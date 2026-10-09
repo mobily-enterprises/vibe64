@@ -185,6 +185,7 @@ const api = createAssistantApi({
   request: (url, options) => props.request(url, options),
   resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app"
 });
+const nativeApplicationAdmission = snapshot => ["codex", "claude", "opencode"].includes(snapshot?.engine);
 const conversation = useAssistantConversation({
   conversationId: () => product.value.conversationId,
   actorKey, surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "",
@@ -195,7 +196,9 @@ const conversation = useAssistantConversation({
     if (activeVoice?.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") activeVoice.session.inviteSpeech(input.messageId);
     return api.sendConversationMessage(id, input);
   } },
-  clearDraftOn: "accepted", queueWhileSending: true, deferWhileWorking: true, draftWhileLoading: true,
+  clearDraftOn: "accepted", queueWhileSending: true,
+  admitWhileWorking: nativeApplicationAdmission, deferWhileWorking: snapshot => !nativeApplicationAdmission(snapshot),
+  draftWhileLoading: true,
   // The app selects tab-local scope; the original shared runtime owns the
   // opaque draft/delivery format, restoration and write lifecycle.
   draftStorage: () => {

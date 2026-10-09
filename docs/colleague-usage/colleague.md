@@ -46,14 +46,14 @@ These actions remain guarded during admission and sending. Taking current words
 may restart hands-free capture unless the microphone was paused. Recovery does
 not stop the existing spoken reply or replace your typed draft.
 
-Type in the message box, then click Send. With a nonempty draft, Tab moves
-directly from the text field to Send and Enter sends the message. While Colleague
-is working, you can send typed or spoken follow-ups. They show as pending and
-wait for the current turn to finish before being sent, in order, preserving its
-current answer and ongoing spoken reply. Send keeps the text and the page or conversation you were viewing;
-later navigation does not redirect a pending request. Colleague shows Send.
-Stop explicitly stops its current turn and cancels
-locally waiting follow-ups before they are sent. The message box keeps its original model button at the left and
+Type, then click **Send**. Tab from a nonempty draft moves to Send; Enter sends.
+Typed and spoken follow-ups keep separate messages and their captured target.
+Codex, Claude and OpenCode save accepted follow-ups while the response finishes.
+New messages supersede proposed actions; actions already started are not undone.
+With an API model, follow-ups stay **Pending** until ready, then send in order.
+Speech uses the same conversation; queued messages stay separate.
+**Stop** stops current work and waiting follow-ups;
+saved messages remain. The message box keeps its original model button at the left and
 Stop/Send controls at the right. Avatar and voice buttons are outside that toolbar;
 showing or hiding the face does not rearrange the composer buttons.
 Stop also works while Claude is starting. It cancels that startup without waiting
@@ -62,10 +62,9 @@ visible and Stop can be retried; it does not claim that work has stopped.
 Stopping Colleague leaves your other agent conversations running.
 Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.
-Changing its selection keeps this conversation and its saved replies. A changed
-engine, provider, model, agent or effort starts a fresh native conversation for
-the next message; choosing the same selection retains the current one. Applying
-the selection does not send a message.
+Model changes keep saved messages and replies, including between native and API.
+A changed engine, provider, model, agent or effort prepares the next conversation;
+the same selection retains it. Applying starts no model work.
 The new native conversation receives recent saved messages as excerpts of up to
 2,000 characters each. Its 24-message window includes your current message,
 leaving up to 23 earlier excerpts. Your full saved replies remain in the chat,
@@ -139,13 +138,13 @@ without changing the final text. Hosted live updates/reconnect refresh retain
 the conversation, expanded messages, completed replies and progress; interrupted
 answers stay incomplete. Voice can speak growing readable phrases. Stop/new
 steering clears unfinished output. Reopening reveals the current reply;
-tool requests are never chat text.
+tool requests and arguments stay out of chat and older-message pages.
 
-Colleague accepts completed replies up to 16,000 characters. A longer reply
-reports a failure instead of silently cutting the answer short or saving it as
-complete. Your request remains in history. Read the error, then ask for a shorter
-answer; the failed request is not automatically sent again. This reply limit
-does not reduce the separate limits for supported application actions.
+Completed replies are limited to 16,000 characters. Longer responses cannot be
+saved as complete; streamed previews stay within that bound. Native models can
+correct invalid responses automatically. If an error remains, ask for a shorter
+answer. Your request stays in history and is not resent after failure. Application
+actions retain their separate limits.
 
 If updates cannot reconnect, the compact chat warning retains already loaded
 history and your draft. Use **Reload chat** in that warning to observe the same
@@ -165,10 +164,9 @@ when that exact output was observed under the admitted request. An unfinished
 sentence or an output without that verified request identity cannot supply it;
 the normal fallback remains available. A late sentence from earlier steering
 cannot become the current request's acknowledgement.
-For an API-based Colleague, progress longer than 280 characters fails the response
-before its requested action starts. The message and history stay available for a
-follow-up. This bound currently applies only to the API integration; equivalent
-native Codex, Claude and OpenCode progress protection remains unfinished.
+Progress over 280 characters is rejected before its action starts. Native models
+can correct an invalid response automatically. If correction fails, your message
+and history remain; read the error before retrying.
 If no progress sentence is available when the first action starts, Colleague says
 “Let me check that.” The first acknowledgement stays available during the lookup,
 including when you reopen the conversation, until the answer replaces it.
@@ -202,7 +200,9 @@ or uncertain operation stops the turn. Your request is retained. Read the report
 inspect the action's target before trying again; you can select another model
 once the turn has stopped. If a model change was interrupted, select that same
 model again to finish the change before sending another message.
-This error does not mean your projects are missing or your account disconnected.
+An operation-limit error keeps completed results; send a follow-up. Repeated
+invalid responses keep your message; retry or choose another model after the
+turn stops. This does not mean your projects are missing or your account disconnected.
 
 Recognized words can appear as a Pending user message in chat; acceptance replaces
 it with the saved message once. Unsent or discarded words are not saved history.

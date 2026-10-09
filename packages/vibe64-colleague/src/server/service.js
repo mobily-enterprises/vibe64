@@ -7,10 +7,11 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
+import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
   stageAdmittedTrainingQuestion, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, nativeInstructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -26,6 +27,7 @@ function requireResult(result) {
 function publicWatch({ cursor, ...watch }) { return watch; }
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
+  if (runtime?.origin === "application" && runtime.completedEnvelope === true) return [];
   return turn.messages.flatMap(message => {
     if (message.role === "system") {
       if (message.text !== "An update from your watched conversations." || (runtime
@@ -64,7 +66,7 @@ function colleagueBrowserState(current) {
 }
 function colleagueBrowserStream(streaming) {
   return streaming ? { ...streaming, messages: streaming.messages.filter(message =>
-    message.origin !== "application" || message.role !== "commentary").map(message =>
+    message.completedEnvelope !== true && (message.origin !== "application" || message.role !== "commentary")).map(message =>
     message.status === "inProgress" ? { ...message, text: message.text.replace(/[\uD800-\uDBFF]$/, "") } : message) } : streaming;
 }
 
@@ -101,7 +103,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
-  const runtime = createConversationRuntime({ storage, actions, persistCommentary: false,
+  const toolPolicy = ({ actionId, kind, context }) => !isTrainingTeacherAction(actionId) &&
+    (!context.colleague.autonomous || kind === "query" ||
+      !context.colleague.readOnly && assignmentCommands.has(actionId));
+  const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });
+  const runtimeOptions = { storage, toolCatalog: catalog, persistCommentary: false,
     limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxFinalReplyCharacters: 16_000, maxApiToolProgressCharacters: 280,
       maxInitialNativeHistoryMessages: 24, maxInitialNativeHistoryMessageCharacters: 2_000,
@@ -118,13 +124,15 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       return true;
     },
-    toolPolicy: ({ actionId, kind, context }) => !isTrainingTeacherAction(actionId) &&
-      (!context.colleague.autonomous || kind === "query" ||
-        !context.colleague.readOnly && assignmentCommands.has(actionId)),
     connections: { resolve: ({ integrationId, context }) => terminals.resolveConversationConnection({
       integrationId, assistantSelection: context.assistantSelection
     }, { vibe64User: authenticatedVibe64User(context) }) }
-  });
+  };
+  const runtime = createConversationRuntime(runtimeOptions);
+  // The same backend/catalogue has two server-owned policies, but each product
+  // runtimeId owns only one live handle. Direct API keeps its original policy.
+  const nativeRuntime = createConversationRuntime({ ...runtimeOptions, completedEnvelope: true,
+    limits: { ...runtimeOptions.limits, maxOutputCharacters: 1_670_455 } });
   const conversationSources = new Map();
   let closed = false;
   let resolveName = async () => "Colleague";
@@ -159,6 +167,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       generation: 0, connections: new Map(), requestContext: null, streamingReply: null,
       interimReply: null, projectReply: null, replyTurnId: "",
       stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
+      runtimeOwner: null, transfer: null, pendingMessages: [], nextConnection: null, workerAbort: null,
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
@@ -228,19 +237,27 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   }
 
-  async function attachBrowserObserver(state, observer) {
+  async function attachBrowserObserver(state, observer, transferring = false) {
+    if (state.transfer && !transferring) await state.transfer;
     assertCurrentConversation(state, observer.context.colleague?.conversationId);
     if (!state.conversation || observer.release || !state.browserObservers.has(observer)) return;
     if (observer.attaching) return observer.attaching;
     observer.attaching = (async () => {
-      const conversation = await runtime.open({ id: state.record.runtimeId, context: observer.context, host: state.host });
+      state.opening += 1;
+      let conversation;
+      try { conversation = await state.runtimeOwner.open({ id: state.record.runtimeId, context: observer.context, host: state.host }); }
+      finally { state.opening -= 1; }
       const release = await conversation.subscribe(event => {
         // Both readers apply the same synchronous product projection. Runtime
         // subscriptions reauthorize independently, so their callback order is
         // deliberately not an application presentation guarantee.
         if (observer.context.colleague?.conversationId !== state.record.scopeId) return;
-        state.projectReply?.(event);
+        const projected = state.projectReply?.(event);
         const interimReply = state.interimReply;
+        if (event.completedEnvelope === true) {
+          observer.listener(projected ? { ...projected, interimReply } : { type: "presentation", interimReply });
+          return;
+        }
         // Product activity is read through the existing authorized snapshot;
         // model tool inputs and effect receipts are not browser notifications.
         if (event.type === "tool") {
@@ -323,9 +340,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function snapshot(state, clientId = "") {
-    const page = await transcript.readConversationLogPage(state.record.runtimeId, { limit: 50 });
+    const page = await transcript.readConversationLogPage(state.record.runtimeId, { limit: 50, presentation: true });
     const record = state.record;
-    const operation = record.conversationLog.at(-1)?.metadata?.applicationTools?.at(-1);
+    const operation = record.conversationLog.findLast(turn => turn.metadata?.applicationTools?.length)?.metadata.applicationTools.at(-1);
     return {
       ok: true, conversationId: record.scopeId, status: record.status, error: record.error,
       assistantSelection: record.assistantSelection, operation: operation ? {
@@ -361,46 +378,72 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     throw failure("Connect an AI and configure an available Senior model in AI Accounts before using Colleague.", "vibe64_colleague_model_unavailable");
   }
 
-  async function openConversation(state, context, settings = {}) {
+  async function openConversation(state, context, settings = {}, transferring = false) {
+    if (state.transfer && !transferring) await state.transfer;
     const scopeId = state.record.scopeId, runtimeId = state.record.runtimeId;
     assertCurrentConversation(state, context.colleague?.conversationId);
-    let host = state.host;
-    if (!host) {
-      const workdir = path.join(state.root, scopeId);
-      await mkdir(workdir, { recursive: true, mode: 0o700 });
-      assertCurrentConversation(state, scopeId);
-      host = terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
-      state.host = host;
-    }
     state.opening += 1;
     let conversation;
     try {
-      conversation = await runtime.open({ id: runtimeId, context, host, ...settings });
+      let host = state.host;
+      if (!host) {
+        const workdir = path.join(state.root, scopeId);
+        await mkdir(workdir, { recursive: true, mode: 0o700 });
+        assertCurrentConversation(state, scopeId);
+        host = terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
+        state.host = host;
+      }
+      const saved = state.record.conversationMetadata?.runtime;
+      const engine = saved?.replacement?.request?.engine === "api" ? "api" : saved?.engine || settings.engine;
+      state.runtimeOwner ||= engine === "api" ? runtime : nativeRuntime;
+      conversation = await state.runtimeOwner.open({ id: runtimeId, context, host, ...settings });
       assertCurrentConversation(state, scopeId);
       state.conversation = conversation;
     } finally { state.opening -= 1; }
-    await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer)));
+    await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, transferring)));
     assertCurrentConversation(state, scopeId);
     return conversation;
   }
 
-  async function prepare(state, context, selection) {
+  async function transferConversation(state, context, owner) {
+    if (state.runtimeOwner === owner) return state.conversation;
+    if (state.opening || [...state.browserObservers].some(observer => observer.attaching)) {
+      throw failure("Wait for Colleague's current conversation observer to open before changing its model.");
+    }
+    const gate = Promise.withResolvers();
+    state.transfer = gate.promise;
+    try {
+      for (const observer of state.browserObservers) {
+        observer.release?.();
+        observer.release = null;
+      }
+      // Never open the destination unless the exact previous owner confirmed
+      // its disposal. A failed release keeps that owner's handle and binding.
+      if (state.conversation) requireResult(await state.conversation.dispose());
+      state.conversation = null;
+      state.runtimeOwner = owner;
+      return await openConversation(state, context, {}, true);
+    } finally {
+      try { await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, true))); }
+      finally { state.transfer = null; gate.resolve(); }
+    }
+  }
+
+  async function prepare(state, context, selection, systemPrompt = instructions) {
     if (!state.record.assistantSelection) state.record.assistantSelection = await chooseSelection(context, selection);
     context.assistantSelection = state.record.assistantSelection;
-    const settings = await terminals.resolveConversationConfiguration(context.assistantSelection, instructions,
+    const settings = await terminals.resolveConversationConfiguration(context.assistantSelection, systemPrompt,
       { vibe64User: authenticatedVibe64User(context) });
     const conversation = await openConversation(state, context, !state.record.conversationMetadata?.runtime ? settings : {});
     await conversation.retrySave();
     const current = await conversation.read();
     if (current.replacement) throw failure("A model change is unfinished. Select that model again to finish it before sending another message.");
-    if (current.configuration.systemPrompt !== instructions) await conversation.configure({ systemPrompt: instructions });
+    if (current.configuration.systemPrompt !== systemPrompt) await conversation.configure({ systemPrompt });
     state.conversation = conversation;
     return conversation;
   }
 
-  async function run(state, connection, generation, message, admission) {
-    const isCurrent = () => !closed && generation === state.generation;
-    const autonomous = !message;
+  async function workerContext(state, connection, generation, autonomous, userMessageIds, isCurrent) {
     let context = actionContext(state, connection);
     const observations = [];
     for (const observation of state.record.observations.slice()) {
@@ -423,8 +466,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await persist(state);
       }
     }
-    if (!isCurrent()) return;
-    if (autonomous && !observations.length) { state.record.status = "ready"; await persist(state); return; }
+    if (!isCurrent()) return null;
+    if (autonomous && !observations.length) { state.record.status = "ready"; await persist(state); return null; }
     const assignmentIds = observations.filter(observation => state.record.assignments?.some(assignment =>
       assignment.assignmentId === observation.assignmentId && ["active", "waiting"].includes(assignment.status))).map(observation => observation.assignmentId);
     const observedAssignmentIds = observations.flatMap(observation => observation.assignmentId ? [observation.assignmentId] : []);
@@ -433,9 +476,30 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         target.assignmentId === link.assignmentId && ["active", "waiting"].includes(target.status))));
     const readOnly = autonomous && !assignmentIds.length && !canRelay;
     context = { ...context, colleague: { ...context.colleague, generation, autonomous, readOnly,
-      userMessageIds: message ? [message.messageId] : [], assignmentIds, observedAssignmentIds,
+      userMessageIds, assignmentIds, observedAssignmentIds,
       observationIds: observations.map(observation => observation.id) } };
     state.observationIds = autonomous ? context.colleague.observationIds : [];
+    return { context, observations, readOnly, observedAssignmentIds };
+  }
+
+  async function workerData(state, connection, currentContext, autonomous, message) {
+    return { assistantName: await resolveName(), focus: connection.focus,
+      ...(message?.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}),
+      userMessageIds: currentContext.context.colleague.userMessageIds, observations: currentContext.observations, readOnly: currentContext.readOnly, autonomous,
+      assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || currentContext.observedAssignmentIds.includes(item.assignmentId))
+        .map(item => {
+          const { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links } = assignmentSummary(item);
+          return { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links };
+        }),
+      ...(state.record.retiredConversation?.operation ? { previousOperation: state.record.retiredConversation.operation } : {}) };
+  }
+
+  async function runApi(state, connection, generation, message, admission) {
+    const isCurrent = () => !closed && generation === state.generation;
+    const autonomous = !message;
+    const currentContext = await workerContext(state, connection, generation, autonomous, message ? [message.messageId] : [], isCurrent);
+    if (!currentContext) return;
+    const { context, observations } = currentContext;
     const hadRuntime = Boolean(state.record.conversationMetadata?.runtime);
     let conversation;
     try { conversation = await prepare(state, context, connection.assistantSelection); }
@@ -446,15 +510,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       throw error;
     }
     if (!isCurrent()) return;
-    const data = { assistantName: await resolveName(), focus: connection.focus,
-      ...(message?.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}),
-      userMessageIds: context.colleague.userMessageIds, observations, readOnly, autonomous,
-      assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
-        .map(item => {
-          const { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links } = assignmentSummary(item);
-          return { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links };
-        }),
-      ...(state.record.retiredConversation?.operation ? { previousOperation: state.record.retiredConversation.operation } : {}) };
+    const data = await workerData(state, connection, currentContext, autonomous, message);
     const streamId = randomUUID();
     const messageId = message?.messageId || `observation-${randomUUID()}`;
     let replyTurnId = "";
@@ -547,14 +603,195 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   }
 
-  function startWorker(state, connection, message) {
+  async function runNative(state, connection, generation, controller) {
+    const isCurrent = () => !closed && !state.stopping && generation === state.generation && !controller.signal.aborted;
+    let autonomous = !state.pendingMessages.length;
+    const userMessageIds = [];
+    let feedback = "", progressAlreadySaid = "", progress = null;
+    let currentContext, prepared, receipt, release, replyTurnId = "", internalMessageId = "";
+    let streamId = randomUUID();
+    const projectReply = event => {
+      if (!isCurrent() || state.pendingMessages.length) return;
+      if (event.type === "accepted" && event.messageId === internalMessageId) receipt = event;
+      if (!receipt || event.turnId !== receipt.turnId) return;
+      if (event.type === "tool" && event.call?.id === prepared?.toolCallId && event.call.status === "running") {
+        if (!autonomous && !progressAlreadySaid) {
+          // This exact completed envelope has already passed the shared parser
+          // and durable reservation; it alone supplies the first intent sentence.
+          progressAlreadySaid = readAssistantResponseEnvelope(prepared.text).text?.trim() || "Let me check that.";
+          progress = { id: `${replyTurnId}:progress`, turnId: replyTurnId, role: "assistant", text: progressAlreadySaid,
+            at: new Date().toISOString(), status: "completed", streamId: randomUUID(), autonomous: false };
+        }
+        state.streamingReply = progress;
+        state.interimReply = progress;
+        publishReply(state);
+        return;
+      }
+      if (event.completedEnvelope !== true || event.type !== "message" || event.role !== "assistant") return;
+      const saved = state.record.conversationLog.find(turn => turn.turnId === receipt.turnId);
+      if (saved?.metadata?.runtime?.nativeToolAttempt === true) {
+        state.streamingReply = progress;
+        publishReply(state);
+        return;
+      }
+      const text = readPartialAssistantReply(event.text);
+      if (!text) return;
+      state.streamingReply = { id: `${replyTurnId}:assistant`, turnId: replyTurnId, role: "assistant", text,
+        at: new Date().toISOString(), status: "inProgress", streamId, autonomous };
+      state.interimReply = null;
+      publishReply(state);
+      // Only decoded product text crosses the browser boundary. A completed
+      // native frame is still unvalidated until the shared loop settles it.
+      return { type: "message", role: "assistant", turnId: replyTurnId, messageId: `${replyTurnId}:assistant`,
+        text, status: "inProgress", origin: autonomous ? "application" : "user" };
+    };
+    state.projectReply = projectReply;
+    try {
+      await runBoundedAssistantToolLoop({ prompt: "", signal: controller.signal,
+        policy: { maximumResponses: 24 }, completedEnvelope: true,
+        limitError: failure("Colleague reached this turn's operation limit. The completed results are kept; send a follow-up to continue."),
+        invalidResponseError: ({ nativeToolAttempt }) => failure(nativeToolAttempt
+          ? "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model."
+          : "The model did not return a valid Colleague response. Your message is kept; try another model or retry.", "vibe64_colleague_response_invalid"),
+        async complete(_prompt, { outputSchema, previousResponse }) {
+          release?.();
+          release = null;
+          controller.signal.throwIfAborted();
+          if (state.pendingMessages.length) {
+            autonomous = false;
+            progress = null;
+            progressAlreadySaid = "";
+            connection = state.nextConnection;
+          }
+          await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: actionContext(state, connection) });
+          controller.signal.throwIfAborted();
+          const messages = state.pendingMessages.splice(0);
+          userMessageIds.push(...messages.map(message => message.messageId));
+          if (messages.length) replyTurnId = messages.at(-1).turnId;
+          state.replyTurnId = replyTurnId;
+          currentContext = await workerContext(state, connection, generation, autonomous, [...userMessageIds], isCurrent);
+          if (!currentContext) return {};
+          if (!feedback && previousResponse?.kind === "invalid") {
+            state.streamingReply = progress;
+            publishReply(state);
+            feedback = previousResponse.nativeToolAttempt
+              ? "You called a Vibe64 application tool as a native runtime tool. No application action ran in that response. Do not report that the application tools are unavailable. Return the intended kind=tool envelope through StructuredOutput or completed JSON, following toolUsage; Vibe64 will execute it and provide the result."
+              : "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.";
+          } else if (!feedback && previousResponse?.kind === "tool") {
+            feedback = JSON.stringify({ toolName: previousResponse.toolName, result: previousResponse.result });
+          }
+          const tools = catalog.resolveToolSet(currentContext.context).tools.map(catalog.toOpenAiToolSchema);
+          const systemPrompt = `${nativeInstructions}\n\nAvailable application tools:\n${JSON.stringify(tools)}`;
+          const conversation = await prepare(state, currentContext.context, connection.assistantSelection, systemPrompt);
+          await conversation.configure({ outputSchema });
+          controller.signal.throwIfAborted();
+          const data = await workerData(state, connection, currentContext, autonomous, messages.at(-1));
+          const operation = state.record.conversationLog.findLast(turn => turn.metadata?.applicationTools?.length)?.metadata.applicationTools.at(-1);
+          const text = JSON.stringify({ ...data, userMessages: messages.map(message => ({ messageId: message.messageId, text: message.text,
+            ...(message.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}) })), progressAlreadySaid,
+            previousOperation: operation ? { ...operation, toolName: operation.name,
+              status: operation.status === "running" ? "executing" : operation.status === "complete" ? "completed" : operation.status }
+              : data.previousOperation, feedback });
+          feedback = "";
+          internalMessageId = randomUUID();
+          receipt = null;
+          prepared = null;
+          streamId = randomUUID();
+          state.streamingReply = progress;
+          state.interimReply = progress;
+          release = await conversation.subscribe(projectReply);
+          try { receipt = await conversation.wake({ messageId: internalMessageId, text }, { excludedMessageIds: [...userMessageIds] }); }
+          catch (error) {
+            if (!isCurrent()) throw error;
+            const observed = await conversation.inspectDelivery({ messageId: internalMessageId }).catch(() => null);
+            if (observed?.status !== "accepted" || observed.recoveryLimitation) throw error;
+            receipt = observed;
+          }
+          try { await conversation.wait(); }
+          catch (error) {
+            if (!isCurrent()) throw error;
+            const observed = await conversation.inspectDelivery({ messageId: internalMessageId }).catch(() => null);
+            if (observed?.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) throw error;
+          }
+          controller.signal.throwIfAborted();
+          const turn = await storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
+          if (turn?.metadata?.runtime?.status !== "complete") {
+            const observed = await conversation.inspectDelivery({ messageId: internalMessageId });
+            if (observed.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) {
+              throw failure("Colleague's response did not complete. Your message is kept.");
+            }
+          }
+          prepared = await conversation.prepareCompletedResponse({ messageId: internalMessageId, turnId: receipt.turnId }, { signal: controller.signal });
+          return prepared;
+        },
+        async settle({ phase, response }) {
+          controller.signal.throwIfAborted();
+          if (!isCurrent() || !currentContext) return "end";
+          if (phase === "before-parse") {
+            await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: currentContext.context });
+            if (state.pendingMessages.length) {
+              feedback = "The user supplied new steering while you were responding. No operation from that response was executed. Follow their latest message.";
+              return "continue";
+            }
+            if (autonomous && !currentContext.observations.some(item => state.record.observations.some(pending => pending.id === item.id))) {
+              state.record.status = "ready";
+              await persist(state);
+              return "end";
+            }
+            return "use";
+          }
+          if (autonomous) {
+            const turn = await transcript.writeConversationSystemMessage(state.record.runtimeId, { text: "An update from your watched conversations." });
+            replyTurnId = turn.turnId;
+          }
+          const turn = await prepared.publishReply({ turnId: replyTurnId });
+          const delivered = new Set(currentContext.observations.map(observation => observation.id));
+          state.record.observations = state.record.observations.filter(observation => !delivered.has(observation.id));
+          for (const watch of state.record.watches) {
+            if (watch.status === "pending" && currentContext.observations.some(observation => observation.watchId === watch.watchId)) watch.status = watch.once ? "delivered" : "active";
+          }
+          scheduleWatches(state);
+          // Original late-admission boundary: a final written while a new
+          // request is entering does not end the shared response allowance.
+          await state.admission;
+          controller.signal.throwIfAborted();
+          if (state.pendingMessages.length) { feedback = "Continue with the user's new message."; return "continue"; }
+          state.record.status = "ready";
+          state.record.error = "";
+          state.streamingReply = null;
+          state.interimReply = null;
+          await persist(state);
+          publishReply(state, { id: turn.assistant.messageId, role: "assistant", text: response.text,
+            at: turn.assistant.at, streamId, autonomous });
+          return "end";
+        }
+      });
+    } finally {
+      release?.();
+      if (state.projectReply === projectReply) state.projectReply = null;
+    }
+  }
+
+  function startWorker(state, connection, message, native = false) {
     const generation = ++state.generation;
+    const controller = new AbortController();
+    state.workerAbort = controller;
     state.replyTurnId = "";
     const admission = Promise.withResolvers();
     admission.promise.catch(() => {});
     state.record.status = "working";
     state.interimReply = null;
-    state.running = persist(state).then(() => run(state, connection, generation, message, admission))
+    state.running = persist(state).then(async () => {
+      if (native === null) {
+        const context = actionContext(state, connection);
+        const selected = state.record.assistantSelection || await chooseSelection(context, connection.assistantSelection);
+        const settings = await terminals.resolveConversationConfiguration(selected, instructions,
+          { vibe64User: authenticatedVibe64User(context) });
+        native = settings.engine !== "api";
+      }
+      return native ? runNative(state, connection, generation, controller)
+        : runApi(state, connection, generation, message, admission);
+    })
       .catch(async error => {
         admission.reject(error);
         if (state.generation !== generation) return;
@@ -573,8 +810,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           publishBrowserChange(state);
         }
         state.running = null;
+        if (state.workerAbort === controller) state.workerAbort = null;
         state.observationIds = [];
-        wakeForObservations(state);
+        if (!closed && !state.stopping && state.record.status === "ready") {
+          if (native && state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+          else wakeForObservations(state);
+        }
       });
     void state.running.catch(() => {});
     return admission.promise;
@@ -583,7 +824,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   function wakeForObservations(state) {
     if (closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length || state.record.status !== "ready") return;
     const observation = state.record.observations[0];
-    void startWorker(state, { clientId: "", focus: observation.focus }).catch(() => {});
+    // Reserve the worker synchronously; its preparation resolves the actual
+    // backend before the first wake, without an untracked parallel preparation.
+    void startWorker(state, { clientId: "", focus: observation.focus }, null,
+      state.runtimeOwner ? state.runtimeOwner === nativeRuntime : null).catch(() => {});
   }
 
   function changeWatches(state, operation) {
@@ -774,8 +1018,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         async function preparedConversation() {
           assertCurrentConversation(state, id);
           if (!state.record.conversationMetadata?.runtime) return null;
-          await openConversation(state, requestContext);
-          return runtime.open({ id: state.record.runtimeId, context: requestContext, host: state.host });
+          return openConversation(state, requestContext);
         }
         return {
           async read(options = {}) {
@@ -791,11 +1034,21 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             // choose a native engine. Its original transcript remains readable.
             if (!conversation) return colleagueBrowserState({ id, status: "ready", phase: "", error: state.record.error || "", interimReply: state.interimReply,
               capabilities: { steering: false, goals: false, attachments: false }, pendingRequest: null,
-              ...(paged ? await transcript.readConversationLogPage(state.record.runtimeId, pageOptions)
-                : { conversationLog: await transcript.readConversationLog(state.record.runtimeId) }),
+              ...(paged ? await transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
+                : { conversationLog: await transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
               streaming: { revision: 0, messages: [] } });
-            const current = paged ? await conversation.read(pageOptions) : await conversation.read();
-            return colleagueBrowserState({ ...current, id, interimReply: state.interimReply,
+            const owner = state.runtimeOwner;
+            let current = paged ? await conversation.read(pageOptions) : await conversation.read();
+            if (paged && owner === runtime) {
+              // Ordinary API work may follow private native envelopes. Project
+              // before counting/cursor selection through the existing store.
+              const page = await transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true });
+              assertCurrentConversation(state, id);
+              current = { ...current, ...page };
+            }
+            return colleagueBrowserState({ ...current, id,
+              ...(state.runtimeOwner === nativeRuntime && state.running ? { status: "working" } : {}),
+              interimReply: state.interimReply,
               capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false } });
           },
           async send(input) {
@@ -810,6 +1063,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             return actions.execute({ actionId: "vibe64.colleague.model.select", input: { ...input, expectedConversationId: id }, context: requestContext });
           },
           async inspectDelivery(input) {
+            assertCurrentConversation(state, id);
+            await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+            const turn = state.record.conversationLog.find(item => !item.metadata?.runtime?.engine &&
+              item.user?.messageId === input.messageId);
+            if (turn) return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user", duplicate: true };
             const conversation = await preparedConversation();
             return conversation ? conversation.inspectDelivery(input) : { status: "unknown", messageId: input.messageId };
           },
@@ -932,7 +1190,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           previousConversations: [...state.record.previousConversations, old] };
         try { validateColleagueConversationRecord({ ...state.record, ...patch }, state.key); }
         catch (error) { throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400); }
-        if (closed || state.stopping || state.running || state.opening || state.summaryRunning || state.record.summaryHelper) {
+        if (closed || state.stopping || state.running || state.opening || state.transfer || state.summaryRunning || state.record.summaryHelper) {
           throw failure("Finish or stop Colleague's current turn or summary before starting fresh.");
         }
         state.rotating = true;
@@ -944,6 +1202,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           await state.saving;
           if (state.conversation) requireResult(await state.conversation.dispose());
           state.conversation = null;
+          state.runtimeOwner = null;
+          state.pendingMessages = [];
           state.host = null;
           old.conversationLog = structuredClone(state.record.conversationLog);
           if (state.record.conversationMetadata) old.conversationMetadata = structuredClone(state.record.conversationMetadata);
@@ -990,7 +1250,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const old = state.record.previousConversations.find(chat => chat.scopeId === input.conversationId);
       if (!old) throw failure("This previous Colleague conversation is unavailable.", "conversation_forbidden", 403);
       const options = { ...(input.beforeTurnId ? { beforeTurnId: input.beforeTurnId } : {}), limit: input.limit || 50 };
-      const page = await transcript.readConversationLogPage(old.runtimeId, options);
+      const page = await transcript.readConversationLogPage(old.runtimeId, { ...options, presentation: true });
       const runtimeState = old.conversationMetadata?.runtime;
       const request = runtimeState?.request;
       const unconfirmed = request?.messageId && request.origin !== "application" && (runtimeState.engine === "api" || request.attempted || request.inspectionOnly) &&
@@ -1062,6 +1322,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           // Only the notification belongs to this watch. The watched coding
           // conversation keeps running, and the accepted wake remains in history.
           state.generation += 1;
+          state.workerAbort?.abort();
           await state.conversation?.cancel();
           await state.running;
           state.streamingReply = null;
@@ -1070,7 +1331,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           state.record.error = "";
           await persist(state);
           publishReply(state);
-          wakeForObservations(state);
+          if (state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+          else wakeForObservations(state);
         }
         return { ok: true };
       });
@@ -1104,9 +1366,17 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
         state.requestContext = context;
         const scoped = { ...actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };
-        const conversation = state.record.conversationMetadata?.runtime ? await openConversation(state, scoped) : null;
-        const current = await conversation?.read();
+        let conversation = state.record.conversationMetadata?.runtime ? await openConversation(state, scoped) : null;
+        let current = await conversation?.read();
         if (current?.status === "working") throw failure("Stop Colleague's previous native turn before changing its model.");
+        if (conversation && state.runtimeOwner === nativeRuntime && settings.engine === "api") {
+          // The completed native envelope is not the ordinary API's response
+          // contract. Remove it through the same idle/authorized config owner
+          // before the destination validates the saved configuration.
+          if (current.configuration.outputSchema !== undefined) await conversation.configure({ outputSchema: undefined });
+          conversation = await transferConversation(state, scoped, runtime);
+          current = await conversation.read();
+        }
         if (!state.record.conversationMetadata?.runtime || !changed && !pendingRequest) {
           // Preserve the native binding while retaining the common owner's
           // failed-cleanup and storage guards for an unchanged selection.
@@ -1130,6 +1400,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           await conversation.select(request);
         } finally { state.selecting = null; }
         state.conversation = conversation;
+        if (settings.engine !== "api" && state.runtimeOwner === runtime) {
+          await transferConversation(state, scoped, nativeRuntime);
+        }
         state.record.status = "ready";
         state.record.error = "";
         await persist(state);
@@ -1253,7 +1526,15 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
         assertCurrentConversation(state, expected);
         if (closed || state.stopping) throw failure("Colleague is stopping. Send again once it has stopped.");
-        if (state.running) {
+        let selected = state.record.assistantSelection;
+        let engine = state.record.conversationMetadata?.runtime?.engine;
+        if (!engine) {
+          selected ||= await chooseSelection(context, input.assistantSelection);
+          engine = (await terminals.resolveConversationConfiguration(selected, instructions,
+            { vibe64User: authenticatedVibe64User(context) })).engine;
+        }
+        const native = engine !== "api";
+        if (!native && state.running) {
           state.generation += 1;
           await state.conversation?.cancel();
           await state.running;
@@ -1266,6 +1547,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const previous = state.connections.get(input.clientId) || {};
         const connection = { ...previous, clientId: input.clientId, focus: input.focus || previous.focus || null, assistantSelection: input.assistantSelection };
         state.connections.set(input.clientId, connection);
+        if (native) {
+          // App admission is independent of native admission: these are the
+          // actual authored rows, not fabricated native acknowledgements.
+          const turn = await transcript.writeConversationUserMessage(state.record.runtimeId, {
+            messageId: input.messageId, text: input.message,
+            ...(trainingQuestion ? { data: { trainingQuestion } } : {}) });
+          if (!turn) throw failure("The authored Colleague message could not be admitted.");
+          state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId,
+            ...(trainingQuestion ? { trainingQuestion } : {}) });
+          state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
+          if (!state.record.assistantSelection) state.record.assistantSelection = selected;
+          if (!state.running) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+          return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
+        }
         return startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message,
           ...(trainingQuestion ? { trainingQuestion } : {}) });
       });
@@ -1279,9 +1574,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       assertCurrentConversation(state, expected);
       state.stopping = true;
+      state.workerAbort?.abort();
       await state.admission;
       try { assertCurrentConversation(state, expected); } catch (error) { state.stopping = false; throw error; }
       state.generation += 1;
+      state.pendingMessages = [];
       for (const connection of state.connections.values()) state.presentation.retireCue(connection);
       state.streamingReply = null;
       state.interimReply = null;
@@ -1326,7 +1623,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await state.running;
         await state.saving;
       }
-      await runtime.close();
+      await Promise.all([runtime.close(), nativeRuntime.close()]);
     }
   };
   return service;

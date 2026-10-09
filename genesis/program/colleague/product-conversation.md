@@ -70,25 +70,34 @@ Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
 Its initial native history retains the original 24-row window with each
-text excerpt limited to 2,000 characters. The current user row occupies one slot
-before it is excluded from the seed; autonomous observations occupy none. The service
+text excerpt limited to 2,000 characters. Pending product rows occupy that window
+before the drained batch is excluded from its seed; autonomous input adds no row. The service
 supplies these limits to the existing shared native continuity owner; saved text,
 the current input, attachment references and delivery fingerprints remain intact.
 Returning engines still receive all missed or corrected messages without this
 initial seed clipping. Generic native defaults and direct-API continuity are unchanged.
-The shared request boundary accepts one current user message, while the frozen
-product could collect several prewritten pending rows in a worker batch. That
-batching policy remains a separate parity disposition; it is not recreated here.
-It consumes normalized events; it has no provider-event parser or reply/tool
-envelope loop. The service selects the original 16,000-character decoded final
-reply bound through JSKIT's `limits.maxFinalReplyCharacters`. The common runtime
-rejects an oversized completed answer before saving it; generic Codex canonical
-assistant writers enforce the same bound before native output reaches storage.
-Shared Claude and OpenCode receipt recovery bounds their joined decoded replies
-before saving, retaining native user admission without resending a request.
-Raw provider output and application-tool argument limits remain separate, so
-large valid text-carried tool payloads are not mistaken for oversized replies.
-This does not restore the original malformed-envelope correction budget.
+Native Colleague preserves the original application pending worker: each Send
+saves its own actual user row, ID and captured focus immediately on admission.
+While a response is in flight, later rows wait without native steering or Stop.
+The product drains them into the next completed response together, retaining
+cumulative authored IDs as application authority. Its internal native response
+has a distinct verified receipt; app acceptance never fabricates native user ACKs.
+Before parsing or executing, the product settlement checks pending rows and
+discards an obsolete completed response. A late admission after final publication
+continues the same worker allowance. Public owns this pending/focus/assignment
+coordination; JSKIT's existing `runBoundedAssistantToolLoop` owns the fixed parser,
+24 completed-response allowance (including discarded responses) and two
+cumulative invalid-response corrections. Its prepared native response retains the existing
+durable tool executor as the sole effect owner, with fresh product authority.
+
+The fixed native envelope validates decoded replies up to 16,000 characters,
+progress up to 280, tool names up to 256 and arguments up to 262,144. Its separate
+finite native wire capacity is 1,670,455 characters; ordinary/API/Main limits stay
+unchanged. The product supplies protocol
+instructions and correction feedback. Shared private marked carriers remain in
+the original store but are excluded before human paging and native catch-up.
+The verified decoded final is written through the prepared response's original
+same-store publisher. No second history or browser-only hiding owns that final.
 Its existing partial-reply and browser-stream projections reuse the
 original trailing-high-surrogate guard for display only, leaving completed events
 and canonical text unchanged. The terminal service supplies authorized account resolution and
@@ -216,7 +225,6 @@ Already-failed initial history, user cancellation and control reconfiguration
 remain immediate. Repeated status or a successful-final-to-failure transition
 cannot regrant the interval, and a held successful history read yields to the
 pending failure operation. Main and standalone defaults retain immediate failure.
-The original malformed-envelope correction remains a separate parity obligation.
 No second timer owner or watcher is introduced.
 On missing-result expiry, the generic driver projects the original
 `response_delivery_failure` checkpoint as failed delivery and rejects its waiter
@@ -317,14 +325,11 @@ checks the captured owner/segment and unsealed request. Ordinary reads, repeated
 it, and a saved patch for the same output keeps its original canonical identity.
 Pending origin alone and first-seen unproven completions cannot manufacture an
 authored row; captured predecessor output cannot become successor progress.
-This restores the completed acknowledgement carrier, not native text/tool
-same-response association. That authority and its original pre-effect bound
-remain open; presentation cannot authorize an effect.
-The original 280-character pre-effect refusal is restored for the direct API
-carrier through the common driver's opt-in `maxApiToolProgressCharacters` limit;
-final replies keep their separate 16000-character bound. Native tool carriers
-still need exact progress association and proof before that original refusal
-can be claimed.
+This carrier alone does not authorize an effect. Native completed-envelope
+Colleague instead uses the exact validated response's reserved tool receipt for
+its first intent, with the shared parser's 280-character pre-effect bound. The
+API path retains `maxApiToolProgressCharacters`; final replies remain16000.
+Ordinary Main native tool behavior is unchanged.
 Autonomous notifications suppress progress in the live projection. Stop, superseding user instructions and
 failure clear transient output. An accepted application wake is retained even when
 its watch is cancelled; cancellation stops that notification, suppresses its late
@@ -396,18 +401,25 @@ session; Show avatar is its only action. Muted capture does not display Listenin
 and speaker preference alone does not display Speaking. Pending speech review
 remains outside that overlay. Tab from a
 sendable draft focuses Send/Steer without propagating to the dialog focus trap.
-Colleague opts into the shared retained conversation's `deferWhileWorking`
-policy and serial delivery queue. A nonsteerable turn keeps new typed and voice
-follow-ups locally pending with their authored IDs and captured focus until the
-same canonical subscription reports ready. Each then uses normal API admission
-and permissions. The product browser facade advertises `steering: false` for
-both empty and prepared chats: its direct send owner implements stop-and-wait,
-not native steering. This truthful capability keeps ordinary browser follow-ups
-buffered without interrupting the current answer. The composer shows Send;
-the original direct service send and explicit Stop semantics remain unchanged. Stop cancels local pre-dispatch
-followers, and account/access retirement cannot dispatch them later. Explicit
-retries retain their original intent; unknown receipts remain inspection-only.
-There is no server queue or separate Colleague turn loop.
+Colleague's retained browser binding resolves `admitWhileWorking` for actual
+native snapshots and `deferWhileWorking` for API or unresolved snapshots, through
+the same serial delivery tail. Typed and spoken requests keep separate IDs/data;
+voice does not merge queued messages or consume the typed draft. The facade
+advertises `steering:false`: native follow-ups use application admission, not
+native steer. API followers wait for the same subscription's ready state. The
+current policy is rechecked before an application-admission follower dispatches;
+a changed backend cannot inherit its captured native permission. Stop cancels
+local undispatched followers; actor/access retirement and unknown-receipt guards
+remain. Product admission is distinct from each internal native response receipt.
+
+Idle model selection uses the original access/configuration and replacement
+journal. Native→API transfer removes only the native output schema through the
+current authorized configure guard before verified disposal and same-store open;
+it does not widen ordinary output bounds or send model work. The authorized
+browser read retains runtime controls and uses the existing application transcript
+presentation page under the ordinary owner, filtering private carriers before
+counts/cursors. Native-owner pages keep their shared presentation policy. Exact
+scope is rechecked after reads; raw preservation and product history remain.
 Voice submissions use the same message-ID admission as text, carry their
 recording's original focus, and never alter the typed draft. Colleague's API stays global when the
 selected project changes. Opening a view sends a command only to the initiating

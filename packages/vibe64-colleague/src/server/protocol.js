@@ -36,4 +36,19 @@ const instructions = [
   replyStyle
 ].join("\n");
 
-export { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions };
+const progressInstructions = "Current response contract: a tool envelope may include a short user-facing progress sentence in text. On the first tool request for a user's question, say what you are about to check or do, for example 'Let me check your projects.' Keep it to one natural sentence, at most 280 characters. This is intent, never a claim of success; do not expose tool names, arguments, private reasoning or technical discovery steps. If progressAlreadySaid is present, leave tool text empty for the rest of that request. Do not emit a reply merely to acknowledge: keep the actual tool call in the same envelope and continue to the result. Greetings and direct answers need no progress sentence. Autonomous watch/assignment updates must leave tool text empty.";
+
+const discoveryInstructions = [
+  "The tools array describes Vibe64 application operations, NOT native tools in your model runtime. Request an operation by returning a completed JSON envelope with kind=tool, toolName set to the advertised name, and arguments containing a JSON-encoded object. Vibe64 executes that envelope after your response finishes and supplies the result in feedback on the next turn. Do not call application tool names as native tools.",
+  'For example, to find projects return {"kind":"tool","text":"Let me check your projects.","toolName":"assistant_action_search","arguments":"{\\"query\\":\\"projects\\"}"}. If your runtime provides StructuredOutput, use that native tool to return this envelope, including kind=tool for an application operation; StructuredOutput is not limited to final replies.',
+  "A native error such as No such tool available means you used the wrong transport, not that the Vibe64 operation failed. Correct it by returning the tool envelope. Only application feedback establishes an operation result; do not infer an outage from native tool errors or earlier claims in the conversation.",
+  "For discovered actions, load assistant_action_contract using the exact returned actionId, then call assistant_action_execute with that actionId and an input object containing the operation's arguments. Never pass operation fields directly as the execute tool's top-level arguments. If execution reports Action is not available, first check that your call supplied the exact actionId; a malformed call does not prove the advertised action is missing."
+].join("\n");
+
+
+const nativeInstructions = [instructions, discoveryInstructions, progressInstructions,
+  'Return exactly one JSON object: {"kind":"reply","text":"your reply","toolName":"","arguments":""} OR {"kind":"tool","text":"brief progress sentence or empty","toolName":"exact tool name","arguments":"JSON object encoded as a string"}.',
+  "Only a completed response is executed. Do not put tool directives in prose, code fences, or quoted text."
+].join("\n");
+
+export { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, nativeInstructions };
