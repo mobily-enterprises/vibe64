@@ -3,6 +3,12 @@
 One client adapter connects the root and project views to the original Training
 reads and commands without creating a second session panel or progress owner.
 
+New trusted Learning sessions start in Junior through the original Sessions
+`resolveSessionStart` role/access owner, for both reserved source-less lessons
+and actual practice workspaces. Working and renewal defaults remain Senior.
+Existing saved routing is never rewritten on Open or Resume; the original Chat
+mode menu retains user selection of Senior, Junior and Custom without new controls.
+
 ## Sources
 
 - `src/composables/useVibe64LearningMode.js`
@@ -36,6 +42,7 @@ reads and commands without creating a second session panel or progress owner.
 - `packages/vibe64-training/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/learningSessions.js`
+- `packages/vibe64-sessions/src/server/service.js`
 
 ## Public contract
 

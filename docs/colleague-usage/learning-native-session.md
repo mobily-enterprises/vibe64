@@ -9,6 +9,14 @@ not send a teaching request or prove that its teaching tools are available.
 An empty Learning chat invites you to ask Main to teach the saved lesson, one
 step at a time. This welcome is a prompt to you, not a delivered lesson question.
 
+New Learning conversations start in **Junior** mode, using that workflow's
+configured Junior model. You can choose **Senior**, **Junior** or **Custom**
+through the existing **Chat mode** controls; **Custom** lets you choose an
+available orchestrator, model and thinking level. Resume keeps your saved choice.
+This applies to lessons with or without a practice exercise. Working conversations
+keep their existing starting mode, and a missing Junior connection must be
+configured through the normal AI Accounts and Model routing controls.
+
 A lesson without a practice exercise retains its conversation and history under
 your exact saved attempt. It creates no practice project, uses no practice
 database slot and has no source changes to Save or Git recovery checkpoint.

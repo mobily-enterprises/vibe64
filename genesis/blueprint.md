@@ -10,7 +10,9 @@ with an AI coding agent.
 
 The approved learning direction gives the existing left-hand session agent the
 teacher role. Colleague remains the general supervisor for application assistance
-and coordination. A yellow learner plate with a black L enters Learning mode,
+and coordination. New Learning conversations start with Junior; people can change
+the teacher through the existing Chat mode controls, and Resume keeps their choice.
+A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
 intact. Both use the same session/conversation implementation. The existing

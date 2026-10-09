@@ -116,10 +116,10 @@ const initialPlanSelection = {
   modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: ""
 };
 
-function assertInitialPlanMetadata(metadata = {}, createdBy = "") {
+function assertInitialPlanMetadata(metadata = {}, createdBy = "", mode = "senior") {
   assert.equal(metadata.created_by, createdBy);
   assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
-  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode: "senior", review: false, workflowEngineId: "opencode" });
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: false, workflowEngineId: "opencode" });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -3846,7 +3846,7 @@ async function learningSessionCreationFixture(root, { denied = false, publishFai
       },
       resolveAssistantPurpose: async (input, options) => {
         assert.equal(options.vibe64User, actor);
-        assert.deepEqual(input, { purpose: "senior", workflowEngineId: "opencode" });
+        assert.deepEqual(input, { purpose: "junior", workflowEngineId: "opencode" });
         events.push("selection");
         return { available: true, effectiveSelection: initialPlanSelection, connectionIdentity: "actual-selected-account" };
       },
@@ -3906,7 +3906,7 @@ test("trusted no-exercise learning creation reuses real Project Runtime and orig
     assert.deepEqual(f.events, ["runtime", "routing", "selection", "account-access", "absence", "create", "inspect", "publish"]);
     assert.equal(f.createdInputs.length, 1);
     assert.equal(Object.hasOwn(f.createdInputs[0], "sourceContext"), false);
-    assertInitialPlanMetadata(f.createdInputs[0].metadata, "ada");
+    assertInitialPlanMetadata(f.createdInputs[0].metadata, "ada", "junior");
     assert.equal(Object.hasOwn(f.createdInputs[0].metadata, "learning_session"), false);
     assert.equal(result.learning.conversationId, result.sessionId);
     assert.deepEqual(result.learning.pin, f.scope.pin);
@@ -4057,6 +4057,26 @@ test("Training source-less opener reuses the reserved real Main conversation and
     assert.equal(Object.hasOwn(reopened, "limits"), false);
   });
 });
+
+for (const mode of ["custom", "senior", "junior"]) {
+  test(`Learning Resume retains its saved ${mode} teacher choice instead of applying the new-session default`, async () => {
+    await withTemporaryRoot(async root => {
+      const f = await learningSessionCreationFixture(root);
+      const request = { actor: f.actor, attemptId: f.scope.attemptId };
+      const created = await f.learningSessions.openSession(request);
+      assert.equal(created.ok, true, created.error);
+      const preferences = { mode, review: false, workflowEngineId: initialPlanSelection.engineId,
+        ...(mode === "custom" ? { override: initialPlanSelection } : {}) };
+      await f.runtime.store.writeMetadataValue(created.sessionId, "assistant_routing", JSON.stringify(preferences));
+      const saved = await f.runtime.store.readSession(created.sessionId);
+      const reopened = await f.learningSessions.openSession(request);
+      assert.equal(reopened.ok, true, reopened.error);
+      assert.deepEqual(await f.runtime.store.readSession(created.sessionId), saved);
+      assert.equal(f.createdInputs.length, 1);
+      assert.equal(f.publications.length, 1);
+    });
+  });
+}
 
 test("Training context refuses inactive new work and exact missing sessions while retaining historical observation", async () => {
   await withTemporaryRoot(async root => {
@@ -4580,7 +4600,7 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(result.ok, true, result.error);
     assert.equal(f.creationInputs.length, 1);
     assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
-    assertInitialPlanMetadata(f.creationInputs[0].metadata, actor.username);
+    assertInitialPlanMetadata(f.creationInputs[0].metadata, actor.username, "junior");
     assert.equal(setup.length, 1);
     assert.equal(setup[0].runtime, f.runtime);
     assert.equal(setup[0].session.sessionId, `training-${scope.attemptId}`);

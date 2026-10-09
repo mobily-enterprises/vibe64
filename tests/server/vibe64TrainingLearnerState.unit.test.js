@@ -2731,7 +2731,7 @@ test("configured practice Learning binds the saved actual initial Main session a
     terminals: {
       async resolveAssistantPurpose(input, options) {
         assert.equal(options.vibe64User, f.actor);
-        assert.equal(input.purpose, "senior");
+        assert.equal(input.purpose, "junior");
         return { available: true, effectiveSelection: selection, connectionIdentity: "controlled-original-account-seam" };
       },
       async requireAssistantSelectionAccess(value, options) {

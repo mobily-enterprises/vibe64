@@ -296,21 +296,21 @@ function createService({
     return legacyCodexAssistantSelection();
   }
 
-  async function resolveSessionStart(input = {}, { session = null, vibe64User = null } = {}) {
+  async function resolveSessionStart(input = {}, { session = null, vibe64User = null, mode = "senior" } = {}) {
     const explicitSelection = Object.keys(input.assistantSelection || {}).length
       ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
-    const preferences = assistantRoutingPreferences({ mode: "senior", review: false,
+    const preferences = assistantRoutingPreferences({ mode, review: false,
       workflowEngineId: input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId || "opencode",
       ...(explicitSelection ? { override: explicitSelection } : {}) });
     if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {
-      throw new Error("The starting Senior model must use the chosen workflow orchestrator.");
+      throw new Error(`The starting ${mode === "junior" ? "Junior" : "Senior"} model must use the chosen workflow orchestrator.`);
     }
     const routingSetup = await initializeModelRouting({ engineIds: [preferences.workflowEngineId], vibe64User });
     if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
-    const decision = await terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: preferences.workflowEngineId,
-      ...(explicitSelection ? { override: { role: "senior", selection: explicitSelection } } : {}) }, { vibe64User });
+    const decision = await terminals.resolveAssistantPurpose({ purpose: mode, workflowEngineId: preferences.workflowEngineId,
+      ...(explicitSelection ? { override: { role: mode, selection: explicitSelection } } : {}) }, { vibe64User });
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
     await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
       vibe64User, expectedConnectionIdentity: decision.connectionIdentity
@@ -873,7 +873,9 @@ function createService({
           number: input.pullRequestNumber, vibe64User
         });
         if (pullRequest && input.repositoryBranch) throw new Error("Choose a branch or a pull request for this session.");
-        const { assistantSelection, assistantRouting } = await resolveSessionStart(input, { vibe64User });
+        const { assistantSelection, assistantRouting } = await resolveSessionStart(input, {
+          vibe64User, mode: learningRuntime ? "junior" : "senior"
+        });
         const runtime = learningRuntime || await project.createRuntime(sessionRuntimeOptions(terminals));
         if (runtime.learningScope && !learningRuntime) {
           throw new TypeError("Learning creation requires the trusted Project learning context.");
