@@ -255,6 +255,11 @@ another stored assistant answer. A single generation-fenced projector runs befor
 both product and browser publication, independent of subscription callback order.
 Proven native output identity follows live output into saved history so speech
 does not replay the acknowledgement or confuse it with the later answer.
+The original 280-character pre-effect refusal is restored for the direct API
+carrier through the common driver's opt-in `maxApiToolProgressCharacters` limit;
+final replies keep their separate 16000-character bound. Native tool carriers
+still need exact progress association and proof before that original refusal
+can be claimed.
 Autonomous notifications suppress progress in the live projection. Stop, superseding user instructions and
 failure clear transient output. An accepted application wake is retained even when
 its watch is cancelled; cancellation stops that notification, suppresses its late

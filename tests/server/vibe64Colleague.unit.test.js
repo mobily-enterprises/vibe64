@@ -379,7 +379,22 @@ test("Colleague shows one completed progress sentence during tools, then replace
   assert.equal((await browser.read()).interimReply, null);
 });
 
-test("Colleague's original progress fallback is transient and Stop clears it", async t => {
+test("tool progress is bounded, has a fallback, and cannot turn a partial envelope into an action", async t => {
+  // The original 281-character refusal now runs through the actual API carrier,
+  // before its common tool owner can execute any application operation.
+  const refused = await fixture(t, [JSON.stringify({ ...JSON.parse(call("never")), text: "x".repeat(281) }), reply("Must not run.")]);
+  await refused.send("Check it");
+  const failed = await refused.service.wait(refused.context);
+  assert.equal(failed.status, "failed");
+  assert.match(failed.error, /progress text/);
+  assert.deepEqual(refused.observations.mutations, []);
+  assert.equal(refused.observations.starts.length, 1, "Oversized progress cannot start another model request");
+
+  const accepted = await fixture(t, [JSON.stringify({ ...JSON.parse(call("bounded")), text: "x".repeat(280) }), reply("Done.")]);
+  await accepted.send("Check it");
+  assert.equal((await accepted.service.wait(accepted.context)).status, "ready");
+  assert.deepEqual(accepted.observations.mutations, ["bounded"]);
+
   const stream = modelStream();
   const f = await fixture(t, [call("first"), signal => stream.response(signal)]);
   t.after(() => stream.finish());

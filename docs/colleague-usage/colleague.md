@@ -159,6 +159,10 @@ and speak a short progress sentence before its final answer. Each is spoken once
 finishing and saving the answer does not replay its opening words. Progress describes
 what it is checking; it is not confirmation that an action succeeded. Stop or
 new steering clears old progress.
+For an API-based Colleague, progress longer than 280 characters fails the response
+before its requested action starts. The message and history stay available for a
+follow-up. This bound currently applies only to the API integration; equivalent
+native Codex, Claude and OpenCode progress protection remains unfinished.
 If no progress sentence is available when the first action starts, Colleague says
 “Let me check that.” The first acknowledgement stays available during the lookup,
 including when you reopen the conversation, until the answer replaces it.
