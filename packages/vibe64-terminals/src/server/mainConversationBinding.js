@@ -6,6 +6,7 @@ import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebug
 import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from "./sessionGitCommandActor.js";
 import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalSignals.js";
 import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-core/server/opencode-process";
+import { conversationRequestText } from "@jskit-ai/assistant-core/server/conversation";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection,
@@ -405,9 +406,16 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       } } });
   const binding = {
     ...conversation, namespace: host.namespace, engine,
-    prepareInput: engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
-      const prepared = await prepareInput(input, current);
-      return { ...prepared, actorContext: prepared.vibe64User || null };
+    prepareInput: teachingAvailable || engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
+      let prepared = typeof prepareInput === "function" ? await prepareInput(input, current) : input;
+      if (teachingAvailable && !prepared.goal && !/^\/goal(?:\s|$)/u.test(String(prepared.message ?? "").trim())) {
+        prepared = { ...prepared, message: conversationRequestText({
+          text: prepared.message ?? prepared.text ?? "", origin: prepared.origin,
+          data: { ...prepared.data, userMessageIds: prepared.origin === "application" ? [] : [input.messageId] }
+        }) };
+      }
+      return engine === "codex" && typeof prepareInput === "function"
+        ? { ...prepared, actorContext: prepared.vibe64User || null } : prepared;
     } : prepareInput,
     ...(engine === "codex" ? { selection } : {}),
     async admission(current) {

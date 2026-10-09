@@ -59,6 +59,12 @@ missing question association leaves the words in chat without treating them as
 an answer to a newer question. An unconfirmed question or grade is not a pass:
 read the retained result before asking for another evaluation.
 
+Main receives the exact accepted answer identity with its captured question; you
+do not need to copy message IDs or move an answer to another conversation. If an
+evaluation says the answer is not admitted, retain the same lesson and report the
+error. Guessing an ID, using an older answer or asking for a pass cannot replace
+the current accepted answer.
+
 Teaching requires current write access to the exact learner, attempt and pinned
 lesson. Historical chat access does not permit a new evaluation. If your account,
 access, attempt or teaching turn changes during a check, the save is refused.

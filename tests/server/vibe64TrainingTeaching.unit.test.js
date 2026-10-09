@@ -1396,3 +1396,76 @@ test("Main practical final held-log authorization rejects revoked access before 
   assert.equal((await f.read()).completion.passed, 0);
   assert.deepEqual(await storedFiles(f.paths), before);
 });
+
+
+test("Main teaching native preparation gives every engine the exact captured current request without changing authored history", async t => {
+  const { createSessionConversationBinding } = await import("../../packages/vibe64-terminals/src/server/mainConversationBinding.js");
+  const { conversationRequestText } = await import("@jskit-ai/assistant-core/server/conversation");
+  const f = await mainTeachingFixture(t);
+  const question = await deliveredMainQuestion(f);
+  const words = "I try Preview and explain its response.";
+  const request = await f.main.captureMessage({ runtime: f.runtime, sessionId: f.sessionId,
+    context: f.current, actions: f.actions, input: { messageId: "exact-current-native-answer", message: words,
+      trainingQuestion: question.reference, data: { userMessageIds: ["forged-browser-id"], forged: true } } });
+  assert.equal(request.message, words);
+  assert.equal(request.data.userMessageIds, undefined);
+  assert.equal(request.data.forged, undefined);
+  const session = await f.runtime.getSession(f.sessionId, { inspectSource: false });
+  const attachments = [{ attachmentId: "original-file", name: "answer.txt" }];
+  const nativeInput = { ...request, displayMessage: words, displayAttachments: attachments,
+    contextText: "Original retained continuity", steering: true };
+  const preparedWords = `${words}\nOriginal prepared attachment text.`;
+  const callback = async input => ({ ...input, message: preparedWords, vibe64User: f.actor, actorContext: "original-callback" });
+  const provider = (engine, runtime = f.runtime) => ({ id: engine, async prepareConversationHost() {
+    return { namespace: `actual-main-${engine}`, context: { runtime, session, key: f.sessionId },
+      native: { messagePreparation: {}, owner: { applicationToolsSupported: true, readFinalAssistantResult() {} } },
+      state: {}, messageEnvironment: {}, publish() {} };
+  } });
+  for (const engine of ["codex", "opencode", "claude"]) {
+    const binding = await createSessionConversationBinding(provider(engine), f.sessionId, { prepareInput: callback });
+    const prepared = await binding.prepareInput(nativeInput, f.current);
+    const data = { ...request.data, userMessageIds: [request.messageId] };
+    assert.equal(prepared.message, conversationRequestText({ text: preparedWords, data }), engine);
+    assert.equal(prepared.displayMessage, words, engine);
+    assert.equal(prepared.displayAttachments, attachments, engine);
+    assert.equal(prepared.contextText, nativeInput.contextText, engine);
+    assert.equal(prepared.steering, true, engine);
+    assert.equal(prepared.data, request.data, "rendered metadata is not a new persisted capture format");
+    assert.equal(prepared.actorContext, engine === "codex" ? f.actor : "original-callback", engine);
+    const noCallback = await createSessionConversationBinding(provider(engine), f.sessionId);
+    assert.equal((await noCallback.prepareInput(nativeInput, f.current)).message,
+      conversationRequestText({ text: words, data }), engine);
+    for (const goal of [{ ...nativeInput, goal: { objective: "Retain the existing goal" } },
+      { ...nativeInput, message: "/goal Retain the existing goal" }]) {
+      const unchanged = await noCallback.prepareInput(goal, f.current);
+      assert.equal(unchanged, goal, "goal commands retain their original native input");
+    }
+    const application = { ...nativeInput, origin: "application" };
+    assert.equal((await noCallback.prepareInput(application, f.current)).message,
+      conversationRequestText({ text: words, origin: "application", data: { ...request.data, userMessageIds: [] } }));
+    const working = Object.create(f.runtime);
+    working.learningScope = null;
+    working.learningTeaching = null;
+    const ordinary = await createSessionConversationBinding(provider(engine, working), f.sessionId, { prepareInput: callback });
+    const originalPrepared = await callback(nativeInput);
+    assert.deepEqual(await ordinary.prepareInput(nativeInput, f.current), engine === "codex"
+      ? { ...originalPrepared, actorContext: f.actor } : originalPrepared, "Working preparation is unchanged");
+  }
+  f.target.turnId = "native-current-answer"; f.target.outerTurnId = request.messageId; f.target.active = true;
+  const admitted = await f.admit(request.messageId, request.message, request.data);
+  const input = { attemptId: f.attemptId, expectedRevision: 2, submissionId: "native-context-submission", messageId: request.messageId };
+  for (const messageId of ["current-turn", "last", f.attemptId, "1", "forged-browser-id"]) {
+    await assert.rejects(f.execute(admitted, "vibe64.training.answer.evaluate", { ...input, messageId }),
+      { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  }
+  assert.equal(f.helperCalls.length, 0, "guessed context grants no Helper or progress effect");
+  const result = await f.execute(admitted, "vibe64.training.answer.evaluate", input);
+  assert.equal(result.outcome, "passed");
+  assert.equal(f.helperCalls.length, 1);
+  const helper = JSON.parse(f.helperCalls[0].input.prompt);
+  assert.equal(helper.evidence.messageId, request.messageId);
+  assert.equal(helper.evidence.text, words);
+  const accepted = (await f.runtime.store.readConversationLog(f.sessionId)).at(-1).messages.find(message => message.role === "user");
+  assert.equal(accepted.text, words);
+  assert.deepEqual(accepted.data, request.data);
+});

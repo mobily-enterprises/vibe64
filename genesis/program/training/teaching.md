@@ -76,6 +76,13 @@ checks cancellation, including inside the final original learner writer. Caller
 JSON cannot supply that authority. Server Send capture preserves duplicate UUID
 facts first and associates only an explicit currently delivered question with the
 original exact accepted words. Missing or stale associations remain ungraded.
+The common Main native input-preparation seam supplies that captured data and the
+exact current server message ID through JSKIT's existing application-data renderer
+to Codex, OpenCode and supported Claude teaching. This moves Colleague's original
+current-request metadata coordination to Main without another formatter. Canonical
+display words, accepted history, native admission and grading guards remain
+unchanged; guessed IDs still fail. Working, scoped and goal inputs keep their
+original preparation.
 
 The same canonical transcript transaction stores application-tool and Helper
 receipts. A retained old Helper must finish cleanup before a successor can run;
