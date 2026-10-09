@@ -632,7 +632,7 @@ test("actual source-less visual HTTP routes reuse saved learner Main scope and o
 
 // Main consumes the original installed-content, learner and question fixture.
 // Native/Helper responses here are controlled owner contracts, not logged-in model acceptance.
-async function mainTeachingFixture(t) {
+async function mainTeachingFixture(t, { actionLearners = null } = {}) {
   const f = await fixture(t, { ready: false, exercise: false });
   const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
   const { createServiceToolCatalog } = await import("@jskit-ai/assistant-core/server");
@@ -663,7 +663,7 @@ async function mainTeachingFixture(t) {
   const auth = { user: f.actor, afterResolve: null };
   const actions = createActionCatalogue();
   const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
-  const definitions = [...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: f.learners, teachingBrief: brief }),
+  const definitions = [...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: actionLearners || f.learners, teachingBrief: brief }),
     ...createTrainingTeachingActions({ mainTeaching: main }),
     ...createTrainingPresentationActions({ learners: f.learners, content: f.content, mainTeaching: main }),
     ...createTrainingAssessmentActions({ mainTeaching: main }),
@@ -1468,4 +1468,80 @@ test("Main teaching native preparation gives every engine the exact captured cur
   const accepted = (await f.runtime.store.readConversationLog(f.sessionId)).at(-1).messages.find(message => message.role === "user");
   assert.equal(accepted.text, words);
   assert.deepEqual(accepted.data, request.data);
+});
+
+test("Main matching optional Learning target retains its admitted saved session and original question delivery", async t => {
+  const f = await mainTeachingFixture(t);
+  const { actor: _actor, ...input } = f.input;
+  const prepared = await f.execute(f.admitted, "vibe64.training.question.prepare", {
+    ...input, learningAttemptId: f.attemptId
+  });
+  assert.equal(prepared.revision, 2);
+  assert.equal(prepared.reference.attemptId, f.attemptId);
+  assert.equal(prepared.delivery, "prepared");
+  const log = await f.runtime.store.readConversationLog(f.sessionId);
+  assert.equal(log[0].metadata.trainingQuestionDelivery.phase, "prepared");
+  assert.equal(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId, context: f.current, actions: f.actions }), null,
+    "saving and staging do not manufacture final delivery");
+  await f.runtime.store.writeConversationAssistantMessage(f.sessionId, { text: prepared.questionText, outputId: "optional-target-question" });
+  f.target.active = false;
+  await f.main.completeConversation({ runtime: f.runtime, sessionId: f.sessionId,
+    outerTurnId: f.target.outerTurnId, nativeTurn: f.target, outcome: "completed" });
+  assert.deepEqual(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId, context: f.current, actions: f.actions }), prepared.reference);
+});
+
+test("Main and scoped Learning reads use the admitted learner owner while ordinary supervision retains its normal reader", async t => {
+  let normalReads = 0;
+  const normalLearners = { async readState() {
+    normalReads++;
+    return { revision: 0, active: null, activeSummaryCurrent: true, completion: null,
+      progress: { learnerId: "42", attempts: [] } };
+  } };
+  const f = await mainTeachingFixture(t, { actionLearners: normalLearners });
+  for (const input of [{}, { learningAttemptId: f.attemptId }]) {
+    const read = await f.execute(f.admitted, "vibe64.training.learning.read", input);
+    assert.equal(read.revision, 1);
+    assert.equal(read.active.attemptId, f.attemptId);
+    assert.equal(read.activeSummaryCurrent, true);
+  }
+  assert.equal(normalReads, 0, "an admitted isolated lesson never reads the normal progress owner");
+  const ordinary = { channel: "internal", surface: "app",
+    requestMeta: { request: { params: {}, vibe64User: f.actor } } };
+  assert.equal((await f.actions.execute({ actionId: "vibe64.training.learning.read", input: {}, context: ordinary })).revision, 0);
+  assert.equal(normalReads, 1, "unbound supervision keeps its original normal scope");
+  const scoped = await f.actions.execute({ actionId: "vibe64.training.learning.read",
+    input: { learningAttemptId: f.attemptId }, context: ordinary });
+  assert.equal(scoped.revision, 1);
+  assert.equal(scoped.active.attemptId, f.attemptId);
+  assert.equal(normalReads, 1);
+});
+
+test("optional Learning IDs cannot replace Main ownership or bypass the saved-session write guard", async t => {
+  const f = await mainTeachingFixture(t);
+  const before = await storedFiles(f.paths);
+  const { actor: _actor, ...input } = f.input;
+  const otherAttempt = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const mapped = await f.bound.applicationTools.prepareContext(f.current, f.admitted);
+  assert.deepEqual(mapped.requestMeta.request.params, {});
+  await assert.rejects(mapped.trainingMain.requireAttempt(f.attemptId, "another-session"),
+    { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  assert.equal((await mapped.trainingMain.requireAttempt(f.attemptId, f.sessionId)).trainingLearners, f.learners);
+  for (const actionId of ["vibe64.training.question.prepare", "vibe64.training.learning.read"]) {
+    await assert.rejects(f.execute(f.admitted, actionId, {
+      ...(actionId.endsWith("prepare") ? input : {}), learningAttemptId: otherAttempt
+    }), { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  }
+  await assert.rejects(f.execute(f.admitted, "vibe64.training.question.prepare", {
+    ...input, learningAttemptId: f.attemptId, sessionId: "another-session"
+  }), { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  const ordinary = { channel: "internal", surface: "app",
+    requestMeta: { request: { params: {}, vibe64User: f.actor } } };
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.training.question.prepare",
+    input: { ...input, learningAttemptId: f.attemptId }, context: ordinary }),
+  { code: "VIBE64_TRAINING_SESSION_REQUIRED" });
+  f.auth.user = { uid: 99, username: "other" };
+  await assert.rejects(f.execute(f.admitted, "vibe64.training.question.prepare", {
+    ...input, learningAttemptId: f.attemptId
+  }));
+  assert.deepEqual(await storedFiles(f.paths), before, "foreign or missing native authority cannot save a question");
 });

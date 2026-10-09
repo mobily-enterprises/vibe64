@@ -89,6 +89,10 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         if (!learningAccess || !learning || learning.learningScope.attemptId !== learningAttemptId) {
           throw actionContextError("vibe64_learning_authority_required", "Authorize this learner’s exact saved attempt before continuing.");
         }
+        // Main's learner-scoped coordinator already rechecks its exact saved
+        // session. Re-entering practice admission would reacquire its barrier
+        // inside those checks; retain the original omitted-ID execution path.
+        if (!projectScoped && context.trainingMain) return execute(trustedInput, context, deps);
         if (learning.learningScope.noExercise === false) {
           if (definition.id === "vibe64.sessions.create" && learningAccess === "create") {
             // The exact saved-session opener already owns the non-reentrant
@@ -151,8 +155,12 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
         if (!scope.learningAccess || typeof resolveLearningContext !== "function") {
           throw actionContextError("vibe64_learning_unavailable", "This operation cannot access learning sessions.");
         }
-        learning = await resolveLearningContext({ actor: user, attemptId: learningAttemptId,
-          sessionId: input.sessionId, access: scope.learningAccess });
+        // An admitted Main coordinator rechecks its server-owned session and
+        // native turn. Optional tool IDs may constrain that target, not select it.
+        learning = context.trainingMain
+          ? await context.trainingMain.requireAttempt(learningAttemptId, input.sessionId)
+          : await resolveLearningContext({ actor: user, attemptId: learningAttemptId,
+            sessionId: input.sessionId, access: scope.learningAccess });
         if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
             learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
           throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");

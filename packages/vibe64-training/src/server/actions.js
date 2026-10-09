@@ -165,8 +165,9 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
       try {
-        if (context.trainingMain) await context.trainingMain.requireAttempt(input.attemptId);
-        const result = boundedResult(await execute(input, actor));
+        const learning = context.trainingMain
+          ? await context.trainingMain.requireAttempt(input.attemptId) : context.vibe64Action?.learning;
+        const result = boundedResult(await execute(input, actor, learning));
         if (context.trainingMain) await context.trainingMain.requireAttempt(input.attemptId);
         return result;
       } catch (cause) {
@@ -198,8 +199,14 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
         }))
       })) };
     }),
-    definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. When this installation supplies learning sessions, this also lists only existing owned learning conversations; opening or listing them does not send a message. A missing conversation is absent, but invalid saved identity is an error. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor) => {
-      const result = await learners.readState({ actor, includeCompletion: true });
+    definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. When this installation supplies learning sessions, this also lists only existing owned learning conversations; opening or listing them does not send a message. A missing conversation is absent, but invalid saved identity is an error. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor, learning) => {
+      const owner = learning ? learning.trainingLearners : learners;
+      if (typeof owner?.readState !== "function") {
+        throw Object.assign(new Error("The authorized lesson's learner reader is unavailable."), {
+          code: "VIBE64_TRAINING_LEARNER_UNAVAILABLE"
+        });
+      }
+      const result = await owner.readState({ actor, includeCompletion: true });
       return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
         ...(learningSessions ? { learnerId: result.progress.learnerId, sessions: await learningSessions.readSessions({ actor }) } : {}),
         active: active(result.active), completion: completion(result.completion),

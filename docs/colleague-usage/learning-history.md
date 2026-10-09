@@ -84,3 +84,10 @@ may supply history but does not permit new teaching work. Missing or unconfirmed
 reservation summaries require the existing supported recovery; simply reading
 state does not repair them or create a substitute workspace. Ask the installation
 owner to inspect corrupt, foreign or missing content rather than changing the pin.
+
+In an open **Learning** Main conversation, progress reads and question preparation
+use that conversation's exact saved lesson, including an owner-only author trial.
+They do not substitute progress from an ordinary lesson. If Vibe64 refuses to save
+a question, Main must say it is unrecorded; discussing or answering those words
+does not create an assessment receipt. Keep the saved attempt and ask the owner
+to inspect the error. Do not start another attempt or change accounts to bypass it.

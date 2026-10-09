@@ -1082,3 +1082,25 @@ prepared-target project selection, real Colleague hide/use/restore, identified
 App interaction, reconnect/Stop behavior across the installed native facade,
 provider tool-receipt retention and desktop/mobile practical acceptance remain
 required. Registration or controlled component results do not prove those gates.
+
+### Admitted Main and selected learner context
+
+The existing Main `requireAttempt` guard returns its freshly authorized Session
+context after checking the actor, saved attempt/full pin and current accepted
+native tuple. Core reuses that context for a matching optional Learning tool ID;
+the ID constrains the admitted target and cannot select a session. The mapped
+native tool request still has no inherited Learning route. Unbound writes still
+require an exact saved session through the original resolver.
+
+The Learning context retains its original learner instance. `learning.read` uses
+that instance for an authorized Learning call or admitted Main, so an isolated
+author trial reads the same progress owner as its teaching brief and question.
+Ordinary unbound supervision keeps its normal reader. No progress format, writer,
+recovery or account/native guard changes. Component evidence does not establish
+installed author-trial question delivery or a genuine learner grade.
+
+Only learner-scoped Main actions retain their original direct execution after
+that exact authorization. They must not wrap their fresh native checks in the
+practice preparation barrier again: the original lock would correctly refuse
+that nested acquisition as busy. Browser/supervisor and project/workspace
+operations keep their original barrier and exact Create-opener handling.

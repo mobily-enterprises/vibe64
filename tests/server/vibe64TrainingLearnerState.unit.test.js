@@ -2803,6 +2803,32 @@ test("configured practice Learning binds the saved actual initial Main session a
     assert.deepEqual(runtime.learningScope, saved.scope);
     assert.equal((await runtime.store.readSession(created.sessionId)).metadata.source_kind, "session_clone");
   });
+  // Exercise the real preparation.lock through the original action wrapper.
+  // Native admission is controlled here; the Teaching file proves its guard.
+  const { withVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+  const { createSchema } = await import("@jskit-ai/kernel/shared/validators");
+  let effects = 0;
+  const definition = {
+    id: "vibe64.training.test-admitted-barrier", kind: "command",
+    input: { mode: "create", schema: createSchema({}) },
+    async execute() {
+      const fresh = await learning.resolveContext({ actor: f.actor, attemptId,
+        sessionId: created.sessionId, access: "write" });
+      return fresh.runLearningOperation(() => { assert.doesNotThrow(assertProjectEffectAdmission); effects++; });
+    }
+  };
+  const learnerAction = withVibe64ActionContext(definition, { projectScoped: false, learningAccess: "write" });
+  const admittedContext = { vibe64Action: { user: f.actor, learning: context }, trainingMain: {} };
+  await learnerAction.execute({}, admittedContext);
+  await learnerAction.execute({ learningAttemptId: attemptId }, admittedContext);
+  assert.equal(effects, 2, "matching optional ID retains the omitted-ID Main barrier lifetime");
+  await assert.rejects(learnerAction.execute({ learningAttemptId: attemptId }, {
+    vibe64Action: { user: f.actor, learning: context }
+  }), { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+  const projectAction = withVibe64ActionContext(definition, { projectScoped: true, learningAccess: "write" });
+  await assert.rejects(projectAction.execute({ learningAttemptId: attemptId }, admittedContext),
+    { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+  assert.equal(effects, 2, "supervision and project effects keep the original outer preparation barrier");
   const summaries = await learning.readSessions({ actor: f.actor });
   assert.equal(summaries.length, 1);
   assert.equal(summaries[0].sessionId, created.sessionId);

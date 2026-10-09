@@ -47,6 +47,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       systemRoot: saved.systemRoot,
       learningScope: Object.freeze(structuredClone(saved.scope)),
       vibe64User: actor,
+      trainingLearners: learners,
       ...(learningTeaching ? { learningTeaching } : {}),
       ...(access === "create" ? {
         // The canonical Create action receives this host-only facility. The
@@ -108,6 +109,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     }
     return Object.freeze({ ...current,
       learningScope: Object.freeze(structuredClone(saved.scope)), vibe64User: actor,
+      trainingLearners: learners,
       ...(learningTeaching ? { learningTeaching } : {}),
       async learningInstructions(currentSessionId) {
         if (currentSessionId !== sessionId) {

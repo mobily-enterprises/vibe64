@@ -344,9 +344,11 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
         request: { ...request, params, vibe64User: grant.user } } } : {}),
       runtime, assistantSelection: current.assistantSelection, trainingTeaching: teaching, trainingAssessment: assessment };
       const coordinator = {
-        async requireAttempt(attemptId) {
+        async requireAttempt(attemptId, requestedSessionId) {
           if (attemptId !== undefined && attemptId !== scope.attemptId) throw failure("Read only this bound pinned attempt.");
-          await requireCurrent(current, admitted);
+          if (requestedSessionId !== undefined && requestedSessionId !== sessionId) throw failure("Use only this bound learning conversation.");
+          const { grant } = await requireCurrent(current, admitted);
+          return grant.project;
         },
         async requirePresentationAttempt(attemptId) {
           if (attemptId !== scope.attemptId) throw failure("Pilot only this bound pinned attempt.");
