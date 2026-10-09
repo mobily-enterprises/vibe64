@@ -811,3 +811,32 @@ archives both old documents, and Make current restores the exact pair as Active.
 The off-tree implementation draft has not been executed or accepted; focused
 original lifecycle, reader, viewer and numbered-upgrade backup/retry evidence is
 required before activation.
+
+## Retained original native Claude continuity (prepared)
+
+`20261009-colleague-native-continuity` follows the earlier Colleague schema and
+native-delivery upgrades. It is prepared and focused-tested, not applied to live
+installations. Run the candidate command as the original daemon with its original
+HOME/configuration; stop all services and native writers before apply.
+
+Only a current, settled original native Claude/Anthropic chat with unchanged
+selection and no common runtime or fresh-chat transition is eligible. The
+application verifies its actor-private scope, original completed scoped receipt,
+single original account pin, original UUID, exact trusted physical HOME and
+complete unambiguous native transcript. A newer user, partial tail, active goal,
+foreign Colleague claim or unfinished effect blocks conversion. Existing common
+bindings and fresh-chat histories are retained. Other retired providers are not
+converted by this increment. No model/auth request, native-history move or old
+request replay occurs. Original receipts and all canonical messages remain.
+
+Check accepts earlier pending outer schemas read-only; apply requires those
+earlier upgrades to have completed schema3. The original backup publisher creates
+private verified before/after copies under
+`upgrades/backups/20261009-colleague-native-continuity/` before replacing product
+records. Native history and scoped receipts remain read-only and are not backed
+up by that publisher. On retry, the owner reinspects native evidence against the
+original backup and requires the full expected product to match the immutable
+replacement, including UUID, account, paths and history cursor. Changed evidence,
+backups or product bytes blocks retry. Resolve the reported cause; do not edit
+the ledger, force a new account pin or start an older candidate against partial
+state. Fresh native account validation still runs before subsequent work.

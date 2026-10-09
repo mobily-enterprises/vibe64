@@ -1,3 +1,4 @@
+import { conversationConfiguration } from "./conversationConfiguration.js";
 import {
   createCodexSessionRenewalPreparation
 } from "./sessionRenewalReceipts.js";
@@ -3508,11 +3509,7 @@ function createService({
 
     async resolveConversationConfiguration(assistantSelection, systemPrompt, options = {}) {
       await sessionAgent.requireAssistantAccessForSelection(assistantSelection, options);
-      const { engineId, modelProviderId, modelId, variantId } = assistantSelection;
-      const nativeAccount = engineId === "codex" && modelProviderId === "openai" ||
-        engineId === "claude" && modelProviderId === "anthropic";
-      return { engine: engineId, configuration: { systemPrompt, model: modelId,
-        ...(!nativeAccount ? { integrationId: modelProviderId } : {}), ...(variantId ? { effort: variantId } : {}) } };
+      return conversationConfiguration(assistantSelection, systemPrompt);
     },
 
     async resolveConversationConnection({ integrationId, assistantSelection }, options = {}) {

@@ -53,7 +53,12 @@ across projects. It knows the selected project and session, can open their views
 and ask coding agents for help through the same operations the UI uses. It has
 no repository tools or engineering role. Its continuing conversation remains
 available before a session exists or when a session cannot open. Each signed-in
-person keeps their own Colleague history and model choice. The current text
+person keeps their own Colleague history and model choice.
+For a confirmed stopped native Claude conversation retained from before the
+shared-runtime move, an operator correction preserves its original thread and
+written discussion. Uncertain history or account ownership requires inspection;
+the correction never resends an old request or grants a different account access.
+The current text
 conversation supports an Online host's global voice controls and configured display name.
 Colleague displays reply text incrementally and a voice host can speak readable
 phrases before completion; only the completed answer enters saved history.

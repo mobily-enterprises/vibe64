@@ -48,6 +48,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-colleague/src/server/conversationUpgrade.js`
+- `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`
 
 ## Public contract
 
@@ -89,7 +90,24 @@ logical scope and credential-home native history: an explicitly supplied scoped
 binding must match both trusted host paths and retains its saved native UUID under
 the unchanged account guard. Ordinary bindings retain their workdir checks. This
 driver facility does not import retired product bindings; their verified conversion remains the
-application's stopped, numbered-upgrade responsibility.
+application's stopped, numbered-upgrade responsibility. The new
+`20261009-colleague-native-continuity` owner converts only a settled original
+native Claude/Anthropic record with unchanged selection, one actor-private scope,
+the original completed scoped receipt and account digest, exact credential HOME
+and an unambiguous complete native history ending at that receipt's user ID.
+The existing reader's strict-tail option is used only for stopped inspection;
+ordinary live reads continue to tolerate a writer's partial last frame. Active
+goals, foreign/multiple Colleague claims, unknown operations and missing or changed
+receipts fail before publication. It preserves canonical rows and the original
+retired/native receipts; no old request journal, inference or auth query is made.
+It maps the exact digest format into the unchanged fresh native-account guard,
+without an external integration shortcut. The existing backup publisher retains
+exact before/after bytes; retries reinspect native evidence and compare the full
+expected product to the immutable replacement, retaining its prepared segment ID.
+Normal admission supplies current instructions before the next request.
+This is scoped stopped conversion evidence, not authentic upstream acceptance
+or platform-wide native UUID inventory. OpenCode, Codex and older external-provider
+conversion remain separate unfinished parity obligations.
 
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through

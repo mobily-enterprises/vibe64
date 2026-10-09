@@ -3,6 +3,12 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+The existing authorized configuration resolver calls the pure
+`packages/vibe64-terminals/src/server/conversationConfiguration.js` mapping after
+its unchanged access check. The offline Colleague upgrade reuses that mapping:
+native Codex/OpenAI and Claude/Anthropic have no external integration ID. The
+pure function grants no account, model or execution authority.
+
 Per-request role instructions distinguish provisional readiness from verified
 completion. Once implemented resources are prepared and Preview responds, the
 implementer invites the person to try the feature while verification continues.

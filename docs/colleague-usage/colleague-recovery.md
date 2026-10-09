@@ -61,3 +61,13 @@ browser or device, and clearing tab storage removes them. Server-saved history
 remains available in Previous conversations. Reading archived history does not
 reopen its runtime or acquire an executable old delivery.
 
+For conversations retained from before the shared-runtime move, the candidate
+release includes an operator upgrade for a confirmed, stopped native Claude
+conversation. When its original private receipt, account pin and complete native
+history match, it retains the original thread; it does not send the old message
+again. The same account is checked before your next request. This is not a
+browser repair or a reason to press Send twice. Missing, unfinished or conflicting
+evidence requires the owner to inspect the reported upgrade error. Other older
+provider bindings are not covered by this correction. Colleague can explain the
+notice; running a stopped-service upgrade requires an operator.
+

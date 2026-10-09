@@ -4,6 +4,8 @@ import path from "node:path";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 
+export { upgradeColleagueNativeContinuity } from "./nativeConversationUpgrade.js";
+
 /** Offline conversion only. Native histories remain untouched and no work resumes. */
 export async function upgradeColleagueConversations({ systemRoot, apply, backupRoot, report }) {
   const root = path.join(systemRoot, "colleague");
