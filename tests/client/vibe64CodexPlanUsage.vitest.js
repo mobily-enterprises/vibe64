@@ -340,3 +340,116 @@ it("shows Claude allowance and native goal controls without an unsupported token
   expect(running).toContain("Pause stops the current turn");
   mocks.goal = null;
 });
+
+it("preserves the displayed native goal identity through the actual shared control and HTTP request", async () => {
+  const { createHash } = await import("node:crypto");
+  const { createRenderer, reactive, nextTick } = await import("vue");
+  const { useAssistantConversation } = await import("@jskit-ai/assistant-runtime/client");
+  const { createAssistantApi } = await import("@jskit-ai/assistant-core/client");
+  const { createConversationFixtureSocket, provideConversationFixture } = await import("./helpers/conversationRuntimeFixture.js");
+  const objective = "Complete the approved implementation and verification plan. ".repeat(40);
+  const nativeGoal = { threadId: "thread-long", createdAt: 20, objective };
+  // The canonical ID retains all three original stale-goal tuple fields. The
+  // common transport deliberately does not expose the native thread tuple.
+  const goalId = createHash("sha256").update(JSON.stringify([
+    nativeGoal.threadId, nativeGoal.createdAt, nativeGoal.objective
+  ])).digest("hex");
+  const capabilities = { goals: true, goalBudgets: true,
+    goalCommands: Object.fromEntries(["set", "pause", "resume", "cancel"].map(action =>
+      [action, { delivery: "control", interruptsTurn: false }])) };
+  const selected = ref("goal-ui-one");
+  const viewer = ref({ actorKey: "goal-ui-owner" });
+  const views = new Map([
+    ["goal-ui-one", { status: "available", goal: { id: goalId, objective, status: "active" },
+      target: { segmentId: "codex:thread-long", capabilities }, routing: { selection: { engineId: "codex" } } }],
+    ["goal-ui-two", { status: "available", goal: { id: "successor-goal", objective: "Another goal", status: "active" },
+      target: { segmentId: "codex:successor-thread", capabilities }, routing: { selection: { engineId: "codex" } } }]
+  ]);
+  const snapshots = new Map();
+  const read = id => {
+    if (!snapshots.has(id)) snapshots.set(id, reactive({ id, segmentId: "codex:visible-thread", status: "working",
+      capabilities, conversationLog: [] }));
+    return snapshots.get(id);
+  };
+  const socket = createConversationFixtureSocket(read);
+  let reply = async () => ({ ok: true });
+  const request = vi.fn(async (url, options) => {
+    const id = decodeURIComponent(url.split("/conversations/")[1].split("/")[0]);
+    if (options.method === "GET") return url.endsWith("/goal") ? structuredClone(views.get(id)) : read(id);
+    return reply(url, options);
+  });
+  const api = createAssistantApi({ request, resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" });
+  const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  let binding;
+  const app = renderer.createApp({ setup() {
+    binding = useAssistantConversation({ conversationId: () => selected.value, actorKey: () => viewer.value.actorKey,
+      surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "", goal: true, api, socket });
+    return () => h("div");
+  } });
+  provideConversationFixture(app, socket, viewer.value.actorKey);
+  app.mount({});
+  const writes = () => request.mock.calls.filter(([, options]) => options.method === "POST");
+  const goalReads = id => request.mock.calls.filter(([url, options]) =>
+    options.method === "GET" && url === `/api/assistant/app/conversations/${id}/goal`);
+  try {
+    await vi.waitFor(() => expect(binding.runtime.value.goalView.value).toEqual(views.get("goal-ui-one")));
+    const original = binding.runtime.value;
+    for (const [action, status, label] of [["pause", "active", "Pause goal"], ["resume", "paused", "Resume goal"],
+      ["cancel", "blocked", "Cancel goal"]]) {
+      views.get("goal-ui-one").goal.status = status;
+      await original.refreshGoal();
+      mocks.buttons = [];
+      const html = await render(null, { conversationRuntime: original });
+      if (action === "pause") {
+        expect(html).toContain(`${objective.slice(0, 140).trimEnd()}…`);
+        expect(html).not.toContain(objective);
+        expect(html).toContain("View full goal");
+      }
+      const before = writes().length;
+      const readsBefore = goalReads("goal-ui-one").length;
+      reply = async () => action === "resume" ? { ok: false, error: "Goal changed" } : { ok: true };
+      await mocks.buttons.find(button => button.text.trim() === label).click();
+      expect(writes().slice(before)).toEqual([["/api/assistant/app/conversations/goal-ui-one/goal", {
+        method: "POST", signal: undefined, headers: { "x-jskit-surface": "app" },
+        body: { action, expectedSegmentId: "codex:thread-long", expectedGoalId: goalId }
+      }]]);
+      expect(goalReads("goal-ui-one").length).toBeGreaterThan(readsBefore);
+      expect(original.goalView.value.goal.objective).toBe(objective);
+      expect(original.snapshot.value.status).toBe("working");
+      expect(original.delivery.state.messages).toEqual([]);
+      if (action === "resume") expect(original.goalState.value.error).toBe("Goal changed");
+    }
+    // A selected foreign chat thread cannot replace the separately pinned goal
+    // target. A late old control reply must not clear or refresh a new owner.
+    expect(original.snapshot.value.segmentId).toBe("codex:visible-thread");
+    expect(original.goalView.value.target.segmentId).toBe("codex:thread-long");
+    views.get("goal-ui-one").goal.status = "active";
+    await original.refreshGoal();
+    mocks.buttons = [];
+    await render(null, { conversationRuntime: original });
+    let finish;
+    reply = () => new Promise(resolve => { finish = resolve; });
+    const pending = mocks.buttons.find(button => button.text.trim() === "Pause goal").click();
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const originalReads = goalReads("goal-ui-one").length;
+    selected.value = "goal-ui-two";
+    await nextTick();
+    await vi.waitFor(() => expect(binding.runtime.value.goalView.value).toEqual(views.get("goal-ui-two")));
+    const successor = binding.runtime.value;
+    const successorReads = goalReads("goal-ui-two").length;
+    finish({ ok: false, error: "Old goal changed" });
+    await pending;
+    expect(goalReads("goal-ui-one")).toHaveLength(originalReads);
+    expect(goalReads("goal-ui-two")).toHaveLength(successorReads);
+    expect(successor.goalView.value).toEqual(views.get("goal-ui-two"));
+    expect(successor.goalState.value.error).toBe("");
+    expect(successor.goalState.value.pending).toBe(false);
+    expect(writes()).toHaveLength(4);
+    expect(writes().every(([url]) => url === "/api/assistant/app/conversations/goal-ui-one/goal")).toBe(true);
+  } finally {
+    app.unmount();
+    mocks.buttons = [];
+    mocks.goal = null;
+  }
+});
