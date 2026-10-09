@@ -2128,3 +2128,68 @@ test("Codex service retirement preserves an archived family before deletion and 
   }
   await assert.rejects(access(workdir), { code: "ENOENT" });
 });
+
+
+test("Learning capture rejection retains an exact pre-admission receipt without exposing internal failures", async t => {
+  const { AppError } = await import("@jskit-ai/kernel/server/runtime");
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, {
+    codexAppServerProviderFactory() { assert.fail("Rejected capture cannot acquire a native provider"); }
+  });
+  const input = { messageId: "capture-before-native", message: "Teach this introduction." };
+  const busy = Object.assign(new Error("The original exercise preparation is busy."), {
+    code: "VIBE64_TRAINING_PREPARATION_BUSY", statusCode: 409, privateDiagnostic: "do not expose"
+  });
+  let problem = busy;
+  f.runtime.learningScope = { learnerId: "42", attemptId: "saved-attempt" };
+  f.runtime.learningTeaching = { async captureMessage() { throw problem; } };
+  const send = () => f.service.sendAgentMessage(f.session.sessionId, input, { runtime: f.runtime });
+  await assert.rejects(send(), error => {
+    assert.equal(error instanceof AppError, true);
+    assert.equal(error.status, 409);
+    assert.equal(error.code, busy.code);
+    assert.equal(error.message, busy.message);
+    assert.deepEqual(error.details, { delivery: { status: "not-sent", messageId: input.messageId } });
+    assert.equal(Object.hasOwn(error, "privateDiagnostic"), false);
+    return true;
+  });
+  const { default: Fastify } = await import("fastify");
+  const { registerFastifyConversations } = await import("@jskit-ai/assistant-runtime/server");
+  const { createHttpError } = await import("@jskit-ai/http-runtime/client");
+  const app = Fastify();
+  t.after(() => app.close());
+  await registerFastifyConversations(app, { env: {},
+    config: { surfaceDefinitions: { home: { enabled: true, requiresWorkspace: false } },
+      assistantSurfaces: { home: { settingsSurfaceId: "home", configScope: "global" } } },
+    authenticate: async () => ({ actor: { id: "42" } }),
+    runtime: { async open() { return { send }; } }
+  });
+  const response = await app.inject({ method: "POST", url: "/api/assistant/home/conversations/learning/messages",
+    headers: { "x-jskit-surface": "home" }, payload: { messageId: input.messageId, text: input.message } });
+  assert.equal(response.statusCode, 409, response.body);
+  const transported = createHttpError({ status: response.statusCode }, response.json());
+  assert.equal(transported.status, 409);
+  assert.equal(transported.code, busy.code);
+  assert.equal(transported.message, busy.message);
+  assert.deepEqual(transported.details, { delivery: { status: "not-sent", messageId: input.messageId } });
+  assert.equal(response.body.includes("privateDiagnostic"), false);
+  problem = new AppError(403, "This account has no teaching access.", {
+    code: "conversation_forbidden", details: { existing: "retained" }
+  });
+  await assert.rejects(send(), error => error === problem && error.status === 403 &&
+    error.details.existing === "retained" && error.details.delivery.messageId === input.messageId);
+  for (problem of [new Error("private storage failure"), Object.assign(new Error("unexpected client failure"), {
+    code: "internal_failure", statusCode: 409
+  }), Object.assign(new Error("private failure"), {
+    code: busy.code, statusCode: 500
+  }), new AppError(500, "Internal server failure.", { details: { existing: "retained" } })]) {
+    await assert.rejects(send(), error => error === problem && !error.details?.delivery);
+  }
+  assert.deepEqual(lock.attempts, [], "capture refusal precedes the original routing/native write lock");
+  f.runtime.learningTeaching.captureMessage = async () => input;
+  await assert.rejects(send(), error => {
+    assert.equal(error.code, "vibe64_assistant_selection_invalid");
+    assert.equal(error.details?.delivery, undefined, "a failure after routing entry is never stamped as capture rejection");
+    return true;
+  });
+});

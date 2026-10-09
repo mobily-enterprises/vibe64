@@ -1530,7 +1530,9 @@ Genuine load failures remain visible and retryable.
 Main and temporary chats keep an ordinary send pending until delivery is confirmed.
 An interrupted attempt shows “Delivery unconfirmed” with Check delivery, which
 checks the original receipt without sending another copy. Only confirmed failures
-offer Retry, Edit and Cancel. A late receipt clears stale delivery warnings.
+offer Retry, Edit and Cancel. Confirmed teaching preparation refusals before
+admission keep the original request available for Retry after preparation is ready;
+unknown delivery checks do not authorize another send. A late receipt clears stale delivery warnings.
 
 Sending a temporary message shows it immediately, including while its conversation
 is being created. Sending and assistant work have distinct status labels. Failed

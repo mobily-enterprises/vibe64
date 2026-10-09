@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationConfiguration } from "./conversationConfiguration.js";
 import {
   createCodexSessionRenewalPreparation
@@ -3736,9 +3737,23 @@ function createService({
           "Prompt suggestion cleanup will be retried on session close.");
       });
       try {
-        const request = options.runtime?.learningScope && options.runtime.learningTeaching
-          ? await options.runtime.learningTeaching.captureMessage({ runtime: options.runtime, sessionId, input,
-            context: options, actions }) : input;
+        let request = input;
+        if (options.runtime?.learningScope && options.runtime.learningTeaching) {
+          try {
+            request = await options.runtime.learningTeaching.captureMessage({ runtime: options.runtime, sessionId, input,
+              context: options, actions });
+          } catch (error) {
+            // This host gate precedes routing and native admission. Do not expose
+            // arbitrary internal exceptions or classify failures after dispatch.
+            const delivery = { status: "not-sent", messageId: input.messageId };
+            if (error instanceof AppError && error.status >= 400 && error.status < 500) {
+              error.details = { ...error.details, delivery };
+            } else if (error?.code === "VIBE64_TRAINING_PREPARATION_BUSY" && error.statusCode === 409) {
+              throw new AppError(409, error.message, { code: error.code, details: { delivery } });
+            }
+            throw error;
+          }
+        }
         const result = await assistantRouting.send(sessionId, request, options);
         if (result?.ok === true && !result.duplicate && !options.purpose && !input.reviewAction && !closing) {
           try {

@@ -1111,3 +1111,15 @@ resolver's captured CONTROL context, which cannot admit project effects. It does
 not acquire the enclosing browser Send's preparation barrier again. Commands,
 ordinary observation/control/creation queries and effect execution keep their
 original admission and serialization; ended or foreign grants remain refused.
+
+### Refused Main Send delivery
+
+Learning's original teaching capture precedes routing and native admission. Its
+known preparation-busy 409, and structured client errors at this boundary, carry
+an exact-message `details.delivery` not-sent fact through the existing HTTP error
+envelope. Status, code and message retain their original meaning; unexpected
+internal failures keep their original sanitization. The shared binding retains
+that exact rejected request as failed and offers manual Retry, preserving its ID,
+captured data and any newer draft. Failures after routing entry and unknown
+receipt inspection remain uncertain. This adds no native journal, historical
+receipt repair, automatic resubmission or change to teaching authority.

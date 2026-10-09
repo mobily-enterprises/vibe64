@@ -103,10 +103,12 @@ is a workspace recovery problem; it does not prove a lesson pass or authorize
 another teaching request. Source-less lessons retain their no-Git result.
 Practice teaching-tool availability remains subject to the limits above.
 Sending in a prepared practice conversation checks fresh teaching access without
-starting setup again. If **Send** reports busy preparation before admission, keep
-the same message and use **Check delivery** before retrying. If setup has
-finished but the lesson still shows preparing, use **Resume** for that saved lesson
-to confirm its preparation; do not start a replacement or change its pin.
+starting setup again. A confirmed preparation refusal before admission keeps the
+message failed; after preparation is ready, use its **Retry** once to send the same
+saved request. If delivery is unconfirmed, use **Check delivery**; an unknown result
+is not permission to resend. If setup has finished but the lesson still shows
+preparing, use **Resume** for that saved lesson to confirm its preparation; do not
+start a replacement or change its pin.
 If preparation reports
 missing source, retain the attempt and resolve that failure before continuing;
 a conversation alone cannot replace the workspace. Existing conversations and
