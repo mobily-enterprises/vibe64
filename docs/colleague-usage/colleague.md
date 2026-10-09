@@ -156,7 +156,11 @@ finishing and saving the answer does not replay its opening words. Progress desc
 what it is checking; it is not confirmation that an action succeeded. Stop or
 new steering clears old progress. The acknowledgement is temporary: the completed
 answer enters saved history, while new progress text does not. Existing historical
-messages remain unchanged.
+messages remain unchanged. Native Codex can use its completed progress sentence
+when that exact output was observed under the admitted request. An unfinished
+sentence or an output without that verified request identity cannot supply it;
+the normal fallback remains available. A late sentence from earlier steering
+cannot become the current request's acknowledgement.
 For an API-based Colleague, progress longer than 280 characters fails the response
 before its requested action starts. The message and history stay available for a
 follow-up. This bound currently applies only to the API integration; equivalent

@@ -299,9 +299,20 @@ policy. The existing final and recovered-output writers exclude commentary;
 Codex's original live output owner completes/publishes the stream without a
 canonical row and retains native item/fingerprint deduplication. Other consumers
 keep persistence by default. No existing rows are deleted, and native provider
-history, reasoning and action receipts are unchanged. Native intent association
-remains open: a completed native sentence can still produce the fallback at the
-first tool boundary. This storage correction does not prove that association.
+history, reasoning and action receipts are unchanged. The existing Codex store
+resolves exact native thread/turn/outer-request/segment ownership to the canonical
+authored row. Its transient stream retains that per-item custody privately;
+completion resolves pending custody only to that same admitted row. Exact completed
+text is published once through the existing message event after accepted and
+before the original delivery commit permits tools, using the request's existing
+progress custody for an early completion. Fresh subscriber authorization also
+checks the captured owner/segment and unsealed request. Ordinary reads, repeated completions and duplicate cleanup do not replay
+it, and a saved patch for the same output keeps its original canonical identity.
+Pending origin alone and first-seen unproven completions cannot manufacture an
+authored row; captured predecessor output cannot become successor progress.
+This restores the completed acknowledgement carrier, not native text/tool
+same-response association. That authority and its original pre-effect bound
+remain open; presentation cannot authorize an effect.
 The original 280-character pre-effect refusal is restored for the direct API
 carrier through the common driver's opt-in `maxApiToolProgressCharacters` limit;
 final replies keep their separate 16000-character bound. Native tool carriers
