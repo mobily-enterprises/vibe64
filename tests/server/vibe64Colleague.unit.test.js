@@ -4895,3 +4895,135 @@ test("Colleague native Codex model-only selection carries exact history once and
   assert.deepEqual(restored.observations.mutations, []);
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog[0], savedBefore.conversationLog[0]);
 });
+
+test("R11 original scoped Claude receipt survives stopped product upgrade and current Colleague admission", { timeout: 30_000 }, async t => {
+  const { createClaudeConversationHost, nativeMessageId } = await import("../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js");
+  const { createClaudeCodeProcess } = await import("@jskit-ai/assistant-core/server/claude-process");
+  const { createConversationTranscript, createMemoryConversationStorage } = await import("@jskit-ai/assistant-core/server/conversation");
+  const { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } =
+    await import("../../packages/vibe64-colleague/src/server/conversationUpgrade.js");
+  const root = await mkdtemp(path.join(os.tmpdir(), "colleague-r11-claude-producer-"));
+  const answer = "The original scoped discussion is settled.";
+  const native = await createControlledColleagueNativeCommands(root, [{ text: JSON.stringify({
+    kind: "reply", text: answer, toolName: "", arguments: ""
+  }) }]);
+  const scopeId = `colleague_${randomUUID().replaceAll("-", "")}`;
+  const directory = path.join(root, "colleague", "NDI");
+  const scope = { id: scopeId, workdir: path.join(directory, scopeId), runtimeRoot: path.join(directory, scopeId),
+    environment: {}, stableContext: "Return the supplied private product reply as JSON; use no native tools." };
+  await mkdir(scope.workdir, { recursive: true });
+  const host = native.host(scope);
+  const oldSelection = { ...selection, engineId: "claude", modelProviderId: "anthropic" };
+  const context = { sessionId: scopeId, assistantScope: scope, assistantSelection: oldSelection };
+  const producer = createClaudeConversationHost({ env: host.env, command: host.commands.claude,
+    credentialHome: { home: host.env.HOME }, systemRoot: root,
+    projectService: { createRuntime: () => assert.fail("A retained scoped producer cannot borrow a development session") },
+    accountStatus: async () => ({ loggedIn: true, authMethod: "claude.ai", email: await readFile(host.env.TEST_ACCOUNT, "utf8") }),
+    // Existing standalone process facility: the original host's managed identity
+    // descriptor is not an execution API. No alternate native owner is created.
+    createProcess: ({ execution: _managedDescriptor, ...input }) => createClaudeCodeProcess(input)
+  });
+  const { native: { owner } } = await producer.prepareConversationHost(scopeId, context, "scoped");
+  let entry;
+  t.after(async () => { if (entry?.process) await owner.stopConversation(entry, "Fixture cleanup"); });
+  const created = await owner.createConversation({ persistent: true }, { context, acquire: owner.acquire });
+  const messageId = randomUUID();
+  const input = { conversationId: created.conversationId, persistent: true, messageId, message: "Keep this scoped discussion." };
+  entry = await owner.acquire(context, created.conversationId, { operation: "start", input });
+  await owner.startTurn(entry, input);
+  assert.equal((await owner.wait(entry, input, { context, acquire: owner.acquire })).status, "completed");
+  const completed = await owner.read(entry, input);
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.admitted, true);
+  assert.equal(JSON.parse(completed.text).text, answer);
+  const nativeFile = path.join(scope.runtimeRoot, "claude-conversations", scopeId, `${created.conversationId}.json`);
+  const receipt = JSON.parse(await readFile(nativeFile, "utf8"));
+  assert.equal(receipt.schemaVersion, 1);
+  assert.equal(receipt.persistent, true);
+  assert.equal(receipt.sent, true);
+  assert.equal(receipt.nativeWorkdir, host.env.HOME);
+  assert.notEqual(receipt.nativeWorkdir, scope.workdir);
+  assert.match(receipt.accountIdentity, /^sha256:[a-f0-9]{64}$/u);
+  assert.equal(receipt.accountIdentities.anthropic, receipt.accountIdentity);
+  assert.ok(receipt.executionId, "The original producer saves its actual process identity");
+  assert.equal(receipt.lastMessageId, nativeMessageId(messageId));
+  assert.ok(receipt.turnId);
+  const historyFile = path.join(host.env.CLAUDE_CONFIG_DIR, "projects", receipt.nativeWorkdir.replace(/[^a-zA-Z0-9]/gu, "-"), `${created.conversationId}.jsonl`);
+  const historyBytes = await readFile(historyFile, "utf8");
+  assert.equal((await owner.stopConversation(entry, "Stopped before numbered upgrade")).stopped, true);
+  assert.equal(entry.process, null);
+  const stoppedReceipt = await readFile(nativeFile, "utf8");
+  assert.equal(JSON.parse(stoppedReceipt).executionId, "", "Actual Stop clears only its proved execution identity");
+  assert.equal(await readFile(historyFile, "utf8"), historyBytes);
+  const accountBytes = await readFile(host.env.TEST_ACCOUNT, "utf8");
+  const stoppedTrace = await native.trace();
+  await writeFile(host.env.TEST_ACCOUNT, "another@example.test");
+  try {
+    await assert.rejects(owner.startTurn(entry, { ...input, messageId: "foreign-account", message: "Forbidden account continuation" }),
+      error => error.code === "vibe64_claude_account_changed");
+    assert.deepEqual(await native.trace(), stoppedTrace, "A changed account cannot infer through the old receipt");
+  } finally { await writeFile(host.env.TEST_ACCOUNT, accountBytes); }
+  const foreignScope = { ...scope, id: `${scopeId}_other` };
+  await assert.rejects(owner.acquire({ ...context, sessionId: foreignScope.id, assistantScope: foreignScope }, created.conversationId), /unavailable/);
+  assert.deepEqual(await native.trace(), stoppedTrace, "A different scope cannot acquire this native receipt");
+
+  // The native receipt above is genuinely produced by the original retained
+  // owner. This captured schema1 PRODUCT envelope is compatibility input, not
+  // a claim that the frozen Colleague service itself produced this record.
+  const transcript = createConversationTranscript({ storage: createMemoryConversationStorage() });
+  const turn = await transcript.writeConversationUserMessage("NDI", { messageId, text: input.message });
+  await transcript.upsertConversationAssistantMessage("NDI", { turnId: turn.turnId, text: answer });
+  const conversationLog = await transcript.readConversationLog("NDI");
+  const legacy = { schemaVersion: 1, scopeId, assistantSelection: oldSelection, status: "ready", error: "",
+    conversationId: created.conversationId, runId: receipt.turnId, currentTurnId: turn.turnId, operation: null,
+    conversationLog, watches: [], observations: [], assignments: [] };
+  const file = path.join(directory, "conversation.json");
+  const originalBytes = JSON.stringify(legacy);
+  await writeFile(file, originalBytes, { mode: 0o600 });
+  const stages = [upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory];
+  const traceBefore = await native.trace();
+  for (let index = 0; index < stages.length; index++) {
+    await stages[index]({ systemRoot: root, backupRoot: path.join(root, "backups", String(index)), apply: false, report() {} });
+  }
+  assert.equal(await readFile(file, "utf8"), originalBytes);
+  for (let index = 0; index < stages.length; index++) {
+    await stages[index]({ systemRoot: root, backupRoot: path.join(root, "backups", String(index)), apply: true, report() {} });
+  }
+  assert.equal(await readFile(path.join(root, "backups", "0", "NDI", "conversation.json"), "utf8"), originalBytes);
+  assert.equal(await readFile(nativeFile, "utf8"), stoppedReceipt);
+  assert.equal(await readFile(historyFile, "utf8"), historyBytes);
+  assert.deepEqual(await native.trace(), traceBefore, "Numbered upgrades send no native requests or cleanup");
+  const f = await fixture(t, [{ text: "The saved discussion continues." }], { systemRoot: root, native });
+  t.after(() => rm(root, { force: true, recursive: true }));
+  assert.deepEqual((await f.service.read({}, f.context)).messages.map(({ role, text }) => [role, text]),
+    conversationLog.flatMap(row => row.messages.map(({ role, text }) => [role, text])));
+  assert.deepEqual(await native.trace(), traceBefore, "Opening upgraded history starts no native work");
+  await f.send("Continue this saved discussion.", "r11-claude-successor");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  const successorTrace = await native.trace();
+  const launches = successorTrace.filter(row => row.args?.includes("--session-id"));
+  assert.equal(launches.length, 2);
+  const successorId = launches[1].args[launches[1].args.indexOf("--session-id") + 1];
+  assert.notEqual(successorId, created.conversationId);
+  const inputs = successorTrace.filter(row => row.frame?.type === "user");
+  assert.equal(inputs.length, 2, "One original and one explicitly admitted successor request");
+  const frames = inputs[1].frame.message.content.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))
+    .filter(value => Array.isArray(value.messages));
+  assert.equal(frames.length, 1);
+  assert.deepEqual(frames[0].messages.map(({ role, text }) => [role, text]), conversationLog.flatMap(row => row.messages.map(({ role, text }) => [role, text])));
+  assert.deepEqual(f.observations.mutations, []);
+  await f.service.close();
+  const restored = await fixture(t, [{ text: "The same current successor resumes." }], { systemRoot: root, native });
+  await restored.send("Continue again.", "r11-claude-restart");
+  assert.equal((await restored.service.wait(restored.context)).status, "ready");
+  const restarted = await native.trace();
+  assert.equal(restarted.filter(row => row.args?.includes("--session-id")).length, 2);
+  const resumed = restarted.filter(row => row.args?.includes("--resume"));
+  assert.equal(resumed.length, 1);
+  assert.equal(resumed[0].args[resumed[0].args.indexOf("--resume") + 1], successorId);
+  assert.equal(restarted.filter(row => row.frame?.type === "user").at(-1).frame.message.content.includes("[Conversation changeover]"), false);
+  assert.equal(await readFile(nativeFile, "utf8"), stoppedReceipt);
+  assert.equal(await readFile(historyFile, "utf8"), historyBytes);
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog[0], conversationLog[0]);
+  assert.deepEqual(restored.observations.mutations, []);
+});
