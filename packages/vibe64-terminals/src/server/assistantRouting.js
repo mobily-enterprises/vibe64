@@ -96,7 +96,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (!notice) return;
     const sessionId = context.session.sessionId;
     const conversationId = context.routingConversationId;
-    const turn = await context.runtime.store.writeConversationSystemMessage(conversationId ? { sessionId, conversationId } : sessionId, notice);
+    const scope = conversationId ? { sessionId, conversationId } : sessionId;
+    const turn = await context.runtime.store.writeConversationSystemMessage(scope, notice);
     if (turn) await publish(sessionId, { reason: "assistant-routing-changed", payload: {
       assistantRoutingRequest: state, conversationLogPatch: { type: "upsert-turn", turn }, ...(conversationId ? { conversationId } : {})
     } });
@@ -751,17 +752,18 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             plan.text.replace(/^Status: completed\r?$/mu, "Status: active") === reviewedPlan.text.replace(/^Status: active\r?$/mu, "Status: active")) {
           try {
             const replies = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 });
-            if (!replies.some(turn => turn.user?.messageId === state.reviewMessageId && turn.assistant?.text?.trim())) {
+            const hasFinalExplanation = replies.some(turn => turn.user?.messageId === state.reviewMessageId && turn.assistant?.text?.trim());
+            if (!hasFinalExplanation) {
               state.error = "Review finished, but its final explanation was not confirmed. The completed plan stays current; check the review reply before archiving it.";
               await save(context, state);
               return;
             }
-            const result = await manageWorkPlan(context, { operation: "archive", expectedRevision: plan.revision,
+            const archivedPlan = await manageWorkPlan(context, { operation: "archive", expectedRevision: plan.revision,
               expectedProgressRevision: plan.progressRevision || "" }, "review");
             await save(context, state);
             await writeNotice(context, state, { messageId: `assistant-plan-archived:${state.reviewMessageId}`,
               text: `Completed plan archived: ${plan.title}.\n\n[View plan history](#vibe64-plan-history)` });
-            await publish(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice, assistantRoutingRequest: state } });
+            await publish(sessionId, { reason: "work-plan-changed", payload: { planNotice: archivedPlan.notice, assistantRoutingRequest: state } });
           } catch (error) {
             state.error = `Review finished, but automatic plan archival could not be confirmed: ${error.message} Open Plan and history to check before retrying Archive.`;
           }

@@ -393,9 +393,10 @@ function parseReviewRoutingDecision(text) {
 function assistantRoutingOutcomeNotice(request) {
   if (!request?.messageId || !request.outcome || request.stopped) return null;
   const outcome = request.outcome;
-  const heading = outcome.decision === "review" ? "Ready for Senior review."
-    : outcome.decision === "continue" ? "Continuing implementation."
-      : outcome.reason === "user_wait" ? "Paused at your request." : "Implementation incomplete.";
+  let heading = "Implementation incomplete.";
+  if (outcome.decision === "review") heading = "Ready for Senior review.";
+  else if (outcome.decision === "continue") heading = "Continuing implementation.";
+  else if (outcome.reason === "user_wait") heading = "Paused at your request.";
   return {
     messageId: `assistant-routing-outcome:${request.messageId}:${request.autoExecution?.continuations || 0}:${outcome.decision}`,
     text: [heading, outcome.explanation, outcome.nextStep ? `Next step: ${outcome.nextStep}` : ""].filter(Boolean).join("\n\n")
