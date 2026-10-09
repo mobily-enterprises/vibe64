@@ -382,10 +382,12 @@ async function verifyOpenCodeConnection({
     }
     const unavailable = error?.retryable === true || Number(error?.statusCode) >= 500;
     if (unavailable) {
+      const message = `${providerReason || `${policy.productLabel} could not be reached to verify this key.`} Nothing was saved; try again later.`;
       throw connectionVerificationError(
         "vibe64_ai_key_verification_unavailable",
-        `${providerReason || `${policy.productLabel} could not be reached to verify this key.`} Nothing was saved; try again later.`,
-        503
+        message,
+        503,
+        providerReason ? { apiKey: message } : null
       );
     }
     const message = providerReason

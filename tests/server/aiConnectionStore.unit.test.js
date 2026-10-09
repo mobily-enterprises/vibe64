@@ -553,6 +553,7 @@ test("regular Z.AI verification explains overload and balance without replacing 
       assert.equal(error.code, expectedCode);
       assert.equal(error.statusCode, status);
       assert.match(error.message, reason);
+      if (code === "1305") assert.equal(error.fieldErrors.apiKey, error.message);
       assert.doesNotMatch(JSON.stringify({ message: error.message, fields: error.fieldErrors }), /raw provider text|rejected-secret/);
       return true;
     });
