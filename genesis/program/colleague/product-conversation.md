@@ -93,6 +93,13 @@ Its existing partial-reply and browser-stream projections reuse the
 original trailing-high-surrogate guard for display only, leaving completed events
 and canonical text unchanged. The terminal service supplies authorized account resolution and
 managed execution. Each person has an independent native scope.
+The standalone Codex driver retains the first exact admitted application-tool
+failure across direct interruption and delayed native completion. Only the same
+latched error with current provider/thread/turn fences enters the existing
+observation-stop owner, which pauses and verifies the same goal and persists the
+stopped barrier before the original pending recovery joins. Supplied native
+ownership, ordinary Stop and account invalidation keep their existing guards;
+no new recovery owner or repeated application effect is introduced.
 The shared host preserves the native Claude profile lookup used by Main;
 it inherits an explicit configuration directory without inventing a default override.
 The shared Claude driver also retains the original distinction between the private

@@ -79,6 +79,10 @@ request's saved native history. A completed answer is recovered once. Otherwise
 Colleague reports the failure and stops the failed native turn through its
 existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing.
 This recovery does not resend your request or use another turn's answer.
+If an admitted Codex tool fails during a native goal, cleanup verifies that the
+same goal is paused before the request settles. Unconfirmed cleanup stays visible;
+use **Stop** before continuing. Saved receipts remain intact; cleanup never
+repeats their effects.
 If a failed or interrupted Codex status arrives before its error detail,
 Colleague briefly waits for that detail before reporting the failure. A following
 error is reported immediately. Repeated status does not extend the wait, and
