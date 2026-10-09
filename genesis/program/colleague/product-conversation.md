@@ -376,6 +376,16 @@ There are no Talk/Text tabs on that adapter path. Opening starts neither capture
 nor read-aloud. Tap Talk starts hands-free; a hold records push-to-talk and release
 sends, with automatic connection setup. Its existing portrait control hides or
 reveals the face, while short containers can clamp the artwork.
+JSKIT's existing canonical speech queue preserves the original cleanup order:
+an 8,000-character raw Markdown window feeds the unchanged normalizer, and spoken
+output is bounded at 4,000 normalized characters. Code within that window leaves
+room for the following explanation. The streaming owner retains raw consumed
+offsets for revision checks and limits phrases against normalized consumed
+prefixes, including intervening whitespace; it also bounds total appended text.
+Reaching the spoken limit ends synthesis without claiming completion before the
+canonical final and actual playback drain. Optional Main activity narration keeps
+its separate original observed-delta cap. Application history, output identity
+and personal preferences remain in their existing owners.
 The cog holds personal voice selection. The frame's minus minimizes; X/Escape
 within the conversation closes and releases audio, discarding unsent speech. The header avatar owns the minimized-session
 badge and reopening of the existing target, with a microphone cue while listening

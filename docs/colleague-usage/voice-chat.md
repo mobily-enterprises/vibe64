@@ -144,6 +144,8 @@ and voice personally, separately for Colleague and coding assistants across
 projects. Its Management → **Speech and Colleague** page changes only the shared
 Colleague name; use each assistant's cog for your own avatar and voice.
 The personal cog's **Speak replies** choice controls output for that target.
+In Vibe64 Online, older browser-only speaker choices are not copied into personal
+settings; check **Speak replies** when first using your personal controls.
 While that choice saves, the speaker control briefly waits; microphone capture
 and typed chat remain available.
 For coding assistants, **Read thinking**, **Read progress** and **Thinking sounds**
@@ -158,7 +160,11 @@ female voices. If only one voice is installed it is shown but cannot be changed.
 Server model setup is an operator task.
 
 Answers start speaking in short phrases before completion; code and dense tables
-remain in chat. Existing history is not replayed when the window opens. Spoken
+remain in chat. Spoken answers use up to 4,000 characters after removing code and
+formatting from the first 8,000 characters of the answer. A long code block within
+that window leaves room to speak the explanation after it. Read the chat for the
+rest of a longer answer; reaching the speech limit does not mean the agent has
+finished. Existing history is not replayed when the window opens. Spoken
 “Stop talking”, “Stop speaking” or “Be quiet” stops audio locally in either live
 mode. Other wording is an ordinary message, so use the explicit button if recognition
 is wrong. Pause detection and echo cancellation depend on the recording environment.
