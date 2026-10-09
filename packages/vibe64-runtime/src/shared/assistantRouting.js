@@ -296,7 +296,7 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   return render();
 }
 
-function assistantModePrompt(mode, message, { planInstructions = "", intent = "" } = {}) {
+function assistantModePrompt(mode, message, { planInstructions = "", intent = "", browserReview = false } = {}) {
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,
@@ -320,6 +320,7 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
       "Perform the review yourself in this turn. Cleanup is optional and only runs when requested in this review's instructions.",
       "If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch.",
       "Run relevant checks, then report findings, fixes, actual checks and anything unverified.",
+      "You own browser verification for this review. Exercise the requested user flow and inspect meaningful visual checkpoints yourself using the supplied managed browser tools; the implementer's code tests do not replace these checks. Reuse reliable passing evidence and avoid repeating unaffected checks. Report browser or visual checks that could not be performed, and do not claim verified completion while required checks remain unfinished.",
       "Do not start another review, publish, or expand scope."
     ].join(" ")
   };
@@ -348,6 +349,12 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
   }
   if (!planInstructions && intent !== "discussion") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update only Progress after reading both documents, never change scope or mark the plan completed.";
+  }
+  if (intent !== "discussion" && intent !== "planning" && intent !== "deslop" && mode !== "review" && mode !== "deslop") {
+    instruction += " When the requested feature is implemented, its required runtime resources are prepared and Preview is responding, promptly tell the user: Ready to try—give it a spin. Verification is still running. Do not claim full completion before verification, and do not wait for the user to test before continuing your checks. If Preview is unavailable, report that instead of inviting the user to try it.";
+    instruction += browserReview
+      ? " A separate Senior review owns in-depth browser testing and visual inspection. Do not run those checks in this implementation turn. Run relevant focused code tests, prepare the app and report exact checks, remaining gaps and browser acceptance cases to Senior; browser verification pending is an expected handoff, not an implementation blocker. Tell the user that Senior will perform the remaining browser checks."
+      : " You own the remaining verification, including relevant browser checks and visual inspection using the supplied tools. Tell the user those checks are next, keep the app usable during checking and report anything unverified if checking is interrupted or unavailable.";
   }
   return `[Vibe64 role: ${assistantModeLabel(mode)}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instruction}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;
 }

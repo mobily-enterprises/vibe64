@@ -3,6 +3,15 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+Per-request role instructions distinguish provisional readiness from verified
+completion. Once implemented resources are prepared and Preview responds, the
+implementer invites the person to try the feature while verification continues.
+Auto implementation runs focused code checks and hands in-depth browser and
+visual verification to its separate Senior review. Without that automatic
+review, the selected agent owns those checks itself. The existing routing
+coordinator supplies this distinction only for requests that will receive
+review; interrupted or unavailable checks remain explicitly unverified.
+
 The original session assistant-selection event refreshes the retained browser
 observer through JSKIT’s existing same-ID subscribe operation. Canonical reads
 and live updates then use the current authorized native owner even when its

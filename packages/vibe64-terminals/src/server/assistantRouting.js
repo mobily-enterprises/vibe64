@@ -371,6 +371,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const includePlanInstructions = usesPlan || (state.task !== "deslop" && ["senior", "junior"].includes(state.mode));
     const message = assistantModePrompt(role, input.message,
       { intent: followup && !implementing ? "review" : state.task || (state.mode === "auto" ? state.reason : ""),
+        browserReview: state.review && (!followup || implementing) && needsReview(state),
         planInstructions: includePlanInstructions ? workPlanInstructions(role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;

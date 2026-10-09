@@ -1,5 +1,19 @@
 # Connect AI accounts and choose Model routing
 
+## Try an app while verification continues
+
+Once an implemented feature's resources are prepared and Preview responds, the
+agent should say **Ready to try—give it a spin. Verification is still running.**
+You can use Preview immediately; this message is provisional, not proof that all
+checks passed. You do not have to test it before the agent continues.
+
+For an implementation in **Auto**, the implementer runs focused code checks and
+hands browser testing and visual inspection to **Senior**. Senior exercises the
+requested user flow and reports results or remaining gaps. In **Custom** or a
+direct role without an automatic review, the same agent remains responsible for
+browser verification. A stopped or unavailable check must be reported as
+unverified; an invitation to try the app does not replace verification.
+
 Open **AI Accounts** in Management. No project or coding session is required.
 The local standalone editor does not require a hosted workspace login to open AI
 Accounts. Hosted connection changes require the workspace owner. A member's permitted models
