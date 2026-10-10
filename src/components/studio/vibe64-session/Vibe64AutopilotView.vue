@@ -864,7 +864,6 @@
 <script setup>
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { useDisplay } from "vuetify";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
   LongTextPreviewBlocks
@@ -1595,7 +1594,6 @@ const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
 const learningViewRef = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 const learningLayoutRef = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
 const learningPreviewRef = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
-const workspaceWidth = props.conversationRuntime?.identity?.learningAttemptId ? useDisplay().width : ref(0);
 const learningIdentity = computed(() => props.conversationRuntime?.identity?.learningAttemptId ? props.conversationRuntime.identity : null);
 const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
   props.conversationRuntime?.available?.value));
@@ -1604,7 +1602,7 @@ const learningLayout = Object.freeze({
   get learningAttemptId() { return learningIdentity.value?.learningAttemptId; },
   get learnerId() { return learningIdentity.value?.learnerId; },
   get ready() { return learningSelected.value && Boolean(props.conversationRuntime?.conversationReady?.value); },
-  get projectVisible() { return workspaceWidth.value > 980 || chatCollapsed.value; },
+  get projectVisible() { return true; },
   get chatVisible() { return !chatCollapsed.value; }
 });
 const learningView = Object.freeze({

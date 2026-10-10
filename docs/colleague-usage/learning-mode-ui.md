@@ -17,10 +17,13 @@ trial or a released, enabled course; changing views does not bypass that rule.
 
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
-**Show chat** opens the chat pane; **Show lessons** returns to the picker. On
-narrow screens these controls switch the visible pane. On small phones, the same
-button shows a chat-bubble or open-book icon; its accessible name and tooltip
-remain **Show chat** or **Show lessons**. Working and Learning use
+The teacher chat stays visible throughout Learning, including after opening a
+lesson or reloading the page. On desktop, Lessons/App/Presentation appear beside
+it. On phones and tablets, chat occupies the upper part of the workspace and
+Lessons/App/Presentation the lower part; each keeps its own scrollable area.
+Use the existing **Lessons**, **App** or **Presentation** tabs in that supporting
+pane without hiding Main. Learning has no chat-collapse or pane-swipe control.
+Returning to Working restores its previous chat-collapse choice. Both modes use
 one retained session panel, so switching modes does not delete drafts or stop
 already admitted background work. A project that is still loading or failed
 keeps its original Working readiness gate while retaining the hidden panel.

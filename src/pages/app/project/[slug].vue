@@ -16,8 +16,7 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { ref } from "vue";
-import { mdiBookOpenPageVariant, mdiMessageTextOutline } from "@mdi/js";
+import { computed, ref } from "vue";
 import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
@@ -26,7 +25,7 @@ const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
 
 const {
-  chatCollapsed,
+  chatCollapsed: workingChatCollapsed,
   chatToggleIcon,
   chatToggleTitle,
   dashboardRouteActive,
@@ -53,20 +52,23 @@ const {
   projectTabs,
   retryProjectRuntime,
   selectProjectPane,
-  setChatCollapsed,
-  showProjectPane,
+  setChatCollapsed: setWorkingChatCollapsed,
+  showProjectPane: showWorkingProjectPane,
   switcherProjects,
   targetFolderName
 } = useVibe64AppPage();
 
 const panel = ref(null);
 const learning = useVibe64LearningMode({ onConversationOpened(identity) {
-  if (panel.value?.selectLearningConversation(identity)) setChatCollapsed(false);
+  panel.value?.selectLearningConversation(identity);
 } });
 const { learningMode, purposeFilter, learningResource } = learning;
-async function changeLearningMode(value) {
-  await learning.setLearningMode(value);
-  if (value && learningMode.value) setChatCollapsed(true);
+const chatCollapsed = computed(() => !learningMode.value && workingChatCollapsed.value);
+function setChatCollapsed(collapsed, event) {
+  if (!learningMode.value) setWorkingChatCollapsed(collapsed, event);
+}
+function showProjectPane() {
+  if (!learningMode.value) showWorkingProjectPane();
 }
 
 </script>
@@ -75,7 +77,7 @@ async function changeLearningMode(value) {
   <StudioAppShellLayout
     show-learning-mode-control
     :learning-mode="learningMode"
-    @update:learning-mode="changeLearningMode"
+    @update:learning-mode="learning.setLearningMode"
     :chat-collapsed="chatCollapsed"
     :mobile-pane-swipe-enabled="mobilePaneSwipeEnabled"
     @update:chat-collapsed="setChatCollapsed"
@@ -143,6 +145,7 @@ async function changeLearningMode(value) {
 
         <div class="studio-home-shell-project-controls">
           <v-btn
+            v-if="!learningMode"
             class="studio-home-shell-chat-toggle"
             density="comfortable"
             :icon="chatToggleIcon"
@@ -188,17 +191,6 @@ async function changeLearningMode(value) {
             {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
-          <v-btn
-            v-if="learningMode"
-            class="studio-app-shell-layout__learning-pane-toggle"
-            :aria-label="chatCollapsed ? 'Show chat' : 'Show lessons'"
-            :title="chatCollapsed ? 'Show chat' : 'Show lessons'"
-            variant="text"
-            @click="setChatCollapsed(!chatCollapsed, $event)"
-          >
-            <span class="studio-app-shell-layout__learning-pane-label">{{ chatCollapsed ? "Show chat" : "Show lessons" }}</span>
-            <v-icon class="studio-app-shell-layout__learning-pane-icon" :icon="chatCollapsed ? mdiMessageTextOutline : mdiBookOpenPageVariant" aria-hidden="true" />
-          </v-btn>
         </div>
       </div>
     </template>

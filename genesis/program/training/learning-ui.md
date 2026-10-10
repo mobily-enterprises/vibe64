@@ -52,13 +52,15 @@ route's path, hash and other query fields. This flag is presentation, never
 Training or session authority. The root app and project page attach the existing L control and original picker
 to the same session panel. The adapter itself owns no mounting or session state.
 
-The original root, project and hosted project Learning pane buttons keep their
-existing gesture-aware toggle handlers. `StudioAppShellLayout` supplies one
-shared presentation rule: at widths up to 400px, that same button occupies 48px
-and shows its chat or lesson icon instead of the text label. The full next-action
-accessible name and tooltip remain `Show chat` or `Show lessons`. This leaves
-room for the host's compact resource control and minimized Colleague controls;
-it does not add a second header or pane owner.
+The root, project and hosted project views keep Learning Main visible without
+changing the Working collapse preference. Learning ignores collapse/reveal
+requests and the shared shell does not start or finish a pane swipe in this mode.
+The existing Preview host retains Lessons/App/Presentation beside Main on desktop.
+At widths up to 980px, the shared shell stacks chat above that supporting pane
+with both visible and independently scrollable. The existing Learning layout
+projection reports the supporting pane visible at these widths as well; it is
+not inferred from Working's single-pane mobile collapse state. No alternate
+teacher, session panel, progress writer or presentation host is introduced.
 
 `coursesResource` and `learningResource` use the original endpoint resource,
 Vue Query cache and HTTP cancellation, scoped by the injected actual viewer

@@ -70,7 +70,7 @@ const props = defineProps({
 const emit = defineEmits(["update:chatCollapsed", "update:learningMode"]);
 let paneSwipe = null;
 
-watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed], cancelPaneSwipe);
+watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed, props.learningMode], cancelPaneSwipe);
 
 function cancelPaneSwipe() {
   paneSwipe = null;
@@ -79,7 +79,7 @@ function cancelPaneSwipe() {
 function startPaneSwipe(event, header = false) {
   cancelPaneSwipe();
   if (
-    !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
+    props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
     || window.getSelection()?.isCollapsed === false
   ) {
     return;
@@ -131,7 +131,7 @@ function movePaneSwipe(event) {
     return;
   }
   if (
-    !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
+    props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
     || event.timeStamp - paneSwipe.startedAt > SWIPE_MAX_DURATION_MS
   ) {
     cancelPaneSwipe();
@@ -164,7 +164,7 @@ function endPaneSwipe(event) {
   const swipe = paneSwipe;
   cancelPaneSwipe();
   if (
-    !swipe || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length
+    !swipe || props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length
     || props.chatCollapsed !== swipe.chatCollapsed || event.timeStamp - swipe.startedAt > SWIPE_MAX_DURATION_MS
     || window.getSelection()?.isCollapsed === false
   ) {
@@ -283,24 +283,18 @@ function endPaneSwipe(event) {
   min-width: 0;
 }
 
-:deep(.studio-app-shell-layout__learning-pane-icon) {
-  display: none;
-}
-
-@media (max-width: 400px) {
-  :deep(.studio-app-shell-layout__learning-pane-toggle) {
-    flex: 0 0 48px;
-    min-width: 48px;
-    padding: 0;
-    width: 48px;
+@media (max-width: 980px) {
+  .studio-app-shell-layout--learning :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed)),
+  .studio-app-shell-layout--learning :deep(.studio-ai-sessions__empty-layout) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 0.5rem;
   }
 
-  :deep(.studio-app-shell-layout__learning-pane-label) {
-    display: none;
-  }
-
-  :deep(.studio-app-shell-layout__learning-pane-icon) {
-    display: inline-flex;
+  .studio-app-shell-layout--learning :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed) .studio-autopilot__project-panel),
+  .studio-app-shell-layout--learning :deep(.studio-ai-sessions__empty-project-panel) {
+    display: grid;
+    visibility: visible;
   }
 }
 </style>

@@ -15,7 +15,10 @@ the teacher through the existing Chat mode controls, and Resume keeps their choi
 A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
-intact. Both use the same session/conversation implementation. The existing
+intact. Learning keeps the teacher chat visible throughout the lesson. Its supporting
+Lessons/App/Presentation pane sits beside chat on desktop and below it on phones;
+Working keeps its own collapse preference. Both use the same session/conversation
+implementation. The existing
 Preview area offers App, Lessons and Presentation, retaining application and
 interactive SVG/animation state. These mode and teacher changes are planned,
 not yet a completed learner-facing feature.
