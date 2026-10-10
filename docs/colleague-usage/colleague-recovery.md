@@ -77,3 +77,49 @@ evidence requires the owner to inspect the reported upgrade error. Other older
 provider bindings are not covered by this correction. Colleague can explain the
 notice; running a stopped-service upgrade requires an operator.
 
+## Failed replies and setup
+
+If Codex reports a failure without a final reply, Colleague checks that exact
+request's saved native history. A completed answer is recovered once. Otherwise
+Colleague reports the failure and stops the failed native turn through its
+existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing.
+This recovery does not resend your request or use another turn's answer.
+If an admitted Codex tool fails during a native goal, cleanup verifies that the
+same goal is paused before the request settles. Unconfirmed cleanup stays visible;
+use **Stop** before continuing. Saved receipts remain intact; cleanup never
+repeats their effects.
+If a failed or interrupted Codex status arrives before its error detail,
+Colleague briefly waits for that detail before reporting the failure. A following
+error is reported immediately. Repeated status does not extend the wait, and
+pressing **Stop** does not wait for an error detail.
+If Codex finishes without delivering answer text, Colleague briefly checks for
+that exact reply, then reports missing output instead of waiting indefinitely.
+A slow first history check does not consume its brief wait for a late reply.
+Your message remains in history; this check does not send it again.
+This also applies when selecting a connected provider under OpenCode. Vibe64
+hands the retained chat context to that provider without starting a fresh
+Colleague chat or resetting your lesson. A pending delivery keeps its original
+receipt; changing provider does not automatically resend it.
+Opening the conversation or reviewing earlier replies does not send a message or start work.
+If a message cannot be saved, sending fails before Colleague starts that request.
+Restore workspace storage, then retry; an unsaved message is not treated as an
+accepted request.
+If the service stops while preparing a message, before sending it, the message
+remains unsent. Retry after the service is available again.
+If the first message needs AI setup, its words stay unsent and the setup error
+remains visible. Complete the requested setup in **AI Accounts**, then send the
+same request again; setup failure does not add a sent message or start inference.
+## Read older messages while replies arrive
+
+Scroll up and use **Load older messages** when it is shown. Incoming replies
+retain the history you loaded and your place in it, including on phone. Your
+unsent draft and selection remain intact. Updated or removed saved messages
+reflect the current conversation; live output does not replace its original
+question or progress.
+
+A reconnection starts with the latest page again. Use **Load older messages**
+to return farther back. A failed history refresh retains the visible messages;
+use the existing **Reload chat** recovery if shown. Access denial clears cached
+private messages instead: sign in with the authorized account and reopen chat.
+Colleague can explain these steps; scrolling and loading this browser's history
+require your interaction. These operations do not resend any request.

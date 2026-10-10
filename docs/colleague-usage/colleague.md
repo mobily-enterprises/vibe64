@@ -75,36 +75,8 @@ If Colleague reports that its previous native turn must be stopped, click its
 existing **Stop** control before selecting a model, including the same model.
 A failed response can leave native cleanup unfinished; selecting a model does
 not silently stop it or resend the request.
-If Codex reports a failure without a final reply, Colleague checks that exact
-request's saved native history. A completed answer is recovered once. Otherwise
-Colleague reports the failure and stops the failed native turn through its
-existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing.
-This recovery does not resend your request or use another turn's answer.
-If an admitted Codex tool fails during a native goal, cleanup verifies that the
-same goal is paused before the request settles. Unconfirmed cleanup stays visible;
-use **Stop** before continuing. Saved receipts remain intact; cleanup never
-repeats their effects.
-If a failed or interrupted Codex status arrives before its error detail,
-Colleague briefly waits for that detail before reporting the failure. A following
-error is reported immediately. Repeated status does not extend the wait, and
-pressing **Stop** does not wait for an error detail.
-If Codex finishes without delivering answer text, Colleague briefly checks for
-that exact reply, then reports missing output instead of waiting indefinitely.
-A slow first history check does not consume its brief wait for a late reply.
-Your message remains in history; this check does not send it again.
-This also applies when selecting a connected provider under OpenCode. Vibe64
-hands the retained chat context to that provider without starting a fresh
-Colleague chat or resetting your lesson. A pending delivery keeps its original
-receipt; changing provider does not automatically resend it.
-Opening the conversation or reviewing earlier replies does not send a message or start work.
-If a message cannot be saved, sending fails before Colleague starts that request.
-Restore workspace storage, then retry; an unsaved message is not treated as an
-accepted request.
-If the service stops while preparing a message, before sending it, the message
-remains unsent. Retry after the service is available again.
-If the first message needs AI setup, its words stay unsent and the setup error
-remains visible. Complete the requested setup in **AI Accounts**, then send the
-same request again; setup failure does not add a sent message or start inference.
+For native reply failures and AI setup errors, see
+[Colleague delivery and recovery](colleague-recovery.md#failed-replies-and-setup).
 For **Check delivery**, **Start fresh**, **Previous conversations** and retained
 drafts, see [Colleague delivery and recovery](colleague-recovery.md). Recovery
 never automatically resends an unconfirmed message.
@@ -226,17 +198,26 @@ candidate release's upgrade command with services stopped; Colleague cannot do
 this through chat. Written history is preserved, and interrupted operations are
 not repeated.
 
-## Read older messages while replies arrive
+## Ask Colleague to coordinate
 
-Scroll up and use **Load older messages** when it is shown. Incoming replies
-retain the history you loaded and your place in it, including on phone. Your
-unsent draft and selection remain intact. Updated or removed saved messages
-reflect the current conversation; live output does not replace its original
-question or progress.
+For example: “Get the agent to implement password reset. Discuss its plan, let
+it finish, arrange a review, and bring it back ready for my testing. You have eight
+turns.” Colleague retains the original criteria, exact session and turn allowance.
+It sends through the normal coding-agent operations, waits through code-driven
+watches, and creates a reviewer in the same session after implementation settles.
+The person does not have to choose Senior or Junior unless they have a preference.
 
-A reconnection starts with the latest page again. Use **Load older messages**
-to return farther back. A failed history refresh retains the visible messages;
-use the existing **Reload chat** recovery if shown. Access denial clears cached
-private messages instead: sign in with the authorized account and reopen chat.
-Colleague can explain these steps; scrolling and loading this browser's history
-require your interaction. These operations do not resend any request.
+Colleague can ask routine questions and request corrections within that assignment.
+Consequential product decisions, expanded scope and extra turns need the person.
+“Ready for testing” requires evidence against the original criteria and a review;
+two agents agreeing that they are done is not sufficient.
+
+Independent assignments can span projects and sessions. Explicitly tell Colleague
+which assignments may exchange relevant findings; that permission does not merge
+their source, make permission transitive or enlarge their budgets. Cancellation
+of follow-through does not itself stop the coding agent. Request that stop separately.
+
+You can also ask it simply to watch a conversation and tell you when the agent
+answers. Such a watch authorizes reporting only, not sending further work.
+
+For the coding chat's Send and Steer controls, see [Coding agents](coding-agents.md).
