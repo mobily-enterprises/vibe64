@@ -79,6 +79,9 @@ notice; running a stopped-service upgrade requires an operator.
 
 ## Failed replies and setup
 
+Colleague can complete a handover within the action's payload limits without
+repeating that action. An oversized tool request is refused before the action runs.
+
 A failed request keeps its original detailed error. Opening or checking that
 request does not resend it. If its previous native turn is still active, use
 **Stop** before changing models or continuing, even when its saved status cannot

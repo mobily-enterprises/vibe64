@@ -105,7 +105,14 @@ are not persisted, shared with another worker, or substituted for permission che
 The fixed native envelope validates decoded replies up to 16,000 characters,
 progress up to 280, tool names up to 256 and arguments up to 262,144. Its separate
 finite native wire capacity is 1,670,455 characters; ordinary/API/Main limits stay
-unchanged. The product supplies protocol
+unchanged. Native application-wake input has a separate 1,572,864 UTF-16-unit
+serialization budget: the existing 262,144 context/framing allowance, twice that
+for the retained raw argument string, once for its result object and twice for
+that result copied into feedback. Both argument and result payload byte guards
+stay at 262,144; the product keeps full previous-operation arguments, result and
+feedback rather than dropping accepted data. This finite transport allowance
+does not impose a new aggregate batching policy or guarantee arbitrary-sized
+original batched context. The product supplies protocol
 instructions and correction feedback. Shared private marked carriers remain in
 the original store but are excluded before human paging and native catch-up.
 The verified decoded final is written through the prepared response's original

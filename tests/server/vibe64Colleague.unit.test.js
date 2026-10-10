@@ -1028,6 +1028,14 @@ for (const native of [false, true]) test(`${native ? "native completed envelope:
   if (native) {
     const completed = await f.service.wait(f.context);
     assert.equal(completed.status, "ready", completed.error);
+    const inputs = completedColleagueNativeInputs(await f.native.trace());
+    assert.equal(inputs.length, 2, "The accepted handover completes through its original native continuation");
+    assert.deepEqual(inputs.map(input => input.data.userMessages.map(message => message.messageId)), [["user-1"], []]);
+    assert.equal(inputs[1].data.previousOperation.arguments, argumentsText,
+      "The full original argument string remains in the continuation");
+    assert.deepEqual(inputs[1].data.previousOperation.result, { ok: true, result: { ok: true } });
+    assert.deepEqual(JSON.parse(inputs[1].data.feedback), { toolName: "vibe64_test_operate",
+      result: inputs[1].data.previousOperation.result }, "The complete result also remains in original feedback");
   } else await until(async () => (await f.service.read({}, f.context)).status === "ready");
   assert.deepEqual(f.observations.mutations, [value]);
   // UTF-8 bytes exceed the same tool owner's limit while characters still fit
