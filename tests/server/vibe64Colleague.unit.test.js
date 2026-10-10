@@ -1025,7 +1025,10 @@ for (const native of [false, true]) test(`${native ? "native completed envelope:
   const accepted = [JSON.stringify(envelope), reply("Saved the agreed handover.")];
   const f = await fixture(t, native ? accepted.map(text => ({ text })) : accepted, { native });
   await f.send("Save the agreed handover.");
-  await until(async () => (await f.service.read({}, f.context)).status === "ready");
+  if (native) {
+    const completed = await f.service.wait(f.context);
+    assert.equal(completed.status, "ready", completed.error);
+  } else await until(async () => (await f.service.read({}, f.context)).status === "ready");
   assert.deepEqual(f.observations.mutations, [value]);
   // UTF-8 bytes exceed the same tool owner's limit while characters still fit
   // the native completed-envelope schema, so rejection occurs before an effect.
