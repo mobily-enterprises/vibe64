@@ -2418,3 +2418,69 @@ test("actual Claude Learning Main executes its admitted native tool and promotes
   assert.equal(native.owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
 });
+
+// Exercise the original Public wrapper, including its early host-owned ID.
+test("Claude managed wrapper lends one startup cleanup while initialization is pending", async (t) => {
+  const { stopVibe64Execution } = await import("@local/vibe64-execution/server");
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-startup-receipt-"));
+  const command = path.join(root, "claude-fixture");
+  await writeFile(command, `#!/usr/bin/env node
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+  const frame = JSON.parse(line);
+  if (frame.type === 'control_request') process.stdout.write(JSON.stringify({
+    type: 'system', subtype: 'startup-wait'
+  }) + '\\n');
+});
+`, { mode: 0o700 });
+  const initializing = Promise.withResolvers();
+  const starts = [];
+  const stops = [];
+  let starting;
+  t.after(async () => {
+    if (typeof starts[1]?.stop === "function") await starts[1].stop();
+    else if (starts.length) await stopVibe64Execution(starts[0].id);
+    await starting?.catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  });
+  starting = createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+    async stopExecution(id, options) {
+      stops.push(id);
+      return stopVibe64Execution(id, options);
+    },
+    onStarted(id, stop) { starts.push({ id, stop }); },
+    onEvent(event) { if (event.subtype === "startup-wait") initializing.resolve(); }
+  });
+  starting.catch(() => {});
+  await Promise.race([initializing.promise, starting]);
+  assert.equal(starts.length, 2);
+  assert.equal(starts[0].id, starts[1].id);
+  assert.equal(starts[0].stop, undefined, "early ID custody remains before factory initialization");
+  assert.equal(typeof starts[1].stop, "function");
+  assert.equal((await starts[1].stop()).scopeEmpty, true);
+  await assert.rejects(starting, error => error.executionId === starts[0].id && error.stopProof?.scopeEmpty === true);
+  assert.deepEqual(stops, [starts[0].id], "startup failure and cancellation join one private cleanup");
+});
+
+test("Claude records one execution when the managed wrapper later lends its startup cleanup", async (t) => {
+  const f = await fixture(t);
+  const metadataWrites = [];
+  const write = f.context.runtime.store.writeMetadataValue;
+  f.context.runtime.store.writeMetadataValue = async (...args) => {
+    metadataWrites.push(args);
+    return write(...args);
+  };
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions, async createProcess(options) {
+    const native = await f.providerOptions.createProcess(options);
+    await options.onStarted(native.executionId);
+    const writes = metadataWrites.length;
+    assert.ok(metadataWrites.some(([, , value]) => {
+      try { return JSON.parse(value)?.executionId === native.executionId; }
+      catch { return false; }
+    }), "early execution custody is persisted before the cleanup receipt arrives");
+    await options.onStarted(native.executionId, () => native.stop());
+    assert.equal(metadataWrites.length, writes, "lending cleanup does not write the same execution again");
+    return native;
+  } });
+  await provider.sendMessage(f.context, { message: "Go", messageId: "receipt-once" });
+  assert.equal(f.processes[0].lastInput.messageId, nativeMessageId("receipt-once"));
+});

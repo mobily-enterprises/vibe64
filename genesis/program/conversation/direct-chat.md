@@ -239,7 +239,12 @@ Claude's existing JSKIT turn owner also owns its serialized instruction state.
 The same native conversation owner connects its process operations to that
 instruction owner and drains its preparation queue before shutdown. It applies
 compatible model settings or restarts the same native history when its prompt
-changes. Both consumers apply authorized provider flags before selecting the model; compatible key
+changes. The managed Claude wrapper publishes its execution ID before stream
+connection, then lends the factory's private stop receipt before initialization.
+The shared turn owner retains that receipt without saving or publishing the same
+execution twice. Startup cancellation and initialization failure join the existing
+cleanup; early stream failure keeps its original exact-ID recovery responsibility.
+Both consumers apply authorized provider flags before selecting the model; compatible key
 rotation retains the process. JSKIT assembles native flag settings while Vibe64
 supplies its managed command hook. Selected connection credentials are installed
 through controls after initialization, and returning to native routing clears

@@ -22,7 +22,7 @@ async function createClaudeCodeProcess({
   commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, ...options
 } = {}) {
   return startClaude({
-    ...options, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
+    ...options, onStarted, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
     execution: createVibe64ConversationExecution({ commandRunner, stopExecution, credentialHome,
       execution, shimDirs, onStarted, purpose: options.toolFree ? "account" : "assistant",
       operationId: "claude-code", label: "Claude Code assistant" })

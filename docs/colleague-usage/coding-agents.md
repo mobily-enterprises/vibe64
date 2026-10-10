@@ -65,6 +65,8 @@ When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
 request. Reply text by itself does not prove that the turn completed successfully.
 Unconfirmed cleanup blocks replacement work, including after failed startup.
+While Claude is starting, **Stop** joins that process's existing cleanup. Its
+execution is recorded once; waiting for initialization does not disable Stop.
 Restore the execution service and retry **Stop**; wait for success before new
 work. Do not resubmit an uncertain request as a workaround. Project **Close**
 also retries pending cleanup and reports unconfirmed exit; a failed Close is
