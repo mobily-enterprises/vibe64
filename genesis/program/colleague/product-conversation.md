@@ -165,8 +165,8 @@ exact before/after bytes; retries reinspect native evidence and compare the full
 expected product to the immutable replacement, retaining its prepared segment ID.
 Normal admission supplies current instructions before the next request.
 This is scoped stopped conversion evidence, not authentic upstream acceptance
-or platform-wide native UUID inventory. OpenCode, Codex and older external-provider
-conversion remain separate unfinished parity obligations.
+or platform-wide native UUID inventory. OpenCode and older external-provider
+conversion remain separate parity obligations.
 
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through
@@ -1026,3 +1026,19 @@ admission, event ordering and every Stop/fresh/focus/failure call site remain in
 this service. The coordinator is an ephemeral state facility and never enters
 the saved conversation record. Original browser/cue assertions remain unchanged;
 this move adds no Main piloting route, connection identity or persisted field.
+
+
+The separate `20261010-colleague-codex-completed-policy` numbered operation uses
+that existing application record owner and verified backup publisher. It retires
+only the exact original nonempty discovery manifest through JSKIT's original
+`retireNative:true` replacement builders. The old binding/account/run/goal and
+canonical transcript remain intact; the successor is inert and keeps selection.
+Current empty/inert or other-engine bindings and previous chats are unchanged.
+Saved active/pending delivery, replacement/Undo and uncertain application effects
+refuse before publication. Earlier numbered formats must complete before apply.
+The standard stopped application/watch/product-writer contract and original
+upgrade lock govern publication; no new global native lock, goal RPC or native
+file mutation is introduced. Native CLI writers do not write this product record.
+Retry verifies both saved sides, reuses immutable prepared replacement IDs and
+compares the full expected product. The next explicit native admission owns
+fresh account validation and original history seeding, never old-work replay.

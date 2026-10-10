@@ -3,6 +3,7 @@ import { lstat, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { conversationHistoryVersions, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 import { claudeHistoryPath, listClaudeConversationStorage, readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
@@ -166,5 +167,115 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
     }
     for (const update of prepared) await update.verify();
     return prepared;
+  } });
+}
+
+// Original shipped search/contract/execute descriptors; native thread tool shape
+// is immutable. Only that exact historical policy has this bounded correction.
+const oldCodexToolSchema = "565d936fcb00d90ddef65fa80b1db8ed6d3bb4faec815cf15dc8723e4d259a16";
+const emptyCodexToolSchema = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
+
+/** Stopped application metadata only; no native writer, file or goal is changed. */
+export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, backupRoot, report }) {
+  const root = path.join(systemRoot, "colleague");
+  await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
+  const entries = await readdir(root, { withFileTypes: true }).catch(error => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  const records = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    const filePath = path.join(root, entry.name, "conversation.json");
+    await verifyUpgradeParents(systemRoot, filePath);
+    const original = await readUpgradeFile(filePath);
+    if (original === null) continue;
+    const saved = parse(original, "Colleague history");
+    validateColleagueConversationRecord(saved, entry.name);
+    records.push({ ownerKey: entry.name, filePath, original, saved });
+  }
+  const inspect = ({ ownerKey, filePath, original, saved, operationId = randomUUID(), successorSegmentId = randomUUID() }) => {
+    const checked = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata || {}, conversationLog: saved.conversationLog });
+    const runtime = checked.metadata.runtime;
+    if (runtime?.engine !== "codex" || !runtime.binding.threadId) return null;
+    const refuse = message => { throw new Error(`${ownerKey}: ${message} No native work or history was changed.`); };
+    const binding = runtime.binding;
+    if (binding.toolSchemaIdentity === emptyCodexToolSchema) return null;
+    if (binding.toolSchemaIdentity !== oldCodexToolSchema) {
+      refuse("This retained Codex tool policy is missing or unknown. Inspect its original binding before retrying.");
+    }
+    const scopeWorkdir = path.join(root, ownerKey, saved.scopeId);
+    if (binding.workdir !== scopeWorkdir || typeof binding.configRoot !== "string" || !path.isAbsolute(binding.configRoot)) {
+      refuse("The saved Codex binding does not match its original private application scope or configuration path.");
+    }
+    // These are saved application receipts, not a claim about offline native
+    // process/goal state. The caller must keep all product writers stopped.
+    if (saved.status === "working" || saved.operation &&
+        !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.operation.status) || saved.retiredConversation?.operation &&
+        !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.retiredConversation.operation.status) ||
+        runtime.request !== undefined || runtime.replacement !== undefined ||
+        binding.observationLoss && binding.observationLoss.stopped !== true ||
+        runtime.nativeTurn?.active === true || binding.codexAppServerRun &&
+        (codexAppServerTurnStateFromAgentRun(binding.codexAppServerRun).active || binding.codexAppServerRun.pendingUserMessageClientIds?.length) ||
+        saved.conversationLog.some(turn => ["running", "working", "inProgress"].includes(turn.metadata?.runtime?.status) ||
+          turn.metadata?.applicationTools?.some(call => !call.result || call.status !== "complete")) ||
+        (saved.assignments || []).some(assignment => assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) {
+      refuse("The application has active, pending or unconfirmed work. Resolve its original receipts with the compatible candidate before retrying; nothing will be replayed.");
+    }
+    if (apply && (saved.schemaVersion !== 3 || checked.changed)) {
+      refuse("Complete earlier numbered Colleague upgrades before retiring this tool policy.");
+    }
+    if (checked.changed) {
+      report("warning", `${ownerKey}: earlier native delivery upgrades must complete before this tool-policy transition.`);
+      return null;
+    }
+    const result = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata, conversationLog: saved.conversationLog,
+      retirement: { operationId, successorSegmentId, expectedSegmentId: runtime.segmentId, expectedThreadId: binding.threadId,
+        expectedToolSchemaIdentity: oldCodexToolSchema, workdir: binding.workdir, configRoot: binding.configRoot } });
+    const next = { ...saved, conversationMetadata: result.metadata };
+    validateColleagueConversationRecord(next, ownerKey);
+    return { filePath, original, contents: JSON.stringify(next) };
+  };
+
+  // The existing publisher validates both saved sides before retry. Recompute
+  // the exact metadata transition from BEFORE with the immutable prepared IDs;
+  // an already inert AFTER never bypasses eligibility or backup validation.
+  const manifestPath = path.join(backupRoot, "manifest.json");
+  await verifyUpgradeParents(systemRoot, manifestPath);
+  const manifestSource = await readUpgradeFile(manifestPath);
+  if (manifestSource !== null) {
+    await publishStateUpgradeFiles({ systemRoot, backupRoot, apply: false, report, prepareUpdates: async () => [] });
+    const manifest = parse(manifestSource, "Codex tool-policy backup manifest");
+    for (const record of records) {
+      if (!manifest.files.some(entry => entry.path === path.relative(systemRoot, record.filePath)) && inspect(record)) {
+        throw new Error("A new eligible Colleague owner appeared after preparation. Keep product writers stopped and inspect the original backup before retrying.");
+      }
+    }
+    for (const entry of manifest.files) {
+      const record = records.find(item => path.relative(systemRoot, item.filePath) === entry.path);
+      if (!record) throw new Error("A backed-up Colleague owner is missing. Restore its original state before retrying.");
+      const original = await readUpgradeFile(path.join(backupRoot, "before", entry.path));
+      const saved = parse(original, "Backed-up Colleague history");
+      const after = parse(await readUpgradeFile(path.join(backupRoot, "after", entry.path)), "Prepared Colleague history");
+      validateColleagueConversationRecord(saved, record.ownerKey);
+      validateColleagueConversationRecord(after, record.ownerKey);
+      const runtime = after.conversationMetadata?.runtime;
+      const retired = runtime?.predecessors?.at(-1);
+      const update = inspect({ ...record, saved, original, operationId: retired?.replacement?.operationId,
+        successorSegmentId: runtime?.segmentId });
+      if (!update || !isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
+        throw new Error("The prepared Codex transition differs from its original binding or history. Inspect the verified backup before retrying.");
+      }
+    }
+  }
+  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
+    const updates = [];
+    for (const record of records) {
+      const update = inspect(record);
+      if (!update) continue;
+      report("warning", `${record.ownerKey}: retire only the known old Codex tool binding and retain its full history. Keep application, watch and independent product writers stopped through publication; native files and goals are untouched. The next explicit request validates the current account and uses a new native binding without replaying old work.`);
+      updates.push(update);
+    }
+    return updates;
   } });
 }

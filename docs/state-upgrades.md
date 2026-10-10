@@ -842,3 +842,46 @@ replacement, including UUID, account, paths and history cursor. Changed evidence
 backups or product bytes blocks retry. Resolve the reported cause; do not edit
 the ledger, force a new account pin or start an older candidate against partial
 state. Fresh native account validation still runs before subsequent work.
+
+
+## Known old Colleague Codex tool policy (prepared)
+
+`20261010-colleague-codex-completed-policy` appends to the published registry.
+Neither the separately prepared independent-credential reset nor native-Claude
+continuity is a prerequisite. Review the candidate's complete ordered registry
+before any apply; preparing this correction does not authorize clearing saved
+credentials. It is not a request-time repair.
+
+Only a current Colleague binding with the exact original three-tool discovery
+manifest is retired. Current empty/inert bindings, other engines and previous
+chats remain unchanged. Missing or unfamiliar retained policies, foreign private
+scope paths, pending delivery/replacement/Undo, active saved application turns and
+uncertain effects block publication. Apply requires earlier outer-schema and
+native-delivery upgrades. Check is read-only, creates no installation or backup,
+and reports the affected actor without private message or credential contents.
+
+Run the candidate command with every application, watch and independent product
+writer stopped throughout publication. The existing host release mutex excludes
+cooperating activation; the original runner's `apply.lock` excludes concurrent
+upgrades. These are the established stopped-state upgrade contract, not a new
+cross-process Colleague lock. Standalone operators must prevent independent
+product writers and manual activation too. A concurrent product-file change
+refuses publication; stopping only one writer is not sufficient.
+
+This changes only the application metadata in `colleague/<owner>/conversation.json`.
+The shared original `retireNative:true` builder retains the old native binding,
+account pin, run/goal metadata and complete canonical history as its predecessor,
+and creates an inert successor with the same selected model and trusted saved
+paths. No native file, credential or goal is read, deleted, paused or changed;
+no global native-writer/goal exclusion is claimed. The next explicit request
+validates the current account, creates the empty-tool native binding and seeds
+retained history under the original policy without replaying an old request.
+
+The script-owned publisher verifies private before/after copies under
+`upgrades/backups/20261010-colleague-codex-completed-policy/` before replacement.
+Retries reconstruct the same transition from the verified original and immutable
+prepared operation/successor IDs, and compare the entire expected replacement.
+An already inert destination cannot skip that check. Modified original, backup,
+manifest or product bytes refuse retry. Keep writers stopped, resolve the reported
+cause and retry the same candidate and backup; never edit the ledger or start an
+older executable against partially published state.

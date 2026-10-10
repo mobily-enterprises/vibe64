@@ -4,8 +4,9 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-runtime-upgrade-"));
@@ -326,4 +327,181 @@ test("native continuity never publishes an old prepared pin after a valid receip
   await assert.rejects(f.run(true), /prepared native binding differs/);
   assert.equal(await readFile(f.filePath, "utf8"), before);
   assert.equal(await readFile(path.join(f.backupRoot, "after", path.relative(f.systemRoot, f.filePath)), "utf8"), written);
+});
+
+const oldCodexPolicy = "565d936fcb00d90ddef65fa80b1db8ed6d3bb4faec815cf15dc8723e4d259a16";
+const emptyCodexPolicy = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
+async function codexPolicyFixture(t) {
+  const f = await fixture(t);
+  const saved = structuredClone(original);
+  saved.schemaVersion = 3;
+  saved.runtimeId = "owner:colleague_retained";
+  saved.previousConversations = [];
+  saved.status = "ready";
+  saved.conversationMetadata.runtime.version = 3;
+  saved.conversationMetadata.runtime.lastEngine = "codex";
+  delete saved.conversationMetadata.runtime.request;
+  saved.conversationMetadata.runtime.binding = { threadId: "exact-native-thread", executionId: "", accountIdentity: "original-account",
+    workdir: path.join(f.systemRoot, "colleague/owner/colleague_retained"), configRoot: path.join(f.root, "original-home/.codex"),
+    toolSchemaIdentity: oldCodexPolicy, goal: { status: "active", condition: "Retained original goal" } };
+  const previous = { ...structuredClone(saved), scopeId: "colleague_older", runtimeId: "owner", archivedAt: "2026-10-09T00:00:00Z",
+    freshOperation: { operationId: "original-fresh-operation", conversationId: saved.scopeId }, unconfirmedMessages: [] };
+  delete previous.schemaVersion; delete previous.previousConversations;
+  previous.conversationMetadata.runtime.binding.threadId = "older-private-thread";
+  saved.previousConversations = [previous];
+  saved.conversationLog[0].metadata.applicationTools = [{ id: "settled-effect", status: "complete", result: { ok: true } }];
+  const filePath = await f.write("owner", saved);
+  const nativePath = path.join(f.root, "native-rollout.jsonl");
+  await writeFile(nativePath, "original native bytes; independent native goal retained\n");
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261010-colleague-codex-completed-policy");
+  return { ...f, saved, filePath, nativePath, backupRoot,
+    run: (apply, report = () => {}) => upgradeColleagueCodexCompletedPolicy({ systemRoot: f.systemRoot, backupRoot, apply,
+      report: (level, message) => { f.reports.push({ level, message }); report(level, message); } }) };
+}
+
+test("Codex tool-policy check is read-only and retirement preserves the original selection, full history and native files", async t => {
+  const empty = await fixture(t);
+  await upgradeColleagueCodexCompletedPolicy({ ...empty, backupRoot: path.join(empty.systemRoot, "upgrades/backups/codex-policy"), apply: false, report() {} });
+  await assert.rejects(stat(empty.systemRoot), { code: "ENOENT" });
+  const f = await codexPolicyFixture(t), before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath, "utf8");
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.run(true);
+  const afterBytes = await readFile(f.filePath, "utf8"), after = JSON.parse(afterBytes), old = JSON.parse(before);
+  assert.deepEqual({ ...after, conversationMetadata: old.conversationMetadata }, old);
+  const runtime = after.conversationMetadata.runtime, previous = runtime.predecessors.at(-1);
+  assert.deepEqual(runtime.binding, { threadId: "", workdir: old.conversationMetadata.runtime.binding.workdir,
+    configRoot: old.conversationMetadata.runtime.binding.configRoot, executionId: "" });
+  assert.deepEqual(previous.binding, old.conversationMetadata.runtime.binding);
+  assert.deepEqual(previous.configuration, old.conversationMetadata.runtime.configuration);
+  assert.equal(previous.replacement.retireNative, true);
+  assert.equal(previous.replacement.operation, "select");
+  assert.equal(previous.successorId, runtime.segmentId);
+  assert.equal(runtime.lastEngine, "");
+  assert.deepEqual(runtime.seen, {});
+  assert.equal(runtime.request, undefined);
+  assert.equal(runtime.replacement, undefined);
+  assert.equal(await readFile(f.nativePath, "utf8"), native);
+  const relative = path.relative(f.systemRoot, f.filePath);
+  assert.equal(await readFile(path.join(f.backupRoot, "before", relative), "utf8"), before);
+  assert.equal(await readFile(path.join(f.backupRoot, "after", relative), "utf8"), afterBytes);
+  assert.equal((await stat(path.join(f.backupRoot, "before", relative))).mode & 0o777, 0o600);
+  assert.equal((await stat(f.filePath)).mode & 0o777, 0o600);
+  await f.run(false);
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), afterBytes, "Retry keeps exact successor and operation identities");
+});
+
+const codexPolicyRefusals = [
+  ["unknown policy", saved => { saved.conversationMetadata.runtime.binding.toolSchemaIdentity = "a".repeat(64); }],
+  ["missing policy", saved => { delete saved.conversationMetadata.runtime.binding.toolSchemaIdentity; }],
+  ["active application", saved => { saved.status = "working"; }],
+  ["pending request", saved => { saved.conversationMetadata.runtime.request = { messageId: "pending", text: "Retained pending words", attachments: [], at: "2026-10-10T00:00:00Z", attempted: false }; }],
+  ["active native receipt", saved => { saved.conversationMetadata.runtime.nativeTurn = { active: true }; }],
+  ["unconfirmed observation cleanup", saved => { saved.conversationMetadata.runtime.binding.observationLoss = { stopped: false }; }],
+  ["missing observation cleanup confirmation", saved => { saved.conversationMetadata.runtime.binding.observationLoss = {}; }],
+  ["pending native input", saved => { saved.conversationMetadata.runtime.binding.codexAppServerRun = { state: "completed", pendingUserMessageClientIds: ["unconfirmed"] }; }],
+  ["active saved run", saved => { saved.conversationMetadata.runtime.binding.codexAppServerRun = { state: "active" }; }],
+  ["running canonical turn", saved => { saved.conversationLog[0].metadata.runtime.status = "running"; }],
+  ["unknown effect", saved => { saved.conversationLog[0].metadata.applicationTools[0].status = "unknown"; }],
+  ["missing effect result", saved => { delete saved.conversationLog[0].metadata.applicationTools[0].result; }],
+  ["retired uncertain effect", saved => { saved.retiredConversation.operation = { status: "unknown" }; }],
+  ["reserved assignment", saved => { saved.assignments = [{ turns: [{ status: "reserved" }] }]; }],
+  ["foreign scope path", saved => { saved.conversationMetadata.runtime.binding.workdir += "/foreign"; }],
+  ["relative configuration", saved => { saved.conversationMetadata.runtime.binding.configRoot = "relative"; }],
+  ["unfinished Undo", saved => { saved.conversationMetadata.runtime.replacement = { reason: "rewind" }; }]
+];
+for (const [name, alter] of codexPolicyRefusals) test(`Codex tool-policy refuses ${name} without backups, replay or product changes`, async t => {
+  const f = await codexPolicyFixture(t);
+  alter(f.saved); await writeFile(f.filePath, JSON.stringify(f.saved));
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath, "utf8");
+  await assert.rejects(f.run(false));
+  await assert.rejects(f.run(true));
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  assert.equal(await readFile(f.nativePath, "utf8"), native);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+test("Codex tool-policy leaves empty, inert and other engine bindings unchanged", async t => {
+  for (const change of [saved => { saved.conversationMetadata.runtime.binding.toolSchemaIdentity = emptyCodexPolicy; },
+    saved => { saved.conversationMetadata.runtime.binding.threadId = ""; },
+    saved => { saved.conversationMetadata.runtime.engine = "claude"; saved.conversationMetadata.runtime.binding = { conversationId: "retained" }; }]) {
+    const f = await codexPolicyFixture(t); change(f.saved); await writeFile(f.filePath, JSON.stringify(f.saved));
+    const before = await readFile(f.filePath, "utf8"); await f.run(false); await f.run(true);
+    assert.equal(await readFile(f.filePath, "utf8"), before);
+    await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  }
+});
+
+test("Codex tool-policy resumes a partial publication using exact prepared IDs and rejects changed backup or product bytes", async t => {
+  const f = await codexPolicyFixture(t), before = await readFile(f.filePath, "utf8");
+  await f.run(true);
+  const after = await readFile(f.filePath, "utf8");
+  await writeFile(f.filePath, before);
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  const relative = path.relative(f.systemRoot, f.filePath), backup = path.join(f.backupRoot, "after", relative);
+  await writeFile(backup, after + " ");
+  await assert.rejects(f.run(true), /after copy is missing or changed/);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  await writeFile(backup, after);
+  await writeFile(f.filePath, JSON.stringify({ ...JSON.parse(before), error: "Independent product writer changed state" }));
+  await assert.rejects(f.run(true), /differs from both upgrade copies/);
+});
+
+test("Codex tool-policy detects a product writer during preparation before backing up or publishing", async t => {
+  const f = await codexPolicyFixture(t), before = await readFile(f.filePath, "utf8");
+  const changed = JSON.stringify({ ...f.saved, error: "Concurrent product writer" });
+  await assert.rejects(f.run(true, (level, message) => { if (level === "warning" && message.includes("retire only")) writeFileSync(f.filePath, changed); }), /changed during preparation/);
+  assert.equal(await readFile(f.filePath, "utf8"), changed);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  assert.notEqual(changed, before);
+});
+
+test("Codex tool-policy numbered wrapper requires the existing feature owner and preserves check/apply context", async t => {
+  const f = await codexPolicyFixture(t);
+  assert.equal(codexCompletedPolicyUpgrade.id, "20261010-colleague-codex-completed-policy");
+  await assert.rejects(codexCompletedPolicyUpgrade.run({ ...f, apply: false, report() {} }), /tool-policy owner is required/);
+  const calls = [];
+  for (const apply of [false, true]) await codexCompletedPolicyUpgrade.run({ systemRoot: f.systemRoot, backupRoot: f.backupRoot,
+    apply, report() {}, upgradeColleagueCodexCompletedPolicy: async context => {
+      calls.push(context.apply);
+      assert.equal(context.systemRoot, f.systemRoot);
+      assert.equal(context.backupRoot, f.backupRoot);
+      await upgradeColleagueCodexCompletedPolicy(context);
+    } });
+  assert.deepEqual(calls, [false, true]);
+  assert.equal(JSON.parse(await readFile(f.filePath, "utf8")).conversationMetadata.runtime.binding.threadId, "");
+});
+
+test("Codex tool-policy retry finishes multiple owners without reconstructing history or replacement IDs", async t => {
+  const f = await codexPolicyFixture(t), second = structuredClone(f.saved);
+  second.runtimeId = "second:colleague_retained";
+  second.previousConversations = [];
+  second.conversationMetadata.runtime.binding.workdir = path.join(f.systemRoot, "colleague/second/colleague_retained");
+  second.conversationMetadata.runtime.binding.threadId = "second-private-thread";
+  const secondPath = await f.write("second", second);
+  let published = 0;
+  await assert.rejects(f.run(true, (_level, message) => { if (message.startsWith("Published state:") && ++published === 1) throw new Error("Interrupted product publication"); }), /Interrupted product publication/);
+  const manifest = JSON.parse(await readFile(path.join(f.backupRoot, "manifest.json"), "utf8"));
+  assert.equal(manifest.files.length, 2);
+  const prepared = await Promise.all(manifest.files.map(entry => readFile(path.join(f.backupRoot, "after", entry.path), "utf8")));
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), prepared[manifest.files.findIndex(entry => entry.path === path.relative(f.systemRoot, f.filePath))]);
+  assert.equal(await readFile(secondPath, "utf8"), prepared[manifest.files.findIndex(entry => entry.path === path.relative(f.systemRoot, secondPath))]);
+  await f.run(true);
+  assert.deepEqual(JSON.parse(await readFile(path.join(f.backupRoot, "manifest.json"), "utf8")), manifest);
+});
+
+test("Codex tool-policy requires earlier outer-schema publication before apply while check stays read-only", async t => {
+  const f = await codexPolicyFixture(t);
+  f.saved.schemaVersion = 2;
+  await writeFile(f.filePath, JSON.stringify(f.saved));
+  const before = await readFile(f.filePath, "utf8");
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(f.run(true), /Complete earlier numbered/);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
 });

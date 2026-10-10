@@ -138,3 +138,17 @@ use the existing **Reload chat** recovery if shown. Access denial clears cached
 private messages instead: sign in with the authorized account and reopen chat.
 Colleague can explain these steps; scrolling and loading this browser's history
 require your interaction. These operations do not resend any request.
+
+
+## A retained conversation needs the Codex tool-policy upgrade
+
+If Colleague reports that its retained Codex tools do not match the current
+configuration, keep the conversation and contact the installation operator.
+The operator must use the candidate's numbered state upgrade with application
+writers stopped; Colleague cannot perform that maintenance. The known old
+binding is retained with your history, model choice, watches and assignments.
+After successful activation, your next explicit message continues with retained
+history in a new native binding. Old requests are not resent. **Start fresh**
+remains your separate choice for a new chat; it is not required for this upgrade.
+An unknown binding or unfinished delivery/effect requires inspection before the
+operator can proceed. These steps are the same on desktop and phone.
