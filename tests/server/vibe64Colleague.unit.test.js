@@ -5666,7 +5666,28 @@ test("native completed Colleague never displays or executes a full streamed tool
   const initial = await f.service.read({}, f.context);
   const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
   const browserEvents = [];
-  const unsubscribe = await browser.subscribe(event => browserEvents.push(structuredClone(event)));
+  const { createHash } = await import("node:crypto");
+  const clone = globalThis.structuredClone;
+  let consumedRaw = null, consumedProjection = null;
+  // The private native handle is not an application fixture API. Observe the
+  // existing runtime subscriber's argument copy, without changing any value.
+  const copying = t.mock.method(globalThis, "structuredClone", (...args) => {
+    const copied = clone(...args);
+    if (copied?.conversationId === "NDI" && copied.type === "message" && copied.completedEnvelope === true &&
+        copied.origin === "application" && copied.status === "inProgress" && copied.text === text &&
+        copied.streaming?.messages?.some(message => message.messageId === copied.messageId &&
+          message.completedEnvelope === true && message.status === "inProgress" && message.text === text)) {
+      consumedRaw = clone(copied);
+    }
+    return copied;
+  });
+  t.after(() => copying.mock.restore());
+  const unsubscribe = await browser.subscribe(event => {
+    browserEvents.push(clone(event));
+    if (consumedRaw && event.type === "presentation" && event.interimReply === null) {
+      consumedProjection = { raw: clone(consumedRaw), public: clone(event) };
+    }
+  });
   let held;
   try {
     await f.send("Do it", "partial-native");
@@ -5688,9 +5709,21 @@ test("native completed Colleague never displays or executes a full streamed tool
     assert.ok(deltas.every(delta => delta.length === 1));
     assert.equal(deltas.join(""), text, "The complete valid tool JSON was streamed character by character before completion");
     assert.equal(trace.some(row => row.notification?.method === "item/completed" || row.notification?.method === "turn/completed"), false);
-    // Give the existing native notification queue the same bounded observation
-    // opportunity as the original partial-argument test; never release its final.
-    await new Promise(resolve => setTimeout(resolve, 25));
+    // Wait for the actual consumed full buffer and its original public callback,
+    // not a producer count, revision or sleep. The native completion stays held.
+    await until(() => consumedProjection !== null);
+    const nativeMessageId = `codex-${createHash("sha256")
+      .update([held.threadId, held.turnId, "assistant-item", "answer"].join("\u0000")).digest("hex")}`;
+    assert.equal(consumedProjection.raw.messageId, nativeMessageId);
+    assert.equal(consumedProjection.raw.text, text);
+    assert.equal(consumedProjection.raw.streaming.messages.find(message => message.messageId === nativeMessageId).text, text,
+      "The original consumer buffer contains every held JSON character before native completion");
+    assert.deepEqual(consumedProjection.public, { type: "presentation", interimReply: null },
+      "That same consumed emission crosses the original public callback only as a private presentation update");
+    const heldHistory = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
+    assert.equal(heldHistory.id, held.threadId);
+    assert.equal(heldHistory.turns.find(turn => turn.id === held.turnId).status, "inProgress");
+    assert.equal((await f.native.trace()).some(row => ["item/completed", "turn/completed"].includes(row.notification?.method)), false);
     const current = await f.service.read({}, f.context);
     assert.equal(current.status, "working");
     assert.equal(current.streamingReply, null);
