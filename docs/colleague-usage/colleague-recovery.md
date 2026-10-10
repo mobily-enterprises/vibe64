@@ -79,6 +79,12 @@ notice; running a stopped-service upgrade requires an operator.
 
 ## Failed replies and setup
 
+A failed request keeps its original detailed error. Opening or checking that
+request does not resend it. If its previous native turn is still active, use
+**Stop** before changing models or continuing, even when its saved status cannot
+be read. An accepted delivery does not turn a provider failure into a successful
+reply.
+
 If Codex reports a failure without a final reply, Colleague checks that exact
 request's saved native history. A completed answer is recovered once. Otherwise
 Colleague reports the failure and stops the failed native turn through its

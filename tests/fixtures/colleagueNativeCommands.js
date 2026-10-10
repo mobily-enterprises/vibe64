@@ -102,7 +102,9 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         const delayMs = params.itemsView === "full" ? state.completionReadDelayMs || 0 : 0;
         if (delayMs) {
           state.completionReadDelayMs = 0;
-          log({ historyReadHeld: { threadId: thread.id, turnId: state.runningTurn.id, delayMs } });
+          const record = JSON.parse(readFileSync(process.env.TEST_INPUT_RECEIPT, "utf8"));
+          log({ historyReadHeld: { threadId: thread.id, turnId: state.runningTurn.id, delayMs,
+            runState: record.conversationMetadata.runtime.binding.codexAppServerRun.state } });
           await new Promise(resolve => setTimeout(resolve, delayMs));
           log({ historyReadReturned: { threadId: thread.id, turnId: state.runningTurn.id } });
         }

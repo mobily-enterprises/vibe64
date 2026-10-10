@@ -4105,7 +4105,6 @@ for (const mode of ["error-only-active", "error-only-completed"]) {
     const f = await fixture(t, [{ text: reply(answer), mode }], { native: true });
     try {
       await f.send("Check this once.");
-      await until(async () => (await f.service.read({}, f.context)).status !== "working");
       const result = await f.service.wait(f.context);
       const recovered = mode === "error-only-completed";
       assert.equal(result.status, recovered ? "ready" : "failed", result.error);
@@ -4171,7 +4170,6 @@ test("Colleague native error without a turn ID recovers only its exact saved com
   const f = await fixture(t, [{ text: reply(answer), mode: "error-only-completed-no-turn-id" }], { native: true });
   try {
     await f.send("Check this once.");
-    await until(async () => (await f.service.read({}, f.context)).status !== "working");
     const result = await f.service.wait(f.context);
     assert.equal(result.status, "ready", result.error);
     assert.deepEqual(result.messages.map(({ role, text }) => [role, text]),
@@ -4229,7 +4227,6 @@ for (const mode of ["retrying-error", "foreign-turn-error", "late-old-turn-error
       }
       const messageId = late ? "user-2" : "user-1";
       await f.send("Complete the current response.", messageId);
-      await until(async () => (await f.service.read({}, f.context)).status !== "working");
       const result = await f.service.wait(f.context);
       assert.equal(result.status, "ready", result.error);
       assert.equal(result.error, "");
@@ -4364,10 +4361,6 @@ for (const delayMs of [1000, 2000]) {
       delayMs, text: reply("Exact final after the slow read.") }], { native: true });
     try {
       await f.send("Keep the slow-read request.", "user-1");
-      await until(async () => (await f.native.trace()).some(row => row.historyReadHeld));
-      const held = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-      assert.equal(held.conversationMetadata.runtime.binding.codexAppServerRun.state, "finalizing",
-        "The delayed full-history read must follow native completion and canonical finalization");
       const result = await f.service.wait(f.context);
       assert.equal(result.status, delayMs === 1000 ? "ready" : "failed", result.error);
       if (delayMs === 2000) assert.match(result.error, /assistant result text was not received/);
@@ -4384,8 +4377,11 @@ for (const delayMs of [1000, 2000]) {
       assert.deepEqual(completedColleagueNativeInputs(trace)[0].data.userMessages.map(message => message.messageId), ["user-1"]);
       assert.equal(saved.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope === true).system.messageId,
         turns[0].params.clientUserMessageId);
+      assert.equal(trace.find(row => row.historyReadHeld).historyReadHeld.runState, "finalizing",
+        "The delayed full-history read must follow native completion and canonical finalization");
       assert.deepEqual(trace.filter(row => row.historyReadHeld).map(row => row.historyReadHeld),
-        [{ threadId: turns[0].params.threadId, turnId: trace.find(row => row.notification?.method === "turn/started").notification.params.turn.id, delayMs: 600 }]);
+        [{ threadId: turns[0].params.threadId, turnId: trace.find(row => row.notification?.method === "turn/started").notification.params.turn.id,
+          delayMs: 600, runState: "finalizing" }]);
       assert.equal(trace.filter(row => row.historyReadReturned).length, 1);
     } finally {
       await f.service.stop({}, f.context);

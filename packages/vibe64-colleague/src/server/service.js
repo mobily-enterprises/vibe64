@@ -7,6 +7,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
+import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
@@ -729,19 +730,27 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             if (observed?.status !== "accepted" || observed.recoveryLimitation) throw error;
             receipt = observed;
           }
-          try { await conversation.wait(); }
+          let result;
+          try { result = await conversation.wait(); }
           catch (error) {
             if (!isCurrent()) throw error;
             const observed = await conversation.inspectDelivery({ messageId: internalMessageId }).catch(() => null);
             if (observed?.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) throw error;
           }
           controller.signal.throwIfAborted();
-          const turn = await storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
+          let turn = await storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
           if (turn?.metadata?.runtime?.status !== "complete") {
-            const observed = await conversation.inspectDelivery({ messageId: internalMessageId });
-            if (observed.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) {
-              throw failure("Colleague's response did not complete. Your message is kept.");
+            // Delivery confirmation cannot turn a settled native failure into
+            // a successful response or reopen its stopped execution.
+            if (!["failed", "interrupted", "cancelled"].includes(turn?.metadata?.runtime?.status)) {
+              const observed = await conversation.inspectDelivery({ messageId: internalMessageId });
+              if (observed.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) {
+                throw failure("Colleague's response did not complete. Your message is kept.");
+              }
+              turn = await storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
             }
+            if (turn?.metadata?.runtime?.status !== "complete") throw failure(turn?.metadata?.runtime?.error || result?.error ||
+              "Colleague's response did not complete. Your message is kept.");
           }
           prepared = await conversation.prepareCompletedResponse({ messageId: internalMessageId, turnId: receipt.turnId },
             { signal: controller.signal, toolSet });
@@ -1391,7 +1400,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const scoped = { ...actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };
         let conversation = state.record.conversationMetadata?.runtime ? await openConversation(state, scoped) : null;
         let current = await conversation?.read();
-        if (current?.status === "working") throw failure("Stop Colleague's previous native turn before changing its model.");
+        const savedRuntime = state.record.conversationMetadata?.runtime;
+        if (current?.status === "working" || savedRuntime?.engine === "codex" &&
+            codexAppServerTurnStateFromAgentRun(savedRuntime.binding?.codexAppServerRun).active) {
+          throw failure("Stop Colleague's previous native turn before changing its model.");
+        }
         if (conversation && state.runtimeOwner === nativeRuntime && settings.engine === "api") {
           // The completed native envelope is not the ordinary API's response
           // contract. Remove it through the same idle/authorized config owner
