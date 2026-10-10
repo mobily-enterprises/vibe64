@@ -1078,3 +1078,16 @@ runner and candidate CLI after the locally committed Codex tool-policy row. Its
 original typed owner, private backup/retry and strict native-history checks are
 unchanged. The prepared independent-credential reset is not part of this
 composition or a continuity prerequisite; no read/startup/chat path runs it.
+
+The original OpenCode host's `conversationHost` explicitly permits its own
+credential refresh only after resolving the current authorized provider connection
+and checking the supplied key and URL. The common driver's authored preparation
+refreshes that same facility and fences the native database, runtime directory and
+shared runtime before rotating the binding fingerprint. Its original shared
+`ensure` stops the previous process with verified exit, then reloads the current
+connection while preserving the native session and history. Standalone bindings
+keep their default credential pin. Admission inspection cannot rotate it, and
+completed-envelope preparation, effect and reply publication retain the exact
+saved fingerprint check. This is the original managed refresh policy through the
+existing host seam; it neither shares credentials between orchestrators nor
+invents an old account identity for a converted session.

@@ -164,3 +164,11 @@ the earlier history/native-delivery and Codex tool-policy rows without clearing
 provider credentials. Owners stop writers, check and apply the coherent candidate
 before reopening. This restores only an eligible original Claude chat; an already
 used common conversation is retained and never switched back to a retired UUID.
+
+When you replace OpenCode's own provider key in **AI Accounts**, the next request
+uses that authorized connection while retaining the chat and native session.
+The shared service verifies that its earlier process stopped before restarting
+with the replacement key. Other orchestrators' connections remain separate.
+Opening history does not send a request or authorize key replacement. A completed
+reply still needs its original delivery receipt; replacing a key does not resend
+an earlier request or authorize its effects under the new key.
