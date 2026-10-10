@@ -808,9 +808,11 @@ Reads/startup never migrate data. A prior candidate must not run against the new
 ledger/layout. Fresh explicit new Plan writes create empty Progress; replacement
 archives both old documents, and Make current restores the exact pair as Active.
 
-The off-tree implementation draft has not been executed or accepted; focused
-original lifecycle, reader, viewer and numbered-upgrade backup/retry evidence is
-required before activation.
+The committed paired owner has focused lifecycle, reader, viewer and numbered-
+upgrade backup/retry evidence. Those controlled checks do not establish activation
+of an existing installation. Before activation, run the candidate's read-only
+check, stop all writers, apply and verify the upgrade, and confirm the installed
+Plan/Progress and native review lifecycle.
 
 ## Retained original native Claude continuity (prepared)
 
