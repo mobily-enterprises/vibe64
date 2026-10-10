@@ -817,7 +817,10 @@ Plan/Progress and native review lifecycle.
 ## Retained original native Claude continuity (prepared)
 
 `20261009-colleague-native-continuity` follows the earlier Colleague schema and
-native-delivery upgrades. It is prepared and focused-tested, not applied to live
+native-delivery upgrades and appends after the locally committed Codex tool-policy
+row. The separately prepared provider-credential reset is not registered by this
+composition and is not a prerequisite; this operation never clears credentials.
+It is prepared and focused-tested, not applied to live
 installations. Run the candidate command as the original daemon with its original
 HOME/configuration; stop all services and native writers before apply.
 

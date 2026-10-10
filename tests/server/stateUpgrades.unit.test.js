@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades as runUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "../../packages/vibe64-runtime/src/server/conversationStorageUpgrade.js";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { upgradeAssistantPlans } from "../../packages/vibe64-accounts/src/server/assistantPlanUpgrade.js";
 import { upgradeCompletedDiscussionPlan } from "../../packages/vibe64-accounts/src/server/completedDiscussionPlanUpgrade.js";
@@ -39,14 +39,15 @@ const upgradeLearningPracticeHistory = async () => {};
 // Earlier upgrade fixtures retain their original files; the new paired owner
 // has separate registry and actual publisher cases, never a production bypass.
 const upgradePlanProgress = async () => {};
+const nativeContinuityId = "20261009-colleague-native-continuity";
 const codexCompletedPolicyId = "20261010-colleague-codex-completed-policy";
-const runStateUpgrades = options => runUpgrades({ upgradeColleagueCodexCompletedPolicy, ...options });
+const runStateUpgrades = options => runUpgrades({ upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, ...options });
 const personalPreferencesId = "20261006-personal-assistant-preferences";
 const routingCompatibilityId = "20261006-routing-format-compatibility";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
-async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy } = {}) {
+async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-upgrade-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "state");
@@ -59,7 +60,7 @@ async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy }
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -89,7 +90,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
     applied: upgradeIds.slice(0, upgradeIds.indexOf(personalVoicePolicyId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }), { mode: 0o600 });
   const before = await readFile(f.ledgerPath);
   const beforeMetadata = await stat(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
@@ -99,7 +100,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
   } }), /interrupted before voice policy ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -110,7 +111,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n';
-  const entry = ', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
@@ -373,7 +374,7 @@ test("training compatibility boundary checks and records only the ledger while p
     }
     const originals = await Promise.all(applicationPaths.map(async filename => ({ filename, bytes: await readFile(filename), metadata: await stat(filename) })));
     const ledgerBeforeCheck = await readFile(f.ledgerPath);
-    assert.deepEqual(await f.run(), { pending: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+    assert.deepEqual(await f.run(), { pending: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBeforeCheck);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
     assert.equal(f.messages.some(entry => entry.message.startsWith(`${trainingId}:`) && entry.message.includes("no backup is required")), true);
@@ -385,7 +386,7 @@ test("training compatibility boundary checks and records only the ledger while p
     } }), /interruption before boundary ledger publication/u);
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBeforeCheck);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-    assert.deepEqual(await f.run(true), { pending: [], applied: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+    assert.deepEqual(await f.run(true), { pending: [], applied: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
     const appliedLedger = await readFile(f.ledgerPath);
     assert.deepEqual(JSON.parse(appliedLedger).applied.map(entry => entry.id), upgradeIds);
     assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -411,7 +412,7 @@ test("the pre-training registry rejects the newer boundary ledger without changi
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import trainingPreparation from "./stateUpgrades/20261006-training-preparation.js";\n';
-  const boundaryRegistryEntry = ', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const boundaryRegistryEntry = ', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryRegistryEntry).length, 2);
   // Keep the original runner logic and owners; only emulate its prior registry.
@@ -457,7 +458,7 @@ test("personal assistant boundary preserves all legacy and private bytes while c
   await writeFile(personalPath, '{"schemaVersion":1,"settings":{"avatar":"merc","voice":"kitten_jasper"}}\n', { mode: 0o600 });
   const originals = await Promise.all([legacyPath, personalPath].map(async filename => ({ filename, bytes: await readFile(filename), metadata: await stat(filename) })));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   let reports = 0;
@@ -466,7 +467,7 @@ test("personal assistant boundary preserves all legacy and private bytes while c
   } }), /interrupted before personal boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -489,7 +490,7 @@ test("the previous original registry refuses the personal preference boundary le
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import personalAssistantPreferences from "./stateUpgrades/20261006-personal-assistant-preferences.js";\n';
-  const boundaryEntry = ', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const boundaryEntry = ', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryEntry).length, 2);
   // Only the new import/registry entry changes: original runner logic stays intact.
@@ -546,7 +547,7 @@ test("routing compatibility boundary validates current native evidence without r
     const prior = { version: 1, applied: upgradeIds.slice(0, upgradeIds.indexOf(routingCompatibilityId)).map(id => ({ id, completedAt: "2026-10-06T00:00:00.000Z" })) };
     await writeFile(f.ledgerPath, JSON.stringify(prior));
     const ledgerBefore = await readFile(f.ledgerPath);
-    assert.deepEqual(await f.run(), { pending: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+    assert.deepEqual(await f.run(), { pending: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
     let validations = 0;
     await assert.rejects(runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true,
@@ -555,7 +556,7 @@ test("routing compatibility boundary validates current native evidence without r
         if (message.startsWith(`${routingCompatibilityId}:`) && ++validations === 8) throw new Error("interrupted validation before ledger");
       } }), /interrupted validation before ledger/u);
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-    assert.deepEqual(await f.run(true), { pending: [], applied: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+    assert.deepEqual(await f.run(true), { pending: [], applied: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
     for (const original of before) {
       assert.deepEqual(await readFile(original.filename), original.bytes);
       const metadata = await stat(original.filename);
@@ -606,9 +607,9 @@ test("prospective assessment boundary leaves old reservations untouched and olde
   await mkdir(path.dirname(f.ledgerPath), { recursive: true });
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1, applied: upgradeIds.slice(0, upgradeIds.indexOf(assessmentsId)).map(id => ({ id, completedAt: "2026-10-06T00:00:00.000Z" })) }));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   for (const original of files) {
     assert.deepEqual(await readFile(original.filename), original.bytes);
@@ -621,7 +622,7 @@ test("prospective assessment boundary leaves old reservations untouched and olde
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAssessments from "./stateUpgrades/20261006-training-assessments.js";\n';
-  const entry = ', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "")
@@ -654,16 +655,16 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(attemptHistoryId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied[upgradeIds.indexOf(attemptHistoryId)].id, attemptHistoryId);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", attemptHistoryId)), { code: "ENOENT" });
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n';
-  const entry = ', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Only the exact new import and entry change. This proves registry-version
@@ -692,10 +693,11 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
 
 test("prospective question-admission boundary preserves learner and native history while only recording the ledger", async t => {
   // These original opaque bytes exercise only the prospective question boundary.
-  // Keep them and every byte/inode assertion; the real Codex owner rejects this
-  // incomplete shape and is proved separately in its original upgrade file.
+  // Keep them and every byte/inode assertion; the real Codex and native continuity
+  // owners reject this shape and are proved separately in the original upgrade file.
   const codexPolicy = async () => {};
-  const f = await fixture(t, { codexPolicy });
+  const nativeContinuity = async () => {};
+  const f = await fixture(t, { codexPolicy, nativeContinuity });
   const progress = path.join(f.systemRoot, "training/users/NDI/progress.json");
   const nativeHistory = path.join(f.systemRoot, "colleague/NDI/conversation.json");
   await mkdir(path.dirname(progress), { recursive: true, mode: 0o700 });
@@ -709,17 +711,17 @@ test("prospective question-admission boundary preserves learner and native histo
     applied: upgradeIds.slice(0, upgradeIds.indexOf(questionAdmissionId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }), { mode: 0o600 });
   const before = await readFile(f.ledgerPath);
   const beforeMetadata = await stat(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   let reports = 0;
-  await assert.rejects(runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
+  await assert.rejects(runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
     if (message.startsWith(`${questionAdmissionId}:`) && ++reports === 2) throw new Error("interrupted before question boundary ledger");
   } }), /interrupted before question boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -730,7 +732,7 @@ test("prospective question-admission boundary preserves learner and native histo
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";\n';
-  const entry = ', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Remove only this prospective entry; preserve the original runner and owners.
@@ -743,7 +745,7 @@ test("prospective question-admission boundary preserves learner and native histo
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   const appliedMetadata = await stat(f.ledgerPath);
   for (const apply of [false, true]) {
-    await assert.rejects(older.runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply, report: () => {} }), /newer history; refusing to upgrade or downgrade/u);
+    await assert.rejects(older.runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply, report: () => {} }), /newer history; refusing to upgrade or downgrade/u);
     assert.deepEqual(await readFile(f.ledgerPath), applied);
     assert.equal((await stat(f.ledgerPath)).ino, appliedMetadata.ino);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
@@ -775,7 +777,7 @@ test("Learning practice session boundary preserves existing records through chec
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(learningPracticeSessionsId)).map(id => ({ id, completedAt: "2026-10-08T00:00:00.000Z" })) }), { mode: 0o600 });
   const priorLedger = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), priorLedger);
   let reports = 0;
   await assert.rejects(runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
@@ -783,7 +785,7 @@ test("Learning practice session boundary preserves existing records through chec
   } }), /interrupted before practice binding ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), priorLedger);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   const appliedLedger = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(appliedLedger).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -793,7 +795,7 @@ test("Learning practice session boundary preserves existing records through chec
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n';
-  const entry = ', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
@@ -829,7 +831,7 @@ test("historical practice registry requires its real typed owner and runs check 
     assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", practiceHistoryId));
   };
   assert.deepEqual(await runStateUpgrades({ systemRoot: f.systemRoot, apply: true,
-    upgradeLearningPracticeHistory: delegate, upgradePlanProgress, report() {} }), { pending: [], applied: [practiceHistoryId, planProgressId, codexCompletedPolicyId] });
+    upgradeLearningPracticeHistory: delegate, upgradePlanProgress, report() {} }), { pending: [], applied: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   assert.deepEqual(calls, [false, true]);
   assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied[upgradeIds.indexOf(practiceHistoryId)].id, practiceHistoryId);
   const oldGate = await readFile(new URL("../../packages/vibe64-core/src/server/stateUpgrades/20261008-learning-practice-sessions.js", import.meta.url), "utf8");
@@ -844,7 +846,7 @@ test("real historical practice delegate retains a fresh installation and refuses
     applied: upgradeIds.slice(0, upgradeIds.indexOf(practiceHistoryId)).map(id => ({ id, completedAt: "2026-10-08T00:00:00.000Z" })) }), { mode: 0o600 });
   const result = await runStateUpgrades({ systemRoot: f.systemRoot, apply: false,
     upgradeLearningPracticeHistory: realOwner, upgradePlanProgress, report() {} });
-  assert.deepEqual(result, { pending: [practiceHistoryId, planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(result, { pending: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", practiceHistoryId)), { code: "ENOENT" });
   const progress = path.join(f.systemRoot, "training/users/NDI/progress.json");
   await mkdir(path.dirname(progress), { recursive: true, mode: 0o700 });
@@ -876,7 +878,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
     if (context.apply && interrupt) throw new Error("interrupted paired owner publication");
   };
   const options = { systemRoot: f.systemRoot, upgradePlanProgress: owner, report() {} };
-  assert.deepEqual(await runStateUpgrades(options), { pending: [planProgressId, codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await runStateUpgrades(options), { pending: [planProgressId, codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.deepEqual(calls, [false]);
   calls.length = 0;
@@ -886,7 +888,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   interrupt = false;
   calls.length = 0;
-  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [planProgressId, codexCompletedPolicyId] });
+  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [planProgressId, codexCompletedPolicyId, nativeContinuityId] });
   assert.deepEqual(calls, [false, true]);
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
@@ -895,7 +897,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n';
-  const entry = ', planProgress, colleagueCodexCompletedPolicy];';
+  const entry = ', planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace(entry, "];")
@@ -912,23 +914,51 @@ test("Codex tool-policy registry checks its original owner before writing and re
   const f = await fixture(t);
   await mkdir(path.dirname(f.ledgerPath), { recursive: true });
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
-    applied: upgradeIds.slice(0, -1).map(id => ({ id, completedAt: "2026-10-10T00:00:00.000Z" })) }));
+    applied: upgradeIds.slice(0, upgradeIds.indexOf(codexCompletedPolicyId)).map(id => ({ id, completedAt: "2026-10-10T00:00:00.000Z" })) }));
   const original = await readFile(f.ledgerPath);
   await assert.rejects(runUpgrades({ systemRoot: f.systemRoot, report() {} }), /tool-policy owner is required/);
   assert.deepEqual(await readFile(f.ledgerPath), original);
   const calls = [];
-  const options = { systemRoot: f.systemRoot, report() {}, upgradeColleagueCodexCompletedPolicy: async context => {
+  const options = { systemRoot: f.systemRoot, report() {}, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy: async context => {
     assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", codexCompletedPolicyId));
     calls.push(context.apply);
     await upgradeColleagueCodexCompletedPolicy(context);
   } };
-  assert.deepEqual(await runUpgrades(options), { pending: [codexCompletedPolicyId], applied: [] });
+  assert.deepEqual(await runUpgrades(options), { pending: [codexCompletedPolicyId, nativeContinuityId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), original);
-  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [codexCompletedPolicyId] });
+  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [codexCompletedPolicyId, nativeContinuityId] });
   assert.deepEqual(calls, [false, false, true]);
   const ledger = JSON.parse(await readFile(f.ledgerPath, "utf8"));
-  assert.deepEqual(ledger.applied.slice(0, -1), JSON.parse(original).applied);
-  assert.equal(ledger.applied.at(-1).id, codexCompletedPolicyId);
+  assert.deepEqual(ledger.applied.slice(0, -2), JSON.parse(original).applied);
+  assert.equal(ledger.applied.at(-2).id, codexCompletedPolicyId);
   await runUpgrades({ ...options, apply: true });
   assert.deepEqual(calls, [false, false, true]);
+});
+
+test("native continuity registry requires its original owner, checks before publication and records only confirmed completion", async t => {
+  const f = await fixture(t);
+  await mkdir(path.dirname(f.ledgerPath), { recursive: true });
+  await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
+    applied: upgradeIds.slice(0, upgradeIds.indexOf(nativeContinuityId)).map(id => ({ id, completedAt: "2026-10-09T00:00:00.000Z" })) }));
+  const previous = await readFile(f.ledgerPath);
+  await assert.rejects(runUpgrades({ systemRoot: f.systemRoot, report() {} }), /native-continuity owner is required/);
+  assert.deepEqual(await readFile(f.ledgerPath), previous);
+  const calls = [];
+  let fail = true;
+  const owner = async context => {
+    assert.equal(context.systemRoot, f.systemRoot);
+    assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades", "backups", nativeContinuityId));
+    calls.push(context.apply);
+    if (context.apply && fail) throw new Error("native evidence changed");
+  };
+  const options = { systemRoot: f.systemRoot, upgradeColleagueNativeContinuity: owner, upgradeColleagueCodexCompletedPolicy, report() {} };
+  assert.deepEqual(await runUpgrades(options), { pending: [nativeContinuityId], applied: [] });
+  await assert.rejects(runUpgrades({ ...options, apply: true }), /native evidence changed/);
+  assert.deepEqual(await readFile(f.ledgerPath), previous);
+  assert.deepEqual(calls, [false, false, true]);
+  fail = false;
+  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [nativeContinuityId] });
+  assert.deepEqual(calls, [false, false, true, false, true]);
+  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [] });
+  assert.deepEqual(calls, [false, false, true, false, true]);
 });

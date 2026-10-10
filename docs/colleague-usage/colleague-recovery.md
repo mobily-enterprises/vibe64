@@ -152,3 +152,10 @@ history in a new native binding. Old requests are not resent. **Start fresh**
 remains your separate choice for a new chat; it is not required for this upgrade.
 An unknown binding or unfinished delivery/effect requires inspection before the
 operator can proceed. These steps are the same on desktop and phone.
+
+The original native Claude continuity upgrade is an operator operation in the
+release's numbered state command; Colleague cannot run it from chat. It follows
+the earlier history/native-delivery and Codex tool-policy rows without clearing
+provider credentials. Owners stop writers, check and apply the coherent candidate
+before reopening. This restores only an eligible original Claude chat; an already
+used common conversation is retained and never switched back to a retired UUID.

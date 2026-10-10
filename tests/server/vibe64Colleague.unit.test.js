@@ -4880,7 +4880,7 @@ async function r11LiteralLegacyFixture(t, responses) {
 }
 
 test("R11 literal schema1 upgrade carries retained history once into a current native successor and resumes it", async t => {
-  const f = await r11LiteralLegacyFixture(t, [{ text: "The retained discussion is available." }]);
+  const f = await r11LiteralLegacyFixture(t, [{ text: reply("The retained discussion is available.") }]);
   const before = await f.service.read({}, f.context);
   assert.equal(before.conversationId, f.legacy.scopeId);
   assert.deepEqual(before.messages.map(({ role, text }) => [role, text]), f.legacy.conversationLog[0].messages.map(({ role, text }) => [role, text]));
@@ -4895,16 +4895,21 @@ test("R11 literal schema1 upgrade carries retained history once into a current n
   assert.equal(starts.length, 1);
   assert.equal(turns.length, 1);
   assert.notEqual(turns[0].params.threadId, f.legacy.conversationId);
-  assert.equal(turns[0].params.clientUserMessageId, "after-legacy-upgrade");
+  const admittedInputs = completedColleagueNativeInputs(trace);
+  assert.equal(admittedInputs[0].data.userMessages[0].messageId, "after-legacy-upgrade");
+  assert.equal(admittedInputs[0].data.userMessages[0].text, "Continue this retained discussion.");
   const frames = turns[0].params.input[0].text.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))
     .filter(value => Array.isArray(value.messages));
   assert.equal(frames.length, 1, "the original changeover transports the retained rows once");
   assert.deepEqual(frames[0].messages.map(({ role, text }) => [role, text]), f.legacy.conversationLog[0].messages.map(({ role, text }) => [role, text]));
   const saved = JSON.parse(await readFile(f.file, "utf8"));
+  const privateInput = saved.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope === true);
+  assert.equal(turns[0].params.clientUserMessageId, privateInput.system.messageId,
+    "The exact authored request is carried by its separate verified private native frame");
   assert.deepEqual(saved.conversationLog[0], f.legacy.conversationLog[0]);
   assert.equal(saved.retiredConversation.operation.status, "unknown");
   await f.service.close();
-  const restored = await fixture(t, [{ text: "The same native successor continues." }], { systemRoot: f.root, native: f.native });
+  const restored = await fixture(t, [{ text: reply("The same native successor continues.") }], { systemRoot: f.root, native: f.native });
   assert.deepEqual((await restored.service.read({}, restored.context)).messages, completed.messages);
   await restored.send("Continue again.", "after-successor-restart");
   const after = await restored.service.wait(restored.context);
@@ -4938,7 +4943,7 @@ test("R11 literal schema1 history uses fresh actor and selection authorization b
 });
 
 test("R11 migrated current successor refuses a changed native account without another inference", async t => {
-  const f = await r11LiteralLegacyFixture(t, [{ text: "A current account owns this successor." }]);
+  const f = await r11LiteralLegacyFixture(t, [{ text: reply("A current account owns this successor.") }]);
   await f.send("Continue with this account.", "r11-current-account");
   assert.equal((await f.service.wait(f.context)).status, "ready");
   const host = f.native.host(f.observations.scope);
@@ -5227,7 +5232,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.equal(await readFile(nativeFile, "utf8"), stoppedReceipt);
   assert.equal(await readFile(historyFile, "utf8"), historyBytes);
   assert.deepEqual(await native.trace(), traceBefore, "Numbered upgrades send no native requests or cleanup");
-  const f = await fixture(t, [{ text: "The saved discussion continues." }], { systemRoot: root, native });
+  const f = await fixture(t, [{ text: reply("The saved discussion continues.") }], { systemRoot: root, native });
   t.after(() => rm(root, { force: true, recursive: true }));
   assert.deepEqual((await f.service.read({}, f.context)).messages.map(({ role, text }) => [role, text]),
     conversationLog.flatMap(row => row.messages.map(({ role, text }) => [role, text])));
@@ -5247,7 +5252,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.deepEqual(frames[0].messages.map(({ role, text }) => [role, text]), conversationLog.flatMap(row => row.messages.map(({ role, text }) => [role, text])));
   assert.deepEqual(f.observations.mutations, []);
   await f.service.close();
-  const restored = await fixture(t, [{ text: "The same current successor resumes." }], { systemRoot: root, native });
+  const restored = await fixture(t, [{ text: reply("The same current successor resumes.") }], { systemRoot: root, native });
   await restored.send("Continue again.", "r11-claude-restart");
   assert.equal((await restored.service.wait(restored.context)).status, "ready");
   const restarted = await native.trace();

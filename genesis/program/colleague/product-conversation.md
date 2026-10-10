@@ -1042,3 +1042,9 @@ file mutation is introduced. Native CLI writers do not write this product record
 Retry verifies both saved sides, reuses immutable prepared replacement IDs and
 compares the full expected product. The next explicit native admission owns
 fresh account validation and original history seeding, never old-work replay.
+
+The existing native-Claude continuity operation is composed in the numbered
+runner and candidate CLI after the locally committed Codex tool-policy row. Its
+original typed owner, private backup/retry and strict native-history checks are
+unchanged. The prepared independent-credential reset is not part of this
+composition or a continuity prerequisite; no read/startup/chat path runs it.

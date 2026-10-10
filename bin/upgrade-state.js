@@ -6,7 +6,7 @@ import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
 import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy } from "@local/vibe64-colleague/server/conversationUpgrade";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
 import { upgradePlanProgress } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
@@ -33,6 +33,7 @@ try {
     upgradeColleagueConversationRuntime,
     upgradeColleagueConversationHistory,
     upgradeColleagueCodexCompletedPolicy,
+    upgradeColleagueNativeContinuity,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
     upgradePlanProgress,
