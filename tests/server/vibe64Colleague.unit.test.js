@@ -4952,10 +4952,15 @@ test("R11 migrated current successor refuses a changed native account without an
   const before = await f.native.trace();
   const turns = before.filter(row => row.method === "turn/start");
   assert.equal(turns.length, 1);
+  const owned = JSON.parse(await readFile(f.file, "utf8"));
   await writeFile(accountFile, "different@example.test");
   try {
-    await assert.rejects(f.send("This account change must not infer.", "r11-changed-account"),
-      /another Codex account/);
+    // The original authored request is retained before tracked native preparation.
+    // Account refusal must settle that worker without dispatching another native turn.
+    await f.send("This account change must not infer.", "r11-changed-account");
+    const refused = await f.service.wait(f.context);
+    assert.equal(refused.status, "failed");
+    assert.match(refused.error, /another Codex account/);
     const after = await f.native.trace();
     assert.deepEqual(after.filter(row => row.method === "turn/start"), turns);
     assert.equal(after.filter(row => row.method === "thread/start").length, 1);
@@ -4963,6 +4968,14 @@ test("R11 migrated current successor refuses a changed native account without an
     assert.deepEqual(f.observations.mutations, []);
     const saved = JSON.parse(await readFile(f.file, "utf8"));
     assert.deepEqual(saved.conversationLog[0], f.legacy.conversationLog[0]);
+    assert.equal(saved.scopeId, owned.scopeId);
+    assert.deepEqual(saved.assistantSelection, owned.assistantSelection);
+    assert.equal(saved.conversationMetadata.runtime.binding.threadId, owned.conversationMetadata.runtime.binding.threadId);
+    assert.equal(saved.conversationMetadata.runtime.binding.accountIdentity, owned.conversationMetadata.runtime.binding.accountIdentity);
+    assert.deepEqual(saved.conversationLog.slice(0, owned.conversationLog.length), owned.conversationLog);
+    const authored = saved.conversationLog.find(turn => turn.user?.messageId === "r11-changed-account");
+    assert.equal(authored.user.text, "This account change must not infer.");
+    assert.equal(authored.assistant, null);
     assert.equal(saved.retiredConversation.conversationId, f.legacy.conversationId,
       "the current account fence does not invent an account binding for retired schema1 history");
   } finally { await writeFile(accountFile, originalAccount); }
