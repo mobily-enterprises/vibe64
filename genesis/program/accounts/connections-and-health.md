@@ -47,6 +47,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-core/src/server/stateUpgrades/20260926-assistant-role-names.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingScores.json`
+- `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
 - `packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue`
 
@@ -248,14 +249,20 @@ identity through the same optional public host injection.
 
 Recommendation values live in the checked-in `assistantRoutingScores.json`,
 keyed by exact orchestrator/provider/model route and role. The shared routing
-policy filters eligible choices before applying those scores. It prefers Astra
-for Codex Senior and DeepSeek Flash for Junior, Helper and Router. Sol ranks
-above GLM for Junior; Luna ranks above GLM for economical assistance. Claude's
-listed native aliases use corresponding tiers. Other eligible models receive
-the JSON default scores, with included Pickle ranked last. Score ties prefer
+policy filters eligible choices before applying those scores. Every role prefers
+Claude/Anthropic, then Codex/OpenAI, then DeepSeek, then GLM. Scores remain integers
+from 1 to 10: Claude occupies 8–10, OpenAI 5–7, DeepSeek 4 and GLM 3. Within the
+native providers, Opus/Astra lead Senior, Sonnet/Sol lead Junior and Haiku/Luna
+lead Helper/Router. Unlisted models use their provider's lowest tier, so versioned
+native names retain that priority; unknown providers use the JSON default 2,
+with included Pickle ranked last at 1. Shared Backup uses Helper scores after
+excluding personal or unavailable connections. Score ties prefer
 the orchestrator being configured, then saved eligible choices; exact route
 ordering makes remaining ties stable. Recommendations never change saved
 assignments or execution destinations without an explicit save.
+Routing model dropdowns omit thinking; the adjacent role thinking control owns
+that selection. Recommendation reviews and effective collaborator labels retain
+the complete model/thinking identity.
 These priorities apply only to qualified routing choices. Codex currently admits
 native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both
 external routes passed managed Astra → coding model → Astra tool-history and

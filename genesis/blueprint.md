@@ -481,8 +481,11 @@ answer questions or implement requested changes without a temporary plan,
 automatic handoff or review. These names describe the model roles, not limits
 on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
-Recommendations rank compatible models for each job, favouring Astra for planning
-and DeepSeek for economical implementation. Equally suitable models prefer the
+Recommendations rank connected, permitted models for every job in the order
+Claude, Codex/OpenAI, DeepSeek, then GLM. Within native providers, Senior favours
+Opus/Astra, Junior Sonnet/Sol, and Helper/Router Haiku/Luna. Model dropdowns name
+only the model; their separate thinking control shows the selected thinking.
+Equally suitable models prefer the
 orchestrator being configured, including Router, Helper and shared Backup.
 They preserve saved choices rather than silently changing models when the
 catalogue or recommendation policy changes.

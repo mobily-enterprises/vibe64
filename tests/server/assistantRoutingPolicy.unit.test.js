@@ -14,34 +14,83 @@ import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/share
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
 const revision = `sha256:${"a".repeat(64)}`;
-function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"]) {
-  const models = { openai: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], deepseek: ["deepseek-flash", "deepseek-v4-pro"], "zai-coding-plan": ["glm-5.3"], zai: ["glm-5.3"] };
-  return { engineId: "codex", label: "Codex", revision, transportId: "codex_app_server",
-    defaults: { agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" },
-    agents: [{ id: "codex", mode: "primary" }],
+function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engineId = "codex") {
+  const models = { anthropic: ["opus", "sonnet", "haiku"], openai: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], deepseek: ["deepseek-flash", "deepseek-v4-pro"], "zai-coding-plan": ["glm-5.3"], zai: ["glm-5.3"] };
+  return { engineId, label: engineId, revision, transportId: engineId === "claude" ? "claude_stream_json" : "codex_app_server",
+    defaults: { agentId: engineId, modelProviderId: engineId === "claude" ? "anthropic" : "openai", modelId: engineId === "claude" ? "opus" : "gpt-6-astra", variantId: "high" },
+    agents: [{ id: engineId, mode: "primary" }],
     modelProviders: providerIds.map((id) => ({ id, label: id, connected: true, models: models[id].map((modelId) => ({
       id: modelId, label: modelId, status: "available", variants: [{ id: "low" }, { id: "high" }]
     })) })) };
 }
 
-test("JSON recommendations keep Astra for Senior and prefer DeepSeek, then Sol, over GLM for Junior", () => {
-  for (const [providers, expected] of [
-    [["openai"], "gpt-6-sol"], [["openai", "zai-coding-plan"], "gpt-6-sol"],
-    [["openai", "deepseek"], "deepseek-flash"], [["openai", "zai-coding-plan", "deepseek"], "deepseek-flash"]
-  ]) {
+test("Codex recommendations prefer native OpenAI for every role when DeepSeek and GLM are connected", () => {
+  for (const providers of [["openai"], ["openai", "zai-coding-plan"],
+    ["openai", "deepseek"], ["openai", "zai-coding-plan", "deepseek"]]) {
     const roles = recommendedRoutingAssignments(catalog(providers));
     assert.equal(roles.senior.modelId, "gpt-6-astra");
-    assert.equal(roles.junior.modelId, expected);
-    assert.equal(roles.helper.modelId, providers.includes("deepseek") ? "deepseek-flash" : "gpt-6-luna");
+    assert.equal(roles.junior.modelId, "gpt-6-sol");
+    assert.equal(roles.helper.modelId, "gpt-6-luna");
     assert.equal(roles.router.modelId, roles.helper.modelId);
     assert.equal(roles.helper.variantId, "low");
   }
 });
 
+test("every role ranks Claude above OpenAI, then DeepSeek, then both GLM connections", () => {
+  const groups = [["anthropic"], ["openai"], ["deepseek"], ["zai", "zai-coding-plan"]];
+  for (const role of [...ASSISTANT_ROUTING_ROLES, "sharedBackup"]) {
+    for (let i = 0; i < groups.length - 1; i += 1) {
+      const scores = providers => routingScores.models.filter(row => providers.includes(row.modelProviderId))
+        .map(row => routingModelScore(row, role));
+      assert.ok(Math.min(...scores(groups[i])) > Math.max(...scores(groups[i + 1])), `${role}: ${groups[i]} > ${groups[i + 1]}`);
+    }
+  }
+});
+
+test("live recommendations follow provider priority after availability and personal Backup eligibility", () => {
+  const codex = catalog();
+  const claude = catalog(["anthropic", "deepseek", "zai-coding-plan"], "claude");
+  const catalogs = [codex, claude];
+  const connectionAccess = catalogs.flatMap(engine => engine.modelProviders.map(provider => ({
+    engineId: engine.engineId, modelProviderId: provider.id, available: true,
+    ownerOnly: ["anthropic", "openai"].includes(provider.id)
+  })));
+  const native = recommendedRoutingAssignments(claude);
+  assert.equal(native.senior.modelId, "opus");
+  assert.equal(native.junior.modelId, "sonnet");
+  assert.equal(native.helper.modelId, "haiku");
+  assert.equal(native.router.modelId, "haiku");
+  const assignments = { helper: { ...recommendedRoutingAssignments(codex).helper, modelProviderId: "deepseek", modelId: "deepseek-flash" } };
+  const original = structuredClone(assignments);
+  for (const [providerId, modelId] of [["anthropic", "haiku"], ["openai", "gpt-6-luna"], ["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
+    for (const ordered of [catalogs, [...catalogs].reverse()]) {
+      const roles = recommendedRoutingAssignments(codex, { catalogs: ordered, connectionAccess, assignments });
+      for (const role of ["helper", "router"]) {
+        assert.equal(roles[role].modelProviderId, providerId, role);
+        assert.equal(roles[role].modelId, modelId, role);
+      }
+      assert.ok(["deepseek", "zai-coding-plan"].includes(roles.sharedBackup.modelProviderId), "personal models cannot supply a shared Backup");
+    }
+    for (const access of connectionAccess) if (access.modelProviderId === providerId) access.available = false;
+  }
+  assert.deepEqual(assignments, original, "recommendation inspection preserves saved choices");
+});
+
+test("unlisted native models retain provider priority without admitting unsupported routes", () => {
+  const codex = catalog();
+  const claude = catalog(["anthropic"], "claude");
+  claude.modelProviders[0].models = [{ id: "claude-sonnet-4-6", label: "Claude Sonnet", status: "available", variants: [{ id: "low" }, { id: "high" }] }];
+  assert.equal(recommendedRoutingAssignments(codex, { catalogs: [codex, claude] }).helper.modelId, "claude-sonnet-4-6");
+  codex.modelProviders[0].models = [{ id: "gpt-new", label: "GPT", status: "available", variants: [] }];
+  const roles = recommendedRoutingAssignments(codex);
+  for (const role of ASSISTANT_ROUTING_ROLES) assert.equal(roles[role].modelId, "gpt-new", role);
+  assert.equal(routingModelScore({ engineId: "opencode", modelProviderId: "unknown", modelId: "unknown" }, "helper"), 2);
+});
+
 test("a saved assignment is revalidated without replacing it with a recommendation", () => {
   const engine = catalog();
   const saved = { ...recommendedRoutingAssignments(engine).junior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
-  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "deepseek-flash");
+  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "gpt-6-sol");
   assert.equal(routingAssignmentSelection(engine, saved).modelId, "glm-5.3");
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelProviderId: "deepseek", modelId: "deepseek-v4-pro" }), /has not been verified/);
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelId: "glm-unverified" }), /available/);
@@ -56,7 +105,7 @@ test("GLM API and Coding Plan remain distinct eligible routing choices despite s
   for (const choice of choices) {
     assert.equal(choice.compatibilityError, "");
     assert.equal(routingAssignmentSelection(engine, choice).modelProviderId, choice.modelProviderId);
-    assert.equal(routingModelScore(choice, "junior"), 7);
+    assert.equal(routingModelScore(choice, "junior"), 3);
   }
 });
 
@@ -218,7 +267,7 @@ test("Accounts exposes safe choices and validates owner-managed assignments", as
   assert.equal((await service.saveModelRouting(input)).ok, false);
   const saved = await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } });
   assert.equal(saved.ok, true, JSON.stringify(saved));
-  assert.equal(saved.engines[0].roles.junior.assignment.modelId, "deepseek-flash");
+  assert.equal(saved.engines[0].roles.junior.assignment.modelId, "gpt-6-sol");
   assert.equal(saved.engines[0].roles.junior.assignment.selectionSource, "recommended");
   assert.equal((await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } })).ok, false);
 });
@@ -238,6 +287,11 @@ function routingFixture() {
     { engineId: "opencode", modelProviderId: "opencode", ownerOnly: false, available: true, connectionIdentity: "included-zen" }
   ];
   const roles = recommendedRoutingAssignments(codex);
+  // Resolver/access cases retain their original saved shared DeepSeek routes;
+  // a recommendation change does not rewrite those existing assignments.
+  roles.junior = routingAssignmentSelection(codex, { ...roles.junior, modelProviderId: "deepseek", modelId: "deepseek-flash" });
+  roles.helper = { ...roles.junior, variantId: "low" };
+  roles.router = { ...roles.helper };
   const backup = recommendedRoutingAssignments(opencode).junior;
   const configuration = { revision: 4, orchestrators: { codex: { ...roles, sharedBackup: backup } } };
   const input = { workflowEngineId: "codex", actor: { id: "member", role: "member" }, configuration,
@@ -255,7 +309,7 @@ test("shipped score JSON has complete bounded scores and unique exact route iden
     assert.ok(row.modelProviderId && row.modelId);
     for (const role of ASSISTANT_ROUTING_ROLES) assert.equal(routingModelScore(row, role), row.scores[role]);
   }
-  for (const scores of [routingScores.defaultScores, ...routingScores.models.map(({ scores }) => scores)]) {
+  for (const scores of [routingScores.defaultScores, ...Object.values(routingScores.providerDefaultScores), ...routingScores.models.map(({ scores }) => scores)]) {
     assert.deepEqual(Object.keys(scores).sort(), [...ASSISTANT_ROUTING_ROLES].sort());
     for (const value of Object.values(scores)) assert.ok(Number.isInteger(value) && value >= 1 && value <= 10);
   }
@@ -269,7 +323,7 @@ test("scores do not admit unsupported Codex history routes; isolated Router has 
   assert.equal(isolated.compatibilityError, "");
   engine.modelProviders.push({ id: "unqualified", connected: true, models: [{ id: "gpt-6-astra", status: "available", variants: [] }] });
   assert.ok(routingModelChoices(engine, { purpose: "request_routing" }).find(({ modelProviderId }) => modelProviderId === "unqualified").compatibilityError);
-  assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "junior"), 2);
+  assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "junior"), 4);
 });
 
 test("independent recommendations compare engines, retain saved ties and filter Backup by connection scope", () => {
@@ -280,7 +334,7 @@ test("independent recommendations compare engines, retain saved ties and filter 
   assert.equal(recommended.senior.engineId, "opencode");
   assert.equal(recommended.junior.engineId, "opencode");
   assert.equal(recommended.helper.engineId, "codex");
-  assert.equal(recommended.router.modelId, "deepseek-flash");
+  assert.equal(recommended.router.modelId, "gpt-6-luna");
   assert.equal(recommended.sharedBackup.modelProviderId, "deepseek");
   assert.deepEqual(f.input, before, "recommendations do not rewrite saved assignments");
   const withoutDeepSeek = { ...options, catalogs: [catalog(["openai"]), f.input.catalogs[1]] };

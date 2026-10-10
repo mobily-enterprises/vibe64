@@ -159,11 +159,11 @@ function selectionLabel(selection) {
 function items(role) {
   const current = draft.value[selectedEngine.value]?.[role];
   const choices = (engine.value?.roles[role]?.choices || []).map((choice) => ({
-    id: choiceId(choice), label: selectionLabel(choiceId(choice) === choiceId(current) ? current : choice),
+    id: choiceId(choice), label: vibe64AssistantSelectionLabel(choice, { includeThinking: false }),
     props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}${choice.compatibilityError ? " · Compatibility pending" : ""}`,
       disabled: !choice.available || Boolean(choice.compatibilityError) || ["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false }
   }));
-  if (current && !choices.some(({ id }) => id === choiceId(current))) choices.unshift({ id: choiceId(current), label: selectionLabel(current), props: { subtitle: "Unavailable saved choice", disabled: true } });
+  if (current && !choices.some(({ id }) => id === choiceId(current))) choices.unshift({ id: choiceId(current), label: vibe64AssistantSelectionLabel(current, { includeThinking: false }), props: { subtitle: "Unavailable saved choice", disabled: true } });
   return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...choices];
 }
 function choose(role, id) {

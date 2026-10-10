@@ -60,6 +60,29 @@ it("hydrates a warm routing resource immediately and keeps engine identities dis
   expect(mocks.command.buildRawPayload().orchestrators.codex.junior).toBeUndefined();
 });
 
+it("shows model choices without thinking and keeps thinking in its separate control", () => {
+  const role = mocks.resource.data.value.engines[0].roles.router;
+  role.assignment = { ...deepseek, variantId: "low" };
+  role.choices = role.choices.map(choice => ({ ...choice, variantId: "high",
+    variants: [{ id: "low", label: "Low" }, { id: "high", label: "High" }] }));
+  const state = mount();
+  const labels = state.items("router").map(item => item.label);
+  expect(labels).toContain("Codex (gpt-6-astra)");
+  expect(labels).toContain("Codex (deepseek-flash)");
+  expect(labels).toContain("OpenCode (deepseek-flash)");
+  expect(labels.join(" ")).not.toMatch(/\b(?:low|high|default|not recorded)\b/);
+  expect(state.draft.codex.router.variantId).toBe("low");
+  state.choose("router", state.choiceId(astra));
+  expect(state.draft.codex.router.variantId).toBe("high");
+  state.changeEffort("router", "low");
+  expect(state.draft.codex.router.variantId).toBe("low");
+  expect(state.items("router").find(item => item.id === state.choiceId(astra)).label).toBe("Codex (gpt-6-astra)");
+  expect(mocks.command.buildRawPayload().orchestrators.codex.router).toMatchObject({ modelId: "gpt-6-astra", variantId: "low" });
+  state.draft.codex.router = { ...astra, modelId: "unavailable-model", variantId: "high" };
+  expect(state.items("router")[1]).toMatchObject({ label: "Codex (unavailable-model)", props: { disabled: true } });
+  expect(state.selectionLabel(state.draft.codex.router)).toBe("Codex (unavailable-model high)");
+});
+
 it("reviews only changes to the current draft before applying recommendations to one workflow", () => {
   const other = structuredClone(resourceData().engines[0]);
   other.engineId = "opencode";

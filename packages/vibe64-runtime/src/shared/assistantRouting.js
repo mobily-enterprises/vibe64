@@ -92,7 +92,7 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
 function routingModelScore(selection, role) {
   const row = routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
     .every((key) => candidate[key] === selection[key]));
-  return (row?.scores || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
+  return (row?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
 }
 
 function routingConnectionAccess(selection, connections = []) {

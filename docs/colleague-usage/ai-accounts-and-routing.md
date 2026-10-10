@@ -73,6 +73,22 @@ The displayed routing form can also offer **Review recommendations**,
 required review, then Save routing. On mobile, scroll the same dialog to its controls.
 Disabled models are unavailable or incompatible; they must not be invented.
 
+Recommendations prefer **Claude → Codex/OpenAI → DeepSeek → GLM** among models
+connected and permitted for each role. Within the chosen provider, Senior uses
+Opus/Astra, Junior uses Sonnet/Sol, and Helper/Router use Haiku/Luna when offered.
+Senior and Junior stay in the selected orchestrator; independent roles can use
+other permitted orchestrators. Personal connections cannot supply a shared
+backup. **No recommended changes** means the current choices already match the
+available recommendations. To review different recommendations for saved
+routes, select **Review recommendations**, inspect them, select **Apply to form**,
+then **Save routing**. Connecting or reconnecting does not overwrite saved roles.
+
+The model dropdown shows the orchestrator and model without a thinking level.
+Use the separate **[role] thinking** control beside it to inspect or change
+thinking after selecting a model; the chosen level is included in Save routing.
+Recommendation reviews and collaborator outcomes still name the complete model
+and thinking selection. On mobile, the controls may be stacked vertically.
+
 Senior and Junior share an orchestrator. Helper and Router have their own allowed
 choices. Shared Backup can supply a permitted alternative for collaborators.
 Changing routing applies to future work, not a running agent or Colleague's own
