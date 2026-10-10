@@ -20,6 +20,7 @@ import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProv
 import { claudeProviderAccountIdentity } from "@local/vibe64-terminals/server/claudeConversationAccounts";
 import { conversationConfiguration } from "@local/vibe64-terminals/server/conversationConfiguration";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
+import { instructions } from "./protocol.js";
 
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iu;
 const nativeClaude = selection => selection?.engineId === "claude" && selection.modelProviderId === "anthropic";
@@ -99,7 +100,7 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
     }
   }
 
-  const inspect = async ({ ownerKey, filePath, original, saved, segmentId = randomUUID() }) => {
+  const inspect = async ({ ownerKey, filePath, original, saved, segmentId = randomUUID(), systemPrompt = instructions }) => {
     const retired = saved.schemaVersion === 1 ? saved : saved.retiredConversation;
     if (!retired || !restoredNative(retired.assistantSelection)) return null;
     const engine = retired.assistantSelection.engineId;
@@ -126,7 +127,7 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
       refuse("The last written product turn does not identify the original completed reply or watched-conversation update.");
     }
     const update = (binding, verify) => {
-      const configuration = conversationConfiguration(saved.assistantSelection, "").configuration;
+      const configuration = conversationConfiguration(saved.assistantSelection, systemPrompt).configuration;
       const next = { ...saved, conversationMetadata: { ...saved.conversationMetadata, runtime: {
         version: 3, segmentId, engine, configuration, predecessors: [],
         seen: conversationHistoryVersions(saved.conversationLog), lastEngine: engine, binding
@@ -433,7 +434,11 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
       const after = parse(await readUpgradeFile(path.join(backupRoot, "after", entry.path)), "Prepared Colleague history");
       validateColleagueConversationRecord(after, record.ownerKey);
       upgradeConversationRuntimeState({ metadata: after.conversationMetadata, conversationLog: after.conversationLog });
-      const update = await inspect({ ...record, saved, original, segmentId: after.conversationMetadata.runtime.segmentId });
+      // Preserve an already prepared original empty-prompt replacement exactly.
+      // The subsequent numbered instructions repair owns its correction.
+      const systemPrompt = after.conversationMetadata.runtime.configuration.systemPrompt;
+      if (systemPrompt !== "" && systemPrompt !== instructions) throw new Error("The prepared Colleague instructions are unsupported. Inspect the verified backup before retrying.");
+      const update = await inspect({ ...record, saved, original, segmentId: after.conversationMetadata.runtime.segmentId, systemPrompt });
       if (!update) throw new Error("The native-continuity backup is not an eligible original conversation. Inspect it before retrying.");
       if (!isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
         throw new Error("The prepared native binding differs from its current original evidence. Restore the original daemon configuration and receipts before retrying.");
@@ -560,6 +565,95 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
       const update = inspect(record);
       if (!update) continue;
       report("warning", `${record.ownerKey}: retire only the known old Codex tool binding and retain its full history. Keep application, watch and independent product writers stopped through publication; native files and goals are untouched. The next explicit request validates the current account and uses a new native binding without replaying old work.`);
+      updates.push(update);
+    }
+    return updates;
+  } });
+}
+
+
+/** Repair only the known empty configuration written by native continuity. */
+export async function upgradeColleagueNativeInstructions({ systemRoot, apply, backupRoot, report }) {
+  const root = path.join(systemRoot, "colleague");
+  await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
+  const entries = await readdir(root, { withFileTypes: true }).catch(error => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  const records = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    const filePath = path.join(root, entry.name, "conversation.json");
+    await verifyUpgradeParents(systemRoot, filePath);
+    const original = await readUpgradeFile(filePath);
+    if (original === null) continue;
+    const saved = parse(original, "Colleague history");
+    validateColleagueConversationRecord(saved, entry.name);
+    records.push({ ownerKey: entry.name, filePath, original, saved });
+  }
+  const inspect = ({ ownerKey, filePath, original, saved }) => {
+    const runtime = saved.conversationMetadata?.runtime;
+    if (runtime?.configuration?.systemPrompt !== "") return null;
+    const refuse = message => { throw new Error(`${ownerKey}: ${message} No request, binding or history was changed.`); };
+    const retired = saved.retiredConversation;
+    const binding = runtime.binding;
+    const nativeId = runtime.engine === "codex" ? binding?.threadId
+      : runtime.engine === "claude" ? binding?.conversationId : binding?.sessionId;
+    if (saved.schemaVersion !== 3 || !restoredNative(retired?.assistantSelection) || !retired.runId ||
+        !isDeepStrictEqual(saved.assistantSelection, retired.assistantSelection) || runtime.version !== 3 ||
+        runtime.engine !== saved.assistantSelection.engineId || runtime.lastEngine !== runtime.engine ||
+        nativeId !== retired.conversationId || !nativeId || runtime.predecessors?.length !== 0 ||
+        saved.previousConversations?.length || saved.freshOperation || binding.executionId !== "" ||
+        !isDeepStrictEqual(runtime.configuration, conversationConfiguration(saved.assistantSelection, "").configuration)) {
+      refuse("The empty configuration is not the known unchanged imported native binding. Inspect its original conversion before retrying.");
+    }
+    if (saved.status === "working" || saved.operation &&
+        !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.operation.status) || retired.operation ||
+        ["request", "replacement", "rewind", "continuity"].some(key => Object.hasOwn(runtime, key)) ||
+        runtime.nativeTurn?.active === true || binding.observationLoss && binding.observationLoss.stopped !== true ||
+        binding.codexAppServerRun && (codexAppServerTurnStateFromAgentRun(binding.codexAppServerRun).active ||
+          binding.codexAppServerRun.pendingUserMessageClientIds?.length) ||
+        saved.conversationLog.some(turn => ["running", "working", "inProgress"].includes(turn.metadata?.runtime?.status) ||
+          turn.metadata?.applicationTools?.some(call => !call.result || call.status !== "complete")) ||
+        (saved.assignments || []).some(assignment => assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) {
+      refuse("The application has active, pending or unconfirmed work. Resolve its original receipts and stop all writers before retrying; nothing will be replayed.");
+    }
+    const checked = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata, conversationLog: saved.conversationLog });
+    if (checked.changed) refuse("Complete earlier numbered runtime upgrades before repairing instructions.");
+    const next = { ...saved, conversationMetadata: { ...saved.conversationMetadata,
+      runtime: { ...runtime, configuration: { ...runtime.configuration, systemPrompt: instructions } } } };
+    return { filePath, original, contents: JSON.stringify(next) };
+  };
+  await verifyUpgradeParents(systemRoot, path.join(backupRoot, "manifest.json"));
+  const manifestSource = await readUpgradeFile(path.join(backupRoot, "manifest.json"));
+  if (manifestSource !== null) {
+    await publishStateUpgradeFiles({ systemRoot, backupRoot, apply: false, report, prepareUpdates: async () => [] });
+    const manifest = parse(manifestSource, "Colleague instructions backup manifest");
+    for (const record of records) {
+      if (!manifest.files.some(entry => entry.path === path.relative(systemRoot, record.filePath)) && inspect(record)) {
+        throw new Error("A new eligible Colleague owner appeared after preparation. Keep writers stopped and inspect the original backup before retrying.");
+      }
+    }
+    for (const entry of manifest.files) {
+      const record = records.find(item => path.relative(systemRoot, item.filePath) === entry.path);
+      if (!record) throw new Error("A backed-up Colleague owner is missing. Restore its original state before retrying.");
+      const original = await readUpgradeFile(path.join(backupRoot, "before", entry.path));
+      const saved = parse(original, "Backed-up Colleague history");
+      const after = parse(await readUpgradeFile(path.join(backupRoot, "after", entry.path)), "Prepared Colleague history");
+      validateColleagueConversationRecord(saved, record.ownerKey);
+      validateColleagueConversationRecord(after, record.ownerKey);
+      const update = inspect({ ...record, original, saved });
+      if (!update || !isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
+        throw new Error("The prepared Colleague instructions differ from the original binding or history. Inspect the verified backup before retrying.");
+      }
+    }
+  }
+  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
+    const updates = [];
+    for (const record of records) {
+      const update = inspect(record);
+      if (!update) continue;
+      report("warning", `${record.ownerKey}: restore only the missing Colleague instructions with all product writers stopped. The failed request, native binding, account and full history remain unchanged; no request is sent or retried.`);
       updates.push(update);
     }
     return updates;

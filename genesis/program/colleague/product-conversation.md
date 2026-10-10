@@ -1091,3 +1091,17 @@ completed-envelope preparation, effect and reply publication retain the exact
 saved fingerprint check. This is the original managed refresh policy through the
 existing host seam; it neither shares credentials between orchestrators nor
 invents an old account identity for a converted session.
+
+
+The native continuity converter supplies the existing `protocol.instructions`
+base prompt before the shared runtime's saved-configuration open validation.
+Existing prepared empty-prompt backups keep their exact original retry bytes.
+The separate `20261010-colleague-native-instructions` operation repairs only that
+known empty imported configuration through the same stopped-state publisher and
+verified before/after backups. Exact original selection/native identity, inert
+import shape and settled receipts qualify the correction; pending or uncertain
+work refuses it. Only `configuration.systemPrompt` changes. The failed authored
+row, error, full transcript, binding/account and seen cursor remain unchanged,
+with no inference, credential operation, native file write or automatic resend.
+The original upgrade file exercises the actual shared SDK open validation before
+and after repair, instead of treating metadata shape validation as usability.

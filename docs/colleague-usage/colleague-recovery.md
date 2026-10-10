@@ -172,3 +172,16 @@ with the replacement key. Other orchestrators' connections remain separate.
 Opening history does not send a request or authorize key replacement. A completed
 reply still needs its original delivery receipt; replacing a key does not resend
 an earlier request or authorize its effects under the new key.
+
+
+## An imported conversation has missing instructions
+
+If an imported Colleague chat reports that its configuration requires a
+`systemPrompt`, contact the installation operator. With application writers
+stopped, the operator runs the candidate's numbered state repair to supply the
+existing Colleague instructions. It preserves the native conversation, account,
+history and failed message; it does not send that message again. After activation,
+use **Reload chat** if shown, or reopen Colleague. Check the retained failed
+message before explicitly sending any further request. Colleague can explain
+these steps but cannot run installation maintenance. The controls are the same
+on desktop and phone.

@@ -4,10 +4,13 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import nativeInstructionsUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-native-instructions.js";
+import { instructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { publishStateUpgradeFiles } from "../../packages/vibe64-core/src/server/stateUpgradeFiles.js";
 import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import { openCodeDetachedPrompt } from "@jskit-ai/assistant-core/server/opencode-turn";
-import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { createConversationRuntime, createMemoryConversationStorage, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-runtime-upgrade-"));
@@ -744,6 +747,8 @@ test("native continuity keeps the exact original Codex thread/scope/completed tu
   assert.equal(conversationMetadata.runtime.binding.accountIdentity, undefined, "Original schema1 had no old native account digest to fabricate");
   assert.equal(conversationMetadata.runtime.request, undefined);
   assert.equal(conversationMetadata.runtime.configuration.integrationId, undefined);
+  assert.equal(conversationMetadata.runtime.configuration.systemPrompt, instructions);
+  await openImportedCodex(next, f);
   assert.deepEqual(await readFile(f.nativePath), native);
   assert.deepEqual(await readFile(f.goalPath), goals);
   assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, f.filePath)), "utf8"), before);
@@ -913,4 +918,132 @@ for (const conflict of ["competing StructuredOutput", "recorded terminal failure
   assert.equal(await readFile(f.filePath, "utf8"), product);
   assert.deepEqual(await readFile(f.nativePath), native);
   await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+
+// Exercise the real SDK's saved configuration/open path without admitting work.
+async function openImportedCodex(saved, f) {
+  const storage = createMemoryConversationStorage();
+  await storage.write(saved.runtimeId, transaction => transaction.writeMetadata(structuredClone(saved.conversationMetadata)));
+  const runtime = createConversationRuntime({ storage, authorize: () => true,
+    host: { workdir: f.scopeWorkdir, env: f.env,
+      execution: { start() { throw new Error("Opening configuration must not start native work"); },
+        run() { throw new Error("Opening configuration must not start native work"); },
+        stop() { throw new Error("Opening configuration must not stop native work"); } } } });
+  try { await runtime.open({ id: saved.runtimeId }); }
+  finally { await runtime.close(); }
+}
+
+test("native instructions repair preserves the already imported failed request and exact binding with SDK-openable configuration", async t => {
+  const f = await codexContinuityFixture(t);
+  await f.run(true);
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  saved.conversationMetadata.runtime.configuration.systemPrompt = "";
+  saved.status = "failed";
+  saved.error = "Conversation configuration requires systemPrompt and optional integrationId, model and effort.";
+  saved.conversationLog.push({ turnId: "000003", messages: [{ role: "user", messageId: "failed-recall", text: "Retained failed recall" }] });
+  await writeFile(f.filePath, JSON.stringify(saved));
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath), goals = await readFile(f.goalPath);
+  await assert.rejects(openImportedCodex(saved, f), /configuration requires systemPrompt/);
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
+  const run = apply => nativeInstructionsUpgrade.run({ systemRoot: f.systemRoot, backupRoot, apply,
+    upgradeColleagueNativeInstructions, report() {} });
+  await run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+  await run(true);
+  const after = await readFile(f.filePath, "utf8"), next = JSON.parse(after);
+  assert.deepEqual(next, { ...saved, conversationMetadata: { ...saved.conversationMetadata,
+    runtime: { ...saved.conversationMetadata.runtime, configuration: { ...saved.conversationMetadata.runtime.configuration, systemPrompt: instructions } } } });
+  await openImportedCodex(next, f);
+  assert.deepEqual(await readFile(f.nativePath), native);
+  assert.deepEqual(await readFile(f.goalPath), goals);
+  const relative = path.relative(f.systemRoot, f.filePath);
+  assert.equal(await readFile(path.join(backupRoot, "before", relative), "utf8"), before);
+  assert.equal(await readFile(path.join(backupRoot, "after", relative), "utf8"), after);
+  assert.equal((await stat(path.join(backupRoot, "before", relative))).mode & 0o777, 0o600);
+  await run(false);
+  await run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  assert.equal(await readFile(path.join(backupRoot, "before", relative), "utf8"), before);
+});
+
+test("native instructions repair skips existing nonempty configuration and has no owner fallback", async t => {
+  const f = await codexContinuityFixture(t);
+  await f.run(true);
+  const before = await readFile(f.filePath, "utf8");
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
+  await upgradeColleagueNativeInstructions({ systemRoot: f.systemRoot, backupRoot, apply: true, report() {} });
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+  await assert.rejects(nativeInstructionsUpgrade.run({}), /native-instructions owner is required/);
+});
+
+for (const [name, change] of [
+  ["foreign native binding", saved => { saved.conversationMetadata.runtime.binding.threadId = "foreign"; }],
+  ["changed model", saved => { saved.assistantSelection.modelId = "other"; }],
+  ["unknown configuration", saved => { saved.conversationMetadata.runtime.configuration.extra = true; }],
+  ["active work", saved => { saved.status = "working"; }],
+  ["pending native request", saved => { saved.conversationMetadata.runtime.request = {}; }],
+  ["uncertain effect", saved => { saved.operation = { status: "unknown" }; }]
+]) test(`native instructions repair refuses ${name} before any backup or mutation`, async t => {
+  const f = await codexContinuityFixture(t);
+  await f.run(true);
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  saved.conversationMetadata.runtime.configuration.systemPrompt = "";
+  change(saved);
+  await writeFile(f.filePath, JSON.stringify(saved));
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath);
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
+  for (const apply of [false, true]) {
+    await assert.rejects(upgradeColleagueNativeInstructions({ systemRoot: f.systemRoot, backupRoot, apply, report() {} }), /known unchanged imported|active, pending or unconfirmed/);
+  }
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  assert.deepEqual(await readFile(f.nativePath), native);
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+});
+
+test("native instructions repair retries verified prepared bytes and rejects intervening product changes", async t => {
+  const f = await codexContinuityFixture(t);
+  await f.run(true);
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  saved.conversationMetadata.runtime.configuration.systemPrompt = "";
+  await writeFile(f.filePath, JSON.stringify(saved));
+  const before = await readFile(f.filePath, "utf8");
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
+  let interrupt = true;
+  const run = apply => upgradeColleagueNativeInstructions({ systemRoot: f.systemRoot, backupRoot, apply,
+    report(_level, message) { if (interrupt && message.startsWith("Published state:")) throw new Error("publication interrupted"); } });
+  await assert.rejects(run(true), /publication interrupted/);
+  interrupt = false;
+  const after = await readFile(f.filePath, "utf8");
+  await run(false);
+  await run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  assert.equal(await readFile(path.join(backupRoot, "before", path.relative(f.systemRoot, f.filePath)), "utf8"), before);
+  const changed = JSON.stringify({ ...JSON.parse(after), error: "A writer changed the record" });
+  await writeFile(f.filePath, changed);
+  await assert.rejects(run(true), /differs from both upgrade copies/);
+  assert.equal(await readFile(f.filePath, "utf8"), changed);
+});
+
+test("native continuity retries its original prepared empty configuration before the separate instructions repair", async t => {
+  const f = await codexContinuityFixture(t);
+  const before = await readFile(f.filePath, "utf8");
+  await f.run(true);
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  saved.conversationMetadata.runtime.configuration.systemPrompt = "";
+  // Retain an original-format before/after publication through the same owner.
+  await rm(f.backupRoot, { recursive: true });
+  await writeFile(f.filePath, before);
+  await publishStateUpgradeFiles({ systemRoot: f.systemRoot, backupRoot: f.backupRoot, apply: true, report() {},
+    prepareUpdates: async () => [{ filePath: f.filePath, original: before, contents: JSON.stringify(saved) }] });
+  const written = await readFile(f.filePath, "utf8");
+  await f.run(false);
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), written);
+  assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, f.filePath)), "utf8"), before);
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
+  await upgradeColleagueNativeInstructions({ systemRoot: f.systemRoot, backupRoot, apply: true, report() {} });
+  assert.equal(JSON.parse(await readFile(f.filePath, "utf8")).conversationMetadata.runtime.configuration.systemPrompt, instructions);
 });

@@ -924,3 +924,35 @@ An already inert destination cannot skip that check. Modified original, backup,
 manifest or product bytes refuse retry. Keep writers stopped, resolve the reported
 cause and retry the same candidate and backup; never edit the ledger or start an
 older executable against partially published state.
+
+
+## Known empty imported Colleague instructions
+
+`20261010-colleague-native-instructions` appends after the committed native
+continuity and Codex tool-policy entries. It does not register or require the
+separately proposed independent-provider credential reset. The normal candidate
+command runs check and apply with every application/watch/product writer stopped;
+no request handler or startup repairs state.
+
+New native continuity imports use the existing Colleague `protocol.instructions`
+base prompt. A previously prepared empty-prompt continuity backup remains exact
+on retry; this separate numbered repair supplies its missing instructions after
+the original entry completes. Do not edit the old backup or ledger.
+
+Only a schema3 imported native runtime with the literal empty prompt, exact
+selection-derived configuration, unchanged retired native ID/selection and no
+predecessor, fresh-chat, pending request or replacement qualifies. Active or
+uncertain application/native receipts block repair. Nonempty configurations are
+unchanged. A settled failed message remains in history with its original error.
+The repair changes only `runtime.configuration.systemPrompt`; it never sends a
+request, revalidates/copies credentials, touches native files or changes the
+binding, account, selection, seen cursor or transcript. Current native admission
+still owns fresh account validation for a subsequent explicit request.
+
+Check is read-only and creates no installation or backup. Apply uses the existing
+verified private before/after publisher under
+`upgrades/backups/20261010-colleague-native-instructions/`. Retry reconstructs the
+exact repair from BEFORE and compares the complete prepared AFTER; changed
+backup/product bytes or new eligible owners block retry. Keep writers stopped,
+resolve the reported cause and retry the same candidate; never reset the ledger
+or resend a failed message as part of maintenance.
