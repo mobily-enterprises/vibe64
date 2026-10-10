@@ -228,7 +228,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
     throw commandBoundaryError(unavailable.name);
   }
   const hostWrapperDir = text(git.hostWrapperDir);
-  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir });
+  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env });
   if (helper?.ok !== true) {
     throw commandBoundaryError("helper");
   }

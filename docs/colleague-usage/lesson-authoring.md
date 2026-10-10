@@ -105,6 +105,13 @@ contract. Colleague can help formulate that request and send it to an authorised
 coding conversation when the person asks; Colleague has no source or shell access.
 
 The author runs `vibe64 training validate <topic-directory>` in their terminal.
+In an assigned Vibe64 coding session, the same command is available through its
+managed shell. `vibe64-helper training validate <topic-directory>` is equivalent;
+the helper also accepts the `bundle` and `publish-manifest` arguments below.
+Use `vibe64-helper training --help` to read the exact argument forms.
+These commands use that session's existing filesystem and Git access. Keep the
+inputs and outputs within the authorised authoring assignment. They do not grant
+Colleague source access or permit a coding agent to install or enable courses.
 Success lists ordered lesson hashes and distinguishes published lessons from drafts.
 A failure means the author must correct the reported schema, reference, rubric or
 path problem; it does not change their project or learning history.
@@ -127,6 +134,11 @@ manifest hashes and every lesson in topic order. Dirty or changed inputs require
 the author to commit the intended version and retry. A preview remains a preview;
 required draft lessons prevent a released course. This command does not publish
 a remote release, install a topic or make a learner course available.
+The managed session command rejects `install-topic`, `installed-courses`,
+`enable-course` and `disable-course`. Installation and course enablement use the
+separate owner/operator workflow. If the managed authoring command is missing or
+cannot read its installed entrypoint, keep the source and ask the platform owner
+to reconcile the installed release; do not install another CLI in the session.
 
 These are terminal authoring steps on desktop, with no separate mobile controls.
 Colleague can explain them and offer to ask a coding agent for help. It cannot run

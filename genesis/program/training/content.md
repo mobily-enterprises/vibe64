@@ -432,6 +432,20 @@ action. Normal reads/startup add no absent end fields or history.
 
 ## Local operator CLI provisioning
 
+The original managed session helper also prepares an ordinary `vibe64` shim for
+`training validate`, `training bundle` and `training publish-manifest`;
+`vibe64-helper training` delegates to that same shim. Existing
+`agentCommandEnvironment` supplies its server environment to `agentHelperCommand`,
+which captures the canonical app's `bin/run.js` and the server's Node executable.
+The child retains the original managed shell identity, cwd, HOME, PATH and Env.
+The shim grants no new filesystem, source, Git or publication authority and
+rejects every operator command before invoking the existing CLI. It adds no
+daemon route, installer, authoring implementation or persisted data. Inputs and
+outputs remain subject to the coding assignment and ordinary filesystem/Git
+authority. Original Training content assertions cover validation, exclusive
+bundle output and clean exact-commit lock generation; the existing command
+environment file covers exact argument/identity delegation and operator refusal.
+
 The original `runTrainingCli` dispatch also supports `install-topic
 <committed-topic-directory> <system-root>`, `installed-courses <system-root>`,
 `enable-course <course.json> <course.lock.json> <system-root> <expected-revision>`

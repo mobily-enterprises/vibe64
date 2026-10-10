@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { promisify } from "node:util";
+import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 
 import {
   agentSessionCommandEnvironmentIsHealthy,
@@ -67,6 +70,8 @@ test("assistant engines share one complete session command environment", async (
     "helper"
   ]);
   assert.equal(calls[0][1].env.ATTACHMENT_ENV, "yes");
+  assert.deepEqual(calls.find(([name]) => name === "helper")[1].env,
+    { LIVE_ENV: "yes", GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" });
   for (const [name, input] of calls.slice(1)) {
     assert.equal(input.wrapperHostDir, "/managed/session-wrappers");
     if (name !== "helper") {
@@ -181,4 +186,71 @@ test("readiness proves live control identity and lifecycle logs exclude credenti
     await service.closeAllForSession("health-session");
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("managed Training authoring delegates exact arguments with ordinary shell identity and refuses operator commands", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-shim-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const appRoot = path.join(root, "installed app's $(unchanged)");
+  const sourceRoot = path.join(root, "assigned source");
+  const wrappers = path.join(root, "wrappers");
+  await mkdir(path.join(appRoot, "bin"), { recursive: true });
+  await mkdir(sourceRoot);
+  await writeFile(path.join(appRoot, "package.json"), '{"type":"module"}');
+  // This fixture observes the existing entrypoint boundary, not a second CLI.
+  // The original Training content file exercises the delegated authoring effects.
+  await writeFile(path.join(appRoot, "bin", "run.js"), `
+console.log(JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(),
+  uid: process.getuid(), gid: process.getgid(), home: process.env.HOME,
+  path: process.env.PATH, marker: process.env.TRAINING_EXISTING_ENV,
+  appRoot: process.env.VIBE64_APP_ROOT, node: process.execPath }));
+if (process.env.TRAINING_TEST_EXIT) {
+  console.error("original CLI failure");
+  process.exitCode = Number(process.env.TRAINING_TEST_EXIT);
+}
+`);
+  await writeFile(path.join(sourceRoot, "keep.txt"), "original assigned bytes");
+  assert.equal((await prepareAgentHelperCommand({ wrapperHostDir: wrappers,
+    env: { VIBE64_APP_ROOT: appRoot } })).ok, true);
+  const childEnv = { ...process.env, HOME: path.join(root, "ordinary-home"),
+    TRAINING_EXISTING_ENV: "same ordinary Env", VIBE64_APP_ROOT: "/child-env-does-not-select-cli" };
+  const run = promisify(execFile);
+  const commands = [
+    ["validate", "topic's $(literal)"],
+    ["bundle", "topic", "../new output"],
+    ["publish-manifest", "../course.json", "topic-one", "topic-two"]
+  ];
+  for (const name of ["vibe64", "vibe64-helper"]) {
+    const command = path.join(wrappers, name);
+    assert.equal((await stat(command)).mode & 0o777, 0o755);
+    const help = await run(command, ["training", "--help"], { cwd: sourceRoot, env: childEnv });
+    assert.match(help.stdout, /validate <topic-directory>/u);
+    assert.equal(help.stderr, "");
+    for (const args of commands) {
+      const { stdout, stderr } = await run(command, ["training", ...args], { cwd: sourceRoot, env: childEnv });
+      assert.equal(stderr, "");
+      assert.deepEqual(JSON.parse(stdout), { args: ["training", ...args], cwd: sourceRoot,
+        uid: process.getuid(), gid: process.getgid(), home: childEnv.HOME,
+        path: childEnv.PATH, marker: childEnv.TRAINING_EXISTING_ENV,
+        appRoot: childEnv.VIBE64_APP_ROOT, node: process.execPath });
+    }
+    for (const operation of ["install-topic", "installed-courses", "enable-course", "disable-course"]) {
+      await assert.rejects(run(command, ["training", operation, "topic", "/operator-root"],
+        { cwd: sourceRoot, env: childEnv }), error => {
+        assert.equal(error.code, 2);
+        assert.equal(error.stdout, "", "operator refusal must precede the original entrypoint");
+        assert.match(error.stderr, /Only training validate, bundle and publish-manifest/u);
+        return true;
+      });
+    }
+  }
+  await assert.rejects(run(path.join(wrappers, "vibe64"), [], { cwd: sourceRoot, env: childEnv }), { code: 2 });
+  await assert.rejects(run(path.join(wrappers, "vibe64"), ["training", "validate", "topic"],
+    { cwd: sourceRoot, env: { ...childEnv, TRAINING_TEST_EXIT: "42" } }), error => {
+    assert.equal(error.code, 42);
+    assert.equal(error.stderr, "original CLI failure\n");
+    assert.deepEqual(JSON.parse(error.stdout).args, ["training", "validate", "topic"]);
+    return true;
+  });
+  assert.equal(await readFile(path.join(sourceRoot, "keep.txt"), "utf8"), "original assigned bytes");
 });
