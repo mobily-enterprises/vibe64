@@ -820,7 +820,9 @@ function useVibe64SessionRenewal({
       ) {
         return false;
       }
-      await Promise.resolve(selectSession(successorId));
+      if (await Promise.resolve(selectSession(successorId)) === false) {
+        return false;
+      }
       handledSuccessorId.value = successorId;
       triggerFocusTarget.value = null;
       open.value = false;

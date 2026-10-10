@@ -1101,6 +1101,9 @@ The new session and its handover remain available for the person to repair an
 expired login, quota, or provider problem and continue. Renewal stops only when
 Vibe64 cannot establish the fresh conversation, its handover, or its saved
 source safely.
+When renewal opens the fresh session, its link follows that session so reloading
+or bookmarking it keeps the new conversation. Other chat and project-view choices
+stay in the link; ordinary session-tab selection keeps its existing behavior.
 Failed renewals always offer an explicit Retry, including after reopening the
 dialog. Save or Update prerequisites can be corrected in the old session;
 Retry checks the current conditions before continuing the saved renewal.

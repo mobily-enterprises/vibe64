@@ -1433,3 +1433,19 @@ describe("useVibe64SessionRenewal", () => {
     scope.stop();
   });
 });
+
+
+it("does not focus or consume a successor opening explicitly declined by its host", async () => {
+  const selectSession = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(undefined);
+  const { controller, focusSession, scope } = mountRenewal({ selectSession });
+  try {
+    renewalHarness.endpoint.data.value = { ok: true, viewerScope: VIEWER_SCOPE,
+      renewal: renewalState({ stage: "completed", status: "completed", successor: { sessionId: "session-2" } }) };
+    await nextTick(); await nextTick();
+    expect(selectSession).toHaveBeenCalledOnce();
+    expect(focusSession).not.toHaveBeenCalled();
+    await expect(controller.openSuccessor()).resolves.toBe(true);
+    expect(selectSession).toHaveBeenCalledTimes(2);
+    expect(focusSession).toHaveBeenCalledWith("session-2");
+  } finally { scope.stop(); }
+});

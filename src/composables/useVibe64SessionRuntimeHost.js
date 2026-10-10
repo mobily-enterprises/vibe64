@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -163,6 +164,8 @@ function runtimeHostWorkTaskState(session = {}) {
 }
 
 function useVibe64SessionRuntimeHost(props, emit) {
+  const route = useRoute();
+  const router = useRouter();
   // The panel retains this keyed host while its purpose is hidden. Its lesson
   // identity belongs to the saved record, never the currently visible filter.
   const initialSession = (unref(props.sessionData.sessions) || []).find(
@@ -352,7 +355,43 @@ function useVibe64SessionRuntimeHost(props, emit) {
     active: computed(() => Boolean(props.active)),
     focusSession: focusRuntimeSessionChat,
     refreshSessionData: props.sessionData.refreshSessionData,
-    selectSession: props.sessionData.selectSessionId,
+    selectSession: async (successorId) => {
+      const predecessorId = selectedSessionId.value;
+      const sessionData = props.sessionData;
+      const projectSlug = runtimeProjectContext.value.slug;
+      const apiPath = readRefOrGetterValue(sessionsApiPath);
+      const target = { path: route.path, hash: route.hash, query: { ...route.query, session: successorId } };
+      const sameRenewal = () => {
+        const renewal = unref(renewalModel.renewal);
+        return workStateActive && props.sessionData === sessionData &&
+          selectedSessionId.value === predecessorId && runtimeProjectContext.value.slug === projectSlug &&
+          readRefOrGetterValue(sessionsApiPath) === apiPath && renewal?.status === "completed" &&
+          String(renewal.successor?.sessionId || "").trim() === successorId;
+      };
+      const canNavigate = () => sameRenewal() && props.active &&
+        readRefOrGetterValue(sessionData.selectedSessionId) === predecessorId;
+      const removeGuard = router.beforeResolve((to) => {
+        if (to.path === target.path && to.hash === target.hash && to.query.session === successorId && !canNavigate()) {
+          return false;
+        }
+      });
+      try {
+        const failure = await router.replace(target);
+        if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+          throw failure;
+        }
+        if (!sameRenewal() || route.path !== target.path || route.hash !== target.hash ||
+          route.query.session !== successorId) return false;
+        // The route watcher normally selects the successor and hides this host.
+        // Never replace a newer explicit tab choice after awaiting navigation.
+        if (readRefOrGetterValue(sessionData.selectedSessionId) === successorId) return true;
+        if (!canNavigate()) return false;
+        sessionData.selectSessionId(successorId);
+        return true;
+      } finally {
+        removeGuard();
+      }
+    },
     selectedSession,
     // Source-less lessons have no renewal workspace. Keep the original owner
     // present, with no resource target or background request.
