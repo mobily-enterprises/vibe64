@@ -330,6 +330,13 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         emit({ type: "result", subtype: "error_during_execution", is_error: true, errors: ["Unexpected native prompt"] });
         return;
       }
+      // Optional original-Claude carriers; ordinary fixture responses stay unchanged.
+      if (response.nativeToolUse) {
+        const use = { type: "assistant", session_id: id, uuid: frame.uuid + "-native-tool", message: { content: [
+          { type: "tool_use", id: frame.uuid + "-native-tool", name: response.nativeToolUse.name, input: response.nativeToolUse.input }
+        ] } };
+        record(use); emit(use);
+      }
       const answer = { type: "assistant", uuid: frame.uuid + "-answer", message: { content: [{ type: "text", text: response.text }] } };
       emit({ type: "stream_event", event: { type: "message_start", message: { id: frame.uuid + "-stream" } } });
       emit({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } } });
@@ -339,7 +346,8 @@ export async function createControlledColleagueNativeCommands(root, responses) {
       const thinking = { type: "assistant", uuid: frame.uuid + "-thinking", message: { content: [{ type: "thinking", thinking: "Reasoning summary" }] } };
       record(thinking); emit(thinking);
       record(answer); emit(answer);
-      emit({ type: "result", subtype: "success", result: answer.message.content[0].text });
+      emit({ type: "result", subtype: "success", result: answer.message.content[0].text,
+        ...(response.structuredOutput ? { structured_output: response.structuredOutput } : {}) });
     });
   `, { mode: 0o700 });
   return {

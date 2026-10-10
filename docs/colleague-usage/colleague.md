@@ -204,6 +204,11 @@ An operation-limit error keeps completed results; send a follow-up. Repeated
 invalid responses keep your message; retry or choose another model after the
 turn stops. This does not mean your projects are missing or your account disconnected.
 
+Colleague can look up an operation and then carry it out within the same request.
+Changing its focused project or switching between your request and background
+observation requires a new lookup. Current permissions still apply: an earlier
+lookup cannot make an operation available after access is removed.
+
 Recognized words can appear as a Pending user message in chat; acceptance replaces
 it with the saved message once. Unsent or discarded words are not saved history.
 Review and recording controls live beside the same typed composer. Microphone permission

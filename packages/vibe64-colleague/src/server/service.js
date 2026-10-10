@@ -609,6 +609,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const userMessageIds = [];
     let feedback = "", progressAlreadySaid = "", progress = null;
     let currentContext, prepared, receipt, release, replyTurnId = "", internalMessageId = "";
+    let toolSet, toolProject, toolAutonomous, toolReadOnly;
     let streamId = randomUUID();
     const projectReply = event => {
       if (!isCurrent() || state.pendingMessages.length) return;
@@ -680,7 +681,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           } else if (!feedback && previousResponse?.kind === "tool") {
             feedback = JSON.stringify({ toolName: previousResponse.toolName, result: previousResponse.result });
           }
-          const tools = catalog.resolveToolSet(currentContext.context).tools.map(catalog.toOpenAiToolSchema);
+          if (!toolSet || toolProject !== currentContext.context.projectSlug || toolAutonomous !== autonomous ||
+              toolReadOnly !== currentContext.readOnly) {
+            toolSet = catalog.resolveToolSet(currentContext.context);
+            toolProject = currentContext.context.projectSlug;
+            toolAutonomous = autonomous;
+            toolReadOnly = currentContext.readOnly;
+          }
+          const tools = toolSet.tools.map(catalog.toOpenAiToolSchema);
           const systemPrompt = `${nativeInstructions}\n\nAvailable application tools:\n${JSON.stringify(tools)}`;
           const conversation = await prepare(state, currentContext.context, connection.assistantSelection, systemPrompt);
           await conversation.configure({ outputSchema });
@@ -721,7 +729,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
               throw failure("Colleague's response did not complete. Your message is kept.");
             }
           }
-          prepared = await conversation.prepareCompletedResponse({ messageId: internalMessageId, turnId: receipt.turnId }, { signal: controller.signal });
+          prepared = await conversation.prepareCompletedResponse({ messageId: internalMessageId, turnId: receipt.turnId },
+            { signal: controller.signal, toolSet });
           return prepared;
         },
         async settle({ phase, response }) {

@@ -1503,6 +1503,29 @@ test("catalogue discovery retains its loaded contract across native model exchan
   assert.equal(f.observations.starts[2].result.ok, true);
 });
 
+for (const engine of ["codex", "claude"]) {
+  test(`native completed ${engine} retains its loaded discovery contract across exact responses`, async t => {
+    const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
+    const f = await fixture(t, [
+      { text: tool("assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 }) },
+      { text: tool("assistant_action_execute", { actionId: "vibe64.test.operate", version: 1, input: { value: "discovered" } }) },
+      { text: reply("Done through the discovered contract.") }
+    ], { native: true, discovery: true });
+    if (engine === "claude") await selectCompletedColleagueClaude(f);
+    await f.send("Use the requested operation.");
+    const final = await f.service.wait(f.context);
+    assert.equal(final.status, "ready", final.error);
+    assert.deepEqual(f.observations.mutations, ["discovered"]);
+    assert.equal(final.messages.at(-1).text, "Done through the discovered contract.");
+    const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    const operations = saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []);
+    assert.deepEqual(operations.map(operation => [operation.name, operation.status, operation.result.ok]),
+      [["assistant_action_contract", "complete", true], ["assistant_action_execute", "complete", true]]);
+    assert.equal(new Set(operations.map(operation => operation.id)).size, 2);
+    assert.equal(operations[1].result.result.result.ok, true);
+  });
+}
+
 test("a flat discovery call is rejected without mutation and can be corrected through the loaded contract", async (t) => {
   const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
   const f = await fixture(t, [
@@ -5720,4 +5743,189 @@ test("native completed Colleague preserves the original 280 and 281 character to
       await f.service.stop({}, f.context);
     }
   }
+});
+
+// R10: frozen 869ebb69 service:224–431 counts complete native envelopes, not
+// tool attempts. These use the existing executable, product and durable owners.
+test("native completed Colleague accepts its final reply on response 24", { timeout: 60_000 }, async t => {
+  const values = Array.from({ length: 23 }, (_, index) => `effect-${index}`);
+  const f = await fixture(t, [...values.map(value => ({ text: call(value) })), { text: reply("All 23 operations completed.") }], { native: true });
+  await f.send("Complete these operations.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, values);
+  assert.equal(final.messages.at(-1).text, "All 23 operations completed.");
+  const inputs = completedColleagueNativeInputs(await f.native.trace());
+  assert.equal(inputs.length, 24);
+  assert.equal(new Set(inputs.map(input => input.params.threadId)).size, 1);
+  assert.deepEqual(inputs.at(-1).data.userMessageIds, ["user-1"]);
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  const calls = saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []);
+  assert.equal(calls.length, 23);
+  assert.equal(calls.every(call => call.status === "complete" && call.result.ok), true);
+});
+
+test("native completed Colleague retains 24 operations at exhaustion and admits a same-conversation follow-up", { timeout: 60_000 }, async t => {
+  const values = Array.from({ length: 24 }, (_, index) => `effect-${index}`);
+  const f = await fixture(t, [...values.map(value => ({ text: call(value) })), { text: reply("The retained results are available.") }], { native: true });
+  await f.send("Complete these operations.");
+  const failed = await f.service.wait(f.context);
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.error, "Colleague reached this turn's operation limit. The completed results are kept; send a follow-up to continue.");
+  assert.deepEqual(f.observations.mutations, values);
+  assert.deepEqual(failed.messages.filter(message => message.role === "assistant"), []);
+  const firstTrace = await f.native.trace();
+  const firstInputs = completedColleagueNativeInputs(firstTrace);
+  assert.equal(firstInputs.length, 24, "Exhaustion never dispatches response 25");
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const before = JSON.parse(await readFile(file, "utf8"));
+  const calls = before.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []);
+  assert.equal(calls.length, 24);
+  assert.equal(calls.every(call => call.status === "complete" && call.result.ok), true);
+  assert.equal(failed.operation.status, "completed");
+  await f.send("Tell me the retained result.", "follow-up");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.conversationId, failed.conversationId);
+  assert.equal(final.messages.at(-1).text, "The retained results are available.");
+  assert.deepEqual(f.observations.mutations, values, "A follow-up never repeats the retained effects");
+  const inputs = completedColleagueNativeInputs(await f.native.trace());
+  assert.equal(inputs.length, 25, "Only the explicitly authored follow-up dispatches the next response");
+  assert.equal(inputs.at(-1).params.threadId, firstInputs[0].params.threadId);
+  assert.deepEqual(inputs.at(-1).data.userMessageIds, ["follow-up"]);
+  assert.deepEqual(inputs.at(-1).data.userMessages, [{ messageId: "follow-up", text: "Tell me the retained result." }]);
+  const after = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(after.conversationLog.slice(0, before.conversationLog.length), before.conversationLog);
+});
+
+test("native completed Colleague unknown effect retains the original receipt through duplicate admission and restart", async t => {
+  const f = await fixture(t, [{ text: call("once") }], { native: true });
+  f.observations.failure = Object.assign(new Error("Receipt was lost after execution"), { statusCode: 503 });
+  await f.send("Do it once");
+  const failed = await f.service.wait(f.context);
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.operation.status, "unknown");
+  assert.deepEqual(f.observations.mutations, ["once"]);
+  const trace = await f.native.trace();
+  const inputs = completedColleagueNativeInputs(trace);
+  assert.equal(inputs.length, 1, "Unknown effects never request correction or recovery inference");
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const before = JSON.parse(await readFile(file, "utf8"));
+  const calls = before.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].status, "unknown");
+  assert.equal(calls[0].result.ok, false);
+  assert.ok(calls[0].result.error.status >= 500);
+  await f.send("Do it once");
+  assert.deepEqual((await f.service.wait(f.context)).messages, failed.messages);
+  assert.deepEqual(f.observations.mutations, ["once"]);
+  assert.deepEqual(completedColleagueNativeInputs(await f.native.trace()), inputs);
+  await f.service.close();
+  const restored = await fixture(t, [], { systemRoot: f.root, native: f.native });
+  const retained = await restored.service.read({}, restored.context);
+  assert.equal(retained.operation.status, "unknown");
+  assert.equal(retained.conversationId, failed.conversationId);
+  assert.deepEqual(retained.messages, failed.messages);
+  assert.deepEqual(restored.observations.mutations, []);
+  assert.deepEqual(completedColleagueNativeInputs(await restored.native.trace()), inputs);
+  const after = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(after.conversationLog, before.conversationLog, "Restart preserves exact raw completion and unknown-effect receipts");
+});
+
+async function selectCompletedColleagueClaude(f) {
+  const current = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: current.conversationId, context: f.context });
+  await browser.select({ assistantSelection: { ...selection, engineId: "claude", modelProviderId: "anthropic" } });
+}
+
+function completedColleagueClaudeInputs(trace) {
+  return trace.filter(row => row.frame?.type === "user").map(row => {
+    const text = row.frame.message.content;
+    const line = text.split("\n").find(value => value.startsWith('{"event":'));
+    assert.ok(line, "The existing native application formatter carries the actual Claude envelope request");
+    return { frame: row.frame, data: JSON.parse(JSON.parse(line).event) };
+  });
+}
+
+// Frozen consumer:1266–1348, transferred onto actual Claude native frames. The
+// structured-output carrier and native mistake fact remain shared-owned.
+test("native completed Claude corrects an application-tool misroute before displaying its false outage", async t => {
+  const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
+  const falseReply = "My lookup tools aren't responding.";
+  const f = await fixture(t, [
+    { nativeToolUse: { name: "assistant_action_search", input: { query: "operate" } }, text: reply(falseReply) },
+    { text: tool("assistant_action_contract", { actionId: "vibe64.test.operate" }) },
+    { text: tool("assistant_action_execute", { actionId: "vibe64.test.operate", input: { value: "verified" } }) },
+    { text: reply("The operation succeeded.") }
+  ], { native: true, discovery: true });
+  await selectCompletedColleagueClaude(f);
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  const trace = await f.native.trace();
+  const inputs = completedColleagueClaudeInputs(trace);
+  const args = trace.find(row => row.args?.includes("--session-id")).args;
+  const toolUsage = args[args.indexOf("--system-prompt") + 1];
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.deepEqual(f.observations.mutations, ["verified"], JSON.stringify({
+    finalReply: final.messages.at(-1)?.text,
+    nativeToolAttempts: saved.conversationLog.filter(turn => turn.metadata?.runtime?.completedEnvelope)
+      .map(turn => turn.metadata.runtime.nativeToolAttempt),
+    offeredNames: [...toolUsage.matchAll(/"function":\{"name":"([^"]+)"/g)].map(match => match[1]),
+    nativeInputs: inputs.length
+  }));
+  assert.equal(final.messages.at(-1).text, "The operation succeeded.");
+  assert.equal(JSON.stringify(f.observations.realtime).includes(falseReply), false);
+  assert.equal(final.messages.some(({ text }) => text === falseReply), false);
+  assert.equal(inputs.length, 4);
+  assert.equal(inputs[1].data.previousOperation, undefined, "Native attempts never dispatch application actions");
+  const misrouted = saved.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope);
+  assert.equal(misrouted.metadata.runtime.nativeToolAttempt, true);
+  assert.deepEqual(misrouted.metadata.applicationTools || [], [], "The misrouted native response reserves no application operation");
+  assert.match(inputs[1].data.feedback, /called a Vibe64 application tool as a native runtime tool/);
+  for (const input of inputs) assert.equal(input.data.toolUsage, undefined);
+  assert.match(toolUsage, /StructuredOutput/);
+  const example = toolUsage.match(/to find projects return (.+?)\. If/)[1];
+  const envelope = JSON.parse(example);
+  assert.equal(envelope.kind, "tool");
+  assert.equal(envelope.toolName, "assistant_action_search");
+  assert.deepEqual(JSON.parse(envelope.arguments), { query: "projects" });
+});
+
+test("native completed Claude stops three repeated native mistakes without saving their false answer", async t => {
+  const response = { nativeToolUse: { name: "vibe64_test_operate", input: { value: "never" } }, text: reply("The application is unavailable.") };
+  const f = await fixture(t, [response, response, response], { native: true });
+  await selectCompletedColleagueClaude(f);
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "failed");
+  assert.match(final.error, /could not send its tool request through Colleague/);
+  assert.deepEqual(f.observations.mutations, []);
+  assert.equal(completedColleagueClaudeInputs(await f.native.trace()).length, 3);
+  assert.equal(final.operation, null);
+  assert.deepEqual(final.messages.map(({ role }) => role), ["user"]);
+});
+
+test("native completed Claude accepts a valid tool envelope after its native mistake without extra correction", async t => {
+  const f = await fixture(t, [
+    { nativeToolUse: { name: "vibe64_test_operate", input: { value: "ignored" } }, text: call("corrected") },
+    { text: reply("Done.") }
+  ], { native: true });
+  await selectCompletedColleagueClaude(f);
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, ["corrected"]);
+  assert.equal(completedColleagueClaudeInputs(await f.native.trace()).length, 2);
+});
+
+test("native completed Claude StructuredOutput remains a valid Colleague reply carrier", async t => {
+  const envelope = JSON.parse(reply("Hello."));
+  const f = await fixture(t, [{ nativeToolUse: { name: "StructuredOutput", input: envelope }, structuredOutput: envelope, text: reply("Hello.") }], { native: true });
+  await selectCompletedColleagueClaude(f);
+  await f.send("Hello.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.messages.at(-1).text, "Hello.");
+  assert.equal(completedColleagueClaudeInputs(await f.native.trace()).length, 1);
 });

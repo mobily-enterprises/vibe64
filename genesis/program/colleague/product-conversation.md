@@ -89,6 +89,13 @@ coordination; JSKIT's existing `runBoundedAssistantToolLoop` owns the fixed pars
 24 completed-response allowance (including discarded responses) and two
 cumulative invalid-response corrections. Its prepared native response retains the existing
 durable tool executor as the sole effect owner, with fresh product authority.
+The native worker retains the original catalogue tool set across response exchanges,
+so loading an exact discovery contract permits the following execute response.
+Its lifetime ends with the worker or a change of focused project, interactive versus
+autonomous policy, or autonomous read-only policy. Public supplies that set to the
+existing prepared response executor; JSKIT keeps each native response's own durable
+operation ID and rechecks current authority and action availability. Loaded contracts
+are not persisted, shared with another worker, or substituted for permission checks.
 
 The fixed native envelope validates decoded replies up to 16,000 characters,
 progress up to 280, tool names up to 256 and arguments up to 262,144. Its separate
