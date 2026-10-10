@@ -4031,6 +4031,15 @@ function createService({
     prepareAssistantChangeover,
     prepareRoutingSelection,
 
+    // Prepare a new routing pin without starting, clearing or changing the native goal.
+    async preparePausedGoalSelection(sessionId, selection, preferences, context) {
+      const prepared = await assistantRouting.prepareGoal(sessionId, { action: "rebind", selection }, {
+        ...context, session: { ...context.session, metadata: { ...context.session.metadata,
+          assistant_routing: JSON.stringify(preferences) } }
+      });
+      return prepared.pinned;
+    },
+
     globalCodexTerminalState() {
       return codex.terminals.globalTerminalState();
     },

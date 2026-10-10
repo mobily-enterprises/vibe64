@@ -1292,6 +1292,17 @@ receipts and context handoff as the existing modes. Selecting a named role clear
 the custom override and returns to that workflow's role assignments. Old records
 remain valid without rewriting or classifying past requests.
 
+An idle paused goal permits an explicit Custom model or Senior/Junior mode
+change within its current orchestrator. The selection writer retains its native
+turn/access checks and lock, prepares the replacement routing pin through
+`preparePausedGoalSelection` and the existing `prepareGoal` owner, then publishes
+the new goal pin/preferences/selection only after native preparation succeeds.
+The internal rebind action does not update or execute the native goal. It retains
+objective and budget/progress fields, captures current authorized routing, and
+keeps status paused; subsequent messages and Resume use the new pin. Active goals,
+active turns, Auto and cross-orchestrator changes remain blocked. The mode menu
+explains the restriction instead of silently disabling all choices.
+
 The Custom dialog starts model catalogue reads for connected engines together
 when opened, through the existing capabilities endpoint. It reuses those
 queries for 30 seconds; account/connection events invalidate them. The

@@ -1718,14 +1718,17 @@ function createService({
             if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
                 preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
             if (preferences.workflowEngineId === previousWorkflow) {
-              if (preferences.mode === "auto") {
-                const observed = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
-                const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
-                const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-                if (goal && !["complete", "completed"].includes(goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+              const observed = typeof terminals.readAgentGoal === "function"
+                ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
+              if (goal && !["complete", "completed"].includes(goal.status)) {
+                if (preferences.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+                if (goal.status !== "paused") throw new Error("Pause this goal before changing its chat mode or model.");
+              } else {
+                await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
+                return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
               }
-              await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
-              return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
             }
             const decision = await terminals.resolveAssistantPurpose({
               purpose: preferences.mode, workflowEngineId: preferences.workflowEngineId, reviewEnabled: preferences.review,
@@ -1758,17 +1761,24 @@ function createService({
           const goal = observedGoal?.status === "available" ? observedGoal.goal
             : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
           if (goal && !["complete", "completed"].includes(goal.status)) {
-            throw new Error("Finish this goal before changing chat modes or models.");
+            if (goal.status !== "paused") throw new Error("Pause this goal before changing its chat mode or model.");
+            if (next.engineId !== current.engineId) throw new Error("A paused goal must stay with its current agent. Choose another model within that agent.");
+            if (preferences?.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
           }
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(routingRequest?.status) ||
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
-          await terminals.prepareRoutingSelection(sessionId, next, { runtime, session, vibe64User });
-          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences || {
+          const nextPreferences = preferences || {
             mode: "custom", review: false, workflowEngineId: next.engineId, override: next
-          }));
+          };
+          const context = { runtime, session, vibe64User };
+          const pausedGoal = goal?.status === "paused"
+            ? await terminals.preparePausedGoalSelection(sessionId, next, nextPreferences, context) : null;
+          await terminals.prepareRoutingSelection(sessionId, next, context);
+          if (pausedGoal) await runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(pausedGoal));
+          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
           await runtime.store.writeMetadataValue(
             sessionId,
             VIBE64_ASSISTANT_SELECTION_METADATA,

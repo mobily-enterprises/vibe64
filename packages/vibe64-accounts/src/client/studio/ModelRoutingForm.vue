@@ -158,13 +158,24 @@ function selectionLabel(selection) {
 }
 function items(role) {
   const current = draft.value[selectedEngine.value]?.[role];
-  const choices = (engine.value?.roles[role]?.choices || []).map((choice) => ({
-    id: choiceId(choice), label: vibe64AssistantSelectionLabel(choice, { includeThinking: false }),
-    props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}${choice.compatibilityError ? " · Compatibility pending" : ""}`,
-      disabled: !choice.available || Boolean(choice.compatibilityError) || ["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false }
-  }));
-  if (current && !choices.some(({ id }) => id === choiceId(current))) choices.unshift({ id: choiceId(current), label: vibe64AssistantSelectionLabel(current, { includeThinking: false }), props: { subtitle: "Unavailable saved choice", disabled: true } });
-  return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...choices];
+  const choices = (engine.value?.roles[role]?.choices || []).map((choice) => {
+    const agent = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === choice.engineId)?.label || choice.engineId;
+    const status = choice.compatibilityError ? "Compatibility pending" : !choice.available ? "Unavailable"
+      : ["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false ? "Tools unavailable" : "";
+    return { id: choiceId(choice), engineId: choice.engineId, agent, label: choice.label || choice.modelId, status,
+      recommended: !status && choiceId(choice) === choiceId(engine.value.roles[role].recommendation),
+      props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}`, disabled: Boolean(status) } };
+  });
+  if (current && !choices.some(({ id }) => id === choiceId(current))) {
+    const agent = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === current.engineId)?.label || current.engineId;
+    choices.unshift({ id: choiceId(current), engineId: current.engineId, agent, label: current.modelId,
+      status: "Unavailable saved choice", props: { disabled: true } });
+  }
+  const groups = [...new Set([selectedEngine.value, ...choices.map(choice => choice.engineId)])].flatMap(engineId => {
+    const models = choices.filter(choice => choice.engineId === engineId);
+    return models.length ? [{ type: "subheader", id: `group:${engineId}`, label: models[0].agent }, ...models] : [];
+  });
+  return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...groups];
 }
 function choose(role, id) {
   const choice = engine.value.roles[role].choices.find((item) => choiceId(item) === id);
@@ -272,10 +283,31 @@ async function reload() {
             <div class="model-routing__role mb-4" :class="{ 'model-routing__role--compact': smAndDown }">
               <v-autocomplete
                 :ref="field => roleFields[role.id] = field" :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="items(role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(role)" persistent-hint :error-messages="roleError(role.id)"
+                :filter-keys="['title', 'raw.agent', 'props.subtitle']" no-data-text="No matching models" class="model-routing__model"
                 :loading="otherModelsRequested && role.crossOrchestrator && otherModels.resource.isInitialLoading.value"
                 @update:menu="open => { if (open && role.crossOrchestrator) otherModelsRequested = true; }"
                 @update:model-value="choose(role.id, $event)"
-              />
+              >
+                <template #subheader="{ props: group }"><v-list-subheader class="model-routing__group">{{ group.label }}</v-list-subheader></template>
+                <template #item="{ props: itemProps, item }">
+                  <v-list-item v-bind="itemProps" role="option" :aria-label="[item.agent, item.label, item.props?.subtitle, item.status, item.recommended ? 'Recommended' : ''].filter(Boolean).join(' · ')" class="model-routing__option" :class="{ 'model-routing__option--model': item.id }" :min-height="item.id ? 68 : 44">
+                    <template #title>
+                      <div class="model-routing__option-title">
+                        <span class="model-routing__model-name">{{ item.label }}</span>
+                        <v-chip v-if="item.recommended" size="x-small" color="primary" variant="tonal">Recommended</v-chip>
+                        <span v-if="item.status" class="text-body-small">{{ item.status }}</span>
+                      </div>
+                    </template>
+                    <template #append="{ isSelected }"><v-icon v-if="isSelected" icon="$complete" color="primary" size="small" aria-hidden="true" /></template>
+                  </v-list-item>
+                </template>
+                <template #selection="{ item }">
+                  <span class="model-routing__selection">
+                    <span class="model-routing__model-name">{{ item.label }}</span>
+                    <span v-if="item.agent" class="text-body-small model-routing__selection-detail">{{ item.agent }}<template v-if="item.props.subtitle"> · {{ item.props.subtitle }}</template></span>
+                  </span>
+                </template>
+              </v-autocomplete>
               <v-select v-if="variants(role.id).length" :model-value="draft[selectedEngine]?.[role.id]?.variantId || ''" :items="[{ id: '', label: 'Default' }, ...variants(role.id)]" item-title="label" item-value="id" :label="`${role.label} thinking`" variant="outlined" hide-details :disabled="saving || !canEdit" @update:model-value="changeEffort(role.id, $event)" />
             </div>
             <v-alert v-if="role.id === 'helper' && engine?.helperRoutingReview" type="warning" variant="tonal" class="mb-4">
@@ -319,4 +351,12 @@ async function reload() {
 .model-routing__role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr); gap: 12px; align-items: start; }
 .model-routing__role--compact { grid-template-columns: minmax(0, 1fr); }
 .model-routing__changes { overflow-wrap: anywhere; }
+.model-routing__group { font-weight: 600; color: rgb(var(--v-theme-on-surface)); background: rgba(var(--v-theme-on-surface), .04); }
+.model-routing__option--model { padding-inline-start: 32px; }
+.model-routing__option-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; white-space: normal; }
+.model-routing__model-name { font-weight: 500; overflow-wrap: anywhere; }
+.model-routing__option :deep(.v-list-item-subtitle) { margin-top: 4px; line-height: 1.4; opacity: .75; color: rgb(var(--v-theme-on-surface)); }
+.model-routing__selection { display: flex; flex-direction: column; min-width: 0; padding-block: 2px; }
+.model-routing__selection-detail { opacity: .75; }
+.model-routing__model :deep(.v-autocomplete__selection) { max-width: 100%; }
 </style>

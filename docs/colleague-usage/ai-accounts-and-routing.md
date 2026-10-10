@@ -83,7 +83,13 @@ available recommendations. To review different recommendations for saved
 routes, select **Review recommendations**, inspect them, select **Apply to form**,
 then **Save routing**. Connecting or reconnecting does not overwrite saved roles.
 
-The model dropdown shows the orchestrator and model without a thinking level.
+The model dropdown groups choices under orchestrator headings such as **Codex**,
+**Claude Code** and **OpenCode**. Choose an indented model beneath its heading;
+the second line identifies its provider and personal or workspace access.
+**Recommended** marks the suggested model for that role. Unavailable choices
+show their reason and cannot be selected. Type to search by model, orchestrator,
+provider or access; only matching groups remain visible. The selected field
+shows the model and its orchestrator/access details, without a thinking level.
 Use the separate **[role] thinking** control beside it to inspect or change
 thinking after selecting a model; the chosen level is included in Save routing.
 Recommendation reviews and collaborator outcomes still name the complete model

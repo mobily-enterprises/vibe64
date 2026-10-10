@@ -83,6 +83,9 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
         status: "available", variants: [{ id: "low" }, { id: "high" }] }] }
     ] };
   const assignments = recommendedRoutingAssignments(catalog);
+  // Preserve the original explicit lifecycle routes independently of recommendation policy.
+  assignments.junior = { ...assignments.junior, modelProviderId: "deepseek", modelId: "deepseek-flash", selectionSource: "explicit" };
+  assignments.helper = { ...assignments.junior, variantId: "low" };
   // Keep a distinct, explicit classifier so lifecycle checks do not depend on recommendation rankings.
   assignments.router = { ...assignments.router, modelProviderId: "openai", modelId: "gpt-6-luna", selectionSource: "explicit" };
   const configuration = createAssistantRoutingStore({ systemRoot: root });
@@ -2265,4 +2268,31 @@ test("Router notices retain their selected conversation in both storage and publ
   const patches = f.events.filter(event => event.payload.conversationLogPatch);
   assert.equal(patches.length, 1);
   assert.equal(patches[0].payload.conversationId, "temporary-1");
+});
+
+
+test("a paused goal is explicitly repinned to a direct mode without native goal or selection writes", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+    objective: "Finish validation", status: "paused", tokenBudget: 20000, tokensUsed: 5000 };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  const original = { ...f.metadata };
+  f.agent.readGoal = async () => ({ status: "available", goal: { ...pinned } });
+  const prepared = await f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior }, f.context);
+  assert.equal(prepared.pinned.mode, "senior");
+  const { selectionSource, ...selection } = f.assignments.senior;
+  assert.deepEqual(prepared.pinned.selection, selection);
+  for (const name of ["objective", "status", "tokenBudget", "tokensUsed"]) assert.equal(prepared.pinned[name], pinned[name]);
+  assert.deepEqual(f.metadata, original, "only the selection writer commits the new routing pin");
+  assert.equal(f.sends.length, 0);
+  f.metadata.assistant_routing_goal = JSON.stringify(prepared.pinned);
+  const resume = await f.service.prepareGoal("session-1", { action: "resume" }, f.context);
+  assert.equal(resume.pinned.mode, "senior");
+  assert.deepEqual(resume.pinned.selection, selection);
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.sends[0].selection.modelId, selection.modelId);
+  f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active" });
+  await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior }, f.context), /Pause this goal/);
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.junior }, f.context), /selected model changed/);
 });

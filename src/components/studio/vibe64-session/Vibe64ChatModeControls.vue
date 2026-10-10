@@ -40,6 +40,7 @@ const goal = computed(() => props.session?.agentSession?.goal || props.session?.
   JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
 const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
   Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
+const goalLocksSelection = computed(() => hasGoal.value && (goal.value?.status || props.session?.agentSession?.turn?.goalStatus) !== "paused");
 const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),
@@ -83,12 +84,12 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 function openCustom() {
-  if (props.connecting) return;
+  if (props.disabled || saving.value || props.connecting || props.active || goalLocksSelection.value) return;
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
 async function save(nextMode = mode.value, nextReview = review.value, nextWorkflow = workflowEngineId.value) {
-  if (saving.value || props.disabled || props.connecting || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
+  if (saving.value || props.disabled || props.connecting || goalLocksSelection.value || hasGoal.value && props.active || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
   if (nextWorkflow !== workflowEngineId.value && (props.temporary || props.active || hasGoal.value || nextMode === "custom" ||
       !workflowChoices.value.some((choice) => choice.engineId === nextWorkflow && choice.available))) return;
   const previous = { mode: mode.value, review: review.value, workflowEngineId: workflowEngineId.value, override: modelOverride.value };
@@ -139,6 +140,7 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
+        <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">{{ goalLocksSelection ? 'Pause the goal and wait for the turn to finish before changing its model or mode.' : 'Goal paused. You can change its model, Senior or Junior within this agent. The goal stays paused; Auto and switching agents are unavailable.' }}</p>
         <div v-if="!temporary && mode !== 'custom'" class="px-4 pt-2 pb-2">
           <v-select
             :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
@@ -160,7 +162,7 @@ function configure() {
         <v-list :lines="false" class="py-0">
           <v-list-item
             :title="requiredMode ? 'Choose model' : 'Custom'" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
-            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || connecting || hasGoal || active" color="primary" min-height="60"
+            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || connecting || goalLocksSelection || active" color="primary" min-height="60"
             @click="openCustom"
           >
             <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
@@ -175,8 +177,8 @@ function configure() {
               v-for="choice in modes.filter(({ id }) => id !== 'custom')" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
-              :disabled="disabled || saving || connecting || hasGoal || decisions[choice.id]?.available !== true" color="primary" min-height="60"
-              :aria-disabled="disabled || saving || connecting || hasGoal || decisions[choice.id]?.available !== true ? 'true' : undefined"
+              :disabled="disabled || saving || connecting || goalLocksSelection || hasGoal && (active || choice.id === 'auto') || decisions[choice.id]?.available !== true" color="primary" min-height="60"
+              :aria-disabled="disabled || saving || connecting || goalLocksSelection || hasGoal && (active || choice.id === 'auto') || decisions[choice.id]?.available !== true ? 'true' : undefined"
               @click="save(choice.id)"
             >
               <template #subtitle>

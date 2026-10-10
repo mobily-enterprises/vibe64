@@ -153,3 +153,34 @@ it("blocks selection changes during reconnection and permits them when preparati
   await state.save("junior", false, "claude");
   expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "claude" });
 });
+
+
+it("lets an idle paused goal change direct modes and open Custom while retaining the goal", async () => {
+  const goal = { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000 };
+  const openPicker = vi.fn();
+  const state = mount(undefined, false, { onCustom: openPicker, session: { sessionId: "session-1", agentSession: { goal },
+    metadata: { assistant_routing: JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex", override }) } } });
+  expect(state.hasGoal).toBe(true);
+  expect(state.goalLocksSelection).toBe(false);
+  state.openCustom();
+  expect(openPicker).toHaveBeenCalledOnce();
+  await state.save("senior");
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, workflowEngineId: "codex" });
+  mocks.save.mockClear();
+  await state.save("auto");
+  await state.save("senior", false, "claude");
+  expect(mocks.save).not.toHaveBeenCalled();
+  app._instance.props.active = true;
+  await nextTick();
+  await state.save("junior");
+  state.openCustom();
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(openPicker).toHaveBeenCalledOnce();
+  app._instance.props.active = false;
+  goal.status = "active";
+  app._instance.props.session = { ...app._instance.props.session, agentSession: { goal: { ...goal } } };
+  await nextTick();
+  expect(state.goalLocksSelection).toBe(true);
+  await state.save("junior");
+  expect(mocks.save).not.toHaveBeenCalled();
+});

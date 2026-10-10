@@ -136,8 +136,16 @@ before retrying; the original request and its reasoning remain in the chat.
 Progress summaries describe the work in progress; they do not mean the final
 answer is ready. They remain attached to the same conversation after reconnecting.
 
-An existing goal keeps its own assistant connection. Its status, **Pause goal**
-and **Cancel goal** do not move to another engine when Main's chat selection changes.
+An unfinished goal stays with its current orchestrator. To change its model or
+direct mode without clearing it, choose **Pause goal** and wait until the current
+turn finishes. Open **Chat mode**, then choose **Senior**, **Junior**, or **Custom**
+and apply another model within that same orchestrator. The goal stays paused and
+keeps its objective, budget and progress. Its routing now uses your new choice for
+messages and **Resume goal**. You do not need **Cancel goal** or a reload.
+**Auto**, automatic review and changing orchestrators remain unavailable until
+the goal finishes or is cancelled. These steps work on desktop and mobile;
+Colleague can explain or offer the supported change, but needs your request
+before performing it.
 Goal status updates as the assistant reports changes and when the chat reconnects
 or regains focus. Claude also refreshes goal status when its reply completes.
 If a goal command shows **Check delivery**, use it before retrying;

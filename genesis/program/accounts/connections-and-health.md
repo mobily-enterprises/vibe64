@@ -260,8 +260,13 @@ excluding personal or unavailable connections. Score ties prefer
 the orchestrator being configured, then saved eligible choices; exact route
 ordering makes remaining ties stable. Recommendations never change saved
 assignments or execution destinations without an explicit save.
-Routing model dropdowns omit thinking; the adjacent role thinking control owns
-that selection. Recommendation reviews and effective collaborator labels retain
+Routing model dropdowns group indented model names beneath non-selectable
+orchestrator headings. Secondary text shows provider/access; Recommended marks
+the role recommendation, and disabled choices state their reason. The selected
+field retains its orchestrator identity. Vuetify's existing subheader filtering
+keeps only groups with matching models when searching model, orchestrator,
+provider or access. Dropdowns omit thinking; the adjacent role thinking control
+owns that selection. Recommendation reviews and effective collaborator labels retain
 the complete model/thinking identity.
 These priorities apply only to qualified routing choices. Codex currently admits
 native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both

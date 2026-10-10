@@ -922,6 +922,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (!preferences) return { input, context };
     if (preferences.mode === "auto") throw failure("Choose Senior or Junior before starting or resuming a goal.");
     const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const rebind = input.action === "rebind";
+    if (rebind && previous?.status !== "paused") throw failure("Pause this goal before changing its chat mode or model.");
     const saved = await createAssistantRoutingStore({ systemRoot }).read();
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const resume = input.action === "resume" && previous;
@@ -937,6 +939,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (resume && (!sameSelection(previous.selection, selection) ||
         previous.connectionIdentity && previous.connectionIdentity !== decision.connectionIdentity)) {
       throw failure("The goal's pinned AI changed. Send a message with the intended AI before starting a new goal.");
+    }
+    if (rebind) {
+      if (selection.engineId !== current.engineId || !sameSelection(selection, input.selection)) {
+        throw failure("The paused goal's selected model changed. Choose its model again.");
+      }
+      return { pinned: { ...previous, mode, workflowEngineId, selection, configuration: state.configuration, override: state.override,
+        settingsRevision: state.configuration.revision, connectionIdentity: decision.connectionIdentity, status: "paused" } };
     }
     await prepareSelection(sessionId, selection, context);
     await context.runtime.store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));

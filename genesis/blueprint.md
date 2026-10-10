@@ -483,8 +483,10 @@ on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
 Claude, Codex/OpenAI, DeepSeek, then GLM. Within native providers, Senior favours
-Opus/Astra, Junior Sonnet/Sol, and Helper/Router Haiku/Luna. Model dropdowns name
-only the model; their separate thinking control shows the selected thinking.
+Opus/Astra, Junior Sonnet/Sol, and Helper/Router Haiku/Luna. Model dropdowns group
+indented models beneath orchestrator headings, with provider/access details and
+recommended or unavailable markers. Their separate thinking control shows the
+selected thinking.
 Equally suitable models prefer the
 orchestrator being configured, including Router, Helper and shared Backup.
 They preserve saved choices rather than silently changing models when the
@@ -596,8 +598,12 @@ the independent Helper role.
 When the service shuts down, pending routing is cancelled and its helper cleanup
 finishes before the assistant processes close. Restart does not send that request.
 Custom AI controls open from Chat mode. Failed saves remain visible in that
-dialog and can be retried. Model changes wait for the active turn or goal to
-finish. The starred-files, attachments and goal controls remain accessible
+dialog and can be retried. Model changes wait for the active turn to
+finish. An idle paused goal permits Custom, Senior or Junior changes within its
+current orchestrator. Explicit selection updates its routing while retaining the
+paused native goal, objective, budget and progress; messages and Resume use the
+new selection. Auto, automatic review and orchestrator changes remain unavailable
+for an unfinished goal. The starred-files, attachments and goal controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send and Stop stay alongside the icons, goal and allowance in one row on mobile.

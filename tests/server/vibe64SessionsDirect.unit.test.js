@@ -2889,7 +2889,7 @@ test("assistant selection checks destination access and prepares routing before 
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
-        async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" }, goal: failure === "goal" ? { status: "paused" } : null }; },
+        async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" }, goal: failure === "goal" ? { status: "active" } : null }; },
         async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session, session);
@@ -3742,7 +3742,7 @@ test("named chat modes switch workflow through authorized native handover and pr
         assistant_selection: JSON.stringify(current),
         assistant_routing: JSON.stringify({ mode, review: mode === "auto", workflowEngineId: "codex", override: current }),
         ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ status: "review_pending" }) } : {}),
-        ...(failure === "goal" ? { assistant_routing_goal: JSON.stringify({ status: "paused" }) } : {})
+        ...(failure === "goal" ? { assistant_routing_goal: JSON.stringify({ status: "active" }) } : {})
       } };
       const original = { ...session.metadata };
       const runtime = { async getSession() { return session; }, store: { ...lock.store,
@@ -4619,4 +4619,57 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(denied.code, "vibe64_session_creation_limit");
     assert.equal(busy.creationInputs.length, 0);
   });
+});
+
+
+test("paused goals change direct mode or model within their agent without clearing or resuming the goal", async () => {
+  for (const mode of ["custom", "senior", "junior"]) {
+    for (const failure of ["", "active", "other-agent", "rebind", "prepare"]) {
+      const lock = agentWriteLockHarness();
+      const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+        modelId: "gpt-6-sol", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
+      const next = { ...current, modelId: "gpt-6-astra", ...(failure === "other-agent" ? { engineId: "claude", agentId: "claude", modelProviderId: "anthropic" } : {}) };
+      const nativeGoal = { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000, tokensUsed: 5000 };
+      const pinned = { ...nativeGoal, mode: "custom", workflowEngineId: "codex", selection: current };
+      const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+        assistant_selection: JSON.stringify(current), assistant_routing_goal: JSON.stringify(pinned),
+        assistant_routing: JSON.stringify({ mode: "custom", review: false, workflowEngineId: "codex", override: current })
+      } };
+      const original = { ...session.metadata };
+      const calls = [];
+      const runtime = { async getSession() { return session; }, store: { ...lock.store,
+        async writeMetadataValue(_id, name, value) { calls.push(name); session.metadata[name] = value; }
+      } };
+      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+        async readAgentGoal() { return { status: "available", goal: nativeGoal }; },
+        async resolveAssistantSelection() { return next; },
+        async resolveAssistantPurpose() { return { available: true, effectiveSelection: next, connectionIdentity: "same-account" }; },
+        async requireAssistantSelectionAccess() {},
+        async agentSessionState() { return { turn: { active: failure === "active" }, goal: nativeGoal }; },
+        async preparePausedGoalSelection(id, selected, preferences) {
+          assert.equal(id, session.sessionId); assert.deepEqual(selected, next); assert.equal(preferences.mode, mode);
+          calls.push("rebind");
+          if (failure === "rebind") throw new Error("Routing changed; choose the model again.");
+          return { ...pinned, mode, selection: next };
+        },
+        async prepareRoutingSelection() { calls.push("prepare"); if (failure === "prepare") throw new Error("Preparation failed."); },
+        async updateAgentGoal() { throw new Error("Must not resume or clear the native goal"); }
+      } });
+      const result = await service.updateAssistantSelection(session.sessionId, {
+        assistantRouting: { mode, review: false, workflowEngineId: "codex", ...(mode === "custom" ? { override: next } : {}) },
+        vibe64User: { role: "owner", username: "owner" }
+      });
+      if (failure) {
+        assert.equal(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
+        assert.deepEqual(session.metadata, original);
+      } else {
+        assert.notEqual(result.ok, false, JSON.stringify(result));
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing_goal), { ...pinned, mode, selection: next });
+        assert.equal(JSON.parse(session.metadata.assistant_routing).mode, mode);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
+        assert.deepEqual(calls, ["rebind", "prepare", "assistant_routing_goal", "assistant_routing", "assistant_selection"]);
+      }
+      assert.deepEqual(nativeGoal, { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000, tokensUsed: 5000 });
+    }
+  }
 });
