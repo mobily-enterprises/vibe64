@@ -8,10 +8,13 @@ see [Colleague delivery and recovery](colleague-recovery.md).
 
 A connection failure stops stale playback and capture. Brief reconnect attempts
 do not resend audio, replay replies or reopen the microphone automatically.
-Interrupted words remain for review where recognition reached the browser. Use
-Send to retry that same message identity or Discard to abandon it. A saved receipt
-clears an uncertain submission without sending it again. Check the target title
-before retrying. If the speech service is unavailable, typed chat remains usable.
+Interrupted words remain for review where recognition reached the browser. Once
+capture has stopped, use **Edit unsent message** to correct those words, **Send**
+to send them with the same captured message identity, or **Discard unsent message**
+to abandon them. These controls also recover a message whose pause was being
+finalized when the connection failed. Reconnecting does not send it for you.
+A saved receipt clears an uncertain submission without sending it again. Check
+the target title before retrying. If the speech service is unavailable, typed chat remains usable.
 
 Reopening a Claude chat reads its saved replies. A finished reply replaces its
 matching partial text; an interrupted partial is not a finished answer. If you
