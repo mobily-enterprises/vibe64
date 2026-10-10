@@ -204,7 +204,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           messages,
           plan: state.workPlan ? {
             status: state.workPlan.status, revision: state.workPlan.revision,
-            outline: state.workPlan.text.slice(0, 6000)
+            outline: state.workPlan.text.slice(0, 6000),
+            progressRevision: state.workPlan.progressRevision || "",
+            progressOutline: (state.workPlan.progressText || "").slice(0, 6000)
           } : null,
           attachments: state.input.attachments || state.input.displayAttachments
         })

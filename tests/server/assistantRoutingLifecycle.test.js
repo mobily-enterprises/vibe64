@@ -123,6 +123,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const router = {
     respond: async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' }),
     review: async () => ({ ok: true, text: '{"decision":"review","reason":"ready","explanation":"Implementation is ready for review.","nextStep":"","progress":true}' }),
+    classifyInputs: [],
     reviewInputs: []
   };
   const agent = {
@@ -140,7 +141,10 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
       validateConversationOutputSchema(input.outputSchema, input.executionProfile.limits);
       helperCalls++;
       if (input.outputSchema.properties.decision) router.reviewInputs.push(input);
-      else assert.match(input.message, /agreed required-field/);
+      else {
+        router.classifyInputs.push(input);
+        assert.match(input.message, /agreed required-field/);
+      }
       assert.doesNotMatch(input.message, /PRIVATE THOUGHT/);
       assert.notEqual(scope.id, session.sessionId);
       assert.equal(options.session, undefined);
@@ -1578,6 +1582,117 @@ test("Senior can update requirements and implement in one request, then receives
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal(f.sends.length, 2);
   assert.equal(f.sends[1].input.turnMetadata.assistantRouting.resolvedMode, "review");
+});
+
+for (const deslop of [true, false]) {
+  test(`explicitly deferring the last blocked requirement retains review and archives the revised pair with Deslop ${deslop ? "on" : "off"}`, async t => {
+    const f = await fixture(t, { mode: "auto", review: deslop });
+    const scope = planDocument() + "\n- [x] Reject blank names\n- [ ] Verify real email delivery\n";
+    await publishPlanFixture(f.context, scope);
+    let plan = await readWorkPlan(f.context);
+    const evidence = "# Progress\nThe agreed required-field rule is implemented; empty and populated form tests passed.\nEmail delivery is blocked: no SMTP server or sender is configured.\n";
+    await manageWorkPlan(f.context, { operation: "progress-write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: evidence }, "junior");
+    await f.service.send("session-1", request, f.context);
+    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "wait", reason: "blocked",
+      explanation: "Email delivery needs platform-owner setup.", nextStep: "", progress: true }) });
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.state().reviewStatus, "skipped_incomplete");
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"plan_implementation"}' });
+    const closure = "Mark this as done without actual emails. Keep email setup and real delivery testing as future work before release.";
+    await f.service.send("session-1", { ...request, messageId: "scope-closure", message: closure }, f.context);
+    assert.equal(f.state().resolvedMode, "senior");
+    assert.equal(f.state().reason, "plan_implementation");
+    assert.equal(f.state().review, true);
+    assert.equal(f.state().outcome, undefined, "the previous blocked outcome is not inherited");
+    const classification = f.router.classifyInputs.at(-1).message;
+    assert.match(classification, /use senior for this scope change/);
+    const input = JSON.parse(classification.slice(classification.indexOf("\n") + 1));
+    plan = await readWorkPlan(f.context);
+    assert.equal(input.message, closure);
+    assert.equal(input.plan.progressRevision, plan.progressRevision);
+    assert.equal(input.plan.progressOutline, evidence);
+    assert.match(f.sends[1].input.message, /Deferred work section of paired Progress before removing it/);
+    assert.match(f.sends[1].input.message, /Leave the plan active/);
+    await assert.rejects(manageWorkPlan(f.context, { operation: "write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: scope.replace("- [ ] Verify real email delivery\n", "") }, "junior"), /Only Senior/);
+    const deferred = evidence + "\n## Deferred work\nBefore release: configure email sending and verify real inbox delivery. Explicitly excluded from this implementation by the person.\n";
+    await manageWorkPlan(f.context, { operation: "progress-write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: deferred }, "senior");
+    plan = await readWorkPlan(f.context);
+    await manageWorkPlan(f.context, { operation: "write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: scope.replace("- [ ] Verify real email delivery\n", "") }, "senior");
+    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "review", reason: "ready",
+      explanation: "The saved scope excludes email delivery; the remaining requirement has implementation evidence.", nextStep: "", progress: true }) });
+    await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+    assert.equal(f.sends.length, 3);
+    assert.equal(f.state().status, "reviewing");
+    const revised = await readWorkPlan(f.context);
+    assert.equal(revised.checked, revised.total);
+    assert.equal(revised.status, "active", "scope closure is not final verified completion");
+    const outcomePrompt = f.router.reviewInputs.at(-1).message;
+    assert.match(outcomePrompt, /blocker belonging only to the explicitly deferred work no longer blocks/);
+    const outcomeInput = JSON.parse(outcomePrompt.slice(outcomePrompt.indexOf("\n") + 1));
+    assert.equal(outcomeInput.plan.text, revised.text);
+    assert.equal(outcomeInput.plan.progressText, deferred);
+    assert.equal(outcomeInput.originalRequest, closure);
+    assert.equal(f.sends[2].input.turnMetadata.assistantRouting.resolvedMode, "review");
+    assert.equal(f.sends[2].input.displayMessage.includes("and Deslop"), deslop);
+    await manageWorkPlan(f.context, { operation: "complete", expectedRevision: revised.revision,
+      expectedProgressRevision: revised.progressRevision }, "review");
+    f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().reviewMessageId },
+      assistant: { text: "Remaining scope verified; deferred email setup and delivery testing remain required before release." } }];
+    await f.service.afterTurn("session-1", completion("turn-3"), f.context);
+    assert.equal(await readWorkPlan(f.context), null);
+    const [archive] = await readWorkPlanHistory(f.context);
+    const saved = await readWorkPlanPage(f.context, { archiveId: archive.id });
+    assert.equal(saved.progressText, deferred, "archival retains the deferred requirement and original evidence");
+    assert.equal(saved.status, "completed");
+    await f.restart().afterTurn("session-1", completion("turn-3"), f.context, { recovered: true });
+    assert.equal(f.sends.length, 3, "the completed review is not repeated on recovery");
+  });
+}
+
+for (const outcome of ["remaining_work", "user_wait", "unclear"]) {
+  test(`plan scope closure respects Router's ${outcome} outcome instead of forcing review from checked items`, async t => {
+    const f = await fixture(t);
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"plan_implementation"}' });
+    await f.service.send("session-1", { ...request, message: "Exclude the email requirement and finish the remaining implementation." }, f.context);
+    let plan = await readWorkPlan(f.context);
+    await manageWorkPlan(f.context, { operation: "write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: plan.text + `\n- [${outcome === "remaining_work" ? " " : "x"}] Reject blank names\n` }, "senior");
+    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: outcome === "remaining_work" ? "continue" : "wait",
+      reason: outcome, explanation: outcome === "remaining_work" ? "Form implementation remains." : outcome === "user_wait"
+        ? "The person has asked to pause before review." : "Checked requirements lack implementation evidence.",
+      nextStep: outcome === "remaining_work" ? "Implement the remaining required-field rule." : "", progress: true }) });
+    if (outcome === "user_wait") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "Pause before review." },
+      messages: [{ role: "assistant", text: "The scope edit is saved; paused." }] }];
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.state().review, true, "review eligibility does not assert readiness");
+    assert.equal(f.sends.length, outcome === "remaining_work" ? 2 : 1);
+    assert.equal(f.sends.some(send => send.input.turnMetadata.assistantRouting.resolvedMode === "review"), false);
+    if (outcome === "remaining_work") {
+      assert.equal(f.state().continuation, "implementation");
+      assert.equal(f.state().resolvedMode, "senior");
+    } else assert.equal(f.state().status, "done");
+    plan = await readWorkPlan(f.context);
+    assert.equal(plan.status, "active");
+  });
+}
+
+test("an ordinary draft-plan edit does not start review even when every item is checked", async t => {
+  const f = await fixture(t);
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+  await f.service.send("session-1", { ...request, message: "Remove the email idea from this draft plan." }, f.context);
+  const plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "write", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "", text: plan.text + "\n- [x] Draft the form requirements\n" }, "senior");
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().review, false);
+  assert.equal(f.state().status, "done");
+  assert.equal(f.router.reviewInputs.length, 0);
+  assert.equal(f.sends.length, 1);
+  assert.equal((await readWorkPlan(f.context)).status, "active");
 });
 
 for (const outcome of ["failed", "interrupted", "stopped"]) {

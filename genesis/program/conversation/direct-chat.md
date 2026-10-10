@@ -1366,6 +1366,25 @@ Planning plus implementation is an implementation request with the same Junior
 default unless the user requests a role; it is not an unsent split workflow.
 The selected role's plan lifecycle permissions still apply.
 
+Explicitly removing or deferring remaining requirements to finish an already
+implemented active plan is `plan_implementation`, retaining the existing review
+gate rather than becoming planning-only. Without an explicit role request it
+defaults to Senior, which already owns scope edits; Junior's Progress-only
+permission is unchanged. Initial classification receives the bounded paired
+Progress outline and revision alongside the Plan outline to distinguish delivered
+implementation from an ordinary draft-plan edit. Implementation instructions
+require recording the excluded requirement and agreed timing in Progress's
+Deferred work section before removing it from current acceptance scope, retaining
+completed evidence and leaving final completion for review.
+The existing outcome classifier evaluates the revised full Plan/Progress: every
+remaining item checked and supported by implementation evidence is eligible for
+`review/ready`, while a blocker belonging only to explicitly deferred work does
+not block review. Checkmarks, an unsaved edit or an assistant-suggested deferral
+cannot substitute for scope authorisation and evidence. Remaining implementation,
+pause, receipt, goal and access gates retain their existing behavior. Deferred
+work stays unfinished in the archived pair; no new state format, watcher, task
+store or historical repair is introduced.
+
 Main chat owns one paired Plan/Progress artifact outside source Git under the same
 session/scoped-conversation plans directory. Immutable Markdown documents live in
 plan/<revision>.md and progress/<revision>.md; one current.json atomically selects

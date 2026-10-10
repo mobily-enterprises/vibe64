@@ -168,6 +168,27 @@ test("review routing preserves recent steering and rejects oversized context wit
   assert.throws(() => assistantReviewRoutingPrompt({ messages, maxCharacters: 100 }), /too long/);
 });
 
+test("explicit closure by scope reduction keeps implementation review while draft edits and unrequested deferrals do not", () => {
+  const plan = { status: "active", revision: "scope", outline: "# Notifications\n- [x] In-app notifications\n- [ ] Real email delivery",
+    progressRevision: "evidence", progressOutline: "In-app delivery tested. SMTP setup is missing." };
+  const prompt = assistantRoutingPrompt({ message: "Finish without actual emails; keep email setup and delivery testing for before release.", plan });
+  const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
+  assert.deepEqual(input.plan, plan);
+  assert.match(prompt, /removes or defers remaining requirements.*reason plan_implementation/);
+  assert.match(prompt, /Without an explicit role request, use senior for this scope change/);
+  assert.match(prompt, /ordinary draft-plan edit.*remains planning or discussion/);
+  assert.match(prompt, /never infer permission to drop a requirement from a blocker or checked items/);
+  const coding = assistantModePrompt("senior", input.message, { intent: "plan_implementation" });
+  assert.match(coding, /record the exact deferred requirement and its agreed timing/);
+  assert.match(coding, /before removing it from Plan's current acceptance scope/);
+  assert.match(coding, /Preserve completed implementation evidence and do not perform deferred work/);
+  assert.match(coding, /Leave the plan active/);
+  const review = assistantReviewRoutingPrompt({ message: input.message, plan });
+  assert.match(review, /every remaining item is checked and supported by implementation evidence/);
+  assert.match(review, /checked items alone, an unsaved scope change/);
+  assert.match(review, /latest pause still requires wait\/user_wait/);
+});
+
 test("outcome routing validates continue, review and wait with explanations and concrete next steps", () => {
   const base = { explanation: "Evidence from the final reply and current plan.", nextStep: "", progress: true };
   const values = [

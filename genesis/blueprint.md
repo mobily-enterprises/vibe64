@@ -572,6 +572,14 @@ without a large composer banner. A partial result
 is presented as implementation incomplete, not plan completion. Two consecutive
 turns without reported progress or eight automatic continuations stop for a new
 user request. Router judges recorded evidence; Senior verifies the actual work.
+When the person explicitly defers remaining requirements to finish an implemented
+active plan, Auto retains its review obligation and defaults the scope edit to
+Senior. Senior preserves the excluded work and agreed timing in Progress before
+removing it from the current acceptance scope. If every remaining item is checked
+and supported by implementation evidence, Router hands off for review and any
+enabled Deslop. Deferred work remains unfinished and is not scheduled automatically.
+Ordinary draft-plan edits do not trigger this handoff; pauses and missing evidence
+still apply.
 If an automatic handoff fails before sending, a new request can replace it
 without claiming that its review completed. Unconfirmed deliveries still require
 a delivery check.

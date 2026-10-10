@@ -179,6 +179,29 @@ after two consecutive turns without reported progress, or eight automatic
 implementation continuations. Review the remaining work and send a new request
 if you want it to proceed. These bounds apply per new request.
 
+If implementation is blocked on a requirement you want to defer, say so explicitly
+in **Auto**: for example, “Exclude actual email delivery from this implementation.
+Keep email setup and real delivery testing as future work before release, and
+finish the remaining plan.” Without an explicitly requested role, Router sends
+this scope change to **Senior**, who can edit the saved Plan. Junior can update
+Progress but cannot remove agreed requirements.
+
+Senior records the deferred requirement and its agreed timing under **Deferred
+work** in Progress before removing it from the current acceptance scope, keeping
+the completed implementation evidence. When every remaining item is checked and
+supported by evidence, Router sends the revised implementation for Senior review
+and any enabled **Deslop**. Missing resources for the explicitly deferred work
+do not block that review. Remaining implementation continues; a pause or missing
+evidence can still stop the handoff. Ordinary draft-plan edits do not trigger
+review just because all their items are checked.
+
+Deferral does not complete the excluded work or schedule it automatically. Its
+record stays with Progress, including after the reviewed plan moves to History.
+Use the document icon beside the usage percentage to open **Progress** in
+Current plan or History. Explicitly request the deferred work when ready. The same conversational steps apply on desktop and mobile. Colleague can
+explain this process and offer to send your explicit scope-change request through
+the existing chat action; an explanation or offer alone does not authorise it.
+
 The composer's **Stop** cancels pending work and interrupts Router. Failed or
 interrupted execution does not automatically continue. After a restart, recovered
 completion needs an explicit **Retry review**. An already prepared implementation
