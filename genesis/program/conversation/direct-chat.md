@@ -261,6 +261,11 @@ Native event summaries, stale-event filtering, conversation-specific errors and
 unexpected stream termination also use that owner. The original single
 reasoning-only final-answer recovery is shared with the common runtime; the
 application flushes its reasoning projection before the recovery input changes.
+When steering overlaps that recovery, the same turn owner confirms the exact
+native recovery user row before dispatching the newer input. It checks the native
+created-time/ID order before accepting that newer final, keeping its application
+receipt even if observation fails. The original turn signal and Stop/cleanup
+owners remain; transport ACK alone is not native input custody.
 JSKIT also retains event readiness and awaited observer closure, bounded native
 admission lookup and steering input rollback. Vibe64 keeps application progress
 publication, durable delivery records and its original returned identifiers.

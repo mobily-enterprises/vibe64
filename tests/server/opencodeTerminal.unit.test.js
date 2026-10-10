@@ -4387,3 +4387,301 @@ test("R19 a late recovery ACK cannot replace admitted B or bypass its authored-r
   assert.equal(harness.checkpoints.length, 1, "The original outer turn checkpoints once after B's commit.");
   assert.deepEqual(harness.systemMessages, []);
 });
+
+// These companions use the original Main controller and native-history fixture.
+// A prompt ACK deliberately precedes native user creation, as prompt_async does.
+for (const order of ["later", "safe-tie", "unsafe-tie"]) {
+  test(`R19 recovery receipt gates native B creation and preserves its authored commit (${order})`, { timeout: 15000 }, async t => {
+    const { upstreamMessageId } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js");
+    const firstMessageId = `r19-native-receipt-A-${order}`;
+    const firstInputId = upstreamMessageId(firstMessageId);
+    const recoveryInputId = upstreamMessageId(`${firstInputId}:final-response`);
+    let latestMessageId = `r19-native-receipt-B-${order}`;
+    if (order !== "later") {
+      for (let suffix = 0; ; suffix += 1) {
+        latestMessageId = `r19-native-receipt-B-${order}-${suffix}`;
+        if ((upstreamMessageId(latestMessageId) > recoveryInputId) === (order === "safe-tie")) break;
+      }
+    }
+    const latestInputId = upstreamMessageId(latestMessageId);
+    const recoveryEntered = Promise.withResolvers();
+    const joinedRecovery = Promise.withResolvers();
+    const committedB = Promise.withResolvers();
+    const missingBRead = Promise.withResolvers();
+    const response = { messages: [] };
+    const created = Date.now();
+    let steering;
+    let harness;
+    harness = await controllerHarness({
+      assistantResponses: [response, response, response],
+      beforePrompt({ input }) {
+        if (input.id === firstInputId) {
+          response.messages.push(
+            { id: firstInputId, type: "user", text: "A", time: { created } },
+            { id: "r19-native-receipt-reasoning", type: "assistant", finish: "stop",
+              content: [{ id: "r19-native-receipt-thought", type: "reasoning", text: "Retained A reasoning." }],
+              time: { created: created + 1, completed: created + 2 } }
+          );
+        } else if (input.id === recoveryInputId) {
+          recoveryEntered.resolve();
+        } else {
+          assert.equal(input.id, latestInputId);
+          assert.equal(response.messages.some(row => row.id === recoveryInputId), true,
+            "B cannot dispatch before exact native R custody.");
+        }
+      },
+      beforeMessages() {
+        if (harness.promptCalls.length === 3 && harness.userMessages.some(row => row.messageId === latestMessageId) &&
+            !response.messages.some(row => row.id === latestInputId)) missingBRead.resolve();
+      }
+    });
+    const writeUser = harness.runtime.store.writeConversationUserMessage;
+    harness.runtime.store.writeConversationUserMessage = async (...args) => {
+      const value = await writeUser(...args);
+      if (args[1].messageId === latestMessageId) committedB.resolve();
+      return value;
+    };
+    t.after(async () => {
+      await harness.controller.interruptTurn("session-1").catch(() => {});
+      await steering?.catch(() => {});
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { recursive: true, force: true });
+    });
+    const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: firstMessageId });
+    const completion = harness.controller.waitForTurn("session-1");
+    await recoveryEntered.promise;
+    const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+    const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+    const gate = tracked.recoveryAdmission;
+    assert.ok(gate);
+    const receiptPromise = gate.promise;
+    Object.defineProperty(gate, "promise", { get() { joinedRecovery.resolve(); return receiptPromise; } });
+    steering = harness.controller.sendMessage("session-1", { message: "B", messageId: latestMessageId });
+    await joinedRecovery.promise;
+    assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId]);
+    assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId]);
+    assert.equal(tracked.inputMessageId, firstInputId, "Undispatched B cannot replace current input.");
+    assert.equal(tracked.active, true);
+    assert.equal(harness.checkpoints.length, 0);
+    response.messages.push({ id: recoveryInputId, type: "user", text: "Internal R", time: { created: created + 3 } });
+    await committedB.promise;
+    await missingBRead.promise;
+    assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId, latestMessageId],
+      "The ACK-admitted authored B is saved while its native creation is still unknown.");
+    assert.equal(tracked.inputMessageId, latestInputId);
+    assert.equal(tracked.active, true);
+    assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+    assert.equal(harness.checkpoints.length, 0);
+    const bCreated = created + (order === "later" ? 4 : 3);
+    response.messages.push(
+      { id: latestInputId, type: "user", text: "B", time: { created: bCreated } },
+      { id: "r19-native-receipt-final", type: "assistant", text: "Exact B final.", finish: "stop",
+        time: { created: created + 5, completed: created + 6 } }
+    );
+    // Native history uses the producer's created-time then JavaScript ID order.
+    response.messages.sort((left, right) => left.time.created - right.time.created ||
+      (left.id > right.id ? 1 : left.id < right.id ? -1 : 0));
+    const latest = await steering;
+    const finished = await completion;
+    assert.equal(latest.delivered, true);
+    assert.equal(latest.thread.id, first.thread.id);
+    assert.equal(latest.deliveryMode, "steer");
+    assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId, latestMessageId]);
+    assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId, latestInputId]);
+    assert.ok(harness.thinkingMessages.some(row => row.text === "Retained A reasoning."));
+    assert.equal(harness.processStops.length, 0, "Existing confirmed session cleanup keeps shared peers warm.");
+    if (order === "unsafe-tie") {
+      assert.equal(finished.status, "observation_lost");
+      assert.equal(finished.state, "failed");
+      assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+      assert.equal(harness.assistantMessages.some(row => row.text === "Exact B final."), false);
+      assert.match(finished.error, /could not confirm that the new input follows/u);
+    } else {
+      assert.equal(finished.state, "completed");
+      assert.equal(harness.assistantMessages.at(-1).text, "Exact B final.");
+      assert.equal(harness.checkpoints.length, 1);
+      assert.deepEqual(harness.systemMessages, []);
+    }
+  });
+}
+
+for (const stopAt of ["R", "B"]) {
+  test(`R19 Stop releases unknown native ${stopAt} custody without dispatching or replaying queued work`, { timeout: 15000 }, async t => {
+    const { upstreamMessageId } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js");
+    const firstMessageId = `r19-stop-receipt-A-${stopAt}`;
+    const latestMessageId = `r19-stop-receipt-B-${stopAt}`;
+    const firstInputId = upstreamMessageId(firstMessageId);
+    const latestInputId = upstreamMessageId(latestMessageId);
+    const recoveryInputId = upstreamMessageId(`${firstInputId}:final-response`);
+    const recoveryEntered = Promise.withResolvers();
+    const joinedRecovery = Promise.withResolvers();
+    const missingBRead = Promise.withResolvers();
+    const response = { messages: [] };
+    const created = Date.now();
+    let interrupts = 0;
+    let steering;
+    let harness;
+    harness = await controllerHarness({
+      assistantResponses: [response, response, response],
+      interrupt: async () => { interrupts += 1; return true; },
+      beforePrompt({ input }) {
+        if (input.id === firstInputId) {
+          response.messages.push(
+            { id: firstInputId, type: "user", text: "A", time: { created } },
+            { id: "r19-stop-receipt-reasoning", type: "assistant", finish: "stop",
+              content: [{ id: "r19-stop-receipt-thought", type: "reasoning", text: "Saved reasoning." }],
+              time: { created: created + 1, completed: created + 2 } }
+          );
+        } else if (input.id === recoveryInputId) {
+          if (stopAt === "B") response.messages.push(
+            { id: recoveryInputId, type: "user", text: "Internal R", time: { created: created + 3 } }
+          );
+          recoveryEntered.resolve();
+        } else assert.equal(input.id, latestInputId);
+      },
+      beforeMessages() {
+        if (harness.promptCalls.length === 3 && harness.userMessages.some(row => row.messageId === latestMessageId)) {
+          missingBRead.resolve();
+        }
+      }
+    });
+    t.after(async () => {
+      await harness.controller.interruptTurn("session-1").catch(() => {});
+      await steering?.catch(() => {});
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { recursive: true, force: true });
+    });
+    const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: firstMessageId });
+    const completion = harness.controller.waitForTurn("session-1");
+    await recoveryEntered.promise;
+    const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+    const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+    const gate = tracked.recoveryAdmission;
+    const receiptPromise = gate.promise;
+    Object.defineProperty(gate, "promise", { get() { joinedRecovery.resolve(); return receiptPromise; } });
+    steering = harness.controller.sendMessage("session-1", { message: "B", messageId: latestMessageId });
+    // Attach before Stop; an undispatched input may reject with the abort cause.
+    const delivery = steering.then(value => ({ value }), error => ({ error }));
+    await joinedRecovery.promise;
+    if (stopAt === "B") await missingBRead.promise;
+    const stopped = await harness.controller.interruptTurn("session-1");
+    const result = await delivery;
+    assert.equal(stopped.ok, true);
+    assert.equal(stopped.turn.state, "interrupted");
+    assert.equal((await completion).state, "interrupted");
+    assert.equal(tracked.active, false);
+    assert.equal(interrupts, 1);
+    assert.equal(harness.processStops.length, 0);
+    assert.deepEqual(harness.systemMessages, []);
+    assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+    if (stopAt === "R") {
+      assert.equal(result.error?.name, "AbortError");
+      assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId]);
+      assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId]);
+      assert.equal(tracked.inputMessageId, firstInputId);
+    } else {
+      assert.equal(result.value.delivered, true, "ACK-admitted B keeps its authored receipt after Stop.");
+      assert.equal(result.value.turn.state, "interrupted");
+      assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId, latestInputId]);
+      assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId, latestMessageId]);
+      assert.equal(tracked.inputMessageId, latestInputId);
+    }
+  });
+}
+
+for (const failureAt of ["R", "B"]) {
+  test(`R19 original native failure releases missing ${failureAt} custody without resending`, { timeout: 15000 }, async t => {
+    const { upstreamMessageId } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js");
+    const firstMessageId = `r19-failed-receipt-A-${failureAt}`;
+    const latestMessageId = `r19-failed-receipt-B-${failureAt}`;
+    const firstInputId = upstreamMessageId(firstMessageId);
+    const latestInputId = upstreamMessageId(latestMessageId);
+    const recoveryInputId = upstreamMessageId(`${firstInputId}:final-response`);
+    const recoveryEntered = Promise.withResolvers();
+    const joinedRecovery = Promise.withResolvers();
+    const missingBRead = Promise.withResolvers();
+    const emitFailure = Promise.withResolvers();
+    const response = { messages: [] };
+    const created = Date.now();
+    const failureText = `Native ${failureAt} construction failed before custody.`;
+    let rejectedB = 0;
+    let steering;
+    let harness;
+    harness = await controllerHarness({
+      assistantResponses: [response, response, response],
+      async *events(id, { onReady, signal }) {
+        onReady();
+        yield { data: { type: "server.connected" } };
+        await emitFailure.promise;
+        signal.throwIfAborted();
+        yield { data: { type: "session.error", properties: {
+          sessionID: id, error: { name: "APIError", data: { message: failureText } }
+        } } };
+        if (!signal.aborted) await new Promise(resolve => signal.addEventListener("abort", resolve, { once: true }));
+      },
+      beforePrompt({ input }) {
+        if (input.id === firstInputId) {
+          response.messages.push(
+            { id: firstInputId, type: "user", text: "A", time: { created } },
+            { id: "r19-failed-receipt-reasoning", type: "assistant", finish: "stop",
+              content: [{ id: "r19-failed-receipt-thought", type: "reasoning", text: "Saved A reasoning." }],
+              time: { created: created + 1, completed: created + 2 } }
+          );
+        } else if (input.id === recoveryInputId) {
+          if (failureAt === "B") response.messages.push(
+            { id: recoveryInputId, type: "user", text: "Internal R", time: { created: created + 3 } }
+          );
+          recoveryEntered.resolve();
+        } else assert.equal(input.id, latestInputId);
+      },
+      beforeMessages() {
+        if (harness.promptCalls.length === 3 && harness.userMessages.some(row => row.messageId === latestMessageId)) {
+          missingBRead.resolve();
+        }
+      }
+    });
+    t.after(async () => {
+      emitFailure.resolve();
+      await harness.controller.interruptTurn("session-1").catch(() => {});
+      await steering?.catch(() => {});
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { recursive: true, force: true });
+    });
+    const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: firstMessageId });
+    const completion = harness.controller.waitForTurn("session-1");
+    await recoveryEntered.promise;
+    const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+    const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+    const gate = tracked.recoveryAdmission;
+    const receiptPromise = gate.promise;
+    Object.defineProperty(gate, "promise", { get() { joinedRecovery.resolve(); return receiptPromise; } });
+    steering = harness.controller.sendMessage("session-1", { message: "B", messageId: latestMessageId,
+      onPromptRejected() { rejectedB += 1; } });
+    const delivery = steering.then(value => ({ value }), error => ({ error }));
+    await joinedRecovery.promise;
+    if (failureAt === "B") await missingBRead.promise;
+    emitFailure.resolve();
+    const result = await delivery;
+    const finished = await completion;
+    assert.equal(finished.state, "failed");
+    assert.equal(finished.status, "observation_lost");
+    assert.equal(finished.active, false);
+    assert.match(finished.error, /construction failed before custody/u);
+    assert.equal(rejectedB, 0, "Failure of R/observation cannot reject an undispatched or ACK-admitted B.");
+    assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+    assert.equal(harness.processStops.length, 0, "Original confirmed session cleanup does not retire shared peers.");
+    assert.ok(harness.thinkingMessages.some(row => row.text === "Saved A reasoning."));
+    if (failureAt === "R") {
+      assert.equal(result.error?.name, "APIError");
+      assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId]);
+      assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId]);
+      assert.equal(tracked.inputMessageId, firstInputId);
+    } else {
+      assert.equal(result.value.delivered, true);
+      assert.equal(result.value.turn.status, "observation_lost");
+      assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId, latestInputId]);
+      assert.deepEqual(harness.userMessages.map(row => row.messageId), [firstMessageId, latestMessageId]);
+      assert.equal(tracked.inputMessageId, latestInputId);
+    }
+  });
+}

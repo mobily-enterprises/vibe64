@@ -130,9 +130,13 @@ repeating a message cannot fix it. Colleague can explain this startup error on
 desktop or mobile but cannot repair the host installation.
 
 If OpenCode produces reasoning without a final answer, it makes one automatic
-attempt to obtain that answer. Wait for the result before sending again. If it
-still reports that no final response was produced, inspect the existing work
-before retrying; the original request and its reasoning remain in the chat.
+attempt to obtain that answer. You can still send a new instruction; it waits for
+that recovery message to be confirmed before delivery. **Stop** remains available
+while it waits. If delivery or the final answer cannot be confirmed, inspect the
+existing messages and work before retrying; do not send the same request again.
+The original request and its reasoning remain in the chat. These controls work
+on desktop and phone; Colleague can explain the status and offer a supported
+check, but does not silently repeat your message.
 Progress summaries describe the work in progress; they do not mean the final
 answer is ready. They remain attached to the same conversation after reconnecting.
 
