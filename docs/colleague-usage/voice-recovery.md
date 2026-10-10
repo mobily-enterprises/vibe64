@@ -16,6 +16,13 @@ finalized when the connection failed. Reconnecting does not send it for you.
 A saved receipt clears an uncertain submission without sending it again. Check
 the target title before retrying. If the speech service is unavailable, typed chat remains usable.
 
+The first spoken phrase after a voice model change may take longer while the
+native model loads and generates audio. The service gives that job a bounded
+first-audio deadline; it does not extend silent gaps after audio starts. You can
+still pause the microphone, turn read-aloud off or use typed chat independently.
+If speech stalls, the answer remains in chat; use **Talk** to reconnect rather
+than resending your request.
+
 Reopening a Claude chat reads its saved replies. A finished reply replaces its
 matching partial text; an interrupted partial is not a finished answer. If you
 lose chat updates, reconnect before deciding to send the same request again.

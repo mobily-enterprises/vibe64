@@ -97,6 +97,13 @@ Automatic endpoint commits reset the stream rather than calling finish, so this
 lookahead does not add a wall-clock pause to automatic send. The synthesis worker's
 separate 60-second load/generation watchdog is a new lifecycle safeguard for the
 multivoice process facility, not the original 60-second recording limit.
+The engine advertises the combined 120-second cold-job ceiling only when a new
+phrase acquires the existing shared queue. The client accepts that optional
+budget for a current, advancing segment until first PCM, then restores the
+original 20-second progress watchdog. Chunk completion restores the same queued
+wait policy; Stop, errors and disconnect clear the allowance. Engines without
+this capability keep the original deadline. Duplicate/stale metadata and pongs
+do not refresh synthesis progress, and capture remains independently controlled.
 
 Colleague supplies its existing per-user state and authorized submission/cancel
 operations, with the request's captured UI focus. The root controller serializes
