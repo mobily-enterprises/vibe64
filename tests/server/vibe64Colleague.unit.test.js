@@ -5419,12 +5419,20 @@ function completedColleagueNativeInputs(trace) {
 }
 
 test("native completed Colleague batches A B C before parsing without steering or discarding authored receipts", async t => {
-  const f = await fixture(t, [{ text: call("obsolete-A") }, { text: reply("Using C's target.") }], { native: true });
-  const barrier = holdCompletedColleagueAuthorization(t, f);
+  const f = await fixture(t, [{ mode: "held-completion", text: call("obsolete-A") }, { text: reply("Using C's target.") }], { native: true });
+  let held;
   try {
     const a = await f.send("Do A.", "queue-A", { focus: { projectSlug: "alpha" } });
-    const internal = await barrier.held;
-    assert.equal(internal.metadata.runtime.status, "complete");
+    const startupDeadline = Date.now() + 30000;
+    while (!held && Date.now() < startupDeadline) {
+      held = (await f.native.trace()).find(row => row.completionHeld)?.completionHeld;
+      if (!held) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(held, "The original native completion is held while B/C are admitted");
+    const active = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    const internal = active.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope === true);
+    assert.equal(internal.metadata.runtime.status, "running");
+    assert.equal(internal.metadata.runtime.nativeTurnId, held.turnId);
     assert.equal(internal.metadata.runtime.completedEnvelope, true);
     assert.notEqual(internal.system.messageId, "queue-A");
     assert.deepEqual(a.messages.filter(message => message.role === "user").map(message => message.text), ["Do A."]);
@@ -5434,7 +5442,7 @@ test("native completed Colleague batches A B C before parsing without steering o
     assert.equal(waiting.status, "working");
     assert.deepEqual(waiting.messages.map(message => [message.role, message.text]), [["user", "Do A."], ["user", "Use B instead."], ["user", "Actually use C."]]);
     assert.deepEqual(f.observations.mutations, []);
-    barrier.release();
+    await f.native.releaseCompletion(held);
     const final = await f.service.wait(f.context);
     assert.equal(final.status, "ready", final.error);
     assert.deepEqual(f.observations.mutations, [], "The exact obsolete A envelope never reaches any application effect");
@@ -5451,6 +5459,20 @@ test("native completed Colleague batches A B C before parsing without steering o
     assert.equal(trace.filter(row => row.method === "thread/start").length, 1);
     assert.equal(trace.some(row => ["turn/interrupt", "turn/steer"].includes(row.method)), false);
     const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    const completedA = saved.conversationLog.find(turn => turn.turnId === internal.turnId);
+    assert.equal(completedA.metadata.runtime.status, "complete", "The same admitted private A turn completes after release");
+    assert.equal(completedA.metadata.runtime.completedEnvelope, true);
+    assert.equal(completedA.metadata.runtime.nativeTurnId, held.turnId);
+    assert.equal(completedA.assistant.text, call("obsolete-A"), "A's exact raw response stays in A's private carrier");
+    const { createHash } = await import("node:crypto");
+    const nativeOutputId = `codex-${createHash("sha256")
+      .update([held.threadId, held.turnId, "assistant-item", "answer"].join("\u0000")).digest("hex")}`;
+    assert.equal(completedA.assistant.messageId, nativeOutputId);
+    assert.equal(completedA.assistant.outputId, nativeOutputId);
+    assert.equal(saved.conversationLog.find(turn => turn.user?.messageId === "queue-B").assistant, null);
+    assert.equal(saved.conversationLog.find(turn => turn.user?.messageId === "queue-C").user.text, "Actually use C.");
+    assert.equal(saved.conversationLog.find(turn => turn.user?.messageId === "queue-C").assistant.text, "Using C's target.");
+    assert.equal(saved.conversationLog.filter(turn => turn.user).some(turn => turn.assistant?.text.includes('"kind"')), false);
     assert.equal(saved.conversationLog.filter(turn => turn.metadata?.runtime?.completedEnvelope).length, 2, "Raw native carriers remain private and durable");
     assert.deepEqual(saved.conversationLog.filter(turn => turn.user).map(turn => turn.user.messageId), ["queue-A", "queue-B", "queue-C"]);
     assert.equal(saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []).length, 0);
@@ -5458,7 +5480,11 @@ test("native completed Colleague batches A B C before parsing without steering o
     const page = await browser.read({ limit: 2 });
     assert.equal(page.pagination.totalTurnCount, 3, "Pagination counts authored turns, not the two private native carriers");
     assert.equal(page.conversationLog.some(turn => turn.messages.some(message => message.text.includes('"kind"'))), false);
-  } finally { barrier.release(); }
+  } finally {
+    if (held && !(await f.native.trace()).some(row => row.completionReleased?.turnId === held.turnId)) {
+      await f.native.releaseCompletion(held);
+    }
+  }
 });
 
 test("native completed Colleague preserves one shared 24-response allowance across queued batches", async t => {

@@ -8,6 +8,12 @@ Completed replies restore the ready controls through the live connection. If
 that connection is unavailable, refresh or reopen Colleague to reconcile the
 saved result; this does not resend your request.
 
+While Colleague is working, you can type a follow-up and choose **Send**. Each
+message keeps its own words. Colleague considers the queued messages in order
+before acting on an earlier response and answers the latest request. Sending a
+follow-up does not stop the native conversation or put its internal tool response
+into your message bubble. Microphone and spoken-reply settings stay independent.
+
 If the first message needs model setup, the draft stays in the message box.
 Complete that setup, then send it again. If delivery is uncertain, use **Check
 delivery** before retrying; reconnecting does not automatically send it twice.

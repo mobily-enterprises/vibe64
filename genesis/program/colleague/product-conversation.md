@@ -117,6 +117,13 @@ instructions and correction feedback. Shared private marked carriers remain in
 the original store but are excluded before human paging and native catch-up.
 The verified decoded final is written through the prepared response's original
 same-store publisher. No second history or browser-only hiding owns that final.
+When a person sends B/C while native A is still active, the shared Codex writer
+resolves A's existing private authorship before appending its final, commentary or
+thinking. Native message/output IDs and explicit correction targets remain exact;
+new human rows cannot acquire A's raw envelope. The original queued companion now
+holds native completion, admits B/C, and only then releases A, rather than holding
+a response after its canonical write already finished. Ordinary unpinned transcript
+pairing remains unchanged; this adds no history repair or native steering.
 Its existing partial-reply and browser-stream projections reuse the
 original trailing-high-surrogate guard for display only, leaving completed events
 and canonical text unchanged. The terminal service supplies authorized account resolution and
