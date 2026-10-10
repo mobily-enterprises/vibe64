@@ -1402,7 +1402,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         let current = await conversation?.read();
         const savedRuntime = state.record.conversationMetadata?.runtime;
         if (current?.status === "working" || savedRuntime?.engine === "codex" &&
-            codexAppServerTurnStateFromAgentRun(savedRuntime.binding?.codexAppServerRun).active) {
+            codexAppServerTurnStateFromAgentRun(savedRuntime.binding?.codexAppServerRun || {}).active) {
           throw failure("Stop Colleague's previous native turn before changing its model.");
         }
         if (conversation && state.runtimeOwner === nativeRuntime && settings.engine === "api") {
