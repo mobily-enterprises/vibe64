@@ -126,6 +126,11 @@ and selecting a choice still requires native validation.
 The session Custom picker requests `allConnectedModels` through the capability
 HTTP route. The session agent manager collects each connected provider's model
 pages, retaining catalogue revision checks and ordinary access validation.
+Its selected provider also uses the existing model-page query. Apply submits
+that provider view's revision, not the warmed full-engine revision; the two can
+differ for Claude's inexpensive external-provider catalogue. Pending or failed
+provider reads block Apply. Native discovery, access checks and the server's
+exact stale-revision rejection remain unchanged.
 
 Preview and Save take the same structured workflow/role selection contract.
 A null assignment explicitly disables the role; omitted assignments are preserved.

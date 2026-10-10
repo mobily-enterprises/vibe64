@@ -17,6 +17,12 @@ it.each([
   { label: "all connected models in one orchestrator",
     input: { engineId: "opencode", allConnectedModels: true, providerConnectedOnly: true },
     expectedQueries: [{ allConnectedModels: "true", connectedOnly: "true", engineId: "opencode", limit: "25" }] },
+  { label: "warmed Claude choices with the selected external provider revision",
+    input: { engineId: "claude", allConnectedModels: true, modelProviderId: "zai-coding-plan", providerConnectedOnly: true },
+    expectedQueries: [
+      { allConnectedModels: "true", connectedOnly: "true", engineId: "claude", limit: "25" },
+      { connectedOnly: "true", engineId: "claude", limit: "100", modelProviderId: "zai-coding-plan" }
+    ] },
   {
     label: "global Colleague choices without a project",
     input: { path: "/api/vibe64/colleague/models", configuredOnly: true },

@@ -113,7 +113,7 @@ function useVibe64AssistantCatalog({
   const modelPage = useEndpointResource({
     enabled: computed(() => Boolean(
       enabled.value &&
-      !value(configuredOnly) && !value(allConnectedModels) &&
+      !value(configuredOnly) &&
       normalizedText(engineId) &&
       normalizedText(modelProviderId)
     )),
@@ -166,10 +166,10 @@ function useVibe64AssistantCatalog({
 
   async function reload() {
     const requests = [overview.reload()];
-    if (!value(configuredOnly) && !value(allConnectedModels)) {
+    if (!value(configuredOnly)) {
       // Without a search or cursor, the provider page shares the overview query.
       if (
-        normalizedText(engineId) === "opencode" &&
+        !value(allConnectedModels) && normalizedText(engineId) === "opencode" &&
         (normalizedText(providerSearch) || normalizedText(providerCursor))
       ) {
         requests.push(providerPage.reload());
