@@ -48,7 +48,7 @@ const routingCompatibilityId = "20261006-routing-format-compatibility";
 const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
-async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity } = {}) {
+async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity, nativeInstructions = upgradeColleagueNativeInstructions } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-upgrade-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "state");
@@ -61,7 +61,7 @@ async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, 
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeColleagueNativeInstructions: nativeInstructions, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -698,7 +698,8 @@ test("prospective question-admission boundary preserves learner and native histo
   // owners reject this shape and are proved separately in the original upgrade file.
   const codexPolicy = async () => {};
   const nativeContinuity = async () => {};
-  const f = await fixture(t, { codexPolicy, nativeContinuity });
+  const nativeInstructions = async () => {};
+  const f = await fixture(t, { codexPolicy, nativeContinuity, nativeInstructions });
   const progress = path.join(f.systemRoot, "training/users/NDI/progress.json");
   const nativeHistory = path.join(f.systemRoot, "colleague/NDI/conversation.json");
   await mkdir(path.dirname(progress), { recursive: true, mode: 0o700 });
@@ -717,7 +718,7 @@ test("prospective question-admission boundary preserves learner and native histo
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   let reports = 0;
-  await assert.rejects(runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
+  await assert.rejects(runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeColleagueNativeContinuity: nativeContinuity, upgradeColleagueNativeInstructions: nativeInstructions, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
     if (message.startsWith(`${questionAdmissionId}:`) && ++reports === 2) throw new Error("interrupted before question boundary ledger");
   } }), /interrupted before question boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
