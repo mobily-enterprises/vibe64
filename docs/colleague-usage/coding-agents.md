@@ -148,6 +148,10 @@ Colleague can explain or offer the supported change, but needs your request
 before performing it.
 Goal status updates as the assistant reports changes and when the chat reconnects
 or regains focus. Claude also refreshes goal status when its reply completes.
+Background status updates keep the current goal controls available. After the
+chat's native conversation changes, wait for its goal status to load before
+using those controls. A pending goal command temporarily disables other goal
+commands; it does not mean the coding turn has stopped.
 If a goal command shows **Check delivery**, use it before retrying;
 reconnecting does not resend the command. These controls work the same on desktop
 and mobile.
