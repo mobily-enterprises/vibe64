@@ -146,6 +146,12 @@ Genesis-composed project guidance or an application's current instructions, plus
 authorized configuration and owned execution resources. Genesis's generated
 hooks yield only for a bound managed conversation; independent CLI conversations
 in the same project retain standalone Genesis delivery.
+Vibe64's OpenCode host preparation includes its existing Genesis command shim
+when stored history starts the shared service before Main or Colleague. Later
+conversations reuse that same service and native identities; their registered
+project environments do not replace the service process PATH. Genesis executable
+resolution remains an application host prerequisite, not a JSKIT dependency or
+a separate server per conversation.
 Codex's native thread status and operation-history checks also live in JSKIT.
 The same run owner selects the retained provider for Stop and keeps failed
 observation attached to its existing owner. It also owns the original in-flight

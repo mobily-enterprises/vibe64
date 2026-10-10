@@ -95,6 +95,14 @@ If recovery has to stop the shared service, inspect both chats before retrying.
 A failed OpenCode **Stop** leaves the current turn available for another **Stop**
 attempt. After Stop succeeds, **Send** starts the next turn in the same conversation.
 The same Stop and retry rules apply to temporary chats.
+If OpenCode reports **Project guidance could not load**, its project instructions
+were unavailable; this is not confirmation that your API key failed. Ask the
+installation owner to check the installed Genesis runtime and project hook. Once
+that prerequisite is repaired and the conversation is ready, enter a new message
+in the same conversation and select **Send**. The failed message remains in its
+history; its composer draft is not retained. Colleague can explain the notice,
+but repairing the installed runtime requires the installation owner.
+The same recovery applies on desktop and mobile.
 A temporary message may appear before the assistant confirms receiving it.
 If it still shows **Check delivery**, use that control and keep the same request;
 its visible bubble alone is not confirmation. An unavailable receipt stays

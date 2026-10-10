@@ -158,3 +158,40 @@ for (const lostConsumer of ["main", "colleague"]) {
     assert.equal((await f.registry()).sessions.some(row => row.conversation), false);
   });
 }
+
+test("cold OpenCode history inspection prepares Genesis before main chat reuses the same service", async t => {
+  const storageDirectories = [];
+  const f = await controllerHarness();
+  const createServer = f.controllerOptions.createServerProcess;
+  f.controllerOptions.createServerProcess = async options => {
+    const server = await createServer(options);
+    server.client.listConversationsForDirectory = async directory => {
+      storageDirectories.push(directory);
+      return [];
+    };
+    return server;
+  };
+  f.controller = f.createController();
+  t.after(async () => {
+    try { await f.controller.closeAllForProject(); }
+    finally { await rm(f.root, { force: true, recursive: true }); }
+  });
+  const workdir = f.session.metadata.source_path;
+  assert.deepEqual(await f.controller.listNativeConversationStorage("session-1", {
+    engineId: "opencode", workdir
+  }, { runtime: f.runtime, session: f.session }), []);
+  assert.deepEqual(storageDirectories, [workdir]);
+  assert.equal(f.processStarts.length, 1);
+  assert.deepEqual(f.processStarts[0].options.shimDirs, [genesisCommandShimDirectory()]);
+  assert.equal(f.createdSessions.length, 0);
+  assert.equal(f.promptCalls.length, 0);
+  const main = await f.controller.ensureSession("session-1");
+  await f.controller.sendMessage("session-1", { messageId: "after-history", message: "Continue" });
+  assert.equal((await f.controller.waitForTurn("session-1")).state, "completed");
+  assert.equal(f.processStarts.length, 1);
+  assert.equal(f.createdSessions.length, 1);
+  assert.equal(f.promptCalls.length, 1);
+  assert.equal(f.promptCalls[0].id, main.thread.id);
+  assert.equal(f.session.metadata.opencode_conversation_id, main.thread.id);
+  assert.equal(f.processStops.length, 0);
+});

@@ -225,7 +225,7 @@ function createOpenCodeHostPreparation({
     return resolved.filter(Boolean);
   }
 
-  async function prepareSharedProcess(context = {}, options = {}, selected = null, shimDirs = []) {
+  async function prepareSharedProcess(context = {}, options = {}, selected = null, shimDirs = [genesisCommandShimDirectory()]) {
     const connections = await configuredConnections(context, options, selected);
     const roots = sharedRoots();
     await writeSessionEnvironmentRegistry();
