@@ -3748,3 +3748,17 @@ helper deletion retains its record and files. Normal cleanup retains normal stor
 read/write guards; arbitrary callers cannot read or mutate hidden successors.
 This repairs an inherited original cleanup boundary exposed by the composed
 renewal case; it is not a new native lifecycle or acknowledgement policy.
+
+
+### Explicit renewal acknowledgement request
+
+The original shared application seed prompt required a structured acknowledgement
+without describing its shape. Codex and Claude additionally supplied the native
+output schema, while OpenCode's original bounded prompt did not. The existing
+`sessionRenewalSeedPrompt` now includes the exact existing acknowledgement JSON
+schema, frozen approved hash and canonical source commit, with a JSON-only/no
+Markdown instruction after the handover. Native schema controls remain unchanged;
+the strict parser and receipt-before-release sequence still own confirmation.
+Already admitted seeds retain their original response/history and use the existing
+same-operation reconciliation and delivery-error continuation. This repairs an
+inherited ambiguous request; it neither fabricates old ACKs nor resends them.

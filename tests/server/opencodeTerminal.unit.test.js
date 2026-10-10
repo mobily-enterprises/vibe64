@@ -4855,3 +4855,48 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
     for (const read of forbiddenReads) t.diagnostic(`R20 forbidden successor read: ${JSON.stringify(read)}`);
   }
 });
+
+
+test("R20 OpenCode renewal requests its exact existing JSON acknowledgement contract", async t => {
+  const handover = renewalHandover();
+  const handoverHash = sessionRenewalHandoverHash(handover);
+  const acknowledgement = { schemaVersion: "vibe64.session-renewal-acknowledgement.v1",
+    status: "ready", handoverHash, sourceCommit: renewalSource.commit, message: "Ready from the approved handover." };
+  const harness = await controllerHarness({ assistantResponses: [JSON.stringify(acknowledgement)],
+    beforePrompt({ input }) {
+      assert.equal(input.prompt.text, sessionRenewalSeedPrompt({ handover, handoverHash, source: renewalSource }));
+      assert.match(input.prompt.text, /Return only one JSON value matching this JSON Schema\. Do not wrap it in Markdown code fences:/u);
+      assert.match(input.prompt.text, /Do not edit files, run commands, begin the next action, or ask questions/u);
+      const schema = JSON.parse(input.prompt.text.split("\n").at(-1));
+      assert.equal(schema.type, "object");
+      assert.equal(schema.additionalProperties, false);
+      assert.deepEqual(schema.required, ["schemaVersion", "status", "handoverHash", "sourceCommit", "message"]);
+      assert.deepEqual(schema.properties.schemaVersion.enum, [acknowledgement.schemaVersion]);
+      assert.deepEqual(schema.properties.status.enum, ["ready"]);
+      assert.deepEqual(schema.properties.handoverHash.enum, [handoverHash]);
+      assert.deepEqual(schema.properties.sourceCommit.enum, [renewalSource.commit]);
+      assert.deepEqual(schema.properties.message, { maxLength: 500, minLength: 1, type: "string" });
+    }, stop: async () => ({ exited: true, signal: "SIGTERM" }) });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const operationId = "renewal:r20-explicit-json-schema";
+  const result = await harness.controller.seedSessionRenewalHandover("session-1", {
+    handover, handoverHash, oldThreadId: "predecessor-native", operationId, source: renewalSource
+  }, { runtime: harness.runtime, session: harness.session });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.acknowledgement, { ...acknowledgement, rawOutput: JSON.stringify(acknowledgement) });
+  assert.deepEqual(result.processExitProof, { exited: true, signal: "SIGTERM" });
+  assert.equal(harness.promptCalls.length, 1);
+  assert.equal(harness.userMessages.length, 0);
+  const metadata = harness.session.metadata;
+  assert.equal(metadata.agent_briefing_delivered, "yes");
+  assert.equal(metadata.agent_briefing_delivered_at, result.acknowledgedAt);
+  assert.equal(metadata.agent_briefing_transport, "opencode_server");
+  assert.equal(metadata.agent_renewal_seed_acknowledged_at, result.acknowledgedAt);
+  assert.equal(metadata.agent_renewal_seed_handover_hash, handoverHash);
+  assert.equal(metadata.agent_renewal_seed_operation_id, operationId);
+  assert.equal(metadata.agent_renewal_seed_thread_id, result.threadId);
+  assert.equal(metadata.agent_renewal_seed_turn_id, result.turnId);
+});

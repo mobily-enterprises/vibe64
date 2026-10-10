@@ -76,6 +76,10 @@ explain that error and inspect the session status, but cannot choose an unknown
 thread or bypass the saved renewal identity. If the old thread is unreadable,
 write or edit the handover manually in the renewal dialog before confirming.
 
+A new OpenCode renewal gives the replacement assistant the exact acknowledgement
+format together with your reviewed handover and saved source. The acknowledgement
+must match that handover and source before it is recorded as confirmed.
+
 OpenCode renewal also keeps the admitted handover and native conversation when
 recovery needs **Retry**. Retry the same renewal; do not send another handover or
 create another replacement. Cleanup stops any remaining progress-summary helper

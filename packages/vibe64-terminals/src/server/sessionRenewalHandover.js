@@ -440,7 +440,13 @@ function sessionRenewalSeedPrompt(input = {}) {
     `Approved handover hash: ${approved.handoverHash}`,
     "",
     "Approved handover:",
-    approved.handover
+    approved.handover,
+    "",
+    "Return only one JSON value matching this JSON Schema. Do not wrap it in Markdown code fences:",
+    JSON.stringify(sessionRenewalAcknowledgementOutputSchema({
+      handoverHash: approved.handoverHash,
+      source: approved.source
+    }))
   ].join("\n");
 }
 
