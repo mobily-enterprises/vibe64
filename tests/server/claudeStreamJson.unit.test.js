@@ -1945,6 +1945,19 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(metadata.claude_conversation_id, state.thread.id);
 
     await service.updateAgentGoal("test", { ...options, ...goal, action: "cancel" });
+    // Raw Cancel acknowledges /goal clear before its terminal result is drained.
+    // Finish that original native command before this separate canonical journey.
+    const clearDeadline = Date.now() + 5000;
+    let clearedState;
+    for (;;) {
+      clearedState = await service.agentSessionState("test", { ...options, session: await store.readSession("test") });
+      assert.equal(clearedState.thread.id, state.thread.id, "goal clear retains the original native thread");
+      if (clearedState.turn?.active === false) break;
+      assert.ok(Date.now() < clearDeadline, "the admitted goal clear reaches its original terminal state");
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.notEqual(clearedState.turn.state, "failed", clearedState.turn.error);
+    assert.equal((await service.readAgentGoal("test", options)).goal, null);
     const routedSelection = { ...defineVibe64AssistantSelection(f.context.assistantSelection), selectionSource: "explicit" };
     await createAssistantRoutingStore({ systemRoot: path.join(f.root, "system") }).write({
       claude: { senior: routedSelection, junior: routedSelection }
