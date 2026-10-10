@@ -347,7 +347,7 @@ test("temporary direct Junior ignores an unusable working plan and persists no p
     await f.service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
     const restored = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
     const request = JSON.parse(restored.routingMetadata.assistant_routing_request);
-    assert.equal(request.status, "done");
+    assert.equal(request.status, "complete");
     assert.equal(request.workPlan, null);
     assert.equal(request.error, undefined);
     assert.equal(f.native.starts, 1);
@@ -412,14 +412,14 @@ test("temporary Auto requests cannot retry or continue into planning or review",
     f.native.status = "completed";
     await f.service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
     const finished = JSON.parse((await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing_request);
-    assert.equal(finished.status, "done");
+    assert.equal(finished.status, "waiting");
     assert.match(finished.error, /Main chat only/);
-    for (const status of ["failed", "review_pending", "planning_pending", "uncertain"]) {
+    for (const delivery of ["failed", "pending", "uncertain"]) {
       await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
-        assistant_routing_request: JSON.stringify({ ...request, messageId: "pending", status }) } });
+        assistant_routing_request: JSON.stringify({ ...request, messageId: "pending", status: "waiting", delivery }) } });
       await assert.rejects(f.service.startTemporaryConversationTurn("one", {
         conversationId: "chat", messageId: "pending", message: "Explain this",
-        ...(["review_pending", "planning_pending"].includes(status) ? { reviewAction: "retry" } : {})
+        ...(delivery === "pending" ? { reviewAction: "retry" } : {})
       }), /Main chat only/);
     }
     assert.equal(f.native.starts, 1);
@@ -437,7 +437,7 @@ test("Close retains a temporary chat when its saved helper cannot be cleaned up"
     const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
       scope: { id: "saved-router", runtimeRoot: path.join(helperRoot, "runtime"), workdir: path.join(helperRoot, "workdir") } };
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
-      assistant_routing_request: JSON.stringify({ status: "failed", mode: "auto", helper }) } });
+      assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "failed", messageId: "owned-helper", input: { message: "Preserved request" }, mode: "auto", helper }) } });
     await assert.rejects(f.service.deleteTemporaryConversation("one", { conversationId: "chat" }), /routing helper could not be closed/);
     const retained = await f.store.readSessionConversation("one", "chat");
     assert.equal(retained.state, "open");
@@ -930,7 +930,7 @@ test("a temporary direct Junior read observes completion without starting review
     await f.service.afterTemporaryTurn("one", { conversationId: row.id,
       temporaryRun: { active: false, state: "completed", providerTurnId: record.runId } }, f.options);
     assert.equal(f.calls.starts.length, 1);
-    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "done");
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "complete");
     assert.equal((await f.store.readConversationLog("one")).length, 0);
   });
 });
@@ -1032,7 +1032,7 @@ test("temporary foreign delivery recovers its exact receipt after restart withou
     f.options.vibe64User = { role: "member", username: "member" };
     await assert.rejects(f.send("junior", "second"), /Lost native admission reply/);
     const pending = await f.record();
-    assert.equal(JSON.parse(pending.routingMetadata.assistant_routing_request).status, "uncertain");
+    assert.equal(JSON.parse(pending.routingMetadata.assistant_routing_request).delivery, "uncertain");
     f.failures.loseAdmission = false;
     f.failures.read = false;
     assert.equal(f.native.get(pending.providerConversationId).status, "inProgress");
@@ -1233,7 +1233,7 @@ test("an old pending Junior repair cannot be resumed by polling or retry", async
     await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
     const record = await f.record();
     const request = JSON.parse(record.routingMetadata.assistant_routing_request);
-    Object.assign(request, { messageId: "old-unsent", status: "sending", attemptedMessageId: "",
+    Object.assign(request, { messageId: "old-unsent", status: "working", delivery: "sending", stopped: false, attemptedMessageId: "",
       input: { message: "Repair the merge.", displayMessage: "Repair the merge." } });
     await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update", routingMetadata: {
       ...record.routingMetadata, assistant_routing_request: JSON.stringify(request)
@@ -1448,8 +1448,9 @@ test("temporary repair model preferences survive recovered completion in either 
         conversationId: "chat", messageId: "original", message: "Preserve the booking validation."
       }, f.options);
       await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update" });
-      await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
-      assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "sent");
+      // Native completion was missed; leave the accepted request for read recovery.
+      f.native.get((await f.record()).providerConversationId).status = "completed";
+      assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "working");
 
       const preferencesWritten = Promise.withResolvers();
       const completionWritten = Promise.withResolvers();
@@ -1477,7 +1478,7 @@ test("temporary repair model preferences survive recovered completion in either 
           if (preferences?.mode === "senior" && preferences.override?.modelId === f.senior.modelId && !writes.includes("preferences")) {
             writes.push("preferences"); preferencesWritten.resolve();
           }
-          if (request.status === "done" && !writes.includes("completion")) {
+          if (request.status === "complete" && !writes.includes("completion")) {
             writes.push("completion"); completionWritten.resolve();
           }
         }
@@ -1516,9 +1517,9 @@ test("temporary repair model preferences survive recovered completion in either 
         assert.equal(preferences.workflowEngineId, "codex");
         assert.equal(preferences.override.modelId, f.senior.modelId);
         assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), preferences);
-        assert.equal(JSON.parse(saved.routingMetadata.assistant_routing_request).status, "done");
+        assert.equal(JSON.parse(saved.routingMetadata.assistant_routing_request).status, "complete");
         if (order === "completion-first") {
-          assert.equal(JSON.parse(changed.routingMetadata.assistant_routing_request).status, "done");
+          assert.equal(JSON.parse(changed.routingMetadata.assistant_routing_request).status, "complete");
         }
         assert.equal(f.calls.starts.length, 1, "completion recovery does not start another turn");
         assert.deepEqual((await f.store.readSession("one")).metadata, main);

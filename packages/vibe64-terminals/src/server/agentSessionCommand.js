@@ -532,6 +532,7 @@ async function ensureAgentSessionCommandServer({
 }
 
 function createAgentSessionCommandService({
+  reportWorkflowOutcome = null,
   logger = null,
   projectService,
   publishSessionChanged = () => {},
@@ -682,16 +683,21 @@ function createAgentSessionCommandService({
   async function managePlan(sessionId, input) {
     return runInSessionProject(sessionId, async ({ store }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
+      if (input.operation === "outcome") {
+        if (typeof reportWorkflowOutcome !== "function") throw new Error("Workflow controls are unavailable.");
+        return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
+      }
       let role = "";
-      if (request?.reason !== "discussion" && request?.task !== "deslop") {
-        if (request?.status === "reviewing") role = "review";
-        else if (request?.status === "sent") role = request.resolvedMode;
+      if (request?.reason !== "conversation" && request?.task !== "deslop" && request?.status === "working" && request.delivery === "accepted") {
+        role = request.stage === "review" && request.followup ? "review" : request.resolvedMode;
       }
       const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
       if (!["read", "history"].includes(input.operation)) {
         await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
       }
-      return { ok: true, ...result };
+      return { ok: true, ...result, ...(input.operation === "read" ? { workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
+        messageId: request.messageId, turnId: request.turnId || "", stage: request.stage, status: request.status
+      } : null } : {}) };
     });
   }
 

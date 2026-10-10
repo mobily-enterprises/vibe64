@@ -197,7 +197,7 @@ function createSessionConversations({
         const sessionId = ctx.session.sessionId;
         const outcome = response.outcome || normalizeVibe64AgentTaskResult(response.text);
         const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
-        if (route && ["sent", "reviewing", "planning"].includes(route.status) && response.runId &&
+        if (route && route.status === "working" && route.delivery === "accepted" && response.runId &&
             !["starting", "inProgress", "ready"].includes(response.status)) {
           // Schedule after releasing the existing write lock. Native idle events
           // normally do this; a read also recovers a missed completion notification.
@@ -217,8 +217,8 @@ function createSessionConversations({
           routingMetadata: { ...record.routingMetadata, assistant_routing: ctx.session.metadata.assistant_routing },
           messages,
           ok: true,
-          ...(route && assistantRoutingStatusIsPending(route.status)
-            ? { status: route.status } : {}),
+          ...(route && assistantRoutingStatusIsPending(route)
+            ? { routingPending: true } : {}),
           ...(record.state === "closing" ? {
             status: "closing",
             error: record.error || "Close did not finish. Try Close again."
@@ -457,7 +457,7 @@ function createSessionConversations({
           const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
           const pending = Object.values(JSON.parse(observed.routingMetadata?.assistant_changeover || "null")?.engines || {})
             .map(value => value.pending).find(value => value?.attempted);
-          const request = route?.status === "uncertain" && route.input ? {
+          const request = route?.delivery === "uncertain" && route.input ? {
             messageId: route.messageId, text: route.input.displayMessage || route.input.message,
             attachments: route.input.displayAttachments || [], error: route.error || ""
           } : pending ? { messageId: pending.messageId, text: pending.displayMessage,
@@ -465,9 +465,9 @@ function createSessionConversations({
           return { engine: observed.assistantSelection.engineId, threadId: observed.providerConversationId || "",
             configuration: observed.agentSettings, conversationLog, pagination, presentation,
             status: observed.readError ? "unavailable" : request ? "unconfirmed"
-              : ["starting", "inProgress"].includes(observed.status) || assistantRoutingStatusIsPending(observed.status) ? "working" : "ready",
+              : ["starting", "inProgress"].includes(observed.status) || observed.routingPending === true ? "working" : "ready",
             phase: ["starting", "inProgress"].includes(observed.status) ? "working"
-              : assistantRoutingStatusIsPending(observed.status) ? "preparing" : "",
+              : observed.routingPending === true ? "preparing" : "",
             error: observed.error || "", pendingRequest: request };
         },
         readStream: () => runtime.store.readConversationStream(scope),
@@ -578,7 +578,7 @@ function createSessionConversations({
           const current = await snapshot(ctx, record);
           if (current.readError) throw new Error("Reconnect this conversation before changing its mode or model.");
           if (current.goal && !["complete", "completed"].includes(current.goal.status)) throw new Error("Finish this goal before changing chat modes or models.");
-          if (record.recoveryOperation === "update" && (["starting", "inProgress"].includes(current.status) || assistantRoutingStatusIsPending(current.status))) {
+          if (record.recoveryOperation === "update" && (["starting", "inProgress"].includes(current.status) || current.routingPending === true)) {
             throw new Error("Stop this repair before changing its model.");
           }
         }

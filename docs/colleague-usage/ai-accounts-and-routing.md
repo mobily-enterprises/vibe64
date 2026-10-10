@@ -17,6 +17,13 @@ direct role without an automatic review, the same agent remains responsible for
 browser verification. A stopped or unavailable check must be reported as
 unverified; an invitation to try the app does not replace verification.
 
+Auto shows Working, Waiting or Complete with a separate Planning, Implementation
+or Review stage. Senior continues unfinished review or saves necessary in-scope
+rework for Junior, then reviews again. Deslop controls cleanup, not whether review
+runs. Waiting retains the stage: use **Resume workflow** when the blocker is
+resolved, or **Check delivery** for an uncertain message. Stop remains respected.
+See [plans and workflow recovery](plans.md) for the full steps.
+
 Open **AI Accounts** in Management. No project or coding session is required.
 The local standalone editor does not require a hosted workspace login to open AI
 Accounts. Hosted connection changes require the workspace owner. A member's permitted models

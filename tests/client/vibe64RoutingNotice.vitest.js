@@ -20,128 +20,66 @@ function mount(request) {
   return { props, state: () => notice.value.$.setupState };
 }
 
-it("keeps normal routing in the message bubble and reports review interruption once through the transient snackbar", async () => {
-  const request = { messageId: "one", status: "routing", resolvedMode: "junior", review: true };
-  const f = mount(request);
-  expect(f.state().actionable).toBe(false);
-  f.props.value.request = { ...request, status: "sent" };
-  await nextTick();
-  expect(f.state().actionable).toBe(false);
-  f.props.value.request = { ...request, status: "done", reviewStatus: "skipped_incomplete" };
-  await nextTick();
-  expect(f.state().actionable).toBe(false);
-  expect(feedback.report).toHaveBeenCalledWith(expect.objectContaining({
-    message: "Coding stopped. Automatic review was skipped.", severity: "info", channel: "snackbar"
-  }));
-  f.props.value.request = { ...f.props.value.request };
-  await nextTick();
-  expect(feedback.report).toHaveBeenCalledTimes(1);
-});
+const request = (stage = "review", delivery = "pending", extra = {}) => ({ messageId: "workflow", status: "waiting",
+  stage, workflow: true, delivery, resolvedMode: "junior", followup: { messageId: "followup" }, ...extra });
+async function render(value, selection) {
+  const instance = createSSRApp(RoutingNotice, { request: value, selection });
+  instance.use(createVuetify());
+  return renderToString(instance);
+}
 
-it("does not replay finished notices on restore, background completion or discussion completion", async () => {
-  const request = { messageId: "old", status: "done", resolvedMode: "junior", reviewStatus: "cancelled" };
-  const f = mount(request);
-  await nextTick();
-  expect(feedback.report).not.toHaveBeenCalled();
-  f.props.value = { active: false, request: { ...request, messageId: "new", status: "sent" } };
-  await nextTick();
-  f.props.value.request.status = "done";
-  await nextTick();
-  f.props.value = { active: true, request: { ...request, messageId: "senior", status: "sent", resolvedMode: "senior", reviewStatus: undefined } };
-  await nextTick();
-  f.props.value.request.status = "done";
-  await nextTick();
-  expect(feedback.report).not.toHaveBeenCalled();
-  expect(f.state().actionable).toBe(false);
-});
-
-it("keeps delivery failures in their bubble and review recovery controls in the notice", async () => {
-  const f = mount({ messageId: "one", status: "failed", error: "Reconnect the AI" });
-  expect(f.state().actionable).toBe(false);
-  for (const status of ["review_pending", "review_uncertain", "implementation_pending", "implementation_uncertain"]) {
-    f.props.value.request = { messageId: "one", status };
-    await nextTick();
-    expect(f.state().actionable).toBe(true);
-    expect(f.state().followupNeedsAction).toBe(true);
-  }
-  expect(feedback.report).not.toHaveBeenCalled();
-});
-
-it("removes a cancelled request's old error only after cleanup and delivery uncertainty are resolved", async () => {
-  const request = { messageId: "cancelled-request", status: "failed", error: "Renew the session to use model routing." };
-  const f = mount(request);
-  expect(f.state().actionable).toBe(false);
-  f.props.value.request = { ...request, status: "cancelled", helper: { executionId: "cleanup-pending" } };
-  await nextTick();
-  expect(f.state().actionable).toBe(true);
-  f.props.value.request = { ...request, status: "cancelled", attemptedMessageId: "delivery-unconfirmed" };
-  await nextTick();
-  expect(f.state().actionable).toBe(true);
-  f.props.value.request = { ...request, status: "cancelled", helper: null };
-  await nextTick();
-  expect(f.state().actionable).toBe(false);
-  expect(f.props.value.request.error).toBe(request.error);
-  app.unmount();
-  const restored = mount({ ...request, status: "cancelled" });
-  expect(restored.state().actionable).toBe(false);
-  expect(feedback.report).not.toHaveBeenCalled();
-});
-
-it("shows recovery controls for a stopped planning handoff", () => {
-  const f = mount({ status: "planning_pending", continuation: "planning", resolvedMode: "junior", assignments: { senior: { engineId: "codex", modelId: "gpt-6-astra" } } });
-  expect(f.state().actionable).toBe(true);
-  expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
-});
-
-it("renders Stop beside retry for every unsent handoff, including recovered unfinished review", async () => {
-  for (const status of ["review_pending", "planning_pending", "implementation_pending"]) {
-    const pending = createSSRApp(RoutingNotice, { request: { messageId: "unfinished", status,
-      resolvedMode: "junior", error: "Scheduling disconnected before the handoff was sent." } });
-    pending.use(createVuetify());
-    const html = await renderToString(pending);
-    expect(html).toMatch(/>\s*Stop\s*</u);
-    expect(html).toContain("Scheduling disconnected before the handoff was sent.");
+it("keeps normal routing and active review in chat without a composer alert", async () => {
+  for (const delivery of ["routing", "sending", "accepted"]) {
+    const value = request("review", delivery, { status: "working", outcome: { decision: "handoff", explanation: "Ready for review." } });
+    expect(mount(value).state().actionable).toBe(false);
+    const html = await render(value);
+    expect(html).not.toContain("v-alert"); expect(html).not.toContain("Ready for review."); app.unmount();
   }
 });
 
-it("keeps Check delivery without an unsent-handoff Stop for uncertain delivery", async () => {
-  for (const status of ["review_uncertain", "planning_uncertain", "implementation_uncertain"]) {
-    const uncertain = createSSRApp(RoutingNotice, { request: { messageId: "unknown", status, resolvedMode: "junior" } });
-    uncertain.use(createVuetify());
-    const html = await renderToString(uncertain);
-    expect(html).toContain("Check delivery");
-    expect(html).not.toMatch(/>\s*Stop\s*</u);
+it("shows Resume workflow and Stop for every retained unsent stage on desktop and mobile", async () => {
+  for (const stage of ["planning", "implementation", "review"]) {
+    const value = request(stage, "pending", { error: "Scheduling disconnected before the handoff was sent." });
+    const html = await render(value);
+    expect(html).toContain("Resume workflow"); expect(html).toMatch(/>\s*Stop\s*</u);
+    expect(html).toContain(value.error); expect(html).toContain("flex-wrap");
   }
 });
 
-it("leaves continuation evidence in chat and preserves an incomplete outcome across restore without a duplicate toast", async () => {
-  const outcome = { decision: "continue", explanation: "Import is still authorised and unfinished.", nextStep: "Implement import validation." };
-  const f = mount({ messageId: "auto-work", status: "sent", resolvedMode: "junior", continuation: "implementation", outcome });
-  expect(f.state().actionable).toBe(false);
-  expect(f.state().showOutcome).toBe(true);
-  expect(f.state().label).toContain("Continuing implementation");
-  f.props.value.request = { ...f.props.value.request, status: "done", reviewStatus: "skipped_incomplete",
-    outcome: { decision: "wait", reason: "blocked", explanation: "A required account is unavailable.", nextStep: "" } };
-  await nextTick();
-  expect(f.state().label).toBe("Implementation incomplete.");
-  expect(f.state().actionable).toBe(false);
-  expect(feedback.report).not.toHaveBeenCalled();
-  const saved = f.props.value.request;
-  app.unmount();
-  const restored = mount(saved);
-  expect(restored.state().showOutcome).toBe(true);
-  restored.props.value.request = { ...saved, stopped: true, reviewStatus: "cancelled" };
-  await nextTick();
-  expect(restored.state().showOutcome).toBe(false);
+it("shows Check delivery without an unsent-handoff Stop for uncertain stage delivery", async () => {
+  for (const stage of ["planning", "implementation", "review"]) {
+    const html = await render(request(stage, "uncertain"));
+    expect(html).toContain("Check delivery"); expect(html).not.toMatch(/>\s*Stop\s*</u);
+  }
 });
 
-it("does not render the Router explanation as a blue composer alert during review", async () => {
-  const request = { messageId: "review", status: "reviewing", outcome: { decision: "review", explanation: "The authorised scope is ready." } };
-  const f = mount(request);
+it("can resume a stopped first implementation without an existing follow-up", async () => {
+  const value = request("implementation", "accepted", { stopped: true, followup: null, error: "Paused at your request." });
+  expect(mount(value).state().followupNeedsAction).toBe(true);
+  const html = await render(value); expect(html).toContain("Resume workflow"); expect(html).toContain("Paused at your request.");
+});
+
+it("keeps initial delivery failures in their message bubble", () => {
+  const f = mount(request(null, "failed", { followup: null, workflow: false, error: "Reconnect the AI" }));
   expect(f.state().actionable).toBe(false);
-  const app = createSSRApp(RoutingNotice, { request });
-  app.use(createVuetify());
-  const html = await renderToString(app);
-  expect(html).not.toContain("The authorised scope is ready.");
-  expect(html).not.toContain("v-alert");
+});
+
+it("retains cleanup failures until helper ownership is resolved", async () => {
+  const value = request(null, "failed", { stopped: true, workflow: false, followup: null, helper: { executionId: "owned" }, error: "Cleanup failed" });
+  const f = mount(value); expect(f.state().actionable).toBe(true);
+  f.props.value.request = { ...value, helper: null }; await nextTick(); expect(f.state().actionable).toBe(false);
+  expect(f.props.value.request.error).toBe("Cleanup failed");
+});
+
+it("does not replay waiting or stopped notices when restored or when hidden", async () => {
+  const f = mount(request("review", "pending", { stopped: true })); await nextTick(); expect(feedback.report).not.toHaveBeenCalled();
+  f.props.value = { active: false, request: request("review", "accepted", { status: "working" }) }; await nextTick();
+  f.props.value.request = request("review", "accepted", { stopped: true }); await nextTick(); expect(feedback.report).not.toHaveBeenCalled();
+});
+
+it("reports a newly stopped active workflow once through the snackbar", async () => {
+  const f = mount(request("review", "accepted", { status: "working" }));
+  f.props.value.request = request("review", "accepted", { stopped: true }); await nextTick();
+  expect(feedback.report).toHaveBeenCalledWith(expect.objectContaining({ message: "Paused at your request.", channel: "snackbar" }));
+  f.props.value.request = { ...f.props.value.request }; await nextTick(); expect(feedback.report).toHaveBeenCalledTimes(1);
 });

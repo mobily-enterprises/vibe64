@@ -947,6 +947,7 @@ resource edits refreshes facts without restarting the native conversation.
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
 - `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
 - `packages/vibe64-accounts/src/server/assistantPlanUpgrade.js`
@@ -1464,7 +1465,7 @@ without declaring an unverified archive successful or launching model work.
 
 Router outcome explanations use the same persisted system-message writer and
 canonical upsert-turn publication as other application chat statuses, with a
-stable request/continuation/decision identity. Repeated callbacks do not duplicate
+stable request/turn/decision identity. Repeated callbacks do not duplicate
 them; writes and publications retain the selected conversation scope. New messages
 survive later routing requests and reload. The original browser
 routing projection can show an older saved outcome without rewriting its history,
@@ -1511,20 +1512,13 @@ pending review. Neither control starts AI. Other lifecycle and execution
 requests use chat. Task instructions are maintained in `docs/colleague-usage/plans.md`.
 
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
-plan. Junior preserves delivered work and records actual evidence in Progress without ticking or rewriting scope. Senior reads both documents, verifies the agreed requirements, records gaps in Progress and fixes in-scope defects. Auto schedules one Senior review after reviewable
-implementation by either role when Router confirms continuation fits the user's
-latest intent, even when the implementer and reviewer use the
-same exact model selection. When Deslop is enabled, the same review turn performs
-cleanup after implementation review and checks that cleanup before explicitly
-completing the plan. Greetings, answers, planning, requested reviews and
-Deslop do not schedule another review. The existing receipt, cancellation,
-question, goal and disconnected-completion guards apply to both implementers.
-The saved review preference controls optional Deslop only;
-it cannot disable review, but the user's instructions can defer or cancel the
-automatic handoff. Direct Senior and Junior requests remain direct. Senior review explicitly completes the plan or leaves
-it active and explains remaining work. Review never automatically starts another
-implementation/planning cycle; further execution needs user intent. Existing
-review interruption, access, delivery-receipt and restart safeguards remain.
+plan. Junior preserves delivered work and records actual evidence in Progress
+without rewriting scope. Senior reads both documents and verifies the agreed
+requirements. Auto continues unfinished review or saves substantial necessary
+technical rework for Junior, within the agreed outcome, then reviews again.
+Changed product requirements need the person's decision. Only Senior explicitly
+completes a verified plan. Direct roles remain direct. Stop, native questions,
+access, uncertain delivery and restart safeguards retain their existing owners.
 
 Deslop is a task with permission to clean up code, not a third role or selectable
 chat mode. A standalone `deslop` command uses the configured Senior model in named
@@ -1582,81 +1576,46 @@ accepted native turn is active. It cannot become an accidental steering request.
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
-After a matching implementation turn completes normally, the captured Router
-uses the existing tool-free helper to choose continue, review or wait. Its input
-includes the original request, accepted steering retained on new Auto requests,
-the full current plan, the last five visible replies, the native outcome and the
-previous decision. Its strict output includes a bounded explanation, next step
-and reported progress. The routing workload accepts up to 128,000 input characters
-so a substantial plan fits; oversized input is rejected without truncating intent.
-Router classifies reported evidence, never verifies code or marks a plan complete.
-Messages with an application actor or a follow-up parent request are marked as
-automatic evidence; they cannot supersede accepted human steering.
+The original routing coordinator retains schema-five workflow state independently
+of delivery: working/waiting/complete plus planning/implementation/review. Router
+classifies only a new Auto request into conversation, planning, implementation or
+review with a Senior/Junior role. Direct roles and Custom do not orchestrate.
 
-An approved continuation uses the selected implementation role, original actor,
-ordinary admission and a fresh durable message ID. The existing follow-up owner
-handles pending/sending/uncertain implementation states and receipt-only recovery.
-The original request identity remains the parent through all continuations.
-Current plan revision and recent messages are rechecked before admission.
-Accepted steering bypasses classification and is retained only after confirmed
-ordinary delivery. Stop, native waiting, active goals, failures, changed access
-and unconfirmed observations cannot launch more work. An independent portion may
-continue while a question blocks another portion. Two consecutive turns without
-reported progress or eight automatic continuations leave a visible incomplete
-outcome requiring a new user request; a review never schedules another review.
+The admitted agent uses the existing authenticated session-helper socket's
+`plan read` and `plan outcome` operations. The read supplies exact request/turn/stage
+identity, including when there is no plan. Outcome accepts continue/handoff/wait/
+complete, a bounded concrete explanation and progress boolean. The owner checks
+captured actor/access, active native turn and both involved plan revisions. Planning
+can continue or wait; only Senior review can complete. An involved plan must first
+be explicitly completed through its existing lifecycle operation.
 
-The notice presents the outcome, explanation and next step through the existing
-chat surface. Pending implementation has Continue implementation or Check delivery;
-Router failure still offers explicit Retry review or Stop. Pending review
-shows Stop alongside Retry review, allowing the person to
-cancel an unsent handoff and submit a new implementation request without marking
-the plan complete. Pending planning and implementation use that same Stop action;
-uncertain delivery retains Check delivery and the existing receipt safeguards.
-This uses the original interrupt/cancel owner and preserves source and history.
-An observed completion never automatically launches another turn after restart. Classification runs
-outside the session lock and Stop can suppress its late answer. Conversation or
-plan changes, malformed decisions, oversized input and cleanup failures retain
-unsent recovery instead of sending from stale evidence.
-The additive 20260930-auto-implementation-continuation release boundary changes
-no existing records: only new explicit Auto requests receive autoExecution state.
-Historical requests retain their review contract without gaining continuation.
+After the exact native turn succeeds, continue retains role/stage; handoff moves
+implementation to Senior review or Senior's saved substantial in-scope rework to
+Junior. Junior then hands back to Senior. Required review and optional Deslop are
+separate choices. Real blockers wait; accepted steering invalidates an older outcome
+and retains the running role. Stop prevents late work. Failed/interrupted turns,
+missing outcomes, changed plans and missing final-explanation proof remain waiting.
+Two no-progress turns or eight automatic steps wait for inspection. Explicit Resume
+workflow resets that allowance. Planning never admits implementation itself.
 
-When approved, review uses one preallocated
-message identity and the snapshotted Senior selection. The visible automatic
-request permits scoped fixes. Structured waiting, failure, interruption, active
-goals and Stop suppress continuation; a reviewer never schedules another review.
-Before review changes models or sends, it also checks the saved last assistant
-reply using the same numbered-question and answer-choice parsers as the composer.
-An unanswered structured question visibly skips review, preserves the question
-and coding model, and allows the user's answer as the next ordinary request.
-Review Retry applies the same check after restart.
-If a read sees completion before the idle event, the coordinator may review an
-implementation request it admitted in the current process, after the Router check. After a server restart, the
-same recovered completion requires explicit Retry/Skip instead.
-Preparation failures retain Retry and Skip. Skipping an unstarted review clears
-its preparation error and finishes the completed coding request immediately,
-without waiting for another native completion event.
-A review stopped after admission is
-incomplete and needs a new explicit request; even a late native success cannot
-overwrite its cancellation. Completion must match the exact admitted turn,
-recovering that identity from its receipt when necessary. Unknown completion
-skips review visibly. Backend recovery offers an unsent review for Retry/Skip
-instead of launching it. Review retries use the original submitting actor even
-when an owner triggers Retry. The host revalidates that original user's current
-access before review; removal blocks review and preserves completed coding work.
-Main and temporary chat retain outcomes in history; transient review notices do not replay after reload. The next request
-replaces that notice; displaying it does not restart coding or review.
-Replaced connections cannot receive a captured request; changed configuration
-does not retarget it. Goal mode, workflow and
-selection are resolved centrally and pinned only after native goal acceptance.
-An unfinished native goal without a saved routing pin also prevents a new Send
-from changing its AI after configuration or access changes.
-A foreign-engine goal destination still requires an ordinary Send for history
-catch-up before native goal admission.
-Service shutdown joins completion bookkeeping already in progress and prevents
-new idle events from starting follow-ups. OpenCode also joins the active turn's
-final status write before releasing its native process record. Deferred review
-still requires explicit Retry after recovery.
+The same durable follow-up owner captures fresh message identity, full original
+request, accepted steering, involved plan and recent visible messages. Ordinary
+account admission, native questions/goals, identity checks, delivery inspection and
+helper cleanup remain authoritative. Delivery has routing/pending/sending/uncertain/
+accepted/failed states; workflow stage is never encoded into delivery. Saved receipts
+win over interrupted transport errors. Check delivery only inspects the same receipt.
+Restart never auto-sends a recovered follow-up; Resume workflow is explicit. Controls
+use the existing retry/Stop actions and explanations remain persisted Status messages.
+
+Only after the exact Senior review's successful native completion and final assistant
+explanation does the owner archive its explicitly completed Plan/Progress pair.
+Archival failure retains the completed current artifact and truthful manual recovery.
+An obsolete callback cannot archive a different plan. No checklist-based completion
+or history replay is introduced. The numbered `20261010-assistant-workflow` stopped-
+service upgrade uses the existing verified backup/publisher and session-store transform
+for Main and temporary metadata. It retains actor, receipt, native identities and
+stages, freezes unfinished scheduling at waiting and refuses unsupported records.
+No request-time conversion or automatic continuation authority is granted.
 
 Codex prepares private per-thread provider configuration, detaches and resumes
 the same idle native thread, and checks the provider acknowledgement. A native
@@ -3718,9 +3677,9 @@ link is not a read. The original private socket still derives role from the admi
 request. Server enforcement proves the returned pair/pages, role and revision fences,
 not the model's semantic inspection of stdout or code correctness. The initial Router
 retains its bounded classification outline; it is not a full paired read. Follow-up
-review receives the actual full pair through the original readWorkPlan capture and
-retains its bounded oversized-context refusal, current actor, Stop and native receipt
-checks. A successful review turn alone never completes the artifact.
+review obtains the actual full pair through the same paged plan helper and reports
+both revisions with its outcome. Current actor, Stop and native receipt checks
+remain authoritative. A successful review turn alone never completes the artifact.
 
 #### Retained Main teaching cleanup after application session close
 

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-const working = new Set(["starting", "inProgress", "routing", "sending", "review_pending", "review_sending", "reviewing", "planning_pending", "planning_sending", "planning", "implementation_pending", "implementation_sending"]);
-const attention = new Set(["failed", "interrupted", "cancelled", "closing", "archived", "uncertain", "review_uncertain", "planning_uncertain", "implementation_uncertain"]);
+const working = new Set(["starting", "inProgress", "working", "preparing"]);
+const attention = new Set(["failed", "interrupted", "cancelled", "closing", "archived", "uncertain", "waiting"]);
 
 // These reads use ordinary actions and their current actor/project authority.
 // Provider records, credentials and session metadata never enter the observation.
@@ -33,7 +33,7 @@ async function readWatchedConversation(actions, watch, context) {
     const log = await execute("vibe64.sessions.conversation-log.read", { sessionId: watch.sessionId, limit: "3" });
     messages = (log.conversationLog || []).flatMap((item) => item.messages || []);
   }
-  const needsUser = route?.reviewStatus === "skipped_question" || (route?.status === "done" && route?.outcome?.decision === "wait");
+  const needsUser = route?.status === "waiting";
   return conversationObservation({ status, runId, messages, error, needsUser,
     replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
 }

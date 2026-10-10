@@ -1,13 +1,13 @@
 import { assistantRoutingStatusLabel, assistantRoutingOutcomeNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function routedChatMessage(request, local = null) {
-  if (!request || !["routing", "sending", "uncertain", "failed"].includes(request.status)) return null;
+  if (!request || !request.input || request.stopped || request.followup || !["routing", "sending", "uncertain", "failed"].includes(request.delivery)) return null;
   return {
     ...local,
     id: request.messageId,
     text: request.input.displayMessage || request.input.message,
     payload: local?.payload || request.input,
-    status: ["failed", "uncertain"].includes(request.status) ? request.status : "pending",
+    status: ["failed", "uncertain"].includes(request.delivery) ? request.delivery : "pending",
     error: request.error || ""
   };
 }
@@ -27,9 +27,7 @@ function chatTurnsWithDelivery(turns, request, checking) {
   if (turns.some((turn) => matches(turn) && ((!turn.optimistic && turn.user?.receipt !== false) || turn.optimistic?.status === "accepted"))) return turns;
   const message = routedChatMessage(request);
   if (!message) {
-    if (!["sent", "done", "review_pending", "review_sending", "review_uncertain", "reviewing",
-      "planning_pending", "planning_sending", "planning_uncertain", "planning",
-      "implementation_pending", "implementation_sending", "implementation_uncertain"].includes(request.status)) return turns;
+    if (request.delivery !== "accepted" && !request.followup) return turns;
     return turns.map((turn) => matches(turn) && turn.optimistic
       ? { ...turn, optimistic: { ...turn.optimistic, status: "accepted", error: "" } } : turn);
   }

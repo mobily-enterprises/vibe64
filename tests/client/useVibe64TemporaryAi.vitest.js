@@ -97,7 +97,7 @@ describe("useVibe64TemporaryAi", () => {
   });
 
   it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
-    const route = { messageId: "interrupted-1", status: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
+    const route = { messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
     mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
       draft: "Newer draft.", routingMetadata: { assistant_routing_request: JSON.stringify(route) } }] });
     const temporary = await mountTemporaryAi({ assistantReady: () => true });
@@ -107,7 +107,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(await temporary.editMessage(task.id, route.messageId)).toBe(false);
     mocks.responses.push({ ok: true, status: "completed", messages: [
       { id: route.messageId, role: "user", text: "Original prompt." }
-    ], assistantRoutingRequest: { ...route, status: "sent" } });
+    ], assistantRoutingRequest: { ...route, status: "complete", delivery: "accepted" } });
     expect(await temporary.send(task.id, { retryMessageId: route.messageId })).toBe(true);
     expect(mocks.requests.find(([path]) => path.includes("/deliveries/"))[0])
       .toContain(`/deliveries/${route.messageId}/inspect`);

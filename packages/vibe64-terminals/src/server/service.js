@@ -1133,6 +1133,7 @@ function createService({
     projectService
   });
   const agentSessionCommand = createAgentSessionCommandService({
+    reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
     logger,
     publishSessionChanged: publishAgentSessionChanged,
     projectService
@@ -1438,8 +1439,8 @@ function createService({
     const restoring = operation === "restore";
     return vibe64Result(() => runMainAgentWrite(sessionId, {}, async (context) => {
       const request = JSON.parse(context.session.metadata.assistant_routing_request || "null");
-      if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request?.status) ||
-          ["sent", "reviewing", "planning"].includes(request?.status)) {
+      if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request) ||
+          request?.status === "working" && request.workflow) {
         return { ok: false, error: "Wait for the assistant and its review to finish before " +
           (restoring ? "making a plan current." : "archiving the plan.") };
       }
@@ -3370,7 +3371,7 @@ function createService({
         const conversations = await context.runtime.store.listSessionConversations(sessionId);
         for (const metadata of [context.session.metadata, ...conversations.map((record) => record.routingMetadata || {})]) {
           const routing = JSON.parse(metadata.assistant_routing_request || "null");
-          if (assistantRoutingStatusIsPending(routing?.status) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
+          if (assistantRoutingStatusIsPending(routing) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
         }
         const saved = JSON.parse(context.session.metadata.assistant_changeover || "null");
         if (saved?.replacement?.status !== "preparing") {
@@ -3818,7 +3819,7 @@ function createService({
             return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior before starting or resuming a goal." };
           }
           const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
-          if (assistantRoutingStatusIsPending(pendingRoute?.status) || pendingRoute?.helper) {
+          if (assistantRoutingStatusIsPending(pendingRoute) || pendingRoute?.helper) {
             return { ok: false, error: "Finish or cancel the pending request before starting a goal." };
           }
           const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
@@ -3921,7 +3922,7 @@ function createService({
       const records = await runtime.store.listSessionConversations(sessionId);
       const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
         .map((metadata) => JSON.parse(metadata.assistant_routing_request || "null"));
-      if (requests.some((request) => assistantRoutingStatusIsPending(request?.status) || request?.helper)) {
+      if (requests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
         throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), { code: "vibe64_assistant_routing_pending", retryable: true });
       }
       const conversation = await sessionAgent.hasActiveTemporaryConversation(

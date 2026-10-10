@@ -66,7 +66,7 @@ function sessionSummary(session) {
     ...(preferences ? { reviewEnabled: preferences.mode === "auto", deslopEnabled: preferences.mode === "auto" && preferences.review,
       hasModelOverride: Boolean(preferences.override) } : {}),
     ...(typeof turn?.active === "boolean" ? { turnActive: turn.active } : {}),
-    ...(route ? { needsUserInput: route.reviewStatus === "skipped_question" } : {})
+    ...(route ? { needsUserInput: route.status === "waiting" } : {})
   };
 }
 

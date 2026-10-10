@@ -66,7 +66,7 @@ that exact Plan and Progress pair into History. Chat shows **Completed plan
 archived** with **View plan history**, which opens this session's existing viewer.
 The plan icon remains available and opens History when there is no current plan.
 
-A finished implementation or Router's readiness explanation is not completion.
+A finished implementation or an agent's handoff explanation is not completion.
 Interrupted reviews, unfinished plans and unrelated requests do not archive a
 plan. A different plan created while reviewing is not archived by the old review.
 If automatic archival cannot be confirmed, the notice explains the problem;
@@ -158,26 +158,29 @@ always takes precedence. Junior also handles other questions and work, including
 implementation without a plan. The router uses your new request, the last three
 visible messages and a short current-plan summary to understand follow-ups.
 
-After an Auto implementation turn, Router checks the original request, accepted
-steering, the full current Plan and Progress, the latest five visible messages and the execution
-outcome. The status says **Router is deciding whether to continue, review or wait…**.
-It chooses one outcome:
+Auto uses three workflow states: **Working**, **Waiting** and **Complete**.
+The current stage is separate: **Planning**, **Implementation** or **Review**.
+Router chooses a role and one of conversation, planning, implementation or review
+only for a new Auto request. It does not decide what happens after each turn.
 
-- **Continue implementation** when authorised work remains and needs no user
-  decision. This keeps the selected coding role, usually Junior, and starts from
-  completed work. A decision affecting one part can leave independent work eligible.
-- **Senior review** when implementation is ready. Review checks the evidence;
-  Router's decision and checkbox counts do not prove that a plan is completed.
-- **Wait** for your pause, a necessary answer, missing access or resources, unclear
-  intent, or stalled work. The notice says **Implementation incomplete**, **Waiting
-  for your answer**, or **Paused at your request**, with the reason. A later explicit
-  instruction to proceed can supersede a pause; asking for an update cannot.
+The working agent reports one of four outcomes:
 
-The notice shows Router's explanation and, when continuing, the next step. These
-are AI judgments about recorded evidence, not independent verification. Auto stops
-after two consecutive turns without reported progress, or eight automatic
-implementation continuations. Review the remaining work and send a new request
-if you want it to proceed. These bounds apply per new request.
+- **Continue** keeps its stage and role while authorised work or checks remain.
+- **Handoff** moves finished implementation to Senior review. If Senior discovers
+  substantial necessary rework, Senior updates the technical plan and Progress
+  within the agreed outcome and hands that work back to Junior. Junior finishes
+  it, then Senior reviews again and performs any enabled Deslop.
+- **Wait** retains the stage for a real blocker, your required decision or an
+  explicit pause. A status question or clarification is incorporated into the
+  ongoing work; it does not abandon review.
+- **Complete** is available only to Senior after verified review. Senior explicitly
+  completes an involved plan before Auto archives it after the final explanation.
+
+The agent's concrete explanation appears as an ordinary **Status** message in
+chat. It is evidence of the reported work, not independent verification.
+Auto waits after two consecutive turns without reported progress or eight
+automatic steps. Inspect the reason and select **Resume workflow** to continue
+with a fresh allowance. This does not grant permission to change the product scope.
 
 If implementation is blocked on a requirement you want to defer, say so explicitly
 in **Auto**: for example, “Exclude actual email delivery from this implementation.
@@ -189,7 +192,7 @@ Progress but cannot remove agreed requirements.
 Senior records the deferred requirement and its agreed timing under **Deferred
 work** in Progress before removing it from the current acceptance scope, keeping
 the completed implementation evidence. When every remaining item is checked and
-supported by evidence, Router sends the revised implementation for Senior review
+supported by evidence, Senior hands the revised implementation to separate Senior review
 and any enabled **Deslop**. Missing resources for the explicitly deferred work
 do not block that review. Remaining implementation continues; a pause or missing
 evidence can still stop the handoff. Ordinary draft-plan edits do not trigger
@@ -202,47 +205,34 @@ Current plan or History. Explicitly request the deferred work when ready. The sa
 explain this process and offer to send your explicit scope-change request through
 the existing chat action; an explanation or offer alone does not authorise it.
 
-The composer's **Stop** cancels pending work and interrupts Router. Failed or
-interrupted execution does not automatically continue. After a restart, recovered
-completion needs an explicit **Retry review**. An already prepared implementation
-handoff offers **Continue implementation**; uncertain delivery offers **Check
-delivery**, which checks its existing receipt without sending again. If the plan
-or conversation changed, stop the handoff and send a fresh request. Direct
-Senior, Junior and Custom modes do not automatically continue.
+The composer's **Stop** pauses the current workflow and interrupts active work
+or request preparation. Auto retains the stage, plan and completed changes.
+A late successful result cannot undo Stop. Select **Resume workflow** when ready;
+this starts a fresh turn at the retained stage. A failed or interrupted turn, or
+one ending without a confirmed outcome, leaves **Waiting** with a concrete reason.
 
-When **Review pending** appears before implementation is finished, choose **Stop**
-beside **Retry review** in the notice. This cancels the pending handoff, preserves
-the conversation, source changes and unfinished plan, and frees the composer.
-Then send “Continue implementation of the remaining plan items” or choose Junior
-for a direct implementation request. The same **Stop** control is available for
-pending planning and implementation handoffs. If delivery is uncertain, use
-**Check delivery** first; cancelling a handoff does not prove an attempted message
-was never delivered. Colleague can explain this recovery and offer to stop the
-pending work or send your explicit continuation through its existing actions.
+After a server restart, unfinished scheduling requires explicit **Resume workflow**;
+opening a session never sends another turn. **Check delivery** checks the original
+receipt of an uncertain message without sending a second copy. If the plan or
+conversation changed before an unsent handoff, stop it and send a fresh request.
+An unsent handoff shows **Stop** beside **Resume workflow**. Stopping it preserves
+history and file changes, and lets you send a new request. A delivery check remains
+necessary for an uncertain attempt; stopping does not prove it was never delivered.
 
-Router's explanation and any suggested next step appear as an ordinary **Status**
-message in the scrollable chat, alongside the relevant exchange. They do not
-occupy a blue box above the composer or speak as an assistant's answer. New
-explanations remain in chat history after reload and later requests. Recovery
-errors and **Retry review**, **Check delivery** and **Stop** controls remain above
-the composer when action is required.
+Recovery errors and controls stay above the composer; workflow explanations stay
+in the scrollable chat. Desktop and mobile use the same controls. Colleague can
+explain the retained stage and blocker and offer to stop work or send your requested
+continuation through its existing actions. An explanation or offer alone does not
+authorise another turn. Colleague's watches treat Waiting as needing attention.
 
-When ready, Auto starts one separate Senior review, even when Senior implemented
-it or both roles use the same model. The **Deslop** switch adds behavior-preserving
-cleanup after the implementation review, within the same Senior turn. Senior
-checks the cleanup before explicitly completing the plan; unfinished work or
-verification leaves it active. The successful final review automatically archives
-the exact completed pair as described above. A failed Router decision leaves **Retry review** for an
-explicit review request, or use **Stop** to cancel it. The same controls and
-notices appear on desktop and mobile. Colleague's conversation watches treat
-unfinished waiting outcomes as needing attention. Colleague can explain the outcome and offer
-to send a requested continuation through the existing chat operation; an
-explanation or offer alone does not authorise another turn.
-
-Ordinary answers, planning,
-requested reviews and cleanup do not start a repeating review cycle. Direct
-Senior, Junior and Custom modes retain their direct behavior without automatic
-review.
+Auto always uses a separate Senior review after implementation, even when Senior
+implemented it or both roles use the same model. The **Deslop** switch adds
+behavior-preserving cleanup to Senior review; turning it off does not disable
+review. Unfinished checks continue in Senior review; substantial necessary rework
+returns to Junior and comes back for another review. A changed product requirement
+needs your decision. Planning-only work waits for your request to implement it.
+Direct Senior, Junior and Custom keep their direct behavior without automatic
+continuation or review. Junior cannot mark a plan completed.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
@@ -252,8 +242,8 @@ explicitly mark it Completed after verifying the evidence.
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending
 replaces that failed, unsent handoff; it does not mark its review completed.
-The previous coding history, plan and file changes remain. **Retry review** still
-retries the original handoff, and **Stop** cancels it without sending new work.
+The previous coding history, plan and file changes remain. **Resume workflow** still
+resumes the retained stage, and **Stop** cancels it without sending new work.
 A handoff with unconfirmed delivery still requires **Check delivery** first.
 Colleague can explain these choices and offer to help you continue; sending new
 work requires your direct request or accepted offer.

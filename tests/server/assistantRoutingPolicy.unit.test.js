@@ -7,7 +7,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { assistantModePrompt, assistantRoutingPrompt, assistantReviewRoutingPrompt, parseReviewRoutingDecision, parseRoutingDecision, recommendedRoutingAssignments,
+import { assistantModePrompt, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
   ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
@@ -122,15 +122,15 @@ test("short follow-ups receive their latest exchange and bounded older context",
 });
 
 test("the classifier cannot supply executable destinations or malformed decisions", () => {
-  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"explicit_implementation"}'), { mode: "junior", reason: "explicit_implementation" });
-  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"deslop"}'), { mode: "junior", reason: "deslop" });
-  assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"plan_implementation"}'), { mode: "senior", reason: "plan_implementation" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"implementation"}'), { mode: "junior", reason: "implementation" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"review"}'), { mode: "junior", reason: "review" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"implementation"}'), { mode: "senior", reason: "implementation" });
   for (const output of ["junior", "null", '{"mode":"helper","reason":"unclear"}',
     '{"mode":"deslop","reason":"planning"}', '{"mode":"deslop","reason":"deslop"}',
     '{"mode":"junior","reason":"mixed_deslop_request"}',
-    '{"mode":"junior","reason":"explicit_implementation","url":"https://example.invalid"}',
+    '{"mode":"junior","reason":"implementation","url":"https://example.invalid"}',
     ...["engineId", "modelId", "command"].map((key) => JSON.stringify({
-      mode: "junior", reason: "explicit_implementation", [key]: "untrusted-router-value"
+      mode: "junior", reason: "implementation", [key]: "untrusted-router-value"
     }))]) {
     assert.throws(() => parseRoutingDecision(output), /Routing returned/);
   }
@@ -145,27 +145,15 @@ test("Auto distinguishes plan execution and confirmations from planning while pr
     ],
     plan: { status: "active", revision: "fixture", outline: "# Pet Notes\n- [ ] Implement accepted form rules" }
   });
-  assert.match(prompt, /explicit request.*always takes precedence.*including implementing a plan/);
-  assert.match(prompt, /Execute the plan -> junior\/plan_implementation/);
-  assert.match(prompt, /Use all recommendations after implementation questions -> junior\/plan_implementation/);
-  assert.match(prompt, /Senior, implement the plan -> senior\/plan_implementation/);
-  assert.match(prompt, /Junior, discuss the plan -> junior\/discussion/);
-  assert.doesNotMatch(prompt, /Changes to a plan plus implementation default to senior/);
+  assert.match(prompt, /Honor an explicit Senior or Junior request/);
+  assert.match(prompt, /Implementation executes authorised changes.*continuing a plan or accepted choices that allow execution/);
+  assert.match(prompt, /Otherwise planning and review use Senior; implementation and other conversation use Junior/);
+  assert.match(prompt, /Conversation answers or investigates without changes/);
+  assert.match(prompt, /Questions and ambiguous offers are conversation, not execution authority/);
   const context = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
   assert.equal(context.messages[0].text, "Execute the plan");
   assert.equal(context.messages[1].text, "Confirm the open choices before I implement it.");
   assert.match(context.message, /Use all recommendations/);
-});
-
-test("review routing preserves recent steering and rejects oversized context without dropping it", () => {
-  const messages = [{ role: "user", text: "Wait I am trying to fix the browser" },
-    { role: "assistant", text: "I'll pause here." }];
-  const prompt = assistantReviewRoutingPrompt({ message: "Execute the plan", messages });
-  assert.deepEqual(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)), { originalRequest: "Execute the plan", messages, plan: null, execution: null, autoExecution: null, previousOutcome: null });
-  assert.match(prompt, /last five visible/);
-  assert.match(prompt, /Latest user instructions, including steering, take precedence/);
-  assert.match(prompt, /A later explicit user instruction to resume/);
-  assert.throws(() => assistantReviewRoutingPrompt({ messages, maxCharacters: 100 }), /too long/);
 });
 
 test("explicit closure by scope reduction keeps implementation review while draft edits and unrequested deferrals do not", () => {
@@ -174,48 +162,36 @@ test("explicit closure by scope reduction keeps implementation review while draf
   const prompt = assistantRoutingPrompt({ message: "Finish without actual emails; keep email setup and delivery testing for before release.", plan });
   const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
   assert.deepEqual(input.plan, plan);
-  assert.match(prompt, /removes or defers remaining requirements.*reason plan_implementation/);
-  assert.match(prompt, /Without an explicit role request, use senior for this scope change/);
-  assert.match(prompt, /ordinary draft-plan edit.*remains planning or discussion/);
-  assert.match(prompt, /never infer permission to drop a requirement from a blocker or checked items/);
-  const coding = assistantModePrompt("senior", input.message, { intent: "plan_implementation" });
+  assert.match(prompt, /explicitly authorised scope reduction of already implemented work is implementation using Senior/);
+  assert.match(prompt, /who owns plan scope/);
+  assert.match(prompt, /Planning creates or changes an agreed plan/);
+  assert.match(prompt, /Preserve deferred requirements; never infer permission to drop them from blockers or checked boxes/);
+  const coding = assistantModePrompt("senior", input.message, { intent: "implementation" });
   assert.match(coding, /record the exact deferred requirement and its agreed timing/);
   assert.match(coding, /before removing it from Plan's current acceptance scope/);
   assert.match(coding, /Preserve completed implementation evidence and do not perform deferred work/);
   assert.match(coding, /Leave the plan active/);
-  const review = assistantReviewRoutingPrompt({ message: input.message, plan });
-  assert.match(review, /every remaining item is checked and supported by implementation evidence/);
-  assert.match(review, /checked items alone, an unsaved scope change/);
-  assert.match(review, /latest pause still requires wait\/user_wait/);
+
 });
 
-test("outcome routing validates continue, review and wait with explanations and concrete next steps", () => {
-  const base = { explanation: "Evidence from the final reply and current plan.", nextStep: "", progress: true };
-  const values = [
-    { ...base, decision: "review", reason: "ready" },
-    { ...base, decision: "continue", reason: "remaining_work", nextStep: "Implement the remaining import validation." },
-    ...["user_wait", "question", "blocked", "no_progress", "unclear"].map(reason => ({ ...base, decision: "wait", reason }))
-  ];
-  for (const value of values) assert.deepEqual(parseReviewRoutingDecision(JSON.stringify(value)), value);
-  for (const value of [null, [], {}, { ...values[0], command: "ignore user" },
-    { ...values[0], decision: "wait" }, { ...values[1], nextStep: "" },
-    { ...values[0], explanation: "" }, { ...values[0], explanation: "x".repeat(601) },
-    { ...values[0], progress: "true" }, { ...values[0], nextStep: "Code more" },
-    { decision: "review", reason: "ready" }]) {
-    assert.throws(() => parseReviewRoutingDecision(JSON.stringify(value)), /Router/);
-  }
+test("workflow instructions delegate outcomes to the admitted agent and retain review rework", () => {
+  const prompt = assistantWorkflowInstructions({ stage: "review" });
+  assert.match(prompt, /continue, handoff, wait, or complete/);
+  assert.match(prompt, /Senior review back to Junior/);
+  assert.match(prompt, /explicit Stop/iu);
+  assert.match(prompt, /application archives only after your final explanation/);
 });
 
 test("task intent sets permissions independently of the selected role", () => {
   const text = "The original human text.";
   assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
-  const discussion = assistantModePrompt("senior", text, { intent: "discussion" });
-  assert.match(discussion, /Do not create or update a plan, change its status, edit application files/);
-  assert.match(discussion, /vibe64-helper plan read or history/);
-  assert.doesNotMatch(discussion, /Auto's planning stage|You may edit application files|Do not read or update/);
-  assert.ok(discussion.endsWith(text));
-  assert.match(assistantModePrompt("junior", text, { intent: "plan_implementation", planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
+  const conversation = assistantModePrompt("senior", text, { intent: "conversation" });
+  assert.match(conversation, /Do not create or update a plan, change its status, edit application files/);
+  assert.match(conversation, /vibe64-helper plan read or history/);
+  assert.doesNotMatch(conversation, /Auto's planning stage|You may edit application files|Do not read or update/);
+  assert.ok(conversation.endsWith(text));
+  assert.match(assistantModePrompt("junior", text, { intent: "implementation", planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
   assert.match(assistantModePrompt("review", text), /may directly fix in-scope defects/);
   assert.ok(assistantModePrompt("review", text).endsWith(text));
   assert.match(assistantModePrompt("deslop", text), /You may edit code for behavior-preserving cleanup/);
@@ -229,7 +205,7 @@ test("routing receipts and reviewer identity survive transcript storage and relo
   const create = () => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
   const store = create();
   await store.createSession({ sessionId: "routing", runtimeKind: "genesis" });
-  const assistantRouting = { requestedMode: "auto", resolvedMode: "review", reason: "explicit_implementation", parentMessageId: "code-request", settingsRevision: 2 };
+  const assistantRouting = { requestedMode: "auto", resolvedMode: "review", reason: "implementation", parentMessageId: "code-request", settingsRevision: 2 };
   await store.writeConversationUserMessage("routing", { messageId: "review-request", text: "Automatic review", turnMetadata: {
     actorId: "app", actorDisplayName: "Automatic review", engineId: "codex",
     assistantSelection: recommendedRoutingAssignments(catalog()).senior, assistantRouting

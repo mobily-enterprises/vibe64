@@ -616,7 +616,7 @@ function createService({
         const conversations = await runtime.store.listSessionConversations(sessionId);
         const routingRequests = [currentSession.metadata, ...conversations.map((record) => record.routingMetadata || {})]
           .map((metadata) => JSON.parse(metadata?.assistant_routing_request || "null"));
-        if (routingRequests.some((request) => assistantRoutingStatusIsPending(request?.status) || request?.helper)) {
+        if (routingRequests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
           throw Object.assign(new Error("Finish or cancel pending chat routing and its cleanup before archiving this session."), {
             code: "vibe64_assistant_routing_pending", retryable: true
           });
@@ -1766,8 +1766,8 @@ function createService({
             if (preferences?.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
           }
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
-          if (assistantRoutingStatusIsPending(routingRequest?.status) ||
-              routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {
+          if (assistantRoutingStatusIsPending(routingRequest) ||
+              routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
           const nextPreferences = preferences || {

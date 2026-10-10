@@ -432,7 +432,7 @@ function useVibe64AutopilotView(props, emit, {
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
   });
-  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status) && !assistantRoutingRequestCanBeReplaced(routingRequest.value));
+  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) && !assistantRoutingRequestCanBeReplaced(routingRequest.value));
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
@@ -1102,7 +1102,7 @@ function useVibe64AutopilotView(props, emit, {
       return false;
     }
     if (routingRequest.value?.messageId === messageId) {
-      if (routingRequest.value.status === "uncertain") return false;
+      if (routingRequest.value.delivery === "uncertain") return false;
       discardingMessageIds.add(messageId);
       try {
         if (await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
@@ -1945,7 +1945,7 @@ function useVibe64AutopilotView(props, emit, {
   });
 
   watch([routingRequest, () => messageDelivery.value?.state.messages || []], ([request]) => {
-    if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) {
+    if (request?.stopped && !request.helper && !request.attemptedMessageId) {
       restoreCancelledMessage(request.messageId);
     }
   }, { immediate: true });

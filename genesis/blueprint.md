@@ -550,9 +550,9 @@ independent Router/Helper and Shared backup. It previews what owners and
 collaborators will use before Save; a foreign Backup keeps planning and coding
 together there, including when review is off. Missing assignments point to this
 setup; other users are directed to the owner. Each assistant application has its own saved models for
-the direct roles and Router. In Auto, Router recognizes discussion, plan changes,
-execution and Deslop. New work and discussion go to Senior; explicit execution
-of the active plan goes to Junior.
+the direct roles and Router. In Auto, Router classifies new requests as conversation, planning, implementation
+or review and respects an explicit Senior or Junior choice. Senior handles planning
+and review; Junior implements unless the person explicitly chooses Senior.
 Routing progress appears with the message, without a duplicate banner above the
 composer.
 When final Senior review and any enabled Deslop succeed, an explicitly completed
@@ -566,42 +566,28 @@ and answering model. Auto planning restricts Senior to plan management. Junior
 implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
 Steering stays with the currently working assistant.
 
-In Auto, Router checks each normally finished implementation turn against the
-original request, accepted steering, full current plan and recent visible replies.
-It can continue authorised independent work on the selected coding role, hand
-reviewable work to Senior, or wait for a necessary decision, resource, permission
-or explicit pause. Its explanation and next step appear as Status messages in chat,
-without a large composer banner. A partial result
-is presented as implementation incomplete, not plan completion. Two consecutive
-turns without reported progress or eight automatic continuations stop for a new
-user request. Router judges recorded evidence; Senior verifies the actual work.
-When the person explicitly defers remaining requirements to finish an implemented
-active plan, Auto retains its review obligation and defaults the scope edit to
-Senior. Senior preserves the excluded work and agreed timing in Progress before
-removing it from the current acceptance scope. If every remaining item is checked
-and supported by implementation evidence, Router hands off for review and any
-enabled Deslop. Deferred work remains unfinished and is not scheduled automatically.
-Ordinary draft-plan edits do not trigger this handoff; pauses and missing evidence
-still apply.
-If an automatic handoff fails before sending, a new request can replace it
-without claiming that its review completed. Unconfirmed deliveries still require
-a delivery check.
-Stop, native questions, failed execution and changed access remain authoritative.
-Existing requests gain no continuation authority during upgrade or reload.
-A failed decision holds review for explicit Retry review or Stop. Pending
-implementation recovery offers Continue implementation or Check delivery without
-duplicate sends; changed plans or conversation require a fresh request.
-When allowed, one visible follow-up asks the Senior model to inspect the implementation, fix
-in-scope defects and then Deslop the coding changes and its fixes in the same
-turn. Cleanup preserves the intended behavior and follows the project's Deslop
-guidance; relevant checks follow cleanup. Its findings state what was checked; completion is not a
-guarantee of correctness. Hosted AI work rechecks the submitting user's current
-access before starting, including automatic review and Retry. Removing that
-user blocks further inference without losing completed coding work. Stop
-cancels pending review. Skipping an unstarted review finishes the request and
-clears its preparation warning immediately. An interrupted review
-remains incomplete. An unanswered structured question keeps the coding model
-selected and skips review so the user can answer first. Goals require a concrete
+Auto retains three workflow states: Working, Waiting and Complete, with a separate
+Planning, Implementation or Review stage. The working agent explicitly reports
+Continue, Handoff, Wait or Complete. Continue keeps its stage and role. Handoff
+moves implementation to Senior review; substantial necessary review rework returns
+to Junior after Senior saves the technical plan and evidence within the agreed
+outcome. Junior finishes it, then Senior reviews and performs any enabled Deslop
+again. Unfinished review checks stay with Senior. A changed product requirement
+needs the person's decision. Planning alone does not authorise implementation.
+Only Senior completes verified review and explicitly completes an involved plan.
+A native turn ending or a fully checked checklist does not complete the workflow.
+
+Explanations appear as Status messages in chat. Real blockers and explicit pauses
+leave Waiting at the retained stage; clarifications and status questions do not
+abandon ongoing review. Two turns without reported progress or eight automatic
+steps wait for inspection and Resume workflow. Stop suppresses late automatic
+work. Recovery never replays a sent message: Check delivery checks its original
+receipt, and interrupted scheduling after restart requires Resume workflow.
+A failed unsent handoff can be replaced by a new request without claiming its work
+completed. Hosted continuation rechecks the original submitting user's access and
+captured connection. Completed work remains available when access is removed.
+Direct Senior, Junior and Custom retain their direct behavior without automatic
+continuation or review. Goals require a concrete
 mode and model, with Auto and automatic review unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
@@ -1669,23 +1655,20 @@ add missing acceptance checks within the agreed scope. Saved edits appear live
 in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after reviewing its requirements
-and evidence. Successful turns, review outcomes and checked boxes never complete
-it automatically. In Auto, Senior reviews completed implementation by either role
-when Router confirms it should proceed, and can fix in-scope defects, even when
-the same model implemented it. Deslop is optional within that review; disabling
-cleanup cannot disable review, while the user's pause or cancellation takes
-precedence over automatic continuation. Unfinished work remains active with specific remaining items; another
-execution pass needs a user request. Ordinary discussion and Stop never reopen,
-archive or complete a plan. No automatic repeating completion-plan cycle exists.
-Direct Senior and Junior still work from the user's request; plan lifecycle
-commands remain restricted to Senior, while Junior can update progress.
+and evidence. Successful turns and checked boxes never complete it automatically.
+Auto reviews implementation by either role, even when both use the same model.
+Senior can fix scoped defects or save substantial necessary rework for Junior,
+then review again. Deslop is optional within review; disabling cleanup cannot
+disable review. The person's pause or cancellation takes precedence. Ordinary
+discussion and Stop never reopen, archive or complete a plan. Direct Senior and
+Junior still work from the person's request; Junior can update Progress but cannot
+complete the plan.
 
-Deslop defaults to the configured Senior model, with permission to edit code for
-behavior-preserving cleanup. Auto honors an explicit request for Junior cleanup.
-The command and saved-commit action go straight to Senior. System-generated
-review and optional Deslop always use Senior. Review and cleanup never schedule
-another review, and neither changes the selected chat mode. Ordinary answers,
-planning and user-requested reviews do not trigger automatic follow-ups.
+Deslop defaults to the configured Senior model for behavior-preserving cleanup.
+Auto honors an explicit request for Junior cleanup. The command and saved-commit
+action go straight to Senior. System-generated review and optional Deslop always
+use Senior. Direct cleanup does not schedule review or change the selected chat
+mode. Ordinary answers and planning do not start implementation themselves.
 
 Independently hosted editors sharing a Preview domain can have separate route
 namespaces, so cloned projects and sessions do not contend for one Preview address.

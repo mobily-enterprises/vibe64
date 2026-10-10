@@ -428,7 +428,7 @@ const customTarget = ref(null);
 const activeTask = temporary.activeTask;
 watch(() => activeTask.value?.id, () => { customOpen.value = false; });
 const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
-const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
+const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
   agentSession: { goal: activeTask.value?.goal || null },

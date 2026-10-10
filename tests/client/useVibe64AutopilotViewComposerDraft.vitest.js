@@ -171,7 +171,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(recovered.view.chatTurns.value[0].optimistic).toMatchObject({ status: "uncertain" });
     expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
     recovered.props.session.metadata.assistant_routing_request = JSON.stringify({
-      messageId, status: "routing", input: { message: "Still routing." }, assignments: {}
+      messageId, status: "working", delivery: "routing", input: { message: "Still routing." }, assignments: {}
     });
     expect(recovered.view.chatTurns.value[0].optimistic.status).toBe("pending");
     expect(await recovered.view.resendOptimisticMessage(messageId)).toBe(false);
@@ -212,7 +212,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const sending = view.submitComposerMessage();
     const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
     view.composerDraft.value = "New text.";
-    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, helper: null });
     await nextTick();
     expect(view.composerDraft.value).toBe("Original prompt.\n\nNew text.");
     delivery.reject(Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" }));
@@ -233,7 +233,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const messageId = first.props.sendAgentMessage.mock.calls[0][0].messageId;
     first.scope.stop();
     const recovered = await createViewWithProps();
-    recovered.props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+    recovered.props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, helper: null });
     await nextTick();
     expect(recovered.view.composerDraft.value).toBe("Keep the stopped request.");
     expect(recovered.view.chatTurns.value).toEqual([]);
@@ -246,7 +246,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       view.composerDraft.value = "Unresolved request.";
       await view.submitComposerMessage();
       const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
-      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", ...pending });
+      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, ...pending });
       await nextTick();
       expect(view.composerDraft.value).toBe("");
       expect(view.chatTurns.value[0].optimistic).toMatchObject({ status: "failed", error: "Check this request" });
@@ -259,7 +259,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerDraft.value = "Send directly to Senior.";
     const sent = view.submitComposerMessage();
     const input = props.sendAgentMessage.mock.calls[0][0];
-    const route = { messageId: input.messageId, input, status: "sending", attemptedMessageId: input.messageId, assignments: {} };
+    const route = { messageId: input.messageId, input, status: "working", delivery: "sending", attemptedMessageId: input.messageId, assignments: {} };
     props.session.metadata.assistant_routing_request = JSON.stringify(route);
     await nextTick();
     expect(view.chatTurns.value[0].optimistic.status).toBe("pending");
@@ -282,7 +282,7 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("checks an unconfirmed request with its original ID and rejects Edit and Cancel", async () => {
     const { view, props } = await createViewWithProps();
     props.session.metadata.assistant_routing_request = JSON.stringify({
-      messageId: "interrupted-1", status: "uncertain", input: { message: "Keep this exact prompt." },
+      messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Keep this exact prompt." },
       error: "Delivery was interrupted.", assignments: {}
     });
     view.composerDraft.value = "A newer draft.";
@@ -302,9 +302,9 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerDraft.value = "Discard this.";
     await view.submitComposerMessage();
     const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
-    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "failed", input: { message: "Discard this." } });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", input: { message: "Discard this." } });
     props.interruptAgentTurn.mockImplementation(async () => {
-      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, helper: null });
       await nextTick();
       return true;
     });
@@ -725,7 +725,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       expect(view.composerSubmitMode.value).toBe("waiting");
     }
     props.session.agentSession.turn = { active: true, id: "opencode-turn", state: "active" };
-    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "route-1", status: "routing" });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "route-1", status: "working", delivery: "routing" });
     expect(view.composerCanSubmit.value).toBe(false);
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
     expect(view.composerDraft.value).toBe("Retain this draft.");
@@ -733,15 +733,15 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("enables Send for failed unsent handoffs while retaining delivery and helper guards", async () => {
     const { props, view } = await createViewWithProps();
     view.composerDraft.value = "Continue implementation.";
-    for (const status of ["review_pending", "planning_pending", "implementation_pending"]) {
-      props.session.metadata.assistant_routing_request = JSON.stringify({ status, error: "Helper schema rejected.", helper: null });
+    for (const stage of ["review", "planning", "implementation"]) {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ status: "waiting", delivery: "pending", stage, error: "Helper schema rejected.", helper: null });
       expect(view.composerCanSubmit.value).toBe(true);
     }
     for (const blocked of [
-      { status: "review_uncertain" }, { status: "review_sending" },
-      { status: "review_pending", attemptedMessageId: "attempt" },
-      { status: "review_pending", helper: { conversationId: "helper" } },
-      { status: "review_pending", error: "" }
+      { status: "working", delivery: "uncertain" }, { status: "working", delivery: "sending" },
+      { status: "working", delivery: "pending", attemptedMessageId: "attempt" },
+      { status: "working", delivery: "pending", helper: { conversationId: "helper" } },
+      { status: "working", delivery: "pending", error: "" }
     ]) {
       props.session.metadata.assistant_routing_request = JSON.stringify({ error: "Failed", ...blocked });
       expect(view.composerCanSubmit.value).toBe(false);

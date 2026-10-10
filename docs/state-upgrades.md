@@ -956,3 +956,20 @@ exact repair from BEFORE and compares the complete prepared AFTER; changed
 backup/product bytes or new eligible owners block retry. Keep writers stopped,
 resolve the reported cause and retry the same candidate; never reset the ledger
 or resend a failed message as part of maintenance.
+
+
+## Simplified assistant workflow
+
+The appended public `20261010-assistant-workflow` candidate converts supported
+schema-three/four Main and temporary routing records to schema five: three
+workflow states, retained stage and separate delivery state. It preserves actor,
+account decision, thread/turn/message IDs and conversation data. Unfinished
+scheduling becomes Waiting and requires explicit Resume workflow; uncertain
+delivery still checks the original receipt. It never sends or completes a plan.
+
+Use the existing candidate check/apply command with all application writers stopped.
+Check is read-only. The script owns verified before/after backups under
+`upgrades/backups/20261010-assistant-workflow/` and uses the existing staged publisher.
+Unreadable or unsupported records block publication with an actionable error.
+Resolve the cause and retry the same backup; changed original or prepared bytes
+are refused. No opening, read handler or startup performs this conversion.

@@ -6,7 +6,7 @@
       <v-btn variant="text" min-height="48" :disabled="retrying" @click="$emit('retry')">
         {{ retryLabel }}
       </v-btn>
-      <v-btn v-if="request.status.endsWith('_pending')" variant="text" min-height="48" @click="$emit('skip')">
+      <v-btn v-if="request.delivery === 'pending'" variant="text" min-height="48" @click="$emit('skip')">
         Stop
       </v-btn>
     </div>
@@ -22,34 +22,19 @@ const props = defineProps({ request: { type: Object, default: null }, mode: { ty
 defineEmits(["retry", "skip"]);
 const feedback = useShellWebErrorRuntime();
 const label = computed(() => assistantRoutingStatusLabel(props.request));
-const followupNeedsAction = computed(() => ["review_pending", "review_uncertain", "planning_pending", "planning_uncertain", "implementation_pending", "implementation_uncertain"].includes(props.request?.status));
-const retryLabel = computed(() => {
-  const request = props.request;
-  if (request?.status?.endsWith("_uncertain")) return "Check delivery";
-  if (request?.continuation === "implementation") return "Continue implementation";
-  if (request?.continuation === "planning") return "Continue planning";
-  return "Retry review";
-});
-const showOutcome = computed(() => {
-  const request = props.request;
-  if (!request?.outcome || request.stopped) return false;
-  if (request.status === "done") return request.outcome.decision === "wait";
-  return ["sent", "reviewing", "implementation_pending", "implementation_sending", "implementation_uncertain"].includes(request.status);
-});
+const followupNeedsAction = computed(() => Boolean(props.request?.status === "waiting" &&
+  (props.request?.followup || props.request?.delivery === "accepted" && (props.request?.workflow || props.request?.stage === "planning"))) ||
+  Boolean(props.request?.delivery === "uncertain" && props.request?.followup));
+const retryLabel = computed(() => props.request?.delivery === "uncertain" ? "Check delivery" : "Resume workflow");
 const actionable = computed(() => {
   const request = props.request;
-  if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) return false;
-  // These delivery failures and retry controls already appear on the unsent bubble.
-  if (["failed", "uncertain"].includes(request?.status)) return false;
-  return Boolean(label.value && (request?.error || followupNeedsAction.value));
+  if (!request || request.stopped && !request.followup && !request.attemptedMessageId && !request.helper && !followupNeedsAction.value) return false;
+  // Original unsent-message delivery controls remain on their message bubble.
+  if (!request.followup && !request.helper && ["failed", "uncertain"].includes(request.delivery)) return false;
+  return Boolean(label.value && (request.error || followupNeedsAction.value));
 });
-
-// Announce a newly finished review once. Restoring a conversation must not
-// replay an old notification; its outcome remains on the message in history.
 watch(() => [props.request?.messageId, props.request?.status], ([id, status], [previousId, previousStatus]) => {
-  if (!props.active || !id || id !== previousId || status !== "done" || previousStatus === "done" ||
-      props.request.error || showOutcome.value ||
-      !["incomplete", "skipped_incomplete", "skipped_unconfirmed", "cancelled", "skipped_question"].includes(props.request.reviewStatus)) return;
+  if (!props.active || !id || id !== previousId || status !== "waiting" || previousStatus === "waiting" || !props.request.stopped) return;
   feedback.report({ source: "vibe64.chat.review", message: label.value, intent: "action-feedback",
     severity: "info", channel: "snackbar", dedupeKey: `vibe64.chat.review:${id}` });
 });

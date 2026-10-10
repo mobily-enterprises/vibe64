@@ -42,7 +42,7 @@ function temporaryAiRequestError(response = {}, fallback = "Temporary AI request
 
 function temporaryAiTurnIsActive(status = "") {
   const normalizedStatus = temporaryAiText(status);
-  return ["starting", "inProgress"].includes(normalizedStatus) || assistantRoutingStatusIsPending(normalizedStatus);
+  return ["starting", "inProgress"].includes(normalizedStatus) || normalizedStatus === "preparing";
 }
 
 function temporaryAiMessages(turns = []) {
@@ -642,7 +642,7 @@ function useVibe64TemporaryAi({
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
         readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") return false;
     const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
-    if (!retryMessageId && assistantRoutingStatusIsPending(route?.status)) return false;
+    if (!retryMessageId && assistantRoutingStatusIsPending(route)) return false;
     const retry = retryMessageId ? pendingMessage(task, retryMessageId) : null;
     const draftPayload = generatedMessage || chatMessagePayload(task.draft, task.attachments);
     const payload = retry?.payload || (draftPayload && {
@@ -740,7 +740,7 @@ function useVibe64TemporaryAi({
         readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
     const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
     if (route?.messageId === messageId) {
-      if (route.status === "uncertain") { updateTask(taskId, { error: "Check delivery before editing or cancelling this message." }); return false; }
+      if (route.delivery === "uncertain") { updateTask(taskId, { error: "Check delivery before editing or cancelling this message." }); return false; }
       await stopTask(taskId);
     } else if (task.busy) return false;
     task.delivery.remove(messageId);
