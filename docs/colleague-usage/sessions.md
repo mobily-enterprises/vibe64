@@ -97,6 +97,13 @@ Code** or **Start OpenCode**, depending on the session's agent. The terminal
 continues that session's native conversation. **Close terminal** stops its
 interactive terminal; starting it again resumes the saved conversation.
 
+Claude opens a new interactive process for the current saved conversation. Finish
+or stop an active chat turn before selecting **Start Claude Code**. The idle chat
+process stops first, and chat is unavailable while the terminal is open. Use
+**Close terminal** to return to chat. Even with a saved Claude connection, its
+interactive terminal may request first-use setup or sign-in. Complete the native
+steps yourself; Colleague can explain them but cannot sign in for you.
+
 Click inside the terminal before typing or pasting. Text and Enter are delivered
 in the order you entered them, even while the server checks terminal access.
 If an input error appears, inspect the terminal before entering the command again;

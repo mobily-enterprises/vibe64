@@ -428,6 +428,11 @@ launch and session/terminal exclusion stay in Vibe64.
 The same native owner now performs the original active-turn/closing checks,
 authorized account binding and verified Stop before terminal preparation. Vibe64
 supplies only its application closing fact and retains the following Git/PTY work.
+The Claude terminal's existing before-terminal slot explains this handoff: it
+resumes the saved conversation in a new interactive process, refuses an active
+chat turn, and blocks chat until Close terminal. Native first-use setup or sign-in
+can still appear with a valid saved account; Vibe64 preserves Claude's own setup
+and authentication checks rather than bypassing them.
 OpenCode terminal attachment grants likewise use its retained native owner;
 attachment admission and the subsequent Git/PTY write remain application-owned.
 Its shared native owner also records attached terminal identity, checks the

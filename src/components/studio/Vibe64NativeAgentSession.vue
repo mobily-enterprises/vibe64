@@ -49,6 +49,10 @@
         />
       </template>
       <template #before-terminal>
+        <p v-if="session?.assistantSelection?.engineId === 'claude'" class="text-caption px-3 py-2 ma-0">
+          Claude resumes this conversation in a new interactive process. Finish or stop any active chat turn first.
+          Chat is unavailable while this terminal is open. Claude may ask you to complete its first-use setup or sign in.
+        </p>
         <Vibe64AttachmentQueue
           :items="attachmentQueueItems"
           :joined="false"
@@ -284,9 +288,9 @@ const showStartPanel = computed(() => Boolean(
 ));
 const terminalSubtitle = computed(() => {
   if (terminalStarting.value) {
-    return "Starting OpenCode";
+    return `Starting ${assistantLabel.value}`;
   }
-  return terminalExited.value ? "Exited" : terminalStatus.value === "running" ? "" : "OpenCode agent session";
+  return terminalExited.value ? "Exited" : terminalStatus.value === "running" ? "" : `${assistantLabel.value} agent session`;
 });
 
 function emitTerminalState() {
