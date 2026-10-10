@@ -4266,3 +4266,124 @@ test("Learning Main final reader exposes the original OpenCode saved publication
     "Exact native explanation.");
   assert.equal(f.promptCalls.length, 1, "Final reads do not dispatch another native prompt.");
 });
+
+
+// The recovery input is already in native history before B; only its ACK is
+// delayed. This proves the receipt fence, not native HTTP created-time ordering.
+test("R19 a late recovery ACK cannot replace admitted B or bypass its authored-row commit", { timeout: 15000 }, async (t) => {
+  const { upstreamMessageId } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js");
+  const recoveryEntered = Promise.withResolvers();
+  const releaseRecoveryAck = Promise.withResolvers();
+  const commitEntered = Promise.withResolvers();
+  const releaseCommit = Promise.withResolvers();
+  const postRecoveryRead = Promise.withResolvers();
+  const twoCompletedBPolls = Promise.withResolvers();
+  const response = { messages: [] };
+  const firstMessageId = "r19-recovery-ack-first";
+  const latestMessageId = "r19-recovery-ack-latest";
+  const firstInputId = upstreamMessageId(firstMessageId);
+  const latestInputId = upstreamMessageId(latestMessageId);
+  const recoveryInputId = upstreamMessageId(`${firstInputId}:final-response`);
+  const created = Date.now();
+  let recoveryAckReleased = false;
+  let completedBPolls = 0;
+  let steering;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response, response, response],
+    async beforePrompt({ input }) {
+      if (input.id === firstInputId) {
+        response.messages.push(
+          { id: firstInputId, type: "user", text: "A", time: { created } },
+          { id: "r19-recovery-ack-a", type: "assistant", finish: "stop",
+            content: [{ id: "r19-recovery-ack-reasoning", type: "reasoning", text: "A's saved reasoning." }],
+            time: { created: created + 1, completed: created + 2 } }
+        );
+      } else if (input.id === recoveryInputId) {
+        response.messages.push(
+          { id: recoveryInputId, type: "user", text: input.prompt.text, time: { created: created + 3 } },
+          { id: "r19-recovery-ack-r", type: "assistant", text: "The predecessor recovery answer.", finish: "stop",
+            time: { created: created + 4, completed: created + 5 } }
+        );
+        recoveryEntered.resolve();
+        await releaseRecoveryAck.promise;
+      } else {
+        assert.equal(input.id, latestInputId, "The only new authored input is B.");
+        response.messages.push(
+          { id: latestInputId, type: "user", text: "B", time: { created: created + 6 } },
+          { id: "r19-recovery-ack-b", type: "assistant", text: "B's exact final answer.", finish: "stop",
+            time: { created: created + 7, completed: created + 8 } }
+        );
+      }
+    },
+    beforeMessages() {
+      if (recoveryAckReleased && harness.promptCalls.length === 3) postRecoveryRead.resolve();
+    },
+    sessionStatus: async () => {
+      if (recoveryAckReleased && harness.promptCalls.length === 3 && ++completedBPolls === 2) {
+        twoCompletedBPolls.resolve();
+      }
+      return { type: "idle" };
+    }
+  });
+  const writeUser = harness.runtime.store.writeConversationUserMessage;
+  harness.runtime.store.writeConversationUserMessage = async (...args) => {
+    if (args[1].messageId === latestMessageId) {
+      commitEntered.resolve();
+      await releaseCommit.promise;
+    }
+    return writeUser(...args);
+  };
+  t.after(async () => {
+    releaseRecoveryAck.resolve();
+    releaseCommit.resolve();
+    await steering?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: firstMessageId });
+  const completion = harness.controller.waitForTurn("session-1");
+  await recoveryEntered.promise;
+  const recovery = harness.promptCalls[1];
+  assert.equal(recovery.id, first.thread.id);
+  assert.equal(recovery.input.id, recoveryInputId);
+  assert.equal(recovery.input.delivery, "queue");
+  assert.equal(recovery.input.resume, true);
+  assert.equal(recovery.input.agent, harness.selection.agentId);
+  assert.deepEqual(recovery.input.model, {
+    id: harness.selection.modelId, providerID: harness.selection.modelProviderId, variant: harness.selection.variantId
+  });
+  assert.ok(harness.thinkingMessages.some(message => message.text === "A's saved reasoning."));
+  steering = harness.controller.sendMessage("session-1", { message: "B", messageId: latestMessageId });
+  await commitEntered.promise;
+  const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+  const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+  const latestAdmission = tracked.admission;
+  assert.equal(tracked.inputMessageId, latestInputId);
+  assert.equal(harness.promptCalls[2].input.delivery, "steer");
+  recoveryAckReleased = true;
+  releaseRecoveryAck.resolve();
+  await postRecoveryRead.promise;
+  assert.equal(tracked.inputMessageId, latestInputId, "A late recovery receipt must not retarget the latest native input.");
+  assert.equal(tracked.admission, latestAdmission, "The same held B commit still owns the terminal fence.");
+  assert.equal(await Promise.race([
+    twoCompletedBPolls.promise.then(() => "observed-B"),
+    completion.then(() => "premature-completion")
+  ]), "observed-B");
+  assert.equal(tracked.active, true);
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  assert.equal(harness.checkpoints.length, 0);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), [firstMessageId]);
+  releaseCommit.resolve();
+  const latest = await steering;
+  assert.equal(latest.thread.id, first.thread.id);
+  assert.equal(latest.deliveryMode, "steer");
+  assert.equal((await completion).state, "completed");
+  assert.equal(tracked.inputMessageId, latestInputId);
+  assert.equal(harness.assistantMessages.at(-1).text, "B's exact final answer.");
+  assert.equal(harness.assistantMessages.some(message => message.text === "The predecessor recovery answer."), false);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), [firstMessageId, latestMessageId]);
+  assert.deepEqual(harness.promptCalls.map(({ input }) => input.id), [firstInputId, recoveryInputId, latestInputId]);
+  assert.equal(harness.checkpoints.length, 1, "The original outer turn checkpoints once after B's commit.");
+  assert.deepEqual(harness.systemMessages, []);
+});
