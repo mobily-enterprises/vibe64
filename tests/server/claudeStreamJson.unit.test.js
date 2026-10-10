@@ -7,7 +7,7 @@ import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
-import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
+import { claudeHistoryPath, readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { claudeCapabilities, createClaudeConversationHost as createNativeClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
@@ -408,6 +408,64 @@ test("Claude split native frames retain thinking and answers across streaming an
   assert.deepEqual(history.messages.map((message) => message.id), live.messages.map((message) => message.id));
   assert.deepEqual(history.messages.map((message) => message.text), ["Exposed summary.", "Done."]);
   assert.equal((await f.provider.readConversation(f.context)).messages.length, 2);
+  const userId = nativeMessageId("offline-original-input");
+  const structured = { kind: "reply", text: "Saved structured answer 🌏", toolName: "", arguments: "" };
+  const inspectedFrames = [
+    ...nativeFrames.map((frame, apiBlockIndex) => ({ ...frame, apiBlockIndex })),
+    { type: "user", uuid: "meta-user", isMeta: true, message: { content: "Hidden meta input" } },
+    { type: "user", uuid: userId, message: { content: [{ type: "text", text: "Original input 🌏" }, { type: "image" }, { type: "text", text: "Second part" }] } },
+    { type: "assistant", uuid: "structured-carrier", message: { content: [
+      { type: "tool_use", id: "structured-tool", name: "StructuredOutput", input: structured }
+    ] } },
+    { type: "assistant", uuid: "unrelated-carrier", message: { content: [
+      { type: "tool_use", id: "unrelated-tool", name: "unrelated_native_tool", input: structured }
+    ] } },
+    { type: "assistant", uuid: "nested-carrier", parent_tool_use_id: "parent", message: { content: [
+      { type: "tool_use", id: "nested-tool", name: "StructuredOutput", input: structured }
+    ] } },
+    { type: "assistant", uuid: "sidechain-carrier", isSidechain: true, message: { content: [
+      { type: "tool_use", id: "sidechain-tool", name: "StructuredOutput", input: structured }
+    ] } },
+    { type: "result", uuid: "native-final", subtype: "success", structured_output: structured },
+    { type: "result", uuid: "nested-final", parent_tool_use_id: "parent", subtype: "success", structured_output: structured },
+    { type: "result", uuid: "sidechain-final", isSidechain: true, subtype: "success", structured_output: structured },
+    { type: "result", uuid: "meta-final", isMeta: true, subtype: "success", structured_output: structured }
+  ];
+  await writeHistory(f, sent.thread.id, inspectedFrames);
+  const options = { configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path,
+    conversationId: sent.thread.id, allowIncompleteTail: false };
+  const nativePath = (await claudeHistoryPath(options)).path;
+  const bytes = await readFile(nativePath);
+  const ordinary = await readClaudeHistory(options);
+  assert.equal(Object.hasOwn(ordinary, "userMessages"), false);
+  assert.equal(Object.hasOwn(ordinary, "completedResults"), false);
+  assert.equal(Object.hasOwn(ordinary, "structuredOutputs"), false);
+  assert.equal(Object.hasOwn(ordinary, "failedResults"), false);
+  const inspected = await readClaudeHistory({ ...options, includeUserMessages: true, includeFinalCarriers: true });
+  const { userMessages, completedResults, failedResults, structuredOutputs, ...unchanged } = inspected;
+  assert.deepEqual(unchanged, ordinary, "Opt-in custody does not change original history projection");
+  assert.deepEqual(userMessages, [{ id: userId, text: "Original input 🌏\n\nSecond part" }]);
+  assert.deepEqual(completedResults, [{ id: "native-final", userId, text: JSON.stringify(structured) }]);
+  assert.deepEqual(structuredOutputs, [{ id: "structured-carrier", userId,
+    toolUseId: "structured-tool", text: JSON.stringify(structured) }]);
+  assert.deepEqual(failedResults, []);
+  assert.deepEqual(await readFile(nativePath), bytes, "History inspection leaves exact native bytes unchanged");
+  const candidateOnly = inspectedFrames.filter(frame => frame.type !== "result");
+  await writeHistory(f, sent.thread.id, candidateOnly);
+  const candidate = await readClaudeHistory({ ...options, includeFinalCarriers: true });
+  assert.deepEqual(candidate.completedResults, [], "A saved StructuredOutput tool candidate is not fabricated completion");
+  assert.deepEqual(candidate.structuredOutputs, structuredOutputs);
+  await writeHistory(f, sent.thread.id, [ ...candidateOnly,
+    { type: "result", uuid: "plain-final", subtype: "success", result: "Original plain result" },
+    { type: "result", uuid: "failed-final", subtype: "error_during_execution", is_error: true, errors: ["Private provider detail"] },
+    { type: "result", uuid: "interrupted-final", subtype: "success", terminal_reason: "aborted_tools", result: "Interrupted words" }
+  ]);
+  const terminal = await readClaudeHistory({ ...options, includeFinalCarriers: true });
+  assert.deepEqual(terminal.completedResults, [{ id: "plain-final", userId, text: "Original plain result" }]);
+  assert.deepEqual(terminal.failedResults, [{ id: "failed-final", userId }, { id: "interrupted-final", userId }]);
+  assert.doesNotMatch(JSON.stringify(terminal.failedResults), /Private provider detail|Interrupted words/);
+  await writeFile(nativePath, (await readFile(nativePath, "utf8")) + '{"type":"result"');
+  await assert.rejects(readClaudeHistory({ ...options, includeUserMessages: true, includeFinalCarriers: true }), /incomplete/);
 });
 
 test("Claude inspection defers native hooks until the prepared first Send", async (t) => {
@@ -956,6 +1014,13 @@ test("Claude reads a historical rewound branch and its subsequent replies withou
   await writeHistory(f, ready.thread.id, frames);
   history = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path, conversationId: ready.thread.id });
   assert.deepEqual(history.messages.map((message) => message.text), ["Retained", "New branch"]);
+  const inspected = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path,
+    conversationId: ready.thread.id, includeUserMessages: true, includeFinalCarriers: true });
+  assert.deepEqual(inspected.userMessages, [{ id: first, text: "First" }, { id: nativeMessageId("replacement"), text: "Replacement" }],
+    "Opt-in input custody follows the same original selected rewind branch");
+  assert.deepEqual(inspected.structuredOutputs, []);
+  assert.deepEqual(inspected.completedResults, []);
+  assert.deepEqual(inspected.failedResults, []);
 });
 
 
