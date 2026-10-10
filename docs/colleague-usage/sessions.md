@@ -69,17 +69,16 @@ the visible mode control or complete lesson delivery.
 
 ## Keep the fresh session's link after renewal
 
-When renewal finishes and opens the fresh session, the address bar changes to
-that session. Reloading or bookmarking the link opens the fresh conversation,
-including after another renewal. Your chat and project-view choices in the link
-stay unchanged. This works on desktop and mobile. If you choose another session
-while the fresh link is opening, Vibe64 keeps your newer choice.
+When a completed renewal selects its confirmed fresh session, the address bar
+follows that session, including when a background refresh selects it before the
+renewal dialog opens it. Reloading or bookmarking the updated link opens the fresh
+conversation, including after another renewal. Your chat and project-view choices
+in the link stay unchanged. This works on desktop and mobile.
 
-If renewal completes but navigation fails, use **Open fresh session** to retry
-opening its saved successor. This does not create another session or resend the
-handover. Ordinary session-tab selection keeps its existing behavior.
-Colleague can explain renewal and inspect the saved result; opening a fresh
-session does not authorize further coding work.
+If you choose another session or navigate away while the link is opening,
+Vibe64 keeps your newer choice. Ordinary session-tab selection keeps its existing
+behavior. Colleague can explain renewal and inspect the saved result; opening a
+fresh session does not authorize further coding work.
 
 ## Archive a session
 

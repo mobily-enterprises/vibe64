@@ -62,20 +62,18 @@ Session URL selection initializes the current session and follows subsequent
 navigation. Available-session reconciliation preserves a newer explicit tab
 selection instead of repeatedly restoring the session from the earlier URL.
 
-The mounted host's renewal-success callback replaces only the URL's `session`
-query with the acknowledged successor, retaining the path, hash and other query
-fields before selecting it. Reload/bookmark therefore follows the latest fresh
-session instead of its archived predecessor. Ordinary tab selection still leaves
-the URL unchanged. Router failure stays in the original renewal opening/retry
-path; a duplicate navigation to that same successor is already successful.
-A temporary router guard retains the original active-host, predecessor and
-successor admission fences while navigation is pending. It is removed on every
-settlement. The resolved path, hash and session must still match the saved
-successor; a successful redirect elsewhere is not an opened session.
-Route-driven successor selection may deactivate the predecessor;
-the callback recognizes that success without overriding a newer explicit tab
-choice. An explicitly declined callback does not consume or focus the successor;
-original selectors returning no value still count as successful.
+The session collection's existing completed-renewal reconciliation selects the
+exact unique `renewed_from` successor, then replaces only the predecessor URL's
+`session` query. It retains the path, hash and all other query fields. This owner
+also handles a successor already selected by refresh: selection may deactivate
+the predecessor runtime host before its dialog callback, so the host does not
+own this URL synchronization. Ordinary tab selection still leaves the URL
+unchanged. A temporary router guard checks the same confirmed renewal and exact
+unique successor, current Working selection, project/API, original predecessor
+URL and collection lifetime before committing navigation; it is always removed
+on settlement. A newer explicit selection, project or route, disposal, ambiguous
+or unconfirmed renewal cannot retarget the link. The original runtime-host
+renewal selection callback and controller fences are unchanged.
 
 The mounted runtime respects an explicitly empty navigation projection in both
 the session toolbar and dashboard. Only an omitted projection uses the full

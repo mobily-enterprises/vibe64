@@ -337,14 +337,7 @@ describe("session navigation projections", () => {
 import { computed, createRenderer, h, reactive, ref, shallowRef, toValue, nextTick } from "vue";
 import { useVibe64SessionRuntimeHost } from "../../src/composables/useVibe64SessionRuntimeHost.js";
 const mountedHostMocks = vi.hoisted(() => ({
-  conversation: vi.fn(), renewal: vi.fn(), request: vi.fn(), events: vi.fn(),
-  route: { path: "/app/project/one", hash: "", query: { session: "working-one" } },
-  replace: vi.fn(), beforeResolve: vi.fn()
-}));
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal()),
-  useRoute: () => mountedHostMocks.route,
-  useRouter: () => ({ replace: mountedHostMocks.replace, beforeResolve: mountedHostMocks.beforeResolve })
+  conversation: vi.fn(), renewal: vi.fn(), request: vi.fn(), events: vi.fn()
 }));
 vi.mock("../../src/composables/useVibe64ConversationRuntime.js", () => ({
   useVibe64ConversationRuntime: mountedHostMocks.conversation
@@ -371,7 +364,7 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one", worki
   const session = { sessionId: learning ? `learning-${attemptId}` : "working-one",
     ...(learning ? { purpose: "learning", learningAttemptId: attemptId } : {}),
     agentSession: { turn: {} } };
-  const state = reactive({ sessions: [session], selectedSessionId: session.sessionId, learnerId, apiPath: "/api/projects/one/vibe64/sessions" });
+  const state = reactive({ sessions: [session], learnerId, apiPath: "/api/projects/one/vibe64/sessions" });
   const props = reactive({ active: true, sessionId: session.sessionId, projectContext: { slug: "one" } });
   props.sessionData = {
     sessions: computed(() => state.sessions),
@@ -379,8 +372,6 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one", worki
     learningLearnerId: computed(() => state.learnerId),
     learningLoadError: ref(""), sessionList: { loadError: "working list temporarily unavailable" },
     shortSessionId: id => id, refreshSessionData: vi.fn(async () => {}),
-    selectedSessionId: computed(() => state.selectedSessionId),
-    selectSessionId: vi.fn(),
     canCreateSession: true, createSessionVisible: true,
     archive: { command: { isRunning: false }, request: vi.fn() }
   };
@@ -390,25 +381,16 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one", worki
       ...props.sessionData,
       ...(workingLoadError === undefined ? {} : { workingLoadError: ref(workingLoadError) }),
       sessions: computed(() => state.sessions),
-      selectedSessionId: computed(() => state.selectedSessionId),
       sessionsApiPath: computed(() => state.apiPath), learningLearnerId: computed(() => state.learnerId)
     } };
   mountedHostMocks.conversation.mockClear(); mountedHostMocks.renewal.mockClear();
   mountedHostMocks.request.mockClear(); mountedHostMocks.events.mockClear();
-  mountedHostMocks.route.path = "/app/project/one";
-  mountedHostMocks.route.hash = "";
-  mountedHostMocks.route.query = { session: "working-one" };
-  mountedHostMocks.replace.mockReset().mockResolvedValue(undefined);
-  mountedHostMocks.beforeResolve.mockReset().mockImplementation(() => vi.fn());
   const send = vi.fn(async () => true);
   mountedHostMocks.conversation.mockImplementation(() => shallowRef({
     mounted: { session: ref(session), detailState: ref({}), agentConnectionError: ref(""),
       agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) }, sendAgentMessage: send
   }));
-  mountedHostMocks.renewal.mockImplementation(() => ({
-    sourceOperationsSuspended: ref(false),
-    renewal: ref({ status: "completed", successor: { sessionId: "fresh-one" } })
-  }));
+  mountedHostMocks.renewal.mockImplementation(() => ({ sourceOperationsSuspended: ref(false) }));
   mountedHostMocks.request.mockResolvedValue({ ok: true, unsaved: false });
   let host;
   const app = mountedHostRenderer.createApp({ setup() {
@@ -564,175 +546,4 @@ it("only captured source-bearing Learning exposes App while all source tools rem
     await expect(host.saveSessionWork()).resolves.toBe(false);
     await expect(host.retryWorkspaceSetup()).resolves.toBe(false);
   } finally { app.unmount(); }
-});
-
-describe("renewal successor navigation through the existing mounted host", () => {
-  it("updates each renewed session link while retaining view choices and ordinary tab behavior", async () => {
-    const f = mountedHostFixture();
-    try {
-      mountedHostMocks.route.hash = "#changes";
-      mountedHostMocks.route.query = { session: "working-one", chat: "main", pane: "files", filter: ["a", "b"] };
-      mountedHostMocks.replace.mockImplementation(async (target) => {
-        Object.assign(mountedHostMocks.route, target);
-      });
-      const openSuccessor = mountedHostMocks.renewal.mock.calls[0][0].selectSession;
-      await openSuccessor("fresh-one");
-      f.host.dialogs.renewal.renewal.successor.sessionId = "fresh-two";
-      await openSuccessor("fresh-two");
-      expect(mountedHostMocks.replace.mock.calls.map(([target]) => target)).toEqual([
-        { path: "/app/project/one", hash: "#changes", query: { session: "fresh-one", chat: "main", pane: "files", filter: ["a", "b"] } },
-        { path: "/app/project/one", hash: "#changes", query: { session: "fresh-two", chat: "main", pane: "files", filter: ["a", "b"] } }
-      ]);
-      expect(f.hostProps.sessionData.selectSessionId.mock.calls).toEqual([["fresh-one"], ["fresh-two"]]);
-      f.host.autopilotSessionToolbar.selectSession("clicked-tab");
-      expect(mountedHostMocks.replace).toHaveBeenCalledTimes(2);
-      expect(mountedHostMocks.route.query.session).toBe("fresh-two");
-      expect(f.hostProps.sessionData.selectSessionId).toHaveBeenLastCalledWith("clicked-tab");
-    } finally { f.app.unmount(); }
-  });
-
-  it("does not select the successor when its route change rejects or returns a navigation failure", async () => {
-    const f = mountedHostFixture();
-    try {
-      const openSuccessor = mountedHostMocks.renewal.mock.calls[0][0].selectSession;
-      const failure = new Error("The fresh session route could not be opened.");
-      mountedHostMocks.replace.mockRejectedValueOnce(failure).mockResolvedValueOnce(failure);
-      await expect(openSuccessor("fresh-one")).rejects.toBe(failure);
-      await expect(openSuccessor("fresh-one")).rejects.toBe(failure);
-      expect(f.hostProps.sessionData.selectSessionId).not.toHaveBeenCalled();
-      expect(mountedHostMocks.route.query.session).toBe("working-one");
-    } finally { f.app.unmount(); }
-  });
-
-  it("accepts an already-current successor URL and restores its selection on reload", async () => {
-    const { createMemoryHistory, createRouter } = await import("vue-router");
-    const { effectScope } = await import("vue");
-    const { useVibe64SessionSelection } = await import("../../src/composables/useVibe64SessionSelection.js");
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: "/app/project/:slug", component: { render: () => null } }]
-    });
-    await router.replace({ path: "/app/project/one", hash: "#changes", query: { session: "fresh-one", chat: "main" } });
-    const f = mountedHostFixture();
-    const scope = effectScope();
-    try {
-      Object.assign(mountedHostMocks.route, router.currentRoute.value);
-      mountedHostMocks.replace.mockImplementation((target) => router.replace(target));
-      await mountedHostMocks.renewal.mock.calls[0][0].selectSession("fresh-one");
-      expect(f.hostProps.sessionData.selectSessionId).toHaveBeenCalledWith("fresh-one");
-      const reloaded = scope.run(() => useVibe64SessionSelection({
-        projectSlug: ref("renewal-route-reload"), route: router.currentRoute.value
-      }));
-      expect(reloaded.selectedId.value).toBe("fresh-one");
-      expect(router.currentRoute.value.query).toEqual({ session: "fresh-one", chat: "main" });
-      expect(router.currentRoute.value.hash).toBe("#changes");
-    } finally { scope.stop(); f.app.unmount(); }
-  });
-});
-
-
-describe("renewal navigation retains the original current-host fences", () => {
-  it("aborts deferred successor navigation after an explicit different tab is selected", async () => {
-    const { createMemoryHistory, createRouter, isNavigationFailure, NavigationFailureType } = await import("vue-router");
-    const router = createRouter({ history: createMemoryHistory(),
-      routes: [{ path: "/app/project/:slug", component: { render: () => null } }] });
-    await router.replace("/app/project/one?session=working-one");
-    const f = mountedHostFixture();
-    let release;
-    const waiting = new Promise(resolve => { release = resolve; });
-    let entered;
-    const started = new Promise(resolve => { entered = resolve; });
-    const removeDelay = router.beforeEach(async () => { entered(); await waiting; });
-    const removed = vi.fn();
-    mountedHostMocks.beforeResolve.mockImplementation(guard => {
-      const remove = router.beforeResolve(guard);
-      return () => { removed(); remove(); };
-    });
-    mountedHostMocks.replace.mockImplementation(async target => {
-      const failure = await router.replace(target);
-      Object.assign(mountedHostMocks.route, router.currentRoute.value);
-      return failure;
-    });
-    try {
-      const opening = mountedHostMocks.renewal.mock.calls[0][0].selectSession("fresh-one").catch(error => error);
-      await started;
-      f.state.selectedSessionId = "clicked-tab";
-      f.props.active = false;
-      release();
-      const failure = await opening;
-      expect(isNavigationFailure(failure, NavigationFailureType.aborted)).toBe(true);
-      expect(router.currentRoute.value.query.session).toBe("working-one");
-      expect(f.hostProps.sessionData.selectSessionId).not.toHaveBeenCalled();
-      expect(removed).toHaveBeenCalledOnce();
-    } finally { release(); removeDelay(); f.app.unmount(); }
-  });
-
-  it("accepts route-driven successor selection even when it deactivates the predecessor host", async () => {
-    const { createMemoryHistory, createRouter } = await import("vue-router");
-    const router = createRouter({ history: createMemoryHistory(),
-      routes: [{ path: "/app/project/:slug", component: { render: () => null } }] });
-    await router.replace("/app/project/one?session=working-one");
-    const f = mountedHostFixture();
-    mountedHostMocks.beforeResolve.mockImplementation(guard => router.beforeResolve(guard));
-    mountedHostMocks.replace.mockImplementation(async target => {
-      const failure = await router.replace(target);
-      Object.assign(mountedHostMocks.route, router.currentRoute.value);
-      return failure;
-    });
-    const removeAfter = router.afterEach((to, _from, failure) => {
-      if (!failure) { f.state.selectedSessionId = to.query.session; f.props.active = false; }
-    });
-    try {
-      await expect(mountedHostMocks.renewal.mock.calls[0][0].selectSession("fresh-one")).resolves.toBe(true);
-      expect(router.currentRoute.value.query.session).toBe("fresh-one");
-      expect(f.state.selectedSessionId).toBe("fresh-one");
-      expect(f.hostProps.sessionData.selectSessionId).not.toHaveBeenCalled();
-    } finally { removeAfter(); f.app.unmount(); }
-  });
-
-  it("does not reselect after a newer tab wins following the route commit", async () => {
-    const { createMemoryHistory, createRouter } = await import("vue-router");
-    const router = createRouter({ history: createMemoryHistory(),
-      routes: [{ path: "/app/project/:slug", component: { render: () => null } }] });
-    await router.replace("/app/project/one?session=working-one");
-    const f = mountedHostFixture();
-    mountedHostMocks.beforeResolve.mockImplementation(guard => router.beforeResolve(guard));
-    mountedHostMocks.replace.mockImplementation(async target => {
-      const failure = await router.replace(target);
-      Object.assign(mountedHostMocks.route, router.currentRoute.value);
-      return failure;
-    });
-    const removeAfter = router.afterEach((_to, _from, failure) => {
-      if (!failure) { f.state.selectedSessionId = "clicked-after-commit"; f.props.active = false; }
-    });
-    try {
-      await expect(mountedHostMocks.renewal.mock.calls[0][0].selectSession("fresh-one")).resolves.toBe(false);
-      expect(f.state.selectedSessionId).toBe("clicked-after-commit");
-      expect(f.hostProps.sessionData.selectSessionId).not.toHaveBeenCalled();
-    } finally { removeAfter(); f.app.unmount(); }
-  });
-});
-
-
-it("does not count a successful router redirect as opening the renewal successor", async () => {
-  const { createMemoryHistory, createRouter } = await import("vue-router");
-  const router = createRouter({ history: createMemoryHistory(), routes: [
-    { path: "/app/project/:slug", component: { render: () => null } },
-    { path: "/login", component: { render: () => null } }
-  ] });
-  await router.replace("/app/project/one?session=working-one");
-  const f = mountedHostFixture();
-  const removeRedirect = router.beforeEach(to => to.query.session === "fresh-one" ? { path: "/login" } : undefined);
-  mountedHostMocks.beforeResolve.mockImplementation(guard => router.beforeResolve(guard));
-  mountedHostMocks.replace.mockImplementation(async target => {
-    const failure = await router.replace(target);
-    Object.assign(mountedHostMocks.route, router.currentRoute.value);
-    return failure;
-  });
-  try {
-    await expect(mountedHostMocks.renewal.mock.calls[0][0].selectSession("fresh-one")).resolves.toBe(false);
-    expect(router.currentRoute.value.path).toBe("/login");
-    expect(f.state.selectedSessionId).toBe("working-one");
-    expect(f.hostProps.sessionData.selectSessionId).not.toHaveBeenCalled();
-  } finally { removeRedirect(); f.app.unmount(); }
 });

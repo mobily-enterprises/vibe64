@@ -1,4 +1,4 @@
-import { computed, effectScope, nextTick, ref } from "vue";
+import { computed, effectScope, nextTick, reactive, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const creationHarness = vi.hoisted(() => ({
@@ -13,6 +13,8 @@ const creationHarness = vi.hoisted(() => ({
   refetch: null,
   renewalEndpointResource: null,
   selectedId: null,
+  route: null,
+  router: null,
   select: null,
   selectAvailableId: null,
   updateRun: null
@@ -75,14 +77,16 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
 
 vi.mock("vue-router", async (importOriginal) => ({
   ...await importOriginal(),
-  useRoute: () => ({ query: {} })
+  useRoute: () => creationHarness.route,
+  useRouter: () => creationHarness.router
 }));
 
 vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
   useVibe64SessionRepositoryStatusRegistry: () => ({ observe: vi.fn() })
 }));
 
-vi.mock("@/composables/useVibe64SessionSelection.js", () => ({
+vi.mock("@/composables/useVibe64SessionSelection.js", async (importOriginal) => ({
+  ...(await importOriginal()),
   useVibe64SessionSelection: (options = {}) => {
     if (creationHarness.selectionFactory) return creationHarness.selectionFactory(options);
     return {
@@ -123,6 +127,8 @@ function mountSessionData() {
 
 beforeEach(() => {
   creationHarness.projectSlug = ref("project-a");
+  creationHarness.route = { query: {} };
+  creationHarness.router = null;
   creationHarness.selectedId = ref("");
   creationHarness.createRun = vi.fn();
   creationHarness.archiveRun = vi.fn(async () => ({ ok: true }));
@@ -899,5 +905,135 @@ describe("one Working and Learning session collection", () => {
       expect(data.sessions.value.some(row => row.sessionId === "working-created-late")).toBe(true);
       expect(creationHarness.querySetData.mock.calls[0][0]).toEqual(["vibe64", "project", "project-a", "app", "public", "sessions"]);
     } finally { localScope.stop(); creationHarness.selectionFactory = null; }
+  });
+});
+
+
+// Compose the existing collection owner with the original stored selection and
+// actual Vue Router. No runtime-host callback participates in this reconciliation.
+describe("completed renewal URL follows collection reconciliation", () => {
+  async function renewalNavigationFixture() {
+    const { createMemoryHistory, createRouter } = await import("vue-router");
+    const { useVibe64SessionSelection } = await vi.importActual("../../src/composables/useVibe64SessionSelection.js");
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: "/app/project/:slug", component: { render: () => null } },
+      { path: "/elsewhere", component: { render: () => null } }
+    ] });
+    await router.replace({ path: "/app/project/project-a", hash: "#changes", query: {
+      session: "predecessor-a", chat: "main", pane: "files", filter: ["a", "b"]
+    } });
+    creationHarness.route = reactive({ ...router.currentRoute.value });
+    creationHarness.router = router;
+    creationHarness.selectionFactory = useVibe64SessionSelection;
+    const removeRouteSync = router.afterEach((to, _from, failure) => {
+      if (!failure) Object.assign(creationHarness.route, to);
+    });
+    creationHarness.queryData.value.sessions = [
+      { sessionId: "predecessor-a", status: "active" },
+      { sessionId: "other-session", status: "active" }
+    ];
+    const { scope, sessionData } = mountSessionData();
+    function complete(predecessorId = "predecessor-a", successorId = "successor-a") {
+      creationHarness.renewalEndpointResource.data.value = {
+        ok: true, viewerScope: `viewer-v1-${"1".repeat(32)}`,
+        renewal: { sessionId: predecessorId, status: "completed", successor: { sessionId: successorId } }
+      };
+      creationHarness.queryData.value.sessions = [
+        { sessionId: "other-session", status: "active" },
+        { sessionId: successorId, status: "active", metadata: { renewed_from: predecessorId } }
+      ];
+    }
+    return { router, scope, sessionData, complete, cleanup() {
+      scope.stop(); removeRouteSync(); creationHarness.selectionFactory = null;
+    } };
+  }
+
+  it("updates the link after automatic successor selection and preserves chat, view and hash on reload", async () => {
+    const f = await renewalNavigationFixture();
+    try {
+      f.complete();
+      await nextTick();
+      expect(f.sessionData.selectedSessionId.value).toBe("successor-a");
+      await vi.waitFor(() => expect(f.router.currentRoute.value.query.session).toBe("successor-a"));
+      expect(f.router.currentRoute.value.query).toEqual({ session: "successor-a", chat: "main", pane: "files", filter: ["a", "b"] });
+      expect(f.router.currentRoute.value.hash).toBe("#changes");
+      const scope = effectScope();
+      try {
+        const actual = await vi.importActual("../../src/composables/useVibe64SessionSelection.js");
+        const reloaded = scope.run(() => actual.useVibe64SessionSelection({ projectSlug: ref("project-a"), route: creationHarness.route }));
+        expect(reloaded.selectedId.value).toBe("successor-a");
+      } finally { scope.stop(); }
+      f.sessionData.selectSessionId("other-session");
+      await nextTick();
+      expect(f.router.currentRoute.value.query.session).toBe("successor-a");
+      expect(f.sessionData.selectedSessionId.value).toBe("other-session");
+    } finally { f.cleanup(); }
+  });
+
+  it("repairs the predecessor link when refresh has already selected its completed successor", async () => {
+    const f = await renewalNavigationFixture();
+    try {
+      f.complete();
+      f.sessionData.selectSessionId("successor-a");
+      expect(f.sessionData.selectedSessionId.value).toBe("successor-a");
+      expect(f.router.currentRoute.value.query.session).toBe("predecessor-a");
+      await vi.waitFor(() => expect(f.router.currentRoute.value.query.session).toBe("successor-a"));
+      expect(f.sessionData.selectedSessionId.value).toBe("successor-a");
+    } finally { f.cleanup(); }
+  });
+
+  it("updates consecutive renewal links through the same collection owner", async () => {
+    const f = await renewalNavigationFixture();
+    try {
+      f.complete();
+      await vi.waitFor(() => expect(f.router.currentRoute.value.query.session).toBe("successor-a"));
+      f.complete("successor-a", "successor-b");
+      await vi.waitFor(() => expect(f.router.currentRoute.value.query.session).toBe("successor-b"));
+      expect(f.sessionData.selectedSessionId.value).toBe("successor-b");
+      expect(f.router.currentRoute.value.query.chat).toBe("main");
+    } finally { f.cleanup(); }
+  });
+
+  it.each(["selection", "project", "dispose", "navigation"])("does not overwrite a newer %s while successor navigation is delayed", async (change) => {
+    const f = await renewalNavigationFixture();
+    const started = deferred(), release = deferred(), settled = deferred();
+    const removeDelay = f.router.beforeEach(async to => {
+      if (to.query.session === "successor-a") { started.resolve(); await release.promise; }
+    });
+    const removeObserve = f.router.afterEach((to, _from, failure) => {
+      if (to.query.session === "successor-a") settled.resolve(failure);
+    });
+    try {
+      f.complete();
+      await started.promise;
+      expect(f.sessionData.selectedSessionId.value).toBe("successor-a");
+      if (change === "selection") f.sessionData.selectSessionId("other-session");
+      if (change === "project") creationHarness.projectSlug.value = "project-b";
+      if (change === "dispose") f.scope.stop();
+      if (change === "navigation") await f.router.replace("/elsewhere?chat=main");
+      await nextTick();
+      release.resolve();
+      expect(await settled.promise).toBeTruthy();
+      expect(f.router.currentRoute.value.query.session).not.toBe("successor-a");
+      if (change === "selection") expect(f.sessionData.selectedSessionId.value).toBe("other-session");
+      if (change === "navigation") expect(f.router.currentRoute.value.path).toBe("/elsewhere");
+    } finally { release.resolve(); removeDelay(); removeObserve(); f.cleanup(); }
+  });
+
+  it.each(["unknown", "running", "ambiguous", "wrong-successor"])("does not retarget the URL for %s renewal evidence", async (kind) => {
+    const f = await renewalNavigationFixture();
+    const replace = vi.spyOn(f.router, "replace");
+    try {
+      f.complete();
+      if (kind === "unknown") creationHarness.renewalEndpointResource.data.value.renewal = null;
+      if (kind === "running") creationHarness.renewalEndpointResource.data.value.renewal.status = "running";
+      if (kind === "ambiguous") creationHarness.queryData.value.sessions.push({
+        sessionId: "ambiguous-successor", status: "active", metadata: { renewed_from: "predecessor-a" }
+      });
+      if (kind === "wrong-successor") creationHarness.renewalEndpointResource.data.value.renewal.successor.sessionId = "unconfirmed";
+      await nextTick(); await nextTick();
+      expect(replace).not.toHaveBeenCalled();
+      expect(f.router.currentRoute.value.query.session).toBe("predecessor-a");
+    } finally { replace.mockRestore(); f.cleanup(); }
   });
 });

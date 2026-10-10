@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, proxyRefs, ref, unref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -11,6 +12,7 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
+  selectedSessionIdFromRoute,
   useVibe64SessionSelection
 } from "@/composables/useVibe64SessionSelection.js";
 import {
@@ -206,6 +208,8 @@ function useVibe64SessionData({
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
   const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
+  const route = useRoute();
+  const router = useRouter();
   const paths = usePaths();
   const learningMode = computed(() => readRefOrGetterValue(purposeFilter) === "learning");
   const learningEndpoint = computed(() => readRefOrGetterValue(learningResource));
@@ -780,6 +784,51 @@ function useVibe64SessionData({
     return createSessionInFlight;
   }
 
+  let pendingRenewalNavigation = null;
+  function syncRenewalSuccessorUrl(predecessorId, successorId) {
+    if (selectedSessionIdFromRoute(route) !== predecessorId) return;
+    const capturedProject = String(projectSlug.value || "").trim();
+    const capturedApiPath = sessionsApiPath.value;
+    const predecessorUrl = route.fullPath;
+    if (pendingRenewalNavigation?.predecessorUrl === predecessorUrl &&
+      pendingRenewalNavigation?.successorId === successorId) return;
+    const sameRenewal = () => {
+      const renewal = selectionRenewalResource.data.value?.renewal;
+      return !sessionDataDisposed && !learningMode.value &&
+        String(projectSlug.value || "").trim() === capturedProject && sessionsApiPath.value === capturedApiPath &&
+        selectedSessionId.value === successorId && workingSelection.selectedId.value === successorId &&
+        !selectionRenewalResource.loadError?.value && !selectionRenewalResource.isInitialLoading?.value &&
+        !selectionRenewalResource.isLoading?.value && renewal?.status === "completed" &&
+        String(renewal.sessionId || "").trim() === predecessorId &&
+        String(renewal.successor?.sessionId || "").trim() === successorId &&
+        renewedSuccessorSessionId({ predecessorSessionId: predecessorId, sessions: availableSessions.value }) === successorId;
+    };
+    if (!sameRenewal()) return;
+    const target = { path: route.path, hash: route.hash, query: { ...route.query, session: successorId } };
+    const targetUrl = router.resolve(target).fullPath;
+    const navigation = { predecessorUrl, successorId };
+    const removeGuard = router.beforeResolve((to) => {
+      if (to.fullPath === targetUrl && (!sameRenewal() || route.fullPath !== predecessorUrl)) return false;
+    });
+    pendingRenewalNavigation = navigation;
+    // Reconciliation has already selected the successor. The predecessor host
+    // may be inactive now, so the collection owner also owns its replacement URL.
+    void (async () => {
+      try {
+        await router.replace(target);
+      } catch (error) {
+        if (sameRenewal()) {
+          vibe64SessionDebugLog("client.sessionData.renewalNavigation.error", {
+            error: vibe64SessionDebugError(error), sessionId: successorId
+          });
+        }
+      } finally {
+        removeGuard();
+        if (pendingRenewalNavigation === navigation) pendingRenewalNavigation = null;
+      }
+    })();
+  }
+
   const selectionReconciliationState = computed(() => {
     const nextSessions = availableSessions.value;
     return {
@@ -852,23 +901,25 @@ function useVibe64SessionData({
         String(selectionRenewal.sessionId || "").trim() === state.selectionRenewalPredecessorId
       ) {
         const renewalStatus = String(selectionRenewal.status || "").trim();
-        if (state.selectedSessionMissing) {
-          if (renewalStatus === "completed") {
-            const renewedSuccessorId = renewedSuccessorSessionId({
-              predecessorSessionId: state.selectedSessionId,
-              sessions: nextSessions
-            });
+        if (renewalStatus === "completed") {
+          const renewedSuccessorId = renewedSuccessorSessionId({
+            predecessorSessionId: state.selectionRenewalPredecessorId,
+            sessions: nextSessions
+          });
+          if (state.selectedSessionMissing) {
             if (renewedSuccessorId) {
               sessionSelection.selectAvailableId(nextSessions, {
                 fallbackId: renewedSuccessorId,
                 getId: (session) => session.sessionId
               });
             }
-            return;
           }
-          if (["failed", "running"].includes(renewalStatus)) {
-            return;
+          if (renewedSuccessorId && selectedSessionId.value === renewedSuccessorId) {
+            syncRenewalSuccessorUrl(state.selectionRenewalPredecessorId, renewedSuccessorId);
           }
+          if (state.selectedSessionMissing) return;
+        } else if (state.selectedSessionMissing && ["failed", "running"].includes(renewalStatus)) {
+          return;
         }
         if (["failed", "running"].includes(renewalStatus)) {
           sessionSelection.select(state.selectionRenewalPredecessorId);
