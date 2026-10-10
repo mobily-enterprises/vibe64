@@ -46,7 +46,7 @@ const routingCompatibilityId = "20261006-routing-format-compatibility";
 const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
-async function fixture(t) {
+async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-upgrade-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "state");
@@ -59,7 +59,7 @@ async function fixture(t) {
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -691,7 +691,11 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
 
 
 test("prospective question-admission boundary preserves learner and native history while only recording the ledger", async t => {
-  const f = await fixture(t);
+  // These original opaque bytes exercise only the prospective question boundary.
+  // Keep them and every byte/inode assertion; the real Codex owner rejects this
+  // incomplete shape and is proved separately in its original upgrade file.
+  const codexPolicy = async () => {};
+  const f = await fixture(t, { codexPolicy });
   const progress = path.join(f.systemRoot, "training/users/NDI/progress.json");
   const nativeHistory = path.join(f.systemRoot, "colleague/NDI/conversation.json");
   await mkdir(path.dirname(progress), { recursive: true, mode: 0o700 });
@@ -710,7 +714,7 @@ test("prospective question-admission boundary preserves learner and native histo
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   let reports = 0;
-  await assert.rejects(runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
+  await assert.rejects(runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
     if (message.startsWith(`${questionAdmissionId}:`) && ++reports === 2) throw new Error("interrupted before question boundary ledger");
   } }), /interrupted before question boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
@@ -739,7 +743,7 @@ test("prospective question-admission boundary preserves learner and native histo
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   const appliedMetadata = await stat(f.ledgerPath);
   for (const apply of [false, true]) {
-    await assert.rejects(older.runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply, report: () => {} }), /newer history; refusing to upgrade or downgrade/u);
+    await assert.rejects(older.runStateUpgrades({ upgradeColleagueCodexCompletedPolicy: codexPolicy, upgradeLearningPracticeHistory, upgradePlanProgress, systemRoot: f.systemRoot, apply, report: () => {} }), /newer history; refusing to upgrade or downgrade/u);
     assert.deepEqual(await readFile(f.ledgerPath), applied);
     assert.equal((await stat(f.ledgerPath)).ino, appliedMetadata.ino);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
@@ -891,7 +895,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n';
-  const entry = ', planProgress];';
+  const entry = ', planProgress, colleagueCodexCompletedPolicy];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace(entry, "];")
