@@ -5323,30 +5323,45 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
 // Storage-only companion of frozen first-progress test261. The separate native
 // intent association companion remains open; this test makes no intent claim.
 test("native Colleague transient progress storage preserves only the final answer", async t => {
-  const operation = Promise.withResolvers();
+  const operation = Promise.withResolvers(), entered = Promise.withResolvers();
   t.after(() => operation.resolve());
   const progress = "Let me check your projects.";
-  const f = await fixture(t, [{ progress, tool: { actionId: "vibe64.test.operate", input: { value: "native-transient" } }, text: "One project is open." }], { native: true });
-  f.observations.onOperation = () => operation.promise;
+  const envelope = JSON.stringify({ kind: "tool", text: progress, toolName: "vibe64_test_operate",
+    arguments: JSON.stringify({ value: "native-transient" }) });
+  const f = await fixture(t, [{ text: envelope }, { text: reply("One project is open.") }], { native: true });
+  f.observations.onOperation = () => { entered.resolve(); return operation.promise; };
   await f.send("Which projects are open?");
-  await until(() => f.observations.mutations.length === 1);
+  const running = f.service.wait(f.context);
+  await Promise.race([entered.promise, running.then(value => assert.fail(
+    `The original operation must be entered before settlement: ${value.status}: ${value.error}`))]);
   const checking = await f.service.read({}, f.context);
   assert.equal(checking.status, "working");
   assert.equal(checking.operation.status, "executing");
   assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
   assert.deepEqual(checking.messages.filter(message => message.role === "commentary"), []);
   const file = path.join(f.root, "colleague", "NDI", "conversation.json");
-  assert.equal((await readFile(file, "utf8")).includes(progress), false,
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(JSON.stringify(saved.conversationLog.filter(turn => !turn.metadata?.runtime?.completedEnvelope)).includes(progress), false,
     "native progress is absent from canonical storage at the real pending-effect barrier");
   operation.resolve();
-  const final = await f.service.wait(f.context);
+  const final = await running;
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["native-transient"]);
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
   assert.deepEqual(final.messages.filter(message => message.role === "commentary"), []);
-  assert.equal((await readFile(file, "utf8")).includes(progress), false);
-  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
-    "transient storage adds no explicit native inference");
+  const after = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(JSON.stringify(after.conversationLog.filter(turn => !turn.metadata?.runtime?.completedEnvelope)).includes(progress), false);
+  assert.equal(after.conversationLog.filter(turn => turn.user?.messageId === "user-1").length, 1,
+    "The final continuation must not author another person request");
+  assert.ok(after.conversationLog.some(turn => turn.metadata?.runtime?.completedEnvelope &&
+    turn.assistant?.text === envelope),
+    "The private native tool envelope remains exact without becoming saved product progress");
+  const trace = await f.native.trace();
+  assert.deepEqual(completedColleagueNativeInputs(trace).map(input => input.data.userMessages.map(message => message.messageId)),
+    [["user-1"], []], "Only the first carrier contains the one authored request");
+  assert.equal(trace.filter(row => row.method === "thread/start").length, 1);
+  assert.equal(trace.filter(row => row.method === "turn/start").length, 2,
+    "One tool carrier and its final continuation serve the same authored request");
 });
 
 // The original native seed polls the actual fixture's append-only trace while
