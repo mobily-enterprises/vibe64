@@ -52,7 +52,8 @@ function createOpenCodeLifecyclePreparation({
         async afterRelease() {
           if (getAssistantManager() && !options.assistantScope) {
             const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
-            await cleanupReasoningSummary({ sessionId: id, runtime, vibe64User: options.vibe64User || null });
+            await cleanupReasoningSummary({ sessionId: id, runtime, session: options.session,
+              renewalCleanup: options.renewalCleanup, vibe64User: options.vibe64User || null });
           }
         }
       }

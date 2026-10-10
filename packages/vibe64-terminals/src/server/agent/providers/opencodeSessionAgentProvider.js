@@ -170,7 +170,8 @@ function createOpenCodeSessionAgentProvider({
         native: { owner: sharedRuntime, preparation: {
           // Preserve the original uncached provider's field projection.
           cleanup: current => prepareSessionCleanup(sessionId, {
-            assistantScope: current.assistantScope, runtime: current.runtime, session: current.session
+            assistantScope: current.assistantScope, runtime: current.runtime, session: current.session,
+            renewalCleanup: current.renewalCleanup
           })
         } }
       };

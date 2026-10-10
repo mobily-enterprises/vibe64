@@ -3731,3 +3731,20 @@ Helper receipt; a stopped native manager binding is not claimed retained.
 Raw shared-handle disposal, internal replacement and shutdown bypasses remain
 separate lifecycle acceptance obligations, not proved by the idle changeover
 companion. JSKIT receives no Training dependency or second cleanup registry.
+
+
+### OpenCode private renewal helper cleanup
+
+The accepted-delivery error continuation remains application-owned: an invalid
+structured seed acknowledgement is not converted into success. The original
+renewal controller retains its delivery-error record and closes the exact hidden
+successor before continuing its existing archive flow. OpenCode disposal carries
+the existing validated renewal cleanup context through to progress-summary cleanup.
+That owner validates both the supplied and current private session snapshot against
+the exact renewal/predecessor relation, reads its retained helper from the existing
+private session view, and reuses the original helper deletion and agent-run event
+writer within the store's established same-session private mutation lease. Failed
+helper deletion retains its record and files. Normal cleanup retains normal store
+read/write guards; arbitrary callers cannot read or mutate hidden successors.
+This repairs an inherited original cleanup boundary exposed by the composed
+renewal case; it is not a new native lifecycle or acknowledgement policy.

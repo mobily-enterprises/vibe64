@@ -6,6 +6,7 @@ import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
+import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
@@ -112,20 +113,34 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
   async function cleanupReasoningSummary(context) {
     const agent = getAssistantManager();
     if (!agent) return;
-    const helper = (await context.runtime.store.readAgentRun(context.sessionId, OPENCODE_AGENT_RUN_ID))?.reasoningSummaryHelper;
-    if (!helper) return;
-    const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
-    if (!/^reasoning_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
-        helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The progress summary has invalid cleanup paths.");
-    const result = await agent.deleteEphemeralConversation(helper.scope, {
-      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
-      ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
-    }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
-    if (result?.ok !== true) throw new Error(result?.error || "The progress summary could not be closed.");
-    await context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
-      event: { kind: "reasoning-helper-closed" }, patch: { reasoningSummaryHelper: null }
-    });
-    await rm(root, { recursive: true, force: true });
+    const renewal = renewalCleanupContext(context.sessionId, context);
+    const cleanup = async () => {
+      let helper;
+      if (renewal) {
+        const session = await context.runtime.getSessionForRenewal(context.sessionId, { inspectSource: false });
+        renewalCleanupContext(context.sessionId, { ...context, session });
+        helper = session.agentRuns?.find(run => run.id === OPENCODE_AGENT_RUN_ID)?.reasoningSummaryHelper;
+      } else {
+        helper = (await context.runtime.store.readAgentRun(context.sessionId, OPENCODE_AGENT_RUN_ID))?.reasoningSummaryHelper;
+      }
+      if (!helper) return;
+      const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
+      if (!/^reasoning_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
+          helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The progress summary has invalid cleanup paths.");
+      const result = await agent.deleteEphemeralConversation(helper.scope, {
+        conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+        ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
+      }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
+      if (result?.ok !== true) throw new Error(result?.error || "The progress summary could not be closed.");
+      await context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
+        event: { kind: "reasoning-helper-closed" }, patch: { reasoningSummaryHelper: null }
+      });
+      await rm(root, { recursive: true, force: true });
+    };
+    // The existing renewal lease authorizes the same event writer only for this session.
+    return renewal
+      ? context.runtime.store.mutateSessionForRenewal(context.sessionId, cleanup)
+      : cleanup();
   }
 
   function disposeReasoningSummary(state) {

@@ -4685,3 +4685,173 @@ for (const failureAt of ["R", "B"]) {
     }
   });
 }
+
+test("R20 hidden renewal successor preserves the original invalid-ACK boundary through the real store", { timeout: 15_000 }, async t => {
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const handover = renewalHandover();
+  const handoverHash = sessionRenewalHandoverHash(handover);
+  const nativeResponse = { messages: [] };
+  const f = await mainOpenCodeServiceFixture(t, {
+    // The existing controller fixture supplies the authorized command-host seam;
+    // command-server HTTP health remains the separately tested host boundary.
+    withCommandBoundary: true,
+    helperResponse: nativeResponse,
+    beforePrompt({ id, input }) {
+      // Replay the observed ordering: completed skill call, then final Markdown.
+      // Only fixture identities/source replace the private live session values.
+      const created = Date.now();
+      nativeResponse.messages = [
+        { id: input.id, type: "user", text: input.prompt.text, time: { created } },
+        { id: "msg_r20_skill", type: "assistant", time: { created: created + 1, completed: created + 2 },
+          content: [{ type: "tool", tool: "skill", state: { status: "completed",
+            input: { name: "genesis-project" }, output: "Loaded skill: genesis-project" } }] },
+        { id: "msg_r20_final", type: "assistant", time: { created: created + 3, completed: created + 4 },
+          text: ["**Acknowledgement — renewal session**", "",
+            `- **Handover accepted**: yes — the approved handover (hash \`${handoverHash}\`) is accepted as this thread's continuity context.`,
+            `- **Canonical source accepted**: ${renewalSource.authority} → ${renewalSource.repository}, ref ${renewalSource.ref}, commit ${renewalSource.commit}.`,
+            "- **Scope acknowledged**: no new Helper, no setup/tests, no file changes, no automatic goal execution — awaiting an explicit next request.",
+            "- **Actions taken this turn**: none (read-only acknowledgement)."].join("\n") }
+      ];
+      assert.ok(id);
+    },
+    async runtimeFactory({ harness }) {
+      const { managedSessionSourcePath } = await import("@local/vibe64-core/server/sessionSourcePath");
+      const predecessorSource = harness.session.metadata.source_path;
+      const runtime = new Vibe64SessionRuntime({ projectContextRoot: harness.root,
+        projectRuntimeRoot: path.join(harness.root, "runtime"), projectSessionSourceRoot: harness.root,
+        createSessionSource: async ({ session, store, expectedCommit }) => {
+          // Use the original renewal fixture's real clone/private attachment sequence.
+          const source = managedSessionSourcePath(harness.root, session.sessionId);
+          await mkdir(path.dirname(source), { recursive: true });
+          harness.git("clone", "--no-hardlinks", predecessorSource, source);
+          assert.equal(harness.git("-C", source, "rev-parse", "HEAD"), expectedCommit);
+          for (const [name, value] of Object.entries({ source_kind: "session_clone",
+            source_path: source, source_path_authority: "managed_session_source" })) {
+            await store.writeMetadataValueForRenewal(session.sessionId, name, value);
+          }
+        } });
+      await runtime.store.createSession({ sessionId: "session-1", runtimeKind: "genesis",
+        metadata: harness.session.metadata });
+      return runtime;
+    }
+  });
+  const renewalId = "11111111-2222-4333-8444-555555555555";
+  const successorId = "renewal-r20-private-successor";
+  await f.store.quiesceSessionForRenewal({ renewalId, sourceSessionId: "session-1" });
+  await f.runtime.createRenewalSession({ renewalId, renewedFrom: "session-1", sessionId: successorId,
+    actorId: "owner", actorDisplayName: "Owner", confirmedAt: "2026-10-10T10:00:00.000Z",
+    metadata: { assistant_selection: f.session.metadata.assistant_selection },
+    sourceContext: { expectedCommit: f.git("rev-parse", "HEAD") } });
+  const successor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+  const predecessor = await f.store.readSessionForRenewal("session-1");
+  assert.equal(successor.status, "renewal_pending");
+  assert.equal(successor.metadata.renewed_from, "session-1");
+  assert.equal(successor.sourcePath, path.join(f.root, "sessions", "active", successorId, "source"));
+  assert.ok(path.isAbsolute(successor.sessionRoot));
+  assert.ok(path.isAbsolute(f.runtime.stateRoot));
+  await assert.rejects(f.runtime.getSession(successorId, { inspectSource: false }),
+    { code: "vibe64_session_renewal_private" });
+  const forbiddenReads = [];
+  const restoreReaders = [];
+  for (const [owner, method] of [[f.runtime, "getSession"], [f.store, "readSession"], [f.store, "readStatus"], [f.store, "readAgentRun"]]) {
+    const original = owner[method];
+    owner[method] = async function (...args) {
+      try { return await original.apply(this, args); }
+      catch (error) {
+        if (args[0] === successorId && error.code === "vibe64_session_renewal_private") {
+          forbiddenReads.push({ method, sessionId: args[0], stack: error.stack });
+        }
+        throw error;
+      }
+    };
+    restoreReaders.push(() => { owner[method] = original; });
+  }
+  try {
+    const input = { handover, handoverHash, operationId: "renewal:r20-private-invalid-ack",
+      forbiddenThreadId: "r20-predecessor-native", source: renewalSource };
+    const options = { runtime: f.runtime, session: successor, vibe64User: f.context.vibe64User };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await assert.rejects(f.service.seedSessionRenewalHandover(successorId, input, options), error => {
+        if (error.code !== "vibe64_session_renewal_acknowledgement_invalid") {
+          t.diagnostic(`R20 unexpected seed failure: ${JSON.stringify({ code: error.code, message: error.message, stack: error.stack })}`);
+        }
+        assert.equal(error.code, "vibe64_session_renewal_acknowledgement_invalid");
+        assert.equal(error.details.handoverPromptAccepted, true);
+        assert.equal(error.details.turnId, "msg_r20_final");
+        return true;
+      });
+      assert.equal(f.commandEnvironmentCalls.length, attempt + 1);
+      const preparedHost = f.commandEnvironmentCalls.at(-1);
+      assert.equal(preparedHost.runtime, f.runtime);
+      assert.equal(preparedHost.sessionId, successorId);
+      assert.equal(preparedHost.worktreePath, successor.sourcePath);
+      assert.equal(f.promptCalls.length, 1, "Same-operation retry must inspect the exact native seed without resending");
+      assert.equal(f.processStops.length, 0, "Invalid ACK must not release native ownership");
+      const retained = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+      assert.equal(retained.status, "renewal_pending");
+      assert.ok(retained.metadata.opencode_conversation_id);
+      assert.equal(retained.metadata.agent_renewal_seed_acknowledged_at, undefined);
+    }
+    // Match the workflow's accepted-native failure catch, without accepting its Markdown ACK.
+    const retainedNativeRows = structuredClone(nativeResponse.messages);
+    const cleanupSuccessor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+    let cleaned;
+    try {
+      cleaned = await f.service.closeRenewalSuccessorSessionTerminals(cleanupSuccessor, { renewalId, runtime: f.runtime });
+    } catch (error) {
+      t.diagnostic(`R20 successor cleanup failure: ${JSON.stringify({ code: error.code, message: error.message, stack: error.stack })}`);
+      throw error;
+    }
+    assert.equal(cleaned.ok, true);
+    assert.equal(f.promptCalls.length, 1, "Accepted-native failure cleanup must not replay the renewal seed");
+    assert.deepEqual(nativeResponse.messages, retainedNativeRows, "Cleanup must retain the exact native seed history");
+    const cleanedSuccessor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+    assert.equal(cleanedSuccessor.status, "renewal_pending");
+    assert.equal(cleanedSuccessor.metadata.agent_renewal_seed_acknowledged_at, undefined);
+    // Retained helper cleanup reuses the same event writer within the exact private lease.
+    const { createOpenCodeConversationPresentation } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationPresentation.js");
+    const helperId = "reasoning_11111111-2222-4333-8444-555555555555";
+    const helperRoot = path.join(f.runtime.stateRoot, "assistant-helpers", helperId);
+    const helper = { scope: { id: helperId, workdir: path.join(helperRoot, "workdir"),
+      runtimeRoot: path.join(helperRoot, "runtime") }, conversationId: "r20-retained-helper",
+      executionId: "r20-retained-helper-execution", selection: { engineId: "opencode", modelProviderId: "opencode", modelId: "big-pickle" } };
+    await mkdir(helper.scope.workdir, { recursive: true });
+    await f.store.mutateSessionForRenewal(successorId, () => f.store.writeAgentRunEvent(successorId, "opencode_server", {
+      event: { kind: "reasoning-helper-created" }, patch: { reasoningSummaryHelper: helper } }));
+    let deleteConfirmed = false;
+    const deletedHelpers = [];
+    const presentation = createOpenCodeConversationPresentation({ getAssistantManager: () => ({
+      async deleteEphemeralConversation(scope, input, options) {
+        deletedHelpers.push({ scope, input, options });
+        return { ok: deleteConfirmed, error: deleteConfirmed ? "" : "Helper deletion is not confirmed" };
+      } }), turns: new Map(), temporaryConversations: new Map(), publishSessionChanged: async () => {} });
+    const privateCleanup = { sessionId: successorId, runtime: f.runtime,
+      session: await f.runtime.getSessionForRenewal(successorId, { inspectSource: false }),
+      renewalCleanup: { kind: "successor", renewalId, sourceSessionId: "session-1" }, vibe64User: f.context.vibe64User };
+    await assert.rejects(presentation.cleanupReasoningSummary({ ...privateCleanup,
+      renewalCleanup: { ...privateCleanup.renewalCleanup, renewalId: "wrong-renewal" } }), TypeError);
+    assert.equal(deletedHelpers.length, 0);
+    await assert.rejects(presentation.cleanupReasoningSummary(privateCleanup), /Helper deletion is not confirmed/);
+    const failedHelperRun = (await f.runtime.getSessionForRenewal(successorId, { inspectSource: false })).agentRuns.find(run => run.id === "opencode_server");
+    assert.deepEqual(failedHelperRun.reasoningSummaryHelper, helper);
+    assert.equal(failedHelperRun.events.some(event => event.kind === "reasoning-helper-closed"), false);
+    assert.ok((await (await import("node:fs/promises")).stat(helperRoot)).isDirectory());
+    deleteConfirmed = true;
+    await presentation.cleanupReasoningSummary(privateCleanup);
+    assert.deepEqual(deletedHelpers[1], { scope: helper.scope,
+      input: { conversationId: helper.conversationId, cleanupExecutionId: helper.executionId },
+      options: { assistantSelection: helper.selection, vibe64User: f.context.vibe64User } });
+    const closedHelperRun = (await f.runtime.getSessionForRenewal(successorId, { inspectSource: false })).agentRuns.find(run => run.id === "opencode_server");
+    assert.equal(closedHelperRun.reasoningSummaryHelper, null);
+    assert.equal(closedHelperRun.events.filter(event => event.kind === "reasoning-helper-closed").length, 1);
+    await assert.rejects((await import("node:fs/promises")).stat(helperRoot), { code: "ENOENT" });
+    await assert.rejects(f.store.readAgentRun(successorId, "opencode_server"), { code: "vibe64_session_renewal_private" });
+    assert.deepEqual(await f.store.readSessionForRenewal("session-1"), predecessor);
+    assert.deepEqual(forbiddenReads.map(({ method, sessionId }) => ({ method, sessionId })),
+      [{ method: "readAgentRun", sessionId: successorId }],
+      "Only the explicit normal-access guard probe may enter a forbidden reader");
+  } finally {
+    for (const restore of restoreReaders) restore();
+    for (const read of forbiddenReads) t.diagnostic(`R20 forbidden successor read: ${JSON.stringify(read)}`);
+  }
+});

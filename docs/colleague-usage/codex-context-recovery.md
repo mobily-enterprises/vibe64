@@ -76,6 +76,15 @@ explain that error and inspect the session status, but cannot choose an unknown
 thread or bypass the saved renewal identity. If the old thread is unreadable,
 write or edit the handover manually in the renewal dialog before confirming.
 
+OpenCode renewal also keeps the admitted handover and native conversation when
+recovery needs **Retry**. Retry the same renewal; do not send another handover or
+create another replacement. Cleanup stops any remaining progress-summary helper
+before renewal continues. An unconfirmed helper deletion leaves the renewal
+retryable and retains its cleanup record. A delivered handover whose structured
+acknowledgement failed retains that delivery error; it is not reported as a valid
+acknowledgement. Colleague can inspect and explain the saved renewal state and,
+after your request, retry that same operation under its normal permissions.
+
 If Codex reports that an expected editing tool is unavailable, stop the work
 and review any edits already made before continuing. Report the model and the
 error to the workspace operator, who can check the installed Codex version and
