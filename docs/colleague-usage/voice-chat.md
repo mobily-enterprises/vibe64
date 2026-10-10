@@ -97,7 +97,8 @@ These actions are unavailable while admission is being committed, sent or remain
 uncertain. Edit pauses only capture while you review; the conversation, agent and
 spoken reply continue. After Send or X resolves those words, hands-free capture
 resumes through its existing controls. A recovered recording stays available until
-you resolve it.
+you resolve it. After discarding an interrupted recording, tap **Talk** to start
+a fresh recording. The discarded words are not sent or reused.
 Holding the Colleague launcher opens a separate recording for review, requiring
 explicit **Send**. You can listen while the assistant replies.
 While live hands-free is on, you can type and send through the conversation's

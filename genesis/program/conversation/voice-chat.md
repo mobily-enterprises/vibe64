@@ -193,6 +193,10 @@ words, ID, focus and endpoint. Transient editPausedCaptureId on that pending
 record owns only this pause. Explicit microphone changes retire ownership; pending
 clear/capture cancellation releases it only for the matching live recording.
 The existing endpoint watcher then handles newer speech, without a new loop.
+The shared call-mode guard counts partial words only while capture is active,
+including transcription. An interrupted recording retains its exact pending
+review; resolving that review permits a fresh Talk gesture without replaying stale
+words. Startup, pending delivery, review and hold guards remain unchanged.
 Playback, controller lifetime and canonical receipt reconciliation stay on their
 original owners. Collapsing retains capture and playback; expand the face to use
 the original voice controls.
