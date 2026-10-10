@@ -458,6 +458,10 @@ those cached query results. The retained owner supplies its own process inventor
 and closing barrier. `claudeConversationAccounts` retains authorized identity,
 access, curated model choices, Helper profiles and product error projection;
 `claudeConversationEvents` retains the original publication and checkpoint effects.
+The original provider-key digest is exported by that same accounts owner as
+`claudeProviderAccountIdentity`; stopped historical conversion uses it to verify
+an old receipt before translating it with the shared native connection-pin owner.
+This does not change the live accounts caller, saved-key store or validation.
 It preserves each saved native frame's message ID and the native owner's exact
 live output ID in the canonical writer. Completing a split saved frame retires
 that same live output rather than its different saved-frame/local-index ID.

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
+import { openCodeDetachedPrompt } from "@jskit-ai/assistant-core/server/opencode-turn";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
@@ -503,5 +504,413 @@ test("Codex tool-policy requires earlier outer-schema publication before apply w
   assert.equal(await readFile(f.filePath, "utf8"), before);
   await assert.rejects(f.run(true), /Complete earlier numbered/);
   assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+
+// Literal frozen869ebb protocol.outputSchema, independently retained as the
+// original producer's persisted prompt grammar (current shared schema differs).
+const originalOpenCodeSchema = {
+  type: "object", additionalProperties: false,
+  required: ["kind", "text", "toolName", "arguments"],
+  properties: {
+    kind: { type: "string", enum: ["reply", "tool"] },
+    text: { type: "string", description: "The final reply, or a brief progress sentence for the first tool request; empty for subsequent tool requests." }, toolName: { type: "string" }, arguments: { type: "string" }
+  }
+};
+// Original schema1 fields and original MessageV2 storage grammar; controlled
+// SQLite fixture proof, not an authenticated historical native conversion.
+async function openCodeContinuityFixture(t) {
+  const f = await fixture(t);
+  const product = { schemaVersion: 1, scopeId: "colleague_opencode_original", conversationId: "ses_original",
+    assistantSelection: { engineId: "opencode", modelProviderId: "deepseek", modelId: "deepseek-flash", agentId: "build", variantId: "high" },
+    status: "ready", error: "", operation: null, runId: "msg_original_user", currentTurnId: "000001",
+    conversationLog: [{ turnId: "000001", messages: [
+      { role: "user", text: "Keep this original discussion.", messageId: "authored_original" },
+      { role: "assistant", text: "The frozen OpenCode discussion is settled." }
+    ] }], watches: [], observations: [], assignments: [] };
+  const filePath = await f.write("NDI", product);
+  const scopeWorkdir = path.join(f.systemRoot, "colleague", "NDI", product.scopeId);
+  await mkdir(scopeWorkdir, { recursive: true });
+  const databasePath = path.join(f.systemRoot, "services", "opencode", "opencode.db");
+  await mkdir(path.dirname(databasePath), { recursive: true });
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(databasePath);
+  database.exec(`CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, parent_id TEXT, revert TEXT);
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+    CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, data TEXT);
+    CREATE TABLE session_input (session_id TEXT, promoted_seq INTEGER);`);
+  database.prepare("INSERT INTO session VALUES (?, ?, NULL, NULL)").run(product.conversationId, scopeWorkdir);
+  database.prepare("INSERT INTO message VALUES (?, ?, ?, ?)").run(product.runId, product.conversationId, 1, JSON.stringify({ role: "user", time: { created: 1 } }));
+  database.prepare("INSERT INTO message VALUES (?, ?, ?, ?)").run("msg_original_final", product.conversationId, 2,
+    JSON.stringify({ role: "assistant", parentID: product.runId, finish: "stop", time: { created: 2, completed: 3 } }));
+  database.prepare("INSERT INTO part VALUES (?, ?, ?, ?)").run("prt_original_input", product.runId, product.conversationId,
+    JSON.stringify({ type: "text", text: openCodeDetachedPrompt({ outputSchema: originalOpenCodeSchema,
+      prompt: JSON.stringify({ assistantName: "Colleague", autonomous: false, readOnly: false, userMessages: [
+        { messageId: product.conversationLog[0].messages[0].messageId, text: product.conversationLog[0].messages[0].text }
+      ] }) }) }));
+  database.prepare("INSERT INTO part VALUES (?, ?, ?, ?)").run("prt_original_final", "msg_original_final", product.conversationId,
+    JSON.stringify({ type: "text", text: JSON.stringify({ kind: "reply", text: product.conversationLog[0].messages[1].text, toolName: "", arguments: "" }) }));
+  database.close();
+  await upgradeColleagueConversations({ ...f, backupRoot: path.join(f.root, "outer-backup"), apply: true, report() {} });
+  await upgradeColleagueConversationHistory({ ...f, backupRoot: path.join(f.root, "history-backup"), apply: true, report() {} });
+  const backupRoot = path.join(f.systemRoot, "upgrades", "backups", "20261009-colleague-native-continuity");
+  return { ...f, product, filePath, scopeWorkdir, databasePath, backupRoot,
+    run: apply => upgradeColleagueNativeContinuity({ systemRoot: f.systemRoot, backupRoot, env: {}, apply, report() {} }) };
+}
+
+test("native continuity keeps the original OpenCode scope/session/database and written history without inventing an old key", async t => {
+  const f = await openCodeContinuityFixture(t);
+  const before = await readFile(f.filePath, "utf8");
+  const native = await readFile(f.databasePath);
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.run(true);
+  const written = await readFile(f.filePath, "utf8");
+  const next = JSON.parse(written);
+  const { conversationMetadata, ...retained } = next;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.engine, "opencode");
+  assert.equal(conversationMetadata.runtime.binding.sessionId, f.product.conversationId);
+  assert.equal(conversationMetadata.runtime.binding.workdir, f.scopeWorkdir);
+  assert.equal(conversationMetadata.runtime.binding.databasePath, f.databasePath);
+  assert.equal(path.dirname(conversationMetadata.runtime.binding.directory), path.join(f.scopeWorkdir, "native"));
+  assert.equal(conversationMetadata.runtime.binding.accountIdentity, undefined);
+  assert.equal(conversationMetadata.runtime.binding.executionId, "");
+  assert.equal(conversationMetadata.runtime.request, undefined);
+  assert.equal(conversationMetadata.runtime.configuration.integrationId, "deepseek");
+  assert.deepEqual(await readFile(f.databasePath), native);
+  assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, f.filePath)), "utf8"), before);
+  assert.equal((await stat(f.filePath)).mode & 0o777, 0o600);
+  await f.run(false);
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), written);
+  assert.deepEqual(await readFile(f.databasePath), native);
+});
+
+for (const change of ["foreign directory", "pending native request", "newer user", "unfinished answer", "wrong final", "native journal", "missing original schema suffix", "changed original schema suffix"]) {
+  test(`native OpenCode continuity refuses ${change} before publishing any metadata`, async t => {
+    const f = await openCodeContinuityFixture(t);
+    const { DatabaseSync } = await import("node:sqlite");
+    if (change === "native journal") await writeFile(`${f.databasePath}-wal`, "Retained uncheckpointed storage");
+    else {
+      const db = new DatabaseSync(f.databasePath);
+      if (change === "foreign directory") db.prepare("UPDATE session SET directory = ?").run(f.root);
+      if (change === "pending native request") db.exec("INSERT INTO session_input VALUES ('ses_original', NULL)");
+      if (change === "newer user") db.prepare("INSERT INTO message VALUES (?, ?, ?, ?)").run("msg_newer", "ses_original", 4, JSON.stringify({ role: "user", time: { created: 4 } }));
+      if (change === "unfinished answer") db.prepare("UPDATE message SET data = ? WHERE id = 'msg_original_final'").run(JSON.stringify({ role: "assistant", parentID: "msg_original_user", time: { created: 2 } }));
+      if (change === "missing original schema suffix" || change === "changed original schema suffix") {
+        const part = JSON.parse(db.prepare("SELECT data FROM part WHERE id = 'prt_original_input'").get().data);
+        const suffix = openCodeDetachedPrompt({ outputSchema: originalOpenCodeSchema });
+        part.text = part.text.slice(0, -suffix.length) + (change === "changed original schema suffix" ? openCodeDetachedPrompt({ outputSchema: { type: "object" } }) : "");
+        db.prepare("UPDATE part SET data = ? WHERE id = 'prt_original_input'").run(JSON.stringify(part));
+      }
+      if (change === "wrong final") db.prepare("UPDATE part SET data = ?").run(JSON.stringify({ type: "text", text: JSON.stringify({ kind: "reply", text: "A different answer", toolName: "", arguments: "" }) }));
+      db.close();
+    }
+    const product = await readFile(f.filePath, "utf8");
+    const native = await readFile(f.databasePath);
+    await assert.rejects(f.run(false));
+    await assert.rejects(f.run(true));
+    assert.equal(await readFile(f.filePath, "utf8"), product);
+    assert.deepEqual(await readFile(f.databasePath), native);
+    await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  });
+}
+
+// Original external Claude pins include the key, but not the native endpoint.
+// Reuse both owners when adapting that receipt to the current connection pin.
+async function externalClaudeContinuityFixture(t) {
+  const f = await nativeContinuityFixture(t);
+  const { claudeProviderAccountIdentity } = await import("../../packages/vibe64-terminals/src/server/claudeConversationAccounts.js");
+  const { codexProviderPaths } = await import("../../packages/vibe64-core/src/server/codexProviderConnections.js");
+  const providerId = "deepseek", apiKey = "fixture-original-private-provider-key";
+  const configRoot = path.join(f.env.HOME, ".claude");
+  const connectionPath = codexProviderPaths(f.systemRoot, providerId, "claude").connectionPath;
+  await mkdir(path.dirname(connectionPath), { recursive: true });
+  await writeFile(connectionPath, JSON.stringify({ apiKey, claudeReady: true }));
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  saved.assistantSelection = { ...saved.assistantSelection, modelProviderId: providerId, modelId: "deepseek-flash" };
+  saved.retiredConversation.assistantSelection = saved.assistantSelection;
+  f.receipt.accountIdentity = claudeProviderAccountIdentity(configRoot, providerId, apiKey);
+  f.receipt.accountIdentities = { [providerId]: f.receipt.accountIdentity };
+  await writeFile(f.receiptPath, JSON.stringify(f.receipt));
+  await writeFile(f.filePath, JSON.stringify(saved));
+  return { ...f, configRoot, providerId, apiKey, connectionPath };
+}
+
+test("native continuity verifies original external Claude key pins and translates through the actual identity owners without changing credentials", async t => {
+  const f = await externalClaudeContinuityFixture(t);
+  const { claudeConnectionIdentity } = await import("@jskit-ai/assistant-core/server/claude-process");
+  const { curatedCodexProvider } = await import("../../packages/vibe64-core/src/shared/curatedCodexProviders.js");
+  const before = await readFile(f.filePath, "utf8"), keyBytes = await readFile(f.connectionPath, "utf8");
+  const nativeBytes = await readFile(f.nativePath, "utf8"), receiptBytes = await readFile(f.receiptPath, "utf8");
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.run(true);
+  const converted = JSON.parse(await readFile(f.filePath, "utf8"));
+  const { conversationMetadata, ...retained } = converted;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.binding.conversationId, f.product.conversationId);
+  assert.equal(conversationMetadata.runtime.binding.accountIdentity, undefined);
+  assert.deepEqual(conversationMetadata.runtime.binding.connectionIdentities, { [f.providerId]:
+    claudeConnectionIdentity(f.configRoot, f.providerId, curatedCodexProvider(f.providerId).claudeBaseUrl, f.apiKey) });
+  assert.equal(conversationMetadata.runtime.configuration.integrationId, f.providerId);
+  assert.equal(conversationMetadata.runtime.binding.executionId, "");
+  assert.equal(conversationMetadata.runtime.request, undefined);
+  assert.equal(await readFile(f.connectionPath, "utf8"), keyBytes);
+  assert.equal(await readFile(f.nativePath, "utf8"), nativeBytes);
+  assert.equal(await readFile(f.receiptPath, "utf8"), receiptBytes);
+  const written = await readFile(f.filePath, "utf8");
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), written);
+});
+
+for (const [name, change] of [
+  ["missing original external Claude key", f => rm(f.connectionPath)],
+  ["replaced original external Claude key", f => writeFile(f.connectionPath, JSON.stringify({ apiKey: "fixture-replacement-key", claudeReady: true }))],
+  ["unverified external Claude connection", f => writeFile(f.connectionPath, JSON.stringify({ apiKey: f.apiKey, claudeReady: false }))]
+]) test(`native continuity refuses ${name} without touching product or credentials`, async t => {
+  const f = await externalClaudeContinuityFixture(t);
+  await change(f);
+  const before = await readFile(f.filePath, "utf8"), receiptBytes = await readFile(f.receiptPath, "utf8");
+  await assert.rejects(f.run(false), /original.*(?:key|connection)/);
+  await assert.rejects(f.run(true), /original.*(?:key|connection)/);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  assert.equal(await readFile(f.receiptPath, "utf8"), receiptBytes);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+// Controlled original schema1 product shape plus the supported native rollout
+// and separate native goal-store schema. This is not authentic legacy custody.
+async function codexContinuityFixture(t, { providerId = "openai" } = {}) {
+  const f = await nativeContinuityFixture(t, { schema: 1 });
+  const { DatabaseSync } = await import("node:sqlite");
+  const product = structuredClone(f.product);
+  product.assistantSelection = { ...product.assistantSelection, engineId: "codex", agentId: "codex", modelProviderId: providerId, modelId: providerId === "openai" ? "gpt-6.1-sol" : "deepseek-flash" };
+  product.conversationId = "01234567-0123-4567-89ab-0123456789ab";
+  product.runId = "12345678-0123-4567-89ab-0123456789ab";
+  await writeFile(f.filePath, JSON.stringify(product));
+  await upgradeColleagueConversations({ ...f, backupRoot: path.join(f.root, "outer-codex"), apply: true, report() {} });
+  await upgradeColleagueConversationHistory({ ...f, backupRoot: path.join(f.root, "history-codex"), apply: true, report() {} });
+  const configRoot = path.join(f.env.HOME, ".codex"), sqliteHome = path.join(f.root, "native-sqlite");
+  let nativeRoot = configRoot;
+  if (providerId !== "openai") {
+    const { codexProviderPaths } = await import("../../packages/vibe64-core/src/server/codexProviderConnections.js");
+    const paths = codexProviderPaths(f.systemRoot, providerId);
+    nativeRoot = paths.codexHome;
+    await mkdir(path.dirname(paths.connectionPath), { recursive: true });
+    await writeFile(paths.connectionPath, JSON.stringify({ apiKey: "fixture-existing-codex-provider-key" }));
+  }
+  await mkdir(path.join(nativeRoot, "sessions", "2026", "10", "10"), { recursive: true });
+  await mkdir(sqliteHome);
+  const goalPath = path.join(sqliteHome, "goals_1.sqlite");
+  const database = new DatabaseSync(goalPath);
+  database.exec("CREATE TABLE thread_goals(thread_id TEXT PRIMARY KEY,goal_id TEXT NOT NULL,objective TEXT NOT NULL,status TEXT NOT NULL,token_budget INTEGER,tokens_used INTEGER NOT NULL,time_used_seconds INTEGER NOT NULL,created_at_ms INTEGER NOT NULL,updated_at_ms INTEGER NOT NULL)");
+  database.close();
+  f.env.CODEX_SQLITE_HOME = sqliteHome;
+  const nativePath = path.join(nativeRoot, "sessions", "2026", "10", "10", `rollout-2026-10-10T00-00-00-${product.conversationId}.jsonl`);
+  const last = product.conversationLog.at(-1);
+  const authored = last.messages.find(message => message.role === "user"), answer = last.messages.find(message => message.role === "assistant").text;
+  const reply = JSON.stringify({ kind: "reply", text: answer, toolName: "", arguments: "" });
+  const rows = [
+    { type: "session_meta", payload: { id: product.conversationId, cwd: f.scopeWorkdir, model_provider: providerId, dynamic_tools: [] } },
+    { type: "event_msg", payload: { type: "task_started", turn_id: product.runId } },
+    { type: "turn_context", payload: { turn_id: product.runId, cwd: f.scopeWorkdir, model: product.assistantSelection.modelId } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: JSON.stringify({ assistantName: "Colleague", autonomous: false, readOnly: false, userMessages: [{ messageId: authored.messageId, text: authored.text }] }) }] } },
+    { type: "response_item", payload: { type: "message", role: "assistant", phase: "final_answer", content: [{ type: "output_text", text: reply }] } },
+    { type: "event_msg", payload: { type: "task_complete", turn_id: product.runId, last_agent_message: reply } }
+  ];
+  const writeNative = () => writeFile(nativePath, rows.map(JSON.stringify).join("\n") + "\n");
+  await writeNative();
+  return { ...f, product, configRoot, nativeRoot, sqliteHome, goalPath, nativePath, rows, writeNative, DatabaseSync };
+}
+
+test("native continuity keeps the exact original Codex thread/scope/completed turn with stopped native goal custody and no invented account", async t => {
+  const f = await codexContinuityFixture(t);
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath), goals = await readFile(f.goalPath);
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.run(true);
+  const written = await readFile(f.filePath, "utf8"), next = JSON.parse(written);
+  const { conversationMetadata, ...retained } = next;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.engine, "codex");
+  assert.deepEqual(conversationMetadata.runtime.binding, { threadId: f.product.conversationId, workdir: f.scopeWorkdir, configRoot: f.configRoot,
+    executionId: "", processInstanceId: "", toolSchemaIdentity: emptyCodexPolicy });
+  assert.equal(conversationMetadata.runtime.binding.accountIdentity, undefined, "Original schema1 had no old native account digest to fabricate");
+  assert.equal(conversationMetadata.runtime.request, undefined);
+  assert.equal(conversationMetadata.runtime.configuration.integrationId, undefined);
+  assert.deepEqual(await readFile(f.nativePath), native);
+  assert.deepEqual(await readFile(f.goalPath), goals);
+  assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, f.filePath)), "utf8"), before);
+  await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), written);
+});
+
+const codexContinuityRefusals = [
+  ["foreign native scope", f => { f.rows[0].payload.cwd = f.root; return f.writeNative(); }],
+  ["foreign native provider", f => { f.rows[0].payload.model_provider = "deepseek"; return f.writeNative(); }],
+  ["foreign native thread", f => { f.rows[0].payload.id = "ffffffff-0123-4567-89ab-0123456789ab"; return f.writeNative(); }],
+  ["forked native history", f => { f.rows[0].payload.forked_from_id = "other"; return f.writeNative(); }],
+  ["different native tool policy", f => { f.rows[0].payload.dynamic_tools = [{ name: "unowned" }]; return f.writeNative(); }],
+  ["uncompleted native request", f => { f.rows.pop(); return f.writeNative(); }],
+  ["wrong completed native turn", f => { f.rows.at(-1).payload.turn_id = "ffffffff-0123-4567-89ab-0123456789ab"; return f.writeNative(); }],
+  ["different native final", f => { f.rows.at(-1).payload.last_agent_message = JSON.stringify({ kind: "reply", text: "Different", toolName: "", arguments: "" }); return f.writeNative(); }],
+  ["newer native work", f => { f.rows.push({ type: "event_msg", payload: { type: "task_started", turn_id: "ffffffff-0123-4567-89ab-0123456789ab" } }); return f.writeNative(); }],
+  ["native Undo", f => { f.rows.push({ type: "event_msg", payload: { type: "thread_rolled_back" } }); return f.writeNative(); }],
+  ["partial native tail", async f => writeFile(f.nativePath, await readFile(f.nativePath, "utf8") + '{"type":')],
+  ["live native goal journal", f => writeFile(`${f.goalPath}-wal`, "owned-live-native-wal")],
+  ["missing native goal store", f => rm(f.goalPath)],
+  ["ambiguous native rollout", async f => { await mkdir(path.join(f.configRoot, "archived_sessions")); await writeFile(path.join(f.configRoot, "archived_sessions", path.basename(f.nativePath)), await readFile(f.nativePath)); }],
+  ["different native model", f => { f.rows[2].payload.model = "other"; return f.writeNative(); }],
+  ["missing final turn context", f => { f.rows.splice(2, 1); return f.writeNative(); }],
+  ["known final native error", f => { f.rows.at(-1).payload.error = { message: "Fixture native failure" }; return f.writeNative(); }],
+  ["newer authored item in the native batch", f => { const input = JSON.parse(f.rows[3].payload.content[0].text); input.userMessages.push({ messageId: "newer", text: "Unwritten newer instruction" }); f.rows[3].payload.content[0].text = JSON.stringify(input); return f.writeNative(); }],
+  ["inherited native history", f => { f.rows[0].payload.history_base = { thread_id: "other" }; return f.writeNative(); }],
+  ["subagent inherited boundary", f => { f.rows[0].payload.subagent_history_start_ordinal = 0; return f.writeNative(); }],
+  ["subagent source", f => { f.rows[0].payload.source = { subagent: "other" }; return f.writeNative(); }],
+  ["autonomous input on an authored product reply", f => { const input = JSON.parse(f.rows[3].payload.content[0].text); input.autonomous = true; f.rows[3].payload.content[0].text = JSON.stringify(input); return f.writeNative(); }],
+  ["malformed final application input", f => { const input = JSON.parse(f.rows[3].payload.content[0].text); input.userMessages = "unverified"; f.rows[3].payload.content[0].text = JSON.stringify(input); return f.writeNative(); }],
+  ["malformed native tool policy", f => { f.rows[0].payload.dynamic_tools = "unknown"; return f.writeNative(); }],
+  ["unknown native history mode", f => { f.rows[0].payload.history_mode = "unknown"; return f.writeNative(); }],
+  ["different authored native input", f => { f.rows[3].payload.content[0].text = JSON.stringify({ userMessages: [{ messageId: "foreign", text: "Different" }] }); return f.writeNative(); }]
+];
+for (const status of ["active", "blocked", "usage_limited", "budget_limited"]) {
+  codexContinuityRefusals.push([`unsettled native goal ${status}`, f => {
+    const database = new f.DatabaseSync(f.goalPath);
+    database.prepare("INSERT INTO thread_goals VALUES (?,?,?,?,?,?,?,?,?)").run(f.product.conversationId, "abcdefab-0123-4567-89ab-0123456789ab", "Retained native goal", status, null, 0, 0, 1, 1);
+    database.close();
+  }]);
+}
+for (const [name, alter] of codexContinuityRefusals) test(`native continuity refuses original Codex ${name} before backup/publication`, async t => {
+  const f = await codexContinuityFixture(t);
+  await alter(f);
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath);
+  await assert.rejects(f.run(false));
+  await assert.rejects(f.run(true));
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  assert.deepEqual(await readFile(f.nativePath), native);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+
+test("native continuity preserves original external Codex provider history HOME separately from the shared app binding HOME", async t => {
+  const f = await codexContinuityFixture(t, { providerId: "deepseek" });
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath);
+  assert.notEqual(f.nativeRoot, f.configRoot);
+  await f.run(true);
+  const next = JSON.parse(await readFile(f.filePath, "utf8"));
+  const { conversationMetadata, ...retained } = next;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.binding.threadId, f.product.conversationId);
+  assert.equal(conversationMetadata.runtime.binding.configRoot, f.configRoot, "Retain the current original host's app binding fence");
+  assert.equal(conversationMetadata.runtime.configuration.integrationId, "deepseek");
+  assert.equal(conversationMetadata.runtime.binding.accountIdentity, undefined);
+  assert.deepEqual(await readFile(f.nativePath), native, "Provider-native history remains in its exact original HOME");
+});
+
+for (const status of ["paused", "complete"]) test(`native continuity preserves an original Codex ${status} native goal without changing it`, async t => {
+  const f = await codexContinuityFixture(t);
+  const database = new f.DatabaseSync(f.goalPath);
+  database.prepare("INSERT INTO thread_goals VALUES (?,?,?,?,?,?,?,?,?)").run(f.product.conversationId,
+    "abcdefab-0123-4567-89ab-0123456789ab", "Retained native goal", status, null, 4, 5, 1, 2);
+  database.close();
+  const goals = await readFile(f.goalPath);
+  await f.run(true);
+  assert.equal(JSON.parse(await readFile(f.filePath, "utf8")).conversationMetadata.runtime.binding.threadId, f.product.conversationId);
+  assert.deepEqual(await readFile(f.goalPath), goals);
+});
+
+
+test("native continuity retains original Codex authored identity across completed tool continuations and existing compacted history", async t => {
+  const f = await codexContinuityFixture(t);
+  const olderRun = "abcdefab-0123-4567-89ab-0123456789ab";
+  // The original run loop empties pending userMessages after its first response.
+  // Compaction keeps the original rollout; no replacement-history reconstruction.
+  f.rows[1].payload.turn_id = olderRun;
+  f.rows[2].payload.turn_id = olderRun;
+  f.rows[4].payload.content[0].text = JSON.stringify({ kind: "tool", toolName: "existing-read-only-tool", arguments: "{}", text: "" });
+  f.rows[5].payload = { type: "task_complete", turn_id: olderRun, last_agent_message: f.rows[4].payload.content[0].text };
+  f.rows.push({ type: "event_msg", payload: { type: "task_started", turn_id: f.product.runId } },
+    { type: "compacted", payload: { replacement_history: [] } },
+    { type: "turn_context", payload: { turn_id: f.product.runId, cwd: f.scopeWorkdir, model: f.product.assistantSelection.modelId } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: JSON.stringify({ autonomous: false, readOnly: false, userMessages: [], feedback: "The read succeeded." }) }] } },
+    { type: "event_msg", payload: { type: "task_complete", turn_id: f.product.runId, last_agent_message: JSON.stringify({ kind: "reply", text: f.product.conversationLog.at(-1).messages.find(message => message.role === "assistant").text, toolName: "", arguments: "" }) } });
+  await f.writeNative();
+  const native = await readFile(f.nativePath);
+  await f.run(true);
+  assert.equal(JSON.parse(await readFile(f.filePath, "utf8")).conversationMetadata.runtime.binding.threadId, f.product.conversationId);
+  assert.deepEqual(await readFile(f.nativePath), native);
+});
+
+for (const engine of ["codex", "claude", "opencode"]) test(`native continuity retains the original ${engine} autonomous watched-update turn without treating its currentTurnId as a user reply`, async t => {
+  const f = await (engine === "codex" ? codexContinuityFixture(t) : engine === "claude" ? nativeContinuityFixture(t) : openCodeContinuityFixture(t));
+  const saved = JSON.parse(await readFile(f.filePath, "utf8"));
+  const answer = saved.conversationLog.at(-1).messages.find(message => message.role === "assistant").text;
+  saved.conversationLog.push({ turnId: "000999", messages: [
+    { role: "system", text: "An update from your watched conversations." }, { role: "assistant", text: answer }
+  ] });
+  assert.notEqual(saved.conversationLog.at(-1).turnId, saved.retiredConversation.currentTurnId);
+  const input = JSON.stringify({ autonomous: true, readOnly: true, observations: [{ id: "original-watched-update" }], userMessages: [] });
+  if (engine === "codex") {
+    f.rows[3].payload.content[0].text = input;
+    await f.writeNative();
+  } else if (engine === "claude") {
+    const frames = (await readFile(f.nativePath, "utf8")).trim().split("\n").map(JSON.parse);
+    frames.find(frame => frame.type === "user" && frame.uuid === f.receipt.lastMessageId).message.content = input;
+    await writeFile(f.nativePath, frames.map(JSON.stringify).join("\n") + "\n");
+  } else {
+    const { DatabaseSync } = await import("node:sqlite");
+    const database = new DatabaseSync(f.databasePath);
+    database.prepare("UPDATE part SET data = ? WHERE id = ?").run(JSON.stringify({ type: "text", text: openCodeDetachedPrompt({ prompt: input, outputSchema: originalOpenCodeSchema }) }), "prt_original_input");
+    database.close();
+  }
+  await writeFile(f.filePath, JSON.stringify(saved));
+  const before = await readFile(f.filePath, "utf8");
+  await f.run(true);
+  const next = JSON.parse(await readFile(f.filePath, "utf8"));
+  const { conversationMetadata, ...retained } = next;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.engine, engine);
+  assert.equal(conversationMetadata.runtime.request, undefined);
+});
+
+
+for (const carrier of ["StructuredOutput", "successful structured result"]) test(`native Claude continuity qualifies ${carrier} only with its original completed scoped receipt and exact canonical reply`, async t => {
+  const f = await nativeContinuityFixture(t);
+  const frames = (await readFile(f.nativePath, "utf8")).trim().split("\n").map(JSON.parse);
+  const frame = frames.find(frame => frame.uuid === `${f.receipt.lastMessageId}-answer`);
+  const envelope = JSON.parse(frame.message.content[0].text);
+  if (carrier === "StructuredOutput") frame.message.content = [{ type: "tool_use", id: "original_structured_output", name: "StructuredOutput", input: envelope }];
+  else {
+    frames.splice(frames.indexOf(frame), 1);
+    frames.push({ type: "result", subtype: "success", is_error: false, uuid: "original_successful_result", structured_output: envelope });
+  }
+  await writeFile(f.nativePath, frames.map(JSON.stringify).join("\n") + "\n");
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath);
+  await f.run(true);
+  const { conversationMetadata, ...retained } = JSON.parse(await readFile(f.filePath, "utf8"));
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.binding.conversationId, f.product.conversationId);
+  assert.deepEqual(await readFile(f.nativePath), native);
+});
+
+for (const conflict of ["competing StructuredOutput", "recorded terminal failure"]) test(`native Claude continuity refuses ${conflict} despite an old completed receipt`, async t => {
+  const f = await nativeContinuityFixture(t);
+  const frames = (await readFile(f.nativePath, "utf8")).trim().split("\n").map(JSON.parse);
+  if (conflict === "competing StructuredOutput") frames.push({ type: "assistant", uuid: "competing_candidate", message: { content: [
+    { type: "tool_use", id: "competing_tool_output", name: "StructuredOutput", input: { kind: "reply", text: "A competing reply", toolName: "", arguments: "" } }
+  ] } });
+  else frames.push({ type: "result", uuid: "recorded_failure", subtype: "error_during_execution", is_error: true, errors: ["Native failed"] });
+  await writeFile(f.nativePath, frames.map(JSON.stringify).join("\n") + "\n");
+  const product = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath);
+  await assert.rejects(f.run(false));
+  await assert.rejects(f.run(true));
+  assert.equal(await readFile(f.filePath, "utf8"), product);
+  assert.deepEqual(await readFile(f.nativePath), native);
   await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
 });

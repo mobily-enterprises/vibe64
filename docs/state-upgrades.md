@@ -814,7 +814,7 @@ of an existing installation. Before activation, run the candidate's read-only
 check, stop all writers, apply and verify the upgrade, and confirm the installed
 Plan/Progress and native review lifecycle.
 
-## Retained original native Claude continuity (prepared)
+## Retained original native continuity (prepared)
 
 `20261009-colleague-native-continuity` follows the earlier Colleague schema and
 native-delivery upgrades and appends after the locally committed Codex tool-policy
@@ -824,14 +824,50 @@ It is prepared and focused-tested, not applied to live
 installations. Run the candidate command as the original daemon with its original
 HOME/configuration; stop all services and native writers before apply.
 
-Only a current, settled original native Claude/Anthropic chat with unchanged
-selection and no common runtime or fresh-chat transition is eligible. The
-application verifies its actor-private scope, original completed scoped receipt,
-single original account pin, original UUID, exact trusted physical HOME and
+Only a current, settled original supported native chat with unchanged
+selection and no common runtime or fresh-chat transition is eligible. For Claude,
+the application verifies its actor-private scope, original completed scoped
+receipt, original account pins, original UUID, exact trusted physical HOME and
 complete unambiguous native transcript. A newer user, partial tail, active goal,
-foreign Colleague claim or unfinished effect blocks conversion. Existing common
-bindings and fresh-chat histories are retained. Other retired providers are not
-converted by this increment. No model/auth request, native-history move or old
+foreign Colleague claim or unfinished effect blocks conversion. The existing
+native reader supplies the original user ID/text and final carriers on explicit
+stopped-inspection options; live read defaults are unchanged. A recorded
+successful result qualifies its final; a recorded StructuredOutput tool input
+is only a candidate, joined to the completed scoped receipt and exact final
+reply. Recorded failures or conflicting candidates block conversion. Existing common
+bindings and fresh-chat histories are retained. Curated external Claude histories
+also require every original provider-key pin to match its current, already
+verified Claude connection; the original identity owner translates those exact
+pins to the shared native endpoint-aware format. Keys are read privately and
+never copied, logged, checked upstream or saved by this upgrade. A removed or
+changed original key blocks conversion.
+
+An original OpenCode history requires the same private scope, native session and
+exact last admitted input, with a completed native reply matching the written
+product answer. Its prompt must retain the byte-exact frozen JSON-schema suffix;
+the upgrade uses the original native formatter to recognize that historical
+format, not a generic instruction-stripping rule. Its existing shared native history owner reads the native
+session/message/part schema in a read-only fixed SQLite transaction. Native WAL,
+SHM or journal files block inspection: stop and checkpoint through the ordinary
+native owner first; this upgrade never checkpoints or removes them. The original
+OpenCode store had no historical per-thread key digest, so conversion does not
+invent one. The selected current connection is validated and pinned by the
+existing fresh admission before new work. Original Codex histories require the exact original private scope, UUID and
+completed native turn, the last authored words and final product reply, plus the
+separate stopped native goal store. The original managed runtime context resolves
+CODEX_HOME and CODEX_SQLITE_HOME; missing or live goal storage does not prove no
+goal. Only absent, paused or complete goals permit conversion. Forked, rewound,
+compressed, ambiguous or unsupported rollout formats remain retired;
+no native file is rewritten. Original native compaction retains its raw rollout;
+complete latest-run provenance is inspected directly without parsing replacement
+history. Original native0.151/0.156/current0.159 row shapes are qualified; creation
+version alone does not retire a compatible thread. Settled watched updates use
+the exact original system marker and native autonomous-input/final provenance,
+rather than pretending their old currentTurnId refers to a person reply.
+Original schema1 had no account digest, so the
+upgrade does not invent one. Fresh current account validation still precedes
+continuation through the existing shared native server. Other unsupported native
+formats stay retired with their written history unchanged. No model/auth request, native-history move or old
 request replay occurs. Original receipts and all canonical messages remain.
 
 Check accepts earlier pending outer schemas read-only; apply requires those

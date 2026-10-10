@@ -74,13 +74,18 @@ remains available in Previous conversations. Reading archived history does not
 reopen its runtime or acquire an executable old delivery.
 
 For conversations retained from before the shared-runtime move, the candidate
-release includes an operator upgrade for a confirmed, stopped native Claude
-conversation. When its original private receipt, account pin and complete native
+release includes an operator upgrade for a confirmed, stopped Codex, Claude or OpenCode
+conversation. When its original ownership receipts and completed native
 history match, it retains the original thread; it does not send the old message
 again. The same account is checked before your next request. This is not a
 browser repair or a reason to press Send twice. Missing, unfinished or conflicting
-evidence requires the owner to inspect the reported upgrade error. Other older
-provider bindings are not covered by this correction. Colleague can explain the
+evidence requires the owner to inspect the reported upgrade error. An external
+Claude connection must still have its original verified key; the upgrade does
+not reconnect it or copy a key. OpenCode retains its original private session
+and checks the current selected connection before new work. Its native database
+must be cleanly stopped before conversion. Unsupported older native formats are
+kept with their written history. A Codex goal must be absent, paused or complete;
+its original native history must identify the exact finished turn. Colleague can explain the
 notice; running a stopped-service upgrade requires an operator.
 
 ## Failed replies and setup

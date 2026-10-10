@@ -150,12 +150,17 @@ account/workdir guards, historical recovery and foreign execution refusal remain
 unchanged; no startup receipt is serialized or inferred from missing processes.
 This driver facility does not import retired product bindings; their verified conversion remains the
 application's stopped, numbered-upgrade responsibility. The new
-`20261009-colleague-native-continuity` owner converts only a settled original
-native Claude/Anthropic record with unchanged selection, one actor-private scope,
-the original completed scoped receipt and account digest, exact credential HOME
-and an unambiguous complete native history ending at that receipt's user ID.
+`20261009-colleague-native-continuity` owner converts settled original native
+bindings with unchanged selection and one actor-private scope. Claude additionally
+requires its completed scoped receipt and original account pins, exact credential
+HOME and an unambiguous complete native history ending at that receipt's user ID.
 The existing reader's strict-tail option is used only for stopped inspection;
-ordinary live reads continue to tolerate a writer's partial last frame. Active
+ordinary live reads continue to tolerate a writer's partial last frame. Its
+stopped opt-ins return raw authored inputs and native final carriers from the
+same existing branch loop. Successful results retain the live final semantics;
+StructuredOutput inputs are candidates qualified jointly by the original
+completed scoped receipt and exact canonical final. Recorded terminal failures
+and conflicting candidates refuse; default history shape is unchanged. Active
 goals, foreign/multiple Colleague claims, unknown operations and missing or changed
 receipts fail before publication. It preserves canonical rows and the original
 retired/native receipts; no old request journal, inference or auth query is made.
@@ -165,8 +170,33 @@ exact before/after bytes; retries reinspect native evidence and compare the full
 expected product to the immutable replacement, retaining its prepared segment ID.
 Normal admission supplies current instructions before the next request.
 This is scoped stopped conversion evidence, not authentic upstream acceptance
-or platform-wide native UUID inventory. OpenCode and older external-provider
-conversion remain separate parity obligations.
+or platform-wide native UUID inventory. External Claude conversion verifies
+all original provider pins using the original `claudeProviderAccountIdentity`
+owner, then calls the shared `claudeConnectionIdentity` owner for the existing
+endpoint-aware native binding; no key is copied or remotely validated. OpenCode
+conversion uses the existing native session/message/part projection and last-input
+reader over a stopped read-only SQLite snapshot. The exact original
+`openCodeDetachedPrompt` suffix and frozen schema are persisted compatibility
+data; only that byte-exact suffix is removed from the inspected prompt before
+application-envelope decoding. Native bytes remain unchanged. Exact private scope, latest
+admitted input and final reply must match the written product evidence. Pending
+native inputs or SQLite sidecars refuse before backups. Its original absence of
+a historical thread-key digest is preserved; current fresh native admission
+owns present connection authorization and pinning. These are existing-owner
+format adaptations, not authentic upstream conversion acceptance.
+For original Codex, the existing managed runtime context supplies the trusted
+native home and SQLite override; the shared raw rollout iterator and separate
+native goal reader supply native format. The application validates exact UUID,
+private cwd, original input and completed run/final reply, no newer native work,
+and absent/paused/complete goals before retaining the empty original tool policy.
+A missing goal store, native journal, unsupported fork/Undo/compressed
+rollout or foreign native claim refuses without changing original files. The original empty-input tool/schema continuations retain the most recent
+nonempty authored batch, whose last item must match the canonical person reply.
+Native terminal errors and missing final turn context refuse. Historical
+compaction retains raw rows; supported0.151/0.156/0.159 field/order predicates do
+not gate on creation version. Original autonomous updates require the exact
+system marker, native autonomous input and completed final, not a stale human
+currentTurnId. No old account digest is fabricated; normal fresh account checks remain before work.
 
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through

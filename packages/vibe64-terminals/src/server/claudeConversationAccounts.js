@@ -9,6 +9,10 @@ const ENGINE = "claude";
 const TRANSPORT = "claude_stream_json";
 const text = (value) => String(value ?? "").trim();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+/** Original provider-key pin, retained for stopped historical conversion. */
+function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
+  return `sha256:${hash(JSON.stringify([configRoot, providerId, apiKey]))}`;
+}
 function claudeCapabilities(initialization, connected, connections = []) {
   const models = claudeCatalogueModels(initialization);
   const external = CURATED_CODEX_PROVIDERS.map((provider) => ({
@@ -49,7 +53,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     const selection = context.selection || context.assistantSelection;
     if (curatedCodexProvider(selection?.modelProviderId)) {
       const settings = await providerConnections.claudeProviderSettings(selection.modelProviderId);
-      return `sha256:${hash(JSON.stringify([configRoot, settings.providerId, settings.apiKey]))}`;
+      return claudeProviderAccountIdentity(configRoot, settings.providerId, settings.apiKey);
     }
     const account = await accountStatus(context);
     const email = text(account.email).toLowerCase();
@@ -130,4 +134,4 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
   return Object.freeze(accounts);
 }
 
-export { claudeCapabilities, createClaudeConversationAccounts };
+export { claudeCapabilities, claudeProviderAccountIdentity, createClaudeConversationAccounts };
