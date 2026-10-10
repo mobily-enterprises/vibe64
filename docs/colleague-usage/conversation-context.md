@@ -23,3 +23,10 @@ not a substitute for checking an uncertain request. Keep the intended account an
 model unless you deliberately want to change them. If the context error returns,
 report the session and exact error to the operator rather than deleting history
 or repeatedly submitting more work. Never paste API keys into chat.
+
+Project guidance can change while Codex is working. The current turn keeps its
+installed instructions; the next idle admission reads the latest guidance without
+interrupting healthy work. Preparing that guidance does not consume the separate
+native-control timeout. If a connection error still appears, read the saved reply
+and check any uncertain delivery before sending new work; do not assume the model
+failed or repeat a request whose outcome is unknown.

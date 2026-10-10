@@ -146,6 +146,11 @@ Genesis-composed project guidance or an application's current instructions, plus
 authorized configuration and owned execution resources. Genesis's generated
 hooks yield only for a bound managed conversation; independent CLI conversations
 in the same project retain standalone Genesis delivery.
+Codex's deferred idle instruction composition stays outside the original native
+control deadline, retaining only the allowance not already spent on native work.
+JSKIT's existing adapter owns this timing and its post-read context fences;
+Vibe64 still owns Genesis composition. Healthy active snapshots, genuine control
+recovery and the rule against retrying an unknown caller effect remain unchanged.
 Vibe64's OpenCode host preparation includes its existing Genesis command shim
 when stored history starts the shared service before Main or Colleague. Later
 conversations reuse that same service and native identities; their registered
