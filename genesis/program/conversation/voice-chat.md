@@ -88,6 +88,16 @@ avatar-hold recordings and interrupted submissions retain words for review.
 Explicit resume keeps an unfinished continuous capture open. Once it finishes,
 new capture gets its own recording identity.
 
+The shared Sherpa engine retains the original 0.45-second sample lookahead on
+explicit finalization and native silence handling by default. An operator's
+positive recognizerMinimumRms opts into onset gating and suppresses finalization
+when no input has reached that floor; zero disables both gates. Once onset is
+accepted, quiet and silent frames remain available for endpoint detection.
+Automatic endpoint commits reset the stream rather than calling finish, so this
+lookahead does not add a wall-clock pause to automatic send. The synthesis worker's
+separate 60-second load/generation watchdog is a new lifecycle safeguard for the
+multivoice process facility, not the original 60-second recording limit.
+
 Colleague supplies its existing per-user state and authorized submission/cancel
 operations, with the request's captured UI focus. The root controller serializes
 target switches, finishes capture/playback cleanup and requires explicit disposition

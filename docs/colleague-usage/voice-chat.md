@@ -169,6 +169,11 @@ finished. Existing history is not replayed when the window opens. Spoken
 mode. Other wording is an ordinary message, so use the explicit button if recognition
 is wrong. Pause detection and echo cancellation depend on the recording environment.
 Use push-to-talk or review when pauses/noise make hands-free unreliable.
+The default service preserves native handling of quiet input. An operator may
+configure an input floor; if quiet words then fail to appear, move closer to the
+microphone and ask the operator to review that setting. **Pause** retains captured
+audio and finishes the final word; review the displayed words before retrying a
+message that was already sent.
 
 ## Navigate and switch targets
 
