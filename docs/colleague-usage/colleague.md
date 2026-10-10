@@ -62,6 +62,8 @@ visible and Stop can be retried; it does not claim that work has stopped.
 Stopping Colleague leaves your other agent conversations running.
 Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.
+A completed reply returns the chat to ready and restores the model controls
+through its live connection, without reloading the page.
 Model changes keep saved messages and replies, including between native and API.
 A changed engine, provider, model, agent or effort prepares the next conversation;
 the same selection retains it. Applying starts no model work.
@@ -100,6 +102,9 @@ Restore workspace storage, then retry; an unsaved message is not treated as an
 accepted request.
 If the service stops while preparing a message, before sending it, the message
 remains unsent. Retry after the service is available again.
+If the first message needs AI setup, its words stay unsent and the setup error
+remains visible. Complete the requested setup in **AI Accounts**, then send the
+same request again; setup failure does not add a sent message or start inference.
 For **Check delivery**, **Start fresh**, **Previous conversations** and retained
 drafts, see [Colleague delivery and recovery](colleague-recovery.md). Recovery
 never automatically resends an unconfirmed message.

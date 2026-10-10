@@ -2319,3 +2319,35 @@ test("Main's selected lifetime and actual body handle fence held receipts; synth
   assert.deepEqual(f.requests, []);
   assert.equal(f.gestures.begin(nativeClick, "colleague-restore"), null);
 });
+
+test("Colleague application completion refreshes its canonical ready state after an earlier native settlement", async t => {
+  const response = { conversationId: "conversation", status: "working", capabilities: { steering: false },
+    messages: [{ id: "question", role: "user", text: "Remember this reply." }] };
+  const view = mount(t, async () => structuredClone(response));
+  await flush();
+  const runtime = view.state.conversation.runtime.value;
+  const subscriptions = [...view.subscriptions.keys()];
+  view.state.draft.value = "Keep my next request unsent.";
+  view.publish({ type: "settled", turnId: "question", status: "complete" });
+  await flush();
+  assert.equal(runtime.snapshot.value.status, "working", "The native settlement precedes product worker completion");
+  assert.equal(view.state.working.value, true);
+  const readsBefore = view.requests.filter(({ url, options }) =>
+    url === "/api/assistant/app/conversations/conversation" && options.method === "GET").length;
+  response.status = "ready";
+  response.messages.push({ id: "final", role: "assistant", text: "The exact completed reply." });
+  view.setConversation(response);
+  view.publish({ type: "application", interimReply: null });
+  await flush();
+  assert.equal(runtime.snapshot.value.status, "ready");
+  assert.equal(view.state.working.value, false, "Model and Stop controls use the same canonical ready state");
+  assert.equal(view.state.conversation.runtime.value, runtime);
+  assert.deepEqual([...view.subscriptions.keys()], subscriptions, "Completion retains the original subscription");
+  assert.equal(view.state.draft.value, "Keep my next request unsent.");
+  assert.deepEqual(runtime.turns.value.flatMap(turn => turn.messages || []).filter(message => message.role === "assistant")
+    .map(message => message.text), ["The exact completed reply."]);
+  assert.equal(view.requests.filter(({ url, options }) =>
+    url === "/api/assistant/app/conversations/conversation" && options.method === "GET").length, readsBefore + 1,
+  "The existing application invalidation triggers one canonical read");
+  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "Completion never resends or starts work");
+});

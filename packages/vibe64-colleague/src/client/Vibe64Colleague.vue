@@ -214,7 +214,10 @@ const conversation = useAssistantConversation({
   }),
   onEvent(event) {
     if (event.presentationCue) observePresentationCue(event.presentationCue);
-    if (event.type === "application") void refresh();
+    if (event.type === "application") {
+      void conversation.runtime.value?.reload();
+      void refresh();
+    }
   },
   presentation: () => ({
     assistantLabel: props.name, systemLabel: "Vibe64", variant: "task", visible: open.value,

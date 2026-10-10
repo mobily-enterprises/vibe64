@@ -382,17 +382,17 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     if (state.transfer && !transferring) await state.transfer;
     const scopeId = state.record.scopeId, runtimeId = state.record.runtimeId;
     assertCurrentConversation(state, context.colleague?.conversationId);
+    let host = state.host;
+    if (!host) {
+      const workdir = path.join(state.root, scopeId);
+      await mkdir(workdir, { recursive: true, mode: 0o700 });
+      assertCurrentConversation(state, scopeId);
+      host = state.host || terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
+      state.host = host;
+    }
     state.opening += 1;
     let conversation;
     try {
-      let host = state.host;
-      if (!host) {
-        const workdir = path.join(state.root, scopeId);
-        await mkdir(workdir, { recursive: true, mode: 0o700 });
-        assertCurrentConversation(state, scopeId);
-        host = terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
-        state.host = host;
-      }
       const saved = state.record.conversationMetadata?.runtime;
       const engine = saved?.replacement?.request?.engine === "api" ? "api" : saved?.engine || settings.engine;
       state.runtimeOwner ||= engine === "api" ? runtime : nativeRuntime;
@@ -494,8 +494,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       ...(state.record.retiredConversation?.operation ? { previousOperation: state.record.retiredConversation.operation } : {}) };
   }
 
-  async function runApi(state, connection, generation, message, admission) {
-    const isCurrent = () => !closed && generation === state.generation;
+  async function runApi(state, connection, generation, message, admission, controller) {
+    const isCurrent = () => !closed && !state.stopping && !controller.signal.aborted && generation === state.generation;
     const autonomous = !message;
     const currentContext = await workerContext(state, connection, generation, autonomous, message ? [message.messageId] : [], isCurrent);
     if (!currentContext) return;
@@ -510,6 +510,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       throw error;
     }
     if (!isCurrent()) return;
+    if (state.runtimeOwner === nativeRuntime) {
+      // First setup stays in the tracked preparation lifetime. Only the actual
+      // prepared owner decides whether this request needs native app admission.
+      if (message) {
+        const turn = await transcript.writeConversationUserMessage(state.record.runtimeId, {
+          messageId: message.messageId, text: message.text,
+          ...(message.trainingQuestion ? { data: { trainingQuestion: message.trainingQuestion } } : {}) });
+        if (!turn) throw failure("The authored Colleague message could not be admitted.");
+        state.pendingMessages.push({ ...message, turnId: turn.turnId });
+        state.nextConnection = connection;
+        admission.resolve({ status: "accepted", messageId: message.messageId, turnId: turn.turnId, origin: "user" });
+      }
+      return runNative(state, connection, generation, controller);
+    }
     const data = await workerData(state, connection, currentContext, autonomous, message);
     const streamId = randomUUID();
     const messageId = message?.messageId || `observation-${randomUUID()}`;
@@ -799,7 +813,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         native = settings.engine !== "api";
       }
       return native ? runNative(state, connection, generation, controller)
-        : runApi(state, connection, generation, message, admission);
+        : runApi(state, connection, generation, message, admission, controller);
     })
       .catch(async error => {
         admission.reject(error);
@@ -822,7 +836,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (state.workerAbort === controller) state.workerAbort = null;
         state.observationIds = [];
         if (!closed && !state.stopping && state.record.status === "ready") {
-          if (native && state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+          if ((native || state.runtimeOwner === nativeRuntime) && state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
           else wakeForObservations(state);
         }
       });
@@ -1535,14 +1549,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
         assertCurrentConversation(state, expected);
         if (closed || state.stopping) throw failure("Colleague is stopping. Send again once it has stopped.");
-        let selected = state.record.assistantSelection;
-        let engine = state.record.conversationMetadata?.runtime?.engine;
-        if (!engine) {
-          selected ||= await chooseSelection(context, input.assistantSelection);
-          engine = (await terminals.resolveConversationConfiguration(selected, instructions,
-            { vibe64User: authenticatedVibe64User(context) })).engine;
-        }
-        const native = engine !== "api";
+        const engine = state.record.conversationMetadata?.runtime?.engine;
+        const native = Boolean(engine && engine !== "api");
         if (!native && state.running) {
           state.generation += 1;
           await state.conversation?.cancel();
@@ -1566,7 +1574,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId,
             ...(trainingQuestion ? { trainingQuestion } : {}) });
           state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
-          if (!state.record.assistantSelection) state.record.assistantSelection = selected;
           if (!state.running) void startWorker(state, state.nextConnection, null, true).catch(() => {});
           return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
         }

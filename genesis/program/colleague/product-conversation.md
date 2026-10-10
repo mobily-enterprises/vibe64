@@ -78,6 +78,11 @@ Returning engines still receive all missed or corrected messages without this
 initial seed clipping. Generic native defaults and direct-API continuity are unchanged.
 Native Colleague preserves the original application pending worker: each Send
 saves its own actual user row, ID and captured focus immediately on admission.
+First model preparation remains in that tracked worker's original cancellation
+and setup-failure lifetime. The prepared owner determines API versus native
+admission; unavailable setup returns the original unsent result, and shutdown
+joins preparation without admitting the request. Later native requests retain
+the independent application admission and captured focus described below.
 While a response is in flight, later rows wait without native steering or Stop.
 The product drains them into the next completed response together, retaining
 cumulative authored IDs as application authority. Its internal native response
@@ -162,6 +167,9 @@ record. It preserves the person's model preference, watches, assignments and
 captured project destinations, and never resends an old message. The original
 admission and atomic writer own rotation; the original common runtime retires only
 the settled chat. Active turns, summaries and stop operations must finish first.
+A pending directory-only read retains the original post-mkdir identity fence,
+so it cannot cache an old host after rotation. The opening guard covers actual
+runtime acquisition and subscriptions, rather than preventing that safe rotation.
 A recovery operation ID retains its exact successor receipt across lost responses
 and restart. Old facade operations fail before admission; an old voice binding
 cannot silently enter the new chat. Product invalidation refreshes other tabs'
@@ -260,6 +268,10 @@ receipts and custom toolbar remain product presentation. Text and voice retain
 one exact actor/conversation target. Live recording preview is applied after
 canonical delivery and cannot acknowledge an unaccepted message. Product reads
 refresh on invalidation, reconnect, opening and focus; no browser polling runs.
+Application invalidation also reloads the existing shared conversation binding,
+so a worker's final ready state restores model and Stop controls after its
+earlier native-settled event. The canonical coalesced read retains the same
+actor/conversation authority; metadata refresh alone cannot update these controls.
 The same original body supplies the combined view through one binding-owned local
 target in the root voice host's existing presentation slot. It keeps the core
 transcript and custom composer, adding the extracted voice controls beside the

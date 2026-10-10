@@ -4,6 +4,10 @@ Use these controls when a message is unconfirmed, after a connection failure, or
 when you need to read an earlier Colleague conversation. The same controls apply
 to the desktop right-hand drawer and the full-screen phone chat.
 
+Completed replies restore the ready controls through the live connection. If
+that connection is unavailable, refresh or reopen Colleague to reconcile the
+saved result; this does not resend your request.
+
 If the first message needs model setup, the draft stays in the message box.
 Complete that setup, then send it again. If delivery is uncertain, use **Check
 delivery** before retrying; reconnecting does not automatically send it twice.
@@ -35,6 +39,8 @@ operation ID and original annotation payload are retained; do not resend the
 uncertain AI message. Background refresh waits until this operation is resolved.
 A storage or retirement error leaves the current identity
 in place and reports the failure.
+An earlier history read cannot reopen the retained conversation after Start
+fresh succeeds. Return to the current chat; that read never resends its messages.
 Open **Previous conversations** to read the retained messages and pages. Scroll
 up to load older messages; each completed page releases the next page request
 and keeps your place. If a page fails, use **Load older messages** to retry. Its list

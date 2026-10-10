@@ -146,6 +146,23 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           emitTurn("turn/completed", { turn: { ...turn, error: { message: "Unexpected native prompt" } } });
           return;
         }
+        if (response.readDelayMs || ["error-only-failed", "failure-before-delayed-detail"].includes(response.mode)) {
+          // These producers previously waited on a read-only native contract.
+          // Completed-envelope Colleague authorizes no native app tools: wait
+          // for the same exact durable input receipt instead of inventing ACKs.
+          const deadline = Date.now() + 30000;
+          let admitted = false;
+          while (ws.readyState === 1 && Date.now() < deadline) {
+            const saved = existsSync(process.env.TEST_INPUT_RECEIPT)
+              ? JSON.parse(readFileSync(process.env.TEST_INPUT_RECEIPT, "utf8")) : null;
+            admitted = saved?.conversationLog.some(row => (row.user || row.system)?.messageId === params.clientUserMessageId &&
+              row.metadata?.runtime?.nativeTurnId === turn.id) === true;
+            if (admitted) break;
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          if (!admitted) throw new Error("The exact native input receipt was not admitted");
+          log({ inputReceiptObserved: { threadId: thread.id, turnId: turn.id, messageId: params.clientUserMessageId } });
+        }
         if (response.tool) {
           if (response.progress !== undefined) {
             const progress = { id: "tool-progress", type: "agentMessage", phase: "commentary", text: response.progress };
@@ -175,11 +192,6 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           return;
         }
         if (response.mode === "completion-before-delayed-final") {
-          if (response.readDelayMs) {
-            // The existing read-only contract tool waits for canonical input
-            // admission before this fixture publishes native completion.
-            await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
-          }
           state.completionReadDelayMs = response.readDelayMs || 0;
           turn.status = "completed";
           save();
@@ -219,14 +231,12 @@ export async function createControlledColleagueNativeCommands(root, responses) {
             error: { message: "Controlled native provider error" }, willRetry: false });
         }
         if (response.mode === "error-only-failed") {
-          await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
           turn.status = "failed";
           save();
           emitTurn("error", { error: { message: response.text }, willRetry: false });
           return;
         }
         if (response.mode === "failure-before-delayed-detail") {
-          await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
           turn.status = "failed";
           save();
           emitTurn("turn/completed", { turn: { id: turn.id, status: turn.status } });
@@ -358,6 +368,7 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         env: { ...process.env, HOME: directory, CODEX_HOME: path.join(directory, "codex"),
           CLAUDE_CONFIG_DIR: path.join(directory, "claude"), ANTHROPIC_AUTH_TOKEN: "", ANTHROPIC_API_KEY: "",
           CLAUDE_CODE_OAUTH_TOKEN: "", TEST_ACCOUNT: account, TEST_TRACE: trace, TEST_RESPONSES: queue,
+          TEST_INPUT_RECEIPT: path.join(root, "colleague", "NDI", "conversation.json"),
           TEST_HISTORY: path.join(directory, "codex-history.json") },
         commands: { codex, claude } };
     },
