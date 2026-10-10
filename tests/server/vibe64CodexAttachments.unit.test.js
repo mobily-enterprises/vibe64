@@ -977,7 +977,7 @@ test("shared attachment admission rejects persisted and in-flight session closin
     }), {
       code: "vibe64_agent_attachment_session_unavailable",
       statusCode: 409,
-      message: "This session is closing. Attachments cannot be added now."
+      message: "Session is archived. Attachments cannot be added while it is closing."
     });
 
     let sessionReads = 0;
@@ -1004,7 +1004,7 @@ test("shared attachment admission rejects persisted and in-flight session closin
     }), {
       code: "vibe64_agent_attachment_session_unavailable",
       statusCode: 409,
-      message: "This session is closing. Attachments cannot be added now."
+      message: "Session is deleting. Attachments cannot be added while it is closing."
     });
     assert.equal(sessionReads, 2);
     assert.deepEqual(await attachmentIds(root), []);

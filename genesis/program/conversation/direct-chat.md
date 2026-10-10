@@ -866,6 +866,11 @@ An archived attachment whose payload has been removed returns a Gone response.
 Its preview keeps the filename and explains that chat text and the attachment
 description remain, with no broken Download action. The host owns expiry policy.
 
+The application attachment owner rechecks the session inside upload admission.
+It preserves the original closing reason in its refusal, including archive or
+delete, with the same 409 status and code and no created file. The shared runtime
+does not own this session lifecycle policy.
+
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count

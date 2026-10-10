@@ -100,6 +100,12 @@ unconfirmed and keeps its files and any newer composer draft. Checking does not
 submit another native turn. Colleague can explain the reported state; a new
 request still needs your instruction.
 
+An attachment upload refused because its session is closing identifies whether
+the session is being archived or deleted when that reason is known. No file is
+added. Use an open session before uploading again. Colleague can explain the
+notice; it cannot override the closing check. The same rule applies on desktop
+and mobile.
+
 If Claude asks you to stop before changing its settings or instructions, select
 **Stop**, wait for it to succeed, then retry the change. Its existing conversation
 history is retained. Colleague can explain the error and perform a supported

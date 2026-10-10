@@ -9,7 +9,7 @@ import {
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";
 import { terminalSessionSourceRoot, vibe64Result } from "./terminalShared.js";
-import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
+import { sessionClosingReason, sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import {
   cleanupCodexAttachments as cleanupUploads,
@@ -86,7 +86,10 @@ function createSessionAttachments({ projectService, env = process.env }) {
       return storeUpload({ executionRoot, sessionId, input, env, beforeCreate: async () => {
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
-          throw Object.assign(new Error("This session is closing. Attachments cannot be added now."), {
+          const closingReason = sessionClosingReason(session);
+          throw Object.assign(new Error(closingReason
+            ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
+            : "This session is closing. Attachments cannot be added now."), {
             code: "vibe64_agent_attachment_session_unavailable", statusCode: 409
           });
         }
