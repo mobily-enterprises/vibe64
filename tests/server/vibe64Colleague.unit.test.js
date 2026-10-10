@@ -5424,13 +5424,25 @@ test("native completed Colleague batches A B C before parsing without steering o
   try {
     const a = await f.send("Do A.", "queue-A", { focus: { projectSlug: "alpha" } });
     const startupDeadline = Date.now() + 30000;
-    while (!held && Date.now() < startupDeadline) {
+    let internal;
+    while (!internal && Date.now() < startupDeadline) {
       held = (await f.native.trace()).find(row => row.completionHeld)?.completionHeld;
-      if (!held) await new Promise(resolve => setTimeout(resolve, 10));
+      if (held) {
+        // The producer can hold its completion before the original input
+        // receipt transaction finishes. Queue B/C only after that exact receipt.
+        const active = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+        const runtime = active.conversationMetadata.runtime;
+        const run = runtime.binding.codexAppServerRun;
+        if (runtime.binding.threadId === held.threadId && run?.providerTurnId === held.turnId) {
+          internal = active.conversationLog.find(turn => turn.system?.messageId === run.outerTurnId &&
+            turn.metadata?.runtime?.segmentId === runtime.segmentId &&
+            turn.metadata.runtime.nativeTurnId === held.turnId && turn.metadata.runtime.completedEnvelope === true);
+        }
+      }
+      if (!internal) await new Promise(resolve => setTimeout(resolve, 10));
     }
     assert.ok(held, "The original native completion is held while B/C are admitted");
-    const active = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-    const internal = active.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope === true);
+    assert.ok(internal, "The exact held native request has its committed private input receipt before B/C");
     assert.equal(internal.metadata.runtime.status, "running");
     assert.equal(internal.metadata.runtime.nativeTurnId, held.turnId);
     assert.equal(internal.metadata.runtime.completedEnvelope, true);
