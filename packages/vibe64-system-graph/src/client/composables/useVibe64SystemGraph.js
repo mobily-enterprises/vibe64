@@ -1,5 +1,6 @@
 import {
   computed,
+  ref,
   unref,
   watch
 } from "vue";
@@ -88,6 +89,15 @@ function useVibe64SystemGraph({
     requestRecoveryLabel: "Subsystems"
   });
 
+  const refreshStatusResource = useEndpointResource({
+    enabled: computed(() => enabled.value && refreshResource.isSaving.value),
+    path: computed(() => `${sessionPath.value}/refresh/status`),
+    queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "refresh-status")),
+    queryOptions: { refetchInterval: 1000, refetchOnWindowFocus: false, retry: false },
+    fallbackLoadError: "Analysis progress is unavailable."
+  });
+  const refreshOutput = ref("");
+
   const machineCity = computed(() => machineResource.data.value?.city || null);
   const programCity = computed(() => programResource.data.value?.city || null);
   const loading = computed(() => Boolean(
@@ -129,9 +139,18 @@ function useVibe64SystemGraph({
   }, { immediate: true });
 
   async function refresh() {
-    const result = await refreshResource.save({}, { method: "POST", timeoutMs: 10 * 60 * 1000 });
-    await reload();
-    return result;
+    refreshOutput.value = "";
+    try {
+      const result = await refreshResource.save({}, { method: "POST", options: { timeoutMs: 10 * 60 * 1000 } });
+      await reload();
+      return result;
+    } catch (error) {
+      refreshOutput.value = String(error?.details?.commandOutput || "");
+      // The retained view already presents this resource error. Do not also
+      // throw it into the shell's blocking application-error dialog.
+      if (!refreshResource.saveError.value) throw error;
+      return null;
+    }
   }
 
   return {
@@ -143,6 +162,14 @@ function useVibe64SystemGraph({
     programCity,
     refresh,
     refreshing: refreshResource.isSaving,
+    refreshProgress: computed(() => {
+      if (!refreshResource.isSaving.value) return null;
+      const progress = refreshStatusResource.data.value?.refresh;
+      return refreshStatusResource.loadError.value
+        ? { message: "Analysis continues; progress unavailable.", elapsedSeconds: progress?.elapsedSeconds || 0 }
+        : progress || { message: "Starting project analysis…", elapsedSeconds: 0 };
+    }),
+    refreshOutput,
     reload,
     subsystemMap: computed(() => subsystemResource.data.value || null),
     subsystemError: subsystemResource.loadError,

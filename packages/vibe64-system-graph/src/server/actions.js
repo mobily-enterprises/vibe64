@@ -9,6 +9,7 @@ function createSystemGraphActions({ systemGraph }) {
     ["program.read", "readProgramCity"],
     ["architecture.read", "readArchitecture"],
     ["refresh.cancel", "cancelRefresh"],
+    ["refresh.status", "readRefreshStatus"],
     ["refresh", "refresh"]
   ].map(([operation, method]) => withVibe64ActionContext({
     id: `vibe64.system-graph.${operation}`, version: 1,

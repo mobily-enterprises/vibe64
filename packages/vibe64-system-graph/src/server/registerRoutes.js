@@ -24,6 +24,7 @@ function registerRoutes(
     ["GET", "cities/machine", "machine.read", "Read the native Genesis Machine City for an active session."],
     ["GET", "cities/program", "program.read", "Read the native Genesis Program City for an active session."],
     ["POST", "refresh/cancel", "refresh.cancel", "Cancel this source architecture analysis and await cleanup."],
+    ["GET", "refresh/status", "refresh.status", "Read the running analysis stage without loading the project index."],
     ["POST", "refresh", "refresh", "Synchronously refresh both Genesis Cities for an active session."]
   ]) routes.actionRoute(method, `${sessionRoute}/${suffix}`, {
     actionId: `vibe64.system-graph.${operation}`,

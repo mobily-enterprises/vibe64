@@ -73,7 +73,8 @@ describe("Genesis City client resources", () => {
       endpointResource(null),
       endpointResource(null),
       endpointResource(null),
-      endpointResource({ status: "missing", subsystems: [] })
+      endpointResource({ status: "missing", subsystems: [] }),
+      endpointResource(null)
     ];
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockImplementation((options) => {
@@ -103,7 +104,7 @@ describe("Genesis City client resources", () => {
 
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
-    { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 7 }
+    { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 8 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -154,6 +155,35 @@ describe("Genesis City client resources", () => {
     }
   });
 
+  it("reports project progress only during refresh and retains command failures inline", async () => {
+    const scope = effectScope();
+    let graph;
+    scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); });
+    const refresh = endpointMocks.resources[4];
+    const status = endpointMocks.calls[7];
+    expect(unref(status.enabled)).toBe(false);
+    expect(status.queryOptions.refetchInterval).toBe(1000);
+    const pending = Promise.withResolvers();
+    refresh.save.mockImplementation(async () => {
+      refresh.isSaving.value = true;
+      try { return await pending.promise; }
+      catch (error) { refresh.saveError.value = error.message; throw error; }
+      finally { refresh.isSaving.value = false; }
+    });
+    const result = graph.refresh();
+    expect(unref(status.enabled)).toBe(true);
+    endpointMocks.resources[7].data.value = { refresh: { message: "Running UI inspector…", elapsedSeconds: 12 } };
+    expect(graph.refreshProgress.value.message).toBe("Running UI inspector…");
+    pending.reject(Object.assign(new Error("UI inspector failed."), { details: { commandOutput: "Required file missing." } }));
+    await expect(result).resolves.toBeNull();
+    expect(graph.error.value).toBe("UI inspector failed.");
+    expect(graph.refreshOutput.value).toBe("Required file missing.");
+    expect(graph.refreshProgress.value).toBeNull();
+    expect(unref(status.enabled)).toBe(false);
+    expect(endpointMocks.resources[0].reload).not.toHaveBeenCalled();
+    scope.stop();
+  });
+
   it("reads status and native Cities, then refreshes synchronously", async () => {
     const scope = effectScope();
     let graph;
@@ -164,7 +194,7 @@ describe("Genesis City client resources", () => {
       });
     });
 
-    expect(endpointMocks.calls).toHaveLength(7);
+    expect(endpointMocks.calls).toHaveLength(8);
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",
       "/api/vibe64/system-graph/sessions/session%2Fa/cities/machine",
@@ -172,7 +202,8 @@ describe("Genesis City client resources", () => {
       "/api/vibe64/system-graph/sessions/session%2Fa/cities/program",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh/cancel",
-      "/api/vibe64/system-graph/sessions/session%2Fa/subsystems"
+      "/api/vibe64/system-graph/sessions/session%2Fa/subsystems",
+      "/api/vibe64/system-graph/sessions/session%2Fa/refresh/status"
     ]);
     expect(endpointMocks.calls[1].enabled.value).toBe(true);
     expect(endpointMocks.calls[3].enabled.value).toBe(false);
@@ -183,7 +214,7 @@ describe("Genesis City client resources", () => {
     await graph.refresh();
 
     expect(endpointMocks.resources[4].save).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[4].save).toHaveBeenCalledWith({}, { method: "POST", timeoutMs: 600_000 });
+    expect(endpointMocks.resources[4].save).toHaveBeenCalledWith({}, { method: "POST", options: { timeoutMs: 600_000 } });
     expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
     expect(endpointMocks.resources[1].reload).toHaveBeenCalledOnce();
     expect(endpointMocks.resources[3].reload).not.toHaveBeenCalled();
@@ -220,10 +251,12 @@ describe("Genesis City client resources", () => {
       request(url, options) {
         if (options.method === "POST") {
           expect(url).toBe(writePath);
+          if (!database) expect(options.timeoutMs).toBe(600_000);
           writes.push(url);
           return commandResponse.promise;
         }
         expect(options.method).toBe("GET");
+        if (!database && url === `${sessionPath}/refresh/status`) return Promise.resolve({ refresh: { message: "Scanning source…", elapsedSeconds: 2 } });
         if (!database && url === `${sessionPath}/subsystems`) return Promise.resolve({ subsystems: [], status: "missing" });
         expect(readPaths).toContain(url);
         reads.push(url);

@@ -16,13 +16,13 @@ export function parseVibe64ArchitectureInspectionLines(lines, { path = "genesis/
     const heading = line.match(/^### Inspector `([a-z0-9]+(?:-[a-z0-9]+)*)`: (.+)$/u);
     if (heading) { finish(); if (ids.has(heading[1])) invalidStackOperation(CODE, path, "Duplicate inspector id.", index + 1); ids.add(heading[1]); current = { id: heading[1], title: heading[2] }; continue; }
     if (!current) invalidStackOperation(CODE, path, "Expected an Inspector heading.", index + 1);
-    const field = line.match(/^- (Runtime|Directory|Command|Timeout seconds|Max output bytes|Entry files): (.+)$/u);
+    const field = line.match(/^- (Runtime|Directory|Command|Timeout seconds|Max output bytes|Entry files|Required files): (.+)$/u);
     if (!field) invalidStackOperation(CODE, path, "Unknown architecture inspector field.", index + 1);
-    const key = { Runtime: "runtimeRequirements", Directory: "workdir", Command: "argv", "Timeout seconds": "timeout", "Max output bytes": "maxBuffer", "Entry files": "entryFiles" }[field[1]];
+    const key = { Runtime: "runtimeRequirements", Directory: "workdir", Command: "argv", "Timeout seconds": "timeout", "Max output bytes": "maxBuffer", "Entry files": "entryFiles", "Required files": "requiredFiles" }[field[1]];
     if (current[key] !== undefined) invalidStackOperation(CODE, path, `Duplicate ${field[1]}.`, index + 1);
     if (key === "runtimeRequirements") current[key] = runtimeArguments(field[2], CODE, path, "Inspector runtime", index + 1);
     else if (key === "argv") current[key] = processArguments(field[2], CODE, path, "Inspector command", index + 1);
-    else if (key === "entryFiles") current[key] = backtickedArguments(field[2], CODE, path, field[1], index + 1).map(value => projectPath(value, CODE, path, "Entry file", index + 1));
+    else if (key === "entryFiles" || key === "requiredFiles") current[key] = backtickedArguments(field[2], CODE, path, field[1], index + 1).map(value => projectPath(value, CODE, path, field[1], index + 1));
     else {
       const [value] = backtickedArguments(field[2], CODE, path, field[1], index + 1, { count: 1 });
       if (key === "workdir") current[key] = projectPath(value, CODE, path, "Inspector directory", index + 1);

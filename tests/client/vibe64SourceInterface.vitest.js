@@ -27,8 +27,8 @@ it('scoped interfaces explain visibility and retain exact Code when no Helper is
   const html = await renderInterface();
   expect(html).toContain('Visibility: crate');
   expect(html).toContain('pub(crate) fn load() -&gt; &amp;str { &quot;😀&quot; }');
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Description<\/button>/u);
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Steps<\/button>/u);
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Program context<\/button>/u);
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
   expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Code<\/button>/u);
   expect(html).toContain('Choose a Helper account.');
 });
@@ -67,8 +67,8 @@ it('saved function pseudocode remains readable without a Helper and stale source
   expect(current).toContain('Reads a saved record and returns it.');
   expect(current).toContain('Matches saved source');
   expect(current).toContain('Informational interpretation');
-  expect(current).toMatch(/<button[^>]*disabled[^>]*>Description<\/button>/u);
-  expect(current).toMatch(/<button[^>]*disabled[^>]*>Regenerate Steps<\/button>/u);
+  expect(current).toMatch(/<button[^>]*disabled[^>]*>Program context<\/button>/u);
+  expect(current).toMatch(/<button[^>]*disabled[^>]*>Regenerate explanation<\/button>/u);
   const stale = await renderInterface({ presentation: 'steps', fileHash: 'changed', interpretations: [record] });
   expect(stale).toContain('Stale — source or guidance changed');
   expect(stale).toContain('Reads a saved record and returns it.');
@@ -80,10 +80,20 @@ it('Genesis capabilities appear without a Helper and do not imply every declarat
   expect(html).toContain('Load saved work');
   expect(html).toContain('Restores saved work');
   expect(html).toContain('Program explanations are authored');
-  expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Description<\/button>/u);
+  expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Program context<\/button>/u);
   expect(html).not.toContain('File summary');
   const missing = await renderInterface({ programStatus: 'valid', presentation: 'description' });
   expect(missing).toContain('No authored explanation.');
   expect(missing).not.toContain('Description comes from');
   expect(missing).not.toContain('Saved function Steps and Code remain readable');
+});
+
+
+it('project rescanning shows its own stage without masquerading as function explanation', async () => {
+  const html = await renderInterface({ refreshing: true, refreshProgress: { message: 'Scanning project source…', elapsedSeconds: 31 } });
+  expect(html).toContain('Re-scan project');
+  expect(html).toContain('Updates signatures and links; no explanations.');
+  expect(html).toContain('Scanning project source… · 31s');
+  expect(html).toContain('Explain function needs an available Helper.');
+  expect(html).not.toContain('Preparing Steps');
 });

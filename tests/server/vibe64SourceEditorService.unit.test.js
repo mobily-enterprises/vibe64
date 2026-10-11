@@ -269,6 +269,7 @@ test("interface explanations separate Description and Steps caches and reject ch
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /Do not emit pseudocode or pseudo-variables/u);
   assert.match(prompts[1], /numbered steps in English as pseudocode/u);
+  assert.match(prompts[1], /Start with a short purpose statement, then use numbered steps/u);
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
   const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
   assert.equal(stale.ok, false);

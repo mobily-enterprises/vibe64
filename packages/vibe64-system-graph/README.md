@@ -71,7 +71,16 @@ original source-work admission, invokes declared finite `Architecture inspection
 commands through the existing managed execution owner, validates bounded JSON,
 then refreshes the native index against those hashed inputs. Failure, changed
 source/Stack or corrupt observations retain the previous index. Cancellation is
-scoped to this refresh and waits for cleanup. Opening/Reload only reads indexes.
+scoped to this refresh and waits for cleanup. `Re-scan project` reads source and
+existing Genesis explanations; it does not rewrite Program or generate function
+explanations. Explicit runtime, workdir and Required files checks precede scanning.
+`refresh.status` reports the actual stage and elapsed seconds from the running
+refresh, with no index reads. The client polls once per second while refreshing
+and shows bounded failed-command diagnostics inline, without another blocking
+shell dialog. The request budget reaches the HTTP client through endpoint
+resource write options. Opening/Reload only reads indexes. `Explain function`
+uses the existing on-demand Helper and source-hash cache for a short purpose
+statement followed by steps; `Program context` opens authored capability context.
 
 Status and view reads share a validated snapshot while its filesystem revision
 is unchanged, including concurrent reads. The reader checks identity, size and

@@ -28,6 +28,7 @@ test("System graph retains native reads and refresh and authorizes Architecture 
         "readArchitecture",
         "cancelRefresh",
         "readStatus",
+        "readRefreshStatus",
         "readMachineCity",
         "readProgramCity",
         "refresh"
@@ -59,6 +60,7 @@ test("System graph retains native reads and refresh and authorizes Architecture 
       const routes = [
         ["GET", "/subsystems", "readSubsystems", "subsystems.read"],
         ["GET", "/status", "readStatus", "status.read"],
+        ["GET", "/refresh/status", "readRefreshStatus", "refresh.status"],
         ["GET", "/architecture", "readArchitecture", "architecture.read"],
         ["POST", "/refresh/cancel", "cancelRefresh", "refresh.cancel"],
         ["GET", "/cities/machine", "readMachineCity", "machine.read"],
@@ -95,8 +97,8 @@ test("System graph retains native reads and refresh and authorizes Architecture 
         await assert.rejects(execute({ projectSlug: slug }), { code: "ACTION_VALIDATION_FAILED" });
         await assert.rejects(execute({ projectSlug: slug, sessionId: "session-1", vibe64User: { role: "owner" } }), { code: "ACTION_VALIDATION_FAILED" });
       }
-      assert.equal(calls.length, 14);
-      assert.equal(app.registeredRoutes.length, 7);
+      assert.equal(calls.length, 16);
+      assert.equal(app.registeredRoutes.length, 8);
     });
   });
 });

@@ -5,7 +5,7 @@ import {
   mergeArchitectureObservations,
   refreshGenesisCities
 } from "@local/vibe64-genesis/server";
-import { lstat } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
@@ -225,11 +225,22 @@ function createService({
       return systemResult(() => readCity(input.sessionId, "program"));
     },
 
+    async readRefreshStatus(input = {}) {
+      return systemResult(async () => {
+        const context = await systemContext(input.sessionId);
+        const progress = refreshes.get(context.sourceRoot)?.progress;
+        return { ok: true, refresh: progress ? { ...progress, elapsedSeconds: Math.floor((Date.now() - progress.startedAt) / 1000) } : null };
+      });
+    },
+
     async cancelRefresh(input = {}) {
       return systemResult(async () => {
         const context = await systemContext(input.sessionId);
         const pending = refreshes.get(context.sourceRoot);
-        if (pending) { pending.controller.abort(); await pending.done; }
+        if (pending) {
+          pending.progress = { ...pending.progress, message: "Stopping analysis…", updatedAt: Date.now() };
+          pending.controller.abort(); await pending.done;
+        }
         return { ok: true, cancelled: pending?.cancelled === true, completed: Boolean(pending && !pending.cancelled) };
       });
     },
@@ -240,15 +251,36 @@ function createService({
         if (refreshes.has(context.sourceRoot)) throw systemError("Architecture analysis is already running for this source.", "vibe64_architecture_refresh_busy");
         const controller = new AbortController();
         let complete;
-        const pending = { controller, cancelled: false, done: new Promise(resolve => { complete = resolve; }) };
+        const pending = { controller, cancelled: false, progress: { startedAt: Date.now(), updatedAt: Date.now(), message: "Checking analysis prerequisites…" }, done: new Promise(resolve => { complete = resolve; }) };
+        const progress = message => { pending.progress = { ...pending.progress, message, updatedAt: Date.now() }; };
         refreshes.set(context.sourceRoot, pending);
         try {
           const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
             const current = await systemContext(context.sessionId);
             const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
             if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
+            // Prerequisites are explicit consumer facts, not command/language guesses.
+            const sourceRoot = await realpath(current.sourceRoot);
+            for (const inspector of inspection.inspectors || []) {
+              const runtime = runtimeReader(inspector.runtimeRequirements);
+              if (!runtime.available) throw systemError(runtime.disabledReason, "vibe64_architecture_runtime_unavailable");
+              for (const directory of ["", ...(inspector.workdir === "." ? [] : inspector.workdir.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')))]) {
+                const info = await lstat(path.join(current.sourceRoot, directory));
+                if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
+              }
+              for (const file of inspector.requiredFiles || []) {
+                try {
+                  const resolved = await realpath(path.join(current.sourceRoot, file));
+                  const relative = path.relative(sourceRoot, resolved);
+                  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !(await stat(resolved)).isFile()) throw new Error('Invalid required file');
+                } catch {
+                  throw systemError(`${inspector.title} needs ${file}. Prepare this project's dependencies, then retry.`, "vibe64_architecture_prerequisite_missing");
+                }
+              }
+            }
             let observations;
             if (inspection.inspectors?.length) {
+              progress("Scanning project source and existing Genesis documents…");
               const initial = await refresher({ projectRoot: current.sourceRoot, write: false, signal: controller.signal });
               if (!initial.machine?.architecture) throw systemError("Update the Genesis compiler before inspecting architecture.", "vibe64_architecture_compiler_unavailable");
               const request = `${JSON.stringify({ schema: "vibe64.architecture-inspection-input.v1", files: initial.machine.architecture.files.map(file => ({ path: file.path, hash: file.hash })), packages: (initial.machine.architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({ id, name, manifest, declarations, root, opaque, entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file })) })), packageIdentity: initial.machine.architecture.packageIdentity, uiDiscovery: initial.machine.architecture.uiDiscovery, stackHash: inspection.stackHash })}\n`;
@@ -263,19 +295,22 @@ function createService({
                   if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
                 }
                 const [command, ...args] = inspector.argv;
+                progress(`Running ${inspector.title}…`);
                 const execution = await runCommand({ actor: "app", allowedRoots: [current.sourceRoot], command, args, cwd: path.resolve(current.sourceRoot, inspector.workdir), mode: "capture", purpose: "source", envPolicy: "project", env: await projectService.projectInspectionEnvironment({ sessionId: current.sessionId }), project: await projectService.readCurrentProject(), session: current.session, runtimes: runtime.runtimes, input: request, maxBuffer: inspector.maxBuffer, timeout: inspector.timeout, signal: controller.signal });
                 if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
-                if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed. Check its command output and retry.`, "vibe64_architecture_inspector_failed");
+                if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ''}.`, "vibe64_architecture_inspector_failed", { inspectorId: inspector.id, commandOutput: String(execution?.stderr || execution?.error || '').slice(-2000) });
                 if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
                 let document;
                 try { document = JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
                 documents.push(document);
               }
+              progress("Validating UI observations…");
               observations = mergeArchitectureObservations(documents, { files: initial.machine.architecture.files, packages: initial.machine.architecture.packages || [] });
               const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
               if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
             }
             if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+            progress("Updating the browsing index…");
             return refresher({ projectRoot: current.sourceRoot, write: true, ...(observations ? { observations } : {}), signal: controller.signal });
           }, { operation: "architecture-refresh" });
           if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");

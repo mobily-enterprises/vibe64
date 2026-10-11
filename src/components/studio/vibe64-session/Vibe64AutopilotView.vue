@@ -741,9 +741,10 @@
             <v-btn :prepend-icon="mdiArrowLeft" size="x-small" type="button" variant="text" @click="backToDashboard">Back to dashboard</v-btn>
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
-          <template #file-interface="{ request, active, architecture, refresh, refreshing, openFile, updateLocation }">
+          <template #file-interface="{ request, active, architecture, refresh, refreshing, refreshProgress, openFile, updateLocation }">
             <Vibe64SessionSourceEditor single-file :key="request.path" :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture" :refresh-architecture="refresh" :architecture-refreshing="refreshing"
+              :architecture-refresh-progress="refreshProgress"
               :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openFile"

@@ -24,33 +24,39 @@ coverage; use the project's declared preparation/verification for runtime proof.
 Open a capability to read its authored contract and participating files. Its one
 owning subsystem stays fixed even when those files include another subsystem's
 library. This is file-level evidence, not a claim that every function implements
-the entire capability. **Description** points to this Program context. Missing
+the entire capability. **Program context** opens this authored capability. Missing
 explanations are explicit; review authored explanations after source changes.
 Vibe64 does not generate a competing file or subsystem summary.
 **Read Program** opens the authored document. Use **Dashboard → Files → Repo**
 to edit that document; the Architecture file viewer is read-only.
 
-Select a callable declaration, then choose **Steps** to generate function-specific
-pseudocode through the existing Helper. Merely opening a file or selecting a
-signature makes no Helper query. Steps describe meaningful decisions, data flow,
+Select a callable declaration, then choose **Explain function** for a short purpose
+statement followed by function-specific steps through the existing Helper. Merely
+opening a file or selecting a signature makes no Helper query. The explanation
+describes meaningful decisions, data flow,
 effects and failures in English. **Code** displays that declaration's exact source
-range. Components, values and types use Program context and Code; function Steps
-are unavailable for non-callable declarations. **Code · whole file** opens the
+range. Components, values and types use Program context and Code; generated
+function explanations are unavailable for non-callable declarations. **Code · whole file** opens the
 existing source view; **Interface** returns to declarations. Controls work on
 both desktop and mobile.
 
 Pseudocode requests obey the existing account, access, admission and cancellation
-rules. If the Helper is unavailable, saved Steps, Program and Code remain readable.
+rules. If the Helper is unavailable, saved explanations, Program and Code remain readable.
 The explanation panel retains **Stop**, retry and follow-up controls. A completed
 initial function answer is cached privately against actual saved source, account,
 verified Helper profile and prompt revision. It remains informational and is
 not supplied to coding agents. Source changes mark it stale; the next explicit
-Steps request regenerates it. **Regenerate Steps** forces a new request.
+**Explain function** request regenerates it. **Regenerate explanation** forces a new request.
 Follow-up chats do not replace the cached initial answer. Existing general
 **Explain file or selection** in the Code editor remains available separately.
 
-An out-of-date index disables symbol-range use. **Refresh analysis** rebuilds
-available analysis; **Code · whole file** and authored Program context remain
+An out-of-date index disables symbol-range use. **Re-scan project** rebuilds
+the whole project browsing index: signatures, imports and UI links. It reads existing
+Genesis documents; it does not rewrite Program or ask the Helper for explanations.
+The running stage and elapsed seconds show progress, with **Cancel analysis** in
+Architecture. An inspector failure offers **Command output** inline and retains
+the preceding index. Fix the reported command or prepare the missing dependency,
+then retry. **Code · whole file** and authored Program context remain
 available without a supported parser. Unsaved edits disable generated
 explanations and indexed range use until saved. Save with the existing **Save now**
 control; conflicts retain the existing draft and recovery workflow. A source change
@@ -58,7 +64,7 @@ between selection and explanation is rejected rather than describing the wrong
 range. For a symbol, the server resolves its indexed identity and checks that
 declaration against the saved file; browser-supplied selection coordinates do
 not determine the symbol explanation. Missing or invalid analysis offers
-**Refresh analysis**; oversized analysis retains Code and ordinary selection
+**Re-scan project**; oversized analysis retains Code and ordinary selection
 explanations. Binary/download-only files retain their normal preview/download
 controls.
 
@@ -92,5 +98,5 @@ file and selected declaration. This history also covers links across subsystems;
 
 **Analysis details** holds coverage, visibility and missing-Helper information.
 The file view keeps this secondary information collapsed. A missing Program
-shows one short notice; **Description** is disabled until an authored explanation
-exists. **Code** and saved function **Steps** remain available independently.
+shows one short notice; **Program context** is disabled until an authored explanation
+exists. **Code** and saved function explanations remain available independently.

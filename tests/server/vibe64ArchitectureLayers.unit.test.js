@@ -65,6 +65,8 @@ test('Stack entry files are explicit canonical paths for any language', () => {
   const recipe = ['### Inspector `app`: Application facts', '- Runtime: `nodejs`', '- Directory: `.`', '- Command: `node` `inspect.mjs`', '- Timeout seconds: `10`', '- Max output bytes: `4096`'];
   assert.deepEqual(parseVibe64ArchitectureInspectionLines([...recipe, '- Entry files: `web/host.go` `desktop/App.cs` `game/main.cpp`'])[0].entryFiles, ['web/host.go', 'desktop/App.cs', 'game/main.cpp']);
   assert.equal(parseVibe64ArchitectureInspectionLines(recipe)[0].entryFiles, undefined);
+  assert.deepEqual(parseVibe64ArchitectureInspectionLines([...recipe, '- Required files: `tools/inspect.py` `build/inspector.exe`'])[0].requiredFiles, ['tools/inspect.py', 'build/inspector.exe']);
+  assert.throws(() => parseVibe64ArchitectureInspectionLines([...recipe, '- Required files: `../inspect.py`']));
   for (const invalid of ['../main.py', '/absolute/Main.kt', 'src/../main.rs']) assert.throws(() => parseVibe64ArchitectureInspectionLines([...recipe, `- Entry files: \`${invalid}\``]));
 });
 

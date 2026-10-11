@@ -221,7 +221,7 @@ facts and existing refresh operation, avoiding another whole-index read for
 each file; standalone Files retains its existing graph resource. Hash checks
 still compare those facts against the freshly read source. Public signatures reach implementation declarations
 rather than the Files workspace. Existing hash checks, Helper admission and
-explanation caches supply Description, Steps and exact Code. Whole-file source
+explanation caches supply Program context, Explain function and exact Code. Whole-file source
 is read-only. Missing return/parser/Helper evidence stays explicit. In narrow
 viewers the selected declaration precedes the symbol list.
 The file view explains common definition kinds and distinguishes a file export
@@ -252,10 +252,16 @@ to prevent mixed Vue runtimes during lazy diagram loading.
 
 Page observations and registrations come from the compiler's neutral validated
 contract. The client performs no source extraction and requires neither URLs,
-JavaScript nor filesystem routing. Explicit Refresh analysis uses the existing per-request HTTP timeout facility
+JavaScript nor filesystem routing. Explicit Re-scan project uses the existing per-request HTTP timeout facility
 with a ten-minute budget, rather than the ordinary short mutation deadline.
 The existing separate cancellation operation remains available, and failure
-notices are small, dismissible overlays. Refresh holds the original
+notices are small, dismissible overlays with bounded inspector command output.
+The same admitted refresh tracks its actual stage and elapsed time in memory;
+a lightweight authenticated status query polls only while this client is
+refreshing, without reading either native artifact. The file viewer forwards
+that status rather than presenting a project re-scan as function generation.
+Declared Required files and runtime/workdir prerequisites fail before scanning.
+Re-scan reads existing Program text; it neither rewrites it nor calls a Helper. Refresh holds the original
 source-work admission and invokes Stack's Vibe64-owned Architecture inspection
 recipe through managed finite commands. Hashed inputs, UI discovery and package
 boundary identity are passed on stdin; stdout is bounded observation JSON.

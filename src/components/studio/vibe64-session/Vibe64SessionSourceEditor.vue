@@ -482,6 +482,7 @@
             :dirty="editor.dirty.value"
             :busy="editor.explanationBusy.value || editor.explanationClosing.value"
             :refreshing="architectureRefreshing || interfaceGraph?.refreshing.value"
+            :refresh-progress="architectureRefreshProgress || interfaceGraph?.refreshProgress.value"
             :analysis-error="architectureFacts ? '' : interfaceGraph?.error.value"
             :assistant-available="assistantAvailable"
             :assistant-unavailable-message="assistantUnavailableMessage"
@@ -736,6 +737,7 @@ const props = defineProps({
   architectureFacts: { type: Object, default: null },
   refreshArchitecture: { type: Function, default: null },
   architectureRefreshing: { type: Boolean, default: false },
+  architectureRefreshProgress: { type: Object, default: null },
   agentActive: { type: Boolean, default: false },
   fileBookmarks: { type: Object, default: null },
   active: {

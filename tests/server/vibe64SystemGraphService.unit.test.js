@@ -408,7 +408,12 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
       runCommand: async ({ signal }) => { started(); await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); interrupted(); await cleanupReady; return { ok: false, stdout: '' }; }
     });
     const refresh = service.refresh({ sessionId: 'session-1' }); await ready;
+    const progress = await service.readRefreshStatus({ sessionId: 'session-1' });
+    assert.equal(progress.ok, true);
+    assert.match(progress.refresh.message, /Running/u);
+    assert.ok(progress.refresh.elapsedSeconds >= 0);
     const cancel = service.cancelRefresh({ sessionId: 'session-1' }); await aborted;
+    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.message, 'Stopping analysis…');
     assert.equal((await service.refresh({ sessionId: 'session-1' })).code, 'vibe64_architecture_refresh_busy');
     let completed = false; cancel.then(() => { completed = true; }); await Promise.resolve(); assert.equal(completed, false);
     cleanup();
@@ -417,6 +422,42 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
     assert.deepEqual((await service.readMachineCity({ sessionId: 'session-1' })).city.architecture, machine.architecture);
     assert.equal((await service.cancelRefresh({ sessionId: 'session-1' })).cancelled, false);
+    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh, null);
+  });
+});
+
+test('missing declared inspector prerequisites fail before source scanning or publication', async () => {
+  await withTempRoot(async root => {
+    const machine = architectureFixture(); await writeCities(root, { machine });
+    const service = createService({ projectService: projectServiceFor(root),
+      runtimeReader: () => ({ available: true, runtimes: [] }),
+      inspectorReader: async () => { const inspection = inspectorFixture(); inspection.inspectors[0].requiredFiles = ['tools/missing-inspector.py']; return inspection; },
+      refresher: async () => { assert.fail('Missing inspector must be rejected before scanning source'); },
+      runCommand: async () => { assert.fail('Missing inspector must not run'); }
+    });
+    const result = await service.refresh({ sessionId: 'session-1' });
+    assert.equal(result.code, 'vibe64_architecture_prerequisite_missing');
+    assert.match(result.error, /tools\/missing-inspector.py/u);
+    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh, null);
+    assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
+  });
+});
+
+test('failed inspectors retain bounded command diagnostics and the preceding artifact', async () => {
+  await withTempRoot(async root => {
+    const machine = architectureFixture(); await writeCities(root, { machine });
+    const calls = [];
+    const projectService = { ...projectServiceFor(root), async readCurrentProject() { return {}; }, async projectInspectionEnvironment() { return {}; } };
+    const service = createService({ projectService, runtimeReader: () => ({ available: true, runtimes: [] }), inspectorReader: async () => inspectorFixture(),
+      refresher: async input => { calls.push(input); return { machine, program: programCityFixture() }; },
+      runCommand: async () => ({ ok: false, exitCode: 1, stderr: 'x'.repeat(4000) + 'Required module missing.' })
+    });
+    const result = await service.refresh({ sessionId: 'session-1' });
+    assert.match(result.error, /exit 1/u);
+    assert.equal(result.details.commandOutput.length, 2000);
+    assert.match(result.details.commandOutput, /Required module missing\.$/u);
+    assert.deepEqual(calls.map(input => input.write), [false]);
+    assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
   });
 });
 

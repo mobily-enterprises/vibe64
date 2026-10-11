@@ -60,11 +60,11 @@ viewer needs no language or package-manager-specific controls.
    file's interface opens inside the square. Selecting a subsystem signature
    likewise opens only its implementation file, with the requested declaration
    selected. The project-wide Files workspace does not open.
-6. Read **File exports**, **Description**, **Steps** and symbol
+6. Read **File exports**, **Program context**, **Explain function** and symbol
    **Code** controls. **Code · whole file** is read-only here; **Interface** returns
-   to declarations. Description shows authored Genesis Program context. Function
-   Steps are generated only on explicit request through an available Helper. Missing Helper or parser coverage remains
-   explicit. See [Read file interfaces](file-interfaces.md).
+   to declarations. Program context shows an authored capability. Explain function
+   asks the Helper for a short purpose statement and steps on explicit request.
+   Missing Helper or parser coverage remains explicit. See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the
    enclosing views, or use the breadcrumb: **Engine → subsystem → file**.
    Inside the square, a mouse wheel, two-finger touchpad movement or a one-finger
@@ -114,7 +114,7 @@ re-export aliases retain their public name and lead to the original source.
 External package declarations have no project source link.
 
 Ordinary source indexing retains an unchanged UI map. If source or Stack changes
-invalidate that evidence, **UI map needs refresh** offers **Refresh analysis** to
+invalidate that evidence, **UI map needs refresh** offers **Re-scan project** to
 run the project's configured inspector. Engine files remain browsable meanwhile.
 
 A coding conversation can inspect source and propose corrections to the
@@ -147,7 +147,7 @@ does not prove that no runtime call exists.
 
 Drag empty space to pan. **Fit** returns to the complete map. **Architecture
 options** (**⋯**) contains **Fit UI**, **Fit Engine**, **Zoom in**, **Zoom out**, the
-UI-call toggle, **Reset arrangement**, **Reload architecture** and **Refresh analysis**. On mobile use the
+UI-call toggle, **Reset arrangement**, **Reload architecture** and **Re-scan project**. On mobile use the
 top bar's **Show project** control if chat fills the screen, then use the same
 menu, pinch and pan; folder and file controls remain keyboard accessible.
 The existing chat divider controls workspace width.
@@ -160,12 +160,15 @@ retained view and changes no source ownership or relationship.
 
 Opening reads existing facts without running inspectors. A failed load shows
 **Retry loading**; **Reload architecture** rereads existing snapshots. If a local
-preview was restarted, reload its browser tab to reconnect. **Refresh analysis**
-explicitly rebuilds them through Stack's declared finite technology inspectors.
+preview was restarted, reload its browser tab to reconnect. **Re-scan project**
+rebuilds the whole project browsing index through Stack's declared finite inspectors.
+It reads existing Genesis documents; it does not rewrite Program or generate
+function explanations. The running stage and elapsed seconds show what is happening.
 **Cancel analysis** waits for cleanup and preserves the previous valid index.
 Large refreshes have a ten-minute request budget; inspectors retain their own
 finite limits. Invalid output, changed source or missing prerequisites leaves
-the previous index and a dismissible error. Correct the declaration/command or
+the previous index and an inline error. **Command output** shows bounded inspector
+diagnostics; no second blocking dialog is opened. Correct the declaration/command or
 finish preparation, then retry. Missing page evidence asks for Stack navigation
 inputs and a technology inspector. An Engine-only project needs no UI pages.
 

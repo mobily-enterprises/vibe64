@@ -4,9 +4,11 @@
       <slot name="navigation" />
       <div class="ui-storyboard__heading">
         <h1>Architecture</h1>
-        <p>{{ uiIds.length }} pages / screens / scenes · {{ engineIds.length - (externalCount ? 1 : 0) }} subsystems<span v-if="externalCount"> · {{ externalCount }} external packages</span> <span v-if="coverage && coverage !== 'complete'">· {{ coverage }} page discovery</span><span v-if="architecture?.ui?.capabilities?.operationUses === 'unconfigured'" title="This project has no UI-call discovery configured. Missing arrows do not prove there are no calls."> · UI calls not analysed</span></p>
+        <p v-if="refreshProgress" role="status">{{ refreshProgress.message }} · {{ refreshProgress.elapsedSeconds }}s</p>
+        <p v-else>{{ uiIds.length }} pages / screens / scenes · {{ engineIds.length - (externalCount ? 1 : 0) }} subsystems<span v-if="externalCount"> · {{ externalCount }} external packages</span> <span v-if="coverage && coverage !== 'complete'">· {{ coverage }} page discovery</span><span v-if="architecture?.ui?.capabilities?.operationUses === 'unconfigured'" title="This project has no UI-call discovery configured. Missing arrows do not prove there are no calls."> · UI calls not analysed</span></p>
       </div>
       <div class="ui-storyboard__actions">
+        <v-btn v-if="refreshing" size="small" variant="text" min-height="44" @click="cancelRefresh">Cancel analysis</v-btn>
         <v-btn size="small" variant="text" :disabled="!contentCount" @click="fit()">Fit</v-btn>
         <v-menu>
           <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text" aria-label="Architecture options" title="Architecture options" min-width="36">⋯</v-btn></template>
@@ -20,14 +22,14 @@
             <v-divider />
             <v-list-item title="Reload architecture" :disabled="loading" @click="reload" />
             <v-list-item v-if="refreshing" title="Cancel analysis" @click="cancelRefresh" />
-            <v-list-item v-else title="Refresh analysis" :disabled="loading" @click="refresh" />
+            <v-list-item v-else title="Re-scan project" :disabled="loading" @click="refresh" />
           </v-list>
         </v-menu>
       </div>
     </header>
     <div ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), fileRequest ? closeFile() : closeDetail($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
-      <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}</v-alert>
-      <v-alert v-else-if="architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Refresh analysis</v-btn></v-alert>
+      <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}<details v-if="refreshOutput"><summary>Command output</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ refreshOutput }}</pre></details></v-alert>
+      <v-alert v-if="!refreshing && architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Re-scan project</v-btn></v-alert>
       <VueFlow v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
         :zoom-on-double-click="false" :zoom-on-scroll="false" :zoom-on-pinch="false" :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false" :elevate-nodes-on-select="false"
         :default-edge-options="{ markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#7895a4' } }"
@@ -62,7 +64,7 @@
               <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest ? 'Back to subsystem' : 'Back to Engine'" title="Close this view (Esc)" @click="fileRequest ? closeFile() : closeDetail($event)">×</button>
             </nav>
             <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
-            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :refresh="refresh" :refreshing="refreshing" :open-file="openFile" :update-location="updateFileLocation"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
+            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :refresh="refresh" :refreshing="refreshing" :refresh-progress="refreshProgress" :open-file="openFile" :update-location="updateFileLocation"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
             <div v-show="!fileRequest" class="subsystem-zoom__body">
               <div v-if="!data.outline" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
               <Vibe64SubsystemInspector v-else embedded :outline="data.outline" @inspect="openFile" @open-source="emit('open-source-file', $event)"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
@@ -107,7 +109,7 @@
       <div v-if="!contentCount" class="ui-storyboard__empty" role="status">
         <h2>{{ error ? 'Architecture could not be loaded' : loading ? 'Loading architecture…' : 'Architecture needs evidence' }}</h2>
         <p v-if="error">{{ error }}</p>
-        <p v-else-if="!loading">{{ coverage === 'complete' ? 'The configured inspector found no UI entry points.' : 'Refresh analysis to create the project index. Check Genesis subsystem declarations and Stack inspection settings if it remains empty.' }}</p>
+        <p v-else-if="!loading">{{ coverage === 'complete' ? 'The configured inspector found no UI entry points.' : 'Re-scan project to create the project index. Check Genesis subsystem declarations and Stack inspection settings if it remains empty.' }}</p>
         <v-btn v-if="error" size="small" variant="tonal" :disabled="loading" @click="reload">Retry loading</v-btn>
       </div>
       <div v-else-if="!expandedSubsystemId" class="ui-storyboard__legend">Drag empty space to pan · Zoom into a subsystem to explore · Use ⠿ to arrange <span>Entry points emphasised · Supporting directories subdued</span></div>
@@ -124,7 +126,7 @@ import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
 const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 } });
-const { architecture, error, loading, refreshing, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
+const { architecture, error, loading, refreshing, refreshProgress, refreshOutput, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion'), projection: 'architecture'
 });
 const emit = defineEmits(['inspect-file', 'open-source-file']);
@@ -442,7 +444,7 @@ const engineIds = ref([]);
 const externalCount = ref(0);
 const initialIds = ref([]);
 const contentCount = computed(() => uiIds.value.length + engineIds.value.length);
-const entryWarning = computed(() => architecture.value?.layoutDiagnostic || architecture.value?.entryPointDiagnostic || ((architecture.value?.layout?.groups || []).flatMap(group => group.subsystems).some(member => !(architecture.value?.subsystems || []).some(owner => !owner.opaque && owner.root === member.root)) ? 'Some declared architecture roots are not indexed. Refresh analysis or correct their Stack paths.' : (architecture.value?.entryPoints || []).some(entry => entry.resolution !== 'resolved') ? 'Some declared entry files are not indexed. Refresh analysis or correct their Stack paths.' : ''));
+const entryWarning = computed(() => architecture.value?.layoutDiagnostic || architecture.value?.entryPointDiagnostic || ((architecture.value?.layout?.groups || []).flatMap(group => group.subsystems).some(member => !(architecture.value?.subsystems || []).some(owner => !owner.opaque && owner.root === member.root)) ? 'Some declared architecture roots are not indexed. Re-scan project or correct their Stack paths.' : (architecture.value?.entryPoints || []).some(entry => entry.resolution !== 'resolved') ? 'Some declared entry files are not indexed. Re-scan project or correct their Stack paths.' : ''));
 const ports = [
   ['top-in', 'target', Position.Top], ['bottom-out', 'source', Position.Bottom],
   ['top-out', 'source', Position.Top], ['bottom-in', 'target', Position.Bottom],

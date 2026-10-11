@@ -1722,9 +1722,9 @@ inside the square. File icons retain directory nesting/search and source-size
 comparisons within their subsystem. Tight signature rows and compact headers
 preserve reading space. The existing single-file viewer retains signatures,
 recorded returns, authored Genesis Program descriptions, on-demand function
-pseudocode through Steps, exact symbol Code and read-only whole-file Code.
+purpose and pseudocode through Explain function, exact symbol Code and read-only whole-file Code.
 Pseudocode is informational only, cached privately against actual saved source,
-and regenerated on the next Steps request after changes. Opening a file or
+and regenerated on the next Explain function request after changes. Opening a file or
 selecting a declaration makes no Helper query. Dashboard Files retains editing.
 
 Purple protocol-neutral page/controller bridges remain evidenced and hidden
@@ -1739,6 +1739,10 @@ Genesis's subsystem map supplies names, responsibilities and the complete
 directory-owner list. Stack's Architecture layout supplies placement and explicit
 library/support roles without changing that ownership. Existing Program
 capabilities enrich subsystem and file views. Loading failures offer Retry loading;
-Reload architecture reads existing snapshots, while Refresh analysis rebuilds them.
+Reload architecture reads existing snapshots. Re-scan project rebuilds signatures
+and links from source and existing Genesis documents, without rewriting Program
+or asking the Helper for explanations. The running stage and elapsed seconds
+show progress; cancellation waits for cleanup. Inspector failures retain the
+previous index and show bounded command output inline.
 Unchanged source indexing retains valid UI observations; stale UI evidence shows
 a short refresh notice while Engine browsing remains available.

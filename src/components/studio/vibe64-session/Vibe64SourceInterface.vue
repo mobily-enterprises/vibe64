@@ -4,7 +4,8 @@
     <v-alert v-if="analysisError" type="error" variant="tonal" class="mb-3">{{ analysisError }}</v-alert>
     <v-alert v-if="dirty" type="info" variant="tonal" class="mb-3">This file has unsaved edits. Save before generating an explanation or using indexed symbol ranges.</v-alert>
     <v-alert v-else-if="!current" type="info" variant="tonal" class="mb-3">{{ indexed ? 'The index is out of date for this file.' : 'Symbol analysis is unavailable for this file.' }} Program context and whole-file Code remain available.</v-alert>
-    <div class="source-interface__file-actions"><v-btn size="small" min-height="44" variant="text" :loading="refreshing" @click="$emit('refresh-analysis')">Refresh analysis</v-btn></div>
+    <div class="source-interface__file-actions"><v-btn size="small" min-height="44" variant="text" :loading="refreshing" title="Rebuild the project browsing index; does not generate explanations" @click="$emit('refresh-analysis')">Re-scan project</v-btn><small>Updates signatures and links; no explanations.</small></div>
+    <p v-if="refreshing" class="source-interface__hint" role="status">{{ refreshProgress?.message || 'Starting project analysis…' }} · {{ refreshProgress?.elapsedSeconds || 0 }}s</p>
     <section v-if="programs.length" class="source-interface__interpretation" aria-label="Genesis Program context">
       <strong>Program</strong>
       <details v-for="program in programs" :key="program.id" class="source-interface__program" @toggle="$event.target.open && expandedPrograms.add(program.id)">
@@ -15,27 +16,28 @@
         </div>
       </details>
     </section>
-    <p v-if="!programs.length" class="source-interface__hint" role="status">{{ programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Refresh analysis.' }}</p>
+    <p v-if="!programs.length" class="source-interface__hint" role="status">{{ programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Re-scan project.' }}</p>
     <p v-if="interpretationWarning" class="source-interface__hint" role="status">{{ interpretationWarning }}</p>
     <h4 class="source-interface__exports-heading">File exports <span>{{ symbols.length }}</span></h4>
-    <details class="source-interface__analysis"><summary>Analysis details</summary><p class="source-interface__hint">{{ coverage }}. File exports may be internal to the subsystem. Unrecorded returns are omitted. Program explanations are authored and may be out of date.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'Steps need a Helper.' }}</p></details>
+    <details class="source-interface__analysis"><summary>Analysis details</summary><p class="source-interface__hint">{{ coverage }}. File exports may be internal to the subsystem. Unrecorded returns are omitted. Program explanations are authored and may be out of date.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'Explain function needs a Helper.' }}</p></details>
     <div class="source-interface__layout">
       <nav class="source-interface__symbols" aria-label="Exported and public symbols">
         <button v-for="symbol in symbols" :key="symbol.id" type="button" :data-symbol-id="symbol.id" :disabled="!current || dirty" :aria-pressed="symbol.id === selectedId" :class="{ 'source-interface__symbol--selected': symbol.id === selectedId }" @click="$emit('select-symbol', symbol.id)"><small>{{ symbol.kind }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType">Returns: {{ symbol.returnType }}</span><span v-if="!symbol.rangeAvailable || symbol.visibilityScope && symbol.visibilityScope !== 'public'">{{ symbol.rangeAvailable ? '' : 'Range unavailable' }}{{ symbol.visibilityScope && symbol.visibilityScope !== 'public' ? ` · Visibility: ${symbol.visibilityScope}` : '' }}</span></button>
-        <p v-if="!symbols.length" class="source-interface__hint">{{ current ? 'No exports recorded; analysis may be incomplete.' : 'Refresh analysis or open whole-file Code.' }}</p>
+        <p v-if="!symbols.length" class="source-interface__hint">{{ current ? 'No exports recorded; analysis may be incomplete.' : 'Re-scan project or open whole-file Code.' }}</p>
       </nav>
       <section v-if="selectedSymbol" class="source-interface__detail" aria-label="Selected symbol">
         <h4><code>{{ signature(selectedSymbol) }}</code></h4><p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
         <div class="source-interface__modes" aria-label="Symbol presentation">
-          <v-btn v-for="option in ['description', 'steps', 'code']" :key="option" size="small" min-height="44" :variant="presentation === option ? 'tonal' : 'text'" :title="option === 'description' && !programs.length ? 'No authored explanation' : option === 'steps' && !assistantAvailable ? 'New Steps need a Helper' : undefined" :disabled="option === 'description' ? !programs.length : (!selectedSymbol.rangeAvailable || !current || dirty) || (option === 'steps' && (!Array.isArray(selectedSymbol.parameters) || (!saved('selection', selectedId, 'steps') && explanationDisabled)))" @click="$emit('present-symbol', option); if (option === 'description') { const program = $el.querySelector('.source-interface__program'); if (program) { program.open = true; program.scrollIntoView({ block: 'start' }); } }">{{ option.charAt(0).toUpperCase() + option.slice(1) }}</v-btn>
-          <v-btn v-if="presentation === 'steps' && selectedInterpretation" size="small" min-height="44" variant="text" :disabled="explanationDisabled" @click="$emit('present-symbol', 'steps', true)">Regenerate Steps</v-btn>
+          <v-btn v-for="option in ['description', 'steps', 'code']" :key="option" size="small" min-height="44" :variant="presentation === option ? 'tonal' : 'text'" :title="option === 'description' ? 'Authored capability context; not an explanation of this function' : option === 'steps' && !assistantAvailable ? 'Explain function needs a Helper' : undefined" :disabled="option === 'description' ? !programs.length : (!selectedSymbol.rangeAvailable || !current || dirty) || (option === 'steps' && (!Array.isArray(selectedSymbol.parameters) || (!saved('selection', selectedId, 'steps') && explanationDisabled)))" @click="$emit('present-symbol', option); if (option === 'description') { const program = $el.querySelector('.source-interface__program'); if (program) { program.open = true; program.scrollIntoView({ block: 'start' }); } }">{{ option === 'description' ? 'Program context' : option === 'steps' ? 'Explain function' : 'Code' }}</v-btn>
+          <v-btn v-if="presentation === 'steps' && selectedInterpretation" size="small" min-height="44" variant="text" :disabled="explanationDisabled" @click="$emit('present-symbol', 'steps', true)">Regenerate explanation</v-btn>
         </div>
+        <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Explain function needs an available Helper.</p>
         <pre v-if="presentation === 'code'" class="source-interface__code"><code>{{ source }}</code></pre>
         <template v-else-if="presentation === 'steps'">
           <p v-if="selectedInterpretation" class="source-interface__hint">Informational interpretation · {{ isCurrentInterpretation(selectedInterpretation) ? 'Matches saved source' : 'Stale — source or guidance changed' }}</p>
           <slot v-if="activeInterpretation" name="explanation" />
           <LongTextPreviewBlocks v-else-if="selectedInterpretation" :blocks="interpretationBlocks" />
-          <p v-else class="source-interface__hint">{{ busy ? 'Preparing Steps…' : 'No saved Steps.' }}</p>
+          <p v-else class="source-interface__hint">{{ busy ? 'Preparing explanation…' : 'No saved explanation.' }}</p>
         </template>
       </section>
     </div>
@@ -46,7 +48,7 @@ import { computed, ref } from 'vue';
 import { LongTextPreviewBlocks } from '@jskit-ai/assistant-core/client/conversation';
 import { sourceEditorLinkTarget } from '@/lib/vibe64SourceEditorLinks.js';
 import { parseLongTextReviewBlocks } from '@jskit-ai/assistant-core/shared/conversation';
-const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, refreshing: Boolean, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
+const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, refreshing: Boolean, refreshProgress: { type: Object, default: null }, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
 const emit = defineEmits(['select-symbol', 'present-symbol', 'whole-file-code', 'open-source', 'refresh-analysis']);
 const expandedPrograms = ref(new Set());
 function openProgramLink({ event, href }, sourcePath) {
@@ -70,6 +72,7 @@ const interpretationBlocks = computed(() => parseLongTextReviewBlocks(selectedIn
 .source-interface__heading h3 { font-size: 20px; line-height: 26px; margin: 0; }.source-interface__heading p { grid-column: 1 / -1; font-size: 12px; line-height: 18px; margin: 0; opacity: .65; overflow-wrap: anywhere; }
 .source-interface__hint { font-size: 12px; line-height: 18px; opacity: .72; margin: 0 0 6px; }
 .source-interface__file-actions, .source-interface__modes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.source-interface__file-actions small { align-self: center; color: #789397; }
 .source-interface__file-actions :deep(.v-btn), .source-interface__modes :deep(.v-btn) { padding-inline: 8px; }
 .source-interface__layout { display: flex; flex-direction: column; gap: 10px; }
 .source-interface__exports-heading { font-size: 15px; margin: 10px 0 4px; }

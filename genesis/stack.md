@@ -81,6 +81,7 @@
 - Runtime: `nodejs`
 - Directory: `.`
 - Command: `node` `node_modules/@jskit-ai/shell-web/src/architecture/cli.js` `--alias` `@=src`
+- Required files: `node_modules/@jskit-ai/shell-web/src/architecture/cli.js`
 - Timeout seconds: `60`
 - Max output bytes: `4194304`
 - Entry files: `bin/run.js` `server.js`
