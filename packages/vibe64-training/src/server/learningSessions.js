@@ -8,7 +8,7 @@ function learningError(code, message, statusCode = 409) {
 
 // Training derives authority and instructions from the saved reservation. Main's
 // original Project/Session/Runtime owners retain storage, routing and execution.
-function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, projectContext, learningTeaching = null, practiceSessions = false } = {}) {
+function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, terminals = null, projectContext, learningTeaching = null, practiceSessions = false } = {}) {
   if (typeof learners?.readLearningSessionScope !== "function" ||
       typeof learners?.runPreparationExclusive !== "function" ||
       typeof teachingBrief?.readBrief !== "function" ||
@@ -285,7 +285,16 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
         }
         const saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "create" });
         return runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access: "create" },
-          () => sessions.inspectSession(saved.initialSessionId), true, true);
+          async () => {
+            if (typeof terminals?.openProjectRuntime !== "function") {
+              throw learningError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot open the saved practice runtime.");
+            }
+            const opened = await terminals.openProjectRuntime({ reason: "learning-session-open" });
+            if (opened?.ok !== true || opened.runtime?.open !== true || opened.projectSlug !== saved.projectSlug) {
+              throw learningError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "The saved practice runtime did not confirm opening. Keep this lesson and retry its App choice.");
+            }
+            return sessions.inspectSession(saved.initialSessionId);
+          }, true, true);
       }
       const sessionId = `learning-${attemptId}`;
       return runWithProjectRequestContext(context, async () => {

@@ -166,7 +166,7 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false, learnerGestureOwner = null } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
@@ -181,6 +181,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
     } };
   }
   const reads = [];
+  const practiceOpens = [];
   const visualReads = [];
   const learningMainReads = [];
   const checkpointReads = [];
@@ -202,6 +203,13 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const colleaguePreview = Vue.shallowRef(null);
   const transport = {
     request(url, options) {
+      if (practiceApp && options.method === "POST" && url === props.conversationRuntime.identity.sessionsApiPath) {
+        expect(options.body).toEqual({});
+        const response = Promise.withResolvers();
+        practiceOpens.push({ url, options, ...response });
+        if (!holdPracticeOpen) response.resolve({ ok: true, sessionId: props.sessionId });
+        return response.promise;
+      }
       if (practiceApp && url === `${props.conversationRuntime.identity.sessionsApiPath}/${props.sessionId}/onboarding`) {
         expect(options.method).toBe("GET");
         const response = Promise.withResolvers(); reads.push({ url, options, ...response });
@@ -360,7 +368,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.mount(container);
   return {
     colleaguePreview, container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
-    visualReads, learningMainReads, checkpointReads, checkpointWrites, presentationHost, viewer,
+    visualReads, learningMainReads, checkpointReads, checkpointWrites, practiceOpens, presentationHost, viewer,
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
@@ -388,6 +396,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
       queryClient.clear();
       for (const request of reads) request.resolve(opening());
       for (const request of writes) request.resolve({ ok: true });
+      for (const request of practiceOpens) request.resolve({ ok: false });
       resetHttpWebClientForTests();
     }
   };
@@ -1664,11 +1673,89 @@ it("the actual selected Learning workspace publisher waits for the original snap
     ready.value = true; expect(layout.value.ready).toBe(true); expect(view.value.pane).toBe("lessons");
     preview.value = { ...binding, projectSlug: "practice", appVisible: true, presentation: { state: { visible: false } } };
     expect(view.value.pane).toBe("preview"); expect(layout.value.chatVisible).toBe(true);
-    width.value = 500; expect(layout.value.projectVisible).toBe(false); expect(view.value.pane).toBe("chat");
+    width.value = 500; expect(layout.value.projectVisible).toBe(true); expect(layout.value.chatVisible).toBe(true); expect(view.value.pane).toBe("preview");
     collapsed.value = true; expect(layout.value.projectVisible).toBe(true); expect(layout.value.chatVisible).toBe(false);
     expect(view.value.pane).toBe("preview");
     preview.value = { ...preview.value, learningAttemptId: "foreign" }; expect(view.value.pane).toBe("lessons");
     available.value = false; expect(view.value).toBeNull(); expect(layout.value).toBeNull();
     available.value = true; props.active = false; expect(view.value).toBeNull();
   } finally { app.unmount(); }
+});
+
+
+it("practice App waits for exact explicit opening before its first output mount and retains the admitted owner", async () => {
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true,
+    lessonsAvailable: true, appAvailable: true, attemptId, holdPracticeOpen: true });
+  try {
+    expect(fixture.reads).toHaveLength(0);
+    expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    const pending = fixture.button("App").props.onClick();
+    await vi.waitFor(() => expect(fixture.practiceOpens).toHaveLength(1));
+    expect(fixture.practiceOpens[0].url).toBe(`/api/learning/${attemptId}/vibe64/sessions`);
+    expect(fixture.reads).toHaveLength(0);
+    expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    expect(fixture.colleaguePreview.value.appVisible).toBe(false);
+    fixture.practiceOpens[0].resolve({ ok: true, sessionId: "saved-practice-initial" });
+    await pending;
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
+    const controls = fixture.outputs.controls.value;
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    expect(fixture.colleaguePreview.value.appVisible).toBe(false);
+    expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
+    const reopened = fixture.button("App").props.onClick();
+    await vi.waitFor(() => expect(fixture.practiceOpens).toHaveLength(2));
+    fixture.practiceOpens[1].resolve({ ok: true, sessionId: "saved-practice-initial" });
+    await reopened; await Vue.nextTick();
+    expect(fixture.outputs.controls.value).toBe(controls);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+  } finally { fixture.close(); }
+});
+
+it.each(["refusal", "different-session", "actor", "binding", "hidden", "unmount"])(
+  "practice App rejects %s opening without mounting outputs or finishing a learner ticket", async change => {
+    const effects = [];
+    const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true,
+      lessonsAvailable: true, appAvailable: true, holdPracticeOpen: true,
+      attemptId: "12345678-1234-4234-8234-123456789abc", learnerGestureOwner: {
+        begin: () => "app-ticket", finish: ticket => effects.push(["finish", ticket]),
+        discard: ticket => effects.push(["discard", ticket])
+      } });
+    try {
+      const pending = fixture.button("App").props.onClick({ type: "click", isTrusted: true });
+      await vi.waitFor(() => expect(fixture.practiceOpens).toHaveLength(1));
+      if (change === "actor") fixture.viewer.value = { actorKey: "another-person" };
+      if (change === "binding") fixture.props.conversationRuntime.identity.sessionId = "another-session";
+      if (change === "hidden") fixture.props.active = false;
+      if (change === "unmount") fixture.close();
+      await Vue.nextTick();
+      fixture.practiceOpens[0].resolve(change === "refusal" ? { ok: false }
+        : { ok: true, sessionId: change === "different-session" ? "other" : "saved-practice-initial" });
+      await pending; await Vue.nextTick();
+      expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+      expect(fixture.reads).toHaveLength(0);
+      expect(effects).toEqual([["discard", "app-ticket"]]);
+    } finally { fixture.close(); }
+  }
+);
+
+
+it("a confirmed practice App retires its output owner when the captured project identity changes", async () => {
+  const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true,
+    lessonsAvailable: true, appAvailable: true, attemptId: "12345678-1234-4234-8234-123456789abc" });
+  try {
+    await fixture.button("App").props.onClick();
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
+    fixture.props.conversationRuntime.identity.projectSlug = "foreign-working";
+    await Vue.nextTick();
+    expect(fixture.outputs.unmounted).toHaveBeenCalledOnce();
+    expect(fixture.colleaguePreview.value).toBeNull();
+    await fixture.button("App").props.onClick();
+    expect(fixture.practiceOpens).toHaveLength(1);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+  } finally { fixture.close(); }
 });

@@ -2759,7 +2759,10 @@ test("configured practice Learning binds the saved actual initial Main session a
   });
   const learning = createTrainingLearningSessions({ learners: f.state,
     teachingBrief: createTrainingTeachingBrief({ learners: f.state, content: installed }),
-    project, sessions, projectContext: core, practiceSessions: true });
+    project, sessions, terminals: { async openProjectRuntime() {
+      assert.equal(core.currentPracticeProjectScope().access, "create");
+      return { ok: true, projectSlug: saved.projectSlug, runtime: { open: true } };
+    } }, projectContext: core, practiceSessions: true });
   const progressBefore = await fs.readFile(f.paths.progress);
   const activeBefore = await fs.readFile(f.paths.active);
   let created;
@@ -2907,7 +2910,7 @@ test("configured practice Learning binds the saved actual initial Main session a
 
 // Uses the original installed fixture, Core/Project/Git/Runtime source creator,
 // and saved preparation owner. No provider/native work or fabricated setup pass.
-async function historicalPracticeFixture(t, { archived = false } = {}) {
+async function historicalPracticeFixture(t, { archived = false, terminals = null } = {}) {
   const f = await fixture(t);
   const [{ createStudioProjectContext }, { createService: createProject }, { createManagedProjectRepositoryService },
     { createSessionSource }, { createTrainingLearningSessions }, { upgradeLearningPracticeHistory }, { createService: createSessions }] = await Promise.all([
@@ -2969,7 +2972,7 @@ async function historicalPracticeFixture(t, { archived = false } = {}) {
   const run = (apply = false, report = (level, message) => messages.push({ level, message })) => upgradeLearningPracticeHistory({
     systemRoot: f.systemRoot, backupRoot, apply, report });
   const learning = createTrainingLearningSessions({ learners: f.state,
-    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content }), project,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content }), project, terminals,
     sessions: { ...createSessions({ project, terminals: { async closeSessionTerminals() {} },
       workspaceSetupRunner: { isRunning: () => false }, publishSessionChanged: async () => {} }),
       createSession() { assert.fail("historical open must not create a session"); } }, projectContext: core, practiceSessions: true });
@@ -3292,4 +3295,67 @@ test("exercise scope preserves no-exercise pin inactive and unavailable-reader r
     await assert.rejects(() => absent.state.readExerciseProjectScope({ ...absentInput, access: "observe" }),
       /installed topic differs from the admitted reservation pin/u);
   }
+});
+
+
+test("explicit saved practice open awaits its original runtime owner and refuses unavailable or retired admission", async t => {
+  const f = await historicalPracticeFixture(t);
+  await f.run(true);
+  const [{ createTrainingLearningSessions }, { currentProjectRequestContext }] = await Promise.all([
+    import("../../packages/vibe64-training/src/server/learningSessions.js"),
+    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
+  ]);
+  const events = [];
+  const opened = Promise.withResolvers();
+  const entering = Promise.withResolvers();
+  let refusal = false;
+  const owner = createTrainingLearningSessions({ learners: f.state,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content: f.content }),
+    project: f.project, projectContext: f.core, practiceSessions: true,
+    sessions: { createSession() { assert.fail("open must not create a replacement"); },
+      async inspectSession(sessionId) {
+        events.push("inspect");
+        assert.equal(sessionId, f.initial.sessionId);
+        return { ok: true, sessionId };
+      } },
+    terminals: { async openProjectRuntime(input) {
+      events.push("open");
+      entering.resolve();
+      assert.equal(input.reason, "learning-session-open");
+      assert.equal(currentProjectRequestContext().slug, f.saved.projectSlug);
+      assert.equal(currentProjectRequestContext().learningScope.attemptId, f.saved.scope.attemptId);
+      assert.equal(f.core.currentPracticeProjectScope().access, "create");
+      if (refusal) return { ok: false, runtime: { open: false } };
+      await opened.promise;
+      return { ok: true, projectSlug: f.saved.projectSlug, runtime: { open: true } };
+    } }
+  });
+  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active),
+    source: await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")),
+    messages: await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).conversationLogRoot, "transcript.json")) };
+  const pending = owner.openSession({ actor: f.actor, attemptId: f.saved.scope.attemptId });
+  await Promise.race([entering.promise, pending]);
+  assert.deepEqual(events, ["open"]);
+  opened.resolve();
+  assert.equal((await pending).sessionId, f.initial.sessionId);
+  assert.deepEqual(events, ["open", "inspect"]);
+  refusal = true;
+  await assert.rejects(owner.openSession({ actor: f.actor, attemptId: f.saved.scope.attemptId }),
+    { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
+  assert.deepEqual(events, ["open", "inspect", "open"]);
+  await assert.rejects(owner.openSession({ actor: { uid: 43 }, attemptId: f.saved.scope.attemptId }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(owner.openSession({ actor: f.actor, attemptId: f.saved.scope.attemptId, input: { sourcePath: "/other" } }),
+    /cannot select a different practice source/u);
+  assert.deepEqual(events, ["open", "inspect", "open"]);
+  assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), before.source);
+  assert.deepEqual(await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).conversationLogRoot, "transcript.json")), before.messages);
+  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId: f.saved.scope.attemptId });
+  await f.state.endAttempt({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+    expectedRevision: current.revision, requestId: "explicit-open-ended", reason: "restart" });
+  await assert.rejects(owner.openSession({ actor: f.actor, attemptId: f.saved.scope.attemptId }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.deepEqual(events, ["open", "inspect", "open"]);
 });

@@ -150,7 +150,10 @@ diagram. A confirmed diagram state is retained separately from an assessment pas
 On a phone, use the existing conversation and Preview view controls to switch
 between the teacher and diagram.
 
-Choose **App** in Preview to use the prepared practice app. **Run** starts its
+Choose **App** in Preview to open this lesson's saved practice runtime before
+its controls appear. This keeps its existing conversation and source; it does
+not send a teacher message or start an output. If opening is refused, keep the
+lesson and choose **App** again after resolving the reported error. **Run** starts its
 declared output; **Restart preview** or **Restart** restarts that same output when
 shown. **Show run output** opens its log. Stop in that log stops the app without
 stopping Main or deleting the log; closing the log only hides it. The practice

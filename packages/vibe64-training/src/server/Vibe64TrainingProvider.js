@@ -51,7 +51,7 @@ const Vibe64TrainingProvider = defineFeature({
     const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
     const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
     const mainTeaching = createTrainingMainTeaching({ teaching, assessment, checks });
-    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext,
+    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, terminals, projectContext,
       learningTeaching: mainTeaching, practiceSessions: true });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
       learningSessions });

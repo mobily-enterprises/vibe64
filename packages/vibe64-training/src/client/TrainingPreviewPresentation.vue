@@ -2,6 +2,8 @@
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { computed, inject, nextTick, onBeforeUnmount, ref, shallowRef, unref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { resolveStudioRequestUrl } from "/src/lib/studioUrls.js";
 import TrainingVisualPlayer from "./TrainingVisualPlayer.vue";
@@ -18,13 +20,40 @@ const props = defineProps({
 });
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-function showApp(event) {
+async function showApp(event) {
+  if (appOpening.value || !props.active || !props.appAvailable) return;
+  const practice = props.learningBinding?.noExercise === false;
+  if (practice && !learningAvailable.value) return;
+  const expected = practice ? Object.freeze({ ...props.learningBinding }) : null;
+  const generation = appOpenGeneration;
   const owner = learnerGestures?.value;
   const ticket = props.active && props.appAvailable ? owner?.begin(event, "preview-select", {
     projectSlug: props.projectSlug, sessionId: props.sessionId }) : null;
-  mode.value = "app";
-  collapsed.value = false;
-  if (ticket) void owner.finish(ticket);
+  appError.value = "";
+  try {
+    if (practice) {
+      appOpening.value = true;
+      const result = await openAppCommand.run({ path: expected.sessionsApiPath });
+      if (!mounted || generation !== appOpenGeneration || !props.active || !sameLearningBinding(expected)) {
+        if (ticket) owner.discard(ticket);
+        return;
+      }
+      if (result?.ok !== true || result.sessionId !== expected.sessionId) {
+        throw new Error("The saved practice conversation did not confirm opening. Keep this lesson and choose App again.");
+      }
+      appOpened.value = true;
+    }
+    mode.value = "app";
+    collapsed.value = false;
+    if (ticket) void owner.finish(ticket);
+  } catch (error) {
+    if (ticket) owner.discard(ticket);
+    if (mounted && generation === appOpenGeneration && (!expected || sameLearningBinding(expected))) {
+      appError.value = String(error?.message || "The practice App could not open. Keep this lesson and choose App again.");
+    }
+  } finally {
+    if (generation === appOpenGeneration) appOpening.value = false;
+  }
 }
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const learningAvailable = computed(() => {
@@ -50,9 +79,34 @@ const revision = ref(0);
 const mode = ref(props.appAvailable && !props.lessonsAvailable ? "app" : "lessons");
 const collapsed = ref(false);
 const cue = ref(null);
+const appOpened = ref(false);
+const appOpening = ref(false);
+const appError = ref("");
+let appOpenGeneration = 0;
+const openAppCommand = useCommand({
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: "app", access: "never",
+  apiSuffix: "/vibe64/sessions", placementSource: "vibe64.sessions.create",
+  suppressSuccessMessage: true,
+  buildRawPayload: () => ({}),
+  buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context.path }),
+  fallbackRunError: "The saved practice App could not open. Keep this lesson and choose App again."
+});
 const visible = computed(() => props.active && mode.value === "presentation" && !collapsed.value);
-const appVisible = computed(() => props.appAvailable && (mode.value === "app" || collapsed.value));
+const appVisible = computed(() => props.appAvailable &&
+  (props.learningBinding?.noExercise !== false || appOpened.value) && (mode.value === "app" || collapsed.value));
 const lessonsVisible = computed(() => props.lessonsAvailable && (mode.value === "lessons" || !props.appAvailable && collapsed.value));
+watch(() => [actorKey.value, props.projectSlug, props.attemptId, props.sessionId, ...["actorKey", "viewerActorKey", "learnerId", "projectSlug",
+  "learningAttemptId", "sessionId", "sessionsApiPath", "noExercise", "sourceProjectSlug"]
+  .map(key => props.learningBinding?.[key])], () => {
+  appOpenGeneration++;
+  appOpened.value = false;
+  appOpening.value = false;
+  appError.value = "";
+}, { flush: "sync" });
+watch(() => props.active, () => {
+  appOpenGeneration++;
+  appOpening.value = false;
+}, { flush: "sync" });
 watch(() => props.lessonsAvailable, enabled => {
   if (!enabled && mode.value === "lessons" && props.appAvailable) mode.value = "app";
 });
@@ -445,13 +499,14 @@ defineExpose({ presentation });
 <template>
   <section class="training-preview">
     <div v-if="selection || lessonsAvailable" class="training-preview__choices" aria-label="Preview content">
-      <v-btn v-if="appAvailable" min-height="48" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
+      <v-btn v-if="appAvailable" min-height="48" :disabled="appOpening" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
       <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Lessons</v-btn>
       <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
       <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
     </div>
+    <p v-if="appError" role="alert">{{ appError }}</p>
     <p v-if="!appAvailable && learningBinding?.noExercise === false" role="status">
       The practice App controls are unavailable in this installation. Keep this lesson and its saved workspace; lesson diagrams use Presentation.
     </p>
@@ -466,7 +521,7 @@ defineExpose({ presentation });
       </v-btn>
     </div>
     <div v-if="appAvailable" v-show="appVisible" class="training-preview__app">
-      <slot :app-visible="appVisible" :presentation="presentation" />
+      <slot v-if="learningBinding?.noExercise !== false || appOpened" :app-visible="appVisible" :presentation="presentation" />
     </div>
     <div v-if="lessonsAvailable" v-show="lessonsVisible" class="training-preview__lessons" aria-label="Lessons">
       <slot name="lessons" />

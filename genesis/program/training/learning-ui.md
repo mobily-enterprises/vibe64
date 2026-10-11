@@ -136,6 +136,20 @@ the wrapper refuses a different attempt and retires changed scope. Actor fences,
 resource pin verification, commands, cues and checkpoint receipts retain their
 original owners. No pin/progress reader or native receipt is invented.
 
+For a saved practice App, the explicit App choice first uses the existing empty-body
+Learning Session Create operation. Its original opener freshly admits the exact
+active attempt under the preparation barrier and awaits Terminals' original
+project-runtime open owner before returning the same initial session. No source,
+conversation or teacher input is created. The browser checks the captured actor,
+attempt, session and exact binding again before showing App or settling the
+trusted gesture. Practice App owners remain unmounted until that first confirmed
+open; once admitted, the same owners stay mounted through App/Lessons/Presentation
+and mode hiding. This prevents an early Outputs read from invoking the original
+missing-marker runtime cleanup on a practice teacher. Reads and current-session
+alias synchronization do not open a runtime. Working and source-less composition
+keep their original policy. Runtime-open refusal keeps the lesson and reports the
+failure without mounting outputs or fabricating a practical gesture.
+
 Autopilot's actual App display and toolbar facts use that wrapper's appVisible
 and its opt-in activation, so an App choice works even while the original page
 pane remains dashboard. Lessons does not count as visible App. The original
