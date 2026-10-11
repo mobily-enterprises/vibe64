@@ -3788,3 +3788,10 @@ tools keep the unchanged `readRetainedTurn(..., current: true)` admission guard.
 The original before-state checkpoint can therefore join a separate canonical
 final carrier while the retained entry still has its pre-checkpoint active state.
 No process, account, request lifecycle or native completion ordering is changed.
+
+OpenCode Main acquisition captures the original Project CONTROL context and
+supplies its existing re-entry facility to the shared native tool bridge. Later
+HTTP tool callbacks therefore survive the finite Send callback without extending
+its borrowed practice write grant. Main actions still resolve the saved actor,
+lesson pin and exact initial session afresh and re-admit each effect through the
+original Learning owner; expired access and revoked accounts remain refusals.

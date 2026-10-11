@@ -226,3 +226,8 @@ For numbered question fields, suggested answers and normal chat replies, read
 For attachments, retained history and required upgrades, see
 [Coding-agent history](coding-agent-history.md). For assignment requests and
 watches, see [Ask Colleague to coordinate](colleague.md#ask-colleague-to-coordinate).
+
+OpenCode Learning tools stay attached to the same saved lesson after **Send** is
+accepted. Each later tool checks current lesson and account access; it cannot
+retain permission to change the exercise from the earlier Send callback. If
+access ends, inspect the lesson and account before sending a new request.

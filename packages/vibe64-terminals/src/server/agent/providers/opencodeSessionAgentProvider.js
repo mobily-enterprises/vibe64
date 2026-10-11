@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
@@ -205,7 +206,9 @@ function createOpenCodeSessionAgentProvider({
           async acquire(current) {
             const options = current || context;
             const selected = await contextFor(sessionId, options);
-            return { key: selected.key, options };
+            const projectContext = captureProjectRequestContext();
+            return { key: selected.key, options,
+              runInContext: operation => runWithProjectRequestContext(projectContext || {}, operation) };
           },
           preparation: {
             state: {
