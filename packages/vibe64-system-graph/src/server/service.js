@@ -278,12 +278,9 @@ function createService({
                 }
               }
             }
-            let observations;
-            if (inspection.inspectors?.length) {
-              progress("Scanning project source and existing Genesis documents…");
-              const initial = await refresher({ projectRoot: current.sourceRoot, write: false, signal: controller.signal });
-              if (!initial.machine?.architecture) throw systemError("Update the Genesis compiler before inspecting architecture.", "vibe64_architecture_compiler_unavailable");
-              const request = `${JSON.stringify({ schema: "vibe64.architecture-inspection-input.v1", files: initial.machine.architecture.files.map(file => ({ path: file.path, hash: file.hash })), packages: (initial.machine.architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({ id, name, manifest, declarations, root, opaque, entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file })) })), packageIdentity: initial.machine.architecture.packageIdentity, uiDiscovery: initial.machine.architecture.uiDiscovery, stackHash: inspection.stackHash })}\n`;
+            progress("Scanning project source and existing Genesis documents…");
+            const observations = inspection.inspectors?.length ? async architecture => {
+              const request = `${JSON.stringify({ schema: "vibe64.architecture-inspection-input.v1", files: architecture.files.map(file => ({ path: file.path, hash: file.hash })), packages: (architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({ id, name, manifest, declarations, root, opaque, entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file })) })), packageIdentity: architecture.packageIdentity, uiDiscovery: architecture.uiDiscovery, stackHash: inspection.stackHash })}\n`;
               if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
               const documents = [];
               for (const inspector of inspection.inspectors) {
@@ -305,12 +302,13 @@ function createService({
                 documents.push(document);
               }
               progress("Validating UI observations…");
-              observations = mergeArchitectureObservations(documents, { files: initial.machine.architecture.files, packages: initial.machine.architecture.packages || [] });
+              const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
               const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
               if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
-            }
+              progress("Updating the browsing index…");
+              return merged;
+            } : null;
             if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
-            progress("Updating the browsing index…");
             return refresher({ projectRoot: current.sourceRoot, write: true, ...(observations ? { observations } : {}), signal: controller.signal });
           }, { operation: "architecture-refresh" });
           if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");

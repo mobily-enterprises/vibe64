@@ -98,6 +98,9 @@ navigation. The file viewer reuses the sheet's analysis; hiding views suspends
 their reads while retaining existing facts. A session change resets the local view. The square has compact
 signature rows instead of equal-height cards. The square fits the canvas height;
 long interfaces and file lists scroll inside it while the breadcrumb stays visible.
+Resizing the window or chat divider keeps the open square visible, preserving
+its zoom, scroll position and selected declaration. Returning through file links
+uses the resized enclosing view.
 Drag empty canvas outside the square to pan. There is no source-subsystem
 side pane, extra toolbar row or pane-balance slider.
 
@@ -170,6 +173,9 @@ Opening reads existing facts without running inspectors. A failed load shows
 **Retry loading**; **Reload architecture** rereads existing snapshots. If a local
 preview was restarted, reload its browser tab to reconnect. **Re-scan project**
 rebuilds the whole project browsing index through Stack's declared finite inspectors.
+Source parsing runs once; UI inspectors use that scan before Genesis checks
+the inputs again and saves it. Previously loaded facts remain available during
+the scan. Existing indexes are read as saved; opening a file never triggers it.
 It reads existing Genesis documents; it does not rewrite Program or generate
 file or function explanations. This project-wide action is in Architecture
 options, never the file view. The running stage and elapsed seconds show what is happening.

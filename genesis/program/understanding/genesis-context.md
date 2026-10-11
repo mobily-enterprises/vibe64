@@ -195,6 +195,8 @@ viewer stays mounted but inactive on its enclosing views within that owner.
 Map node IDs/types stay
 mounted but hidden in detail. Camera frames do not recompute the overview or
 change label font sizes.
+Canvas resize adapts the open square's camera and retained file-history cameras
+without changing magnification or remounting the scrollable content.
 
 Wheel and two-touch pinch share one animation-frame camera path. The initial
 element owns a gesture; neighbours cannot take over. Scale and centre interpolate
@@ -273,6 +275,9 @@ Re-scan reads existing Program text; it neither rewrites it nor calls a Helper. 
 source-work admission and invokes Stack's Vibe64-owned Architecture inspection
 recipe through managed finite commands. Hashed inputs, UI discovery and package
 boundary identity are passed on stdin; stdout is bounded observation JSON.
+The inspector runs in Genesis's async observation callback after one source
+extraction. Genesis joins its output to that scan, then rechecks the original
+inputs before publication rather than extracting the whole project a second time.
 Invalid output, cancellation or changed source retains the previous native
 artifact. Opening is read-only. Original artifact paths and APIs remain
 available to other callers. The Files manager retains its public interface,

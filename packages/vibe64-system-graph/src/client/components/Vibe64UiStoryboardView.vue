@@ -510,6 +510,33 @@ watch(outline, detail => {
 });
 watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; fileHistory.value = []; selectedPageId.value = ''; showCalls.value = false; layoutPositions.value = {}; zoomAnchor = undefined; zoomTarget = undefined; parentViewport = undefined; fileParentViewport = undefined; });
 watch(() => props.active, active => { if (!active) { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; } else if (fitPending) void fit(initialIds.value); });
+watch(canvas, (element, previous, onCleanup) => {
+  if (!element) return;
+  let width = element.clientWidth;
+  let height = element.clientHeight;
+  const observer = new ResizeObserver(() => {
+    const nextWidth = element.clientWidth;
+    const nextHeight = element.clientHeight;
+    if (!nextWidth || !nextHeight || (width === nextWidth && height === nextHeight)) return;
+    const oldWidth = width;
+    width = nextWidth; height = nextHeight;
+    if (!props.active || !flow || !expandedSubsystemId.value || focusOwner.value?.opaque) return;
+    // Preserve magnification, scroll and the square's offset from the canvas
+    // centre. Responsive CSS changes its width without remounting its content.
+    const sheetWidth = value => Math.min(960, Math.max(280, value - 48));
+    const adapt = viewport => viewport && ({ ...viewport, x: viewport.x + (width - oldWidth) / 2 + (sheetWidth(oldWidth) - sheetWidth(width)) * viewport.zoom / 2 });
+    stopZoomMotion();
+    ++navigationVersion;
+    clearTimeout(gestureTimer);
+    gestureTarget = undefined; zoomTarget = undefined; zoomAnchor = undefined;
+    transitioning = false;
+    fileParentViewport = adapt(fileParentViewport);
+    fileHistory.value = fileHistory.value.map(entry => ({ ...entry, viewport: adapt(entry.viewport), fileParentViewport: adapt(entry.fileParentViewport) }));
+    void flow.setViewport(adapt(flow.getViewport()), { duration: 0 });
+  });
+  observer.observe(element);
+  onCleanup(() => observer.disconnect());
+}, { flush: 'post' });
 onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 </script>
 

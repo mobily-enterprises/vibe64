@@ -346,7 +346,7 @@ test('configured architecture inspection uses managed execution and publishes on
     const projectService = { ...projectServiceFor(root), async readCurrentProject() { return { slug: 'fixture' }; }, async projectInspectionEnvironment() { return { FIXTURE: '1' }; } };
     const calls = []; const machine = architectureFixture();
     const service = createService({ projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: ids => { assert.deepEqual(ids, ['nodejs']); return { available: true, runtimes: ['fixture-node'] }; },
-      refresher: async input => { calls.push(input); return { machine, program: programCityFixture() }; },
+      refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async input => {
         assert.equal(input.actor, 'app'); assert.equal(input.mode, 'capture'); assert.equal(input.purpose, 'source'); assert.equal(input.envPolicy, 'project');
         assert.equal(input.cwd, root); assert.deepEqual(input.allowedRoots, [root]); assert.equal(input.command, 'node'); assert.deepEqual(input.args, ['inspect.mjs']);
@@ -357,9 +357,10 @@ test('configured architecture inspection uses managed execution and publishes on
       }
     });
     assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, true);
-    assert.deepEqual(calls.map(input => input.write), [false, true]);
-    assert.equal(calls[1].observations.adapter, 'fixture');
-    assert.equal(calls[0].signal, calls[1].signal);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].write, true, 'one native index operation owns scan, inspection and guarded publication');
+    assert.equal(typeof calls[0].observations, 'function');
+    assert.equal(calls[1].published.adapter, 'fixture');
   });
 });
 
@@ -390,12 +391,12 @@ test('invalid output and changed Stack never reach architecture publication', as
       const calls = []; let reads = 0;
       const service = createService({ projectService, runtimeReader: () => ({ available: true, runtimes: [] }),
         inspectorReader: async () => ({ ...inspectorFixture(), stackHash: failure === 'changed-stack' && reads++ ? 'changed' : 'stack-hash' }),
-        refresher: async input => { calls.push(input); return { machine: architectureFixture(), program: programCityFixture() }; },
+        refresher: async input => { calls.push(input); const machine = architectureFixture(); await input.observations(machine.architecture); assert.fail('Invalid inspection must not publish'); },
         runCommand: async () => ({ ok: true, stdout: failure === 'invalid-json' ? 'broken' : JSON.stringify(failure === 'invalid-evidence' ? { ...emptyObservations(), inputs: [{ path: 'src/catalog.js', hash: 'stale' }] } : emptyObservations()) })
       });
       const result = await service.refresh({ sessionId: 'session-1' });
       assert.equal(result.ok, false, failure);
-      assert.deepEqual(calls.map(input => input.write), [false], failure);
+      assert.deepEqual(calls.map(input => input.write), [true], failure);
     }
   });
 });
@@ -409,7 +410,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     let cleanup; const cleanupReady = new Promise(resolve => { cleanup = resolve; });
     const calls = [];
     const service = createService({ projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: () => ({ available: true, runtimes: [] }),
-      refresher: async input => { calls.push(input); return { machine, program: programCityFixture() }; },
+      refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async ({ signal }) => { started(); await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); interrupted(); await cleanupReady; return { ok: false, stdout: '' }; }
     });
     const refresh = service.refresh({ sessionId: 'session-1' }); await ready;
@@ -423,7 +424,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     let completed = false; cancel.then(() => { completed = true; }); await Promise.resolve(); assert.equal(completed, false);
     cleanup();
     assert.equal((await refresh).code, 'vibe64_architecture_cancelled'); assert.equal((await cancel).cancelled, true);
-    assert.deepEqual(calls.map(input => input.write), [false]);
+    assert.deepEqual(calls.map(input => input.write), [true]);
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
     assert.deepEqual((await service.readMachineCity({ sessionId: 'session-1' })).city.architecture, machine.architecture);
     assert.equal((await service.cancelRefresh({ sessionId: 'session-1' })).cancelled, false);
@@ -454,14 +455,14 @@ test('failed inspectors retain bounded command diagnostics and the preceding art
     const calls = [];
     const projectService = { ...projectServiceFor(root), async readCurrentProject() { return {}; }, async projectInspectionEnvironment() { return {}; } };
     const service = createService({ projectService, runtimeReader: () => ({ available: true, runtimes: [] }), inspectorReader: async () => inspectorFixture(),
-      refresher: async input => { calls.push(input); return { machine, program: programCityFixture() }; },
+      refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async () => ({ ok: false, exitCode: 1, stderr: 'x'.repeat(4000) + 'Required module missing.' })
     });
     const result = await service.refresh({ sessionId: 'session-1' });
     assert.match(result.error, /exit 1/u);
     assert.equal(result.details.commandOutput.length, 2000);
     assert.match(result.details.commandOutput, /Required module missing\.$/u);
-    assert.deepEqual(calls.map(input => input.write), [false]);
+    assert.deepEqual(calls.map(input => input.write), [true]);
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
   });
 });
