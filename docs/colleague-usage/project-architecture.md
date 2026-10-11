@@ -65,11 +65,13 @@ viewer needs no language or package-manager-specific controls.
    file's interface opens inside the square. Selecting a subsystem signature
    likewise opens only its implementation file, with the requested declaration
    selected. The project-wide Files workspace does not open.
-6. Read **File exports**, **Explain function** and symbol
+6. Read **File exports**, **Explain file**, **Explain function** and symbol
    **Code** controls. **Code · whole file** is read-only here; **Interface** returns
    to declarations. **Part of …** links to the Program's main source; the authored
    explanation appears there, without repeating it in supporting files. Explain function
-   asks the Helper for a short purpose statement and steps on explicit request.
+   asks the Helper for a short purpose statement and pseudocode on explicit request.
+   Explain file gives a cached overview without scanning the project. Both check
+   the saved source hash and regenerate after changes when requested.
    Missing Helper or parser coverage remains explicit. See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the
    enclosing views, or use the breadcrumb: **Engine → subsystem → file**.
@@ -169,7 +171,8 @@ Opening reads existing facts without running inspectors. A failed load shows
 preview was restarted, reload its browser tab to reconnect. **Re-scan project**
 rebuilds the whole project browsing index through Stack's declared finite inspectors.
 It reads existing Genesis documents; it does not rewrite Program or generate
-function explanations. The running stage and elapsed seconds show what is happening.
+file or function explanations. This project-wide action is in Architecture
+options, never the file view. The running stage and elapsed seconds show what is happening.
 **Cancel analysis** waits for cleanup and preserves the previous valid index.
 Large refreshes have a ten-minute request budget; inspectors retain their own
 finite limits. Invalid output, changed source or missing prerequisites leaves

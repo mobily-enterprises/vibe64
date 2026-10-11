@@ -1,11 +1,9 @@
 <template>
   <section class="source-interface" aria-label="File public interface">
-    <header class="source-interface__heading"><h3>{{ filePath?.split('/').pop() }}</h3><v-btn size="small" min-height="44" variant="text" @click="$emit('whole-file-code')">Code · whole file</v-btn><p>{{ filePath }}</p></header>
+    <header class="source-interface__heading"><h3>{{ filePath?.split('/').pop() }}</h3><div class="source-interface__modes"><v-btn size="small" min-height="44" variant="tonal" :disabled="!fileInterpretation && explanationDisabled" @click="explainFile()">Explain file</v-btn><v-btn size="small" min-height="44" variant="text" @click="$emit('whole-file-code')">Code · whole file</v-btn></div><p>{{ filePath }}</p></header>
     <v-alert v-if="analysisError" type="error" variant="tonal" class="mb-3">{{ analysisError }}</v-alert>
     <v-alert v-if="dirty" type="info" variant="tonal" class="mb-3">This file has unsaved edits. Save before generating an explanation or using indexed symbol ranges.</v-alert>
-    <v-alert v-else-if="!current" type="info" variant="tonal" class="mb-3">{{ indexed ? 'The index is out of date for this file.' : 'Symbol analysis is unavailable for this file.' }} Program context and whole-file Code remain available.</v-alert>
-    <div class="source-interface__file-actions"><v-btn size="small" min-height="44" variant="text" :loading="refreshing" title="Rebuild the project browsing index; does not generate explanations" @click="$emit('refresh-analysis')">Re-scan project</v-btn><small>Updates signatures and links; no explanations.</small></div>
-    <p v-if="refreshing" class="source-interface__hint" role="status">{{ refreshProgress?.message || 'Starting project analysis…' }} · {{ refreshProgress?.elapsedSeconds || 0 }}s</p>
+    <v-alert v-else-if="!current" type="info" variant="tonal" class="mb-3">{{ indexed ? 'Index out of date.' : 'Symbols not indexed.' }} Open whole-file Code. Update the index from Architecture → ⋯.</v-alert>
     <section v-if="mainPrograms.length" class="source-interface__interpretation" aria-label="Main Program file">
       <details v-for="program in mainPrograms" :key="program.id" class="source-interface__program" @toggle="$event.target.open && expandedPrograms.add(program.id)">
         <summary><small class="source-interface__main">Main</small><strong>{{ program.title }}</strong></summary>
@@ -23,14 +21,24 @@
       <summary>Part of {{ memberPrograms.length }} {{ mainPrograms.length ? 'other Programs' : 'Programs' }}</summary>
       <nav class="source-interface__membership" aria-label="Program membership"><span v-for="program in memberPrograms" :key="program.id"><button type="button" :title="program.mainSource ? `Open main source: ${program.mainSource}` : 'Read Program document'" @click="$emit('open-source', { path: program.mainSource || program.path, ...(program.mainSource ? {} : { presentation: 'code' }) })">{{ program.title }} ↗</button></span></nav>
     </details>
-    <p v-if="!programs.length" class="source-interface__hint" role="status">{{ programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Re-scan project.' }}</p>
+    <p v-if="!programs.length" class="source-interface__hint" role="status">{{ programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable.' }}</p>
     <p v-if="interpretationWarning" class="source-interface__hint" role="status">{{ interpretationWarning }}</p>
+    <section v-if="fileOverviewOpen" class="source-interface__detail source-interface__overview" aria-label="File overview">
+      <div class="source-interface__modes"><h4>File overview</h4><v-btn v-if="fileInterpretation" size="small" min-height="44" variant="text" :disabled="explanationDisabled" @click="explainFile(true)">Regenerate overview</v-btn><v-btn size="small" min-height="44" variant="text" @click="fileOverviewOpen = false">Hide overview</v-btn></div>
+      <p v-if="fileInterpretation" class="source-interface__hint">{{ isCurrentInterpretation(fileInterpretation) ? 'Saved · matches source' : 'Stale · source or guidance changed' }}</p>
+      <slot v-if="activeFileInterpretation" name="explanation" />
+      <LongTextPreviewBlocks v-else-if="fileInterpretation" :blocks="parseLongTextReviewBlocks(fileInterpretation.body)" />
+      <p v-else class="source-interface__hint" role="status">{{ !assistantAvailable ? 'Explain file needs a Helper.' : busy ? 'Preparing overview…' : 'No saved overview.' }}</p>
+    </section>
     <h4 class="source-interface__exports-heading">File exports <span>{{ symbols.length }}</span></h4>
     <details class="source-interface__analysis"><summary>Analysis details</summary><p class="source-interface__hint">{{ coverage }}. File exports may be internal to the subsystem. Unrecorded returns are omitted. Program explanations are authored and may be out of date.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'Explain function needs a Helper.' }}</p></details>
     <div class="source-interface__layout">
       <nav class="source-interface__symbols" aria-label="Exported and public symbols">
-        <button v-for="symbol in symbols" :key="symbol.id" type="button" :data-symbol-id="symbol.id" :disabled="!current || dirty" :aria-pressed="symbol.id === selectedId" :class="{ 'source-interface__symbol--selected': symbol.id === selectedId }" @click="$emit('select-symbol', symbol.id)"><small>{{ symbol.kind }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType">Returns: {{ symbol.returnType }}</span><span v-if="!symbol.rangeAvailable || symbol.visibilityScope && symbol.visibilityScope !== 'public'">{{ symbol.rangeAvailable ? '' : 'Range unavailable' }}{{ symbol.visibilityScope && symbol.visibilityScope !== 'public' ? ` · Visibility: ${symbol.visibilityScope}` : '' }}</span></button>
-        <p v-if="!symbols.length" class="source-interface__hint">{{ current ? 'No exports recorded; analysis may be incomplete.' : 'Re-scan project or open whole-file Code.' }}</p>
+        <div v-for="symbol in symbols" :key="symbol.id" class="source-interface__symbol-row">
+          <button class="source-interface__symbol" type="button" :data-symbol-id="symbol.id" :disabled="!current || dirty" :aria-pressed="symbol.id === selectedId" :class="{ 'source-interface__symbol--selected': symbol.id === selectedId }" @click="$emit('select-symbol', symbol.id)"><small>{{ symbol.kind }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType">Returns: {{ symbol.returnType }}</span><span v-if="!symbol.rangeAvailable || symbol.visibilityScope && symbol.visibilityScope !== 'public'">{{ symbol.rangeAvailable ? '' : 'Range unavailable' }}{{ symbol.visibilityScope && symbol.visibilityScope !== 'public' ? ` · Visibility: ${symbol.visibilityScope}` : '' }}</span></button>
+          <v-btn v-if="Array.isArray(symbol.parameters)" size="small" min-height="44" variant="text" :aria-label="`Explain function ${symbol.qualifiedName || symbol.name}`" :disabled="!symbol.rangeAvailable || !current || dirty || (!saved('selection', symbol.id, 'steps') && explanationDisabled)" @click="explainSymbol(symbol.id)">Explain function</v-btn>
+        </div>
+        <p v-if="!symbols.length" class="source-interface__hint">{{ current ? 'No exports recorded; analysis may be incomplete.' : 'Open whole-file Code.' }}</p>
       </nav>
       <section v-if="selectedSymbol" class="source-interface__detail" aria-label="Selected symbol">
         <h4><code>{{ signature(selectedSymbol) }}</code></h4><p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
@@ -51,12 +59,17 @@
   </section>
 </template>
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { LongTextPreviewBlocks } from '@jskit-ai/assistant-core/client/conversation';
 import { sourceEditorLinkTarget } from '@/lib/vibe64SourceEditorLinks.js';
 import { parseLongTextReviewBlocks } from '@jskit-ai/assistant-core/shared/conversation';
-const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, refreshing: Boolean, refreshProgress: { type: Object, default: null }, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
-const emit = defineEmits(['select-symbol', 'present-symbol', 'whole-file-code', 'open-source', 'refresh-analysis']);
+const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, activeFileInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
+const emit = defineEmits(['select-symbol', 'present-symbol', 'explain-file', 'whole-file-code', 'open-source']);
+const fileOverviewOpen = ref(false);
+watch(() => props.filePath, () => { fileOverviewOpen.value = false; });
+watch(() => props.activeFileInterpretation, active => { if (active) fileOverviewOpen.value = true; }, { immediate: true });
+function explainFile(force = false) { fileOverviewOpen.value = true; emit('explain-file', force); }
+function explainSymbol(id) { emit('select-symbol', id); emit('present-symbol', 'steps'); }
 const expandedPrograms = ref(new Set());
 const mainPrograms = computed(() => props.programs.filter(program => program.mainSource === props.filePath));
 const memberPrograms = computed(() => props.programs.filter(program => program.mainSource !== props.filePath));
@@ -73,16 +86,19 @@ function signature(symbol) { return (symbol.qualifiedName || symbol.name) + (Arr
 function saved(scope, symbolId, presentation) { return props.interpretations.find(record => record.path === props.filePath && record.scope === scope && (record.symbolId || '') === symbolId && record.presentation === presentation); }
 function isCurrentInterpretation(record) { return record.status === 'current' && record.fileHash === props.fileHash && !props.dirty; }
 const selectedInterpretation = computed(() => saved(selectedSymbol.value ? 'selection' : 'file', selectedSymbol.value?.id || '', props.presentation));
+const fileInterpretation = computed(() => saved('file', '', 'description'));
 const interpretationBlocks = computed(() => parseLongTextReviewBlocks(selectedInterpretation.value?.body || ''));
 </script>
 <style scoped>
 .source-interface { container-type: inline-size; overflow: auto; padding: 12px; min-width: 0; min-height: 0; }
 .source-interface__heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 8px; margin-bottom: 6px; }
 .source-interface__heading h3 { font-size: 20px; line-height: 26px; margin: 0; }.source-interface__heading p { grid-column: 1 / -1; font-size: 12px; line-height: 18px; margin: 0; opacity: .65; overflow-wrap: anywhere; }
+.source-interface__heading > .source-interface__modes { justify-content: flex-end; margin: 0; }
+.source-interface__overview { margin: 4px 0 8px; }
+.source-interface__overview .source-interface__modes { align-items: center; }
 .source-interface__hint { font-size: 12px; line-height: 18px; opacity: .72; margin: 0 0 6px; }
-.source-interface__file-actions, .source-interface__modes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.source-interface__file-actions small { align-self: center; color: #789397; }
-.source-interface__file-actions :deep(.v-btn), .source-interface__modes :deep(.v-btn) { padding-inline: 8px; }
+.source-interface__modes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.source-interface__modes :deep(.v-btn) { padding-inline: 8px; }
 .source-interface__layout { display: flex; flex-direction: column; gap: 10px; }
 .source-interface__exports-heading { font-size: 15px; margin: 10px 0 4px; }
 .source-interface__exports-heading span { font-weight: normal; font-size: 12px; opacity: .65; }
@@ -94,18 +110,21 @@ const interpretationBlocks = computed(() => parseLongTextReviewBlocks(selectedIn
 .source-interface__main { display: inline-block; color: #755616; background: #f1e5c6; border-radius: 4px; padding: 2px 5px; font-size: 10px; text-transform: uppercase; margin-right: 8px; }
 .source-interface__symbols, .source-interface__detail { min-width: 0; }
 .source-interface__symbols { width: 100%; }
-.source-interface__symbols button { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; text-align: left; min-height: 44px; width: 100%; padding: 6px 10px; gap: 2px 8px; border: 1px solid #dbe6e3; background: #f7faf9; border-radius: 6px; margin-bottom: 4px; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
-.source-interface__symbols button code { display: block; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.source-interface__symbols button small { text-transform: uppercase; font-size: 10px; opacity: .7; }
-.source-interface__symbols button span, .source-interface__symbol-summary { grid-column: 2; font-size: 12px; margin: 0; }
-.source-interface__symbols button span { font-size: 12px; opacity: .65; }
-.source-interface__symbols button:disabled { opacity: .5; cursor: default; }
+.source-interface__symbol-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.source-interface__symbol-row > button:first-child { min-width: 0; flex: 1; margin-bottom: 0; }
+.source-interface__symbol-row > :deep(.v-btn) { flex: 0 0 auto; padding-inline: 8px; }
+.source-interface__symbols .source-interface__symbol { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; text-align: left; min-height: 44px; width: 100%; padding: 6px 10px; gap: 2px 8px; border: 1px solid #dbe6e3; background: #f7faf9; border-radius: 6px; margin-bottom: 4px; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.source-interface__symbols .source-interface__symbol code { display: block; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.source-interface__symbols .source-interface__symbol small { text-transform: uppercase; font-size: 10px; opacity: .7; }
+.source-interface__symbols .source-interface__symbol span, .source-interface__symbol-summary { grid-column: 2; font-size: 12px; margin: 0; }
+.source-interface__symbols .source-interface__symbol span { font-size: 12px; opacity: .65; }
+.source-interface__symbols .source-interface__symbol:disabled { opacity: .5; cursor: default; }
 .source-interface__symbol--selected { background: rgba(var(--v-theme-primary), .1); border-color: rgb(var(--v-theme-primary)) !important; }
 .source-interface__detail { order: -1; width: 100%; border: 1px solid #dbe6e3; border-radius: 8px; padding: 10px; }
 .source-interface__detail h4 { margin-bottom: 4px; overflow-wrap: anywhere; font-size: 14px; font-weight: normal; }
 .source-interface__code { overflow: auto; padding: 16px; background: rgba(var(--v-theme-on-surface), .06); border-radius: 8px; font-size: 13px; tab-size: 2; }
 button:focus-visible { outline: 3px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
-@container(max-width: 759px) { .source-interface__layout { grid-template-columns: minmax(0, 1fr); } .source-interface__detail { grid-row: 1; } }
+@container(max-width: 759px) { .source-interface__layout { grid-template-columns: minmax(0, 1fr); } .source-interface__detail { grid-row: 1; } .source-interface__heading { grid-template-columns: minmax(0, 1fr); } .source-interface__heading > .source-interface__modes { justify-content: flex-start; } .source-interface__symbols .source-interface__symbol { grid-template-columns: minmax(0, 1fr); } .source-interface__symbols .source-interface__symbol span { grid-column: 1; } }
 @media(max-width: 759px) { .source-interface { padding: 12px; } }
 .source-interface__analysis { font-size: 12px; opacity: .72; margin-bottom: 6px; }
 .source-interface__analysis summary { cursor: pointer; }

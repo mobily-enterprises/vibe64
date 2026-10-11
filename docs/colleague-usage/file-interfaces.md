@@ -32,7 +32,8 @@ use **Dashboard → Files → Repo** to edit it. The Architecture viewer is read
 The anchor is the place to start reading, not necessarily an executable entry
 point. It belongs to the Program's owning subsystem; supporting files may be
 shared libraries elsewhere. These explanations describe the capability, not each
-individual function. Vibe64 does not generate competing file/subsystem summaries.
+individual function. **Explain file** provides a separate, informational overview of
+the saved file; it does not edit Genesis Program or subsystem responsibilities.
 
 Genesis requires exactly one `- Main: \`project/relative/source\`` bullet in each
 Program's **Sources**. An agent must inspect the implementation and choose it
@@ -40,8 +41,15 @@ explicitly. After updating the documents, use **Re-scan project**. An older
 cached index without an anchor links to the Program document until re-scanned;
 the viewer never guesses a main file.
 
-Select a callable declaration, then choose **Explain function** for a short purpose
-statement followed by function-specific steps through the existing Helper. Merely
+Choose **Explain file** at the top to read a short overview of purpose, operations,
+inputs/outputs, effects and important dependencies. The first request uses the
+Helper; later requests reuse the saved overview while its source hash and guidance
+match. **Regenerate overview** requests a new one; **Hide overview** collapses it.
+A file overview needs no project index.
+
+Choose **Explain function** beside a callable, or select it and use its detail
+button, for a short purpose statement followed by function-specific pseudocode
+through the same Helper. Merely
 opening a file or selecting a signature makes no Helper query. The explanation
 describes meaningful decisions, data flow,
 effects and failures in English. **Code** displays that declaration's exact source
@@ -50,17 +58,21 @@ function explanations are unavailable for non-callable declarations. **Code · w
 existing source view; **Interface** returns to declarations. Controls work on
 both desktop and mobile.
 
-Pseudocode requests obey the existing account, access, admission and cancellation
+Both explanation requests obey the existing account, access, admission and cancellation
 rules. If the Helper is unavailable, saved explanations, Program and Code remain readable.
 The explanation panel retains **Stop**, retry and follow-up controls. A completed
-initial function answer is cached privately against actual saved source, account,
+initial file overview or function answer is cached privately against actual saved source, account,
 verified Helper profile and prompt revision. It remains informational and is
 not supplied to coding agents. Source changes mark it stale; the next explicit
-**Explain function** request regenerates it. **Regenerate explanation** forces a new request.
+**Explain file** or **Explain function** request regenerates the corresponding answer.
+**Regenerate overview** or **Regenerate explanation** forces a new request.
+Helper progress messages appear as they arrive; **Stop** cancels the current
+request. A provider that emits no progress can remain at **Thinking…** until
+its answer arrives. This is generation status, not a project scan.
 Follow-up chats do not replace the cached initial answer. Existing general
 **Explain file or selection** in the Code editor remains available separately.
 
-An out-of-date index disables symbol-range use. **Re-scan project** rebuilds
+An out-of-date index disables symbol-range use. **Architecture → ⋯ → Re-scan project** rebuilds
 the whole project browsing index: signatures, imports and UI links. It reads existing
 Genesis documents; it does not rewrite Program or ask the Helper for explanations.
 The running stage and elapsed seconds show progress, with **Cancel analysis** in
@@ -73,8 +85,9 @@ control; conflicts retain the existing draft and recovery workflow. A source cha
 between selection and explanation is rejected rather than describing the wrong
 range. For a symbol, the server resolves its indexed identity and checks that
 declaration against the saved file; browser-supplied selection coordinates do
-not determine the symbol explanation. Missing or invalid analysis offers
-**Re-scan project**; oversized analysis retains Code and ordinary selection
+not determine the symbol explanation. Missing or invalid analysis points to the
+Architecture menu; no file button scans the project. Oversized analysis retains
+Code and ordinary selection
 explanations. Binary/download-only files retain their normal preview/download
 controls.
 

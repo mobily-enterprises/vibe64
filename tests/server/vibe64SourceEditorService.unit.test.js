@@ -400,6 +400,46 @@ test('function pseudocode survive restart, expose staleness and isolate people a
   assert.equal(generated, 3);
 });
 
+test('file overviews use the whole saved file without an index, survive restart and regenerate after changes', async t => {
+  let generated = 0;
+  const text = "export function load() { return 1; }\nexport const name = 'app';\n";
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], explanationGenerator(input) {
+    generated++;
+    assert.equal(input.range.scope, 'file');
+    assert.equal(input.range.symbolId, undefined);
+    assert.equal(input.selectedText, generated < 2 ? text : text.replace('return 1', 'return 2'));
+    return { body: `File overview revision ${generated}.`, executionProfile: resolvedSourceExplanationProfile() };
+  } });
+  const other = await createSourceEditorFixture();
+  t.after(() => Promise.all([fixture, other].map(({ root }) => rm(root, { recursive: true, force: true }))));
+  const expectedHash = crypto.createHash('sha256').update(text).digest('hex');
+  // No .genesis index exists. Client range must not truncate a whole-file overview.
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description', startLine: 2, endLine: 2, startColumn: 2, endColumn: 4, expectedHash, vibe64User: { uid: 1001, username: 'ada' } };
+  const first = await fixture.service.explainSelection(input);
+  assert.equal(first.ok, true);
+  assert.equal(first.explanation.sourceRange.startLine, 1);
+  assert.equal(first.explanation.sourceRange.endLine, 3);
+  const restarted = fixture.restartService();
+  assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
+  assert.equal(generated, 1);
+  const current = await restarted.readFile(input);
+  assert.equal(current.interpretations.records[0].scope, 'file');
+  assert.equal(current.interpretations.records[0].presentation, 'description');
+  assert.equal(current.interpretations.records[0].status, 'current');
+  assert.deepEqual((await restarted.readFile({ ...input, vibe64User: { uid: 1002, username: 'bob' } })).interpretations.records, []);
+  assert.deepEqual((await other.service.readFile(input)).interpretations.records, []);
+  await writeFile(path.join(fixture.sourceRoot, input.path), text.replace('return 1', 'return 2'));
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
+  assert.equal((await restarted.explainSelection(input)).statusCode, 409);
+  assert.equal(generated, 1);
+  const changedHash = (await restarted.readFile(input)).file.hash;
+  assert.equal((await restarted.explainSelection({ ...input, expectedHash: changedHash })).ok, true);
+  assert.equal(generated, 2);
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
+  await restarted.explainSelection({ ...input, expectedHash: changedHash, force: true });
+  assert.equal(generated, 3);
+});
+
 test('forced interpretation refresh cannot be overwritten by an older completed generation', async t => {
   let release;
   let announce;
@@ -1406,6 +1446,8 @@ test("source editor streams explanation chat events through the agent service", 
           turnId: "agent-turn-1",
           type: "notification"
         });
+        assert.equal(events.find(event => event.type === 'source-explanation.message')?.text, '## Role\nStreaming', 'progress must reach the reader before the turn finishes');
+        assert.equal(events.some(event => event.type === 'source-explanation.finished'), false);
         return {
           executionProfile: resolvedSourceExplanationProfile(),
           ok: true,
@@ -1442,19 +1484,21 @@ test("source editor streams explanation chat events through the agent service", 
       "source-explanation.started",
       "source-explanation.thread",
       "source-explanation.turn",
+      "source-explanation.message",
       "source-explanation.execution-profile",
       "source-explanation.message",
       "source-explanation.finished"
     ]);
     assert.equal(events[0].explanation.status, "running");
-    assert.deepEqual(events[3].executionProfile, resolvedSourceExplanationProfile());
-    assert.equal(events[4].text, "## Role\nStreaming complete");
-    assert.equal(events[5].explanation.agentThreadId, "agent-thread-1");
-    assert.equal(events[5].explanation.agentTurnId, "agent-turn-1");
-    assert.equal(events[5].explanation.model, "gpt-5.6-luna");
-    assert.equal(events[5].explanation.agentSettings, null);
-    assert.deepEqual(events[5].explanation.executionProfile, resolvedSourceExplanationProfile());
-    assert.equal(events[5].explanation.messages.at(-1).text, "## Role\nStreaming complete");
+    assert.equal(events[3].text, "## Role\nStreaming");
+    assert.deepEqual(events[4].executionProfile, resolvedSourceExplanationProfile());
+    assert.equal(events[5].text, "## Role\nStreaming complete");
+    assert.equal(events[6].explanation.agentThreadId, "agent-thread-1");
+    assert.equal(events[6].explanation.agentTurnId, "agent-turn-1");
+    assert.equal(events[6].explanation.model, "gpt-5.6-luna");
+    assert.equal(events[6].explanation.agentSettings, null);
+    assert.deepEqual(events[6].explanation.executionProfile, resolvedSourceExplanationProfile());
+    assert.equal(events[6].explanation.messages.at(-1).text, "## Role\nStreaming complete");
     assert.equal(streamCalls[0].agentSettings, undefined);
     assert.deepEqual(streamCalls[0].executionProfile, resolvedSourceExplanationProfile());
     assert.equal(

@@ -1555,10 +1555,12 @@ Explain function (a short purpose statement followed by informational English
 pseudocode), and exact Code. Supporting files show compact Part of links to
 the explicitly authored main source; only that anchor file contains the Program
 explanation and contract. Gold main-file icons distinguish it in the browser.
-The Program explains a capability, not each declaration. Re-scan project updates
-the whole browsing index and shows its stage/elapsed time; it generates no
-explanation or Program text. The interface
-does not generate parallel file/subsystem summaries. Program Sources identify
+The Program explains a capability, not each declaration. Explain file requests
+a short informational overview of the saved file without reading the project
+index or generating a subsystem responsibility. Explain function is also
+available beside each callable. Architecture → ⋯ → Re-scan project updates the
+whole browsing index and shows its stage/elapsed time; it generates no
+explanation or Program text. The file view has no scan button. Program Sources identify
 participating files, not exact per-function intent. Whole-file Code preserves
 the mounted CodeMirror editor, draft, autosave, conflict and realtime owners.
 Function explanations reuse the original Helper service, verified profile, account
@@ -1578,12 +1580,14 @@ Unsupported parsers and
 stale indexes retain whole-file explanation and Code controls without fabricating
 an empty complete public interface.
 
-Only function-specific pseudocode is stored privately by
+On-demand file overviews and function-specific pseudocode are stored privately by
 the source-editor service, scoped to actor, project/session, actual saved source,
 verified Helper profile, presentation and Genesis prompt revision. Only completed
 initial answers are persisted atomically; follow-up conversations do not replace
 them. A forced refresh cannot be overwritten by an older completion. Reads can
 show current or explicitly stale saved text without starting a Helper. Opening
 files or selecting declarations does not query the Helper. The next explicit
-Explain function request regenerates a stale answer; there is no background summary job. These
+Explain file or Explain function request regenerates its stale answer; there is
+no background summary job. Only user-visible Helper progress classifications
+are forwarded during generation, followed by the validated final answer. These
 interpretations are not Program contracts or coding-agent context.

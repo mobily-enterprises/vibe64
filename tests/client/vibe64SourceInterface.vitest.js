@@ -44,7 +44,7 @@ it('dirty files disable indexed symbol use and explanations while keeping the ed
 
 it('stale indexes stop indexed Code but retain authored Program context and editing paths', async () => {
   const html = await renderInterface({ current: false, assistantAvailable: true, source: '' });
-  expect(html).toContain('The index is out of date for this file.');
+  expect(html).toContain('Index out of date.');
   expect(html).toMatch(/<button[^>]*disabled[^>]*>Code<\/button>/u);
   expect(html).toContain('Program unavailable.');
   expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Code · whole file<\/button>/u);
@@ -107,13 +107,25 @@ it('components and values offer Code without an inapplicable function-explanatio
 });
 
 
-it('project rescanning shows its own stage without masquerading as function explanation', async () => {
-  const html = await renderInterface({ refreshing: true, refreshProgress: { message: 'Scanning project source…', elapsedSeconds: 31 } });
-  expect(html).toContain('Re-scan project');
-  expect(html).toContain('Updates signatures and links; no explanations.');
-  expect(html).toContain('Scanning project source… · 31s');
-  expect(html).toContain('Explain function needs an available Helper.');
-  expect(html).not.toContain('Preparing Steps');
+it('file explanations do not require a project index and never offer a whole-project scan', async () => {
+  const html = await renderInterface({ current: false, indexed: false, assistantAvailable: true });
+  expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Explain file<\/button>/u);
+  expect(html).not.toContain('Re-scan project');
+  expect(html).not.toContain('Scanning project');
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
+  const dirty = await renderInterface({ dirty: true, assistantAvailable: true });
+  expect(dirty).toMatch(/<button[^>]*disabled[^>]*>Explain file<\/button>/u);
+});
+
+it('saved file overviews remain accessible without a Helper, separate from function pseudocode', async () => {
+  const record = { path: 'engine.rs', scope: 'file', symbolId: '', presentation: 'description', body: 'Loads saved records and coordinates storage.', fileHash: 'current', status: 'current' };
+  const cached = await renderInterface({ fileHash: 'current', interpretations: [record] });
+  expect(cached).toMatch(/<button(?![^>]*disabled)[^>]*>Explain file<\/button>/u);
+  expect(cached).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
+  const active = await renderInterface({ activeFileInterpretation: true, fileHash: 'changed', interpretations: [record] });
+  expect(active).toContain('File overview');
+  expect(active).toContain('Stale · source or guidance changed');
+  expect(active).toMatch(/<button[^>]*disabled[^>]*>Regenerate overview<\/button>/u);
 });
 
 it('file icons distinguish the explicit main source from same-named and shared supporting files', async () => {

@@ -415,14 +415,15 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 function sourceEditorInterfacePromptVersion(presentation) {
-  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}`;
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v1' : ''}`;
 }
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
-  // Ad-hoc selections keep their established bounded in-memory cache. Only
-  // function-specific pseudocode has durable informational value. Program owns
-  // the Architecture browser's English capability explanations.
-  if (input.range.presentation !== 'steps' || input.range.scope !== 'selection' || !input.range.symbolId) return {};
+  // Reuse the existing private cache for on-demand file overviews and exact
+  // function pseudocode. Neither interpretation changes the authored Program.
+  const range = input.range;
+  if (!(range.scope === 'file' && range.presentation === 'description')
+    && !(range.scope === 'selection' && range.presentation === 'steps' && range.symbolId)) return {};
   return {
     readCompleted: () => readSourceInterpretation(context, input, cacheKey).catch(() => null),
     writeCompleted: async (template, currentGeneration) => {
@@ -3129,7 +3130,7 @@ function sourceEditorExplanationPromptCode({
 
 async function sourceEditorExplanationInput(context = {}, input = {}) {
   const file = await readSourceEditorFile(context, input.path);
-  if (input.expectedHash && input.expectedHash !== file.hash) throw sourceEditorError("This file changed after symbol analysis. Refresh analysis before describing the symbol.", "vibe64_source_explanation_source_changed", {}, 409);
+  if (input.expectedHash && input.expectedHash !== file.hash) throw sourceEditorError("The saved file changed. Reopen it before requesting an explanation.", "vibe64_source_explanation_source_changed", {}, 409);
   const presentation = input.presentation;
   if (presentation !== undefined && !["description", "steps"].includes(presentation)) throw sourceEditorError("Choose Description or Steps.", "vibe64_source_explanation_presentation_invalid");
   const lines = sourceEditorLines(file.text);
@@ -3172,10 +3173,13 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
         throw sourceEditorError("The indexed symbol range is invalid for this file. Refresh analysis.", "vibe64_source_explanation_symbol_changed", {}, 409);
       }
     }
-    if (presentation === 'steps' && !Array.isArray(symbol.parameters)) throw sourceEditorError("Steps are available for callable declarations. Use Program context for components, values and types.", "vibe64_source_explanation_not_callable");
+    if (presentation === 'steps' && !Array.isArray(symbol.parameters)) throw sourceEditorError("Explain function is available for callable declarations. Use Explain file or Code for other declarations.", "vibe64_source_explanation_not_callable");
     selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
   }
   const scope = symbolId !== undefined ? "selection" : normalizeText(input.scope) === "file" ? "file" : "selection";
+  if (scope === 'file' && presentation === 'description') {
+    selection = { startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 };
+  }
   const range = sourceEditorRangeWithSelectionColumns(
     normalizeSourceEditorLineRange(selection, lines.length),
     selection,
@@ -3720,6 +3724,9 @@ async function streamSourceEditorAgentTurn(context = {}, {
           return;
         }
         latestText = String(classification.text || "");
+        if (classification.kind === 'live_progress') {
+          await onText?.({ kind: 'live_progress', text: latestText, threadId: latestThreadId, turnId: latestTurnId });
+        }
       }
     }));
     latestThreadId = normalizeText(result?.threadId) || latestThreadId;
@@ -4142,6 +4149,8 @@ function sourceEditorExplanationPrompt({
     ...(range.presentation ? [sourceExplanationGuidance({ presentation: range.presentation, scope: range.scope })] : []),
     range.presentation === "steps"
       ? "Start with a short purpose statement, then use numbered steps. Include meaningful failure conditions in the step where they occur."
+      : wholeFile && range.presentation === 'description'
+      ? "Give a short file overview in 100–180 words: purpose, main operations, inputs and outputs, side effects and important dependencies. Explain observed behavior; distinguish inference and missing context. Omit generic introductions and empty sections."
       : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
     "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
     `Return concise user-facing Markdown no longer than ${SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS.toLocaleString("en-US")} characters.`,

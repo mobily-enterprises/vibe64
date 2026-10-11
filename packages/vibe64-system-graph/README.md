@@ -78,7 +78,11 @@ explanations. Explicit runtime, workdir and Required files checks precede scanni
 refresh, with no index reads. The client polls once per second while refreshing
 and shows bounded failed-command diagnostics inline, without another blocking
 shell dialog. The request budget reaches the HTTP client through endpoint
-resource write options. Opening/Reload only reads indexes. `Explain function`
+resource write options. Re-scan project is only an Architecture toolbar option;
+file views expose no project-scan action. Opening/Reload only reads indexes.
+`Explain file` requests a short informational overview without requiring an index.
+It reuses the private source-editor cache, invalidated by saved source and prompt
+identity. `Explain function`
 uses the existing on-demand Helper and source-hash cache for a short purpose
 statement followed by steps. Supporting files show `Part of` links to the
 explicit main source, which holds the authored Program context.

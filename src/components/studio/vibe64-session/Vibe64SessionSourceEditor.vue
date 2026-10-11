@@ -473,6 +473,7 @@
             :interpretations="editor.interpretations.value"
             :interpretation-warning="editor.interpretationWarning.value"
             :active-interpretation="activeInterfaceInterpretation"
+            :active-file-interpretation="activeFileInterpretation"
             :symbols="interfaceSymbols"
             :programs="interfacePrograms"
             :program-status="interfaceArchitecture?.program?.status"
@@ -481,8 +482,6 @@
             :indexed="Boolean(interfaceFile)"
             :dirty="editor.dirty.value"
             :busy="editor.explanationBusy.value || editor.explanationClosing.value"
-            :refreshing="architectureRefreshing || interfaceGraph?.refreshing.value"
-            :refresh-progress="architectureRefreshProgress || interfaceGraph?.refreshProgress.value"
             :analysis-error="architectureFacts ? '' : interfaceGraph?.error.value"
             :assistant-available="assistantAvailable"
             :assistant-unavailable-message="assistantUnavailableMessage"
@@ -490,12 +489,12 @@
             :presentation="symbolPresentation"
             @select-symbol="selectInterfaceSymbol"
             @present-symbol="presentInterfaceSymbol"
+            @explain-file="presentFileOverview"
             @whole-file-code="showWholeFileCode"
             @open-source="$emit('open-source-file', $event)"
-            @refresh-analysis="refreshArchitecture ? refreshArchitecture() : interfaceGraph?.refresh()"
           >
             <template #explanation>
-              <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation" embedded
+              <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation || activeFileInterpretation" embedded
                 :assistant-available="assistantAvailable" :assistant-unavailable-message="assistantUnavailableMessage"
                 :busy="editor.explanationBusy.value" :closing="editor.explanationClosing.value"
                 :explanation="editor.activeExplanation.value" :followup="editor.explanationFollowup.value" :selected-path="editor.selectedPath.value"
@@ -735,9 +734,6 @@ const SOURCE_EDITOR_TREE_STATE_STORAGE_KEY = "vibe64:source-editor:tree-state";
 const props = defineProps({
   singleFile: { type: Boolean, default: false },
   architectureFacts: { type: Object, default: null },
-  refreshArchitecture: { type: Function, default: null },
-  architectureRefreshing: { type: Boolean, default: false },
-  architectureRefreshProgress: { type: Object, default: null },
   agentActive: { type: Boolean, default: false },
   fileBookmarks: { type: Object, default: null },
   active: {
@@ -805,7 +801,7 @@ const editor = useVibe64SourceEditor({
 const filePresentation = ref('interface');
 const interfaceSymbolId = ref('');
 const symbolPresentation = ref('description');
-// Architecture supplies its existing snapshot and refresh owner at mount. Only
+// Architecture supplies its existing snapshot at mount. Only
 // standalone file browsing owns another graph reader.
 const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
 const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
@@ -834,6 +830,16 @@ const activeInterfaceInterpretation = computed(() => {
   return Boolean(range?.path === editor.selectedPath.value && range.presentation === symbolPresentation.value
     && (range.symbolId || '') === interfaceSymbolId.value && range.scope === (interfaceSymbolId.value ? 'selection' : 'file'));
 });
+const activeFileInterpretation = computed(() => {
+  const range = editor.activeExplanation.value?.sourceRange;
+  return range?.path === editor.selectedPath.value && range.scope === 'file' && range.presentation === 'description';
+});
+function presentFileOverview(force = false) {
+  if (!force && currentInterpretation('file', '', 'description')) return;
+  if (!editor.selectedPath.value || editor.dirty.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
+  const lines = editor.text.value.split('\n');
+  void editor.explainSelection({ scope: 'file', presentation: 'description', force, expectedHash: editor.savedHash.value, startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 });
+}
 function presentInterfaceSymbol(presentation, force = false) {
   symbolPresentation.value = presentation;
   const symbol = interfaceSymbol.value;

@@ -220,11 +220,13 @@ local file history and return to their enclosing view.
 The host's `file-interface` slot embeds the existing
 `Vibe64SessionSourceEditor` in single-file mode with the requested path/native
 symbol ID/original name. The host supplies the already loaded common architecture
-facts and existing refresh operation, avoiding another whole-index read for
+facts, avoiding another whole-index read for
 each file; standalone Files retains its existing graph resource. Hash checks
 still compare those facts against the freshly read source. Public signatures reach implementation declarations
 rather than the Files workspace. Existing hash checks, Helper admission and
-explanation caches supply Explain function and exact Code. Authored Program
+explanation caches supply Explain file, Explain function and exact Code. File
+overviews are on-demand, informational and hashed against the whole saved file;
+they do not require an index or replace authored Program text. Authored Program
 context appears at its main source; supporting files link there. Whole-file source
 is read-only. Missing return/parser/Helper evidence stays explicit. In narrow
 viewers the selected declaration precedes the symbol list.
@@ -262,8 +264,10 @@ The existing separate cancellation operation remains available, and failure
 notices are small, dismissible overlays with bounded inspector command output.
 The same admitted refresh tracks its actual stage and elapsed time in memory;
 a lightweight authenticated status query polls only while this client is
-refreshing, without reading either native artifact. The file viewer forwards
-that status rather than presenting a project re-scan as function generation.
+refreshing, without reading either native artifact. Re-scan project and its
+status belong to the Architecture toolbar, not the file viewer. File and
+function explanations reuse the existing Helper stream and show its user-visible
+progress messages; scanning never invokes that service.
 Declared Required files and runtime/workdir prerequisites fail before scanning.
 Re-scan reads existing Program text; it neither rewrites it nor calls a Helper. Refresh holds the original
 source-work admission and invokes Stack's Vibe64-owned Architecture inspection
