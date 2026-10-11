@@ -1,6 +1,7 @@
 import { assistantRoutingStatusLabel, assistantRoutingOutcomeNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function routedChatMessage(request, local = null) {
+  if (local?.status === "uncertain" && local.id === request?.messageId && request?.delivery === "failed") return local;
   if (!request || !request.input || request.stopped || request.followup || !["routing", "sending", "uncertain", "failed"].includes(request.delivery)) return null;
   return {
     ...local,
@@ -36,7 +37,8 @@ function chatTurnsWithDelivery(turns, request, checking) {
     user: { role: "user", text: message.text, messageId: message.id, attachments: request.input.displayAttachments || [] },
     messages: []
   }];
-  return result.map((turn) => !matches(turn) ? turn : {
+  return result.map((turn) => !matches(turn) ||
+    turn.optimistic?.status === "uncertain" && message.status === "failed" ? turn : {
     ...turn,
     optimistic: { ...turn.optimistic, id: message.id, status: message.status, error: message.error },
     system: {

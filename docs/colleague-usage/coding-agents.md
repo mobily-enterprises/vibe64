@@ -32,7 +32,8 @@ If Claude cannot initialize, inspect the failed request before selecting **Retry
 An initialization failure occurs before that request reaches Claude; it does not
 complete the requested work. Vibe64 keeps a bounded, credential-redacted startup
 diagnostic in its private operational log before confirmed process cleanup. The
-chat continues to show the original startup error; Colleague cannot read that log.
+request stays in chat for review; unconfirmed delivery requires **Check delivery**
+before Retry. Colleague cannot read that log.
 
 1. Select the intended project and session, then Main or the intended temporary
    conversation. Type the request and select **Send**.
@@ -54,6 +55,8 @@ Your draft, uploaded file references and failed requests stay with the same
 signed-in person, project and session across a page reload. Restoring them does
 not send anything. Review an unconfirmed request before using **Retry**; when
 **Check delivery** is shown, it checks the existing request without resending it.
+An unconfirmed request keeps that control even if a saved routing error says it
+failed. Retry, Edit and Cancel become available only after its delivery is resolved.
 A rejected **Steer** returns to the composer; **Retry** retains its request ID
 and any newer draft text. Steering arriving after a finished turn is failed,
 not **Check delivery**, and never becomes new work automatically. Use its

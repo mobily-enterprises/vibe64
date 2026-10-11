@@ -1592,7 +1592,10 @@ Live dispatch remains `sending` (or its review/planning equivalent) while its
 attempted message ID and native thread are persisted before submission. An
 interrupted attempt becomes `uncertain`; ordinary pending delivery never renders
 as failure. The shared Main/temporary adapter presents unconfirmed delivery with
-Check delivery and hides Edit/Cancel until the outcome is known. Checking reuses
+Check delivery and hides Edit/Cancel until the outcome is known. A same-message
+local uncertain receipt survives a conflicting saved failed routing projection;
+its existing Check delivery action inspects the common receipt before any Retry.
+Live server routing keeps its original pending ownership. Checking reuses
 the original message ID and the existing native receipt lookup, never a new send.
 A canonical user-message receipt or accepted routing state supersedes a stale
 local HTTP error. Recovery also settles saved receipts and clears routing errors

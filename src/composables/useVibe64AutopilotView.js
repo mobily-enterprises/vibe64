@@ -1099,7 +1099,7 @@ function useVibe64AutopilotView(props, emit, {
 
   async function cancelOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
-    if (!message) {
+    if (!message || message.status === "uncertain") {
       return false;
     }
     if (routingRequest.value?.messageId === messageId) {
@@ -1141,7 +1141,8 @@ function useVibe64AutopilotView(props, emit, {
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    if (message.status === "uncertain" && routingRequest.value?.messageId !== messageId) {
+    if (message.status === "uncertain" && (routingRequest.value?.messageId !== messageId ||
+        messageDelivery.value?.find(messageId)?.status === "uncertain" && routingRequest.value?.delivery === "failed")) {
       const receipt = await props.conversationRuntime.inspectDelivery(messageId);
       if (receipt?.status === "accepted") {
         settleComposerRetry(retry);

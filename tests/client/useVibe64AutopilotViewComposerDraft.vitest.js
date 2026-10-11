@@ -3139,3 +3139,55 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkTitle.value).toBe("Wait for the current repository operation to finish");
   });
 });
+
+
+it("checks a local uncertain receipt before retrying a conflicting failed route", async () => {
+  accountMocks.useVibe64Accounts.mockReturnValue({ status: ref(null) });
+  const inspect = vi.fn();
+  const { view, props, scope } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
+  const runtime = props.conversationRuntime;
+  try {
+    await vi.waitFor(() => expect(runtime.canSubmit.value).toBe(true));
+    const messageId = "uncertain-failed-route";
+    const payload = { message: "Keep this exact request." };
+    runtime.delivery.state.messages = [{
+      id: messageId, payload, text: payload.message, status: "uncertain",
+      error: "Internal server error.", createdAt: new Date().toISOString(), createdAtMs: Date.now()
+    }];
+    props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId, status: "failed", delivery: "failed", input: payload, error: "Claude initialize timed out."
+    });
+    view.composerDraft.value = "A separate unsent draft.";
+    expect(runtime.canSubmit.value).toBe(false);
+    expect(runtime.delivery.state.sending).toBe(false);
+    const [turn] = view.chatTurns.value;
+    expect(turn.optimistic).toMatchObject({ id: messageId, status: "uncertain" });
+    expect(turn.system.delivery).toMatchObject({ messageId, error: "Internal server error." });
+    await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(false);
+    await expect(view.editOptimisticMessage(messageId)).resolves.toBe(false);
+    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
+    expect(view.composerDraft.value).toBe("A separate unsent draft.");
+
+    inspect.mockResolvedValue({ status: "unknown", messageId });
+    await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(false);
+    expect(inspect).toHaveBeenCalledExactlyOnceWith(runtime.identity.conversationId, messageId);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
+
+    inspect.mockResolvedValue({ status: "not-sent", messageId, error: "Confirmed not sent." });
+    await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(false);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(runtime.delivery.find(messageId)?.status).toBe("failed");
+    expect(runtime.canSubmit.value).toBe(true);
+    expect(view.chatTurns.value[0].optimistic.status).toBe("failed");
+    expect(view.chatTurns.value[0].system.delivery).toBeUndefined();
+    await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(true);
+    expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
+    expect(props.sendAgentMessage.mock.calls[0][0]).toMatchObject({ messageId, message: payload.message });
+    expect(view.composerDraft.value).toBe("A separate unsent draft.");
+  } finally {
+    scope.stop();
+    viewScopes.delete(scope);
+  }
+});
