@@ -3212,3 +3212,84 @@ test("local active missing storage and ended stored ownership corruption remain 
   assert.deepEqual((await ended.learning.readSessions({ actor: ended.actor })).map(row => row.sessionId), [ended.initial.sessionId]);
   await ended.unchanged();
 });
+
+
+test("admitted exercise scope validates once per fresh read and refuses changed content or returned identity", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const calls = [];
+  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+    async readLesson(input) { calls.push("lesson"); return reader.readLesson(input); },
+    async readExercise(input) { calls.push("exercise"); return reader.readExercise(input); }
+  } });
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" };
+  const before = await treeState(f.systemRoot);
+  const first = await state.readExerciseProjectScope(input);
+  assert.deepEqual(await state.readExerciseProjectScope(input), first);
+  assert.deepEqual(calls, ["exercise", "exercise"]);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  for (const changed of [
+    { pin: { ...f.pin.topic, release: "9.9.9" } },
+    { lessonCode: "OTHER" },
+    { lessonHash: "f".repeat(64) }
+  ]) {
+    const mismatched = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+      readLesson: reader.readLesson,
+      async readExercise(value) { return { ...await reader.readExercise(value), ...changed }; }
+    } });
+    await assert.rejects(() => mismatched.readExerciseProjectScope(input), /installed topic differs from the admitted reservation pin/u);
+  }
+  const readerFailure = new Error("Existing exercise reader failure");
+  const failed = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+    readLesson: reader.readLesson, async readExercise() { throw readerFailure; }
+  } });
+  await assert.rejects(() => failed.readExerciseProjectScope(input), error => error === readerFailure);
+  await fs.writeFile(path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
+    "files/training/exercises/app/server.mjs"), "changed after fresh admitted read");
+  await assert.rejects(() => state.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  assert.deepEqual(calls, ["exercise", "exercise", "exercise"]);
+});
+
+test("exercise scope preserves no-exercise pin inactive and unavailable-reader refusal precedence", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const calls = [];
+  const unavailable = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+    async readLesson(input) { calls.push("lesson"); return reader.readLesson(input); }
+  } });
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" };
+  await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
+  assert.deepEqual(calls, ["lesson"]);
+  await f.state.endAttempt({ actor: f.actor, attemptId: input.attemptId,
+    expectedRevision: reserved.revision, requestId: "validation-end", reason: "restart" });
+  await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  assert.deepEqual(calls, ["lesson", "lesson"]);
+  const wrongPin = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+    async readLesson(value) { const lesson = await reader.readLesson(value); return { ...lesson, pin: { ...lesson.pin, release: "9.9.9" } }; }
+  } });
+  await assert.rejects(() => wrongPin.readExerciseProjectScope(input), /installed topic differs from the admitted reservation pin/u);
+  const absent = await fixture(t, { noExercise: true });
+  const noExercise = await absent.reserve();
+  const absentReader = createInstalledTrainingContent({ systemRoot: absent.systemRoot });
+  const absentInput = { actor: absent.actor, attemptId: noExercise.attempt.attemptId, access: "create" };
+  const absentBefore = await treeState(absent.systemRoot);
+  await assert.rejects(() => absent.state.readExerciseProjectScope(absentInput), {
+    code: "VIBE64_TRAINING_EXERCISE_MISSING", statusCode: 409,
+    message: "This saved lesson has no practice project. Use its source-less learning conversation."
+  });
+  const absentUnavailable = createTrainingLearnerState({ systemRoot: absent.systemRoot, content: { readLesson: absentReader.readLesson } });
+  await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
+  assert.deepEqual(await treeState(absent.systemRoot), absentBefore);
+  await absent.state.endAttempt({ actor: absent.actor, attemptId: absentInput.attemptId,
+    expectedRevision: noExercise.revision, requestId: "absent-validation-end", reason: "restart" });
+  await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
+  const progress = JSON.parse(await fs.readFile(absent.paths.progress, "utf8"));
+  for (const changed of [{ release: "9.9.9" }, { repository: "different/learn-topic" }]) {
+    progress.attempts[0].pin.topic = { ...absent.pin.topic, ...changed };
+    await fs.writeFile(absent.paths.progress, `${JSON.stringify(progress)}\n`);
+    await assert.rejects(() => absent.state.readExerciseProjectScope({ ...absentInput, access: "observe" }),
+      /installed topic differs from the admitted reservation pin/u);
+  }
+});

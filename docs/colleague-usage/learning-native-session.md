@@ -105,7 +105,10 @@ is a workspace recovery problem; it does not prove a lesson pass or authorize
 another teaching request. Source-less lessons retain their no-Git result.
 Practice teaching-tool availability remains subject to the limits above.
 Sending in a prepared practice conversation checks fresh teaching access without
-starting setup again. A confirmed preparation refusal before admission keeps the
+starting setup again. Its installed lesson and exercise are checked together
+for that access read; this does not retain permission for a later request. A changed
+lesson pin or installed exercise remains an error, and historical reading does
+not permit new practice work. A confirmed preparation refusal before admission keeps the
 message failed; after preparation is ready, use its **Retry** once to send the same
 saved request. If delivery is unconfirmed, use **Check delivery**; an unknown result
 is not permission to resend. If setup has finished but the lesson still shows

@@ -246,7 +246,9 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
     const exercise = lesson.lesson.exercise;
-    if (!exercise) throw new Error(`Lesson ${lessonCode} has no declared bundled exercise.`);
+    if (!exercise) throw Object.assign(new Error(`Lesson ${lessonCode} has no declared bundled exercise.`), {
+      code: "VIBE64_TRAINING_EXERCISE_MISSING"
+    });
     const sourcePath = path.posix.join(path.posix.dirname(lesson.descriptorPath), exercise.source);
     const prefix = sourcePath === "." ? "" : `${sourcePath}/`;
     const files = [];

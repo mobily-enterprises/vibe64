@@ -558,19 +558,35 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const state = await loadState(paths);
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
-    const lesson = await verifyInstalled(attempt.pin);
-    if (!lesson.lesson.exercise) {
-      throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
-    }
     const active = state.progress.activeAttemptId === attemptId && !attempt.ended;
-    if ((access === "write" || access === "create") && (!active || !state.activeSummaryCurrent)) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting practice work.", 409);
-    }
-    if (typeof installed.readExercise !== "function") {
+    const workInactive = (access === "write" || access === "create") && (!active || !state.activeSummaryCurrent);
+    // Refusals retain the original installed-pin/no-exercise precedence. Admitted
+    // reads use readExercise's existing lesson validation instead of repeating it.
+    if (workInactive || typeof installed.readExercise !== "function") {
+      const lesson = await verifyInstalled(attempt.pin);
+      if (!lesson.lesson.exercise) {
+        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
+      }
+      if (workInactive) {
+        throw failure("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting practice work.", 409);
+      }
       throw failure("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installed content reader cannot supply the lesson's exact bundled exercise.", 409);
     }
-    const exercise = await installed.readExercise({ ...attempt.pin.topic,
-      lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    let exercise;
+    try {
+      exercise = await installed.readExercise({ ...attempt.pin.topic,
+        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    } catch (error) {
+      if (error?.code === "VIBE64_TRAINING_EXERCISE_MISSING") {
+        await verifyInstalled(attempt.pin);
+        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
+      }
+      throw error;
+    }
+    if (canonicalJson(exercise.pin) !== canonicalJson(attempt.pin.topic) ||
+        exercise.lessonCode !== attempt.pin.lesson.code || exercise.lessonHash !== attempt.pin.lesson.hash) {
+      throw new Error("The installed topic differs from the admitted reservation pin.");
+    }
     return {
       scope: { learnerId: paths.learner.id, attemptId, pin: structuredClone(attempt.pin), noExercise: false },
       systemRoot,

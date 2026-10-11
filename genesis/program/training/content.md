@@ -118,7 +118,16 @@ exact pin/lesson identity, original exercise metadata, snapshot-relative
 `sourcePath`, and sorted manifest files below that source. File records contain
 exercise-relative `path` and verified Buffer `bytes`. It reuses the same file read,
 without scanning for new inputs. Manifest records contain no file modes, so this
-read promises no mode preservation. It does not copy, provision, fetch, execute or
+read promises no mode preservation. A missing exercise retains its original error
+message with the typed `VIBE64_TRAINING_EXERCISE_MISSING` refusal.
+An admitted `readExerciseProjectScope` uses this existing read once, including
+its topic/lesson validation, and checks the returned exact pin/code/hash. Each
+new scope still reads saved learner state and validates installed content; no
+result or authorization is cached. An inactive write/create or unavailable
+exercise reader retains the original separate lesson validation and
+missing-exercise/inactive/unavailable refusal order. A typed missing-exercise
+refusal rechecks the original full topic pin before normalization, so release or
+repository corruption cannot become an ordinary missing-practice message. It does not copy, provision, fetch, execute or
 grant project access; ordinary project and Preview permissions remain applicable.
 No caller supplies a resource path. Descriptor limits and the 1 MiB per-file limit
 remain the original content validator's contract. This is an internal resource

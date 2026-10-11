@@ -731,3 +731,18 @@ test("canonical title projection refuses missing, ambiguous, oversized or wrong-
     await assert.rejects(() => execute(), /training operation could not complete/u);
   }
 });
+
+
+test("an absent exercise retains its message and typed missing-exercise refusal", async t => {
+  const f = await fixture(t);
+  await f.write("training/lessons/LESSON-01/lesson.json", {
+    ...f.lesson, exercise: undefined, checks: undefined, assessments: [f.lesson.assessments[0]]
+  });
+  const installed = await f.install();
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readExercise({ ...installed.pin,
+    lessonCode: "LESSON-01", lessonHash: installed.bundle.lessons[0].hash }), {
+    code: "VIBE64_TRAINING_EXERCISE_MISSING", message: "Lesson LESSON-01 has no declared bundled exercise."
+  });
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
