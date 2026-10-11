@@ -2595,3 +2595,66 @@ test("Claude native cleanup cannot leave the saved run active when learning chec
     delete f.context.runtime.learningTeaching;
   }
 });
+
+test("Claude startup failure preserves bounded redacted stderr before verified cleanup", async (t) => {
+  const { runVibe64Command, stopVibe64Execution } = await import("@local/vibe64-execution/server");
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-startup-stderr-"));
+  const command = path.join(root, "claude-fixture");
+  await writeFile(command, `#!/usr/bin/env node
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+  const frame = JSON.parse(line);
+  if (frame.type !== 'control_request') return;
+  const secret = process.env.ANTHROPIC_API_KEY;
+  const ending = '\\nstartup diagnostic marker\\nAPI_TOKEN=assignment-secret\\nBearer bearer-secret\\n' + secret + '\\n';
+  const boundary = secret.slice(10);
+  require('node:fs').writeSync(2, 'old-prefix\\n' + 'z'.repeat(70 * 1024) + secret + '\\n' +
+    'x'.repeat(64 * 1024 - boundary.length - 1 - ending.length) + ending);
+  process.stdout.write(JSON.stringify({ type: 'system', subtype: 'startup-wait',
+    stdoutOnly: 'stdout must not be preserved' }) + '\\n');
+});
+`, { mode: 0o700 });
+  const initialized = Promise.withResolvers();
+  const starts = [];
+  const stops = [];
+  let logPath;
+  let starting;
+  t.after(async () => {
+    if (typeof starts[1]?.stop === "function") await starts[1].stop();
+    else if (starts.length) await stopVibe64Execution(starts[0].id);
+    await starting?.catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  });
+  starting = createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+    env: { ...process.env, ANTHROPIC_API_KEY: "bare-fixture-credential" },
+    commandRunner(input) { logPath = input.logPath; return runVibe64Command(input); },
+    async stopExecution(id, options) {
+      stops.push(id);
+      const output = await readFile(logPath);
+      assert.ok(output.toString().includes("startup diagnostic marker"));
+      assert.ok(output.subarray(-64 * 1024).toString().startsWith("bare-fixture-credential".slice(10)),
+        "the real bounded reader begins inside the supplied credential");
+      return stopVibe64Execution(id, options);
+    },
+    onStarted(id, stop) { starts.push({ id, stop }); },
+    onEvent(event) { if (event.subtype === "startup-wait") initialized.resolve(); }
+  });
+  starting.catch(() => {});
+  await Promise.race([initialized.promise, starting]);
+  assert.equal((await starts[1].stop()).scopeEmpty, true);
+  await assert.rejects(starting, error => {
+    assert.equal(error.message, "Claude connection was closed.");
+    assert.equal(error.executionId, starts[0].id);
+    assert.equal(error.stopProof.scopeEmpty, true);
+    assert.ok(error.nativeStartupStderr.includes("startup diagnostic marker"));
+    assert.ok(error.nativeStartupStderr.includes("[redacted]"));
+    assert.ok(error.nativeStartupStderr.length <= 64 * 1024);
+    for (const absent of ["old-prefix", "assignment-secret", "bearer-secret",
+      "bare-fixture-credential", "bare-fixture-credential".slice(10), "stdout must not be preserved"]) {
+      assert.equal(error.nativeStartupStderr.includes(absent), false);
+    }
+    assert.equal(Object.keys(error).includes("nativeStartupStderr"), false);
+    return true;
+  });
+  await assert.rejects(readFile(logPath), { code: "ENOENT" });
+  assert.deepEqual(stops, [starts[0].id], "diagnostic capture keeps the original single cleanup");
+});

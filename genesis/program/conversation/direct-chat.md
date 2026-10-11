@@ -2942,6 +2942,17 @@ an unrelated failure cannot gain an account link merely because of its wording.
 
 ### Application conversation and host boundaries
 
+The Public Claude process wrapper reads the existing managed handle's bounded
+stderr before confirmed startup cleanup removes its temporary file. The existing
+reader marks a truncated tail; the wrapper discards its first partial line so a
+credential cut at that boundary is not retained. Non-truncated log shapes stay
+unchanged. During initialization only, it applies the existing operation sanitizer, including
+exact credential values from the supplied native environment, and retains that
+diagnostic privately on the original error. The existing message-delivery
+operational event reports it separately; error message/code, HTTP presentation,
+native identity and the original single cleanup remain unchanged. Successful
+startup and later normal Stop do not capture another startup diagnostic.
+
 The ordinary entry is `service.assistantSessionOptions` / `runMainAgentWrite`,
 then `sessionAgentManager.callSessionProvider` and `conversationOperation`, then
 JSKIT's common conversation runtime. Main and retained read, Send/Start, Wait,

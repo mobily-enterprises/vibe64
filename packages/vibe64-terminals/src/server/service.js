@@ -3790,6 +3790,7 @@ function createService({
           event: "vibe64.agent_message.delivery_failed",
           username,
           messageId: input.messageId,
+          nativeStartupStderr: error?.nativeStartupStderr,
           sessionId
         }, "Vibe64 assistant message delivery failed.");
         throw error;

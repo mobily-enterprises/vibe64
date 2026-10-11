@@ -28,6 +28,12 @@ Scroll chat if a short phone view cannot fit the warning and composer together.
 
 ## Send, steer and stop
 
+If Claude cannot initialize, inspect the failed request before selecting **Retry**.
+An initialization failure occurs before that request reaches Claude; it does not
+complete the requested work. Vibe64 keeps a bounded, credential-redacted startup
+diagnostic in its private operational log before confirmed process cleanup. The
+chat continues to show the original startup error; Colleague cannot read that log.
+
 1. Select the intended project and session, then Main or the intended temporary
    conversation. Type the request and select **Send**.
 2. While it works, add instructions through **Steer**. This targets the active

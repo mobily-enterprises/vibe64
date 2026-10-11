@@ -140,7 +140,8 @@ export function createVibe64ConversationExecution({
               const size = fstatSync(descriptor).size;
               const output = Buffer.alloc(Math.min(size, 64 * 1024));
               readSync(descriptor, output, 0, output.length, Math.max(0, size - output.length));
-              return { stderr: output.toString("utf8").trim(), stdout: "" };
+              return { stderr: output.toString("utf8").trim(), stdout: "",
+                ...(size > output.length ? { stderrTruncated: true } : {}) };
             } catch (error) {
               if (error.code === "ENOENT") return { stderr: "", stdout: "" };
               throw error;
