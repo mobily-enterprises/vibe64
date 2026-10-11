@@ -14,7 +14,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-terminals/src/server/service.js`
 - Main: `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
-- `packages/vibe64-system-graph/src/server/service.js`
+- Main: `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/server/actions.js`
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
@@ -139,7 +139,10 @@ The three-dimensional City presentation and its camera controls are retired.
 Architecture is the sole subsystem and Program presentation. It reuses the
 canonical directory-bound owners and descriptions from `genesis/subsystems.md`.
 Each Program operation belongs to one owner. Its contract and cited files appear
-inside the subsystem and file views; cross-subsystem library citations remain
+inside the subsystem and its required main source view. Each module explicitly
+names a reading anchor in its owning subsystem, exposed by Genesis as mainSource.
+File icons distinguish it with a gold border, star and Main label. Other files
+show only Part of links to that anchor; cross-subsystem library citations remain
 visible without changing ownership. The former list-and-detail screen is retired.
 Program is fallible authored explanation, not proof of a function's behavior or
 of current source freshness. Missing Program facts remain explicit.
@@ -221,7 +224,8 @@ facts and existing refresh operation, avoiding another whole-index read for
 each file; standalone Files retains its existing graph resource. Hash checks
 still compare those facts against the freshly read source. Public signatures reach implementation declarations
 rather than the Files workspace. Existing hash checks, Helper admission and
-explanation caches supply Program context, Explain function and exact Code. Whole-file source
+explanation caches supply Explain function and exact Code. Authored Program
+context appears at its main source; supporting files link there. Whole-file source
 is read-only. Missing return/parser/Helper evidence stays explicit. In narrow
 viewers the selected declaration precedes the symbol list.
 The file view explains common definition kinds and distinguishes a file export

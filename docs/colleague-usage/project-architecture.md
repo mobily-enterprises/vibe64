@@ -39,7 +39,12 @@ viewer needs no language or package-manager-specific controls.
    behind it. A compact skeleton appears while the interface is prepared.
 3. **What this subsystem does** shows its owned Genesis Program capabilities.
    Expand one to read its contract and follow its cited files. File icons also
-   name the capabilities that cite them. A library can participate in another
+   name the capabilities that cite them. Each Program explicitly names one main
+   source in its owning subsystem. Its icon has a gold border, star and **Main · …**
+   label; supporting icons say **Part of · …**. Main stays first even when the
+   source participates in other capabilities. Additional icon memberships show a
+   count with titles on hover. Expand a Program and select its **Main** link to
+   open that anchor. A library can participate in another
    subsystem's Program without changing ownership. These authored explanations
    can lag behind code. **Interface** lists recorded signatures directly: functions,
    methods, components, values and types keep their recorded kinds. Select a
@@ -60,9 +65,10 @@ viewer needs no language or package-manager-specific controls.
    file's interface opens inside the square. Selecting a subsystem signature
    likewise opens only its implementation file, with the requested declaration
    selected. The project-wide Files workspace does not open.
-6. Read **File exports**, **Program context**, **Explain function** and symbol
+6. Read **File exports**, **Explain function** and symbol
    **Code** controls. **Code · whole file** is read-only here; **Interface** returns
-   to declarations. Program context shows an authored capability. Explain function
+   to declarations. **Part of …** links to the Program's main source; the authored
+   explanation appears there, without repeating it in supporting files. Explain function
    asks the Helper for a short purpose statement and steps on explicit request.
    Missing Helper or parser coverage remains explicit. See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the

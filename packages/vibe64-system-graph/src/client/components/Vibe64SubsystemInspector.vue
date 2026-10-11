@@ -13,7 +13,7 @@
           <summary><strong>{{ program.title }}</strong><span>{{ program.description }}</span></summary>
           <div v-if="expandedPrograms.has(program.id)">
             <slot name="text" :text="program.publicContract" :source-path="program.path"><p class="subsystem-inspector__contract">{{ program.publicContract }}</p></slot>
-            <div class="subsystem-inspector__program-sources"><button v-for="path in program.sources" :key="path" type="button" @click="$emit('inspect', { path })">{{ path }} ↗</button></div>
+            <div class="subsystem-inspector__program-sources"><button v-if="program.mainSource" type="button" class="subsystem-inspector__program-main" @click="$emit('inspect', { path: program.mainSource })">Main · {{ program.mainSource }} ↗</button><button v-for="path in program.sources.filter(path => path !== program.mainSource)" :key="path" type="button" @click="$emit('inspect', { path })">{{ path }} ↗</button></div>
             <button type="button" class="subsystem-inspector__program-document" @click="$emit('open-source', { path: program.path })">Read or edit Program explanation ↗</button>
           </div>
         </details>
@@ -174,4 +174,5 @@ watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value 
 .subsystem-inspector__contract { white-space: pre-wrap; font-size: 13px; line-height: 20px; }
 .subsystem-inspector__program-sources { display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .subsystem-inspector__program-sources button, .subsystem-inspector__program-document { border: 0; background: transparent; color: #367e8a; font-size: 12px; text-align: left; overflow-wrap: anywhere; min-height: 44px; cursor: pointer; }
+.subsystem-inspector__program-sources .subsystem-inspector__program-main { color: #755616; font-weight: 600; }
 </style>

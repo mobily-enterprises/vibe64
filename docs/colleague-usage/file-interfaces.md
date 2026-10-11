@@ -20,22 +20,32 @@ attributes. A grouped declaration can include more than one named value. Build
 configuration, macro expansion and conditional compilation remain outside static
 coverage; use the project's declared preparation/verification for runtime proof.
 
-**Program** lists Genesis capabilities that cite the selected file.
-Open a capability to read its authored contract and participating files. Its one
-owning subsystem stays fixed even when those files include another subsystem's
-library. This is file-level evidence, not a claim that every function implements
-the entire capability. **Program context** opens this authored capability. Missing
-explanations are explicit; review authored explanations after source changes.
-Vibe64 does not generate a competing file or subsystem summary.
-**Read Program** opens the authored document. Use **Dashboard → Files → Repo**
-to edit that document; the Architecture file viewer is read-only.
+**Part of …** links a supporting file to its Program's main source file. The
+browser does not repeat the explanation in supporting files. **← Back** restores
+the file you came from. Shared files can belong to several Programs; expand
+**Part of … Programs** to choose a link when there are several memberships.
+
+Main file icons have a gold border, star and **Main · …** label. In that file's
+interface, expand its **Main** Program title to read the authored explanation,
+contract and participating files. **Read Program** opens the Genesis document;
+use **Dashboard → Files → Repo** to edit it. The Architecture viewer is read-only.
+The anchor is the place to start reading, not necessarily an executable entry
+point. It belongs to the Program's owning subsystem; supporting files may be
+shared libraries elsewhere. These explanations describe the capability, not each
+individual function. Vibe64 does not generate competing file/subsystem summaries.
+
+Genesis requires exactly one `- Main: \`project/relative/source\`` bullet in each
+Program's **Sources**. An agent must inspect the implementation and choose it
+explicitly. After updating the documents, use **Re-scan project**. An older
+cached index without an anchor links to the Program document until re-scanned;
+the viewer never guesses a main file.
 
 Select a callable declaration, then choose **Explain function** for a short purpose
 statement followed by function-specific steps through the existing Helper. Merely
 opening a file or selecting a signature makes no Helper query. The explanation
 describes meaningful decisions, data flow,
 effects and failures in English. **Code** displays that declaration's exact source
-range. Components, values and types use Program context and Code; generated
+range. Components, values and types offer Code; generated
 function explanations are unavailable for non-callable declarations. **Code · whole file** opens the
 existing source view; **Interface** returns to declarations. Controls work on
 both desktop and mobile.
@@ -98,5 +108,5 @@ file and selected declaration. This history also covers links across subsystems;
 
 **Analysis details** holds coverage, visibility and missing-Helper information.
 The file view keeps this secondary information collapsed. A missing Program
-shows one short notice; **Program context** is disabled until an authored explanation
-exists. **Code** and saved function explanations remain available independently.
+shows one short notice. **Code** and saved function explanations remain available
+independently.

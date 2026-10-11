@@ -1091,7 +1091,7 @@ resource edits refreshes facts without restarting the native conversation.
 - `packages/vibe64-terminals/src/server/service.js`
 - Main: `packages/vibe64-terminals/src/server/mainConversationBinding.js`
 - `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
-- `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
+- Main: `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/vibe64-terminals/src/server/sessionConversations.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`

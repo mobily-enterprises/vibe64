@@ -212,6 +212,10 @@ function validateProgramCity(city) {
     requireOptionalString(building.districtId, kind, `${label}.districtId`);
     requireCondition(building.districtId === null || districtIds.has(building.districtId), kind, `${label}.districtId does not identify a district.`);
     requireStringArray(building.sources, kind, `${label}.sources`);
+    if (building.mainSource !== undefined) {
+      requireString(building.mainSource, kind, `${label}.mainSource`);
+      requireCondition(building.sources.includes(building.mainSource), kind, `${label}.mainSource must be a cited source.`);
+    }
     requireStringArray(building.sourceFileIds, kind, `${label}.sourceFileIds`);
   });
 

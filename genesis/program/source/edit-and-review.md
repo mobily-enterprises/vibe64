@@ -1550,10 +1550,12 @@ crate-restricted items. Symbol Code includes attached attributes/decorators and
 language declaration keywords; grouped values can share their exact declaration
 range. Public fields/properties/constants and types supplement callable symbols
 through the existing native index, while local declarations remain internal.
-A declaration offers Program context from authored Genesis capabilities, explicit
+A declaration offers explicit
 Explain function (a short purpose statement followed by informational English
-pseudocode), and exact Code. Program context is file-level capability evidence,
-not an exact explanation of the selected declaration. Re-scan project updates
+pseudocode), and exact Code. Supporting files show compact Part of links to
+the explicitly authored main source; only that anchor file contains the Program
+explanation and contract. Gold main-file icons distinguish it in the browser.
+The Program explains a capability, not each declaration. Re-scan project updates
 the whole browsing index and shows its stage/elapsed time; it generates no
 explanation or Program text. The interface
 does not generate parallel file/subsystem summaries. Program Sources identify

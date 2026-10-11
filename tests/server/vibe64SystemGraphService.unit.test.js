@@ -95,6 +95,7 @@ function programCityFixture() {
       subsystem: "catalog",
       districtId: "subsystem:catalog",
       sources: ["src/catalog.js"],
+      mainSource: "src/catalog.js",
       sourceFileIds: ["file:src/catalog.js"]
     }],
     links: [{
@@ -267,6 +268,10 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
       readGenesisCity(root, "machine"),
       (error) => error.code === "vibe64_invalid_genesis_city" && /unknown function id/u.test(error.message)
     );
+    const invalidProgram = programCityFixture();
+    invalidProgram.buildings[0].mainSource = 'src/uncited.py';
+    await writeJson(path.join(root, GENESIS_PROGRAM_CITY_PATH), invalidProgram);
+    await assert.rejects(readGenesisCity(root, 'program'), error => error.code === 'vibe64_invalid_genesis_city' && /mainSource must be a cited source/u.test(error.message));
   });
 });
 

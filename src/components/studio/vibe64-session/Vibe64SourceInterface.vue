@@ -6,16 +6,23 @@
     <v-alert v-else-if="!current" type="info" variant="tonal" class="mb-3">{{ indexed ? 'The index is out of date for this file.' : 'Symbol analysis is unavailable for this file.' }} Program context and whole-file Code remain available.</v-alert>
     <div class="source-interface__file-actions"><v-btn size="small" min-height="44" variant="text" :loading="refreshing" title="Rebuild the project browsing index; does not generate explanations" @click="$emit('refresh-analysis')">Re-scan project</v-btn><small>Updates signatures and links; no explanations.</small></div>
     <p v-if="refreshing" class="source-interface__hint" role="status">{{ refreshProgress?.message || 'Starting project analysis…' }} · {{ refreshProgress?.elapsedSeconds || 0 }}s</p>
-    <section v-if="programs.length" class="source-interface__interpretation" aria-label="Genesis Program context">
-      <strong>Program</strong>
-      <details v-for="program in programs" :key="program.id" class="source-interface__program" @toggle="$event.target.open && expandedPrograms.add(program.id)">
-        <summary><strong>{{ program.title }}</strong><span>{{ program.description }}</span></summary>
+    <section v-if="mainPrograms.length" class="source-interface__interpretation" aria-label="Main Program file">
+      <details v-for="program in mainPrograms" :key="program.id" class="source-interface__program" @toggle="$event.target.open && expandedPrograms.add(program.id)">
+        <summary><small class="source-interface__main">Main</small><strong>{{ program.title }}</strong></summary>
+        <p class="source-interface__program-description">{{ program.description }}</p>
         <div v-if="expandedPrograms.has(program.id)"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(program.publicContract)" @open-link="openProgramLink($event, program.path)" />
-          <div class="source-interface__program-sources"><button v-for="path in program.sources" :key="path" type="button" @click="$emit('open-source', { path })">{{ path }} ↗</button></div>
+          <div class="source-interface__program-sources"><button v-for="path in program.sources" :key="path" type="button" :title="path" @click="$emit('open-source', { path })">{{ path }} ↗</button></div>
           <v-btn size="small" min-height="44" variant="text" @click="$emit('open-source', { path: program.path, presentation: 'code' })">Read Program</v-btn>
         </div>
       </details>
     </section>
+    <nav v-if="memberPrograms.length === 1" class="source-interface__membership" aria-label="Program membership">
+      <span v-for="program in memberPrograms" :key="program.id">Part of <button type="button" :title="program.mainSource ? `Open main source: ${program.mainSource}` : 'Read Program document'" @click="$emit('open-source', { path: program.mainSource || program.path, ...(program.mainSource ? {} : { presentation: 'code' }) })">{{ program.title }} ↗</button></span>
+    </nav>
+    <details v-else-if="memberPrograms.length > 1" class="source-interface__memberships">
+      <summary>Part of {{ memberPrograms.length }} {{ mainPrograms.length ? 'other Programs' : 'Programs' }}</summary>
+      <nav class="source-interface__membership" aria-label="Program membership"><span v-for="program in memberPrograms" :key="program.id"><button type="button" :title="program.mainSource ? `Open main source: ${program.mainSource}` : 'Read Program document'" @click="$emit('open-source', { path: program.mainSource || program.path, ...(program.mainSource ? {} : { presentation: 'code' }) })">{{ program.title }} ↗</button></span></nav>
+    </details>
     <p v-if="!programs.length" class="source-interface__hint" role="status">{{ programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Re-scan project.' }}</p>
     <p v-if="interpretationWarning" class="source-interface__hint" role="status">{{ interpretationWarning }}</p>
     <h4 class="source-interface__exports-heading">File exports <span>{{ symbols.length }}</span></h4>
@@ -28,7 +35,7 @@
       <section v-if="selectedSymbol" class="source-interface__detail" aria-label="Selected symbol">
         <h4><code>{{ signature(selectedSymbol) }}</code></h4><p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
         <div class="source-interface__modes" aria-label="Symbol presentation">
-          <v-btn v-for="option in ['description', 'steps', 'code']" :key="option" size="small" min-height="44" :variant="presentation === option ? 'tonal' : 'text'" :title="option === 'description' ? 'Authored capability context; not an explanation of this function' : option === 'steps' && !assistantAvailable ? 'Explain function needs a Helper' : undefined" :disabled="option === 'description' ? !programs.length : (!selectedSymbol.rangeAvailable || !current || dirty) || (option === 'steps' && (!Array.isArray(selectedSymbol.parameters) || (!saved('selection', selectedId, 'steps') && explanationDisabled)))" @click="$emit('present-symbol', option); if (option === 'description') { const program = $el.querySelector('.source-interface__program'); if (program) { program.open = true; program.scrollIntoView({ block: 'start' }); } }">{{ option === 'description' ? 'Program context' : option === 'steps' ? 'Explain function' : 'Code' }}</v-btn>
+          <v-btn v-for="option in Array.isArray(selectedSymbol.parameters) ? ['steps', 'code'] : ['code']" :key="option" size="small" min-height="44" :variant="presentation === option ? 'tonal' : 'text'" :title="option === 'steps' && !assistantAvailable ? 'Explain function needs a Helper' : undefined" :disabled="(!selectedSymbol.rangeAvailable || !current || dirty) || (option === 'steps' && !saved('selection', selectedId, 'steps') && explanationDisabled)" @click="$emit('present-symbol', option)">{{ option === 'steps' ? 'Explain function' : 'Code' }}</v-btn>
           <v-btn v-if="presentation === 'steps' && selectedInterpretation" size="small" min-height="44" variant="text" :disabled="explanationDisabled" @click="$emit('present-symbol', 'steps', true)">Regenerate explanation</v-btn>
         </div>
         <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Explain function needs an available Helper.</p>
@@ -51,6 +58,8 @@ import { parseLongTextReviewBlocks } from '@jskit-ai/assistant-core/shared/conve
 const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, refreshing: Boolean, refreshProgress: { type: Object, default: null }, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
 const emit = defineEmits(['select-symbol', 'present-symbol', 'whole-file-code', 'open-source', 'refresh-analysis']);
 const expandedPrograms = ref(new Set());
+const mainPrograms = computed(() => props.programs.filter(program => program.mainSource === props.filePath));
+const memberPrograms = computed(() => props.programs.filter(program => program.mainSource !== props.filePath));
 function openProgramLink({ event, href }, sourcePath) {
   const relative = href && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(href);
   const target = sourceEditorLinkTarget({ href: relative ? new URL(href, `https://source.invalid/${sourcePath}`).pathname.slice(1) : href });
@@ -77,8 +86,12 @@ const interpretationBlocks = computed(() => parseLongTextReviewBlocks(selectedIn
 .source-interface__layout { display: flex; flex-direction: column; gap: 10px; }
 .source-interface__exports-heading { font-size: 15px; margin: 10px 0 4px; }
 .source-interface__exports-heading span { font-weight: normal; font-size: 12px; opacity: .65; }
-.source-interface__interpretation { padding: 8px 10px; border: 1px solid #dbe6e3; border-radius: 8px; margin: 4px 0 10px; }
-.source-interface__interpretation-heading { display: flex; align-items: center; justify-content: space-between; }
+.source-interface__interpretation { padding: 0 10px; border: 1px solid #d8c18e; border-left: 3px solid #aa812c; border-radius: 6px; margin: 4px 0 8px; background: #fcfaf5; }
+.source-interface__membership { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; font-size: 12px; margin: 2px 0 6px; color: #69847d; }
+.source-interface__membership button { color: #367e8a; min-height: 44px; text-align: left; }
+.source-interface__memberships { font-size: 12px; margin: 2px 0 6px; color: #69847d; }
+.source-interface__memberships summary { cursor: pointer; min-height: 44px; align-content: center; }
+.source-interface__main { display: inline-block; color: #755616; background: #f1e5c6; border-radius: 4px; padding: 2px 5px; font-size: 10px; text-transform: uppercase; margin-right: 8px; }
 .source-interface__symbols, .source-interface__detail { min-width: 0; }
 .source-interface__symbols { width: 100%; }
 .source-interface__symbols button { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; text-align: left; min-height: 44px; width: 100%; padding: 6px 10px; gap: 2px 8px; border: 1px solid #dbe6e3; background: #f7faf9; border-radius: 6px; margin-bottom: 4px; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
@@ -97,9 +110,8 @@ button:focus-visible { outline: 3px solid rgb(var(--v-theme-primary)); outline-o
 .source-interface__analysis { font-size: 12px; opacity: .72; margin-bottom: 6px; }
 .source-interface__analysis summary { cursor: pointer; }
 .source-interface__program { padding: 6px 0; }
-.source-interface__program summary { cursor: pointer; font-size: 13px; }
-.source-interface__program summary span { display: block; margin-top: 2px; font-size: 12px; line-height: 18px; opacity: .72; }
-.source-interface__program:not([open]) summary span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.source-interface__program summary { cursor: pointer; font-size: 13px; min-height: 44px; align-content: center; }
+.source-interface__program-description { margin: 0 0 6px; font-size: 12px; line-height: 18px; }
 .source-interface__program-sources { display: flex; gap: 4px 8px; flex-wrap: wrap; }
 .source-interface__program-sources button { background: transparent; border: 0; cursor: pointer; color: #367e8a; min-height: 44px; overflow-wrap: anywhere; text-align: left; font-size: 12px; }
 </style>

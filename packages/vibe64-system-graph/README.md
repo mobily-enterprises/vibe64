@@ -80,7 +80,8 @@ and shows bounded failed-command diagnostics inline, without another blocking
 shell dialog. The request budget reaches the HTTP client through endpoint
 resource write options. Opening/Reload only reads indexes. `Explain function`
 uses the existing on-demand Helper and source-hash cache for a short purpose
-statement followed by steps; `Program context` opens authored capability context.
+statement followed by steps. Supporting files show `Part of` links to the
+explicit main source, which holds the authored Program context.
 
 Status and view reads share a validated snapshot while its filesystem revision
 is unchanged, including concurrent reads. The reader checks identity, size and
@@ -127,6 +128,11 @@ owners. `- Nothing.` explicitly leaves placement unconfigured. Names and kinds
 are presentation declarations, not inferred language or framework roles.
 
 Architecture replaces the old subsystem list and layer prototype. Native Program
-facts carry each capability's one owner, authored contract and cross-subsystem
+facts carry each capability's one owner, required main source, authored contract and cross-subsystem
 source citations. The subsystem square and file browser reuse those facts, with
-lazy contract rendering and explicit missing/invalid explanation states.
+lazy contract rendering and explicit missing/invalid explanation states. The
+main source is a reading anchor in the Program's owner, not necessarily an
+executable entry point. Its file icon has a gold border, star and Main label.
+Supporting files keep compact membership links instead of repeating its body.
+Previously cached facts without an anchor remain readable until re-scanned;
+the viewer never derives one from citations or imports.

@@ -17,7 +17,7 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/client/TrainingLessonPicker.vue`
 
 - `packages/vibe64-training/src/server/contentSchemas.js`
-- `packages/vibe64-training/src/server/content.js`
+- Main: `packages/vibe64-training/src/server/content.js`
 - `packages/vibe64-training/src/server/catalogue.js`
 - `packages/vibe64-training/src/server/installedCatalogue.js`
 - Main: `packages/vibe64-training/src/server/cli.js`

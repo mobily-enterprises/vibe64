@@ -727,7 +727,10 @@ Copy and Collapse sit beside the progress description, beneath the heading.
 People explore subsystem responsibilities, Program capabilities and their cited
 source files through the Architecture canvas. Genesis's directory-bound map is
 the canonical owner list: each Program capability belongs to exactly one owner,
-while its Sources may include another owner's libraries. Responsibilities and
+while its Sources may include another owner's libraries.
+Each capability has a visibly distinct main source file where people begin
+reading its implementation. Other participating files link back to it instead
+of repeating the explanation. Responsibilities and
 Program contracts remain editable explanations, with source evidence for review.
 They are not proof of API intent or current behavior. There is no separate
 subsystem/Program list screen. The database overview continues to explain data.
