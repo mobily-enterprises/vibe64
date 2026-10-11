@@ -6,6 +6,9 @@ import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createSessionNaming, parseSessionName } from "../../packages/vibe64-terminals/src/server/sessionNaming.js";
 import { markHistoricalConversationRewound } from "./vibe64TestHelpers.js";
+import { assertProjectEffectAdmission, captureProjectRequestContext, currentPracticeProjectScope,
+  currentProjectRequestContext, runWithPracticeProjectContext, runWithProjectRequestContext } from
+  "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-session-name-"));
@@ -177,3 +180,75 @@ test("names validate before storage and automatic names must be one word", async
   assert.equal(parseSessionName('{"name":"予約"}'), "予約");
   assert.equal(parseSessionName('{"name":"Café"}'), "Café");
 });
+
+test("Learning naming keeps admitted CONTROL after Send returns and rechecks fresh access without holding WRITE", async (t) => {
+  const f = await fixture(t);
+  const owner = {};
+  const scope = { learnerId: 42, attemptId: "saved-attempt", noExercise: false, topicHash: "original-pin" };
+  f.context.runtime.learningScope = scope;
+  const requestContext = {};
+  f.context.browserAuthority = { sessionId: "original-id", learningAttemptId: scope.attemptId,
+    actorId: scope.learnerId, requestContext };
+  let grant, checks = 0, release, started;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const ready = new Promise(resolve => { started = resolve; });
+  const run = f.agent.runEphemeralChatTurn;
+  f.agent.runEphemeralChatTurn = async (...args) => {
+    assert.equal(currentPracticeProjectScope(owner).access, "control");
+    assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+    started();
+    await waiting;
+    assert.deepEqual(currentProjectRequestContext().learningScope, scope);
+    return run(...args);
+  };
+  f.naming = createSessionNaming({ agent: f.agent, actions: { async execute(input) {
+    checks++;
+    assert.equal(input.actionId, "vibe64.sessions.conversation.teaching-context.read");
+    assert.equal(input.context, requestContext);
+    assert.deepEqual(input.input, { sessionId: "original-id", learningAttemptId: scope.attemptId });
+    return { actor: { id: 42 }, project: grant };
+  } }, publishSessionChanged: async (...args) => f.events.push(args), logger: { warn: (...args) => f.warnings.push(args) } });
+  await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "Bookings" });
+  await runWithPracticeProjectContext(owner, { access: "write", vibe64User: f.context.vibe64User }, () =>
+    runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope: scope }, () => {
+      grant = captureProjectRequestContext();
+      f.naming.start(f.context, "first");
+    }));
+  await ready;
+  release();
+  await f.naming.close();
+  assert.equal(checks, 2);
+  assert.deepEqual(f.warnings, []);
+  assert.equal(await f.store.readMetadataValue("original-id", "label"), "Bookings");
+  assert.equal((await f.store.readBackgroundTask("original-id", "session-name")).assistantHelper, null);
+});
+
+for (const refusedAt of ["before-helper", "after-helper", "changed-pin"]) {
+  test(`Learning naming refuses ${refusedAt} without publishing a label or losing cleanup`, async (t) => {
+    const f = await fixture(t);
+    const scope = { learnerId: 42, attemptId: "saved-attempt", noExercise: false, topicHash: "original-pin" };
+    f.context.runtime.learningScope = scope;
+    f.context.browserAuthority = { sessionId: "original-id", learningAttemptId: scope.attemptId,
+      actorId: scope.learnerId, requestContext: {} };
+    let checks = 0;
+    f.naming = createSessionNaming({ agent: f.agent, actions: { async execute() {
+      checks++;
+      if (refusedAt === "before-helper" || (refusedAt === "after-helper" && checks === 2)) {
+        throw Object.assign(new Error("Access revoked"), { code: "access_revoked" });
+      }
+      return { actor: { id: 42 }, project: { learningScope: refusedAt === "changed-pin"
+        ? { ...scope, topicHash: "other-pin" } : scope } };
+    } }, publishSessionChanged: async (...args) => f.events.push(args), logger: { warn: (...args) => f.warnings.push(args) } });
+    await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "Bookings" });
+    f.naming.start(f.context, "first");
+    await f.naming.close();
+    assert.equal(await f.store.readMetadataValue("original-id", "label"), "");
+    assert.deepEqual(f.events, []);
+    assert.equal(f.warnings.length, 1);
+    const task = await f.store.readBackgroundTask("original-id", "session-name");
+    assert.equal(task.status, "failed");
+    assert.equal(task.assistantHelper || null, null);
+    assert.equal(f.calls.filter(call => call === "delete").length, refusedAt === "after-helper" ? 1 : 0);
+    assert.equal(f.calls.filter(call => call === "resolve").length, refusedAt === "after-helper" ? 1 : 0);
+  });
+}

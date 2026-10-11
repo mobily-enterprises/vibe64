@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -40,7 +42,7 @@ function parseSessionName(value) {
   return result.name;
 }
 
-function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
+function createSessionNaming({ agent, actions, publishSessionChanged, logger } = {}) {
   const active = new Map();
   const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId || session.id}`;
 
@@ -57,7 +59,21 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
     });
     if (task.operationId !== operationId) return;
     try {
-      const result = await runSessionNamingHelper({
+      const scope = agentContext.runtime.learningScope;
+      async function currentLearningAccess() {
+        const authority = agentContext.browserAuthority;
+        if (!actions || !authority || authority.sessionId !== sessionId ||
+            authority.learningAttemptId !== scope.attemptId || authority.actorId !== scope.learnerId) {
+          throw namingError("Use this learning conversation's original authorized naming request.");
+        }
+        const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.teaching-context.read",
+          input: { sessionId, learningAttemptId: scope.attemptId }, context: authority.requestContext });
+        if (grant.actor.id !== scope.learnerId || !isDeepStrictEqual(grant.project?.learningScope, scope)) {
+          throw namingError("The learner, conversation or pinned lesson changed before naming.");
+        }
+        return grant;
+      }
+      const name = () => runSessionNamingHelper({
         agent,
         agentContext,
         taskId: TASK_ID,
@@ -74,6 +90,11 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
           first.text.slice(0, 16000) || "The first message contains only attachments."
         ].join("\n")
       });
+      // Read current WRITE eligibility, but retain only CONTROL while the
+      // tool-free Helper runs; do not hold the lesson preparation barrier.
+      const grant = scope ? await currentLearningAccess() : null;
+      const result = grant ? await runWithProjectRequestContext(grant.project, name) : await name();
+      if (scope) await currentLearningAccess();
       // A manual rename always wins, even while the Helper is working.
       const sessionName = await runtime.store.writeSessionLabel(sessionId, parseSessionName(result.text), {
         onlyIfUnnamed: true
@@ -97,7 +118,8 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
     start(agentContext, messageId) {
       const id = sessionKey(agentContext);
       if (active.has(id)) return;
-      const pending = nameFirstMessage(agentContext, messageId)
+      const context = captureProjectRequestContext();
+      const pending = runWithProjectRequestContext(context, () => nameFirstMessage(agentContext, messageId))
         .catch((error) => {
           logger?.warn({
             error: error.message,

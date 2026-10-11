@@ -239,6 +239,15 @@ assess practical learner gestures or execute a declared check.
 
 ### Final original progress writer admission
 
+The existing first-message naming task retains only its admitted Project
+CONTROL context after Send returns. Learning naming reads fresh WRITE eligibility
+through its original browser request and checks the exact actor, saved session,
+attempt and pin before running the original tool-free Helper and before applying
+its name. It does not hold the practice preparation barrier while the Helper
+runs. The existing task receipt, native cleanup, first-message idempotency and
+manual-rename precedence remain in `sessionNaming.js` and `sessionNamingHelper.js`;
+naming grants no teaching tools or progress authority.
+
 `saveLessonResume` and `recordAssessment` accept optional trusted host facilities
 without changing their input schemas, CAS or consumed-evidence rules. Inside
 the original learner lock, `writeLearning` verifies the retained installed lessons,

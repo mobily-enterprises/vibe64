@@ -1390,7 +1390,7 @@ function createService({
     if (preparation) await preparation;
   }
 
-  const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger });
+  const sessionNaming = createSessionNaming({ agent: sessionAgent, actions, publishSessionChanged: publishAgentSessionChanged, logger });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {

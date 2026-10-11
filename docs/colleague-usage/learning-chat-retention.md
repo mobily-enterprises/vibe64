@@ -19,6 +19,11 @@ an already-submitted message must not be repeated merely because the view change
 Learning tabs provide session information and their saved conversation name.
 When Rename session is available in session information, it renames the lesson
 conversation you chose, even if another attempt is selected.
+Automatic naming runs separately from the teacher's answer. It retains the same
+saved lesson and checks current access before naming; an unavailable naming
+Helper or changed lesson access leaves the name unchanged. A manual rename wins
+over an automatic name. Do not repeat a lesson message just to obtain a name;
+use Rename session when it is available. These rules also apply on phones.
 They do not show a Working-session Archive button, source branch or repository
 save-status icon. Ending a lesson uses the supported lesson controls; an ordinary
 Working tab keeps its existing Archive and repository status.
