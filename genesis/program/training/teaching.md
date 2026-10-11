@@ -1142,6 +1142,19 @@ Main question reads retain their before/after fresh context checks. This is a
 necessary coordination adaptation for repeated Main subscription authorization,
 not a cached grant, deadline change or native-read shortcut.
 
+For the exact reserved `training-<attemptId>` session request, the Learning
+resolver selects its original practice reader directly. This is only a dispatch
+hint: the saved learner, full installed pin, requested eligibility and actual
+initial session are still validated, followed by the second fresh scope read,
+original Project marker and native descriptor admission. Only typed missing
+exercise falls back to source-less admission. Normal source-less requests keep
+their original path. No grant snapshot, validation cache or effect admission is
+introduced; later operations and question before/after checks remain fresh.
+The bound resolver also reattaches its own `trainingLearners` facility after
+Core captures CONTROL identity. Core's projection remains unchanged; the
+Sessions grant and Main `learning.read` receive the authorized learner owner
+instead of losing it or falling back to another progress store.
+
 The internal teaching-context query still requires fresh WRITE eligibility for
 the exact learner, saved session, attempt and pin. It reads that grant in the
 resolver's captured CONTROL context, which cannot admit project effects. It does

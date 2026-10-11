@@ -94,6 +94,15 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
   }
 
   async function resolveContext(input = {}) {
+    // This is only a reader-selection hint. The original practice owner must
+    // still prove this person's saved pin, Project and exact initial session.
+    if (practiceSessions && input.sessionId === `training-${input.attemptId}`) {
+      try { return await resolveBoundPracticeContext(input); }
+      catch (error) {
+        if (error.code !== "VIBE64_TRAINING_EXERCISE_MISSING") throw error;
+        return resolveSourceLessContext(input);
+      }
+    }
     try { return await resolveSourceLessContext(input); }
     catch (error) {
       if (!practiceSessions || error.code !== "VIBE64_TRAINING_EXERCISE_REQUIRED") throw error;
@@ -135,7 +144,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     let captured;
     await runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access: "control" },
       () => { captured = captureProjectRequestContext(); }, true, false, access === "observe" && !sessionId);
-    return Object.freeze({ ...captured,
+    return Object.freeze({ ...captured, trainingLearners: learners,
       ...(access === "create" ? { createLearningSession: input => openSession({ actor, attemptId, input }) } : {}),
       runLearningOperation(operation) {
         if (typeof operation !== "function") throw new TypeError("Learning execution requires its owning callback.");

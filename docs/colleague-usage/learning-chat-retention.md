@@ -11,6 +11,12 @@ Learning keeps its App controls in the supporting pane rather than the Working
 Preview toolbar. Returning to Working restores its existing toolbar without
 replacing either conversation.
 
+A prepared practice lesson reconnects to its saved initial conversation. Returning
+to it does not repeat workspace preparation or start a replacement teacher.
+Current lesson and account access are still checked on each reconnect. The
+teacher uses your saved lesson progress, including when you practise in a
+workspace.
+
 A lesson chat stays attached to the saved attempt you opened. Showing a different
 working project does not move that chat, its words or its pending request into
 that project. Changing account requires fresh access to your own saved lessons;

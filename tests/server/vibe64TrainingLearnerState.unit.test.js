@@ -3359,3 +3359,162 @@ test("explicit saved practice open awaits its original runtime owner and refuses
     { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   assert.deepEqual(events, ["open", "inspect", "open"]);
 });
+
+
+test("exact saved practice session dispatch skips only the source-less probe and retains both fresh scope admissions", async t => {
+  const f = await historicalPracticeFixture(t);
+  await f.run(true);
+  const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+  const calls = [];
+  const learners = { ...f.state,
+    readLearningSessionScope(input) { calls.push("source-less"); return f.state.readLearningSessionScope(input); },
+    readExerciseProjectScope(input) { calls.push(`exercise:${input.access || "observe"}`); return f.state.readExerciseProjectScope(input); }
+  };
+  const learning = createTrainingLearningSessions({ learners,
+    teachingBrief: createTrainingTeachingBrief({ learners, content: f.content }), project: f.project, projectContext: f.core,
+    practiceSessions: true, sessions: { createSession() { assert.fail("identity reads must not create sessions"); },
+      inspectSession() { assert.fail("identity reads must not open sessions"); } } });
+  const input = { actor: f.actor, attemptId: f.saved.scope.attemptId, sessionId: f.initial.sessionId, access: "observe" };
+  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active),
+    source: await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")) };
+  assert.equal(input.sessionId, `training-${input.attemptId}`);
+  const first = await learning.resolveContext(input);
+  assert.deepEqual(first.learningScope, f.saved.scope);
+  assert.deepEqual(calls, ["exercise:observe", "exercise:control"]);
+  const second = await learning.resolveContext(input);
+  assert.deepEqual(second.learningScope, first.learningScope);
+  assert.deepEqual(calls, ["exercise:observe", "exercise:control", "exercise:observe", "exercise:control"]);
+  await assert.rejects(learning.resolveContext({ ...input, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(learning.resolveContext({ ...input, sessionId: "foreign" }), { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
+  const forgedAttempt = randomUUID();
+  await assert.rejects(learning.resolveContext({ ...input, attemptId: forgedAttempt, sessionId: `training-${forgedAttempt}` }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), before.source);
+  const current = await f.state.readState({ actor: f.actor });
+  await f.state.endAttempt({ actor: f.actor, attemptId: input.attemptId, expectedRevision: current.revision,
+    requestId: "hot-session-ended", reason: "discard" });
+  assert.deepEqual((await learning.resolveContext(input)).learningScope, first.learningScope, "ended history retains its original observation admission");
+  await assert.rejects(learning.resolveContext({ ...input, access: "write" }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  await fs.writeFile(path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
+    "files/training/exercises/app/server.mjs"), "changed installed source");
+  await assert.rejects(learning.resolveContext(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+});
+
+test("normal source-less dispatch is unchanged and a practice-shaped hint cannot grant a practice namespace", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  const [{ createTrainingLearningSessions }, { createStudioProjectContext }, { createService: createProject },
+    { runWithProjectRequestContext }] = await Promise.all([
+    import("../../packages/vibe64-training/src/server/learningSessions.js"),
+    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
+    import("../../packages/vibe64-project/src/server/service.js"),
+    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
+  ]);
+  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
+    home: f.root, runtimeProfile: { local: true } });
+  const project = createProject({ projectContext: core });
+  const saved = await f.state.readLearningSessionScope({ actor: f.actor, attemptId: reserved.attempt.attemptId });
+  const sessionId = `learning-${reserved.attempt.attemptId}`;
+  await runWithProjectRequestContext({ projectRuntimeRoot: saved.projectRuntimeRoot, systemRoot: f.systemRoot,
+    learningScope: saved.scope, vibe64User: f.actor }, async () => {
+    const runtime = await project.createRuntime({ inspectSource: false });
+    await runtime.store.createSession({ sessionId, runtimeKind: "genesis" });
+  });
+  const calls = [];
+  const learners = { ...f.state,
+    readLearningSessionScope(input) { calls.push("source-less"); return f.state.readLearningSessionScope(input); },
+    readExerciseProjectScope(input) { calls.push("exercise"); return f.state.readExerciseProjectScope(input); }
+  };
+  const learning = createTrainingLearningSessions({ learners,
+    teachingBrief: createTrainingTeachingBrief({ learners, content: createInstalledTrainingContent({ systemRoot: f.systemRoot }) }),
+    project, projectContext: core, practiceSessions: true,
+    sessions: { createSession() { assert.fail("identity reads must not create sessions"); },
+      inspectSession() { assert.fail("identity reads must not open sessions"); } } });
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, sessionId, access: "observe" };
+  const before = await treeState(f.systemRoot);
+  assert.deepEqual((await learning.resolveContext(input)).learningScope, saved.scope);
+  assert.deepEqual(calls, ["source-less"]);
+  assert.deepEqual((await learning.resolveContext(input)).learningScope, saved.scope);
+  assert.deepEqual(calls, ["source-less", "source-less"]);
+  const forged = { ...input, sessionId: `training-${input.attemptId}` };
+  await assert.rejects(learning.resolveContext(forged), { code: "vibe64_session_not_found" });
+  assert.deepEqual(calls.slice(-2), ["exercise", "source-less"]);
+  await assert.rejects(learning.resolveContext({ ...forged, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.deepEqual(await treeState(f.systemRoot), before, "dispatch hints cannot create practice storage or alter learner state");
+});
+
+
+test("bound practice Main learning.read retains the owning learner through the original Sessions grant and fresh admission", async t => {
+  const f = await historicalPracticeFixture(t);
+  await f.run(true);
+  const [{ createActionCatalogue }, { registerVibe64ActionContext }, { createSessionActions, createLearningTeachingContextActions },
+    { createTrainingActions }, { createTrainingLearningSessions }, { createTrainingMainTeaching },
+    { createTrainingTeachingOwner }, { createTrainingAnswerAssessment }, { runWithProjectRequestContext }] = await Promise.all([
+    import("@jskit-ai/kernel/server/actions"),
+    import("../../packages/vibe64-core/src/server/actionContext.js"),
+    import("../../packages/vibe64-sessions/src/server/actions.js"),
+    import("../../packages/vibe64-training/src/server/actions.js"),
+    import("../../packages/vibe64-training/src/server/learningSessions.js"),
+    import("../../packages/vibe64-training/src/server/mainTeaching.js"),
+    import("../../packages/vibe64-training/src/server/teaching.js"),
+    import("../../packages/vibe64-training/src/server/answerAssessment.js"),
+    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
+  ]);
+  const teaching = createTrainingTeachingOwner({ learners: f.state, content: f.content });
+  const main = createTrainingMainTeaching({ teaching,
+    assessment: createTrainingAnswerAssessment({ learners: f.state, content: f.content, teaching }) });
+  const brief = createTrainingTeachingBrief({ learners: f.state, content: f.content });
+  const learning = createTrainingLearningSessions({ learners: f.state, teachingBrief: brief, project: f.project,
+    projectContext: f.core, learningTeaching: main, practiceSessions: true,
+    sessions: { createSession() { assert.fail("a learner read must not create a session"); }, inspectSession() {} } });
+  const actions = createActionCatalogue();
+  let currentActor = f.actor;
+  let normalReads = 0;
+  const normalLearners = { readState() { normalReads++; assert.fail("bound Main must not use the default learner store"); } };
+  const sessionId = f.initial.sessionId;
+  const attemptId = f.saved.scope.attemptId;
+  const requestContext = { channel: "internal", surface: "app",
+    requestMeta: { request: { params: { learningAttemptId: attemptId }, vibe64User: f.actor } } };
+  registerVibe64ActionContext(actions, { projectContext: f.core, resolveUser: async () => currentActor,
+    authorizeProject() { assert.fail("practice must not borrow an ordinary Working grant"); }, resolveLearningContext: learning.resolveContext });
+  actions.register({ contributorId: "actual-practice-main-learner", domain: "training", actions: [
+    ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: normalLearners, teachingBrief: brief }),
+    createSessionActions({ sessions: {} }).find(action => action.id === "vibe64.sessions.conversation.context.read"),
+    ...createLearningTeachingContextActions()
+  ].map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
+  const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
+    input: { learningAttemptId: attemptId, sessionId }, context: requestContext });
+  const runtime = await runWithProjectRequestContext(grant.project, () => f.project.createRuntime({ inspectSource: false }));
+  const selection = { engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6.1-sol", variantId: "high" };
+  const row = await runtime.store.writeConversationUserMessage(sessionId, { messageId: "own-learner-read", text: "Read this saved lesson." });
+  const target = { threadId: "original-native-thread", turnId: "original-native-turn", outerTurnId: row.turnId, active: true, assistantSelection: selection };
+  const bound = main.bindConversation({ runtime, sessionId, actions, native: { readTurn: async () => ({ ...target }) },
+    terminals: { async requireAssistantSelectionAccess(value, options) {
+      assert.deepEqual(value, selection); assert.equal(options.vibe64User, f.actor);
+    } } });
+  const admitted = { conversationId: sessionId, turnId: row.turnId, messageId: "own-learner-read",
+    nativeTurnId: target.turnId, nativeThreadId: target.threadId, origin: "user", assertCurrent() {} };
+  const current = { runtime, sessionId, assistantSelection: selection,
+    browserAuthority: { sessionId, learningAttemptId: attemptId, actorId: "42", requestContext } };
+  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active) };
+  const execute = async () => actions.execute({ actionId: "vibe64.training.learning.read", input: {},
+    context: await bound.applicationTools.prepareContext(current, admitted) });
+  const result = await execute();
+  assert.equal(result.active.attemptId, attemptId);
+  assert.equal(result.revision, (await f.state.readState({ actor: f.actor })).revision);
+  assert.equal(grant.project.trainingLearners, f.state, "Learning reattaches only its own reader after the original CONTROL projection");
+  assert.equal(normalReads, 0);
+  const mapped = await bound.applicationTools.prepareContext(current, admitted);
+  await assert.rejects(mapped.trainingMain.requireAttempt(randomUUID()), { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  await assert.rejects(mapped.trainingMain.requireAttempt(attemptId, "foreign-session"), { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  currentActor = { uid: 43 };
+  await assert.rejects(execute(), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  currentActor = f.actor;
+  target.active = false;
+  await assert.rejects(execute(), { code: "VIBE64_TRAINING_MAIN_UNADMITTED" });
+  assert.equal(normalReads, 0);
+  assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+});
