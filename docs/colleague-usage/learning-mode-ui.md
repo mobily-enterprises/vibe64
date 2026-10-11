@@ -45,7 +45,10 @@ motion completion. Hiding or stopping it does not count as completed teaching.
 If its cue receipt was not confirmed, read the current status before continuing;
 do not assume the explanation or motion succeeded.
 When Main opens a lesson diagram, keep that same browser open until its operation
-is confirmed. Stop or a replacement Learning conversation retires its old
+is confirmed. Main opens it in that lesson's **Presentation** pane; opening the
+Colleague drawer is not required. If the browser did not acknowledge navigation,
+keep the initiating conversation open and check its current status before
+requesting another operation. Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
 
 The selected Learning conversation prepares the configured agent through the same

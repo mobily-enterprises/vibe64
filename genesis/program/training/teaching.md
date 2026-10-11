@@ -924,6 +924,15 @@ ordering remain. The sole host facility publishes the existing product change;
 no account, progress, native process, new queue or durable journal is owned here.
 A live generation getter preserves the original ACK-time consumer generation.
 
+Main's existing native binding publishes the same `configuration` invalidation
+through JSKIT's original conversation publisher and subscriber. That notification
+refreshes its captured presentation resource even though the native-backed
+binding has no command facade. The selected receiver then uses the original
+navigation/cache/ACK coordination and exact Preview handle. It does not require
+the Colleague drawer to be open or configure a native conversation. Application
+authority, navigation identity, player completion and ACK predicates remain here;
+JSKIT transports the notification without owning those teaching semantics.
+
 `executeTrainingPresentationOperation` returns the original player operation
 promise. Online's existing actor/view/handle fences still run after it completes
 and before `trainingPresentationReceipt` projects the original bounded fields.

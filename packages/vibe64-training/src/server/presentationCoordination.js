@@ -15,7 +15,7 @@ function createTrainingPresentationCoordination({ changed }) {
         command.status = "failed";
         connection.acknowledge = null;
         changed();
-        resolve({ ok: false, error: "The browser did not acknowledge navigation. Open Colleague in that browser and try again." });
+        resolve({ ok: false, error: "The browser did not acknowledge navigation. Keep the initiating conversation open and check its current status before trying again." });
       }, command.presentation ? 45000 : 15000);
       connection.acknowledge = (result) => {
         clearTimeout(timer);
