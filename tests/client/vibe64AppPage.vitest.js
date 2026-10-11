@@ -9,11 +9,13 @@ vi.mock("vue-router", async importOriginal => ({
   useRoute: () => pageFixture.route,
   useRouter: () => pageFixture.router
 }));
-vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent() {} }));
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent(options) { pageFixture.realtime?.push(options); }
+}));
 vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: () => ({ canRun: false, isRunning: false, run: vi.fn() })
+  useCommand: options => pageFixture.commands?.[options.apiSuffix] || ({ canRun: false, isRunning: false, run: vi.fn() })
 }));
 vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
@@ -27,8 +29,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountAppPage({ mobile = true, path = "/app/project/practice", withLearningChild = false } = {}) {
-  pageFixture.route = reactive({ path, params: { slug: "practice" }, query: {} });
+function mountAppPage({ mobile = true, path = "/app/project/practice", withLearningChild = false, mode = "", commands = null } = {}) {
+  pageFixture.commands = commands; pageFixture.realtime = [];
+  pageFixture.route = reactive({ path, params: { slug: "practice" }, query: mode ? { mode } : {} });
   pageFixture.router = { push: vi.fn(async () => {}), afterEach: vi.fn(() => () => {}) };
   const media = { matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() };
   vi.stubGlobal("window", { matchMedia: () => media });
@@ -393,4 +396,82 @@ it("keeps mounted preview controls valid while Learning hides the Working toolba
   expect(findTarget(root).style.display).not.toBe("none");
   expect(controls).toEqual([working, learning]);
   expect(errors).toEqual([]); expect(warnings).toEqual([]);
+});
+
+
+it("retains selected Learning on outer idle close and uses original Open readiness when returning to Working", async () => {
+  let confirmReturn;
+  const open = { canRun: true, isRunning: false, run: vi.fn()
+    .mockResolvedValueOnce({ ok: true, runtime: { open: true } })
+    .mockImplementationOnce(() => new Promise(resolve => { confirmReturn = resolve; })) };
+  const f = mountAppPage({ withLearningChild: true, mode: "learning",
+    commands: { "/vibe64/project-runtime/open": open } });
+  await Promise.resolve(); await nextTick();
+  expect(f.page.projectRuntimeReady.value).toBe(true);
+  expect(open.run).toHaveBeenCalledExactlyOnceWith({ projectSlug: "practice", reason: "project-open" });
+  const selected = f.view.value, layout = f.layout.value;
+  selected.draft = "Retain my exact Learning draft";
+  const listener = pageFixture.realtime.find(item => item.matches({ payload: {
+    projectSlug: "practice", action: "runtime-closed", runtime: { open: false } } }));
+  const idle = { projectSlug: "practice", action: "runtime-closed", runtime: { open: false }, runtimeCloseReason: "idle-timeout", runtimeDormantClose: true };
+  expect(listener.matches({ payload: { ...idle, projectSlug: "foreign" } })).toBe(false);
+  listener.onEvent({ payload: idle }); await nextTick();
+  expect(pageFixture.router.push).not.toHaveBeenCalled();
+  expect(f.page.projectRuntimeReady.value).toBe(false);
+  expect(f.view.value).toBe(selected); expect(f.layout.value).toBe(layout);
+  expect(f.view.value.draft).toBe("Retain my exact Learning draft"); expect(layout.ready).toBe(true);
+  expect(open.run).toHaveBeenCalledTimes(1);
+  delete pageFixture.route.query.mode;
+  await nextTick();
+  expect(open.run).toHaveBeenCalledTimes(2);
+  expect(open.run).toHaveBeenLastCalledWith({ projectSlug: "practice", reason: "project-open" });
+  expect(f.page.projectRuntimeReady.value).toBe(false);
+  confirmReturn({ ok: true, runtime: { open: true } });
+  await Promise.resolve(); await nextTick();
+  expect(f.page.projectRuntimeReady.value).toBe(true);
+  expect(f.view.value).toBe(selected); expect(selected.draft).toBe("Retain my exact Learning draft");
+});
+
+it("keeps explicit Close and non-idle or unselected Learning closure on the original project redirect", () => {
+  for (const reason of ["project-close", "project-delete", "project-runtime-marker-missing", "idle-timeout", ""]) {
+    const f = mountAppPage({ withLearningChild: true, mode: "learning" });
+    const payload = { projectSlug: "practice", action: "runtime-closed", runtime: { open: false }, runtimeCloseReason: reason };
+    const listener = pageFixture.realtime.find(item => item.matches({ payload }));
+    listener.onEvent({ payload });
+    expect(pageFixture.router.push).toHaveBeenCalledExactlyOnceWith({ path: "/app/manage/projects", query: { projectClosed: "practice" } });
+    expect(f.page.pageError.value).toBe("Project is closed.");
+  }
+  for (const options of [{ withLearningChild: true }, { mode: "learning" }]) {
+    mountAppPage(options);
+    const payload = { projectSlug: "practice", action: "runtime-closed", runtime: { open: false }, runtimeCloseReason: "idle-timeout", runtimeDormantClose: true };
+    const listener = pageFixture.realtime.find(item => item.matches({ payload }));
+    listener.onEvent({ payload });
+    expect(pageFixture.router.push).toHaveBeenCalledExactlyOnceWith({ path: "/app/manage/projects", query: { projectClosed: "practice" } });
+  }
+});
+
+
+it("rejects a late original Open result after Learning retained an authoritative outer dormant close", async () => {
+  for (const lateError of [false, true]) {
+    let finishInitial, finishReturn;
+    const open = { canRun: true, isRunning: false, run: vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve, reject) => { finishInitial = lateError ? reject : resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishReturn = resolve; })) };
+    const f = mountAppPage({ withLearningChild: true, mode: "learning",
+      commands: { "/vibe64/project-runtime/open": open } });
+    const payload = { projectSlug: "practice", action: "runtime-closed", runtime: { open: false },
+      runtimeCloseReason: "idle-timeout", runtimeDormantClose: true };
+    const listener = pageFixture.realtime.find(item => item.matches({ payload }));
+    listener.onEvent({ payload });
+    finishInitial(lateError ? new Error("Late retired Open failure") : { ok: true, runtime: { open: true } });
+    await Promise.resolve(); await nextTick();
+    expect(f.page.projectRuntimeReady.value).toBe(false);
+    expect(f.page.projectRuntimeError.value).toBe("");
+    expect(f.view.value).toBe(f.learningView); expect(f.layout.value).toBe(f.learningLayout);
+    expect(pageFixture.router.push).not.toHaveBeenCalled(); expect(open.run).toHaveBeenCalledTimes(1);
+    delete pageFixture.route.query.mode; await nextTick();
+    expect(open.run).toHaveBeenCalledTimes(2); expect(f.page.projectRuntimeReady.value).toBe(false);
+    finishReturn({ ok: true, runtime: { open: true } }); await Promise.resolve(); await nextTick();
+    expect(f.page.projectRuntimeReady.value).toBe(true);
+  }
 });

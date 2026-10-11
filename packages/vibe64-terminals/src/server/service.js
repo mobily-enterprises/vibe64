@@ -2415,7 +2415,7 @@ function createService({
     });
     const closeResult = await service.closeProjectRuntime({
       reason: PROJECT_RUNTIME_IDLE_TIMEOUT_REASON
-    });
+    }, { dormant: true });
     return {
       closeResult,
       dormancy,
@@ -3137,7 +3137,7 @@ function createService({
       });
     },
 
-    async closeProjectRuntime(input = {}) {
+    async closeProjectRuntime(input = {}, { dormant = false } = {}) {
       const startedAtMs = Date.now();
       const context = projectRuntimeContext();
       const projectScope = context.projectSlug ? `project:${context.projectSlug}` : terminalProjectScopeKey();
@@ -3240,7 +3240,7 @@ function createService({
           result.runtime = runtime;
         }
         await publishProjectRuntimeChanged(result, {
-          action: "runtime-closed"
+          action: "runtime-closed", dormant
         });
         vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
           ...result,

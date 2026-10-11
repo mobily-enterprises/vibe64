@@ -332,3 +332,14 @@ eligibility and immutable pins are unchanged; no draft course is promoted. Main
 uses the existing paired saved-scope teacher/player/progress owners. Actual
 installed owner/member/browser/native simultaneous normal/trial acceptance and
 standalone snapshot admission remain separate gates.
+
+An exact outer-project idle-close event retains the selected Learning view. The
+original dormant cleanup marks the close through an internal option that the
+public Close input cannot set. Its publisher carries that bounded flag and close
+reason; the page only
+defers the idle-timeout redirect while Learning has its current selected binding.
+It retires Working readiness and ignores retired Open success/error replies
+without keeping that runtime alive. Returning to
+Working calls the original project Open through fresh access and readiness
+checks, without restarting its former work. Ordinary Working, explicit Close,
+deletion, missing markers and foreign-project events keep their existing policy.

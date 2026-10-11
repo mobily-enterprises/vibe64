@@ -74,6 +74,7 @@ function useVibe64AppPage() {
   const projectRuntimeError = computed(() => projectOpenFailure.value?.key === projectOpenKey.value
     ? projectOpenFailure.value.message : "");
   let attemptedProjectOpenKey = "";
+  let dormantWorkingProjectSlug = "";
   const projectSelection = useVibe64ProjectsResource({
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
@@ -254,7 +255,15 @@ function useVibe64AppPage() {
     { immediate: true }
   );
 
-  watch(projectSlug, retryProjectRuntime, { flush: "sync" });
+  watch(projectSlug, () => {
+    dormantWorkingProjectSlug = "";
+    retryProjectRuntime();
+  }, { flush: "sync" });
+  watch(() => route.query.mode, mode => {
+    if (mode === "learning" || !dormantWorkingProjectSlug || dormantWorkingProjectSlug !== projectSlug.value) return;
+    dormantWorkingProjectSlug = "";
+    retryProjectRuntime();
+  }, { flush: "sync" });
   watch(
     [projectOpenKey, () => openProjectRuntimeCommand.canRun, () => openProjectRuntimeCommand.isRunning],
     ([key, canRun, running]) => {
@@ -468,10 +477,10 @@ function useVibe64AppPage() {
       if (result?.ok !== true || result?.runtime?.open !== true) {
         throw new Error(result?.error || "Project could not open. Try again.");
       }
-      if (key === projectOpenKey.value) openedProjectKey.value = key;
+      if (key === projectOpenKey.value && dormantWorkingProjectSlug !== project) openedProjectKey.value = key;
       return result;
     } catch (error) {
-      if (key === projectOpenKey.value) {
+      if (key === projectOpenKey.value && dormantWorkingProjectSlug !== project) {
         projectOpenFailure.value = { key, message: String(error?.message || "Project could not open. Try again.") };
       }
       vibe64SessionDebugLog("client.projectRuntime.open.error", {
@@ -489,6 +498,13 @@ function useVibe64AppPage() {
 
   function handleProjectRuntimeClosed(payload = {}) {
     const closedSlug = String(payload.projectSlug || projectSlug.value || "").trim();
+    if (payload.runtimeDormantClose === true && payload.runtimeCloseReason === "idle-timeout" && route.query.mode === "learning" &&
+        selectedCompanionView?.value?.learningBinding && closedSlug === projectSlug.value) {
+      dormantWorkingProjectSlug = closedSlug;
+      openedProjectKey.value = "";
+      return;
+    }
+    dormantWorkingProjectSlug = "";
     pageError.value = String(payload.message || "Project is closed.");
     void router.push({
       path: "/app/manage/projects",

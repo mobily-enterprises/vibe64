@@ -27,6 +27,12 @@ Returning to Working restores its previous chat-collapse choice. Both modes use
 one retained session panel, so switching modes does not delete drafts or stop
 already admitted background work. A project that is still loading or failed
 keeps its original Working readiness gate while retaining the hidden panel.
+If the hidden Working project closes through ordinary inactivity cleanup, your
+selected Learning conversation stays open. Returning to Working reopens its
+original project through the usual access checks before showing it as ready.
+This does not restart stopped Working agents or outputs. Explicit project Close
+or deletion still leaves the project view; a missing runtime or revoked access
+is not treated as ordinary inactivity.
 The original Preview host offers **Lessons**, **App** when this session actually
 has a source-backed application, and **Presentation** after a declared diagram
 has been opened. A declared diagram can open from Lessons; hidden App controls do not remain

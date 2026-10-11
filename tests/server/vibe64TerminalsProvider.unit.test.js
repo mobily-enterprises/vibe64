@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 
 import {
   VIBE64_SERVICE_DATA_ROOT_ENV
@@ -44,9 +45,7 @@ async function failingCodexAuthPreflight() {
 
 function featureDependencies({ env = {}, project, published = [] } = {}) {
   return {
-    actionCatalogue: {
-      register() {}
-    },
+    actionCatalogue: createActionCatalogue(),
     env,
     events: {
       async publish(event) {
@@ -469,4 +468,55 @@ test("terminals feature owns attachment and dormancy startup and shutdown", asyn
 
   assert.equal(cleanupCalls, 1);
   assert.equal(closeCalls, 1);
+});
+
+
+test("runtime close publisher retains only the bounded original close reason for its exact closed project", async () => {
+  const published = [];
+  const publish = createProjectRuntimeChangedPublisher({ async publish(event) { published.push(event); return event; } });
+  await publish({ ok: true, projectSlug: "outer", runtime: { open: false }, reason: "idle-timeout" }, { action: "runtime-closed", dormant: true });
+  assert.equal(published[0].realtime.payload.runtimeCloseReason, "idle-timeout");
+  assert.equal(published[0].realtime.payload.runtimeDormantClose, true);
+  assert.equal(published[0].realtime.payload.projectSlug, "outer");
+  assert.equal(published[0].realtime.payload.reason, "runtime-closed");
+  await publish({ ok: true, projectSlug: "outer", runtime: { open: false }, reason: "x".repeat(101) }, { action: "runtime-closed" });
+  assert.equal(published[1].realtime.payload.runtimeCloseReason.length, 100);
+  assert.equal(Object.hasOwn(published[1].realtime.payload, "runtimeDormantClose"), false);
+  await publish({ ok: true, projectSlug: "outer", runtime: { open: true }, reason: "project-open" }, { action: "runtime-opened" });
+  assert.equal(Object.hasOwn(published[2].realtime.payload, "runtimeCloseReason"), false);
+  await publish({ ok: false, projectSlug: "outer", runtime: { open: false }, reason: "idle-timeout" }, { action: "runtime-closed" });
+  assert.equal(published.length, 3);
+});
+
+
+test("original dormancy owner supplies internal close authority while an explicit same-reason Close does not", async () => {
+  await withTemporaryRoot(async root => {
+    const runtimeRoot = path.join(root, "runtime"), targetRoot = path.join(root, "project");
+    await mkdir(targetRoot, { recursive: true });
+    const project = {
+      createSessionStore() { return {}; },
+      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
+      currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
+      async readCurrentProject() { return { slug: "project" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(_slug, operation) { return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    };
+    const published = [], dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, published });
+    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      await outputs.terminals.openProjectRuntime();
+      const dormant = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
+      assert.equal(dormant.dormant, true); assert.equal(dormant.ok, true);
+      const closed = published.find(event => event.realtime.payload.action === "runtime-closed").realtime.payload;
+      assert.equal(closed.runtimeDormantClose, true); assert.equal(closed.runtimeCloseReason, "idle-timeout");
+      assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, false);
+      await outputs.terminals.openProjectRuntime();
+      const explicit = await outputs.terminals.closeProjectRuntime({ reason: "idle-timeout", dormant: true });
+      assert.equal(explicit.ok, true);
+      const explicitClosed = published.filter(event => event.realtime.payload.action === "runtime-closed").at(-1).realtime.payload;
+      assert.equal(explicitClosed.runtimeCloseReason, "idle-timeout");
+      assert.equal(Object.hasOwn(explicitClosed, "runtimeDormantClose"), false);
+    } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
+  });
 });

@@ -99,6 +99,10 @@ function projectRealtimePayload(value = {}) {
     ...(source.runtime ? { runtime: source.runtime } : {}),
     ...(source.runtime?.open === false ? { message: "Project is closed." } : {}),
     ...(source.action ? { action: String(source.action).trim() } : {}),
+    ...(source.action === "runtime-closed" && source.runtime?.open === false && source.runtimeDormantClose === true
+      ? { runtimeDormantClose: true } : {}),
+    ...(source.action === "runtime-closed" && source.runtime?.open === false && source.runtimeCloseReason
+      ? { runtimeCloseReason: String(source.runtimeCloseReason).trim().slice(0, 100) } : {}),
     ...(source.githubRefresh === true ? { githubRefresh: true } : {}),
     ...(typeof source.repositoryWorkflow?.requirePullRequest === "boolean"
       ? { repositoryWorkflow: { requirePullRequest: source.repositoryWorkflow.requirePullRequest } }
