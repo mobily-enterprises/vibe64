@@ -1,7 +1,7 @@
 {
   "name": "@local/vibe64-system-graph",
   "version": "0.1.0",
-  "description": "Reads Genesis Machine and Program Cities for the Vibe64 visual browser.",
+  "description": "Project architecture and authored subsystem understanding.",
   "private": true,
   "type": "module",
   "exports": {
@@ -55,18 +55,7 @@
     }
   },
   "dependencies": {
+    "@vue-flow/core": "^1.48.2",
     "@jskit-ai/kernel": "0.1.237",
     "@jskit-ai/http-web": "0.1.82",
     "@jskit-ai/shell-web": "0.1.241",
-    "@local/vibe64-core": "0.1.0",
-    "@local/vibe64-genesis": "0.1.0",
-    "@local/vibe64-database-tools": "0.1.0",
-    "@local/vibe64-project": "0.1.0",
-    "@mdi/js": "^7.4.47",
-    "camera-controls": "^3.1.2",
-    "d3-hierarchy": "^3.1.2",
-    "three": "^0.185.1",
-    "troika-three-text": "^0.52.4",
-    "vue": "^3.5.13"
-  }
-}

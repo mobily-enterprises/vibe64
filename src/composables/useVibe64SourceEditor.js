@@ -221,6 +221,9 @@ function normalizeExplanation(value = null) {
       language: String(sourceRange.language || ""),
       path: normalizeEditorPath(sourceRange.path),
       scope: String(sourceRange.scope || "selection"),
+      ...(sourceRange.presentation ? { presentation: sourceRange.presentation } : {}),
+      ...(sourceRange.fileHash ? { fileHash: String(sourceRange.fileHash) } : {}),
+      ...(sourceRange.symbolId ? { symbolId: String(sourceRange.symbolId) } : {}),
       startColumn: Math.max(1, Number(sourceRange.startColumn || 1)),
       startLine: Math.max(1, Number(sourceRange.startLine || 1))
     },
@@ -491,6 +494,8 @@ function localSourceExplanation({
     language: String(range.language || ""),
     path: normalizeEditorPath(filePath),
     scope: String(range.scope || "selection"),
+    ...(range.presentation ? { presentation: range.presentation } : {}),
+    ...(range.symbolId ? { symbolId: range.symbolId } : {}),
     startColumn: Math.max(1, Number(range.startColumn || 1)),
     startLine: Math.max(1, Number(range.startLine || 1))
   };
@@ -580,6 +585,8 @@ function useVibe64SourceEditor({
   const selectedPath = ref("");
   const text = ref("");
   const savedHash = ref("");
+  const interpretations = ref([]);
+  const interpretationWarning = ref('');
   const dirty = ref(false);
   const treeLoadingPaths = ref([]);
   const treeLoadErrors = ref({});
@@ -966,6 +973,7 @@ function useVibe64SourceEditor({
     }
     text.value = String(file.text || "");
     savedHash.value = String(file.hash || "");
+    applySavedInterpretations(response, filePath);
     dirty.value = false;
     if (reveal) revealLoadedFilePath(filePath);
     cursorRequest.value = {
@@ -976,6 +984,13 @@ function useVibe64SourceEditor({
     };
     loadedVersion.value += 1;
     return true;
+  }
+
+  function applySavedInterpretations(response, filePath) {
+    interpretations.value = (response.interpretations?.records || []).filter(record => record.path === filePath
+      && ['file', 'selection'].includes(record.scope) && ['description', 'steps'].includes(record.presentation)
+      && typeof record.body === 'string' && ['current', 'stale'].includes(record.status));
+    interpretationWarning.value = String(response.interpretations?.warning || '');
   }
 
   async function openFile(filePath = "", options = {}) {
@@ -1125,6 +1140,7 @@ function useVibe64SourceEditor({
         tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
       }
       const nextHash = String(response.file?.hash || "");
+      applySavedInterpretations(response, pathAtRequest);
       if (dirty.value || saving.value) {
         if (nextHash && nextHash !== savedHash.value) {
           saveError.value = SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE;
@@ -1456,6 +1472,15 @@ function useVibe64SourceEditor({
     }
     if (event.type === "source-explanation.finished" && eventExplanation) {
       activeExplanation.value = eventExplanation;
+      const range = eventExplanation.sourceRange;
+      // Follow-up chat does not replace the cached initial interpretation.
+      if (eventExplanation.status === 'ready' && range.presentation && (range.scope === 'file' || range.symbolId)
+        && !eventExplanation.followups.length && range.path === selectedPath.value) {
+        const record = { path: range.path, scope: range.scope, symbolId: range.symbolId || '', presentation: range.presentation,
+          fileHash: range.fileHash, body: eventExplanation.body, summary: eventExplanation.summary, createdAt: eventExplanation.createdAt,
+          status: range.fileHash === savedHash.value ? 'current' : 'stale' };
+        interpretations.value = [...interpretations.value.filter(previous => !(previous.scope === record.scope && previous.symbolId === record.symbolId && previous.presentation === record.presentation)), record];
+      }
       if (eventExplanation.status !== "failed") {
         explanationError.value = "";
       }
@@ -1511,6 +1536,9 @@ function useVibe64SourceEditor({
         endLine: range.endLine,
         explanationId,
         force: range.force === true,
+        presentation: range.presentation,
+        symbolId: range.symbolId,
+        expectedHash: range.expectedHash,
         originId,
         path: selectedPath.value,
         scope: range.scope,
@@ -1550,6 +1578,7 @@ function useVibe64SourceEditor({
     }
     await explainSelection({
       ...range,
+      ...(range.presentation && range.fileHash ? { expectedHash: range.fileHash } : {}),
       force: true
     });
   }
@@ -1904,6 +1933,8 @@ function useVibe64SourceEditor({
     selectedRevealTree.value = null;
     text.value = "";
     savedHash.value = "";
+    interpretations.value = [];
+    interpretationWarning.value = '';
     dirty.value = false;
     activeExplanation.value = null;
     explanationFollowup.value = "";
@@ -1977,6 +2008,8 @@ function useVibe64SourceEditor({
     saveError,
     saveNow,
     savedHash,
+    interpretations,
+    interpretationWarning,
     searchError,
     searchLoading,
     searchIndex,

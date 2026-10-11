@@ -41,6 +41,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SourceEditorFileSync.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue`
 - `src/composables/useVibe64RepositoryWorkspace.js`
 - `src/composables/useVibe64AutopilotView.js`
@@ -52,6 +53,8 @@ from saved project work, and inspect one exact file change at a time.
 - `src/lib/vibe64RepositoryRealtime.js`
 - `src/pages/app/project/[slug]/dashboard/changes/index.vue`
 - `src/pages/app/project/[slug]/dashboard/repository/index.vue`
+
+- `packages/vibe64-source-editor/src/server/sourceInterpretations.js`
 
 ## Public contract
 
@@ -1539,3 +1542,38 @@ an AI symbol. Unknown future providers remain available under Other services.
 Presentation sources: `src/lib/integrationCatalogue.js`,
 `src/components/studio/IntegrationServiceLogo.vue`, and
 `src/components/studio/IntegrationsPanel.vue`.
+
+
+Source files open on their indexed public interface in both Files and Architecture.
+That interface preserves available language visibility scopes, including Rust
+crate-restricted items. Symbol Code includes attached attributes/decorators and
+language declaration keywords; grouped values can share their exact declaration
+range. Public fields/properties/constants and types supplement callable symbols
+through the existing native index, while local declarations remain internal.
+A symbol offers Description (English without pseudocode), Steps (ordered English
+with meaningful names when helpful), and exact Code. Whole-file Code preserves
+the mounted CodeMirror editor, draft, autosave, conflict and realtime owners.
+Description/Steps reuse the original Helper service, verified profile, account
+isolation, cache, admission, stream, stop and cleanup. Their optional new-write
+`sourceRange.presentation` and prompt versions keep the caches distinct; existing
+records without the field keep their original interpretation and need no historical
+rewrite. Indexed range use requires the saved file hash to match and no local
+draft. The server rechecks expectedHash before generation, resolves an optional
+symbol ID against validated native Architecture facts in the admitted session's
+source root, and uses the declaration's server range rather than browser
+coordinates. A missing/stale identity, a mismatching file hash or an impossible
+range rejects generation with refresh guidance. Native artifact reads reuse the
+original no-symlink/file-identity download access and are bounded at 128 MiB;
+larger artifacts retain ordinary selection/whole-file explanations and Code.
+Symbol identity participates in cache keys and remains on the explanation range.
+Unsupported parsers and
+stale indexes retain whole-file explanation and Code controls without fabricating
+an empty complete public interface.
+
+Optional informational file/declaration interpretations are stored privately by
+the source-editor service, scoped to actor, project/session, actual saved source,
+verified Helper profile, presentation and Genesis prompt revision. Only completed
+initial answers are persisted atomically; follow-up conversations do not replace
+them. A forced refresh cannot be overwritten by an older completion. Reads can
+show current or explicitly stale saved text without starting a Helper. These
+interpretations are not Program contracts or coding-agent context.

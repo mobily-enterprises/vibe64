@@ -725,12 +725,9 @@ light and dark themes. They keep their heading, status, progress text and colors
 opening details adds output and controls within the same shared presentation.
 Copy and Collapse sit beside the progress description, beneath the heading.
 People can explore the application through a compact searchable subsystem list
-and a focused detail pane in Overview. Each authored subsystem explains a
+and a focused detail pane. Each authored subsystem explains a
 responsibility and brings together its Program operations and owned or shared
-data tables. Map opens the three-dimensional Machine City directly, showing
-files, functions, and optional subsystem and implementation layers. There is no
-separate Program presentation. A selected subsystem can be located in Machine
-when its generated subsystem is available. Operations link to explanations and
+data tables. Operations link to explanations and
 source; tables with resolved database references link to the
 relationship diagram, with a way back to the selected subsystem. Missing or invalid maps
 offer a temporary AI task to generate or repair the subsystem map with the session's
@@ -1699,3 +1696,45 @@ A pinned lesson without a declared practice exercise can teach its quiz answers
 without creating a project or session. It keeps the original reserved attempt
 and durable progress; exercise tasks and lesson graphics retain their preparation
 requirements. Teaching distinguishes this from pending Workspace setup.
+
+
+Architecture is one pannable, zoomable sheet: explicit UI pages, screens and
+scenes above, Engine directory-rooted subsystem circles below a horizontal
+divider. Registered web routes show host-relative paths; no filesystem routing
+is assumed. Every indexed owner remains visible without imposed layers or an
+import web. Declared entries say Start here; support resources are subdued.
+Source-size growth is bounded. Explicit shared libraries form a right-hand
+stack, followed by opaque external dependencies with public metadata only.
+
+The spatial journey is subsystem circle → interface square with directory-grouped
+file icons → that file's interface. A square and compact
+skeleton appear immediately; a faint circle behind it preserves context.
+Zoom in enlarges and centres the initial target together. That target owns the
+gesture even as neighbours move under the pointer. Zoom out returns through
+enclosing views without aggressive recentring. Breadcrumbs offer Engine,
+subsystem and file returns. Hidden map and file-browser elements retain their
+mounted state. Interrupted gestures and repeated entry/exit remain usable.
+
+The square distinguishes observed cross-subsystem imports, declared API members,
+file-level review candidates and other available exports, preserving callables,
+components, values and types. Import paths are secondary. Current source
+identity/ranges resolve exact implementation links, including re-export aliases.
+Exports in externally used files outside the declared surface are review
+candidates; internal file exports are not automatically subsystem API. Missing
+analysis stays explicit. Selecting a signature reaches its file and declaration
+inside the square. File icons retain directory nesting/search and source-size
+comparisons within their subsystem. Tight signature rows and compact headers
+preserve reading space. The existing single-file viewer retains signatures,
+recorded returns, English Description, ordered Steps, exact symbol Code and
+read-only whole-file Code. Dashboard Files retains editing.
+
+Purple protocol-neutral page/controller bridges remain evidenced and hidden
+initially; page selection focuses its calls and the menu can show all.
+Each receiving file has a separate port on its owner. Available operation facts
+open the receiving file and an exact declaration when supplied; missing or
+ambiguous destinations never create guessed arrows. Technology/language owners
+discover facts; the viewer parses no source. Editable Blueprint, Program and
+subsystem explanations allow an AI to propose responsibilities/API boundaries
+with source evidence for review. Usage does not prove intended design.
+Stack's Architecture layout supplies readable names/purposes and explicit
+library/support roles without changing native ownership.

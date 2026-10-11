@@ -653,7 +653,7 @@
             variant="tonal"
             @click="backToSystemFromEditor"
           >
-            Back to Subsystems
+            Back to Architecture
           </v-btn>
           <v-btn
             v-else
@@ -698,7 +698,7 @@
             variant="tonal"
             @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()"
           >
-            {{ systemBackAvailable ? "Back to Subsystems" : "Back to dashboard" }}
+            {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
           </v-btn>
         </header>
         <Vibe64DatabaseWorkspace
@@ -718,20 +718,9 @@
 
       <section
         v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
-        class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
+        class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
-        <header class="studio-autopilot__session-tool-header">
-          <v-btn
-            :prepend-icon="mdiArrowLeft"
-            size="x-small"
-            type="button"
-            variant="tonal"
-            @click="backToDashboard"
-          >
-            Back to dashboard
-          </v-btn>
-        </header>
         <Vibe64SubsystemsView
           :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('system')"
@@ -744,17 +733,33 @@
           @open-table="openSubsystemTable"
           @describe-subsystems="describeSubsystems"
           :session-id="sessionId"
+          @inspect-file="architectureFileRequest = { ...$event, presentation: 'interface' }"
           @open-source-file-immersive="openSourceEditorFile"
           @open-source-file="openSourceEditorFile"
         >
-          <template #text="{ text, sourcePath, openSource }">
-            <LongTextPreviewBlocks
-              style="gap: 1em"
-              :blocks="parseLongTextReviewBlocks(text)"
-              @link-click="openSubsystemTextLink($event, sourcePath, openSource)"
-            />
+          <template #navigation>
+            <v-btn :prepend-icon="mdiArrowLeft" size="x-small" type="button" variant="text" @click="backToDashboard">Back to dashboard</v-btn>
+          </template>
+          <template #file-interface="{ request, active, architecture, refresh, refreshing }">
+            <Vibe64SessionSourceEditor single-file :key="request.path" :active="props.active && active" :agent-active="agentActive"
+              :architecture-facts="architecture" :refresh-architecture="refresh" :architecture-refreshing="refreshing"
+              :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
+              :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+              :assistant-available="assistantCanUsePurpose('source_explanation')"
+              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
           </template>
         </Vibe64SubsystemsView>
+        <v-dialog :model-value="Boolean(architectureFileRequest)" max-width="1100" @update:model-value="!$event && (architectureFileRequest = null)">
+          <section class="studio-autopilot__architecture-file" aria-label="Architecture file viewer">
+            <header><strong>{{ architectureFileRequest?.path }}</strong><v-btn variant="text" aria-label="Close file viewer" @click="architectureFileRequest = null">Close</v-btn></header>
+            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file
+              :key="architectureFileRequest.path" :active="props.active" :agent-active="agentActive"
+              :open-request="architectureFileRequest" :project-slug="projectSlug" :session-id="sessionId"
+              :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+              :assistant-available="assistantCanUsePurpose('source_explanation')"
+              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
+          </section>
+        </v-dialog>
       </section>
 
       <div
@@ -909,6 +914,7 @@ import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/ass
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
+import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
 import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
@@ -939,6 +945,8 @@ import {
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+const architectureFileRequest = ref(null);
+watch(() => props.session?.sessionId, () => { architectureFileRequest.value = null; });
 const resourceRetryBusy = ref(false);
 function openSubsystemTextLink({ event, href }, sourcePath, openSource) {
   // Markdown links are relative to their declaration, not the dashboard URL.
@@ -1993,6 +2001,11 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.studio-autopilot__architecture-pane {
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
 .studio-autopilot__session-tool-header {
   border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
   min-height: 2.7rem;
@@ -2038,4 +2051,11 @@ onBeforeUnmount(() => {
   }
 }
 .studio-autopilot__voice-feedback { flex: 1 1 100%; min-width: 0; }
+</style>
+
+<style scoped>
+.studio-autopilot__architecture-file { height: min(84dvh, 850px); min-height: 0; display: flex; flex-direction: column; background: rgb(var(--v-theme-surface)); border-radius: 12px; overflow: hidden; }
+.studio-autopilot__architecture-file > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), .12); }
+.studio-autopilot__architecture-file > header strong { overflow-wrap: anywhere; font-size: 14px; }
+.studio-autopilot__architecture-file > .vibe64-source-editor { flex: 1; min-height: 0; }
 </style>

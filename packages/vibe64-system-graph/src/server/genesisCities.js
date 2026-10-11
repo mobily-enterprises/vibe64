@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
   GENESIS_MACHINE_CITY_PATH,
-  GENESIS_PROGRAM_CITY_PATH
+  GENESIS_PROGRAM_CITY_PATH,
+  validateArchitectureFacts
 } from "@local/vibe64-genesis/server";
 import {
   isMissingPathError,
@@ -14,6 +15,9 @@ import {
 const GENESIS_MACHINE_CITY_SCHEMA = "genesis.machine-city.v1";
 const GENESIS_PROGRAM_CITY_SCHEMA = "genesis.program-city.v1";
 const GENESIS_CITY_SCHEMA_VERSION = 1;
+// Status and the selected view share immutable, validated snapshots. Keep only
+// two files; large indexes must not accumulate across projects or sessions.
+const cityReads = new Map();
 
 const CITY_DEFINITIONS = Object.freeze({
   machine: Object.freeze({
@@ -234,6 +238,7 @@ function validateGenesisCity(city, kind) {
   requireString(city.status, kind, "status");
   if (kind === "machine") {
     validateMachineCity(city);
+    if (city.architecture) validateArchitectureFacts(city.architecture);
   } else {
     validateProgramCity(city);
   }
@@ -242,11 +247,13 @@ function validateGenesisCity(city, kind) {
 
 async function readGenesisCity(projectRoot, kind) {
   const definition = cityDefinition(kind);
-  const filePath = path.join(projectRoot, definition.path);
-  let source;
+  const filePath = path.resolve(projectRoot, definition.path);
+  const identity = info => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(':');
+  let revision;
   try {
-    source = await readFile(filePath, "utf8");
+    revision = identity(await stat(filePath, { bigint: true }));
   } catch (error) {
+    cityReads.delete(filePath);
     if (isMissingPathError(error)) {
       return {
         city: null,
@@ -257,26 +264,40 @@ async function readGenesisCity(projectRoot, kind) {
     }
     throw error;
   }
-
-  let city;
-  try {
-    city = JSON.parse(source);
-  } catch {
-    throw genesisCityError(kind, "contains invalid JSON.");
+  const existing = cityReads.get(filePath);
+  if (existing?.revision === revision) {
+    cityReads.delete(filePath);
+    cityReads.set(filePath, existing);
+    return existing.promise;
   }
-  return {
-    city: validateGenesisCity(city, kind),
-    exists: true,
-    kind,
-    path: definition.path
-  };
+  const pending = { revision, promise: null };
+  pending.promise = (async () => {
+    const source = await readFile(filePath, "utf8");
+    let city;
+    try { city = JSON.parse(source); }
+    catch { throw genesisCityError(kind, "contains invalid JSON."); }
+    validateGenesisCity(city, kind);
+    if (identity(await stat(filePath, { bigint: true })) !== revision) {
+      throw genesisCityError(kind, "changed while loading. Reload to read the new snapshot.");
+    }
+    return { city, exists: true, kind, path: definition.path };
+  })();
+  cityReads.delete(filePath);
+  cityReads.set(filePath, pending);
+  while (cityReads.size > 2) cityReads.delete(cityReads.keys().next().value);
+  try {
+    return await pending.promise;
+  } catch (error) {
+    if (cityReads.get(filePath) === pending) cityReads.delete(filePath);
+    throw error;
+  }
 }
 
 function requireGenesisCity(record, kind) {
   if (!record?.exists || !record.city) {
     throw genesisCityError(
       kind,
-      "has not been generated. Refresh the Genesis Cities first.",
+      "has not been generated. Refresh analysis first.",
       "vibe64_genesis_city_missing"
     );
   }

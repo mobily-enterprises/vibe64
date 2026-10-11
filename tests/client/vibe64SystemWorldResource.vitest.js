@@ -71,6 +71,8 @@ describe("Genesis City client resources", () => {
       endpointResource({ city: { schema: "genesis.machine-city.v1" } }),
       endpointResource(null),
       endpointResource(null),
+      endpointResource(null),
+      endpointResource(null),
       endpointResource({ status: "missing", subsystems: [] })
     ];
     endpointMocks.useEndpointResource.mockReset();
@@ -87,21 +89,21 @@ describe("Genesis City client resources", () => {
     scope.run(() => useVibe64SystemGraph({ active, reloadVersion, sessionId: "session-1" }));
     reloadVersion.value += 1;
     await nextTick();
-    expect(endpointMocks.resources[4].reload).not.toHaveBeenCalled();
+    expect(endpointMocks.resources[6].reload).not.toHaveBeenCalled();
     active.value = true;
     await nextTick();
-    expect(endpointMocks.resources[4].reload).toHaveBeenCalledOnce();
+    expect(endpointMocks.resources[6].reload).toHaveBeenCalledOnce();
     active.value = false;
     await nextTick();
     active.value = true;
     await nextTick();
-    expect(endpointMocks.resources[4].reload).toHaveBeenCalledOnce();
+    expect(endpointMocks.resources[6].reload).toHaveBeenCalledOnce();
     scope.stop();
   });
 
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
-    { component: "Vibe64SubsystemsView", pane: "system", useTool: useVibe64SystemGraph, resources: 5 }
+    { component: "Vibe64SubsystemsView", pane: "system", useTool: useVibe64SystemGraph, resources: 7 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -162,41 +164,45 @@ describe("Genesis City client resources", () => {
       });
     });
 
-    expect(endpointMocks.calls).toHaveLength(5);
+    expect(endpointMocks.calls).toHaveLength(7);
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",
       "/api/vibe64/system-graph/sessions/session%2Fa/cities/machine",
       "",
+      "",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh",
+      "/api/vibe64/system-graph/sessions/session%2Fa/refresh/cancel",
       "/api/vibe64/system-graph/sessions/session%2Fa/subsystems"
     ]);
     expect(endpointMocks.calls[1].enabled.value).toBe(true);
-    expect(endpointMocks.calls[2].enabled.value).toBe(false);
-    expect(endpointMocks.calls[3].enabled).toBe(false);
+    expect(endpointMocks.calls[3].enabled.value).toBe(false);
+    expect(endpointMocks.calls[4].enabled).toBe(false);
     expect(graph.machineCity.value).toEqual({ schema: "genesis.machine-city.v1" });
     expect(graph.programCity.value).toBeNull();
 
     await graph.refresh();
 
-    expect(endpointMocks.resources[3].save).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[3].save).toHaveBeenCalledWith({}, { method: "POST" });
+    expect(endpointMocks.resources[4].save).toHaveBeenCalledOnce();
+    expect(endpointMocks.resources[4].save).toHaveBeenCalledWith({}, { method: "POST", timeoutMs: 600_000 });
     expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
     expect(endpointMocks.resources[1].reload).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[2].reload).not.toHaveBeenCalled();
+    expect(endpointMocks.resources[3].reload).not.toHaveBeenCalled();
     scope.stop();
   });
 
   it.each([
     { label: "Database schema", family: "database", useTool: useVibe64DatabaseTools },
     { label: "Cities", family: "system-graph", useTool: useVibe64SystemGraph },
-    { label: "Cities status", family: "system-graph", useTool: useVibe64SystemGraph, holdStatus: true }
-  ])("finishes a held $label refresh while hidden without a path error and reads fresh data on return", async ({ family, useTool, holdStatus = false }) => {
+    { label: "Cities status", family: "system-graph", useTool: useVibe64SystemGraph, holdStatus: true },
+    { label: "Architecture", family: "system-graph", useTool: useVibe64SystemGraph, projection: "architecture" },
+    { label: "Architecture status", family: "system-graph", useTool: useVibe64SystemGraph, projection: "architecture", holdStatus: true }
+  ])("finishes a held $label refresh while hidden without a path error and reads fresh data on return", async ({ family, useTool, holdStatus = false, projection = "native" }) => {
     endpointMocks.live = true;
     const database = family === "database";
     const sessionPath = `/api/vibe64/${family}/sessions/session%2Fa`;
     const readPaths = database
       ? [sessionPath]
-      : ["/status", "/cities/machine", "/cities/program"].map((suffix) => `${sessionPath}${suffix}`);
+      : (projection === "architecture" ? ["/status", "/architecture"] : ["/status", "/cities/machine", "/cities/program"]).map((suffix) => `${sessionPath}${suffix}`);
     const writePath = `${sessionPath}${database ? "/schema/refresh" : "/refresh"}`;
     const reads = [];
     const writes = [];
@@ -218,6 +224,7 @@ describe("Genesis City client resources", () => {
           return commandResponse.promise;
         }
         expect(options.method).toBe("GET");
+        if (!database && url === `${sessionPath}/subsystems`) return Promise.resolve({ subsystems: [], status: "missing" });
         expect(readPaths).toContain(url);
         reads.push(url);
         if (database) return Promise.resolve({ revision, schema: { tables: [] } });
@@ -228,7 +235,7 @@ describe("Genesis City client resources", () => {
             cities: { machine: { available: true }, program: { available: true } }
           });
         }
-        return Promise.resolve({ city: { revision } });
+        return Promise.resolve(projection === "architecture" ? { architecture: { revision } } : { city: { revision } });
       }
     });
     const app = createRenderer({
@@ -239,7 +246,7 @@ describe("Genesis City client resources", () => {
       remove() {}
     }).createApp({
       setup() {
-        tool = useTool({ active, sessionId: ref("session/a") });
+        tool = useTool({ active, sessionId: ref("session/a"), projection });
         return () => null;
       }
     });
@@ -293,8 +300,14 @@ describe("Genesis City client resources", () => {
         expect(tool.state.value.revision).toBe(2);
       } else {
         expect(tool.systemStatus.value.revision).toBe(2);
-        expect(tool.machineCity.value.revision).toBe(2);
-        expect(tool.programCity.value.revision).toBe(2);
+        if (projection === "architecture") {
+          expect(tool.architecture.value.revision).toBe(2);
+          expect(tool.machineCity.value).toBeNull();
+          expect(tool.programCity.value).toBeNull();
+        } else {
+          expect(tool.machineCity.value.revision).toBe(2);
+          expect(tool.programCity.value.revision).toBe(2);
+        }
       }
       expect(writes).toEqual([writePath]);
       expect(hiddenError).toBe("");

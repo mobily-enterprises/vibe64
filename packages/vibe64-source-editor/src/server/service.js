@@ -20,7 +20,7 @@ import { registerAmplitudeClient } from "@jskit-ai/connectors-catalog/server/amp
 import { runtimeConfigKeyIsVibe64Reserved } from "@local/vibe64-core/server/runtimeConfig";
 import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
 
-import { inspectVibe64IntegrationSetup } from "@local/vibe64-genesis/server";
+import { GENESIS_MACHINE_CITY_PATH, inspectVibe64IntegrationSetup, validateArchitectureFacts, SOURCE_EXPLANATION_PROMPT_VERSION, sourceExplanationGuidance } from "@local/vibe64-genesis/server";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import { createIntegrationSetupRequest, runIntegrationSetupCommand } from "./integrationSetupCommand.js";
 
@@ -70,6 +70,7 @@ import {
 import { readStarredFiles, setStarredFile, starredFilesPath } from "./starredFiles.js";
 import { createSourceEditorFileIndex } from "./fileIndex.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "./searchIndex.js";
+import { readSourceInterpretation, readSourceInterpretations, writeSourceInterpretation } from "./sourceInterpretations.js";
 
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
 const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
@@ -97,6 +98,7 @@ const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
 const SOURCE_EDITOR_EXPLANATION_CONTEXT_MAX_CHARS = 12_000;
 const SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS = 60_000;
 const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
+const SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES = 128 * 1024 * 1024;
 const SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS = 5_000;
 const SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS = 4_000;
 const SOURCE_EDITOR_FOLLOWUP_CONTEXT_MAX_CHARS = 8_000;
@@ -412,6 +414,29 @@ function sourceEditorStructuredAnswer(value = "", {
   return answer;
 }
 
+function sourceEditorInterfacePromptVersion(presentation) {
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}`;
+}
+
+function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
+  // Ad-hoc selections keep their established bounded in-memory cache. Only
+  // explicit file/declaration interpretations have durable informational value.
+  if (!input.range.presentation || !(input.range.scope === 'file' || input.range.symbolId)) return {};
+  return {
+    readCompleted: () => readSourceInterpretation(context, input, cacheKey).catch(() => null),
+    writeCompleted: async (template, currentGeneration) => {
+      try {
+        await writeSourceInterpretation(context, input, cacheKey, template, async () => currentGeneration()
+          && (await readSourceEditorFile(context, input.range.path)).hash === input.range.fileHash);
+      } catch (error) {
+        // Saving an optional interpretation must not fail a completed Helper
+        // conversation or replace its existing stop/recovery lifecycle.
+        logger?.warn('Source interpretation could not be saved.', { path: input.range.path, error });
+      }
+    }
+  };
+}
+
 function sourceEditorExplanationCacheKey(context = {}, explanationInput = {}) {
   const range = explanationInput.range || {};
   const executionProfile = requiredSourceEditorExecutionProfile(context.agentExecutionProfile);
@@ -429,6 +454,7 @@ function sourceEditorExplanationCacheKey(context = {}, explanationInput = {}) {
     positiveInteger(range.endColumn, 1),
     normalizeText(range.fileHash),
     normalizeText(range.selectedTextHash),
+    normalizeText(range.symbolId),
     normalizeText(explanationInput.promptVersion)
   ]);
 }
@@ -508,7 +534,9 @@ function createSourceEditorExplanationCache({
     force = false,
     generate,
     reuse,
-    validateCompleted = null
+    validateCompleted = null,
+    readCompleted = null,
+    writeCompleted = null
   } = {}) => {
     if (closed) {
       throw sourceEditorError(
@@ -531,11 +559,11 @@ function createSourceEditorExplanationCache({
     if (force) {
       completed.delete(key);
     } else if (completedCache) {
-      const template = read(key);
+      const template = read(key) || (readCompleted ? await readCompleted() : null);
       if (template) {
         const completedIdentityValid = typeof validateCompleted !== "function" ||
           await validateCompleted(template) === true;
-        if (completedIdentityValid) {
+        if (completedIdentityValid && !closed && generations.get(key) === token) {
           return reuse(template, {
             cacheHit: true,
             coalesced: false
@@ -565,7 +593,9 @@ function createSourceEditorExplanationCache({
           force: true,
           generate,
           reuse,
-          validateCompleted
+          validateCompleted,
+          readCompleted,
+          writeCompleted
         });
       }
     }
@@ -580,6 +610,9 @@ function createSourceEditorExplanationCache({
         );
         if (completedIdentityValid) {
           remember(key, token, template);
+          if (template && writeCompleted && !closed && generations.get(key) === token) {
+            await writeCompleted(template, () => !closed && generations.get(key) === token);
+          }
         }
         return template;
       });
@@ -1314,10 +1347,11 @@ function createService({
 
     async readFile(input = {}) {
       return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
+        const context = await sourceEditorContext(input.sessionId, { vibe64User: input.vibe64User });
         const file = await readSourceEditorFile(context, input.path);
         return {
           file,
+          interpretations: await readSourceInterpretations(context, file, sourceEditorInterfacePromptVersion),
           revealTree: await sourceEditorFileRevealTree(context, file.path),
           ok: true
         };
@@ -1449,6 +1483,7 @@ function createService({
             explanation: await explanationCache.run(cacheKey, {
               completedCache: Boolean(context.agentAccountIdentitySignature),
               force: input.force === true,
+              ...sourceEditorInterpretationCacheOptions(context, explanationInput, cacheKey, logger),
               generate: () => createSourceEditorExplanation(context, input, {
                 explanationChats,
                 explanationGenerator: sourceExplanationGenerator,
@@ -1484,6 +1519,7 @@ function createService({
           return explanationCache.run(cacheKey, {
             completedCache: Boolean(context.agentAccountIdentitySignature),
             force: input.force === true,
+            ...sourceEditorInterpretationCacheOptions(context, explanationInput, cacheKey, logger),
             generate: () => streamSourceEditorExplanation(context, input, {
               emit: stream.emit,
               explanationChats,
@@ -2902,6 +2938,8 @@ function normalizeSourceEditorExplanation(value = {}) {
       language: normalizeText(sourceRange.language || sourceEditorLanguageForPath(sourceRange.path)),
       path: normalizeSourceEditorRelativePath(sourceRange.path),
       scope: normalizeText(sourceRange.scope || "selection"),
+      ...(["description", "steps"].includes(sourceRange.presentation) ? { presentation: sourceRange.presentation } : {}),
+      ...(sourceRange.symbolId ? { symbolId: normalizeText(sourceRange.symbolId) } : {}),
       selectedTextHash: normalizeText(sourceRange.selectedTextHash),
       startColumn: positiveInteger(sourceRange.startColumn, 1),
       startLine: positiveInteger(sourceRange.startLine, 1)
@@ -3090,11 +3128,55 @@ function sourceEditorExplanationPromptCode({
 
 async function sourceEditorExplanationInput(context = {}, input = {}) {
   const file = await readSourceEditorFile(context, input.path);
+  if (input.expectedHash && input.expectedHash !== file.hash) throw sourceEditorError("This file changed after symbol analysis. Refresh analysis before describing the symbol.", "vibe64_source_explanation_source_changed", {}, 409);
+  const presentation = input.presentation;
+  if (presentation !== undefined && !["description", "steps"].includes(presentation)) throw sourceEditorError("Choose Description or Steps.", "vibe64_source_explanation_presentation_invalid");
   const lines = sourceEditorLines(file.text);
-  const scope = normalizeText(input.scope) === "file" ? "file" : "selection";
+  const symbolId = input.symbolId;
+  let selection = input;
+  if (symbolId !== undefined) {
+    if (typeof symbolId !== "string" || !symbolId.trim() || symbolId.length > 4096) {
+      throw sourceEditorError("Choose a valid indexed symbol.", "vibe64_source_explanation_symbol_invalid");
+    }
+    let architecture;
+    try {
+      // Reuse the original path, symlink and file-identity checks. The native
+      // index has its own bound; it is not subject to the editable-file limit.
+      const { fileHandle } = await downloadSessionFile(context, GENESIS_MACHINE_CITY_PATH);
+      try {
+        if ((await fileHandle.stat()).size > SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES) {
+          throw sourceEditorError("Symbol analysis exceeds the supported size. Use Code or explain a selection.", "vibe64_source_explanation_index_too_large", {}, 413);
+        }
+        const chunks = [];
+        for await (const chunk of fileHandle.createReadStream({ start: 0, end: SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES, autoClose: false })) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
+        if (buffer.length > SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES) {
+          throw sourceEditorError("Symbol analysis exceeds the supported size. Use Code or explain a selection.", "vibe64_source_explanation_index_too_large", {}, 413);
+        }
+        architecture = validateArchitectureFacts(JSON.parse(buffer.toString("utf8")).architecture);
+      } finally {
+        await fileHandle.close();
+      }
+    } catch (error) {
+      if (error.statusCode === 403 || error.statusCode === 413) throw error;
+      throw sourceEditorError("Symbol analysis is unavailable or invalid. Refresh analysis before describing the symbol.", "vibe64_source_explanation_index_unavailable", {}, 409);
+    }
+    const symbol = architecture.symbols.find(entry => entry.id === symbolId);
+    const indexedFile = architecture.files.find(entry => entry.id === symbol?.fileId);
+    if (!symbol?.rangeAvailable || symbol.path !== file.path || indexedFile?.path !== file.path || indexedFile.hash !== `sha256:${file.hash}`) {
+      throw sourceEditorError("This symbol changed after analysis. Refresh analysis before describing it.", "vibe64_source_explanation_symbol_changed", {}, 409);
+    }
+    for (const point of [symbol.start, symbol.end]) {
+      if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
+        throw sourceEditorError("The indexed symbol range is invalid for this file. Refresh analysis.", "vibe64_source_explanation_symbol_changed", {}, 409);
+      }
+    }
+    selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
+  }
+  const scope = symbolId !== undefined ? "selection" : normalizeText(input.scope) === "file" ? "file" : "selection";
   const range = sourceEditorRangeWithSelectionColumns(
-    normalizeSourceEditorLineRange(input, lines.length),
-    input,
+    normalizeSourceEditorLineRange(selection, lines.length),
+    selection,
     lines
   );
   const selectedText = sourceEditorSelectionForRange(file.text, range);
@@ -3115,7 +3197,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     }, 413);
   }
   const selectedTextHash = sourceEditorTextHash(selectedText);
-  const promptVersion = SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION;
+  const promptVersion = presentation ? sourceEditorInterfacePromptVersion(presentation) : SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION;
   const promptCode = sourceEditorExplanationPromptCode({
     range: {
       ...range,
@@ -3131,6 +3213,8 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     range: {
       ...range,
       fileHash: file.hash,
+      ...(presentation ? { presentation } : {}),
+      ...(symbolId !== undefined ? { symbolId } : {}),
       language: file.language,
       path: file.path,
       scope,
@@ -4053,7 +4137,10 @@ function sourceEditorExplanationPrompt({
       ? "The user asked about the whole file. Explain the file's role, its major sections, and how other parts of the project are likely to interact with it."
       : "The user selected a specific range. Explain that range first, then explain how it fits into the surrounding file and wider project.",
     "Use only the bounded source context supplied below. Do not inspect the repository, use tools, access the network, or edit files. Be explicit when you infer something from context.",
-    "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
+    ...(range.presentation ? [sourceExplanationGuidance({ presentation: range.presentation, scope: range.scope })] : []),
+    range.presentation === "steps"
+      ? "Start with a short purpose statement, then use numbered steps. Include meaningful failure conditions in the step where they occur."
+      : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
     "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
     `Return concise user-facing Markdown no longer than ${SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS.toLocaleString("en-US")} characters.`,
     "",

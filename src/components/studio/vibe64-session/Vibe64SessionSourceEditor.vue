@@ -10,6 +10,7 @@
     aria-label="Session source editor"
   >
     <header
+      v-if="!singleFile"
       class="vibe64-source-editor__header"
     >
       <v-btn
@@ -30,6 +31,7 @@
           {{ selectedFileName }}
         </h2>
       </div>
+      <v-btn v-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
       <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
         <v-btn
           :disabled="!editor.dirty.value || editor.saving.value"
@@ -175,7 +177,7 @@
     </header>
 
     <div
-      v-if="!codeFocusMode && (!mobile || !fileListCollapsed)"
+      v-if="!singleFile && !codeFocusMode && (!mobile || !fileListCollapsed)"
       class="vibe64-source-editor__tools"
     >
       <div class="vibe64-source-editor__tool">
@@ -254,12 +256,12 @@
     <div
       class="vibe64-source-editor__body"
       :class="{
-        'vibe64-source-editor__body--code-focus': codeFocusMode,
+        'vibe64-source-editor__body--code-focus': codeFocusMode || singleFile,
         'vibe64-source-editor__body--file-list-collapsed': fileListCollapsed && !codeFocusMode
       }"
     >
       <aside
-        v-if="!codeFocusMode"
+        v-if="!singleFile && !codeFocusMode"
         v-show="!mobile || !fileListCollapsed"
         class="vibe64-source-editor__sidebar"
         :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed }"
@@ -417,9 +419,9 @@
         </template>
       </aside>
 
-      <main v-show="!mobile || fileListCollapsed || codeFocusMode" class="vibe64-source-editor__main">
+      <main v-show="singleFile || !mobile || fileListCollapsed || codeFocusMode" class="vibe64-source-editor__main">
         <div
-          v-if="editor.loadError.value && editor.tree.value"
+          v-if="editor.loadError.value && (singleFile || editor.tree.value)"
           class="vibe64-source-editor__banner"
         >
           {{ editor.loadError.value }}
@@ -453,15 +455,51 @@
         <div
           class="vibe64-source-editor__workspace"
           :class="{
-            'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value,
-            'vibe64-source-editor__workspace--explanation-collapsed': editor.activeExplanation.value && explanationCollapsed
+            'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value && filePresentation === 'code',
+            'vibe64-source-editor__workspace--explanation-collapsed': editor.activeExplanation.value && explanationCollapsed && filePresentation === 'code'
           }"
         >
+          <v-btn v-if="singleFile && filePresentation === 'code'" variant="text" @click="filePresentation = 'interface'">Interface</v-btn>
           <div
             ref="editorElement"
+            v-show="filePresentation === 'code'"
             class="vibe64-source-editor__codemirror"
             :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value || editor.loadingFile.value }"
           />
+          <Vibe64SourceInterface
+            v-if="editor.selectedPath.value && !editor.loadingFile.value && filePresentation === 'interface'"
+            :file-path="editor.selectedPath.value"
+            :file-hash="editor.savedHash.value"
+            :interpretations="editor.interpretations.value"
+            :interpretation-warning="editor.interpretationWarning.value"
+            :active-interpretation="activeInterfaceInterpretation"
+            :symbols="interfaceSymbols"
+            :selected-id="interfaceSymbolId"
+            :current="interfaceCurrent"
+            :indexed="Boolean(interfaceFile)"
+            :dirty="editor.dirty.value"
+            :busy="editor.explanationBusy.value || editor.explanationClosing.value"
+            :refreshing="architectureRefreshing || interfaceGraph?.refreshing.value"
+            :analysis-error="architectureFacts ? '' : interfaceGraph?.error.value"
+            :assistant-available="assistantAvailable"
+            :assistant-unavailable-message="assistantUnavailableMessage"
+            :source="interfaceSymbolSource"
+            :presentation="symbolPresentation"
+            @select-symbol="selectInterfaceSymbol"
+            @present-symbol="presentInterfaceSymbol"
+            @whole-file-code="showWholeFileCode"
+            @explain="explainInterfaceFile"
+            @refresh-analysis="refreshArchitecture ? refreshArchitecture() : interfaceGraph?.refresh()"
+          >
+            <template #explanation>
+              <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation" embedded
+                :assistant-available="assistantAvailable" :assistant-unavailable-message="assistantUnavailableMessage"
+                :busy="editor.explanationBusy.value" :closing="editor.explanationClosing.value"
+                :explanation="editor.activeExplanation.value" :followup="editor.explanationFollowup.value" :selected-path="editor.selectedPath.value"
+                @close="closeExplanationPanel" @open-range="openExplanationRange" @open-source-link="openExplanationSourceLink"
+                @retry="retryExplanation" @send-followup="sendExplanationFollowup" @stop="editor.stopExplanation" @update:followup="editor.updateExplanationFollowup" />
+            </template>
+          </Vibe64SourceInterface>
           <div
             v-if="imagePreviewUrl"
             class="vibe64-source-editor__image-preview"
@@ -495,7 +533,7 @@
             />
           </div>
           <div
-            v-if="editor.activeExplanation.value"
+            v-if="editor.activeExplanation.value && filePresentation === 'code'"
             class="vibe64-source-editor__explanation-dock"
             :class="{ 'vibe64-source-editor__explanation-dock--collapsed': explanationCollapsed }"
           >
@@ -603,7 +641,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
@@ -665,6 +703,8 @@ import {
   mdiUndoVariant
 } from "@mdi/js";
 
+import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
+import { useVibe64SystemGraph } from "@local/vibe64-system-graph/client";
 import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
 import Vibe64StarredFilesList from "@/components/studio/vibe64-session/Vibe64StarredFilesList.vue";
@@ -690,6 +730,10 @@ import {
 const SOURCE_EDITOR_TREE_STATE_STORAGE_KEY = "vibe64:source-editor:tree-state";
 
 const props = defineProps({
+  singleFile: { type: Boolean, default: false },
+  architectureFacts: { type: Object, default: null },
+  refreshArchitecture: { type: Function, default: null },
+  architectureRefreshing: { type: Boolean, default: false },
   agentActive: { type: Boolean, default: false },
   fileBookmarks: { type: Object, default: null },
   active: {
@@ -754,6 +798,71 @@ const editor = useVibe64SourceEditor({
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
+const filePresentation = ref('interface');
+const interfaceSymbolId = ref('');
+const symbolPresentation = ref('description');
+// Architecture supplies its existing snapshot and refresh owner at mount. Only
+// standalone file browsing owns another graph reader.
+const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
+const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
+const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
+const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);
+const interfaceSymbols = computed(() => (interfaceArchitecture.value?.symbols || []).filter(symbol => symbol.fileId === interfaceFile.value?.id && symbol.visibility === 'public'));
+const interfaceSymbol = computed(() => interfaceSymbols.value.find(symbol => symbol.id === interfaceSymbolId.value));
+const interfaceSymbolSource = computed(() => {
+  const symbol = interfaceSymbol.value;
+  if (!symbol?.end || !interfaceCurrent.value) return '';
+  const lines = editor.text.value.split('\n');
+  const selected = lines.slice(symbol.start.line - 1, symbol.end.line);
+  if (!selected.length) return '';
+  selected[selected.length - 1] = selected.at(-1).slice(0, symbol.end.column - 1);
+  selected[0] = selected[0].slice(symbol.start.column - 1);
+  return selected.join('\n');
+});
+function showWholeFileCode() { filePresentation.value = 'code'; nextTick(() => { editorView?.requestMeasure(); editorView?.focus(); }); }
+function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'description'; presentInterfaceSymbol('description'); }
+const interpretationAttempts = new Set();
+function currentInterpretation(scope, symbolId, presentation) {
+  return editor.interpretations.value.find(record => record.path === editor.selectedPath.value && record.scope === scope && (record.symbolId || '') === symbolId && record.presentation === presentation && record.status === 'current' && record.fileHash === editor.savedHash.value);
+}
+const activeInterfaceInterpretation = computed(() => {
+  const range = editor.activeExplanation.value?.sourceRange;
+  return Boolean(range?.path === editor.selectedPath.value && range.presentation === symbolPresentation.value
+    && (range.symbolId || '') === interfaceSymbolId.value && range.scope === (interfaceSymbolId.value ? 'selection' : 'file'));
+});
+function presentInterfaceSymbol(presentation, force = false) {
+  symbolPresentation.value = presentation;
+  const symbol = interfaceSymbol.value;
+  if (presentation === 'code' || !symbol?.end || !interfaceCurrent.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
+  if (!force && currentInterpretation('selection', symbol.id, presentation)) return;
+  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, symbol.id, presentation]);
+  interpretationAttempts.add(key);
+  void editor.explainSelection({ scope: 'selection', symbolId: symbol.id, presentation, force, expectedHash: editor.savedHash.value, startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column });
+}
+function explainInterfaceFile({ presentation, force = false }) {
+  interfaceSymbolId.value = '';
+  symbolPresentation.value = presentation;
+  if (!props.assistantAvailable || editor.dirty.value || editor.explanationBusy.value || editor.explanationClosing.value) return;
+  if (!force && currentInterpretation('file', '', presentation)) return;
+  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, '', presentation]);
+  interpretationAttempts.add(key);
+  const lines = editor.text.value.split('\n');
+  void editor.explainSelection({ scope: 'file', presentation, force, expectedHash: editor.savedHash.value, startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 });
+}
+watch(editor.selectedPath, () => { filePresentation.value = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value ? 'code' : 'interface'; interfaceSymbolId.value = ''; symbolPresentation.value = 'description'; });
+watch([interfaceSymbols, interfaceCurrent, () => props.openRequest], () => {
+  if (props.openRequest?.path !== editor.selectedPath.value || !interfaceCurrent.value) return;
+  const requested = interfaceSymbols.value.find(symbol => symbol.id === props.openRequest.symbolId || (props.openRequest.symbol && (symbol.qualifiedName === props.openRequest.symbol || symbol.name === props.openRequest.symbol)));
+  if (requested && requested.id !== interfaceSymbolId.value) selectInterfaceSymbol(requested.id);
+});
+watch([editor.loadedVersion, editor.savedHash, editor.loadingFile, editor.explanationBusy, editor.explanationClosing, interfaceSymbolId, symbolPresentation, filePresentation, () => props.active, () => props.assistantAvailable], () => {
+  if (!props.active || filePresentation.value !== 'interface' || editor.loadingFile.value || !editor.selectedPath.value || editor.dirty.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value || symbolPresentation.value === 'code') return;
+  const id = interfaceSymbolId.value;
+  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, id, symbolPresentation.value]);
+  if (interpretationAttempts.has(key) || currentInterpretation(id ? 'selection' : 'file', id, symbolPresentation.value)) return;
+  if (id) presentInterfaceSymbol(symbolPresentation.value);
+  else explainInterfaceFile({ presentation: symbolPresentation.value });
+}, { flush: 'post' });
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
 const imagePreviewStatus = ref("loading");
 const imagePreviewVersion = ref(0);
@@ -1290,6 +1399,8 @@ function createEditor() {
       doc: editor.text.value,
       extensions: [
         editorPerformanceSetup,
+        EditorState.readOnly.of(props.singleFile),
+        EditorView.editable.of(!props.singleFile),
         sourcePathClickExtension,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
         lineWrappingCompartment.of(sourceEditorLineWrappingExtension(editor.selectedPath.value)),
@@ -1393,7 +1504,7 @@ function applyCursorRequest() {
     },
     scrollIntoView: true
   });
-  editorView.focus();
+  if (filePresentation.value === "code") editorView.focus();
 }
 
 function runEditorCommand(command = "") {
@@ -1524,6 +1635,8 @@ watch(editor.loadingPath, (filePath) => {
 
 watch(() => props.openRequest, (request = null) => {
   if (request?.path) {
+    if (request.path === editor.selectedPath.value && request.presentation === "code") showWholeFileCode();
+    if (request.presentation === "interface") filePresentation.value = "interface";
     editor.openRequest(request);
   }
 }, {

@@ -19,9 +19,11 @@ function registerRoutes(
 
   for (const [method, suffix, operation, summary] of [
     ["GET", "subsystems", "subsystems.read", "Read authored subsystem responsibilities and operation/data associations."],
+    ["GET", "architecture", "architecture.read", "Read the compact neutral architecture snapshot for an active session."],
     ["GET", "status", "status.read", "Read Genesis Machine and Program City availability for an active session."],
     ["GET", "cities/machine", "machine.read", "Read the native Genesis Machine City for an active session."],
     ["GET", "cities/program", "program.read", "Read the native Genesis Program City for an active session."],
+    ["POST", "refresh/cancel", "refresh.cancel", "Cancel this source architecture analysis and await cleanup."],
     ["POST", "refresh", "refresh", "Synchronously refresh both Genesis Cities for an active session."]
   ]) routes.actionRoute(method, `${sessionRoute}/${suffix}`, {
     actionId: `vibe64.system-graph.${operation}`,

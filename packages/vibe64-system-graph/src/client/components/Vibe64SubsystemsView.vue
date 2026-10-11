@@ -17,23 +17,6 @@
           </p>
         </div>
       </div>
-      <v-btn-toggle
-        :model-value="view"
-        mandatory
-        divided
-        color="primary"
-        variant="outlined"
-        rounded="pill"
-        aria-label="Subsystem presentation"
-        @update:model-value="changeView"
-      >
-        <v-btn min-height="48" value="overview" :prepend-icon="mdiViewGridOutline">
-          Overview
-        </v-btn>
-        <v-btn min-height="48" value="city" :prepend-icon="mdiCityVariantOutline">
-          Map
-        </v-btn>
-      </v-btn-toggle>
       <v-btn
         min-height="48"
         :disabled="refreshing || subsystemLoading"
@@ -46,7 +29,7 @@
     </header>
 
     <div
-      v-if="view === 'overview' && subsystemLoading && !subsystemMap"
+      v-if="subsystemLoading && !subsystemMap"
       class="subsystems__loading"
       role="status"
       aria-label="Loading subsystems"
@@ -55,7 +38,7 @@
       <v-skeleton-loader type="list-item-two-line@6" />
       <v-skeleton-loader type="heading, paragraph, list-item-three-line@3" />
     </div>
-    <div v-else-if="view === 'overview' && subsystemError && !entries.length" class="subsystems__empty" role="alert">
+    <div v-else-if="subsystemError && !entries.length" class="subsystems__empty" role="alert">
       <v-icon :icon="mdiLayersTripleOutline" color="primary" size="48" />
       <h2 class="text-headline-small">
         The subsystem map needs attention
@@ -91,7 +74,7 @@
         </v-btn>
       </div>
     </div>
-    <div v-else-if="!entries.length && view === 'overview'" class="subsystems__empty">
+    <div v-else-if="!entries.length" class="subsystems__empty">
       <v-avatar color="primary" variant="tonal" size="80">
         <v-icon :icon="mdiLayersTripleOutline" size="40" />
       </v-avatar>
@@ -111,19 +94,10 @@
         >
           Generate subsystem map with AI
         </v-btn>
-        <v-btn
-          min-height="48"
-          variant="text"
-          rounded="pill"
-          @click="changeView('city')"
-        >
-          Explore map
-        </v-btn>
       </div>
     </div>
-    <div v-else class="subsystems__body" :class="{ 'subsystems__body--city': view === 'city', 'subsystems__body--detail': detailOpen }">
+    <div v-else class="subsystems__body" :class="{ 'subsystems__body--detail': detailOpen }">
       <v-sheet
-        v-if="view === 'overview'"
         class="subsystems__catalog"
         rounded="xl"
         color="surface-light"
@@ -197,19 +171,9 @@
           </v-expansion-panels>
         </div>
       </v-sheet>
-      <Vibe64SystemWorldView
-        v-else
-        class="subsystems__city"
-        :active="active && view === 'city'"
-        :session-id="sessionId"
-        :resolve-request-url="resolveRequestUrl"
-        :restore-request="cityRestoreRequest"
-        @open-source-file="forwardSource"
-        @open-source-file-immersive="forwardSource"
-      />
 
       <v-sheet
-        v-if="selected && view === 'overview'"
+        v-if="selected"
         class="subsystems__detail-shell"
         rounded="xl"
         color="surface"
@@ -228,15 +192,6 @@
             All subsystems
           </v-btn>
           <v-spacer />
-          <v-btn
-            min-height="48"
-            :icon="mdiCityVariantOutline"
-            :disabled="!programCity?.districts?.some(district => district.id === `subsystem:${selected.id}`)"
-            variant="text"
-            aria-label="Show selected subsystem in Machine"
-            title="Show in map"
-            @click="showInCity"
-          />
           <v-btn
             min-height="48"
             :icon="mdiFileDocumentOutline"
@@ -474,7 +429,7 @@
         :disabled="refreshing"
         @click="subsystemError ? reload() : refresh()"
       >
-        {{ subsystemError ? 'Retry' : 'Refresh Cities' }}
+        {{ subsystemError ? 'Retry' : 'Refresh descriptions' }}
       </v-btn>
     </div>
   </section>
@@ -487,19 +442,16 @@ import {
   mdiArrowTopRight,
   mdiCheck,
   mdiChevronRight,
-  mdiCityVariantOutline,
   mdiCodeBraces,
   mdiDatabaseOutline,
   mdiFileDocumentOutline,
   mdiLayersTripleOutline,
   mdiMagnify,
-  mdiRefresh,
-  mdiViewGridOutline
+  mdiRefresh
 } from "@mdi/js";
 import { useVibe64DatabaseTools } from "@local/vibe64-database-tools/client";
 import { useVibe64SystemGraph } from "../composables/useVibe64SystemGraph.js";
 import { subsystemEntries } from "../subsystemsModel.js";
-import Vibe64SystemWorldView from "./Vibe64SystemWorldView.vue";
 const props = defineProps({
   assistantAvailable: {
     type: Boolean,
@@ -539,7 +491,6 @@ const {
   reloadVersion: toRef(props, "reloadVersion"),
   sessionId: toRef(props, "sessionId")
 });
-const view = ref("overview");
 const search = ref("");
 const selectedId = ref("");
 const detailPane = ref(null);
@@ -556,7 +507,6 @@ watch(selectedId, () => {
   descriptionExpanded.value = false;
   detailTab.value = "operations";
 });
-const cityRestoreRequest = ref(null);
 const hasData = computed(() => subsystemMap.value?.subsystems?.some(entry => entry.dataOwned.length || entry.dataUsed.length));
 const {
   state: databaseState,
@@ -596,8 +546,9 @@ const dataGroups = [{
 }];
 function returnContext() {
   return {
-    subsystemView: view.value,
-    subsystemId: view.value === "overview" || detailOpen.value ? selected.value?.id || "" : ""
+    subsystemView: "overview",
+    subsystemId: selected.value?.id || "",
+    detailTab: detailTab.value
   };
 }
 function openSource(path) {
@@ -632,23 +583,10 @@ async function selectSubsystem(id, event) {
   detailPane.value?.scrollTo({ top: 0 });
   detailHeading.value?.focus({ preventScroll: true });
 }
-function changeView(value) {
-  view.value = value;
-  detailOpen.value = false;
-}
 async function closeDetail() {
   detailOpen.value = false;
   await nextTick();
   detailTrigger?.focus();
-}
-function showInCity() {
-  view.value = "city";
-  detailOpen.value = false;
-  cityRestoreRequest.value = {
-    cityKind: "machine",
-    selectedSubsystemId: `subsystem:${selected.value.id}`,
-    sequence: Date.now()
-  };
 }
 async function reloadAll() {
   await Promise.all([reload(), reloadDatabase()]);
@@ -659,17 +597,14 @@ watch(() => props.sessionId, () => {
   descriptionExpanded.value = false;
   detailTab.value = "operations";
   search.value = "";
-  view.value = "overview";
-  cityRestoreRequest.value = null;
 });
 watch(() => props.restoreRequest, request => {
   if (!request) return;
   if (request.subsystemId) {
     selectedId.value = request.subsystemId;
     detailOpen.value = true;
+    nextTick(() => { detailTab.value = request.detailTab === 'data' ? 'data' : 'operations'; });
   }
-  if (request.subsystemView) view.value = request.subsystemView;
-  cityRestoreRequest.value = request;
 }, {
   immediate: true
 });
@@ -822,16 +757,7 @@ watch(() => props.restoreRequest, request => {
   display: none;
 }
 
-.subsystems__body--city {
-  display: block;
-  padding: 0;
-}
 
-.subsystems__city {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
 
 .subsystems__loading {
   display: grid;
@@ -908,9 +834,6 @@ watch(() => props.restoreRequest, request => {
   }
   .subsystems__detail {
     padding: 16px 20px 24px;
-  }
-  .subsystems__body--city {
-    padding: 0;
   }
   .subsystems__loading {
     grid-template-columns: 1fr;

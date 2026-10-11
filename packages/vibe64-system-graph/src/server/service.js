@@ -1,7 +1,15 @@
 import {
   inspectGenesisSubsystems,
+  inspectVibe64ArchitectureInspection,
+  inspectVibe64ArchitectureLayout,
+  mergeArchitectureObservations,
   refreshGenesisCities
 } from "@local/vibe64-genesis/server";
+import { lstat } from "node:fs/promises";
+import path from "node:path";
+import { runVibe64Command } from "@local/vibe64-execution/server";
+import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
+import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   normalizeText,
   pathExists,
@@ -23,7 +31,7 @@ import {
 function systemResult(operation) {
   return vibe64Result(operation, {
     fallbackCode: "vibe64_system_graph_failed",
-    fallbackMessage: "Vibe64 City operation failed."
+    fallbackMessage: "Vibe64 architecture operation failed."
   });
 }
 
@@ -85,6 +93,10 @@ function settledCityStatus(result, kind) {
 function createService({
   cityReader = readGenesisCity,
   subsystemReader = inspectGenesisSubsystems,
+  inspectorReader = inspectVibe64ArchitectureInspection,
+  layoutReader = inspectVibe64ArchitectureLayout,
+  runCommand = runVibe64Command,
+  runtimeReader = vibe64RuntimePacks,
   projectService,
   refresher = refreshGenesisCities
 } = {}) {
@@ -94,6 +106,7 @@ function createService({
   if (typeof cityReader !== "function" || typeof refresher !== "function") {
     throw new TypeError("createService requires Genesis City reader and refresher functions.");
   }
+  const refreshes = new Map();
 
   async function systemContext(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
@@ -107,13 +120,15 @@ function createService({
     const sourceRoot = sessionSourcePath(session);
     if (!sourceRoot || !await pathExists(sourceRoot)) {
       throw systemError(
-        "Create the active session source before opening City.",
+        "Create the active session source before opening Architecture.",
         "vibe64_system_source_unavailable",
         { sessionId: normalizedSessionId }
       );
     }
     return {
       sessionId: normalizedSessionId,
+      session,
+      runtime,
       sourceRoot
     };
   }
@@ -161,17 +176,110 @@ function createService({
       return systemResult(() => readCity(input.sessionId, "machine"));
     },
 
+    async readArchitecture(input = {}) {
+      return systemResult(async () => {
+        const context = await systemContext(input.sessionId);
+        const record = await cityReader(context.sourceRoot, "machine");
+        const machine = requireGenesisCity(record, "machine");
+        const native = machine.architecture;
+        const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === 'source').map(file => [file.id, file]));
+        // Stack supplies application entry identity; the renderer never guesses
+        // server/main filenames. Reading declarations executes no inspector.
+        let inspection = null;
+        let layout = null;
+        let layoutDiagnostic = '';
+        let entryPointDiagnostic = '';
+        if (native) {
+          try { inspection = await inspectorReader({ projectRoot: context.sourceRoot }); }
+          catch (error) { entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`; }
+          try { layout = await layoutReader({ projectRoot: context.sourceRoot }); }
+          catch (error) { layoutDiagnostic = `Architecture layout needs attention: ${error.message}`; }
+        }
+        const entryPaths = [...new Set((inspection?.inspectors || []).flatMap(inspector => inspector.entryFiles || []))];
+        const entryPoints = entryPaths.map(file => {
+          const source = native.files.find(candidate => candidate.path === file);
+          return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
+        });
+        // The complete native artifact remains available to existing callers.
+        // This view needs file ownership, public interfaces and source edges.
+        const architecture = native ? {
+          ...native,
+          layout,
+          layoutDiagnostic,
+          entryPoints,
+          entryPointStatus: inspection?.status || 'unconfigured',
+          entryPointDiagnostic,
+          files: native.files.map(file => {
+            const metrics = sourceMetrics.get(file.id);
+            const lines = metrics?.hash === file.hash && Number.isSafeInteger(metrics.lines) && metrics.lines >= 0 ? metrics.lines : null;
+            return { id: file.id, path: file.path, title: file.title, language: file.language, hash: file.hash, lines: file.lines, sourceLines: lines, analysis: file.analysis, subsystemId: file.subsystemId };
+          }),
+          symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(symbol => ({ id: symbol.id, fileId: symbol.fileId, name: symbol.name, qualifiedName: symbol.qualifiedName, kind: symbol.kind, visibility: symbol.visibility, visibilityScope: symbol.visibilityScope, parameters: symbol.parameters, returnType: symbol.returnType, start: symbol.start, end: symbol.end, rangeAvailable: symbol.rangeAvailable })),
+          relations: native.relations.map(relation => ({ id: relation.id, fromFileId: relation.fromFileId, targetFileId: relation.targetFileId, targetPackageId: relation.targetPackageId, importPath: relation.importPath, kind: relation.kind, typeOnly: relation.typeOnly, specifier: relation.specifier, resolution: relation.resolution, reason: relation.reason, evidence: relation.evidence, importedNames: relation.importedNames, importedSymbolIds: relation.importedSymbolIds })),
+        } : null;
+        return { ok: true, architecture, legacy: !native };
+      });
+    },
+
     async readProgramCity(input = {}) {
       return systemResult(() => readCity(input.sessionId, "program"));
+    },
+
+    async cancelRefresh(input = {}) {
+      return systemResult(async () => {
+        const context = await systemContext(input.sessionId);
+        const pending = refreshes.get(context.sourceRoot);
+        if (pending) { pending.controller.abort(); await pending.done; }
+        return { ok: true, cancelled: pending?.cancelled === true, completed: Boolean(pending && !pending.cancelled) };
+      });
     },
 
     async refresh(input = {}) {
       return systemResult(async () => {
         const context = await systemContext(input.sessionId);
-        const result = await refresher({
-          projectRoot: context.sourceRoot,
-          write: true
-        });
+        if (refreshes.has(context.sourceRoot)) throw systemError("Architecture analysis is already running for this source.", "vibe64_architecture_refresh_busy");
+        const controller = new AbortController();
+        let complete;
+        const pending = { controller, cancelled: false, done: new Promise(resolve => { complete = resolve; }) };
+        refreshes.set(context.sourceRoot, pending);
+        try {
+          const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
+            const current = await systemContext(context.sessionId);
+            const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
+            if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
+            let observations;
+            if (inspection.inspectors?.length) {
+              const initial = await refresher({ projectRoot: current.sourceRoot, write: false, signal: controller.signal });
+              if (!initial.machine?.architecture) throw systemError("Update the Genesis compiler before inspecting architecture.", "vibe64_architecture_compiler_unavailable");
+              const request = `${JSON.stringify({ schema: "vibe64.architecture-inspection-input.v1", files: initial.machine.architecture.files.map(file => ({ path: file.path, hash: file.hash })), packages: (initial.machine.architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({ id, name, manifest, declarations, root, opaque, entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file })) })), packageIdentity: initial.machine.architecture.packageIdentity, uiDiscovery: initial.machine.architecture.uiDiscovery, stackHash: inspection.stackHash })}\n`;
+              if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+              const documents = [];
+              for (const inspector of inspection.inspectors) {
+                if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+                const runtime = runtimeReader(inspector.runtimeRequirements);
+                if (!runtime.available) throw systemError(runtime.disabledReason, "vibe64_architecture_runtime_unavailable");
+                for (const directory of ["", ...(inspector.workdir === "." ? [] : inspector.workdir.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')))]) {
+                  const info = await lstat(path.join(current.sourceRoot, directory));
+                  if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
+                }
+                const [command, ...args] = inspector.argv;
+                const execution = await runCommand({ actor: "app", allowedRoots: [current.sourceRoot], command, args, cwd: path.resolve(current.sourceRoot, inspector.workdir), mode: "capture", purpose: "source", envPolicy: "project", env: await projectService.projectInspectionEnvironment({ sessionId: current.sessionId }), project: await projectService.readCurrentProject(), session: current.session, runtimes: runtime.runtimes, input: request, maxBuffer: inspector.maxBuffer, timeout: inspector.timeout, signal: controller.signal });
+                if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+                if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed. Check its command output and retry.`, "vibe64_architecture_inspector_failed");
+                if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
+                let document;
+                try { document = JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
+                documents.push(document);
+              }
+              observations = mergeArchitectureObservations(documents, { files: initial.machine.architecture.files, packages: initial.machine.architecture.packages || [] });
+              const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
+              if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
+            }
+            if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+            return refresher({ projectRoot: current.sourceRoot, write: true, ...(observations ? { observations } : {}), signal: controller.signal });
+          }, { operation: "architecture-refresh" });
+          if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+          const result = exclusive.value;
         const machine = validateGenesisCity(result?.machine, "machine");
         const program = validateGenesisCity(result?.program, "program");
         return {
@@ -185,6 +293,10 @@ function createService({
           status: normalizeText(result.status) || "ready",
           summary: normalizeText(result.summary)
         };
+        } catch (error) {
+          if (controller.signal.aborted) { pending.cancelled = true; throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled"); }
+          throw error;
+        } finally { refreshes.delete(context.sourceRoot); complete(); }
       });
     }
   });

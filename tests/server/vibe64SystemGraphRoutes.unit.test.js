@@ -17,7 +17,7 @@ import {
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
-test("System graph exposes only native Genesis City status, reads, and synchronous refresh", async () => {
+test("System graph retains native reads and refresh and authorizes Architecture read and cancellation", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
       const calls = [];
@@ -25,6 +25,8 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
       let allowed = true;
       const service = Object.fromEntries([
         "readSubsystems",
+        "readArchitecture",
+        "cancelRefresh",
         "readStatus",
         "readMachineCity",
         "readProgramCity",
@@ -57,6 +59,8 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
       const routes = [
         ["GET", "/subsystems", "readSubsystems", "subsystems.read"],
         ["GET", "/status", "readStatus", "status.read"],
+        ["GET", "/architecture", "readArchitecture", "architecture.read"],
+        ["POST", "/refresh/cancel", "cancelRefresh", "refresh.cancel"],
         ["GET", "/cities/machine", "readMachineCity", "machine.read"],
         ["GET", "/cities/program", "readProgramCity", "program.read"],
         ["POST", "/refresh", "refresh", "refresh"]
@@ -91,8 +95,8 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
         await assert.rejects(execute({ projectSlug: slug }), { code: "ACTION_VALIDATION_FAILED" });
         await assert.rejects(execute({ projectSlug: slug, sessionId: "session-1", vibe64User: { role: "owner" } }), { code: "ACTION_VALIDATION_FAILED" });
       }
-      assert.equal(calls.length, 10);
-      assert.equal(app.registeredRoutes.length, 5);
+      assert.equal(calls.length, 14);
+      assert.equal(app.registeredRoutes.length, 7);
     });
   });
 });

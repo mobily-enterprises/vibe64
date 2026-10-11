@@ -28,7 +28,8 @@ function cityAvailable(status = {}, kind = "") {
 function useVibe64SystemGraph({
   active = true,
   reloadVersion = 0,
-  sessionId = ""
+  sessionId = "",
+  projection = "native"
 } = {}) {
   const paths = usePaths();
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
@@ -38,44 +39,50 @@ function useVibe64SystemGraph({
   }));
   const sessionPath = computed(() => systemSessionPath(apiPath.value, normalizedSessionId.value));
 
+  // Retained readers share query keys. Their endpoints must stay identical;
+  // enabled suspends loading without replacing the shared fetcher's path.
   const statusResource = useEndpointResource({
     enabled,
-    fallbackLoadError: "Genesis City status could not be loaded.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/status` : ""),
+    fallbackLoadError: "Architecture index status could not be loaded.",
+    path: computed(() => `${sessionPath.value}/status`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "status")),
-    requestRecoveryLabel: "Genesis City status"
+    requestRecoveryLabel: "Architecture index status"
   });
   const systemStatus = computed(() => statusResource.data.value || {});
-  const machineEnabled = computed(() => enabled.value && cityAvailable(systemStatus.value, "machine"));
-  const programEnabled = computed(() => enabled.value && cityAvailable(systemStatus.value, "program"));
+  const machineEnabled = computed(() => enabled.value && projection === "native" && cityAvailable(systemStatus.value, "machine"));
+  const programEnabled = computed(() => enabled.value && projection === "native" && cityAvailable(systemStatus.value, "program"));
 
   const machineResource = useEndpointResource({
     enabled: machineEnabled,
-    fallbackLoadError: "Machine City could not be loaded.",
-    path: computed(() => machineEnabled.value ? `${sessionPath.value}/cities/machine` : ""),
+    fallbackLoadError: "Source facts could not be loaded.",
+    path: computed(() => `${sessionPath.value}/cities/machine`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "machine-city")),
-    requestRecoveryLabel: "Machine City"
+    requestRecoveryLabel: "Source facts"
   });
+  const architectureEnabled = computed(() => enabled.value && projection === "architecture" && cityAvailable(systemStatus.value, "machine"));
+  const architectureResource = useEndpointResource({ enabled: architectureEnabled, path: computed(() => `${sessionPath.value}/architecture`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "architecture")), fallbackLoadError: "Architecture could not be loaded.", requestRecoveryLabel: "Architecture" });
   const programResource = useEndpointResource({
     enabled: programEnabled,
-    fallbackLoadError: "Program City could not be loaded.",
-    path: computed(() => programEnabled.value ? `${sessionPath.value}/cities/program` : ""),
+    fallbackLoadError: "Program descriptions could not be loaded.",
+    path: computed(() => `${sessionPath.value}/cities/program`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "program-city")),
-    requestRecoveryLabel: "Program City"
+    requestRecoveryLabel: "Program descriptions"
   });
   const refreshResource = useEndpointResource({
     enabled: false,
-    fallbackSaveError: "Genesis Cities could not be refreshed.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/refresh` : ""),
+    fallbackSaveError: "Architecture analysis could not be refreshed.",
+    path: computed(() => `${sessionPath.value}/refresh`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "refresh")),
-    requestRecoveryLabel: "Refresh Genesis Cities",
+    requestRecoveryLabel: "Refresh architecture analysis",
     writeMethod: "POST"
   });
+
+  const cancelResource = useEndpointResource({ enabled: false, path: computed(() => `${sessionPath.value}/refresh/cancel`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, 'refresh-cancel')), writeMethod: 'POST', fallbackSaveError: 'Architecture cancellation could not be confirmed.' });
 
   const subsystemResource = useEndpointResource({
     enabled,
     fallbackLoadError: "Subsystems could not be loaded.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/subsystems` : ""),
+    path: computed(() => `${sessionPath.value}/subsystems`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "subsystems")),
     requestRecoveryLabel: "Subsystems"
   });
@@ -83,12 +90,15 @@ function useVibe64SystemGraph({
   const machineCity = computed(() => machineResource.data.value?.city || null);
   const programCity = computed(() => programResource.data.value?.city || null);
   const loading = computed(() => Boolean(
+    architectureResource.isLoading.value ||
     statusResource.isLoading.value ||
     machineResource.isLoading.value ||
     programResource.isLoading.value
   ));
   const error = computed(() => (
+    cancelResource.saveError.value ||
     refreshResource.saveError.value ||
+    architectureResource.loadError.value ||
     statusResource.loadError.value ||
     machineResource.loadError.value ||
     programResource.loadError.value ||
@@ -99,6 +109,7 @@ function useVibe64SystemGraph({
     if (!enabled.value) return;
     await Promise.all([statusResource.reload(), subsystemResource.reload()]);
     const cityLoads = [];
+    if (architectureEnabled.value) cityLoads.push(architectureResource.reload());
     if (machineEnabled.value) {
       cityLoads.push(machineResource.reload());
     }
@@ -117,12 +128,14 @@ function useVibe64SystemGraph({
   }, { immediate: true });
 
   async function refresh() {
-    const result = await refreshResource.save({}, { method: "POST" });
+    const result = await refreshResource.save({}, { method: "POST", timeoutMs: 10 * 60 * 1000 });
     await reload();
     return result;
   }
 
   return {
+    architecture: computed(() => architectureResource.data.value?.architecture || null),
+    cancelRefresh: () => cancelResource.save({}, { method: "POST" }),
     error,
     loading,
     machineCity,

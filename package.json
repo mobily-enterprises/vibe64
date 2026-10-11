@@ -72,7 +72,8 @@
     "dev:home": "VITE_SURFACE=home vite",
     "jskit:update": "npx --yes @jskit-ai/jskit-catalog@latest update",
     "jskit:check": "jskit check",
-    "pack:release": "node ./tooling/release/pack-release.mjs"
+    "pack:release": "node ./tooling/release/pack-release.mjs",
+    "test:client:file": "node tooling/run-targeted-client-tests.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",

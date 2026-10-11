@@ -759,7 +759,7 @@ existing project/session query reservations, without a separate persisted tracke
 
 ## `understanding` Project understanding
 
-Owns presenting Genesis explanations, authored subsystems and source Cities.
+Owns presenting Genesis explanations, authored subsystems and source associations.
 System Graph reads and refresh share named actions and actor/project authority
 across HTTP and direct callers; coding conversations own engineering investigation.
 

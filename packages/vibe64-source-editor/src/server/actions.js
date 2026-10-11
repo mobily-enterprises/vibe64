@@ -20,6 +20,10 @@ const selection = {
   path: { ...filePath, required: true }, startLine: { type: "integer", min: 1, required: true },
   startColumn: { type: "integer", min: 1, required: false }, endLine: { type: "integer", min: 1, required: true },
   endColumn: { type: "integer", min: 1, required: false },
+  presentation: { type: "string", enum: ["description", "steps"], required: false },
+  symbolId: { ...text, minLength: 1, maxLength: 4096 },
+  expectedHash: { ...text, minLength: 64, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  scope: { type: "string", enum: ["file", "selection"], required: false },
   force: { type: "boolean", defaultTo: false, required: false }, originId: text
 };
 

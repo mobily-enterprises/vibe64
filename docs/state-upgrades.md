@@ -1090,3 +1090,30 @@ inputs still require the exact qualified historical producer and every native
 proof. The original numbered script files are immutable and unchanged; this
 separate appended entry records the shared-owner correction. No current binding,
 message, account or native file is changed by the applicability no-op.
+
+## Source explanation presentation
+
+Optional informational file/declaration interpretations are new records under
+`source-editor/interpretations/` in private runtime state. Schema version 1 records
+retain the source hash, prompt revision, actor/project/session scope, presentation
+mode and verified Helper profile identity. Completed initial answers are saved
+atomically; follow-up chats do not replace them. Reads report current/stale status
+against actual saved source and guidance, without generation or historical
+backfills. Missing records need no migration; invalid records give regeneration
+guidance. No existing source, explanation history, cleanup ledger or Genesis
+Program is transformed. These records remain informational and are excluded from
+coding-agent context.
+
+New explicit interface requests may retain optional `sourceRange.presentation`
+(`description` or `steps`) and its versioned prompt identity in the original
+explanation record. Existing records without it remain valid and unchanged, with
+their original prompt/body/range/profile and cache meaning. Reads never stamp the
+field or regenerate historical answers. This additive new-write attribute needs
+no historical transformation or numbered repair. `expectedHash` is an ephemeral
+admission input, not authority to rewrite saved source or histories.
+New symbol explanations also carry optional `sourceRange.symbolId`, resolved
+against the current native index before generation. Existing explanation ranges
+without it retain ordinary selection/whole-file behavior. Reads preserve a
+present identity and do not infer one for old records. This additive attribute
+requires no historical transformation; the existing ephemeral explanation and
+durable cleanup lifetimes are unchanged.

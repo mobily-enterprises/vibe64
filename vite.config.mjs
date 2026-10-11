@@ -29,6 +29,7 @@ const clientEntry = (() => {
 export default defineConfig({
   resolve: {
     preserveSymlinks: true,
+    dedupe: ["vue"],
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url))
     }
@@ -64,6 +65,7 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
+    include: ["vue", "@vue-flow/core"],
     entries: [
       "index.html",
       "src/**/*.{js,ts,vue}"

@@ -869,6 +869,7 @@ describe("useVibe64SourceEditor", () => {
         }],
         model: "gpt-5.6-luna",
         sourceRange: {
+          symbolId: "symbol:app:start",
           endColumn: 12,
           endLine: 1,
           path: "src/app.js",
@@ -882,6 +883,7 @@ describe("useVibe64SourceEditor", () => {
     }]);
 
     await editor.explainSelection({
+      symbolId: "symbol:app:start",
       endColumn: 12,
       endLine: 1,
       scope: "selection",
@@ -893,6 +895,8 @@ describe("useVibe64SourceEditor", () => {
     const [url, options] = mocks.streamCalls[0];
     expect(url).toBe("/api/app/vibe64/sessions/session-1/source-editor/explanations/stream");
     expect(options.body).not.toHaveProperty("agentSettings");
+    expect(options.body.symbolId).toBe("symbol:app:start");
+    expect(editor.activeExplanation.value.sourceRange.symbolId).toBe("symbol:app:start");
     expect(editor).not.toHaveProperty("explanationAgentSettings");
     expect(editor).not.toHaveProperty("updateExplanationAgentSetting");
     expect(editor.activeExplanation.value.agentSettings).toBeNull();
