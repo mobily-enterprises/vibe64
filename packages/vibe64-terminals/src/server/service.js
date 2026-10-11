@@ -4004,8 +4004,15 @@ function createService({
       }
       const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId };
       const conversation = await mainConversations.open({ id: sessionId, context: current });
-      if (!context.runtime.learningScope || !context.runtime.learningTeaching) return conversation;
-      return Object.freeze({ ...conversation, async read(query) {
+      const browser = Object.freeze({ ...conversation, async inspectDelivery(input) {
+        const receipt = await conversation.inspectDelivery(input);
+        if (receipt?.status !== "unknown") return receipt;
+        const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
+        if (routed?.delivered === true) return conversation.inspectDelivery(input);
+        return routed?.status === "not-sent" ? routed : receipt;
+      } });
+      if (!context.runtime.learningScope || !context.runtime.learningTeaching) return browser;
+      return Object.freeze({ ...browser, async read(query) {
         const result = await conversation.read(query);
         const trainingQuestion = await context.runtime.learningTeaching.readQuestion({ runtime: context.runtime,
           sessionId, context: current, actions });

@@ -1031,3 +1031,64 @@ test("Router gets only the last three visible messages, preserving their order a
   };
   await f.service.send("session-1", request, f.context);
 });
+
+
+test("delivery inspection exposes the original failed-before-admission receipt without sending", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  await assert.rejects(f.service.send("session-1", request, { ...f.context,
+    onPromptSending: async () => { throw new Error("Initialize refused before query."); }
+  }), /Initialize refused/);
+  const saved = f.metadata.assistant_routing_request;
+  assert.equal(f.state().delivery, "failed");
+  assert.equal(Object.hasOwn(f.state(), "attemptedMessageId"), false);
+  const restarted = f.restart();
+  assert.deepEqual(await restarted.inspectDelivery("session-1", { messageId: request.messageId }, f.context), {
+    status: "not-sent", messageId: request.messageId, error: "Initialize refused before query."
+  });
+  assert.equal(f.metadata.assistant_routing_request, saved, "inspection does not repair historical state");
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
+  await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId, text: request.message });
+  assert.equal(await restarted.inspectDelivery("session-1", { messageId: request.messageId }, f.context), null,
+    "the coordinator cannot contradict an authored acceptance receipt");
+});
+
+test("failed delivery inspection keeps unmatched, attempted, live and foreign-owner receipts unknown", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  await assert.rejects(f.service.send("session-1", request, { ...f.context,
+    onPromptSending: async () => { throw new Error("Rejected before query."); }
+  }), /Rejected before query/);
+  const saved = f.state();
+  const inspected = () => f.restart().inspectDelivery("session-1", { messageId: request.messageId }, f.context);
+  for (const patch of [
+    { messageId: "other-request" }, { attemptedMessageId: request.messageId },
+    { helper: { conversationId: "retained-helper" } },
+    { followup: { messageId: "follow-up", message: "Continue" } },
+    { followup: { messageId: request.messageId, message: "Same-UUID continuation" } },
+    { stopped: true },
+    { submittedBy: { username: "different-owner", role: "owner" } }
+  ]) {
+    f.metadata.assistant_routing_request = JSON.stringify({ ...saved, ...patch });
+    assert.equal(await inspected(), null);
+  }
+  f.metadata.assistant_routing_request = JSON.stringify(saved);
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  assert.equal(await inspected(), null);
+  f.agent.sessionState = async () => ({ status: "working", turn: { active: false } });
+  assert.equal(await inspected(), null);
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.context.session.agentRuns = [{ active: true }];
+  assert.equal(await inspected(), null);
+  f.context.session.agentRuns = [{ state: "finalizing" }];
+  assert.equal(await inspected(), null);
+  f.context.session.agentRuns = [{ state: "completed", providerGoalStatus: "active", providerGoalThreadId: "thread", providerThreadId: "thread" }];
+  assert.equal(await inspected(), null);
+  f.context.session.agentRuns = [];
+  f.metadata.assistant_selection = JSON.stringify({ ...f.assignments.senior, modelId: "gpt-6-luna" });
+  assert.equal(await inspected(), null);
+  f.metadata.assistant_selection = JSON.stringify(saved.deliverySelection);
+  f.connections.set("codex:deepseek", { connectionIdentity: "replacement-account" });
+  await assert.rejects(inspected(), /selected AI connection changed/);
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
+});

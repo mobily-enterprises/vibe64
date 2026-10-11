@@ -61,7 +61,10 @@ A rejected **Steer** returns to the composer; **Retry** retains its request ID
 and any newer draft text. Steering arriving after a finished turn is failed,
 not **Check delivery**, and never becomes new work automatically. Use its
 **Cancel** or **Edit** recovery before deliberately sending new work. A genuinely
-lost receipt stays uncertain until the delivery check confirms it.
+lost receipt stays uncertain until the delivery check confirms it. If Vibe64 saved
+that this exact request failed before sending, or was definitely rejected, **Check
+delivery** confirms it was not sent and restores **Retry**, **Edit** and **Cancel**.
+Checking never sends it; **Retry** is a separate deliberate action.
 If OpenCode cannot confirm delivery, checking its status does not send the request
 again. An unavailable receipt remains uncertain; inspect the conversation before
 deciding what to send next. This also applies to steering instructions.

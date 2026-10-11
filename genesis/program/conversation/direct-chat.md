@@ -1149,6 +1149,12 @@ native-only acceptance does not create an authored row or borrow a native turn I
 An idle attempted changeover still recovers through its original owner, which
 writes the authored receipt before clearing the existing pending journal.
 Inspection rechecks authorization after native I/O and never resubmits a prompt.
+Main also consults the original routing inspector after an unknown native
+receipt. Its persisted failed delivery conclusion can report not-sent only for
+the exact original active UUID, without an attempted prompt, helper or running
+owner, and with the same submitter, selected destination and fresh account
+admission. Canonical acceptance wins first. Missing routing or continuity fields
+alone remain unknown; follow-up aliases cannot turn an earlier input into not-sent.
 
 Router's exact inactive-turn steering rejection uses the common
 `conversation_not_steerable` pre-admission code. The shared client retains a failed

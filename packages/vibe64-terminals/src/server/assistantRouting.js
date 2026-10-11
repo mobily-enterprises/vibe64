@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { readWorkPlan, manageWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
+import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
@@ -627,6 +628,27 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   function inspectDelivery(sessionId, { messageId }, options) {
     return exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
+      if (state?.messageId === messageId && activeMessage(state).messageId === messageId &&
+          state.delivery === "failed" && !state.followup && !state.stopped && !state.attemptedMessageId && !state.helper &&
+          !running.has(keyFor(sessionId, context))) {
+        // Failed is the original coordinator's persisted pre-dispatch or
+        // definite-rejection conclusion. Missing request metadata is not proof.
+        if (await context.runtime.store.conversationMessageIdExists(sessionId, messageId)) return null;
+        const actor = state.submittedBy;
+        if (!actor || (actor.id !== undefined ? actor.id !== context.vibe64User?.id
+          : !actor.username || actor.username !== context.vibe64User?.username)) return null;
+        const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+        const workflow = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
+        if (workflow && workflow !== state.workflowEngineId ||
+            !sameSelection(selection, state.observedSelection) && !sameSelection(selection, state.deliverySelection)) return null;
+        await validateDecision(context, state);
+        const native = await agent.sessionState(sessionId, context);
+        if (!native || native.ok === false || native.status === "working" || native.turn?.active || native.turn?.waitingForInput ||
+            native.pendingRequests?.length || native.terminal?.status === "running" ||
+            context.session.agentRuns?.some(run => run.active || vibe64AgentRunStateIsActive(run.state) ||
+              run.providerGoalStatus === "active" && run.providerGoalThreadId && run.providerGoalThreadId === run.providerThreadId)) return null;
+        return { status: "not-sent", messageId, error: state.error || "This request was not sent." };
+      }
       if (!state || activeMessage(state).messageId !== messageId && state.messageId !== messageId ||
           !["sending", "uncertain"].includes(state.delivery)) return null;
       return deliver(sessionId, context, state, Boolean(state.followup), true);
