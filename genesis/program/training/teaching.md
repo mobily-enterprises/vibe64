@@ -1155,6 +1155,15 @@ Core captures CONTROL identity. Core's projection remains unchanged; the
 Sessions grant and Main `learning.read` receive the authorized learner owner
 instead of losing it or falling back to another progress store.
 
+Codex registered native tool callbacks re-enter the provider preparation's existing
+captured CONTROL context after the finite practice admission returns. The shared
+SDK provider retains that host facility only on registered thread handlers;
+account-shared execution and the original thread/client/registration checks stay
+unchanged. Main still uses the accepted request's browser authority for each fresh
+learner/session/pin/native-turn check and action admission. No WRITE grant or
+practice preparation barrier spans the native turn. Managed shell-command
+environment callbacks remain a separate authority path.
+
 The internal teaching-context query still requires fresh WRITE eligibility for
 the exact learner, saved session, attempt and pin. It reads that grant in the
 resolver's captured CONTROL context, which cannot admit project effects. It does

@@ -26,4 +26,6 @@ The teacher must genuinely finish delivering the question before practical obser
 
 Main grades your actual explanation alongside the server's description of your completed practical actions. The Helper checks both against the saved lesson rubric; it cannot perform missing steps for you. A saved **needs-review** result grants no pass. Ask Main about the missing evidence and use a fresh independent question when reassessment is appropriate; retrying a completed submission does not grade it again.
 
+Main rechecks your current access to the saved lesson when it uses a teaching tool, including after Send has returned. If access or the lesson target changed, wait for the reported result and return to the intended saved lesson before asking Main to continue.
+
 Standalone Vibe64 uses its local learner/display scope and the original Colleague component. Hosted Vibe64 uses the signed-in person's authenticated scope. Local routed Colleague navigation is unavailable unless its composing host supplies the original navigation adapter; manual controls and supported server actions remain distinct. Voice is optional and does not replace the practical controls or your explanation.
