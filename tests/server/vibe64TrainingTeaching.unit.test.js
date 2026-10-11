@@ -706,7 +706,7 @@ async function mainTeachingFixture(t, { actionLearners = null } = {}) {
     return actions.execute({ actionId, input, context });
   }
   const admitted = await admit("ask-question", "Teach this lesson.");
-  return { ...f, main, runtime, sessionId, target, current, bound, actions, auth, controls, controller, helperCalls, tools, admit, execute, admitted };
+  return { ...f, main, runtime, sessionId, target, current, bound, actions, terminals, auth, controls, controller, helperCalls, tools, admit, execute, admitted };
 }
 
 async function deliveredMainQuestion(f) {
@@ -1003,7 +1003,7 @@ async function practiceMainPresentationFixture(t, options = {}) {
   const current = { browserAuthority: { sessionId, learningAttemptId: f.attemptId, actorId: "42", requestContext: {} } };
   const terminals = { async requireAssistantSelectionAccess() {} };
   const bound = main.bindConversation({ runtime, sessionId, actions, terminals, native: { async readTurn() { return {}; } } });
-  return { ...f, runtime, main, actions, current, bound, sessionId, scope, grant,
+  return { ...f, runtime, main, actions, terminals, current, bound, sessionId, scope, grant,
     source: sourcePath(root, sessionId) };
 }
 
@@ -1695,4 +1695,90 @@ test("Main cue completion binds its exact separate final carrier without changin
   assert.equal(cue.outputId, written.assistant.outputId);
   assert.equal(cue.turnId, f.admitted.turnId, "Cue acknowledgement still belongs to its initiating accepted input");
   assert.equal(f.notifications.at(-1).type, "configuration");
+});
+
+test("Main native presentation publication retains its captured Learning control namespace across every engine", async t => {
+  const { createSessionConversationBinding, publishMainConversationEvent } = await import("../../packages/vibe64-terminals/src/server/mainConversationBinding.js");
+  const { codexTerminalNamespace, opencodeTerminalNamespace, claudeTerminalNamespace } =
+    await import("../../packages/vibe64-terminals/src/server/terminalShared.js");
+  const { currentProjectRequestContext, currentProjectScopeKey, runWithProjectRequestContext,
+    runWithPracticeProjectContext, currentPracticeProjectScope, assertProjectEffectAdmission } =
+    await import("@local/vibe64-core/server/projectRequestContext");
+  for (const practice of [false, true]) {
+    const f = await (practice ? practiceMainPresentationFixture(t) : mainTeachingFixture(t));
+    const scope = f.runtime.learningScope;
+    const owner = {};
+    const ownerContext = { learningScope: scope, learningTeaching: f.main, vibe64User: f.actor,
+      ...(practice ? { slug: f.grant.project.slug, targetRoot: f.source, access: "write" } : {}) };
+    const before = await storedFiles(f.paths);
+    const transcript = await f.runtime.store.readConversationLog(f.sessionId);
+    for (const engine of ["codex", "opencode", "claude"]) {
+      const namespaceForSession = { codex: codexTerminalNamespace,
+        opencode: opencodeTerminalNamespace, claude: claudeTerminalNamespace }[engine];
+      let native;
+      const runtime = Object.create(f.runtime);
+      runtime.learningTeaching = { ...f.main, bindConversation(input) {
+        native = input.native;
+        return f.main.bindConversation(input);
+      } };
+      const publications = [], applicationEvents = [];
+      const session = await f.runtime.getSession(f.sessionId, { inspectSource: false });
+      const provider = { id: engine, async prepareConversationHost() {
+        return { namespace: `actual-main-${engine}`, context: { runtime, session, key: f.sessionId },
+          native: { messagePreparation: {}, owner: { applicationToolsSupported: true, readFinalAssistantResult() {} } },
+          state: {}, messageEnvironment: {},
+          publish(sessionId, event) {
+            const context = currentProjectRequestContext();
+            if (practice) {
+              assert.equal(currentPracticeProjectScope(owner).access, "control");
+              assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+            }
+            assert.deepEqual(context.vibe64User, f.actor);
+            assert.equal(context.learningScope, scope);
+            if (practice) {
+              assert.equal(context.slug, ownerContext.slug);
+              assert.equal(context.targetRoot, f.source);
+            }
+            return publishMainConversationEvent(namespaceForSession,
+              async (id, value) => applicationEvents.push({ sessionId: id, event: value }),
+              async value => publications.push(value), sessionId, event);
+          } };
+      } };
+      let expectedNamespace;
+      const open = async () => {
+        expectedNamespace = namespaceForSession(f.sessionId);
+        const binding = await createSessionConversationBinding(provider, f.sessionId,
+          { teachingActions: f.actions, teachingTerminals: f.terminals });
+        assert.ok(binding.applicationTools, engine);
+      };
+      if (practice) await runWithPracticeProjectContext(owner, ownerContext, open);
+      else await runWithProjectRequestContext(ownerContext, open);
+      const event = { type: "configuration" };
+      const foreign = { slug: "foreign-working", vibe64User: { id: "other-learner" } };
+      await runWithProjectRequestContext(foreign, async () => {
+        assert.equal(currentProjectScopeKey(), "project:foreign-working");
+        await native.notifyPresentation(event);
+        assert.deepEqual(currentProjectRequestContext(), foreign, "Publication restores the unrelated caller context");
+      });
+      await native.notifyPresentation(event);
+      assert.equal(currentProjectRequestContext(), null, "Publication restores the standalone caller context");
+      assert.deepEqual(publications, [1, 2].map(() => ({ namespace: expectedNamespace, sessionId: f.sessionId, event })), engine);
+      assert.deepEqual(applicationEvents, [1, 2].map(() => ({ sessionId: f.sessionId, event })), engine);
+      const standalone = [];
+      const fallbackProvider = { ...provider, async prepareConversationHost() {
+        return { ...await provider.prepareConversationHost(), publish(sessionId, value) {
+          standalone.push({ namespace: namespaceForSession(sessionId), sessionId, event: value });
+        } };
+      } };
+      const fallback = await createSessionConversationBinding(fallbackProvider, f.sessionId,
+        { teachingActions: f.actions, teachingTerminals: f.terminals });
+      assert.ok(fallback.applicationTools);
+      const standaloneNamespace = namespaceForSession(f.sessionId);
+      await runWithProjectRequestContext(foreign, () => native.notifyPresentation(event));
+      assert.deepEqual(standalone, [{ namespace: standaloneNamespace, sessionId: f.sessionId, event }],
+        "A binding opened without Project context retains the original standalone namespace");
+    }
+    assert.deepEqual(await storedFiles(f.paths), before, "Publication does not write learner state");
+    assert.deepEqual(await f.runtime.store.readConversationLog(f.sessionId), transcript, "Publication does not rewrite source/history");
+  }
 });

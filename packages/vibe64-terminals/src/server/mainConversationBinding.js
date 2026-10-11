@@ -7,6 +7,7 @@ import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from
 import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalSignals.js";
 import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-core/server/opencode-process";
 import { conversationRequestText } from "@jskit-ai/assistant-core/server/conversation";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection,
@@ -371,6 +372,7 @@ export async function createSessionConversationBinding(provider, sessionId, opti
   const teachingAvailable = (["codex", "opencode"].includes(engine) || engine === "claude" &&
     host.native.owner.applicationToolsSupported === true && typeof host.native.owner.readFinalAssistantResult === "function") &&
     runtime.learningScope && runtime.learningTeaching;
+  const teachingProjectContext = teachingAvailable ? captureProjectRequestContext() : null;
   let teaching;
   const bindTeaching = () => runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
       terminals: openingContext.teachingTerminals, native: {
@@ -383,7 +385,8 @@ export async function createSessionConversationBinding(provider, sessionId, opti
             return result ? structuredClone(result) : null;
           }
         } : {}),
-        notifyPresentation: event => host.publish(sessionId, event),
+        notifyPresentation: event => runWithProjectRequestContext(teachingProjectContext,
+          () => host.publish(sessionId, event)),
         ...(engine === "claude" ? {
           async readCompletedTurn({ threadId, turnId }) {
             const current = await host.state.read();

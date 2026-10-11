@@ -925,7 +925,12 @@ no account, progress, native process, new queue or durable journal is owned here
 A live generation getter preserves the original ACK-time consumer generation.
 
 Main's existing native binding publishes the same `configuration` invalidation
-through JSKIT's original conversation publisher and subscriber. That notification
+through JSKIT's original conversation publisher and subscriber. The binding captures
+Core's original Project control context and re-enters it only for this publication:
+native tool dispatch must retain the saved learner/attempt namespace rather than
+the shared provider's ambient context. Practice capture preserves its original
+actor and source while projecting effect admission to control; fresh teaching
+authorization and retired-binding checks remain unchanged. That notification
 refreshes its captured presentation resource even though the native-backed
 binding has no command facade. The selected receiver then uses the original
 navigation/cache/ACK coordination and exact Preview handle. It does not require

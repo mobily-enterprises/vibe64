@@ -48,7 +48,10 @@ When Main opens a lesson diagram, keep that same browser open until its operatio
 is confirmed. Main opens it in that lesson's **Presentation** pane; opening the
 Colleague drawer is not required. If the browser did not acknowledge navigation,
 keep the initiating conversation open and check its current status before
-requesting another operation. Stop or a replacement Learning conversation retires its old
+requesting another operation. If Main already finished with that failure, its
+message remains saved; read its result and your saved lesson progress before
+asking it to continue. Do not resend that completed message to recover navigation.
+Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
 
 The selected Learning conversation prepares the configured agent through the same
