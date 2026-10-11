@@ -1558,10 +1558,12 @@ The Program explains a capability, not each declaration. The file opens as a
 document: an empty Explanation field offers Generate explanation, and saved text
 appears directly with Update explanation. Selecting a callable expands its
 Pseudocode field inline with Generate pseudocode or Update pseudocode. Generated
-file explanations and function steps lead with Inputs and Outputs and use:
+function explanations describe applicable Inputs and Outputs and use:
 supplied parameters/configuration, useful returned data and operations, and how
 callers consume them. Source-evidenced defaults, live state, snapshots, awaitable
-results and observable effects remain distinct; missing contracts are explicit.
+results and observable effects remain distinct; missing real contracts are explicit.
+File overviews describe scope, responsibilities, parts and behavior without
+function input/output sections, including files containing callable exports.
 Changed explanation guidance marks saved interpretations out of date without
 starting a Helper request. No chat
 transcript or composer is embedded in these fields. Their progress, Stop and

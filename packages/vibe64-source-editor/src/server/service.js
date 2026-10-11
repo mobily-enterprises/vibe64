@@ -415,7 +415,7 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 function sourceEditorInterfacePromptVersion(presentation) {
-  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v3' : ':pseudocode-v3'}`;
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v5' : ':pseudocode-v5'}`;
 }
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
@@ -4136,6 +4136,7 @@ function sourceEditorExplanationPrompt({
   selectedText = ""
 } = {}) {
   const wholeFile = range.scope === "file";
+  const functionExplanation = range.scope === "selection" && range.presentation === "steps" && Boolean(range.symbolId);
   const inlineCode = isPlainObject(promptCode) ? promptCode : {};
   const codeLabel = normalizeText(inlineCode.label) || (wholeFile ? "File contents" : "Selected code");
   const codeNote = normalizeText(inlineCode.note);
@@ -4148,16 +4149,16 @@ function sourceEditorExplanationPrompt({
       : "The user selected a specific range. Explain that range first, then explain how it fits into the surrounding file and wider project.",
     "Use only the bounded source context supplied below. Do not inspect the repository, use tools, access the network, or edit files. Be explicit when you infer something from context.",
     ...(range.presentation ? [sourceExplanationGuidance({ presentation: range.presentation, scope: range.scope })] : []),
-    ...(range.presentation ? [
-      "The caller's inputs and practical outputs are essential. After the purpose sentence, include labelled **Inputs** and **Outputs and use** sections before describing internal behavior.",
-      "Inputs: name the parameters or configuration callers supply, their practical meaning and expected shape, and important required/optional distinctions, defaults or constraints evidenced by this code. For a file, cover its main callable exports; group related options instead of documenting every parameter.",
+    ...(functionExplanation ? [
+      "For a real callable or runtime data interface, the caller's inputs and practical outputs are essential. Include **Inputs** and **Outputs and use** only when each describes a meaningful interface established by this source; absent sections must be omitted, not filled with 'no runtime parameters' or 'does not return data'. Explain observable effects where useful, without disguising them as returned data.",
+      "When Inputs applies: name the parameters or runtime configuration callers supply, their practical meaning and expected shape, and important required/optional distinctions, defaults or constraints evidenced by this code. Group related options instead of documenting every parameter.",
       "Outputs and use: state what is actually returned and how callers use it. Name the useful returned fields and operations, what callers read or invoke and what those operations provide. Distinguish live state from snapshots, awaitable results and no useful return value when evidenced. Explain observable effects separately from returned data; merely saying 'returns an object', 'reactive state' or a type name is insufficient.",
-      "For components, services, values or types, explain the analogous incoming data and provided interface or observable result without inventing a function return. If a parameter contract, return shape or usage cannot be established from the supplied code, state that briefly rather than guessing. A tiny usage example is welcome only when its calls and member names are evidenced; do not invent callers or dependencies."
+      "If a parameter contract, return shape or usage cannot be established from the supplied code, state that briefly rather than guessing. A tiny usage example is welcome only when its calls and member names are evidenced; do not invent callers or dependencies."
     ] : []),
     range.presentation === "steps"
-      ? "Start with a short purpose statement, then the Inputs and Outputs and use sections, then **Steps** with at most 12 concise numbered steps, within 300 words total. Each step describes an action, decision, effect or return; include meaningful failure conditions in the step where they occur. Group related handlers or returned operations rather than writing an essay about each one. Prioritize the practical caller contract over internal implementation detail. Do not add introductory, API-intent or cache commentary."
+      ? `Start with a short purpose statement, ${functionExplanation ? 'explain the applicable input/output interface, then ' : ''}**Steps** with at most 12 concise numbered steps, within 300 words total. Each step describes an action, decision, effect or return; include meaningful failure conditions in the step where they occur. Group related handlers or returned operations rather than writing an essay about each one. Do not add introductory, API-intent or cache commentary.`
       : wholeFile && range.presentation === 'description'
-      ? "Write a readable file explanation in 150–250 words. Start with one sentence describing its purpose, then the Inputs and Outputs and use sections, then **Behavior** with at most 3 concise bullets for important effects, constraints and dependencies. Give the practical caller contract more space than implementation details. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
+      ? "Write a readable file overview in 150–250 words, using fewer words when the artifact is simple. Explain its scope, responsibilities, main parts, behavior and role in the surrounding system. Start with one purpose sentence, then use concise prose or at most 3 bullets for important behavior, configuration, effects, constraints and dependencies. Do not add Inputs or Outputs and use sections, even when the file contains callable exports; parameter and practical-return contracts belong only in function explanations. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
       : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
     "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
     `Return concise user-facing Markdown no longer than ${SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS.toLocaleString("en-US")} characters.`,

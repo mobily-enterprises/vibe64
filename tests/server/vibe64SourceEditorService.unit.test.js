@@ -269,16 +269,8 @@ test("interface explanations separate Description and Steps caches and reject ch
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /Do not emit pseudocode or pseudo-variables/u);
   assert.match(prompts[1], /numbered steps in English as pseudocode/u);
-  for (const prompt of prompts) {
-    assert.match(prompt, /labelled \*\*Inputs\*\* and \*\*Outputs and use\*\* sections/u);
-    assert.match(prompt, /name the parameters or configuration callers supply/u);
-    assert.match(prompt, /state what is actually returned and how callers use it/u);
-    assert.match(prompt, /Name the useful returned fields and operations/u);
-    assert.match(prompt, /Explain observable effects separately from returned data/u);
-    assert.match(prompt, /state that briefly rather than guessing/u);
-  }
+  for (const prompt of prompts) assert.doesNotMatch(prompt, /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
   assert.match(prompts[1], /\*\*Steps\*\* with at most 12 concise numbered steps/u);
-  assert.match(prompts[0], /The caller's inputs and practical outputs are essential/u);
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
   const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
   assert.equal(stale.ok, false);
@@ -449,6 +441,21 @@ test('file overviews use the whole saved file without an index, survive restart 
   assert.equal(generated, 3);
 });
 
+test('file overviews describe manifests without function input/output contracts', async t => {
+  const prompts = [];
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'package.json', text: '{"name":"example","exports":{".":"./src/app.js"}}' }], terminalService: {
+    async runEphemeralAgentChatTurn(_scope, input) {
+      prompts.push(input.prompt);
+      return { ok: true, text: structuredExplanation('Declares the package entry point.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-manifest', turnId: 'turn-manifest' };
+    }
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  assert.equal((await fixture.service.explainSelection({ sessionId: 'session-1', path: 'package.json', scope: 'file', presentation: 'description' })).ok, true);
+  assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
+  assert.match(prompts[0], /Do not add Inputs or Outputs and use sections/u);
+  assert.doesNotMatch(prompts[0], /state what is actually returned and how callers use it/u);
+});
+
 test('document explanations include every line within the byte budget and admit complete indexed long functions', async t => {
   const text = ['export function app() {', ...Array.from({ length: 300 }, (_, index) => `  observe(${index});`), '  return "middle-behavior";', '}'].join('\n');
   const prompts = [];
@@ -464,7 +471,9 @@ test('document explanations include every line within the byte budget and admit 
   assert.equal((await fixture.service.explainSelection(input)).ok, true);
   assert.ok(prompts[0].includes(text), 'file explanation receives the complete saved file, including its middle');
   assert.doesNotMatch(prompts[0], /File excerpt|lines omitted from the middle/u);
-  assert.match(prompts[0], /Give the practical caller contract more space than implementation details/u);
+  assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
+  assert.match(prompts[0], /Do not add Inputs or Outputs and use sections, even when the file contains callable exports/u);
+  assert.doesNotMatch(prompts[0], /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
   await writeCallableAnalysis(fixture, text);
   const indexPath = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
   const index = JSON.parse(await readFile(indexPath, 'utf8'));
@@ -473,6 +482,13 @@ test('document explanations include every line within the byte budget and admit 
   await writeFile(indexPath, JSON.stringify(index));
   assert.equal((await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', symbolId: 'symbol:app' })).ok, true);
   assert.ok(prompts[1].includes(text), 'indexed function receives its entire server-validated declaration');
+  assert.match(prompts[1], /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
+  assert.match(prompts[1], /absent sections must be omitted/u);
+  assert.match(prompts[1], /name the parameters or runtime configuration callers supply/u);
+  assert.match(prompts[1], /state what is actually returned and how callers use it/u);
+  assert.match(prompts[1], /Name the useful returned fields and operations/u);
+  assert.match(prompts[1], /Explain observable effects separately from returned data/u);
+  assert.match(prompts[1], /state that briefly rather than guessing/u);
   const selection = await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', startLine: 1, endLine: 302 });
   assert.equal(selection.statusCode, 413, 'ordinary unindexed selections retain their existing line limit');
   assert.equal(prompts.length, 2);
