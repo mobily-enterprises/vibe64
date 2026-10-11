@@ -415,7 +415,7 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 function sourceEditorInterfacePromptVersion(presentation) {
-  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v1' : ''}`;
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v2' : ''}`;
 }
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
@@ -3094,7 +3094,7 @@ function sourceEditorExplanationPromptCode({
   const text = String(selectedText || "");
   const lines = sourceEditorLines(text);
   if (
-    (range.scope !== "file" || lines.length <= SOURCE_EDITOR_EXPLANATION_MAX_LINES) &&
+    (range.scope !== "file" || range.presentation === 'description' || lines.length <= SOURCE_EDITOR_EXPLANATION_MAX_LINES) &&
     text.length <= SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS
   ) {
     return {
@@ -3190,7 +3190,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     throw sourceEditorError("Select code before asking for an explanation.", "vibe64_source_explanation_empty_selection");
   }
   const selectedLineCount = range.endLine - range.startLine + 1;
-  if (scope !== "file" && selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
+  if (scope !== "file" && symbolId === undefined && selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
     throw sourceEditorError("Select a smaller code range before asking for an explanation.", "vibe64_source_explanation_selection_too_large", {
       maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
       selectedLineCount
@@ -3207,7 +3207,8 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
   const promptCode = sourceEditorExplanationPromptCode({
     range: {
       ...range,
-      scope
+      scope,
+      presentation
     },
     selectedText
   });
@@ -4150,7 +4151,7 @@ function sourceEditorExplanationPrompt({
     range.presentation === "steps"
       ? "Start with a short purpose statement, then use numbered steps. Include meaningful failure conditions in the step where they occur."
       : wholeFile && range.presentation === 'description'
-      ? "Give a short file overview in 100–180 words: purpose, main operations, inputs and outputs, side effects and important dependencies. Explain observed behavior; distinguish inference and missing context. Omit generic introductions and empty sections."
+      ? "Write a readable file explanation in 80–140 words. Start with one sentence describing its purpose, then 3–5 concise bullets covering its main responsibilities, inputs/outputs, effects and important dependencies when evidenced. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
       : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
     "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
     `Return concise user-facing Markdown no longer than ${SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS.toLocaleString("en-US")} characters.`,

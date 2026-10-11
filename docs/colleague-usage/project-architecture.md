@@ -37,7 +37,7 @@ viewer needs no language or package-manager-specific controls.
    pointer. The circle grows and moves towards the centre together.
 2. At reading size it becomes a square on the same canvas. A faint circle remains
    behind it. A compact skeleton appears while the interface is prepared.
-3. **What this subsystem does** shows its owned Genesis Program capabilities.
+3. **Programs** shows its owned Genesis Program capabilities when present.
    Expand one to read its contract and follow its cited files. File icons also
    name the capabilities that cite them. Each Program explicitly names one main
    source in its owning subsystem. Its icon has a gold border, star and **Main · …**
@@ -52,8 +52,8 @@ viewer needs no language or package-manager-specific controls.
    Unknown return information is omitted from these compact rows; coverage
    remains explicit. Hover a shortened signature to read its complete text.
 4. Graphical **Files** appear below the interface as soon as the selected
-   subsystem's detail is ready. Scroll down to browse; there is no additional
-   Files view to open. Direct files appear before subdirectories at every level.
+   subsystem's detail is ready. Use the **Files** shortcut at the top to reach them immediately, or scroll down.
+   **Interface** and **Programs** jump to their sections in the same retained document. Direct files appear before subdirectories at every level.
    Open a folder's disclosure arrow; **Find a file** filters
    names and paths and exposes matching folders. File bars and icon heights
    compare measured source size within this subsystem. A dash means unavailable
@@ -65,14 +65,17 @@ viewer needs no language or package-manager-specific controls.
    file's interface opens inside the square. Selecting a subsystem signature
    likewise opens only its implementation file, with the requested declaration
    selected. The project-wide Files workspace does not open.
-6. Read **File exports**, **Explain file**, **Explain function** and symbol
-   **Code** controls. **Code · whole file** is read-only here; **Interface** returns
-   to declarations. **Part of …** links to the Program's main source; the authored
-   explanation appears there, without repeating it in supporting files. Explain function
-   asks the Helper for a short purpose statement and pseudocode on explicit request.
-   Explain file gives a cached overview without scanning the project. Both check
-   the saved source hash and regenerate after changes when requested.
-   Missing Helper or parser coverage remains explicit. See [Read file interfaces](file-interfaces.md).
+6. The file is a document with an **Explanation** field and **File exports**.
+   **Generate explanation** fills an empty field; **Update explanation** refreshes
+   saved text. Reopening displays the saved explanation directly, without a chat.
+   Select a callable signature to reveal its **Pseudocode** field and use
+   **Generate pseudocode**, **Update pseudocode** or **Code**. **Code · whole file**
+   is read-only here; **Interface** returns to the document. **Part of …** links to
+   the Program's main source, where its authored explanation appears. Helper
+   progress and **Stop** stay in the field while generation runs. These cached
+   interpretations check saved source and remain informational; they do not change
+   Genesis documents or enter the coding agent's context.
+   See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the
    enclosing views, or use the breadcrumb: **Engine → subsystem → file**.
    Inside the square, a mouse wheel, two-finger touchpad movement or a one-finger

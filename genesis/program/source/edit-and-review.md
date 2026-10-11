@@ -1550,15 +1550,20 @@ crate-restricted items. Symbol Code includes attached attributes/decorators and
 language declaration keywords; grouped values can share their exact declaration
 range. Public fields/properties/constants and types supplement callable symbols
 through the existing native index, while local declarations remain internal.
-A declaration offers explicit
-Explain function (a short purpose statement followed by informational English
-pseudocode), and exact Code. Supporting files show compact Part of links to
+A callable has a Pseudocode field (a short purpose statement followed by informational English
+steps), and exact Code. Supporting files show compact Part of links to
 the explicitly authored main source; only that anchor file contains the Program
 explanation and contract. Gold main-file icons distinguish it in the browser.
-The Program explains a capability, not each declaration. Explain file requests
-a short informational overview of the saved file without reading the project
-index or generating a subsystem responsibility. Explain function is also
-available beside each callable. Architecture → ⋯ → Re-scan project updates the
+The Program explains a capability, not each declaration. The file opens as a
+document: an empty Explanation field offers Generate explanation, and saved text
+appears directly with Update explanation. Selecting a callable expands its
+Pseudocode field inline with Generate pseudocode or Update pseudocode. No chat
+transcript or composer is embedded in these fields. Their progress, Stop and
+retry reuse the existing Helper lifecycle; an update retains preceding saved text.
+A file explanation reads the saved file without the project index or generating
+a subsystem responsibility. Entire files within the existing character budget
+are supplied, regardless of line count; validated indexed functions retain that
+character limit without the ordinary selection line cap. Architecture → ⋯ → Re-scan project updates the
 whole browsing index and shows its stage/elapsed time; it generates no
 explanation or Program text. The file view has no scan button. Program Sources identify
 participating files, not exact per-function intent. Whole-file Code preserves
@@ -1587,7 +1592,7 @@ initial answers are persisted atomically; follow-up conversations do not replace
 them. A forced refresh cannot be overwritten by an older completion. Reads can
 show current or explicitly stale saved text without starting a Helper. Opening
 files or selecting declarations does not query the Helper. The next explicit
-Explain file or Explain function request regenerates its stale answer; there is
+Generate/Update explanation or pseudocode request regenerates its stale answer; there is
 no background summary job. Only user-visible Helper progress classifications
 are forwarded during generation, followed by the validated final answer. These
 interpretations are not Program contracts or coding-agent context.

@@ -9,6 +9,7 @@ vi.mock('vuetify/components/VAlert', () => ({ VAlert: {
   inheritAttrs: false, setup: (_, { attrs, slots }) => () => Vue.h('aside', attrs, slots.default?.()),
 } }));
 import Interface from '../../src/components/studio/vibe64-session/Vibe64SourceInterface.vue';
+import Inspector from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue';
 import TreeBranch from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue';
 
 async function renderInterface(overrides = {}) {
@@ -29,7 +30,7 @@ it('scoped interfaces explain visibility and retain exact Code when no Helper is
   expect(html).toContain('Visibility: crate');
   expect(html).toContain('pub(crate) fn load() -&gt; &amp;str { &quot;😀&quot; }');
   expect(html).not.toContain('>Program context</button>');
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Generate pseudocode<\/button>/u);
   expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Code<\/button>/u);
   expect(html).toContain('Choose a Helper account.');
 });
@@ -66,12 +67,11 @@ it('saved function pseudocode remains readable without a Helper and stale source
   const record = { path: 'engine.rs', scope: 'selection', symbolId: 'load', presentation: 'steps', body: 'Reads a saved record and returns it.', summary: 'Reads a saved record.', fileHash: 'current', status: 'current' };
   const current = await renderInterface({ presentation: 'steps', fileHash: 'current', interpretations: [record] });
   expect(current).toContain('Reads a saved record and returns it.');
-  expect(current).toContain('Matches saved source');
-  expect(current).toContain('Informational interpretation');
+  expect(current).toContain('Saved · matches source');
   expect(current).not.toContain('>Program context</button>');
-  expect(current).toMatch(/<button[^>]*disabled[^>]*>Regenerate explanation<\/button>/u);
+  expect(current).toMatch(/<button[^>]*disabled[^>]*>Update pseudocode<\/button>/u);
   const stale = await renderInterface({ presentation: 'steps', fileHash: 'changed', interpretations: [record] });
-  expect(stale).toContain('Stale — source or guidance changed');
+  expect(stale).toContain('Out of date · source or guidance changed');
   expect(stale).toContain('Reads a saved record and returns it.');
 });
 
@@ -84,8 +84,8 @@ it('supporting files show membership only, without repeating the Program explana
   expect(html).not.toContain('Retains work on failure');
   expect(html).not.toContain('Main Program file');
   expect(html).not.toContain('>Program context</button>');
-  const missing = await renderInterface({ programStatus: 'valid', presentation: 'description' });
-  expect(missing).toContain('No authored explanation.');
+  const missing = await renderInterface({ programStatus: 'valid', presentation: 'description', assistantAvailable: true });
+  expect(missing).toContain('No explanation yet.');
 });
 
 it('only the explicitly designated main source carries the Program explanation', async () => {
@@ -102,30 +102,31 @@ it('only the explicitly designated main source carries the Program explanation',
 
 it('components and values offer Code without an inapplicable function-explanation button', async () => {
   const html = await renderInterface({ selectedId: 'view', symbols: [{ id: 'view', name: 'View', kind: 'component', rangeAvailable: true }] });
-  expect(html).not.toContain('>Explain function</button>');
+  expect(html).not.toContain('>Pseudocode</button>');
   expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Code<\/button>/u);
 });
 
 
 it('file explanations do not require a project index and never offer a whole-project scan', async () => {
   const html = await renderInterface({ current: false, indexed: false, assistantAvailable: true });
-  expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Explain file<\/button>/u);
+  expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Generate explanation<\/button>/u);
   expect(html).not.toContain('Re-scan project');
   expect(html).not.toContain('Scanning project');
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Generate pseudocode<\/button>/u);
   const dirty = await renderInterface({ dirty: true, assistantAvailable: true });
-  expect(dirty).toMatch(/<button[^>]*disabled[^>]*>Explain file<\/button>/u);
+  expect(dirty).toMatch(/<button[^>]*disabled[^>]*>Generate explanation<\/button>/u);
 });
 
 it('saved file overviews remain accessible without a Helper, separate from function pseudocode', async () => {
   const record = { path: 'engine.rs', scope: 'file', symbolId: '', presentation: 'description', body: 'Loads saved records and coordinates storage.', fileHash: 'current', status: 'current' };
   const cached = await renderInterface({ fileHash: 'current', interpretations: [record] });
-  expect(cached).toMatch(/<button(?![^>]*disabled)[^>]*>Explain file<\/button>/u);
-  expect(cached).toMatch(/<button[^>]*disabled[^>]*>Explain function<\/button>/u);
+  expect(cached).toMatch(/<button[^>]*disabled[^>]*>Update explanation<\/button>/u);
+  expect(cached).toContain(record.body);
+  expect(cached).toMatch(/<button[^>]*disabled[^>]*>Generate pseudocode<\/button>/u);
   const active = await renderInterface({ activeFileInterpretation: true, fileHash: 'changed', interpretations: [record] });
-  expect(active).toContain('File overview');
-  expect(active).toContain('Stale · source or guidance changed');
-  expect(active).toMatch(/<button[^>]*disabled[^>]*>Regenerate overview<\/button>/u);
+  expect(active).toContain('File explanation');
+  expect(active).toContain('Out of date');
+  expect(active).toMatch(/<button[^>]*disabled[^>]*>Update explanation<\/button>/u);
 });
 
 it('file icons distinguish the explicit main source from same-named and shared supporting files', async () => {
@@ -148,4 +149,32 @@ it('many memberships cannot bury the main marker or repeat capability bodies', a
   const icons = await renderToString(Vue.createSSRApp(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }] }));
   expect(icons.indexOf('Main ·')).toBeLessThan(icons.indexOf('Part of ·'));
   expect(icons).toContain('2 Programs');
+});
+
+
+it('the file document has one explanation field and never hides saved text behind a chat or opening button', async () => {
+  const empty = await renderInterface({ selectedId: '', assistantAvailable: true });
+  expect(empty).toContain('aria-label="File explanation"');
+  expect(empty).toContain('No explanation yet.');
+  expect(empty).toMatch(/<button(?![^>]*disabled)[^>]*>Generate explanation<\/button>/u);
+  const saved = await renderInterface({ selectedId: '', assistantAvailable: true, fileHash: 'now', interpretations: [{ path: 'engine.rs', scope: 'file', presentation: 'description', body: 'Coordinates record storage.', status: 'current', fileHash: 'now' }] });
+  expect(saved).toContain('Coordinates record storage.');
+  expect(saved).toMatch(/<button(?![^>]*disabled)[^>]*>Update explanation<\/button>/u);
+  expect(saved).not.toContain('Generate explanation');
+  expect(saved).not.toContain('Hide overview');
+  expect(saved).not.toContain('Regenerate overview');
+  expect(saved).not.toContain('<form');
+  expect(saved).not.toContain('Ask a follow-up');
+});
+
+
+it('subsystem reading offers Files immediately and omits an empty Program section', async () => {
+  const file = { id: 'file:app.py', path: 'app.py', sourceLines: 42 };
+  const outline = { owner: { id: 'directory:app', title: 'Application', root: 'app', description: 'Runs the application.' }, files: [file], programs: [], programStatus: 'valid', operations: [], publicEntries: [], publicSymbols: [], boundarySymbols: [], observedSymbols: [], availableSymbols: [], tree: [{ kind: 'file', id: file.id, name: 'app.py', file, reasons: [], volume: 1 }] };
+  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  expect(html).toContain('aria-label="In this subsystem"');
+  expect(html).toMatch(/<button[^>]*>Files <small[^>]*>1<\/small><\/button>/u);
+  expect(html).toContain('data-file-path="app.py"');
+  expect(html).not.toContain('No authored explanation');
+  expect(html).not.toContain('aria-label="Subsystem Program"');
 });

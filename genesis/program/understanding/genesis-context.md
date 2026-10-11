@@ -187,7 +187,9 @@ bars/heights compare measured source within the owner.
 
 Semantic zoom changes a circle into one square on the same sheet, retaining a
 faint circular backdrop. The square/skeleton paint before its detail prepares.
-Compact signatures precede grouped file icons with search, disclosures,
+Files, Interface and Programs shortcuts jump within the retained subsystem
+document; empty Program sections are omitted. Compact signatures precede
+grouped file icons with search, disclosures,
 name/type/size sorting, single-click/tap and keyboard access. Direct files
 precede folders at every level. Inspector and
 file browser stay mounted behind a file interface; the latest single-file
@@ -226,12 +228,14 @@ facts, avoiding another whole-index read for
 each file; standalone Files retains its existing graph resource. Hash checks
 still compare those facts against the freshly read source. Public signatures reach implementation declarations
 rather than the Files workspace. Existing hash checks, Helper admission and
-explanation caches supply Explain file, Explain function and exact Code. File
+explanation caches supply the document’s Explanation and Pseudocode fields,
+Generate/Update controls and exact Code. No chat transcript or composer appears
+in the file interface; discussion remains in the agent’s conversation. File
 overviews are on-demand, informational and hashed against the whole saved file;
 they do not require an index or replace authored Program text. Authored Program
 context appears at its main source; supporting files link there. Whole-file source
-is read-only. Missing return/parser/Helper evidence stays explicit. In narrow
-viewers the selected declaration precedes the symbol list.
+is read-only. Missing return/parser/Helper evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
+heading and detached detail card.
 The file view explains common definition kinds and distinguishes a file export
 from the subsystem's intended API. Missing-Helper status appears before selection,
 with disabled English modes and available whole-file Code stated directly.

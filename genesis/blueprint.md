@@ -1725,7 +1725,8 @@ inside the square. File icons retain directory nesting/search and source-size
 comparisons within their subsystem. Tight signature rows and compact headers
 preserve reading space. The existing single-file viewer retains signatures,
 recorded returns, authored Genesis Program descriptions, on-demand file overviews
-through Explain file, function purpose and pseudocode through Explain function,
+in an Explanation field with Generate/Update controls, function purpose and
+pseudocode in an inline Pseudocode field without an embedded chat,
 exact symbol Code and read-only whole-file Code. Generated interpretations are
 informational only, cached privately against actual saved source and guidance,
 and regenerated on the next explicit explanation request after changes. Opening a file or

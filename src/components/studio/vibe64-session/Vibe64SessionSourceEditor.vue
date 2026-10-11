@@ -493,8 +493,9 @@
             @whole-file-code="showWholeFileCode"
             @open-source="$emit('open-source-file', $event)"
           >
-            <template #explanation>
+            <template #explanation="{ savedBody }">
               <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation || activeFileInterpretation" embedded
+                :saved-body="savedBody"
                 :assistant-available="assistantAvailable" :assistant-unavailable-message="assistantUnavailableMessage"
                 :busy="editor.explanationBusy.value" :closing="editor.explanationClosing.value"
                 :explanation="editor.activeExplanation.value" :followup="editor.explanationFollowup.value" :selected-path="editor.selectedPath.value"
@@ -821,7 +822,7 @@ const interfaceSymbolSource = computed(() => {
   return selected.join('\n');
 });
 function showWholeFileCode() { filePresentation.value = 'code'; nextTick(() => { editorView?.requestMeasure(); editorView?.focus(); }); }
-function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'description'; }
+function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'steps'; }
 function currentInterpretation(scope, symbolId, presentation) {
   return editor.interpretations.value.find(record => record.path === editor.selectedPath.value && record.scope === scope && (record.symbolId || '') === symbolId && record.presentation === presentation && record.status === 'current' && record.fileHash === editor.savedHash.value);
 }

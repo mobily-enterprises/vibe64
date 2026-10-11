@@ -32,7 +32,7 @@ use **Dashboard → Files → Repo** to edit it. The Architecture viewer is read
 The anchor is the place to start reading, not necessarily an executable entry
 point. It belongs to the Program's owning subsystem; supporting files may be
 shared libraries elsewhere. These explanations describe the capability, not each
-individual function. **Explain file** provides a separate, informational overview of
+individual function. The **Explanation** field provides a separate, informational overview of
 the saved file; it does not edit Genesis Program or subsystem responsibilities.
 
 Genesis requires exactly one `- Main: \`project/relative/source\`` bullet in each
@@ -41,36 +41,39 @@ explicitly. After updating the documents, use **Re-scan project**. An older
 cached index without an anchor links to the Program document until re-scanned;
 the viewer never guesses a main file.
 
-Choose **Explain file** at the top to read a short overview of purpose, operations,
-inputs/outputs, effects and important dependencies. The first request uses the
-Helper; later requests reuse the saved overview while its source hash and guidance
-match. **Regenerate overview** requests a new one; **Hide overview** collapses it.
-A file overview needs no project index.
+The file opens as a document, with an **Explanation** field above its exports.
+An empty field offers **Generate explanation**. Press it to fill the field through
+the configured Helper. Saved text is shown automatically when you reopen the file;
+**Update explanation** replaces it with a newly generated answer. Existing text
+stays readable while an update runs. A short status marks an out-of-date answer.
+These explanations describe the saved file, not a chat transcript or an authored
+Genesis Program. A file explanation needs no project index.
 
-Choose **Explain function** beside a callable, or select it and use its detail
-button, for a short purpose statement followed by function-specific pseudocode
-through the same Helper. Merely
-opening a file or selecting a signature makes no Helper query. The explanation
-describes meaningful decisions, data flow,
-effects and failures in English. **Code** displays that declaration's exact source
-range. Components, values and types offer Code; generated
-function explanations are unavailable for non-callable declarations. **Code · whole file** opens the
-existing source view; **Interface** returns to declarations. Controls work on
-both desktop and mobile.
+Select a callable signature to reveal its **Pseudocode** field directly beneath
+that signature. **Generate pseudocode** fills it with a purpose statement and
+English steps. A saved answer appears when that declaration is selected;
+**Update pseudocode** regenerates it. **Code** shows the exact declaration; **Pseudocode** returns to saved steps without generating again.
+Components, values and types offer Code without an inapplicable pseudocode field.
+**Code · whole file** opens the source view; **Interface** returns to the document.
+Opening a file or selecting a signature makes no Helper query.
 
-Both explanation requests obey the existing account, access, admission and cancellation
-rules. If the Helper is unavailable, saved explanations, Program and Code remain readable.
-The explanation panel retains **Stop**, retry and follow-up controls. A completed
-initial file overview or function answer is cached privately against actual saved source, account,
-verified Helper profile and prompt revision. It remains informational and is
-not supplied to coding agents. Source changes mark it stale; the next explicit
-**Explain file** or **Explain function** request regenerates the corresponding answer.
-**Regenerate overview** or **Regenerate explanation** forces a new request.
-Helper progress messages appear as they arrive; **Stop** cancels the current
-request. A provider that emits no progress can remain at **Thinking…** until
-its answer arrives. This is generation status, not a project scan.
-Follow-up chats do not replace the cached initial answer. Existing general
-**Explain file or selection** in the Code editor remains available separately.
+Both generated fields use the existing private source-editor cache, keyed to saved
+source, person, project/session, verified Helper profile and prompt revision.
+Source changes mark the text out of date. It remains informational and is not
+supplied to coding agents. Generating or updating starts only on an explicit
+button press. A missing Helper disables generation, but saved text and Code stay
+readable. Configure the Helper in **Model routing** and connect its account in
+**AI Accounts** if necessary.
+
+While generating, the field shows **Generating explanation…**, **Stop**, and any
+actual Helper progress. No transcript, user prompt or follow-up composer appears
+in the document. Stopping or a failure retains earlier saved text and offers
+**Retry**. To discuss the code, use the coding agent or a temporary conversation.
+The Code editor's existing **Explain file or selection** conversation remains a
+separate facility. A file explanation receives the complete saved source when it
+fits the 60,000-character input limit; larger files use an explicitly labelled
+bounded excerpt. Indexed function pseudocode uses the complete validated declaration
+within that same character limit, including functions longer than 240 lines.
 
 An out-of-date index disables symbol-range use. **Architecture → ⋯ → Re-scan project** rebuilds
 the whole project browsing index: signatures, imports and UI links. It reads existing
@@ -100,7 +103,7 @@ they use script setup or contain only a template. Its **Code** covers the comple
 component declaration. Explicit functions and other public declarations remain
 available according to the selected language analysis.
 
-From Architecture, enter a subsystem and scroll to its graphical files. Click or tap a
+From Architecture, enter a subsystem and use its **Files** shortcut to reach the graphical files. Click or tap a
 file icon once or press Enter to open only that file inside the
 subsystem square. Selecting a subsystem public signature goes directly to its
 implementation file and selects that exact declaration, including a resolved
@@ -120,6 +123,5 @@ file and selected declaration. This history also covers links across subsystems;
 **×**, Esc and the subsystem breadcrumb return to the enclosing browser instead.
 
 **Analysis details** holds coverage, visibility and missing-Helper information.
-The file view keeps this secondary information collapsed. A missing Program
-shows one short notice. **Code** and saved function explanations remain available
+The file view keeps this secondary information collapsed. Program diagnostics remain inside **Analysis details**. **Code** and saved function explanations remain available
 independently.

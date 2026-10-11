@@ -440,6 +440,34 @@ test('file overviews use the whole saved file without an index, survive restart 
   assert.equal(generated, 3);
 });
 
+test('document explanations include every line within the byte budget and admit complete indexed long functions', async t => {
+  const text = ['export function app() {', ...Array.from({ length: 300 }, (_, index) => `  observe(${index});`), '  return "middle-behavior";', '}'].join('\n');
+  const prompts = [];
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], terminalService: {
+    async runEphemeralAgentChatTurn(_scope, input) {
+      prompts.push(input.prompt);
+      return { ok: true, text: structuredExplanation('Observes the input and returns a result.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-document', turnId: 'turn-document' };
+    },
+    async deleteEphemeralAgentConversation() { return { ok: true }; }
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description' };
+  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.ok(prompts[0].includes(text), 'file explanation receives the complete saved file, including its middle');
+  assert.doesNotMatch(prompts[0], /File excerpt|lines omitted from the middle/u);
+  await writeCallableAnalysis(fixture, text);
+  const indexPath = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
+  const index = JSON.parse(await readFile(indexPath, 'utf8'));
+  index.architecture.files[0].lines = text.split('\n').length;
+  index.architecture.symbols[0].end = { line: text.split('\n').length, column: 2 };
+  await writeFile(indexPath, JSON.stringify(index));
+  assert.equal((await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', symbolId: 'symbol:app' })).ok, true);
+  assert.ok(prompts[1].includes(text), 'indexed function receives its entire server-validated declaration');
+  const selection = await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', startLine: 1, endLine: 302 });
+  assert.equal(selection.statusCode, 413, 'ordinary unindexed selections retain their existing line limit');
+  assert.equal(prompts.length, 2);
+});
+
 test('forced interpretation refresh cannot be overwritten by an older completed generation', async t => {
   let release;
   let announce;

@@ -4,11 +4,16 @@
       <div><small>{{ outline.owner.opaque ? 'EXTERNAL DEPENDENCY' : outline.owner.placementKind === 'libraries' ? 'SHARED LIBRARY' : 'SUBSYSTEM' }}</small><h2>{{ outline.owner.title }}</h2><p>{{ outline.owner.root }}</p></div>
       <button v-if="!embedded" type="button" class="subsystem-inspector__close" aria-label="Back to architecture map" @click="$emit('close')">×</button>
     </header>
+    <nav v-if="!outline.owner.opaque" class="subsystem-inspector__navigation nodrag nopan" aria-label="In this subsystem">
+      <button type="button" @click="filesElement?.scrollIntoView({ block: 'start' })">Files <small>{{ outline.files.length }}</small></button>
+      <button type="button" @click="interfaceElement?.scrollIntoView({ block: 'start' })">Interface</button>
+      <button v-if="outline.programs?.length" type="button" @click="programElement?.scrollIntoView({ block: 'start' })">Programs <small>{{ outline.programs.length }}</small></button>
+    </nav>
     <div class="subsystem-inspector__body">
       <div class="subsystem-inspector__description"><slot name="text" :text="outline.owner.description" source-path="genesis/subsystems.md">{{ outline.owner.description || 'This subsystem has no recorded description yet.' }}</slot></div>
       <p class="subsystem-inspector__summary">{{ outline.owner.opaque ? 'External package · source remains opaque' : `${outline.files.length} file${outline.files.length === 1 ? '' : 's'} · ${measuredFiles ? measuredLines.toLocaleString() + ' measured source lines' + (measuredFiles < outline.files.length ? ` (${measuredFiles}/${outline.files.length} files)` : '') : 'Source size unavailable'}` }}</p>
-      <section class="subsystem-inspector__section" aria-label="Subsystem Program">
-        <h3>What this subsystem does <span>{{ outline.programs?.length || 0 }}</span></h3>
+      <section v-if="outline.programs?.length" ref="programElement" class="subsystem-inspector__section" aria-label="Subsystem Program">
+        <h3>Programs <span>{{ outline.programs.length }}</span></h3>
         <details v-for="program in outline.programs || []" :key="program.id" class="subsystem-inspector__program nodrag nopan" @toggle="$event.target.open && expandedPrograms.add(program.id)">
           <summary><strong>{{ program.title }}</strong><span>{{ program.description }}</span></summary>
           <div v-if="expandedPrograms.has(program.id)">
@@ -17,10 +22,8 @@
             <button type="button" class="subsystem-inspector__program-document" @click="$emit('open-source', { path: program.path })">Read or edit Program explanation ↗</button>
           </div>
         </details>
-        <p v-if="!outline.programs?.length" class="subsystem-inspector__hint" role="status">{{ outline.programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Refresh analysis.' }}</p>
-        <p v-for="diagnostic in outline.programDiagnostics || []" :key="diagnostic.code + diagnostic.message" class="subsystem-inspector__coverage" role="status">{{ diagnostic.message }}</p>
       </section>
-        <section class="subsystem-inspector__section" aria-label="Subsystem interface">
+        <section ref="interfaceElement" class="subsystem-inspector__section" aria-label="Subsystem interface">
           <h3>Interface</h3>
           <p v-if="!outline.publicEntries.length" class="subsystem-inspector__hint">Intended API not declared.</p>
           <p v-if="outline.dependencyCoverage !== 'complete' && !outline.owner.opaque" class="subsystem-inspector__coverage" role="status" title="Unobserved imports do not prove an export is internal or unused.">Import analysis {{ outline.dependencyCoverage || 'unavailable' }}.</p>
@@ -43,6 +46,8 @@
             </div>
           </details>
           <details class="subsystem-inspector__technical nodrag nopan"><summary>Analysis details</summary>
+            <p v-if="outline.programStatus !== 'valid'">Program unavailable.</p>
+            <p v-for="diagnostic in outline.programDiagnostics || []" :key="diagnostic.code + diagnostic.message">{{ diagnostic.message }}</p>
             <p v-for="group in signatureGroups" :key="group.key"><strong>{{ group.title }}:</strong> {{ group.explanation }}</p>
             <p v-if="outline.publicEntries.some(entry => entry.coverage !== 'complete')">Partial export analysis. Unknown return types omitted.</p>
           </details>
@@ -54,7 +59,7 @@
           <h3>Receives UI calls <span>{{ outline.operations.length }}</span></h3>
           <button v-for="call in outline.operations" :key="call.id" type="button" class="subsystem-inspector__signature nodrag nopan" @click="$emit('inspect', { path: call.file.path, symbol: call.controllerSymbol })"><code>{{ [call.key?.protocol, call.key?.method, call.key?.operation].filter(Boolean).join(' · ') || call.id }}</code><span>{{ basename(call.file.path) }} ↗<template v-if="call.pages.length"> · {{ call.pages.map(page => page.title).join(', ') }}</template></span></button>
         </section>
-      <section v-if="!outline.owner.opaque" class="subsystem-inspector__section subsystem-inspector__files">
+      <section v-if="!outline.owner.opaque" ref="filesElement" class="subsystem-inspector__section subsystem-inspector__files">
           <h3>Files <span>{{ outline.files.length }}</span></h3><p class="subsystem-inspector__hint">Click a file to open it. Bars compare source size.</p>
           <div class="subsystem-inspector__file-tools nodrag nopan">
             <label class="subsystem-inspector__search">Find a file<input v-model="query" type="search" placeholder="Name or path" /></label>
@@ -72,6 +77,9 @@ import Vibe64SubsystemTreeBranch from './Vibe64SubsystemTreeBranch.vue';
 const props = defineProps({ outline: { type: Object, required: true }, embedded: Boolean });
 defineEmits(['close', 'inspect', 'open-source']);
 const query = ref('');
+const filesElement = ref(null);
+const interfaceElement = ref(null);
+const programElement = ref(null);
 const folderState = ref(new Map());
 const symbolQuery = ref('');
 const sortBy = ref('name');
@@ -127,6 +135,11 @@ watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value 
 .subsystem-inspector--embedded { position: relative; inset: auto; width: 100%; box-shadow: none; border: 0; }
 .subsystem-inspector--embedded .subsystem-inspector__header small { display: none; }
 .subsystem-inspector--embedded h2 { font-size: 18px; }
+.subsystem-inspector__navigation { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid #deebe6; background: white; position: sticky; top: 0; z-index: 1; }
+.subsystem-inspector__navigation button { min-height: 44px; padding: 0 10px; font: inherit; font-size: 13px; color: #367e8a; background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+.subsystem-inspector__navigation button:hover { background: #f3f8f6; border-bottom-color: #80b1a7; }
+.subsystem-inspector__navigation small { font-size: 11px; color: #6b827a; margin-left: 4px; }
+.subsystem-inspector__section { scroll-margin-top: 48px; }
 .subsystem-inspector__header { display: flex; justify-content: space-between; gap: 10px; padding: 12px 18px; border-bottom: 1px solid #deebe6; background: #f3f9f6; border-radius: 14px 14px 0 0; }
 .subsystem-inspector__header small { color: #63867d; letter-spacing: .08em; font-size: 10px; }
 .subsystem-inspector h2 { margin: 3px 0; font-size: 22px; }
