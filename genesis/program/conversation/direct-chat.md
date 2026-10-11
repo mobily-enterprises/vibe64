@@ -116,6 +116,18 @@ An already invoked old failure cannot stop its accepted steering successor.
 The common ordered tool-work catch attributes a rejected effect only to its
 still-current request; the old action retains its own error receipt and is not
 replayed, while current effect failure still fails its own run.
+Public Claude captures the existing same-owner CONTROL projection at native
+process creation and re-enters it for event, failure and application-control
+callbacks. Its application event sink also re-enters the exact captured context
+for checkpoint and terminal publication. This replaces the finite practice
+admission’s inherited async context; it does not extend that expired grant or
+retain CREATE/WRITE authority. Fresh teaching effects continue through the
+original saved-attempt action contributor and preparation barrier. Ordinary
+project identity, native history/account ownership and checkpoint order remain
+with the existing owners. After verified native cleanup, an interrupted
+checkpoint refusal is retained while the shared owner saves and publishes an
+inactive interruption; completed-answer checkpoints still gate settlement.
+
 The configured normal CLI adds only the existing SDK
 MCP declaration, preserving original source tools and permission defaults.
 

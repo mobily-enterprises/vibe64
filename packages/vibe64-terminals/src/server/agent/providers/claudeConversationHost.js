@@ -10,6 +10,7 @@ import path from "node:path";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { appCredentialContext, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { closeTerminalSessionsForNamespace, listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
@@ -71,8 +72,25 @@ function createClaudeConversationHost({
       check: messagePolicy.check,
       message: messagePolicy.prepareMessage
     },
-    process: { prepare: prepareProcess, configure: configureProcess, configureTerminal, create: createProcess, stopExecution },
-    onEvent(entry, event) { return publishTurnEvent(entry, event); }
+    process: { prepare: prepareProcess, configure: configureProcess, configureTerminal, stopExecution,
+      create(options) {
+        // The accepted native stream outlives its finite practice admission.
+        // Keep only the original CONTROL projection; tool effects still use
+        // the saved-attempt action contributor's fresh admission.
+        const projectContext = captureProjectRequestContext();
+        return createProcess({ ...options,
+          onEvent: frame => runWithProjectRequestContext(projectContext || {}, () => options.onEvent(frame)),
+          onFailure: failure => runWithProjectRequestContext(projectContext || {}, () => options.onFailure(failure)),
+          ...(options.onControlRequest ? {
+            onControlRequest: (request, control) => runWithProjectRequestContext(projectContext || {},
+              () => options.onControlRequest(request, control))
+          } : {})
+        });
+      }
+    },
+    onEvent(entry, event) {
+      return runWithProjectRequestContext(entry.context.projectContext || {}, () => publishTurnEvent(entry, event));
+    }
   });
   const accounts = createClaudeConversationAccounts({ owner: conversations, configRoot, providerConnections,
     accountStatus, connectionStatus, createProcess, command, commandRunner, stopExecution, credentialHome, env });
@@ -81,7 +99,8 @@ function createClaudeConversationHost({
     messagePolicy, owner: conversations, accountQueries, publishSessionChanged });
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
   async function contextFor(context) {
-    return readSessionConversationContext("claude", projectService, context.sessionId, context);
+    const projectContext = captureProjectRequestContext();
+    return { ...await readSessionConversationContext("claude", projectService, context.sessionId, context), projectContext };
   }
 
   function prepareEntry(ctx, context, conversationId, { create, cleanupExecutionId, operation, input }) {

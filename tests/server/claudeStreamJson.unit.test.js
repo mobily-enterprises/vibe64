@@ -2484,3 +2484,114 @@ test("Claude records one execution when the managed wrapper later lends its star
   await provider.sendMessage(f.context, { message: "Go", messageId: "receipt-once" });
   assert.equal(f.processes[0].lastInput.messageId, nativeMessageId("receipt-once"));
 });
+
+
+test("Claude delayed practice events retain only original control after admission callback ends", async (t) => {
+  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
+    assertProjectEffectAdmission } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const f = await fixture(t);
+  const owner = {};
+  const practice = { access: "write", slug: "training-test", vibe64User: { uid: 42 },
+    training: { attemptId: "exact-attempt", pin: { lesson: "exact-pin" } } };
+  const release = Promise.withResolvers();
+  let delayed;
+  let expired;
+  let admitted;
+  const observed = [];
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    async publishSessionChanged() {
+      const scope = currentPracticeProjectScope(owner);
+      if (!scope) return;
+      observed.push(scope);
+      assert.equal(currentProjectRequestContext().vibe64User.uid, 42);
+      assert.deepEqual(scope.training, practice.training);
+      if (scope.access === "control") assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+    }
+  });
+  f.behavior.afterSend = native => {
+    delayed = release.promise.then(async () => {
+      await native.options.onEvent({ type: "assistant", uuid: "late-answer", message: { id: "late-answer", content: [{ type: "text", text: "Preserved answer." }] } });
+      await native.options.onEvent({ type: "result", subtype: "success", result: "Preserved answer." });
+    });
+    delayed.catch(() => {});
+  };
+  await runWithPracticeProjectContext(owner, practice, async () => {
+    expired = currentProjectRequestContext();
+    admitted = await provider.sendMessage(f.context, { message: "Go", messageId: "practice-late-final" });
+  });
+  await assert.rejects(() => runWithProjectRequestContext(expired, async () => currentProjectRequestContext()), { code: "vibe64_practice_scope_expired" });
+  release.resolve();
+  await delayed;
+  const state = await provider.sessionState(f.context);
+  assert.equal(state.thread.id, admitted.thread.id);
+  assert.equal(state.turn.active, false);
+  assert.equal(state.turn.state, "completed");
+  assert.ok(observed.some(scope => scope.access === "control"));
+  assert.equal(f.written.filter(message => message.role === "user").length, 1);
+  assert.equal(f.written.find(message => message.role === "assistant").text, "Preserved answer.");
+});
+
+test("Claude delayed practice failure proves native stop then publishes original inactive owner", async (t) => {
+  const { runWithPracticeProjectContext, currentPracticeProjectScope, assertProjectEffectAdmission } =
+    await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const f = await fixture(t);
+  const owner = {};
+  const practice = { access: "write", slug: "training-test", vibe64User: { uid: 42 },
+    training: { attemptId: "exact-attempt", pin: { lesson: "exact-pin" } } };
+  const release = Promise.withResolvers();
+  let delayed;
+  let admitted;
+  let observedIdle = false;
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    async publishSessionChanged(_id, event) {
+      const scope = currentPracticeProjectScope(owner);
+      if (!scope) return;
+      assert.deepEqual(scope.training, practice.training);
+      if (event.reason === "claude-stream-turn-idle") {
+        assert.equal(scope.access, "control");
+        assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+        assert.equal(f.processes[0].stopped, true);
+        observedIdle = true;
+      }
+    }
+  });
+  f.behavior.afterSend = native => {
+    delayed = release.promise.then(() => native.options.onFailure(new Error("Broken practice stream")));
+    delayed.catch(() => {});
+  };
+  await runWithPracticeProjectContext(owner, practice, async () => {
+    admitted = await provider.sendMessage(f.context, { message: "Go", messageId: "practice-late-failure" });
+  });
+  release.resolve();
+  await delayed;
+  const state = await provider.sessionState(f.context);
+  assert.equal(state.thread.id, admitted.thread.id);
+  assert.equal(f.processes[0].stopped, true);
+  assert.equal(state.turn.active, false);
+  assert.equal(state.turn.state, "interrupted");
+  assert.equal(state.turn.error, "Broken practice stream");
+  assert.equal(observedIdle, true);
+});
+
+
+test("Claude native cleanup cannot leave the saved run active when learning checkpoint refuses", async (t) => {
+  const f = await fixture(t);
+  const sent = await f.provider.sendMessage(f.context, { message: "Go", messageId: "refused-checkpoint-stop" });
+  f.context.runtime.learningScope = { noExercise: true };
+  f.context.runtime.getNativeExecutionRoot = async () => f.context.session.metadata.source_path;
+  f.context.runtime.learningTeaching = {
+    async completeConversation() { throw Object.assign(new Error("Saved lesson authority changed before checkpoint."), { code: "test_checkpoint_refused" }); }
+  };
+  try {
+    await assert.rejects(() => f.processes[0].options.onFailure(new Error("Broken stream")), { code: "test_checkpoint_refused" });
+    assert.equal(f.processes[0].stopped, true, "the original native cleanup completed");
+    const saved = JSON.parse(f.context.session.metadata[`claude_conversation_${sent.thread.id}`]);
+    assert.equal(saved.state, "interrupted", "verified native cleanup must not retain an active checkpoint");
+    const state = await f.provider.sessionState(f.context);
+    assert.equal(state.turn.active, false);
+    assert.equal(state.turn.error, "Saved lesson authority changed before checkpoint.");
+  } finally {
+    delete f.context.runtime.learningScope;
+    delete f.context.runtime.learningTeaching;
+  }
+});

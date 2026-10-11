@@ -168,3 +168,12 @@ Working conversation to bypass the refusal. Colleague can explain the controls
 and help you recover; Main remains the lesson teacher.
 
 The App setup view retains the same lesson presentation handle and saved lesson identity. Switching between App, Lessons and Presentation does not switch to a working project. A changed account or saved lesson target retires that view; open the current Learning session again.
+
+An accepted Claude teacher request keeps its own saved lesson, conversation and
+account while its answer continues, including after the Send request returns.
+New teaching actions still check that saved attempt’s current access. If access
+changes or the stream fails, retain the existing message and inspect the error;
+do not send the same request again merely because the answer stopped updating.
+If the lesson checkpoint refuses after native cleanup is verified, the request
+shows an interruption with that error. It does not remain active or claim a
+successful teaching answer. Read the saved lesson again before a new request.
