@@ -21,7 +21,7 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
 function fixture({ readGoal = () => null, status = "ready", steering = true,
-  learningAttemptId, learnerId, noExercise, sourceProjectSlug, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount } = {}) {
+  learningAttemptId, learnerId, noExercise, sourceProjectSlug, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount, provideShell } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
@@ -44,11 +44,12 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   const viewer = ref({ actorKey: "owner" });
   const selected = reactive({ sessionId, projectSlug, learningAttemptId, learnerId, noExercise, sourceProjectSlug, sessionsApiPath });
   let runtime;
-  const app = renderer.createApp({ setup() {
+  const reader = { setup() {
     runtime = useVibe64ConversationRuntime({ sessionId: computed(() => selected.sessionId), projectSlug: computed(() => selected.projectSlug), sessionsApiPath: computed(() => selected.sessionsApiPath),
       learningAttemptId: computed(() => selected.learningAttemptId), learnerId: computed(() => selected.learnerId), noExercise: computed(() => selected.noExercise), sourceProjectSlug: computed(() => selected.sourceProjectSlug) });
     return () => h("div");
-  } });
+  } };
+  const app = renderer.createApp(provideShell ? { setup() { provideShell(); return () => h(reader); } } : reader);
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   provideConversationFixture(app, socket, "owner");
   if (!beforeMount) {
@@ -908,4 +909,66 @@ describe("actual shared VoiceHost restores loaded saved review policy before rep
       f.app.unmount();
     } finally { gate.resolve(); await mounted.close(); endpoints.restore(); }
   });
+});
+
+
+it("retains component-provided practical facilities when the saved Learning identity arrives after setup", async () => {
+  const { provide, shallowRef } = await import("vue");
+  const attempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const fallback = { matchesLearning: () => false };
+  const channel = shallowRef(fallback), layout = ref(null), view = ref(null);
+  const body = ref({ actorKey: "owner", conversationId: "real-general", visible: false, compact: false });
+  const f = fixture({ projectSlug: "", sessionId: "", learningAttemptId: attempt, learnerId: "own",
+    noExercise: false, sourceProjectSlug: "practice", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    provideShell() {
+      for (const [key, value] of [[VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel], [VIBE64_COLLEAGUE_BODY_KEY, body],
+        [VIBE64_COLLEAGUE_VIEW_KEY, view], [VIBE64_COLLEAGUE_LAYOUT_KEY, layout]]) provide(key, value);
+    } });
+  expect(f.runtime.value).toBeNull();
+  expect(channel.value).toBe(fallback);
+  f.selected.sessionId = "saved-initial";
+  await nextTick();
+  const runtime = f.runtime.value, identity = runtime.identity;
+  view.value = { learningBinding: identity, sessionId: "saved-initial", ready: true, conversationId: "",
+    temporarySelected: false, hostConversationSelected: false, pane: "preview" };
+  layout.value = { projectSlug: "practice", learningAttemptId: attempt, learnerId: "own", ready: true,
+    chatVisible: true, projectVisible: true };
+  const question = { attemptId: attempt, questionId: "delivered-practical", assessmentId: "workspace-navigation",
+    issuedRevision: 4, topicHash: "a".repeat(64), lessonHash: "b".repeat(64) };
+  f.snapshot(identity, { trainingQuestion: question });
+  await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
+  const owner = channel.value;
+  expect(owner.matchesLearning(identity)).toBe(true);
+  expect(owner.begin({ type: "click", isTrusted: false }, "project-select")).toBeNull();
+  for (const control of ["project-select", "session-select", "preview-select"]) {
+    const ticket = owner.begin({ type: "click", isTrusted: true }, control,
+      { projectSlug: "practice", sessionId: "saved-initial" });
+    expect(ticket).toBeTruthy();
+    await owner.finish(ticket);
+  }
+  const observations = mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"));
+  expect(observations).toHaveLength(3);
+  for (const [url, options] of observations) {
+    expect(url).toBe(`/api/learning/${attempt}/vibe64/sessions/saved-initial/training/observations`);
+    expect(options.method).toBe("POST");
+    expect(options.body.conversationId).toBeUndefined();
+    expect(options.body.clientId).toBe(runtime.presentation.clientId);
+    expect(options.body.reference).toEqual(question);
+    expect(options.body.workspace).toEqual({ projectSlug: "practice", sessionId: "saved-initial", mainChatVisible: true,
+      projectVisible: true, pane: "preview", ready: true, colleagueVisible: false });
+  }
+  expect(observations.map(([, options]) => options.body.control)).toEqual(["project-select", "session-select", "preview-select"]);
+  view.value.ready = false;
+  const ticket = owner.begin({ type: "click", isTrusted: true }, "preview-select");
+  const pending = owner.finish(ticket);
+  f.selected.sessionId = "next-saved";
+  await nextTick();
+  expect(await pending).toBe(false);
+  expect(owner.matchesLearning(identity)).toBe(false);
+  expect(channel.value).not.toBe(owner);
+  expect(channel.value.matchesLearning(f.runtime.value.identity)).toBe(true);
+  expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(3);
+  channel.value = fallback;
+  f.app.unmount();
+  expect(channel.value).toBe(fallback);
 });

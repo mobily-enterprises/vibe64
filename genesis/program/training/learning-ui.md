@@ -275,6 +275,15 @@ saved practice target and original authoritative trainingQuestion, using its
 existing presentation clientId and the original Learning observation route. The
 server derives its typed conversation identity and reauthorizes the saved pin.
 
+The Main composable captures the shell's component-provided gesture channel,
+workspace refs, Preview, voice and action-feedback facilities during setup. Its
+existing retained application can then be created after the saved identity loads
+without losing those ancestor providers. The retained scope clears only its own
+gesture channel on disposal; replacement Main or Colleague ownership is preserved.
+No collector, ticket grammar or admission guard is replaced. A page reload may
+register a fresh current browser connection for the same delivered question;
+its actual steps and accepted explanation must use that same current client.
+
 The shared root provides the original companion refs and one actual Colleague
 body handle. Online keeps its authenticated AuthGate viewer and original host;
 standalone explicitly supplies its established local display scope and mounts the
@@ -286,7 +295,7 @@ already-mounted original Working page reclaims its original layout.
 Practice project lists actual loaded own-learner saved rows and delegates to the
 same original session selector. It captures a person click before selection and
 settles only a confirmed selection. Automatic Start/Resume callbacks supply no
-gesture. Show chat and App choices forward their native event, while the original
+gesture. Saved Main session and App choices forward their native event, while the original
 App observer retains server instance, interaction, player/frame and request IDs.
 Main and general Colleague remain different conversations: only the real drawer's
 hide/use/restore is eligible for that rubric. Main's pending return question keeps

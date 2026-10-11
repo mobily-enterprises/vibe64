@@ -1,4 +1,4 @@
-import { computed, inject, onBeforeUnmount, proxyRefs, ref, toValue, watch } from "vue";
+import { computed, inject, onScopeDispose, proxyRefs, ref, toValue, watch } from "vue";
 import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
 import { useTrainingWorkspaceObservation } from "@local/vibe64-training/client/workspace-observation";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
@@ -33,7 +33,7 @@ function browserDraftStorage(identity) {
 
 // Only application policy and mounted product data live here. The supplied
 // binding owns retention, draft/receipt recovery, transport and subscriptions.
-function createConversationApplication(conversation, { identity, viewer, summarySession }) {
+function createConversationApplication(conversation, { identity, viewer, summarySession, shell }) {
   const { active, current } = conversation;
   const mounted = useVibe64MountedSessionData({ ...identity, active,
     summarySession: computed(() => toValue(summarySession)?.sessionId === identity.sessionId ? toValue(summarySession) : null) });
@@ -55,17 +55,13 @@ function createConversationApplication(conversation, { identity, viewer, summary
     return Object.freeze(projectTrainingQuestion(reference));
   });
   const presentation = identity.learningAttemptId !== undefined ? useTrainingMainPresentation({ identity,
-    current, preview: inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null), voice: useVibe64Voice(),
+    current, preview: shell.preview, voice: shell.voice,
     ready: computed(() => Boolean(conversation.snapshot.value)),
     enabled: computed(() => available.value &&
       (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))
   }) : null;
   if (identity.learningAttemptId !== undefined && identity.noExercise === false && presentation) {
-    const channel = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-    const body = inject(VIBE64_COLLEAGUE_BODY_KEY, null);
-    const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
-    const view = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-    const feedback = channel ? useShellWebErrorRuntime() : null;
+    const { channel, body, layout, view, feedback } = shell;
     const rawActor = computed(() => toValue(viewer)?.actorKey || "");
     const selected = () => current.value && active.value && available.value && rawActor.value === identity.viewerActorKey;
     const matchingView = computed(() => {
@@ -96,7 +92,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
       if (valid && channel) channel.value = gestures;
       else { gestures.clear(); if (channel?.value === gestures) channel.value = null; }
     }, { immediate: true, flush: "sync" });
-    onBeforeUnmount(() => { if (channel?.value === gestures) channel.value = null; });
+    onScopeDispose(() => { gestures.clear(); if (channel?.value === gestures) channel.value = null; });
   }
   // A goal can stay pinned to another native engine after a chat selection.
   // Product invalidations refresh the same binding; they own no goal cache.
@@ -196,6 +192,15 @@ function createConversationApplication(conversation, { identity, viewer, summary
 /** Main text and voice consume one supplied retained conversation. */
 function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, learningAttemptId, learnerId, noExercise, sourceProjectSlug, active = true, summarySession } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  // The retained factory runs outside this component's setup after selection.
+  // Capture its existing shell facilities while ancestor providers are current.
+  const channel = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+  const shell = {
+    channel, body: inject(VIBE64_COLLEAGUE_BODY_KEY, null),
+    layout: inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null), view: inject(VIBE64_COLLEAGUE_VIEW_KEY, null),
+    preview: inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null), voice: useVibe64Voice(),
+    feedback: channel ? useShellWebErrorRuntime() : null
+  };
   const identity = computed(() => {
     const target = { sessionId: String(toValue(sessionId) || ""), projectSlug: String(toValue(projectSlug) || ""),
       actorKey: toValue(viewer)?.actorKey || "",
@@ -232,7 +237,7 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
     application(conversation) {
       const target = mainConversationTarget(conversation.identity.conversationId);
-      return createConversationApplication(conversation, { viewer, summarySession,
+      return createConversationApplication(conversation, { viewer, summarySession, shell,
         identity: Object.freeze({ ...identity.value, ...target, actorKey: conversation.identity.actorKey }) });
     }
   });
