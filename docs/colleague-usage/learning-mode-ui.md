@@ -53,6 +53,8 @@ message remains saved; read its result and your saved lesson progress before
 asking it to continue. Do not resend that completed message to recover navigation.
 Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
+Wait for Main to confirm that the diagram is ready before continuing its
+illustrated steps.
 
 The selected Learning conversation prepares the configured agent through the same
 Main readiness flow as Working. Preparation retains that saved conversation and

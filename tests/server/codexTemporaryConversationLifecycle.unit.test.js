@@ -13558,3 +13558,70 @@ test("actual Codex Main retains collected practical evidence through repeated br
     return runtime;
   } });
 });
+
+
+test("Codex Main host and run owner share the original native conversation publisher", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => {
+    const provider = controller.conversationProvider;
+    const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
+      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+        ? prepareSessionConversationDisposal(provider, id, context, input)
+        : createSessionConversationBinding(provider, id, { ...context, prepareInput: async input => input }) }
+    });
+    const applicationEvents = [], nativeEvents = [], order = [], canonicalEvents = [];
+    captures.onSessionChanged = (id, event) => { order.push("application"); applicationEvents.push({ id, event }); };
+    captures.onConversationChanged = event => { order.push("native"); nativeEvents.push(event); return common.publishNative(event); };
+    let unsubscribe;
+    try {
+      const conversation = await common.open({ id: sessionId, context: { runtime } });
+      unsubscribe = await conversation.subscribe(event => canonicalEvents.push(event));
+      const host = await provider.prepareConversationHost(sessionId, { runtime }, "main");
+      const before = (await runtime.getSession(sessionId)).metadata;
+      // Main native.notifyPresentation forwards to this original prepared host.
+      // Its captured Project CONTROL boundary is covered by the Teaching fixture.
+      const configuration = { type: "configuration", reason: "training-presentation" };
+      await host.publish(sessionId, configuration);
+      assert.deepEqual(order, ["application", "native"]);
+      assert.deepEqual(applicationEvents, [{ id: sessionId, event: configuration }]);
+      assert.deepEqual(nativeEvents, [{ namespace: codexTerminalNamespace(sessionId), sessionId, event: configuration }]);
+      assert.equal(canonicalEvents.filter(event => event.type === "configuration").length, 1,
+        "the original native-bound subscriber receives the presentation invalidation once");
+      assert.deepEqual((await runtime.getSession(sessionId)).metadata, before,
+        "presentation publication does not write or reconstruct the original Main state");
+      assert.equal(captures.provider, null, "presentation publication does not acquire another provider");
+
+      applicationEvents.length = nativeEvents.length = order.length = 0;
+      const nativeGoal = { threadId: "another-native-thread", goal: { objective: "Keep the native projection" } };
+      const goalEvent = { reason: "codex-goal", nativeGoal };
+      await host.publish(sessionId, goalEvent);
+      assert.deepEqual(order, ["application", "native"]);
+      assert.deepEqual(applicationEvents, [{ id: sessionId, event: { reason: "codex-goal" } }]);
+      assert.deepEqual(nativeEvents, [{ namespace: host.namespace, sessionId, event: goalEvent }],
+        "only the application projection strips nativeGoal");
+      assert.deepEqual((await runtime.getSession(sessionId)).metadata, before);
+
+      applicationEvents.length = nativeEvents.length = order.length = 0;
+      const published = await host.native.runOwner.publishAgentRun(sessionId, {
+        publishReason: "original-run-owner-publication", runState: "completed", status: "completed"
+      });
+      assert.equal(published.ok, true);
+      assert.deepEqual(order, ["application", "native"]);
+      assert.equal(applicationEvents.length, 1);
+      assert.equal(nativeEvents.length, 1);
+      assert.equal(nativeEvents[0].namespace, host.namespace);
+      assert.equal(nativeEvents[0].sessionId, sessionId);
+      assert.deepEqual(applicationEvents[0].event, nativeEvents[0].event,
+        "the original run owner uses the same publisher without a second wrapper");
+
+      applicationEvents.length = nativeEvents.length = order.length = 0;
+      const failure = new Error("Original application publication failed");
+      captures.onSessionChanged = () => { order.push("application"); throw failure; };
+      await assert.rejects(host.publish(sessionId, configuration), error => error === failure);
+      assert.deepEqual(order, ["application"], "an application failure still prevents native publication");
+      assert.equal(nativeEvents.length, 0);
+    } finally {
+      await unsubscribe?.();
+      await common.close();
+    }
+  }, { bindConversation: true });
+});

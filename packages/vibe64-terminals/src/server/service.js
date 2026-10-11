@@ -431,6 +431,12 @@ function createCodexSessionRegistration({
     }
   });
   const codexAppServerRenewalSessionClosures = new WeakSet();
+  async function publishCodexConversationEvent(sessionId, event) {
+    const { nativeGoal: _nativeGoal, ...publicEvent } = event;
+    return publishMainConversationEvent(
+      codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
+    );
+  }
   const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged });
   const codexAppServerRunOwner = createCodexAppServerRunOwner({
     namespace: codexTerminalNamespace,
@@ -439,12 +445,7 @@ function createCodexSessionRegistration({
     debugError: vibe64SessionDebugError,
     createRuntime: createRuntimeForSession,
     createStore: createStoreForSession,
-    async publish(sessionId, event) {
-      const { nativeGoal: _nativeGoal, ...publicEvent } = event;
-      return publishMainConversationEvent(
-        codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
-      );
-    },
+    publish: publishCodexConversationEvent,
     providerSessions: {
       owner: codexAppServerProviderOwner,
       wellbeingMs: codexAppServerDaemonWellbeingMs,
@@ -653,7 +654,7 @@ function createCodexSessionRegistration({
     enabled: codexAppServerPromptDeliveryEnabled,
     runNativeDetachedConversation,
     env,
-    publishSessionChanged,
+    publishSessionChanged: publishCodexConversationEvent,
     checkpoint: checkpointCodexAppServerTurn
   });
   return Object.freeze({

@@ -925,7 +925,12 @@ no account, progress, native process, new queue or durable journal is owned here
 A live generation getter preserves the original ACK-time consumer generation.
 
 Main's existing native binding publishes the same `configuration` invalidation
-through JSKIT's original conversation publisher and subscriber. The binding captures
+through JSKIT's original conversation publisher and subscriber. Codex registration
+supplies the same original combined publisher to its run owner and native Main
+host, preserving the original application event's `nativeGoal` filtering while
+forwarding the complete event to the existing conversation entry. Checkpoint,
+startup and preparation callbacks retain their original application publisher.
+The binding captures
 Core's original Project control context and re-enters it only for this publication:
 native tool dispatch must retain the saved learner/attempt namespace rather than
 the shared provider's ambient context. Practice capture preserves its original
