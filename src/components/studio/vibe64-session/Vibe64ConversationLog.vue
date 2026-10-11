@@ -150,6 +150,7 @@ import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@lo
 
 const props = defineProps({
   voiceRuntime: { type: Object, default: null },
+  hiddenByWorkspaceMode: { type: Boolean, default: false },
   working: { type: Boolean, default: undefined },
   integrationConnections: { default: () => ({}), type: Object },
   integrationActionPending: { default: null, type: Object },
@@ -423,6 +424,15 @@ function presentationMessage(message) {
   return integrationRequest ? { ...message, text: integrationRequest.text, integrationRequest } : message;
 }
 
+// Keep only a mode-hidden reader; ordinary tab/collapse hiding keeps its policy.
+const retainedByWorkspaceMode = ref(false);
+watch(() => [props.hiddenByWorkspaceMode, props.visible, props.scrollKey],
+  ([hiddenByMode, visible, scrollKey], [, , previousScrollKey] = []) => {
+    if (scrollKey !== previousScrollKey) retainedByWorkspaceMode.value = false;
+    if (hiddenByMode) retainedByWorkspaceMode.value = true;
+    else if (!visible) retainedByWorkspaceMode.value = false;
+  }, { flush: "post" });
+
 const adapter = computed(() => ({
   conversation: {
     working: props.working && !props.error,
@@ -439,6 +449,7 @@ const adapter = computed(() => ({
     reloading: props.reloading,
     scrollKey: props.scrollKey,
     variant: props.variant,
+    retainWhenHidden: props.hiddenByWorkspaceMode || retainedByWorkspaceMode.value,
     visible: props.visible,
     welcomeMessage: props.welcomeMessage,
     progressPreviewLimit: usesCommentaryForThinking(props.turns.at(-1)?.metadata?.assistantSelection) ? 1 : 2,

@@ -10,6 +10,7 @@
       :lessons-available="props.lessonsAvailable"
       :learning-attempt-id="learningAttemptId"
       :active="autopilotModeActive"
+      :hidden-by-workspace-mode="Boolean(props.workspacePurpose && selection.selectedSession && !vibe64SessionMatchesPurpose(selection.selectedSession, props.workspacePurpose))"
       :agent-connection-error="agentConnectionError"
       :agent-connection-status="agentConnectionStatus"
       :retry-agent-connection="retryAgentConnection"
@@ -87,6 +88,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { vibe64SessionMatchesPurpose } from "@/lib/vibe64SessionPanelModel.js";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64CodexSession from "@/components/studio/Vibe64CodexSession.vue";
 import Vibe64NativeAgentSession from "@/components/studio/Vibe64NativeAgentSession.vue";
@@ -97,6 +99,7 @@ import {
 
 const props = defineProps({
   lessonsAvailable: Boolean,
+  workspacePurpose: { default: "", type: String },
   refreshRepositoryState: {
     default: null,
     type: Function

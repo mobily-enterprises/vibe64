@@ -168,6 +168,7 @@
         :active="props.active && runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
         :session-id="runtimeSessionId"
+        :workspace-purpose="props.purposeFilter"
         :chat-collapsed="chatCollapsed"
         :create-session-teleport-target="!emptyLayoutVisible && !selectedSessionArchiving && runtimeSessionId === selection.selectedSessionId ? props.createSessionTeleportTarget : ''"
         :github-actor-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''"

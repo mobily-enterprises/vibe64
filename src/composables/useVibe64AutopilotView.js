@@ -99,6 +99,7 @@ const vibe64AutopilotViewEmits = [
   "project-attention"
 ];
 const vibe64AutopilotViewProps = {
+  hiddenByWorkspaceMode: { default: false, type: Boolean },
   active: {
     default: true,
     type: Boolean

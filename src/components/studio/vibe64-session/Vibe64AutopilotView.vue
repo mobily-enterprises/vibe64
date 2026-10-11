@@ -357,6 +357,7 @@
         :scroll-key="conversationScrollKey"
         :source-root="sessionSourceRoot"
         :turns="chatTurns"
+        :hidden-by-workspace-mode="props.hiddenByWorkspaceMode"
         :visible="conversationLogVisible && !chatCollapsed && !temporaryAiWorkspace?.visible"
         :welcome-message="emptyConversationWelcome"
         @cancel-turn="cancelOptimisticMessage"

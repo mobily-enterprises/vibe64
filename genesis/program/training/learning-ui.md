@@ -21,6 +21,7 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 - `src/composables/useVibe64SessionPanel.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
@@ -88,6 +89,15 @@ message is sent. Retry identity is temporary UI state, not a new persisted
 journal or a promise of hard-unload recovery.
 
 ## Original panel attachment
+
+The retained Main wrapper distinguishes hiding through the Working/Learning
+purpose filter from ordinary tab or chat visibility. The existing session-purpose
+matcher supplies that reason; ConversationLog keeps one local visibility reason
+and opts into the shared transcript's existing retained-reader behavior. Returning
+from the mode filter restores its reading anchor, while ordinary hiding clears
+that opt-in and session identity changes use the original initial scroll. No
+second transcript, persisted scroll record or SDK policy change is introduced.
+
 
 The app index retains one original Panel while its Working project picker stays
 on the original force-picker/navigate path. The project page uses the same Panel
