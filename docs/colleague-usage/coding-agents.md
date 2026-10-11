@@ -20,6 +20,10 @@ alone cannot establish whether the agent is running. Access denial clears cached
 messages and hides Reload: sign in with the authorized account and reopen chat.
 Desktop and phone use the same recovery. Colleague can explain it; reconnecting
 this browser view requires your interaction.
+While that warning is shown, the avatar and its controls occupy space above the
+messages so they cannot cover the warning or **Reload chat**, including on a
+phone. History has less visible height until the warning clears; your avatar
+preference, loaded messages and draft stay intact.
 
 ## Send, steer and stop
 

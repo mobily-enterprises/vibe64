@@ -129,6 +129,10 @@ conversation again; it does not resend a message. A connection warning does not
 prove that Colleague has stopped working. If access is denied, cached content is
 cleared and the recovery button is hidden. Sign in with the authorized account
 and reopen Colleague. These controls also apply to the full-screen phone chat.
+While the warning is present, the avatar and its controls move above the messages
+to leave the text and **Reload chat** reachable. This temporarily leaves less
+visible history; clearing the warning restores the floating avatar without
+changing its size preference, loaded messages or your draft.
 
 When a question needs a lookup or another product action, Colleague can show
 and speak a short progress sentence before its final answer. Each is spoken once;

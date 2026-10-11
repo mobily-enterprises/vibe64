@@ -633,6 +633,13 @@ is restored beside the avatar. JSKIT's existing subscription owner measures
 authentication, action admission, conversation opening, observer attachment,
 snapshot reading and acknowledgement sending through runtime.logger; those
 timings do not establish the cause of an unmeasured production delay.
+The shared element derives its error layout from the existing conversation error:
+avatar artwork and retained hidden controls temporarily enter normal flow above
+the transcript, and the warning stacks text and Reload. This reserves their own
+space without new measurements, preferences or state, preventing the floating
+avatar from intercepting the recovery pointer target. The compact natural-height
+warning and original loaded history remain; clearing the error restores the
+floating layout. The temporary avatar space reduces the visible history height.
 A fully cancelled request no longer displays its earlier error above the composer,
 including after reload. Pending helper cleanup and unconfirmed delivery retain
 their notices. The saved request remains available as operational evidence.
