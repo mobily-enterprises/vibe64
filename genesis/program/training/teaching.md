@@ -1191,3 +1191,13 @@ reference and application message identity. The original authored preparation
 stays intact, and same-carrier delivery keeps its original flow. A visual cue
 likewise binds the verified final output while retaining its initiating turn for
 browser acknowledgement. Colleague grouping and cue coordination are unchanged.
+
+For a separate final carrier, Main completion uses a provider's narrowly supplied
+completed-turn reader when available, keeping the original active reader for all
+tool admission and other providers' existing completion behavior. The original
+fresh learner/Project and selection checks, latest accepted authored user, exact
+native input/item/output/final text, binding/generation and repeated final-receipt
+comparison still fence delivery. The common admitted-request `assertCurrent`
+remains unchanged and is valid before settlement resolves that request; completed
+native inactivity alone does not retire it. Only that original checkpoint may
+promote delivery; it does not grade the question or repair old history.

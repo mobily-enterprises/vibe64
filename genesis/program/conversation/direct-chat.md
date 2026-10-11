@@ -3779,3 +3779,12 @@ the strict parser and receipt-before-release sequence still own confirmation.
 Already admitted seeds retain their original response/history and use the existing
 same-operation reconciliation and delivery-error continuation. This repairs an
 inherited ambiguous request; it neither fabricates old ACKs nor resends them.
+
+Claude's Main adapter exposes a completion-only settled-turn projection backed
+by its existing exact native-final owner. It reads current saved selection and
+thread identity, then requires that same context/thread/turn's completed final;
+it never falls back to saved history or the inactive retained snapshot. Active
+tools keep the unchanged `readRetainedTurn(..., current: true)` admission guard.
+The original before-state checkpoint can therefore join a separate canonical
+final carrier while the retained entry still has its pre-checkpoint active state.
+No process, account, request lifecycle or native completion ordering is changed.

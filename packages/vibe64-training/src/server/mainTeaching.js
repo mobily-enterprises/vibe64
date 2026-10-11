@@ -139,8 +139,10 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           origin.admitted.assertCurrent();
           if (state.binding !== binding || state.generation !== generation) throw failure("The original Main lesson binding changed.");
           if (crossCarrier(authored)) {
-            const current = await binding.native.readTurn();
-            if (current.active || current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId ||
+            const current = await (binding.native.readCompletedTurn
+            ? binding.native.readCompletedTurn({ threadId: nativeTurn.threadId, turnId: nativeTurn.turnId })
+            : binding.native.readTurn());
+            if (!current || current.active || current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId ||
                 current.outerTurnId !== outerTurnId || !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
                 !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
                   threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
@@ -165,8 +167,10 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           await origin.terminals.requireAssistantSelectionAccess(origin.current.assistantSelection, {
             vibe64User: authenticatedVibe64User(origin.current.browserAuthority.requestContext) });
           origin.admitted.assertCurrent();
-          const current = await binding.native.readTurn();
-          if (state.binding !== binding || state.generation !== generation || current.active ||
+          const current = await (binding.native.readCompletedTurn
+            ? binding.native.readCompletedTurn({ threadId: nativeTurn.threadId, turnId: nativeTurn.turnId })
+            : binding.native.readTurn());
+          if (state.binding !== binding || state.generation !== generation || !current || current.active ||
               current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId || current.outerTurnId !== outerTurnId ||
               !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
               !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({

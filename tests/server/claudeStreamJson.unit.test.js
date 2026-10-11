@@ -2658,3 +2658,136 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
   await assert.rejects(readFile(logPath), { code: "ENOENT" });
   assert.deepEqual(stops, [starts[0].id], "diagnostic capture keeps the original single cleanup");
 });
+
+
+// Compose the real supplied Claude owner and common accepted-request lifetime.
+// No reader is mocked to accept current:true after native settlement.
+test("actual Claude Main separate-final completion uses only a settled native receipt and retains its fresh fences", { timeout: 30_000 }, async t => {
+  for (const disposition of ["delivered", "selection-changed", "newer-user"]) await t.test(disposition, async t => {
+    const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+    const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+    const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+    const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+    const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+    const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+    const { createTrainingActions } = await import("../../packages/vibe64-training/src/server/actions.js");
+    const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
+    const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+    let removeTeaching;
+    const teaching = await trainingTeachingFixture({ after(callback) { removeTeaching = callback; } }, { ready: false, exercise: false });
+    teaching.actor.role = "owner";
+    const main = createTrainingMainTeaching({ teaching: teaching.owner,
+      assessment: createTrainingAnswerAssessment({ learners: teaching.learners, content: teaching.content, teaching: teaching.owner }) });
+    const saved = await teaching.learners.readLearningSessionScope({ actor: teaching.actor, attemptId: teaching.attemptId });
+    const actions = createActionCatalogue();
+    const brief = createTrainingTeachingBrief({ learners: teaching.learners, content: teaching.content });
+    let runtime, entry, owner, adapter, checkpointReads = 0;
+    const teachingHost = { ...main,
+      bindConversation(input) { adapter = input.native; return main.bindConversation(input); },
+      async completeConversation(input) {
+        checkpointReads++;
+        assert.equal(entry.nativeTurn.read().active, false, "native settlement precedes the original before-state checkpoint");
+        assert.equal(owner.readRetainedTurn(entry.context.key, entry.id, { saved: null, current: true }), null,
+          "the actual active-only tool reader cannot admit settled work");
+        const final = owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id);
+        assert.ok(final);
+        assert.equal(final.inputMessageId, nativeMessageId("separate-final-input"));
+        assert.equal(final.itemId, final.conversationTurn.assistant.messageId);
+        assert.equal(final.outputId, final.conversationTurn.assistant.outputId);
+        assert.equal(owner.readFinalAssistantResult(entry.context.key, "foreign-thread", entry.turn.id), null);
+        assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, "foreign-turn"), null);
+        for (const [field, replacement] of [["process", {}], ["executionId", "foreign-execution"],
+          ["accountIdentity", "foreign-account"]]) {
+          const original = entry[field]; entry[field] = replacement;
+          try {
+            assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
+            if (typeof adapter.readCompletedTurn === "function") assert.equal(
+              await adapter.readCompletedTurn({ threadId: input.nativeTurn.threadId, turnId: input.nativeTurn.turnId }), null,
+              `settled projection cannot reattach ${field}`);
+          } finally { entry[field] = original; }
+        }
+        if (disposition === "selection-changed") await runtime.store.writeMetadataValue(input.sessionId, "assistant_selection",
+          JSON.stringify({ ...f.context.assistantSelection, modelId: "haiku" }));
+        if (disposition === "newer-user") await runtime.store.writeConversationUserMessage(input.sessionId,
+          { messageId: "later-accepted-input", text: "A later user owns the conversation." });
+        await main.completeConversation(input);
+      }
+    };
+    const learning = createTrainingLearningSessions({ learners: teaching.learners, teachingBrief: brief, learningTeaching: teachingHost,
+      project: { createRuntime: async () => runtime }, sessions: { createSession() {}, inspectSession() {} } });
+    const scope = await learning.resolveContext({ actor: teaching.actor, attemptId: teaching.attemptId });
+    const f = await boundMainFixture(t, { actions,
+      toolPolicy: ({ actionId, context }) => Boolean(context.runtime?.learningScope && context.runtime.learningTeaching?.actionIds.includes(actionId)),
+      async runtimeFactory(base) {
+        base.context.sessionId = `learning-${teaching.attemptId}`;
+        runtime = new Vibe64SessionRuntime({ projectContextRoot: base.root, projectRuntimeRoot: saved.projectRuntimeRoot,
+          learningScope: scope.learningScope, learningInstructions: scope.learningInstructions, learningTeaching: teachingHost,
+          promptRenderer: () => assert.fail("source-less teaching must not create a project prompt") });
+        await runtime.createSession({ sessionId: base.context.sessionId,
+          metadata: { assistant_selection: base.context.session.metadata.assistant_selection } });
+        return runtime;
+      }
+    });
+    t.after(() => removeTeaching());
+    actions.register({ contributorId: "settled-claude-main", domain: "training", actions: [
+      ...createSessionActions({ sessions: {} }).filter(action => action.id === ACTION_READ_CONVERSATION_CONTEXT),
+      ...createLearningTeachingContextActions(),
+      ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: teaching.learners, teachingBrief: brief }),
+      ...createTrainingTeachingActions({ mainTeaching: main })
+    ].map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
+    registerVibe64ActionContext(actions, { resolveUser: async () => teaching.actor,
+      authorizeProject: () => assert.fail("source-less teaching cannot borrow a Working ACL"),
+      resolveLearningContext: input => learning.resolveContext(input) });
+    const sessionId = f.context.sessionId;
+    const requestContext = { surface: "app", channel: "internal", requestMeta: { request: {
+      params: { learningAttemptId: teaching.attemptId }, vibe64User: teaching.actor } } };
+    Object.assign(f.context, { vibe64User: teaching.actor, teachingActions: actions,
+      browserAuthority: { sessionId, learningAttemptId: teaching.attemptId, actorId: scope.learningScope.learnerId, requestContext },
+      teachingTerminals: { async requireAssistantSelectionAccess(selection, options) {
+        assert.deepEqual(selection, defineVibe64AssistantSelection(f.context.assistantSelection));
+        assert.equal(options.vibe64User.uid, teaching.actor.uid);
+      } } });
+    const canonical = await f.open();
+    const input = { message: "Teach the exact saved question.", messageId: "separate-final-input", clientId: "original-browser" };
+    const sent = await f.provider.sendMessage(f.context, await main.captureMessage({ input, context: f.context, runtime, sessionId, actions }));
+    assert.equal(sent.delivered, true);
+    const process = f.processes[0];
+    const native = (await createSessionConversationBinding(f.provider, sessionId, f.context)).native;
+    owner = native.owner;
+    entry = [...owner.entries.values()].find(value => value.main && value.context.sessionId === sessionId);
+    assert.ok(owner.readRetainedTurn(entry.context.key, entry.id, { saved: null, current: true }), "active tools retain their original actual native input guard");
+    await process.options.onEvent({ type: "assistant", session_id: entry.id, uuid: "progress-before-question",
+      message: { content: [{ type: "text", text: "I will prepare the question." }] } });
+    const argumentsValue = { actionId: "vibe64.training.question.prepare", input: { attemptId: teaching.attemptId,
+      expectedRevision: 1, requestId: "separate-final-question", assessmentId: "explain", text: teaching.input.text, assistance: "none" } };
+    async function call(id, name, input) {
+      await process.options.onEvent({ type: "assistant", session_id: entry.id, uuid: `native-${id}`,
+        message: { content: [{ type: "tool_use", id, name: `mcp__application__${name}`, input }] } });
+      const response = await process.options.onControlRequest({ subtype: "mcp_message", server_name: "application",
+        message: { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: input,
+          _meta: { "claudecode/toolUseId": id } } } }, { signal: new AbortController().signal });
+      return JSON.parse(response.mcp_response.result.content[0].text);
+    }
+    const contract = await call("separate-final-contract", "assistant_action_contract", {
+      actionId: "vibe64.training.question.prepare", version: 1 });
+    assert.equal(contract.ok, true, JSON.stringify(contract));
+    const response = await call("prepare-separate-final", "assistant_action_execute", argumentsValue);
+    assert.equal(response.ok, true, JSON.stringify(response));
+    const authored = (await f.store.readConversationLog(sessionId)).find(turn => turn.messages.some(message => message.messageId === input.messageId));
+    assert.equal(authored.metadata.trainingQuestionDelivery.phase, "prepared");
+    await process.options.onEvent({ type: "result", session_id: entry.id, subtype: "success", result: teaching.input.text, uuid: "separate-native-final" });
+    await canonical.wait();
+    assert.equal(checkpointReads, 1);
+    const log = await f.store.readConversationLog(sessionId);
+    const final = owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id);
+    assert.ok(final);
+    assert.notEqual(final.conversationTurn.turnId, authored.turnId, "the original canonical writer retains the separate final carrier");
+    assert.equal(log.find(turn => turn.turnId === authored.turnId).metadata.trainingQuestionDelivery.phase, "prepared");
+    assert.equal(log.find(turn => turn.turnId === final.conversationTurn.turnId).metadata.trainingQuestionDelivery?.phase,
+      disposition === "delivered" ? "delivered" : undefined, "only the same saved selection and latest accepted user can promote that exact native final");
+    assert.equal(typeof adapter.readCompletedTurn, "function", "the completion hook is mandatory after the real delivery assertion");
+    assert.equal((await teaching.read()).completion.passed, 0, "question delivery is never grading");
+    assert.equal(entry.process, process);
+    assert.equal(f.processes.length, 1, "completion does not replace the original process");
+  });
+});

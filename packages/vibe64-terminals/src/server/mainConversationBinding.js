@@ -384,6 +384,17 @@ export async function createSessionConversationBinding(provider, sessionId, opti
           }
         } : {}),
         notifyPresentation: event => host.publish(sessionId, event),
+        ...(engine === "claude" ? {
+          async readCompletedTurn({ threadId, turnId }) {
+            const current = await host.state.read();
+            // Only the original settled final owner can establish inactivity.
+            // The active-only tool reader remains unchanged below.
+            if (current.threadId !== threadId || !host.native.owner.readFinalAssistantResult(
+              host.context.key, threadId, turnId)) return null;
+            return { threadId, turnId, active: false, outerTurnId: `claude:${threadId}:${turnId}`,
+              assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
+          }
+        } : {}),
         async readTurn() {
         if (engine === "codex") {
           const current = await host.state.read();

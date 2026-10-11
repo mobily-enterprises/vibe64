@@ -183,3 +183,9 @@ do not send the same request again merely because the answer stopped updating.
 If the lesson checkpoint refuses after native cleanup is verified, the request
 shows an interruption with that error. It does not remain active or claim a
 successful teaching answer. Read the saved lesson again before a new request.
+
+When Claude finishes a prepared lesson question, delivery is confirmed from that
+request's exact completed native final and the saved final message. A brief
+progress reply does not replace the question, and preparing a question alone
+does not mark it delivered or passed. Changed access, account, teacher selection
+or a later accepted message cannot attach an old final to the current question.
