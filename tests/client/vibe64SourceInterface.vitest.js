@@ -177,4 +177,17 @@ it('subsystem reading offers Files immediately and omits an empty Program sectio
   expect(html).toContain('data-file-path="app.py"');
   expect(html).not.toContain('No authored explanation');
   expect(html).not.toContain('aria-label="Subsystem Program"');
+  expect(html).toContain('aria-label="Subsystem explanation"');
+  expect(html).toContain('Runs the application.');
+  expect(html).toContain('Open Genesis explanation');
+});
+
+it('invalid Genesis capabilities retain the subsystem responsibility and expose the exact repair document', async () => {
+  const outline = { owner: { id: 'directory:app', title: 'Application', root: 'app', description: 'Coordinates application requests.' }, files: [], programs: [], programStatus: 'invalid', programDiagnostics: [{ code: 'PROGRAM_SOURCE_MISSING', details: { path: 'genesis/program/app/run.md', sourcePath: 'app/missing.go' }, message: 'Missing source citation.' }], operations: [], publicEntries: [], publicSymbols: [], boundarySymbols: [], observedSymbols: [], availableSymbols: [], tree: [] };
+  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  expect(html).toContain('Coordinates application requests.');
+  expect(html).toContain('Genesis capability explanations need repair.');
+  expect(html).toContain('app/missing.go');
+  expect(html).toContain('Review document');
+  expect(html).not.toContain('Program unavailable');
 });

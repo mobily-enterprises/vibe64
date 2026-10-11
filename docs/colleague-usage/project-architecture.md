@@ -37,7 +37,13 @@ viewer needs no language or package-manager-specific controls.
    pointer. The circle grows and moves towards the centre together.
 2. At reading size it becomes a square on the same canvas. A faint circle remains
    behind it. A compact skeleton appears while the interface is prepared.
-3. **Programs** shows its owned Genesis Program capabilities when present.
+3. **Explanation · Genesis** shows the subsystem's authored responsibility and
+   its owned Program capabilities when present. **Open Genesis explanation**
+   opens the subsystem map; edit it through **Dashboard → Files → Repo**.
+   If **Genesis capability explanations need repair** appears, **Review document**
+   opens the diagnostic's document. Correct the source citation or missing source,
+   then use **Architecture options → Re-scan project** to update its index.
+   The declared subsystem responsibility remains readable during that failure.
    Expand one to read its contract and follow its cited files. File icons also
    name the capabilities that cite them. Each Program explicitly names one main
    source in its owning subsystem. Its icon has a gold border, star and **Main · …**
@@ -51,9 +57,11 @@ viewer needs no language or package-manager-specific controls.
    signature to reach its implementation file and that exact declaration.
    Unknown return information is omitted from these compact rows; coverage
    remains explicit. Hover a shortened signature to read its complete text.
+   Drag across text to select and copy it. Selecting signature text does not open
+   the implementation; an ordinary click or keyboard activation still does.
 4. Graphical **Files** appear below the interface as soon as the selected
    subsystem's detail is ready. Use the **Files** shortcut at the top to reach them immediately, or scroll down.
-   **Interface** and **Programs** jump to their sections in the same retained document. Direct files appear before subdirectories at every level.
+   **Interface** and **Explanation** jump to their sections in the same retained document. Direct files appear before subdirectories at every level.
    Open a folder's disclosure arrow; **Find a file** filters
    names and paths and exposes matching folders. File bars and icon heights
    compare measured source size within this subsystem. A dash means unavailable

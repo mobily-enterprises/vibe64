@@ -1730,6 +1730,9 @@ pseudocode in an inline Pseudocode field without an embedded chat. Function expl
 identify applicable caller inputs and practical outputs: what is supplied, what is returned,
 and how to read the returned data or invoke its operations, separately from effects.
 File overviews explain scope and behavior without function input/output sections.
+Subsystems display their Genesis-authored responsibility and associated capability
+explanations. Source-citation failures remain visible with document navigation;
+text can be selected without activating a signature.
 The viewer also retains exact symbol Code and read-only whole-file Code. Generated interpretations are
 informational only, cached privately against actual saved source and guidance,
 and regenerated on the next explicit explanation request after changes. Opening a file or
