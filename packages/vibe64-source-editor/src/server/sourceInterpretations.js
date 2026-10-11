@@ -70,16 +70,16 @@ export async function readSourceInterpretations(context, file, promptVersion) {
     for (let offset = 0; offset < Math.min(entries.length, MAX_FILE_RECORDS); offset += 16) {
       const batch = await Promise.allSettled(entries.slice(offset, Math.min(offset + 16, MAX_FILE_RECORDS)).map(name => readRecord(path.join(directory(context, file.path), name))));
       for (const result of batch) {
-        if (result.status === 'rejected') { warnings.push(result.reason.message); continue; }
+        if (result.status === 'rejected') { warnings.push('A saved pseudocode record could not be read. Regenerate it with the Helper.'); continue; }
         const record = result.value;
-        if (!record || record.path !== file.path) continue;
+        if (!record || record.path !== file.path || record.presentation !== 'steps' || record.scope !== 'selection' || !record.symbolId) continue;
         records.push({ path: record.path, scope: record.scope, symbolId: record.symbolId, presentation: record.presentation,
           fileHash: record.fileHash, body: record.body, summary: record.summary, createdAt: record.createdAt,
           status: record.fileHash === file.hash && record.promptVersion === promptVersion(record.presentation) ? 'current' : 'stale' });
       }
     }
   } catch (error) {
-    if (error.code !== 'ENOENT') warnings.push(error.message);
+    if (error.code !== 'ENOENT') warnings.push('Saved pseudocode is unavailable. Regenerate it with the Helper.');
   }
   return { records, warning: [...new Set(warnings)].join(' ') };
 }

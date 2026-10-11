@@ -5,17 +5,29 @@
       <button v-if="!embedded" type="button" class="subsystem-inspector__close" aria-label="Back to architecture map" @click="$emit('close')">×</button>
     </header>
     <div class="subsystem-inspector__body">
-      <p class="subsystem-inspector__description">{{ outline.owner.description || 'This subsystem has no recorded description yet.' }}</p>
+      <div class="subsystem-inspector__description"><slot name="text" :text="outline.owner.description" source-path="genesis/subsystems.md">{{ outline.owner.description || 'This subsystem has no recorded description yet.' }}</slot></div>
       <p class="subsystem-inspector__summary">{{ outline.owner.opaque ? 'External package · source remains opaque' : `${outline.files.length} file${outline.files.length === 1 ? '' : 's'} · ${measuredFiles ? measuredLines.toLocaleString() + ' measured source lines' + (measuredFiles < outline.files.length ? ` (${measuredFiles}/${outline.files.length} files)` : '') : 'Source size unavailable'}` }}</p>
+      <section class="subsystem-inspector__section" aria-label="Subsystem Program">
+        <h3>What this subsystem does <span>{{ outline.programs?.length || 0 }}</span></h3>
+        <details v-for="program in outline.programs || []" :key="program.id" class="subsystem-inspector__program nodrag nopan" @toggle="$event.target.open && expandedPrograms.add(program.id)">
+          <summary><strong>{{ program.title }}</strong><span>{{ program.description }}</span></summary>
+          <div v-if="expandedPrograms.has(program.id)">
+            <slot name="text" :text="program.publicContract" :source-path="program.path"><p class="subsystem-inspector__contract">{{ program.publicContract }}</p></slot>
+            <div class="subsystem-inspector__program-sources"><button v-for="path in program.sources" :key="path" type="button" @click="$emit('inspect', { path })">{{ path }} ↗</button></div>
+            <button type="button" class="subsystem-inspector__program-document" @click="$emit('open-source', { path: program.path })">Read or edit Program explanation ↗</button>
+          </div>
+        </details>
+        <p v-if="!outline.programs?.length" class="subsystem-inspector__hint" role="status">{{ outline.programStatus === 'valid' ? 'No authored explanation.' : 'Program unavailable. Refresh analysis.' }}</p>
+        <p v-for="diagnostic in outline.programDiagnostics || []" :key="diagnostic.code + diagnostic.message" class="subsystem-inspector__coverage" role="status">{{ diagnostic.message }}</p>
+      </section>
         <section class="subsystem-inspector__section" aria-label="Subsystem interface">
           <h3>Interface</h3>
-          <p class="subsystem-inspector__hint">{{ outline.publicEntries.length ? `${outline.publicSymbols.length} declared API members. Declared exports are marked below.` : 'Intended API not specified. Directory ownership does not define a public contract.' }} Select a signature to open its implementation.</p>
-          <p v-if="outline.dependencyCoverage !== 'complete' && !outline.owner.opaque" class="subsystem-inspector__coverage" role="status">Import analysis is {{ outline.dependencyCoverage || 'unavailable' }}. Missing consumers do not prove an export is internal or unused.</p>
+          <p v-if="!outline.publicEntries.length" class="subsystem-inspector__hint">Intended API not declared.</p>
+          <p v-if="outline.dependencyCoverage !== 'complete' && !outline.owner.opaque" class="subsystem-inspector__coverage" role="status" title="Unobserved imports do not prove an export is internal or unused.">Import analysis {{ outline.dependencyCoverage || 'unavailable' }}.</p>
           <label v-if="(outline.exportCount || outline.publicSymbols.length) > 12" class="subsystem-inspector__search">Find a signature<input v-model="symbolQuery" type="search" placeholder="Operation, component, value or type" /></label>
           <details v-for="group in signatureGroups" :key="group.key" class="subsystem-inspector__surface nodrag nopan" :open="group.primary" @toggle="$event.target.open && expandedGroups.add(group.key)">
-            <summary>{{ group.title }} · {{ group.count }}</summary>
+            <summary :title="group.explanation">{{ group.title }} · {{ group.count }}</summary>
             <div v-if="group.primary || expandedGroups.has(group.key)">
-              <p class="subsystem-inspector__hint">{{ group.explanation }}</p>
               <div class="subsystem-inspector__signatures">
                 <template v-for="symbol in group.symbols.slice(0, 200)" :key="`${symbol.source?.symbolId || symbol.importPaths?.join(',')}:${symbol.qualifiedName || symbol.name}:${symbol.start?.line || ''}`">
                   <button v-if="symbol.source" type="button" class="subsystem-inspector__signature nodrag nopan" :title="`Open ${symbol.source.path}:${symbol.source.line || ''}`" @click="$emit('inspect', symbol.source)">
@@ -30,7 +42,10 @@
               <p v-if="symbolQuery && !group.symbols.length" class="subsystem-inspector__hint">No declarations match this search.</p>
             </div>
           </details>
-          <p v-if="outline.publicEntries.some(entry => entry.coverage !== 'complete')" class="subsystem-inspector__hint">Partial analysis · Unrecorded return types are omitted.</p>
+          <details class="subsystem-inspector__technical nodrag nopan"><summary>Analysis details</summary>
+            <p v-for="group in signatureGroups" :key="group.key"><strong>{{ group.title }}:</strong> {{ group.explanation }}</p>
+            <p v-if="outline.publicEntries.some(entry => entry.coverage !== 'complete')">Partial export analysis. Unknown return types omitted.</p>
+          </details>
           <details v-if="outline.publicEntries.length" class="subsystem-inspector__technical nodrag nopan"><summary>Import paths · {{ outline.publicEntries.length }}</summary>
             <div v-for="(entry, index) in outline.publicEntries" :key="index"><code>{{ entry.importPath }}</code><p>{{ entry.conditions.join(' · ') || 'Default conditions' }}<span v-if="entry.target"> · {{ entry.target }}</span></p><p v-if="!entry.symbols.length">Public declarations have not been resolved for this path.</p></div>
           </details>
@@ -40,12 +55,12 @@
           <button v-for="call in outline.operations" :key="call.id" type="button" class="subsystem-inspector__signature nodrag nopan" @click="$emit('inspect', { path: call.file.path, symbol: call.controllerSymbol })"><code>{{ [call.key?.protocol, call.key?.method, call.key?.operation].filter(Boolean).join(' · ') || call.id }}</code><span>{{ basename(call.file.path) }} ↗<template v-if="call.pages.length"> · {{ call.pages.map(page => page.title).join(', ') }}</template></span></button>
         </section>
       <section v-if="!outline.owner.opaque" class="subsystem-inspector__section subsystem-inspector__files">
-          <h3>Files <span>{{ outline.files.length }}</span></h3><p class="subsystem-inspector__hint">Scroll to browse. Click or tap a file to read its interface; Enter also opens it. Bars compare source size within this subsystem.</p>
+          <h3>Files <span>{{ outline.files.length }}</span></h3><p class="subsystem-inspector__hint">Click a file to open it. Bars compare source size.</p>
           <div class="subsystem-inspector__file-tools nodrag nopan">
             <label class="subsystem-inspector__search">Find a file<input v-model="query" type="search" placeholder="Name or path" /></label>
             <label class="subsystem-inspector__sort">Sort<select v-model="sortBy"><option value="name">Name</option><option value="type">File type</option><option value="size">Size · largest first</option></select></label>
           </div>
-          <Vibe64SubsystemTreeBranch :items="tree" :searching="!!query.trim()" :selected-id="selected?.id || ''" @select="selected = $event" @inspect="$emit('inspect', $event)" />
+          <Vibe64SubsystemTreeBranch :items="tree" :folder-state="folderState" :searching="!!query.trim()" :selected-id="selected?.id || ''" @select="selected = $event" @inspect="$emit('inspect', $event)" />
           <p v-if="!tree.length" class="subsystem-inspector__hint">No files match this search.</p>
       </section>
     </div>
@@ -55,12 +70,14 @@
 import { computed, ref, watch } from 'vue';
 import Vibe64SubsystemTreeBranch from './Vibe64SubsystemTreeBranch.vue';
 const props = defineProps({ outline: { type: Object, required: true }, embedded: Boolean });
-defineEmits(['close', 'inspect']);
+defineEmits(['close', 'inspect', 'open-source']);
 const query = ref('');
+const folderState = ref(new Map());
 const symbolQuery = ref('');
 const sortBy = ref('name');
 const selected = ref(null);
 const expandedGroups = ref(new Set());
+const expandedPrograms = ref(new Set());
 const signatureGroups = computed(() => {
   const term = symbolQuery.value.trim().toLocaleLowerCase();
   const observed = props.outline.observedSymbols || [];
@@ -68,7 +85,7 @@ const signatureGroups = computed(() => {
   return [
     { key: 'observed', title: 'Imported by other subsystems', primary: true, symbols: observed, explanation: 'These particular declarations are imported across this directory boundary. Imports do not prove runtime calls or intended API membership.' },
     { key: 'declared', title: 'Declared API', primary: !observed.length, symbols: props.outline.publicSymbols.filter(symbol => !observedIds.has(symbol.source?.symbolId)), explanation: 'Explicit package or module exports, including members with no observed consumers.' },
-    { key: 'candidates', title: 'Exports from externally imported files', primary: !observed.length && !props.outline.publicSymbols.length, symbols: props.outline.boundarySymbols, explanation: 'File-level usage is known, but these individual exports are not proven to be imported. Review candidates, not a declared API.' },
+    { key: 'candidates', title: 'API review candidates', primary: !observed.length && !props.outline.publicSymbols.length, symbols: props.outline.boundarySymbols, explanation: 'Exports from externally imported files. Individual imports are unproven.' },
     { key: 'available', title: 'Other available exports', primary: false, symbols: props.outline.availableSymbols || [], explanation: 'Available under the language’s visibility rules. They may be internal, unused or useful to future consumers; current analysis does not decide intent.' }
   ].filter(group => group.symbols.length).map(group => ({ ...group, count: group.symbols.length, symbols: group.symbols.filter(symbol => !term || `${symbol.qualifiedName || ''} ${symbol.name || ''} ${symbol.source?.path || ''}`.toLocaleLowerCase().includes(term)) }));
 });
@@ -103,7 +120,7 @@ const tree = computed(() => {
   }
   return arrange(props.outline.tree);
 });
-watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value = ''; selected.value = null; sortBy.value = 'name'; expandedGroups.value = new Set(); });
+watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value = ''; selected.value = null; sortBy.value = 'name'; folderState.value = new Map(); expandedGroups.value = new Set(); expandedPrograms.value = new Set(); });
 </script>
 <style scoped>
 .subsystem-inspector { position: absolute; z-index: 10; top: 14px; bottom: 42px; right: 14px; width: min(560px, calc(100% - 28px)); display: flex; flex-direction: column; min-height: 0; color: #304b50; background: #fff; border: 1px solid #b6cfca; border-radius: 14px; box-shadow: 0 12px 40px #183e4329; }
@@ -150,4 +167,11 @@ watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value 
 .subsystem-inspector__sort select { max-width: 190px; padding: 6px 8px; border: 1px solid #d6e2dc; border-radius: 6px; background: white; color: #304b50; }
 .subsystem-inspector button:focus-visible, .subsystem-inspector summary:focus-visible { outline: 2px solid #377dcb; outline-offset: 2px; }
 @media (max-width: 600px) { .subsystem-inspector__signature { grid-template-columns: 64px minmax(0, 1fr); gap: 2px 6px; } .subsystem-inspector__signature .subsystem-inspector__source { grid-column: 2; grid-row: auto; max-width: 100%; } .subsystem-inspector__signature small { font-size: 9px; white-space: nowrap; } .subsystem-inspector:not(.subsystem-inspector--embedded) { top: 8px; right: 8px; bottom: 32px; width: calc(100% - 16px); } .subsystem-inspector__header { padding: 12px 16px; } .subsystem-inspector__body { padding: 10px 16px; } }
+.subsystem-inspector__program { border-bottom: 1px solid #e2eae7; }
+.subsystem-inspector__program summary { display: list-item; padding: 8px 0; }
+.subsystem-inspector__program summary span { display: block; font-size: 12px; line-height: 18px; color: #6b827a; margin-top: 2px; }
+.subsystem-inspector__program:not([open]) summary span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.subsystem-inspector__contract { white-space: pre-wrap; font-size: 13px; line-height: 20px; }
+.subsystem-inspector__program-sources { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.subsystem-inspector__program-sources button, .subsystem-inspector__program-document { border: 0; background: transparent; color: #367e8a; font-size: 12px; text-align: left; overflow-wrap: anywhere; min-height: 44px; cursor: pointer; }
 </style>

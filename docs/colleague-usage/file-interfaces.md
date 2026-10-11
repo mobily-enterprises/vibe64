@@ -1,12 +1,12 @@
 # Read file interfaces and exact code
 
 Open **Dashboard → Files → Repo**, then select a source file. The default view is
-**Public interface**, listing the public/exported symbols available from the
+**Interface**, showing **File exports** available from the
 project's selected language parser. Visibility follows that language's conventions.
 Callable signatures show indexed parameters and return information when available.
 The view explains that definitions can be operations, components, values or types.
 File exports are not automatically the subsystem's intended API. Select a
-definition to read its details; the empty detail area explicitly asks for a selection.
+definition to read its details.
 Unrecorded return information is omitted; this does not mean a function returns
 nothing. Coverage is partial; an empty list does not prove there is no public interface.
 For Python, a static `__all__` list determines module exports. Dynamic or
@@ -20,31 +20,37 @@ attributes. A grouped declaration can include more than one named value. Build
 configuration, macro expansion and conditional compilation remain outside static
 coverage; use the project's declared preparation/verification for runtime proof.
 
-Select a symbol to request its **Description** in English through the existing
-Helper explanation panel. **Steps** requests an ordered English account of its
-decisions, data flow and effects; meaningful pseudo-variable names can clarify the
-steps. **Code** displays that symbol's exact source range. **File summary** and
-**File steps** describe the complete file with the service's existing bounded
-context. **Code · whole file** opens the existing editable source view; **Interface**
-in the header returns to public symbols. The controls are available on desktop
-and mobile. The compact header keeps the full path beneath the title and
-whole-file Code control; file actions stay together when space permits.
-Explicit immersive Code view still opens the editor directly.
-Long declarations scroll horizontally within the Code area; the public-symbol
-list and presentation controls stay within the available pane width.
+**Program** lists Genesis capabilities that cite the selected file.
+Open a capability to read its authored contract and participating files. Its one
+owning subsystem stays fixed even when those files include another subsystem's
+library. This is file-level evidence, not a claim that every function implements
+the entire capability. **Description** points to this Program context. Missing
+explanations are explicit; review authored explanations after source changes.
+Vibe64 does not generate a competing file or subsystem summary.
+**Read Program** opens the authored document. Use **Dashboard → Files → Repo**
+to edit that document; the Architecture file viewer is read-only.
 
-Explanation requests require an available assistant and obey the same existing
-account, access, admission and cancellation rules as **Explain file or selection**.
-If the Helper is unavailable, its status appears before the definition list,
-even before you select an item. Description and Steps remain disabled; signatures
-and whole-file Code can still be read. This notice does not invent an explanation
-for missing source or assistant evidence.
-The panel retains **Stop**, retry and follow-up controls. Description and Steps
-have separate caches; cached answers remain scoped to the same source, account
-and verified Helper profile. Explanations are generated interpretation, not proof.
+Select a callable declaration, then choose **Steps** to generate function-specific
+pseudocode through the existing Helper. Merely opening a file or selecting a
+signature makes no Helper query. Steps describe meaningful decisions, data flow,
+effects and failures in English. **Code** displays that declaration's exact source
+range. Components, values and types use Program context and Code; function Steps
+are unavailable for non-callable declarations. **Code · whole file** opens the
+existing source view; **Interface** returns to declarations. Controls work on
+both desktop and mobile.
+
+Pseudocode requests obey the existing account, access, admission and cancellation
+rules. If the Helper is unavailable, saved Steps, Program and Code remain readable.
+The explanation panel retains **Stop**, retry and follow-up controls. A completed
+initial function answer is cached privately against actual saved source, account,
+verified Helper profile and prompt revision. It remains informational and is
+not supplied to coding agents. Source changes mark it stale; the next explicit
+Steps request regenerates it. **Regenerate Steps** forces a new request.
+Follow-up chats do not replace the cached initial answer. Existing general
+**Explain file or selection** in the Code editor remains available separately.
 
 An out-of-date index disables symbol-range use. **Refresh analysis** rebuilds
-available analysis; **Code · whole file** and whole-file descriptions remain
+available analysis; **Code · whole file** and authored Program context remain
 available without a supported parser. Unsaved edits disable generated
 explanations and indexed range use until saved. Save with the existing **Save now**
 control; conflicts retain the existing draft and recovery workflow. A source change
@@ -80,9 +86,11 @@ or Esc goes back one level. The subsystem breadcrumb returns to its retained int
 browsing. A stale, ambiguous or unavailable implementation identity never
 selects a guessed declaration.
 
-Saved informational interpretations remain readable when the Helper is unavailable.
-**Matches saved source** identifies a current answer; **Stale — source or guidance
-changed** retains the old text with its warning. **Regenerate** requests a new
-answer through the Helper. Source edits invalidate freshness. Initial completed
-answers are privately cached across reopening and service restart; follow-up
-messages do not silently replace them. They are not passed to coding agents.
+After following a cited source to another file, **← Back** restores the previous
+file and selected declaration. This history also covers links across subsystems;
+**×**, Esc and the subsystem breadcrumb return to the enclosing browser instead.
+
+**Analysis details** holds coverage, visibility and missing-Helper information.
+The file view keeps this secondary information collapsed. A missing Program
+shows one short notice; **Description** is disabled until an authored explanation
+exists. **Code** and saved function **Steps** remain available independently.

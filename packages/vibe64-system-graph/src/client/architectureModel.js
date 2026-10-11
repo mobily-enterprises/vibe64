@@ -158,7 +158,7 @@ export function engineOverview(architecture, order = []) {
       : receivingFiles.size ? 'Exported signatures to review' : 'Public interface not recorded';
     cards.set(subsystem.id, {
       id: subsystem.id, type: 'subsystem', style: { width: `${width}px`, height: `${height}px` },
-      data: { ...subsystem, ...(placement ? { title: placement.title, description: placement.description, placementKind: placement.kind } : {}), publicSummary,
+      data: { ...subsystem, ...(placement ? { placementKind: placement.kind } : {}), publicSummary,
         library: placement?.kind === 'libraries', presentationOrder: placement?.order ?? Infinity, memberOrder: placement?.memberOrder ?? Infinity, sourceLines, sizePartial: measured.length !== sourceFiles.length, measuredFiles: measured.length, sourceVolume: (sourceLines || 0) / largest,
         entryFiles: (architecture?.entryPoints || []).filter(entry => entry.subsystemId === subsystem.id).map(entry => entry.file),
         cycleLabel: group.cyclic ? group.cycleLabel : '', disconnected: graph.disconnectedIds.has(subsystem.id), rank: layer.rank }
@@ -236,7 +236,7 @@ export function subsystemOutline(architecture, subsystemId) {
   if (!nativeOwner) return null;
   const placementGroup = (architecture?.layout?.groups || []).find(group => group.subsystems.some(member => member.root === nativeOwner.root));
   const placement = placementGroup?.subsystems.find(member => member.root === nativeOwner.root);
-  const owner = placement ? { ...nativeOwner, title: placement.title, description: placement.description, placementKind: placementGroup.kind } : nativeOwner;
+  const owner = placement ? { ...nativeOwner, placementKind: placementGroup.kind } : nativeOwner;
   const files = new Map((architecture?.files || []).map(file => [file.id, file]));
   const local = owner.opaque ? [] : [...files.values()].filter(file => file.subsystemId === owner.id);
   const localIds = new Set(local.map(file => file.id));
@@ -307,6 +307,12 @@ export function subsystemOutline(architecture, subsystemId) {
   const entryFiles = [...entries.values()].map(entry => ({ ...entry, reasons: [...entry.reasons], consumers: [...entry.consumers.values()],
     symbols: symbolsByFile.get(entry.file.id) || []
   })).sort((a, b) => a.file.path.localeCompare(b.file.path));
+  const programs = (architecture?.program?.modules || []).filter(module => module.subsystemId === owner.id);
+  const programsByFile = new Map();
+  for (const module of architecture?.program?.modules || []) for (const source of module.sources) {
+    if (!programsByFile.has(source)) programsByFile.set(source, []);
+    programsByFile.get(source).push(module);
+  }
   const largest = Math.max(1, ...local.map(file => Number.isSafeInteger(file.sourceLines) ? file.sourceLines : 0));
   const root = { children: [] };
   const directories = new Map([['', root]]);
@@ -327,6 +333,7 @@ export function subsystemOutline(architecture, subsystemId) {
     }
     directory.children.push({ kind: 'file', id: file.id, name: segments.at(-1), file, relativePath,
       reasons: entries.has(file.id) ? [...entries.get(file.id).reasons] : [],
+      programs: programsByFile.get(file.path) || [],
       publicCount: symbolsByFile.get(file.id)?.length || 0,
       volume: Number.isSafeInteger(file.sourceLines) ? Math.max(0, file.sourceLines) / largest : null });
   }
@@ -345,7 +352,7 @@ export function subsystemOutline(architecture, subsystemId) {
   const candidates = new Set(boundarySymbols.map(symbol => symbol.id));
   const availableSymbols = local.flatMap(file => (symbolsByFile.get(file.id) || []).filter(symbol => !declaredSymbolIds.has(symbol.id) && !observed.has(symbol.id) && !candidates.has(symbol.id))
     .map(symbol => ({ ...symbol, source: { path: file.path, symbolId: symbol.id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line } })));
-  return { owner, tree: root.children, files: local, entryFiles, publicEntries, publicSymbols: [...publicSymbols.values()], observedSymbols, boundarySymbols, availableSymbols, operations, fileLinks: [...fileLinks.values()], dependencyCoverage: architecture?.ui?.capabilities?.imports || architecture?.capabilities?.dependencies || 'unconfigured', exportCount: local.reduce((count, file) => count + (symbolsByFile.get(file.id)?.length || 0), 0) };
+  return { owner, tree: root.children, files: local, programs, programStatus: architecture?.program?.status || 'unavailable', programDiagnostics: architecture?.program?.diagnostics || [], entryFiles, publicEntries, publicSymbols: [...publicSymbols.values()], observedSymbols, boundarySymbols, availableSymbols, operations, fileLinks: [...fileLinks.values()], dependencyCoverage: architecture?.ui?.capabilities?.imports || architecture?.capabilities?.dependencies || 'unconfigured', exportCount: local.reduce((count, file) => count + (symbolsByFile.get(file.id)?.length || 0), 0) };
 }
 
 export function architectureOverview(architecture, expandedSubsystemId = '', order = []) {

@@ -1093,7 +1093,7 @@ message, account or native file is changed by the applicability no-op.
 
 ## Source explanation presentation
 
-Optional informational file/declaration interpretations are new records under
+Optional informational function pseudocode is new cache data under
 `source-editor/interpretations/` in private runtime state. Schema version 1 records
 retain the source hash, prompt revision, actor/project/session scope, presentation
 mode and verified Helper profile identity. Completed initial answers are saved
@@ -1102,7 +1102,8 @@ against actual saved source and guidance, without generation or historical
 backfills. Missing records need no migration; invalid records give regeneration
 guidance. No existing source, explanation history, cleanup ledger or Genesis
 Program is transformed. These records remain informational and are excluded from
-coding-agent context.
+coding-agent context. Only explicit function Steps are durably cached; old optional
+file/Description records remain untouched and are ignored by the new view.
 
 New explicit interface requests may retain optional `sourceRange.presentation`
 (`description` or `steps`) and its versioned prompt identity in the original

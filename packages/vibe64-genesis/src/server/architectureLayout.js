@@ -24,11 +24,11 @@ export function parseVibe64ArchitectureLayoutLines(lines, { path = 'genesis/stac
     }
     const field = line.match(/^- (Kind|Purpose|Subsystem): (.+)$/u);
     if (!current || !field) invalidStackOperation(code, path, 'Expected a Group heading or Kind, Purpose, Subsystem field.', index + 1);
-    const values = backtickedArguments(field[2], code, path, field[1], index + 1, { count: field[1] === 'Subsystem' ? 3 : 1 });
+    const values = backtickedArguments(field[2], code, path, field[1], index + 1, { count: 1 });
     if (field[1] === 'Subsystem') {
       const root = projectPath(values[0], code, path, 'Subsystem root', index + 1);
       if (roots.has(root)) invalidStackOperation(code, path, 'Each directory root may be placed only once.', index + 1);
-      roots.add(root); current.subsystems.push({ root, title: values[1], description: values[2] });
+      roots.add(root); current.subsystems.push({ root });
     } else {
       const key = field[1].toLowerCase();
       if (current[key] !== undefined) invalidStackOperation(code, path, `Duplicate ${field[1]}.`, index + 1);

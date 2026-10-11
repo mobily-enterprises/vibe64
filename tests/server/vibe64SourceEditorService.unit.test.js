@@ -290,7 +290,7 @@ test("symbol explanations use the server-indexed declaration, ignore forged brow
     }
   });
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
-  const symbols = declarations.map((declaration, index) => ({ id: `symbol:${index}`, fileId: "file:src/app.js", path: "src/app.js", name: index ? "second" : "first", visibility: "public", rangeAvailable: true, start: { line: index + 1, column: 1 }, end: { line: index + 1, column: declaration.length + 1 } }));
+  const symbols = declarations.map((declaration, index) => ({ id: `symbol:${index}`, fileId: "file:src/app.js", path: "src/app.js", name: index ? "second" : "first", visibility: "public", parameters: index ? [] : undefined, rangeAvailable: true, start: { line: index + 1, column: 1 }, end: { line: index + 1, column: declaration.length + 1 } }));
   const architecture = {
     schema: "genesis.architecture.v1", snapshotId: "source-test",
     subsystems: [{ id: "directory:src", root: "src", fileIds: ["file:src/app.js"], parentId: null }],
@@ -300,7 +300,7 @@ test("symbol explanations use the server-indexed declaration, ignore forged brow
   const artifact = path.join(fixture.sourceRoot, ".genesis/machine-city.json");
   await mkdir(path.dirname(artifact));
   await writeFile(artifact, JSON.stringify({ architecture }));
-  const input = { sessionId: "session-1", path: "src/app.js", symbolId: symbols[1].id, expectedHash: hash, presentation: "description", scope: "file", startLine: 1, endLine: 1, startColumn: 2, endColumn: 3 };
+  const input = { sessionId: "session-1", path: "src/app.js", symbolId: symbols[1].id, expectedHash: hash, presentation: "steps", scope: "file", startLine: 1, endLine: 1, startColumn: 2, endColumn: 3 };
   const result = await fixture.service.explainSelection(input);
   assert.equal(result.ok, true);
   assert.deepEqual(generated, [declarations[1]]);
@@ -360,12 +360,26 @@ test("symbol explanations reject missing, malformed, impossible, symlinked and o
   assert.equal(generated, 0);
 });
 
-test('informational file interpretations survive restart, expose staleness and isolate people and projects', async t => {
+async function writeCallableAnalysis(fixture, text = 'export function app() { return 1; }\n') {
+  await writeFile(path.join(fixture.sourceRoot, 'src/app.js'), text);
+  const hash = crypto.createHash('sha256').update(text).digest('hex');
+  const architecture = { schema: 'genesis.architecture.v1', snapshotId: 'function-cache',
+    subsystems: [{ id: 'directory:src', root: 'src', parentId: null, fileIds: ['file:src/app.js'] }],
+    files: [{ id: 'file:src/app.js', path: 'src/app.js', hash: `sha256:${hash}`, subsystemId: 'directory:src', lines: 2 }],
+    symbols: [{ id: 'symbol:app', fileId: 'file:src/app.js', path: 'src/app.js', name: 'app', visibility: 'public', parameters: [], rangeAvailable: true, start: { line: 1, column: 1 }, end: { line: 1, column: text.trimEnd().length + 1 } }],
+    relations: [], capabilities: { symbols: 'partial', dependencies: 'partial', pages: 'unconfigured', runtimeCalls: 'unsupported' }, diagnostics: [] };
+  const artifact = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
+  await mkdir(path.dirname(artifact), { recursive: true });
+  await writeFile(artifact, JSON.stringify({ architecture }));
+}
+
+test('function pseudocode survive restart, expose staleness and isolate people and projects', async t => {
   let generated = 0;
   const fixture = await createSourceEditorFixture({ explanationGenerator() { generated++; return { body: `Describes revision ${generated}.`, executionProfile: resolvedSourceExplanationProfile() }; } });
   const other = await createSourceEditorFixture();
   t.after(() => Promise.all([fixture, other].map(({ root }) => rm(root, { recursive: true, force: true }))));
-  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description', startLine: 1, endLine: 1, vibe64User: { uid: 1001, username: 'ada' } };
+  await writeCallableAnalysis(fixture);
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1, vibe64User: { uid: 1001, username: 'ada' } };
   assert.equal((await fixture.service.explainSelection(input)).ok, true);
   const restarted = fixture.restartService();
   assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
@@ -375,8 +389,9 @@ test('informational file interpretations survive restart, expose staleness and i
   assert.match(current.interpretations.records[0].body, /revision 1/);
   assert.deepEqual((await restarted.readFile({ ...input, vibe64User: { uid: 1002, username: 'bob' } })).interpretations.records, []);
   assert.deepEqual((await other.service.readFile(input)).interpretations.records, []);
-  await writeFile(path.join(fixture.sourceRoot, input.path), "console.log('changed');\n");
+  await writeFile(path.join(fixture.sourceRoot, input.path), 'export function app() { return 2; }\n');
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
+  await writeCallableAnalysis(fixture, 'export function app() { return 2; }\n');
   assert.equal((await restarted.explainSelection(input)).ok, true);
   assert.equal(generated, 2);
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
@@ -395,7 +410,8 @@ test('forced interpretation refresh cannot be overwritten by an older completed 
     return { body: 'New interpretation.', executionProfile: resolvedSourceExplanationProfile() };
   } });
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
-  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description', startLine: 1, endLine: 1 };
+  await writeCallableAnalysis(fixture);
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1 };
   const older = fixture.service.explainSelection(input);
   await started;
   const newer = await fixture.service.explainSelection({ ...input, force: true });

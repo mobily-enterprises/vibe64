@@ -1550,10 +1550,12 @@ crate-restricted items. Symbol Code includes attached attributes/decorators and
 language declaration keywords; grouped values can share their exact declaration
 range. Public fields/properties/constants and types supplement callable symbols
 through the existing native index, while local declarations remain internal.
-A symbol offers Description (English without pseudocode), Steps (ordered English
-with meaningful names when helpful), and exact Code. Whole-file Code preserves
+A declaration offers Description from authored Genesis Program context, explicit
+function Steps (informational English pseudocode), and exact Code. The interface
+does not generate parallel file/subsystem summaries. Program Sources identify
+participating files, not exact per-function intent. Whole-file Code preserves
 the mounted CodeMirror editor, draft, autosave, conflict and realtime owners.
-Description/Steps reuse the original Helper service, verified profile, account
+Function Steps reuse the original Helper service, verified profile, account
 isolation, cache, admission, stream, stop and cleanup. Their optional new-write
 `sourceRange.presentation` and prompt versions keep the caches distinct; existing
 records without the field keep their original interpretation and need no historical
@@ -1570,10 +1572,12 @@ Unsupported parsers and
 stale indexes retain whole-file explanation and Code controls without fabricating
 an empty complete public interface.
 
-Optional informational file/declaration interpretations are stored privately by
+Only function-specific pseudocode is stored privately by
 the source-editor service, scoped to actor, project/session, actual saved source,
 verified Helper profile, presentation and Genesis prompt revision. Only completed
 initial answers are persisted atomically; follow-up conversations do not replace
 them. A forced refresh cannot be overwritten by an older completion. Reads can
-show current or explicitly stale saved text without starting a Helper. These
+show current or explicitly stale saved text without starting a Helper. Opening
+files or selecting declarations does not query the Helper. The next explicit
+Steps request regenerates a stale answer; there is no background summary job. These
 interpretations are not Program contracts or coding-agent context.

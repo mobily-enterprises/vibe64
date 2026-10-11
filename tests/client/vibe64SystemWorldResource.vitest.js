@@ -103,7 +103,7 @@ describe("Genesis City client resources", () => {
 
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
-    { component: "Vibe64SubsystemsView", pane: "system", useTool: useVibe64SystemGraph, resources: 7 }
+    { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 7 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -130,7 +130,7 @@ describe("Genesis City client resources", () => {
       props.active = false;
       await nextTick();
       expect(endpointMocks.calls.every((call) => unref(call.enabled) === false)).toBe(true);
-      expect(endpointMocks.calls.map((call) => call.path.value)).toEqual(Array(resources).fill(""));
+      expect(endpointMocks.calls.map((call) => call.path.value)).toEqual(pane === "database" ? Array(resources).fill("") : paths);
 
       props.active = true;
       await nextTick();
@@ -168,8 +168,8 @@ describe("Genesis City client resources", () => {
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",
       "/api/vibe64/system-graph/sessions/session%2Fa/cities/machine",
-      "",
-      "",
+      "/api/vibe64/system-graph/sessions/session%2Fa/architecture",
+      "/api/vibe64/system-graph/sessions/session%2Fa/cities/program",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh/cancel",
       "/api/vibe64/system-graph/sessions/session%2Fa/subsystems"

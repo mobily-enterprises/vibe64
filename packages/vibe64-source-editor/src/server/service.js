@@ -420,8 +420,9 @@ function sourceEditorInterfacePromptVersion(presentation) {
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
   // Ad-hoc selections keep their established bounded in-memory cache. Only
-  // explicit file/declaration interpretations have durable informational value.
-  if (!input.range.presentation || !(input.range.scope === 'file' || input.range.symbolId)) return {};
+  // function-specific pseudocode has durable informational value. Program owns
+  // the Architecture browser's English capability explanations.
+  if (input.range.presentation !== 'steps' || input.range.scope !== 'selection' || !input.range.symbolId) return {};
   return {
     readCompleted: () => readSourceInterpretation(context, input, cacheKey).catch(() => null),
     writeCompleted: async (template, currentGeneration) => {
@@ -3171,6 +3172,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
         throw sourceEditorError("The indexed symbol range is invalid for this file. Refresh analysis.", "vibe64_source_explanation_symbol_changed", {}, 409);
       }
     }
+    if (presentation === 'steps' && !Array.isArray(symbol.parameters)) throw sourceEditorError("Steps are available for callable declarations. Use Program context for components, values and types.", "vibe64_source_explanation_not_callable");
     selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
   }
   const scope = symbolId !== undefined ? "selection" : normalizeText(input.scope) === "file" ? "file" : "selection";

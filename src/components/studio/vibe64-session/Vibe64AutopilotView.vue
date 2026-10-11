@@ -721,7 +721,7 @@
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
-        <Vibe64SubsystemsView
+        <Vibe64ArchitectureView
           :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
@@ -740,15 +740,18 @@
           <template #navigation>
             <v-btn :prepend-icon="mdiArrowLeft" size="x-small" type="button" variant="text" @click="backToDashboard">Back to dashboard</v-btn>
           </template>
-          <template #file-interface="{ request, active, architecture, refresh, refreshing }">
+          <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
+          <template #file-interface="{ request, active, architecture, refresh, refreshing, openFile, updateLocation }">
             <Vibe64SessionSourceEditor single-file :key="request.path" :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture" :refresh-architecture="refresh" :architecture-refreshing="refreshing"
               :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+              @open-source-file="openFile"
+              @interface-location="updateLocation"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
               :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
           </template>
-        </Vibe64SubsystemsView>
+        </Vibe64ArchitectureView>
         <v-dialog :model-value="Boolean(architectureFileRequest)" max-width="1100" @update:model-value="!$event && (architectureFileRequest = null)">
           <section class="studio-autopilot__architecture-file" aria-label="Architecture file viewer">
             <header><strong>{{ architectureFileRequest?.path }}</strong><v-btn variant="text" aria-label="Close file viewer" @click="architectureFileRequest = null">Close</v-btn></header>
@@ -756,6 +759,7 @@
               :key="architectureFileRequest.path" :active="props.active" :agent-active="agentActive"
               :open-request="architectureFileRequest" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+              @open-source-file="openSourceEditorFile"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
               :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
           </section>
@@ -972,8 +976,8 @@ const sessionRenewalActionPresentation = computed(() => (
 const sourceOperationsSuspended = computed(() => (
   props.sessionRenewal?.sourceOperationsSuspended === true
 ));
-const Vibe64SubsystemsView = defineAsyncComponent(() => (
-  import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64SubsystemsView())
+const Vibe64ArchitectureView = defineAsyncComponent(() => (
+  import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64ArchitectureView())
 ));
 const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
   import("@local/vibe64-database-tools/client").then((module) => module.loadVibe64DatabaseWorkspace())

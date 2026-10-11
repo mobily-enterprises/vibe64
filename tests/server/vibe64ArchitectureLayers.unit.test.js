@@ -7,15 +7,15 @@ import { parseVibe64ArchitectureLayoutLines, vibe64ArchitectureLayout } from '..
 
 test('authored architectural groups accept any stack and reject ambiguous placement', () => {
   const lines = ['### Group `work`: Request handling', '- Kind: `layer`', '- Purpose: `Receives application requests.`',
-    '- Subsystem: `Services/Orders` `Orders` `Manages orders.`',
+    '- Subsystem: `Services/Orders`',
     '### Group `common`: Shared facilities', '- Kind: `libraries`', '- Purpose: `Independent reusable APIs.`',
-    '- Subsystem: `vendor-owned/math` `Math` `Numerical operations.`'];
+    '- Subsystem: `vendor-owned/math`'];
   const groups = parseVibe64ArchitectureLayoutLines(lines);
   assert.deepEqual(groups.map(group => [group.kind, group.subsystems[0].root]), [['layer','Services/Orders'],['libraries','vendor-owned/math']]);
   assert.equal(vibe64ArchitectureLayout({status:'ready',lines}).groups.length, 2);
   assert.deepEqual(vibe64ArchitectureLayout({status:'missing'}).groups, []);
   assert.deepEqual(parseVibe64ArchitectureLayoutLines(['- Nothing.']), []);
-  for (const extra of ['- Subsystem: `Services/Orders` `Duplicate` `Description.`', '- Kind: `library`', '- Extra: `value`']) assert.throws(() => parseVibe64ArchitectureLayoutLines([...lines, extra]));
+  for (const extra of ['- Subsystem: `Services/Orders`', '- Kind: `library`', '- Extra: `value`']) assert.throws(() => parseVibe64ArchitectureLayoutLines([...lines, extra]));
   for (const root of ['../outside','/absolute','a/../b','a\\b']) assert.throws(() => parseVibe64ArchitectureLayoutLines(lines.map(line => line.replace('Services/Orders', root))));
   assert.throws(() => parseVibe64ArchitectureLayoutLines(lines.slice(0, 2)), /needs Kind, Purpose/);
 });
@@ -23,16 +23,16 @@ test('authored architectural groups accept any stack and reject ambiguous placem
 test('circle map retains every source owner and explicit library roles without imposing layers', () => {
   const roots = ['host','work/feature','outside/common','another/place','unknown','resources'];
   const architecture = {
-    subsystems: roots.map(root => ({id:root,root,title:root,fileIds:[root+'.file']})),
+    subsystems: roots.map(root => ({id:root,root,title:root === 'outside/common' ? 'Common' : root,description:root === 'outside/common' ? 'Public shared functions.' : '',fileIds:[root+'.file']})),
     files: roots.map(root => ({id:root+'.file',path:root+'/Api.cs',subsystemId:root,sourceLines:10})),
     packages:[{id:'own',subsystemId:'outside/common',name:'Common',opaque:false,entryPoints:[{importPath:'.',file:'outside/common/Api.cs',symbols:[{name:'run'}]}]}],
     relations:[['host','work/feature'],['work/feature','outside/common'],['outside/common','another/place']].map(([from,to])=>({fromFileId:from+'.file',targetFileId:to+'.file',resolution:'resolved'})),
     layout:{groups:parseVibe64ArchitectureLayoutLines([
       '### Group `application`: Application work','- Kind: `layer`','- Purpose: `Handles user requests.`',
-      '- Subsystem: `host` `Host` `Starts the app.`','- Subsystem: `work/feature` `Feature` `Performs the work.`',
+      '- Subsystem: `host`','- Subsystem: `work/feature`',
       '### Group `library`: Independent facilities','- Kind: `libraries`','- Purpose: `Reusable APIs.`',
-      '- Subsystem: `outside/common` `Common` `Public shared functions.`','- Subsystem: `another/place` `Numbers` `Numerical operations.`',
-      '### Group `resources`: Resources','- Kind: `support`','- Purpose: `Not a runtime layer.`','- Subsystem: `resources` `Resources` `Static assets.`'
+      '- Subsystem: `outside/common`','- Subsystem: `another/place`',
+      '### Group `resources`: Resources','- Kind: `support`','- Purpose: `Not a runtime layer.`','- Subsystem: `resources`'
     ])}
   };
   const diagram = engineOverview(architecture);
@@ -538,4 +538,16 @@ test('no external list is fabricated without observed package use, including typ
   assert.equal(engineOverview(architecture).externalCount,0);
   assert.ok(!engineOverview(architecture).nodes.some(node=>node.id==='visual:external-dependencies'));
   assert.equal(subsystemOutline(architecture,'visual:external-dependencies'),null);
+});
+
+
+test('Program ownership and cross-subsystem cited files enrich the existing outline without changing file ownership', () => {
+  const architecture = { subsystems: [{ id: 'app', root: 'app', title: 'App', fileIds: ['app.file'] }, { id: 'lib', root: 'shared', title: 'Library', fileIds: ['lib.file'] }], files: [{ id: 'app.file', path: 'app/run.py', subsystemId: 'app' }, { id: 'lib.file', path: 'shared/math.rs', subsystemId: 'lib' }], symbols: [], relations: [], program: { status: 'valid', diagnostics: [], modules: [{ id: 'run', subsystemId: 'app', title: 'Run work', description: 'Uses shared arithmetic.', sources: ['app/run.py', 'shared/math.rs'] }] } };
+  const app = subsystemOutline(architecture, 'app');
+  const lib = subsystemOutline(architecture, 'lib');
+  assert.equal(app.programs[0].title, 'Run work');
+  assert.deepEqual(lib.programs, []);
+  assert.equal(lib.tree[0].programs[0].title, 'Run work');
+  assert.deepEqual(lib.files.map(file => file.path), ['shared/math.rs']);
+  assert.equal(subsystemOutline({ ...architecture, program: undefined }, 'app').programStatus, 'unavailable');
 });

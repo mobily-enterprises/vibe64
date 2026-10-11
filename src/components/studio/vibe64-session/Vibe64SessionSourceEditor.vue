@@ -474,6 +474,8 @@
             :interpretation-warning="editor.interpretationWarning.value"
             :active-interpretation="activeInterfaceInterpretation"
             :symbols="interfaceSymbols"
+            :programs="interfacePrograms"
+            :program-status="interfaceArchitecture?.program?.status"
             :selected-id="interfaceSymbolId"
             :current="interfaceCurrent"
             :indexed="Boolean(interfaceFile)"
@@ -488,7 +490,7 @@
             @select-symbol="selectInterfaceSymbol"
             @present-symbol="presentInterfaceSymbol"
             @whole-file-code="showWholeFileCode"
-            @explain="explainInterfaceFile"
+            @open-source="$emit('open-source-file', $event)"
             @refresh-analysis="refreshArchitecture ? refreshArchitecture() : interfaceGraph?.refresh()"
           >
             <template #explanation>
@@ -781,7 +783,7 @@ const props = defineProps({
     type: Boolean
   }
 });
-const emit = defineEmits(["ask-codex-about-file"]);
+const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -808,6 +810,7 @@ const interfaceArchitecture = computed(() => props.architectureFacts || interfac
 const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
 const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);
 const interfaceSymbols = computed(() => (interfaceArchitecture.value?.symbols || []).filter(symbol => symbol.fileId === interfaceFile.value?.id && symbol.visibility === 'public'));
+const interfacePrograms = computed(() => (interfaceArchitecture.value?.program?.modules || []).filter(program => program.sources.includes(editor.selectedPath.value)));
 const interfaceSymbol = computed(() => interfaceSymbols.value.find(symbol => symbol.id === interfaceSymbolId.value));
 const interfaceSymbolSource = computed(() => {
   const symbol = interfaceSymbol.value;
@@ -820,8 +823,7 @@ const interfaceSymbolSource = computed(() => {
   return selected.join('\n');
 });
 function showWholeFileCode() { filePresentation.value = 'code'; nextTick(() => { editorView?.requestMeasure(); editorView?.focus(); }); }
-function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'description'; presentInterfaceSymbol('description'); }
-const interpretationAttempts = new Set();
+function selectInterfaceSymbol(id) { interfaceSymbolId.value = id; symbolPresentation.value = 'description'; }
 function currentInterpretation(scope, symbolId, presentation) {
   return editor.interpretations.value.find(record => record.path === editor.selectedPath.value && record.scope === scope && (record.symbolId || '') === symbolId && record.presentation === presentation && record.status === 'current' && record.fileHash === editor.savedHash.value);
 }
@@ -833,35 +835,22 @@ const activeInterfaceInterpretation = computed(() => {
 function presentInterfaceSymbol(presentation, force = false) {
   symbolPresentation.value = presentation;
   const symbol = interfaceSymbol.value;
-  if (presentation === 'code' || !symbol?.end || !interfaceCurrent.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
+  if (presentation !== 'steps' || !Array.isArray(symbol?.parameters) || !symbol?.end || !interfaceCurrent.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value) return;
   if (!force && currentInterpretation('selection', symbol.id, presentation)) return;
-  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, symbol.id, presentation]);
-  interpretationAttempts.add(key);
   void editor.explainSelection({ scope: 'selection', symbolId: symbol.id, presentation, force, expectedHash: editor.savedHash.value, startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column });
-}
-function explainInterfaceFile({ presentation, force = false }) {
-  interfaceSymbolId.value = '';
-  symbolPresentation.value = presentation;
-  if (!props.assistantAvailable || editor.dirty.value || editor.explanationBusy.value || editor.explanationClosing.value) return;
-  if (!force && currentInterpretation('file', '', presentation)) return;
-  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, '', presentation]);
-  interpretationAttempts.add(key);
-  const lines = editor.text.value.split('\n');
-  void editor.explainSelection({ scope: 'file', presentation, force, expectedHash: editor.savedHash.value, startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 });
 }
 watch(editor.selectedPath, () => { filePresentation.value = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value ? 'code' : 'interface'; interfaceSymbolId.value = ''; symbolPresentation.value = 'description'; });
 watch([interfaceSymbols, interfaceCurrent, () => props.openRequest], () => {
   if (props.openRequest?.path !== editor.selectedPath.value || !interfaceCurrent.value) return;
   const requested = interfaceSymbols.value.find(symbol => symbol.id === props.openRequest.symbolId || (props.openRequest.symbol && (symbol.qualifiedName === props.openRequest.symbol || symbol.name === props.openRequest.symbol)));
   if (requested && requested.id !== interfaceSymbolId.value) selectInterfaceSymbol(requested.id);
+  if (props.openRequest.symbolPresentation) symbolPresentation.value = props.openRequest.symbolPresentation;
 });
-watch([editor.loadedVersion, editor.savedHash, editor.loadingFile, editor.explanationBusy, editor.explanationClosing, interfaceSymbolId, symbolPresentation, filePresentation, () => props.active, () => props.assistantAvailable], () => {
-  if (!props.active || filePresentation.value !== 'interface' || editor.loadingFile.value || !editor.selectedPath.value || editor.dirty.value || !props.assistantAvailable || editor.explanationBusy.value || editor.explanationClosing.value || symbolPresentation.value === 'code') return;
-  const id = interfaceSymbolId.value;
-  const key = JSON.stringify([editor.selectedPath.value, editor.savedHash.value, id, symbolPresentation.value]);
-  if (interpretationAttempts.has(key) || currentInterpretation(id ? 'selection' : 'file', id, symbolPresentation.value)) return;
-  if (id) presentInterfaceSymbol(symbolPresentation.value);
-  else explainInterfaceFile({ presentation: symbolPresentation.value });
+watch([editor.selectedPath, interfaceSymbolId, filePresentation, symbolPresentation], () => {
+  if (props.singleFile && props.active && interfaceCurrent.value && editor.selectedPath.value) emit('interface-location', {
+    path: editor.selectedPath.value, symbolId: interfaceSymbolId.value,
+    presentation: filePresentation.value, symbolPresentation: symbolPresentation.value
+  });
 }, { flush: 'post' });
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
 const imagePreviewStatus = ref("loading");

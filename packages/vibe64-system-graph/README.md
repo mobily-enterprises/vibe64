@@ -99,20 +99,25 @@ Example Stack presentation declaration (groups are listed top to bottom):
 ### Group `requests`: Request handling
 - Kind: `layer`
 - Purpose: `Receives and coordinates application requests.`
-- Subsystem: `services/orders` `Orders` `Handles order operations.`
+- Subsystem: `services/orders`
 
 ### Group `shared`: Shared libraries
 - Kind: `libraries`
 - Purpose: `Reusable APIs independent of their consumers.`
-- Subsystem: `common/math` `Math` `Numerical operations.`
+- Subsystem: `common/math`
 
 ### Group `resources`: Supporting resources
 - Kind: `support`
 - Purpose: `Resources outside the runtime layer policy.`
-- Subsystem: `assets` `Assets` `Images and other resources.`
+- Subsystem: `assets`
 ```
 
-Each member is three exact backticked values: indexed directory root, display
-name and description. Each root appears once. Missing roots never create source
+Each member is one exact backticked canonical Genesis subsystem directory root.
+Titles, responsibilities and Program membership come only from the Genesis map. Each root appears once. Missing roots never create source
 owners. `- Nothing.` explicitly leaves placement unconfigured. Names and kinds
 are presentation declarations, not inferred language or framework roles.
+
+Architecture replaces the old subsystem list and layer prototype. Native Program
+facts carry each capability's one owner, authored contract and cross-subsystem
+source citations. The subsystem square and file browser reuse those facts, with
+lazy contract rendering and explicit missing/invalid explanation states.

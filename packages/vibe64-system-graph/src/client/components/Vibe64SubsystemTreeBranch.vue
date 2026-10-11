@@ -1,14 +1,15 @@
 <template>
   <ul class="subsystem-tree" :class="{ 'subsystem-tree--branch': depth > 0 }">
     <li v-for="item in items" :key="item.path || item.id" :class="{ 'subsystem-tree__directory': item.kind === 'directory' }">
-      <details v-if="item.kind === 'directory'" :open="depth < 1 || searching">
+      <details v-if="item.kind === 'directory'" :open="searching || (folderState.get(item.path) ?? depth < 1)" @toggle="!searching && folderState.set(item.path, $event.target.open)">
         <summary><svg class="subsystem-tree__folder" viewBox="0 0 24 24" aria-hidden="true"><path :d="mdiFolderOutline" /></svg><span>{{ item.name }}</span><small>{{ item.count }} file{{ item.count === 1 ? '' : 's' }}</small></summary>
-        <Vibe64SubsystemTreeBranch :items="item.children" :depth="depth + 1" :searching="searching" :selected-id="selectedId" @select="$emit('select', $event)" @inspect="$emit('inspect', $event)" />
+        <Vibe64SubsystemTreeBranch :items="item.children" :folder-state="folderState" :depth="depth + 1" :searching="searching" :selected-id="selectedId" @select="$emit('select', $event)" @inspect="$emit('inspect', $event)" />
       </details>
       <button v-else type="button" class="subsystem-tree__file nodrag nopan" data-zoom-kind="file" :data-file-path="item.file.path" :class="{ 'subsystem-tree__file--selected': selectedId === item.id }"
         :aria-pressed="selectedId === item.id" :style="{ '--file-volume': item.volume ?? 0 }" :title="`${item.file.path}\n${item.reasons.join(' · ')}\nClick to open this file's interface.`"
         @click="$emit('select', item.file); $emit('inspect', item.file)" @keydown.enter.stop.prevent="$emit('select', item.file); $emit('inspect', item.file)">
         <span class="subsystem-tree__type" aria-hidden="true"><svg class="subsystem-tree__document" viewBox="0 0 24 24" :style="{ color: icon(item.name).color }"><path :d="icon(item.name).path" /></svg><small>{{ item.name.includes('.') ? item.name.split('.').at(-1) : 'file' }}</small></span><span class="subsystem-tree__name">{{ item.name }}</span>
+        <span v-if="item.programs?.length" class="subsystem-tree__program" :title="item.programs.map(program => program.description).join('\n')">{{ item.programs.map(program => program.title).join(' · ') }}</span>
         <span v-if="item.reasons.length" class="subsystem-tree__entry" :title="item.reasons.join(' · ')">Entry</span>
         <span class="subsystem-tree__volume" :title="item.volume == null ? 'Size unavailable' : `${item.file.sourceLines.toLocaleString()} source lines; bar relative to other files in this subsystem.`">
           <span v-if="item.volume != null" class="subsystem-tree__bar"><i :style="{ width: `${item.volume * 100}%` }" /></span>
@@ -21,7 +22,7 @@
 <script setup>
 import { mdiCodeJson, mdiConsoleLine, mdiFileCodeOutline, mdiFileCogOutline, mdiFileDocumentOutline, mdiFileImageOutline, mdiFileTableOutline, mdiFolderOutline,
   mdiLanguageCpp, mdiLanguageCsharp, mdiLanguageCss3, mdiLanguageGo, mdiLanguageHtml5, mdiLanguageJava, mdiLanguageJavascript, mdiLanguageKotlin, mdiLanguagePhp, mdiLanguagePython, mdiLanguageRuby, mdiLanguageRust, mdiLanguageTypescript, mdiVuejs } from '@mdi/js';
-defineProps({ items: { type: Array, required: true }, depth: { type: Number, default: 0 }, selectedId: { type: String, default: '' }, searching: Boolean });
+defineProps({ items: { type: Array, required: true }, depth: { type: Number, default: 0 }, selectedId: { type: String, default: '' }, searching: Boolean, folderState: { type: Map, default: () => new Map() } });
 defineEmits(['select', 'inspect']);
 // File-name decoration only. Analysers, not these icons, identify code semantics.
 const icons = [
@@ -64,4 +65,5 @@ function icon(name) {
 .subsystem-tree__bar { display: block; flex: 1; height: 3px; background: #e3ebe9; border-radius: 2px; }
 .subsystem-tree__bar i { display: block; height: 100%; min-width: 1px; background: #89b7ab; border-radius: 2px; }
 @media (max-width: 600px) { .subsystem-tree__bar { display: none; } .subsystem-tree--branch { margin-left: 7px; padding-left: 4px; } }
+.subsystem-tree__program { font-size: 11px; line-height: 16px; color: #65827a; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 </style>

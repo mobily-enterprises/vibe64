@@ -18,9 +18,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/server/actions.js`
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
-- `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
-- `packages/vibe64-system-graph/src/client/components/Vibe64ArchitectureView.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64LayerDiagram.vue`
 - `packages/vibe64-system-graph/src/client/architectureModel.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
@@ -138,17 +136,13 @@ finish while hidden, while subsequent reads wait for activation. Managed command
 retain the bundled, pinned Genesis invocation and selected Stack catalog.
 The three-dimensional City presentation and its camera controls are retired.
 
-Architecture retains the original subsystem detail owner, which reads the selected session's `genesis/subsystems.md`
-through Genesis's version-zero inspection API. The default overview uses a compact searchable list and one detail pane. The list
-shows names and counts; the selected responsibility, expandable Program operations,
-and owned/used data live in the detail pane. Operations and Data have separate tabs.
-Descriptions render paragraphs, wrapped list items, code and links with the
-existing safe Markdown renderer; long descriptions
-expand on request. Narrow panes show either the list or the detail with a Back
-action. Links on used tables navigate to their owning subsystem. It does not infer
-ownership from directories or create operation-to-table dependency edges.
-Program contracts and source links use the generated Program City when available;
-the authored Program files remain directly accessible before generation.
+Architecture is the sole subsystem and Program presentation. It reuses the
+canonical directory-bound owners and descriptions from `genesis/subsystems.md`.
+Each Program operation belongs to one owner. Its contract and cited files appear
+inside the subsystem and file views; cross-subsystem library citations remain
+visible without changing ownership. The former list-and-detail screen is retired.
+Program is fallible authored explanation, not proof of a function's behavior or
+of current source freshness. Missing Program facts remain explicit.
 
 The useful native Machine and Program facts remain available for source
 navigation. No Map action or restored camera state opens a City renderer.
@@ -168,8 +162,8 @@ over child subtrees, siblings never wrap into descendants and roots remain
 independent. `architectureOverview` places UI above Engine on the existing
 Vue Flow canvas. Fit/UI/Engine and a compact options menu share host navigation.
 
-`engineOverview` shows every native source owner as a circle. Architecture
-layout supplies readable names/descriptions and explicit library/support roles
+`engineOverview` shows every native source owner as a circle. Genesis supplies readable names/descriptions. Architecture
+layout supplies only explicit library/support roles
 through the public Genesis boundary. Exact roots identify placements; missing
 roots produce a diagnostic, not invented owners. Authored member order and role
 guide arrangement; import rank does not define visible layers. Entry circles
@@ -214,6 +208,12 @@ level without disturbing the enclosing state. Opening a file requires a click
 or tap; outward movement cannot re-enter it. The enclosing reading camera is captured before a target grows, so return
 does not restore oversized icons that cover the surrounding canvas.
 
+The Back control retraces followed file links, retaining the previous exact
+declaration and its enclosing camera/owner. The single-file host reports its
+current selected declaration and presentation; this is navigation state, not
+source analysis. Close, Esc, Engine and subsystem breadcrumbs discard that
+local file history and return to their enclosing view.
+
 The host's `file-interface` slot embeds the existing
 `Vibe64SessionSourceEditor` in single-file mode with the requested path/native
 symbol ID/original name. The host supplies the already loaded common architecture
@@ -235,9 +235,9 @@ all. Unresolved counts never create guessed targets. Receives UI calls opens a
 controller file and selects a declaration only when supplied by the inspector.
 The browser owns presentation, not framework/transport discovery.
 
-The previous `Vibe64ArchitectureView` prototype remains as a reviewable reference,
-but the async loader no longer opens it. Existing backend ownership, subsystem,
-package, symbol and controller facts remain intact for subsequent increments.
+The obsolete layer prototype and subsystem list screen are removed. Their
+reviewable implementations remain in the local checkpoint. Existing backend
+ownership, subsystem, package, symbol and controller facts remain available.
 The compact Architecture read joins existing hash-matched Machine source metrics
 without rereading project files. Optional Entry files in the existing Vibe64-owned
 Architecture inspection grammar supply stack-neutral application entry identities.

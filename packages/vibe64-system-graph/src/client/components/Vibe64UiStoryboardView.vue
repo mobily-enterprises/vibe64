@@ -18,6 +18,7 @@
             <v-list-item title="Zoom out" :disabled="!contentCount" @click="zoomControl(false)" />
             <v-list-item title="Reset arrangement" :disabled="!Object.keys(layoutPositions).length" @click="layoutPositions = {}" />
             <v-divider />
+            <v-list-item title="Reload architecture" :disabled="loading" @click="reload" />
             <v-list-item v-if="refreshing" title="Cancel analysis" @click="cancelRefresh" />
             <v-list-item v-else title="Refresh analysis" :disabled="loading" @click="refresh" />
           </v-list>
@@ -26,6 +27,7 @@
     </header>
     <div ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), fileRequest ? closeFile() : closeDetail($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
       <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}</v-alert>
+      <v-alert v-else-if="architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Refresh analysis</v-btn></v-alert>
       <VueFlow v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
         :zoom-on-double-click="false" :zoom-on-scroll="false" :zoom-on-pinch="false" :nodes-draggable="false" :nodes-connectable="false" :edges-updatable="false" :elevate-nodes-on-select="false"
         :default-edge-options="{ markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#7895a4' } }"
@@ -53,16 +55,17 @@
         <template #node-subsystem-detail="{ data }">
           <div class="subsystem-zoom__context"><article class="subsystem-zoom nodrag nopan" aria-label="Zoomed subsystem" @wheel="!$event.ctrlKey && $event.stopPropagation()" @touchmove="($event.touches.length !== 2) && $event.stopPropagation()">
             <nav class="subsystem-zoom__breadcrumbs" aria-label="Architecture location">
+              <button type="button" class="subsystem-zoom__back nodrag nopan" aria-label="Back to previous view" @click="goBack">← Back</button>
               <button type="button" class="nodrag nopan" @click="closeDetail">Engine</button><span>›</span>
               <button v-if="fileRequest" type="button" class="nodrag nopan" @click="closeFile">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
               <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
               <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest ? 'Back to subsystem' : 'Back to Engine'" title="Close this view (Esc)" @click="fileRequest ? closeFile() : closeDetail($event)">×</button>
             </nav>
-            <p class="subsystem-zoom__navigation-hint">Scroll inside to read · Pinch or Ctrl-scroll to zoom · Scroll outside, × or Esc to go back</p>
-            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :refresh="refresh" :refreshing="refreshing"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
+            <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
+            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :refresh="refresh" :refreshing="refreshing" :open-file="openFile" :update-location="updateFileLocation"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
             <div v-show="!fileRequest" class="subsystem-zoom__body">
               <div v-if="!data.outline" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
-              <Vibe64SubsystemInspector v-else embedded :outline="data.outline" @inspect="openFile" />
+              <Vibe64SubsystemInspector v-else embedded :outline="data.outline" @inspect="openFile" @open-source="emit('open-source-file', $event)"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
             </div>
           </article></div>
         </template>
@@ -102,8 +105,10 @@
       </VueFlow>
       <Vibe64SubsystemInspector v-if="outline?.owner.opaque" :outline="outline" @close="closeDetail" @inspect="emit('inspect-file', $event)" />
       <div v-if="!contentCount" class="ui-storyboard__empty" role="status">
-        <h2>{{ loading ? 'Loading architecture…' : 'Architecture needs evidence' }}</h2>
-        <p v-if="!loading">{{ coverage === 'complete' ? 'The configured inspector found no UI entry points.' : 'Declare navigation inputs and a technology inspector in Stack, then refresh analysis.' }}</p>
+        <h2>{{ error ? 'Architecture could not be loaded' : loading ? 'Loading architecture…' : 'Architecture needs evidence' }}</h2>
+        <p v-if="error">{{ error }}</p>
+        <p v-else-if="!loading">{{ coverage === 'complete' ? 'The configured inspector found no UI entry points.' : 'Refresh analysis to create the project index. Check Genesis subsystem declarations and Stack inspection settings if it remains empty.' }}</p>
+        <v-btn v-if="error" size="small" variant="tonal" :disabled="loading" @click="reload">Retry loading</v-btn>
       </div>
       <div v-else-if="!expandedSubsystemId" class="ui-storyboard__legend">Drag empty space to pan · Zoom into a subsystem to explore · Use ⠿ to arrange <span>Entry points emphasised · Supporting directories subdued</span></div>
       <div v-if="entryWarning" class="ui-storyboard__notice" role="status">{{ entryWarning }}</div>
@@ -119,10 +124,10 @@ import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
 const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 } });
-const { architecture, error, loading, refreshing, refresh, cancelRefresh } = useVibe64SystemGraph({
+const { architecture, error, loading, refreshing, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion'), projection: 'architecture'
 });
-const emit = defineEmits(['inspect-file']);
+const emit = defineEmits(['inspect-file', 'open-source-file']);
 const canvas = ref(null);
 const dismissedError = ref('');
 watch(error, () => { dismissedError.value = ''; });
@@ -150,6 +155,7 @@ watch([expandedSubsystemId, architecture], async ([id], previous, onCleanup) => 
 const layoutPositions = ref({});
 const fileRequest = ref(null);
 const retainedFileRequest = shallowRef(null);
+const fileHistory = shallowRef([]);
 let dragging = false;
 let lastDragEnded = 0;
 let zoomAnchor;
@@ -234,6 +240,7 @@ async function closeDetail(event) {
   expandedSubsystemId.value = '';
   fileRequest.value = null;
   retainedFileRequest.value = null;
+  fileHistory.value = [];
   zoomTarget = undefined;
   await nextTick();
   if (!external && parentViewport && parentNode && currentViewport) {
@@ -253,13 +260,47 @@ async function closeDetail(event) {
   transitioning = false;
 }
 async function openFile(request) {
+  if (fileRequest.value?.path === request.path && !request.symbolId && !request.symbol && !request.presentation) return;
+  if (fileRequest.value) fileHistory.value = [...fileHistory.value, {
+    request: { ...fileRequest.value }, ownerId: expandedSubsystemId.value,
+    parentNode, parentViewport, fileParentViewport, viewport: { ...flow.getViewport() }
+  }];
+  const file = architecture.value?.files?.find(file => file.path === request.path);
+  const ownerNode = nodes.value.find(node => node.id === file?.subsystemId);
+  if (ownerNode && file.subsystemId !== expandedSubsystemId.value) {
+    parentNode = { position: { ...ownerNode.position }, style: { ...ownerNode.style } };
+    expandedSubsystemId.value = file.subsystemId;
+  }
   // Return to the enclosing reading view, before its icon grew to entry size.
   fileParentViewport = gestureDirection === true && zoomTarget?.kind === 'file' ? gestureTarget.viewport
     : { ...(zoomMotion && !zoomMotion.semantic ? zoomMotion.viewport : flow.getViewport()) };
-  fileRequest.value = { path: request.path, symbolId: request.symbolId, symbol: request.symbol, line: request.line, presentation: 'interface' };
+  fileRequest.value = { path: request.path, symbolId: request.symbolId, symbol: request.symbol, line: request.line, presentation: request.presentation || 'interface', symbolPresentation: request.symbolPresentation };
   retainedFileRequest.value = fileRequest.value;
   zoomTarget = undefined;
   await readingViewport();
+}
+function updateFileLocation(location) {
+  if (!fileRequest.value || location.path !== fileRequest.value.path) return;
+  if (['symbolId', 'presentation', 'symbolPresentation'].every(key => fileRequest.value[key] === location[key])) return;
+  fileRequest.value = { ...fileRequest.value, ...location };
+  retainedFileRequest.value = fileRequest.value;
+}
+async function goBack(event) {
+  const previous = fileHistory.value.at(-1);
+  if (!fileRequest.value || !previous) return fileRequest.value ? closeFile() : closeDetail(event);
+  ++navigationVersion;
+  stopZoomMotion();
+  gestureTarget = undefined;
+  transitioning = false;
+  fileHistory.value = fileHistory.value.slice(0, -1);
+  expandedSubsystemId.value = previous.ownerId;
+  parentNode = previous.parentNode;
+  parentViewport = previous.parentViewport;
+  fileParentViewport = previous.fileParentViewport;
+  fileRequest.value = previous.request;
+  retainedFileRequest.value = previous.request;
+  await nextTick();
+  await flow.setViewport(previous.viewport, { duration: 0 });
 }
 async function closeFile() {
   ++navigationVersion;
@@ -268,6 +309,7 @@ async function closeFile() {
   transitioning = true;
   canvas.value?.focus({ preventScroll: true });
   fileRequest.value = null;
+  fileHistory.value = [];
   await nextTick();
   moveCamera(fileParentViewport || { x: 24, y: 24, zoom: 1 }, { done: () => { transitioning = false; } });
 }
@@ -420,7 +462,7 @@ async function fit(ids) {
   gestureTarget = undefined;
   transitioning = true;
   if (focusOwner.value && !focusOwner.value.opaque) {
-    expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null;
+    expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; fileHistory.value = [];
     ids = undefined;
   }
   await nextTick();
@@ -464,7 +506,7 @@ watch(outline, detail => {
   // Detail arriving must not rebuild the retained map during its animation.
   flow?.updateNodeData('visual:subsystem-detail', { outline: detail });
 });
-watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; selectedPageId.value = ''; showCalls.value = false; layoutPositions.value = {}; zoomAnchor = undefined; zoomTarget = undefined; parentViewport = undefined; fileParentViewport = undefined; });
+watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; fileHistory.value = []; selectedPageId.value = ''; showCalls.value = false; layoutPositions.value = {}; zoomAnchor = undefined; zoomTarget = undefined; parentViewport = undefined; fileParentViewport = undefined; });
 watch(() => props.active, active => { if (!active) { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; } else if (fitPending) void fit(initialIds.value); });
 onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 </script>
@@ -499,6 +541,7 @@ onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 .subsystem-zoom__breadcrumbs button { color: #367e70; cursor: pointer; border-radius: 4px; padding: 5px 3px; }
 .subsystem-zoom__breadcrumbs button:hover { background: #dcece6; }
 .subsystem-zoom__breadcrumbs button:focus-visible { outline: 2px solid #377dcb; }
+.subsystem-zoom__breadcrumbs .subsystem-zoom__back { min-height: 44px; padding: 5px 8px; }
 .subsystem-zoom__breadcrumbs .subsystem-zoom__close { position: absolute; top: 2px; right: 4px; width: 44px; height: 44px; padding: 0; font-size: 24px; }
 .subsystem-zoom__navigation-hint { flex: none; margin: 0; padding: 3px 18px; font-size: 11px; line-height: 16px; color: #69817d; border-bottom: 1px solid #edf2f0; }
 .subsystem-zoom__file { height: min(720px, 75vh); min-height: 0; overflow: hidden; }
@@ -513,7 +556,8 @@ onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 .storyboard-page :deep(.vue-flow__handle) { width: 6px; height: 6px; border: 0; background: #93a7ba; pointer-events: none; }
 .ui-storyboard__legend { position: absolute; bottom: 16px; left: 20px; right: 20px; display: flex; justify-content: space-between; gap: 12px; pointer-events: none; font-size: 11px; color: #6d8094; }
 .ui-storyboard__error { position: absolute; z-index: 12; top: 12px; left: 12px; max-width: min(520px, calc(100% - 24px)); flex: none; font-size: 12px; }
-.ui-storyboard__empty { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 24px; pointer-events: none; }
+.ui-storyboard__empty { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; text-align: center; padding: 24px; pointer-events: none; }
+.ui-storyboard__empty button { pointer-events: auto; }
 .ui-storyboard__empty h2 { margin: 0 0 8px; font-size: 20px; }
 .ui-storyboard__empty p { max-width: 420px; margin: 0; font-size: 14px; }
 .engine-subsystem { position: relative; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%; background: #fff; color: #213c40; border: 1px solid #bfcfce; border-radius: 50%; box-shadow: 0 3px 12px #30465d0b; }

@@ -46,6 +46,7 @@ function useVibe64SystemGraph({
     fallbackLoadError: "Architecture index status could not be loaded.",
     path: computed(() => `${sessionPath.value}/status`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "status")),
+    queryOptions: { refetchOnWindowFocus: false, retry: false },
     requestRecoveryLabel: "Architecture index status"
   });
   const systemStatus = computed(() => statusResource.data.value || {});
@@ -60,7 +61,7 @@ function useVibe64SystemGraph({
     requestRecoveryLabel: "Source facts"
   });
   const architectureEnabled = computed(() => enabled.value && projection === "architecture" && cityAvailable(systemStatus.value, "machine"));
-  const architectureResource = useEndpointResource({ enabled: architectureEnabled, path: computed(() => `${sessionPath.value}/architecture`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "architecture")), fallbackLoadError: "Architecture could not be loaded.", requestRecoveryLabel: "Architecture" });
+  const architectureResource = useEndpointResource({ enabled: architectureEnabled, path: computed(() => `${sessionPath.value}/architecture`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "architecture")), queryOptions: { refetchOnWindowFocus: false, retry: false }, fallbackLoadError: "Architecture could not be loaded.", requestRecoveryLabel: "Architecture" });
   const programResource = useEndpointResource({
     enabled: programEnabled,
     fallbackLoadError: "Program descriptions could not be loaded.",
@@ -80,7 +81,7 @@ function useVibe64SystemGraph({
   const cancelResource = useEndpointResource({ enabled: false, path: computed(() => `${sessionPath.value}/refresh/cancel`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, 'refresh-cancel')), writeMethod: 'POST', fallbackSaveError: 'Architecture cancellation could not be confirmed.' });
 
   const subsystemResource = useEndpointResource({
-    enabled,
+    enabled: computed(() => enabled.value && projection === "native"),
     fallbackLoadError: "Subsystems could not be loaded.",
     path: computed(() => `${sessionPath.value}/subsystems`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "subsystems")),
@@ -107,7 +108,7 @@ function useVibe64SystemGraph({
 
   async function reload() {
     if (!enabled.value) return;
-    await Promise.all([statusResource.reload(), subsystemResource.reload()]);
+    await Promise.all([statusResource.reload(), ...(projection === "native" ? [subsystemResource.reload()] : [])]);
     const cityLoads = [];
     if (architectureEnabled.value) cityLoads.push(architectureResource.reload());
     if (machineEnabled.value) {

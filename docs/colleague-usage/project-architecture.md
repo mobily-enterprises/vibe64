@@ -14,7 +14,9 @@ use a bounded logarithmic source-line scale: larger owners look larger, while
 even tiny owners retain a readable minimum and huge owners cannot dominate
 the canvas. Unknown source sizes receive the minimum. Source size does
 not prove architectural importance. The map keeps every indexed source owner,
-including directories outside Stack's default subsystem parents. Each subsystem
+including directories outside Stack's default subsystem parents. The canonical
+list and responsibilities come from `genesis/subsystems.md`; Architecture is the
+single subsystem/Program view, replacing the older list screen. Each subsystem
 has one directory root; a nested owner keeps its own files. The current map
 does not impose layers or draw Engine import arrows.
 
@@ -35,7 +37,11 @@ viewer needs no language or package-manager-specific controls.
    pointer. The circle grows and moves towards the centre together.
 2. At reading size it becomes a square on the same canvas. A faint circle remains
    behind it. A compact skeleton appears while the interface is prepared.
-3. **Interface** lists recorded signatures directly: functions,
+3. **What this subsystem does** shows its owned Genesis Program capabilities.
+   Expand one to read its contract and follow its cited files. File icons also
+   name the capabilities that cite them. A library can participate in another
+   subsystem's Program without changing ownership. These authored explanations
+   can lag behind code. **Interface** lists recorded signatures directly: functions,
    methods, components, values and types keep their recorded kinds. Select a
    signature to reach its implementation file and that exact declaration.
    Unknown return information is omitted from these compact rows; coverage
@@ -54,10 +60,10 @@ viewer needs no language or package-manager-specific controls.
    file's interface opens inside the square. Selecting a subsystem signature
    likewise opens only its implementation file, with the requested declaration
    selected. The project-wide Files workspace does not open.
-6. Read the existing **Public interface**, **Description**, **Steps** and symbol
+6. Read **File exports**, **Description**, **Steps** and symbol
    **Code** controls. **Code · whole file** is read-only here; **Interface** returns
-   to declarations. Description and Steps require an available Helper and use
-   the existing explanation service. Missing Helper or parser coverage remains
+   to declarations. Description shows authored Genesis Program context. Function
+   Steps are generated only on explicit request through an available Helper. Missing Helper or parser coverage remains
    explicit. See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the
    enclosing views, or use the breadcrumb: **Engine → subsystem → file**.
@@ -70,6 +76,11 @@ viewer needs no language or package-manager-specific controls.
    its icon grew, keeping the square's surrounding canvas accessible. **×** at
    the top right or Esc goes back one level; both retain the enclosing view's state.
    A compact reminder beneath the breadcrumb shows these scroll, zoom and return rules.
+
+**← Back** retraces file-to-file links, including links to another subsystem.
+It restores the previous file and selected declaration. With no file history,
+it returns to the enclosing subsystem or map. **×** and Esc always close the
+current level; breadcrumbs jump directly to their named view.
 
 The map stays mounted while hidden, retaining its arrangement. The file browser
 stays mounted behind a file interface, retaining its search, folder disclosures
@@ -87,10 +98,14 @@ side pane, extra toolbar row or pane-balance slider.
 **Imported by other subsystems** identifies particular declarations named in
 cross-boundary imports, with consumer counts. It does not prove runtime calls or
 intended API membership. **Declared API** shows explicit package/module exports;
-**Exports from externally imported files** are review candidates whose individual
+**API review candidates** are exports from externally imported files whose individual
 usage is not established. **Other available exports** is collapsed initially and
 can include internal or unused declarations. **Find a signature** searches these
-groups. **Import paths** remains secondary detail.
+groups. **Import paths** are the names another part imports to access the API, such as
+`@local/vibe64-voice/client`. They explain how to reach an interface; the
+signatures explain what it offers. They remain secondary detail.
+**Analysis details** holds the longer evidence definitions. Short notices keep
+missing intended API and partial import coverage visible beside the signatures.
 
 Missing declarations do not mean an empty API. Import coverage is shown explicitly;
 namespace, dynamic, build-dependent or unresolved imports may remain partial.
@@ -98,11 +113,14 @@ Signatures link only when analysis identifies one implementation declaration;
 re-export aliases retain their public name and lead to the original source.
 External package declarations have no project source link.
 
+Ordinary source indexing retains an unchanged UI map. If source or Stack changes
+invalidate that evidence, **UI map needs refresh** offers **Refresh analysis** to
+run the project's configured inspector. Engine files remain browsable meanwhile.
+
 A coding conversation can inspect source and propose corrections to the
 subsystem responsibilities, public-operation explanations and boundary roots in
 Genesis's editable Blueprint, Program and subsystem map. It can also author
-Vibe64's **Architecture layout** Stack section: exact root, readable name,
-description and explicitly designated libraries/support. This changes
+Vibe64's **Architecture layout** Stack section: exact roots grouped for presentation, with explicitly designated libraries/support. This changes
 presentation, not native ownership. Require source citations and separate
 declared intent from observed usage when reviewing a proposal. An AI can
 identify a directory root outside default Stack grouping; it must not invent
@@ -129,7 +147,7 @@ does not prove that no runtime call exists.
 
 Drag empty space to pan. **Fit** returns to the complete map. **Architecture
 options** (**⋯**) contains **Fit UI**, **Fit Engine**, **Zoom in**, **Zoom out**, the
-UI-call toggle, **Reset arrangement** and **Refresh analysis**. On mobile use the
+UI-call toggle, **Reset arrangement**, **Reload architecture** and **Refresh analysis**. On mobile use the
 top bar's **Show project** control if chat fills the screen, then use the same
 menu, pinch and pan; folder and file controls remain keyboard accessible.
 The existing chat divider controls workspace width.
@@ -140,7 +158,9 @@ Libraries and the dependency column retain their fixed side positions.
 **Reset arrangement** restores analysis order. Arrangement is local to the
 retained view and changes no source ownership or relationship.
 
-Opening reads existing facts without running inspectors. **Refresh analysis**
+Opening reads existing facts without running inspectors. A failed load shows
+**Retry loading**; **Reload architecture** rereads existing snapshots. If a local
+preview was restarted, reload its browser tab to reconnect. **Refresh analysis**
 explicitly rebuilds them through Stack's declared finite technology inspectors.
 **Cancel analysis** waits for cleanup and preserves the previous valid index.
 Large refreshes have a ten-minute request budget; inspectors retain their own

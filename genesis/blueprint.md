@@ -724,19 +724,13 @@ Operation cards share a subtle background that separates them from the chat in
 light and dark themes. They keep their heading, status, progress text and colors when expanded;
 opening details adds output and controls within the same shared presentation.
 Copy and Collapse sit beside the progress description, beneath the heading.
-People can explore the application through a compact searchable subsystem list
-and a focused detail pane. Each authored subsystem explains a
-responsibility and brings together its Program operations and owned or shared
-data tables. Operations link to explanations and
-source; tables with resolved database references link to the
-relationship diagram, with a way back to the selected subsystem. Missing or invalid maps
-offer a temporary AI task to generate or repair the subsystem map with the session's
-selected model and normal workspace tools. The main draft remains untouched;
-map edits stay in the session for review and Save. The subsystem view refreshes
-when the task finishes. The task checks the declared format before reporting success.
-An unreadable map can
-also be opened directly for correction. Unresolved table references remain visible. The database
-overview continues to explain the data itself.
+People explore subsystem responsibilities, Program capabilities and their cited
+source files through the Architecture canvas. Genesis's directory-bound map is
+the canonical owner list: each Program capability belongs to exactly one owner,
+while its Sources may include another owner's libraries. Responsibilities and
+Program contracts remain editable explanations, with source evidence for review.
+They are not proof of API intent or current behavior. There is no separate
+subsystem/Program list screen. The database overview continues to explain data.
 
 People can explore a project's database through a readable relationship diagram,
 including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
@@ -1714,6 +1708,8 @@ gesture even as neighbours move under the pointer. Zoom out returns through
 enclosing views without aggressive recentring. Breadcrumbs offer Engine,
 subsystem and file returns. Hidden map and file-browser elements retain their
 mounted state. Interrupted gestures and repeated entry/exit remain usable.
+An explicit Back control retraces file-to-file links, including cross-subsystem
+jumps, restoring the previous declaration. Close and Esc return one enclosing level.
 
 The square distinguishes observed cross-subsystem imports, declared API members,
 file-level review candidates and other available exports, preserving callables,
@@ -1725,8 +1721,11 @@ analysis stays explicit. Selecting a signature reaches its file and declaration
 inside the square. File icons retain directory nesting/search and source-size
 comparisons within their subsystem. Tight signature rows and compact headers
 preserve reading space. The existing single-file viewer retains signatures,
-recorded returns, English Description, ordered Steps, exact symbol Code and
-read-only whole-file Code. Dashboard Files retains editing.
+recorded returns, authored Genesis Program descriptions, on-demand function
+pseudocode through Steps, exact symbol Code and read-only whole-file Code.
+Pseudocode is informational only, cached privately against actual saved source,
+and regenerated on the next Steps request after changes. Opening a file or
+selecting a declaration makes no Helper query. Dashboard Files retains editing.
 
 Purple protocol-neutral page/controller bridges remain evidenced and hidden
 initially; page selection focuses its calls and the menu can show all.
@@ -1736,5 +1735,10 @@ ambiguous destinations never create guessed arrows. Technology/language owners
 discover facts; the viewer parses no source. Editable Blueprint, Program and
 subsystem explanations allow an AI to propose responsibilities/API boundaries
 with source evidence for review. Usage does not prove intended design.
-Stack's Architecture layout supplies readable names/purposes and explicit
-library/support roles without changing native ownership.
+Genesis's subsystem map supplies names, responsibilities and the complete
+directory-owner list. Stack's Architecture layout supplies placement and explicit
+library/support roles without changing that ownership. Existing Program
+capabilities enrich subsystem and file views. Loading failures offer Retry loading;
+Reload architecture reads existing snapshots, while Refresh analysis rebuilds them.
+Unchanged source indexing retains valid UI observations; stale UI evidence shows
+a short refresh notice while Engine browsing remains available.
