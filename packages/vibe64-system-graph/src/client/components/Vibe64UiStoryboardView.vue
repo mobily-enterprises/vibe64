@@ -512,6 +512,14 @@ watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clea
 watch(() => props.active, active => { if (!active) { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; } else if (fitPending) void fit(initialIds.value); });
 watch(canvas, (element, previous, onCleanup) => {
   if (!element) return;
+  // Disabling a generation button can release focus to body. Escape still
+  // closes this reader, without handling keys from chat or another dialog.
+  const pageEscape = event => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.target !== document.body || !props.active || !expandedSubsystemId.value) return;
+    event.preventDefault();
+    fileRequest.value ? closeFile() : closeDetail(event);
+  };
+  document.addEventListener('keydown', pageEscape);
   let width = element.clientWidth;
   let height = element.clientHeight;
   const observer = new ResizeObserver(() => {
@@ -535,7 +543,7 @@ watch(canvas, (element, previous, onCleanup) => {
     void flow.setViewport(adapt(flow.getViewport()), { duration: 0 });
   });
   observer.observe(element);
-  onCleanup(() => observer.disconnect());
+  onCleanup(() => { observer.disconnect(); document.removeEventListener('keydown', pageEscape); });
 }, { flush: 'post' });
 onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 </script>

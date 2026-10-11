@@ -94,6 +94,7 @@ viewer needs no language or package-manager-specific controls.
    the centre. Returning from a file restores the enclosing reading view before
    its icon grew, keeping the square's surrounding canvas accessible. **×** at
    the top right or Esc goes back one level; both retain the enclosing view's state.
+   Esc also works after generation temporarily releases keyboard focus.
    A compact reminder beneath the breadcrumb shows these scroll, zoom and return rules.
 
 **← Back** retraces file-to-file links, including links to another subsystem.
