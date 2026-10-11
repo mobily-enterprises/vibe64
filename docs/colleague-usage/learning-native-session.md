@@ -65,6 +65,11 @@ unavailable, and ask the installation owner to check its supported lesson tools.
 Reading or reopening the same retained lesson conversation preserves its connected
 lesson state; sending your explanation uses that same state. Genuine conversation
 replacement or a retired connection requires fresh lesson recovery.
+Keep the same saved lesson and Main open while chat and diagram updates arrive.
+Updates still require your current account and access to that lesson. If access
+ends, retain the attempt and resolve the access error before using the existing
+chat **Reload** recovery. Reload does not resend an admitted request or turn an
+unsuccessful diagram action into a completed one.
 
 Reply to the question actually shown in that conversation. Typed input captures
 its current question; voice input captures it when recording begins. Retrying an

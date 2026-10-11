@@ -13625,3 +13625,98 @@ test("Codex Main host and run owner share the original native conversation publi
     }
   }, { bindConversation: true });
 });
+
+
+test("Main browser fresh authorization survives expired publishing scope and still revokes access", { timeout: 30_000 }, async () => {
+  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
+    captureProjectRequestContext, assertProjectEffectAdmission } = await import("@local/vibe64-core/server/projectRequestContext");
+  const actions = createActionCatalogue();
+  const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
+  const attemptId = "839fb16d-3aed-40c8-be26-cb4ec8fe1229";
+  const access = { allowed: true }, reads = [], denied = [], events = [];
+  const resume = Promise.withResolvers();
+  let publishing = false, held = false, browser, unsubscribe, goalOperation, expired;
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    const scope = { slug: "test-project", targetRoot: runtime.projectContextRoot,
+      projectRuntimeRoot: runtime.stateRoot, projectSessionSourceRoot: runtime.projectContextRoot,
+      access: "write", vibe64User: actor,
+      learningScope: { learnerId: "42", attemptId, noExercise: false } };
+    const requestContext = { channel: "internal", surface: "app", requestMeta: { request: {
+      params: { learningAttemptId: attemptId }, vibe64User: actor } } };
+    actions.register({ contributorId: "original-browser-scope-companion", domain: "vibe64-sessions",
+      actions: createSessionActions({ sessions: {} }).map(definition => ({
+        channels: ["internal"], surfaces: ["app"], ...definition
+      })) });
+    // The original action catalogue and grant are retained; only the host's
+    // current admission is controlled, as in the original browser fixture.
+    actions.registerContextContributor({ id: "controlled-browser-current-admission", async contribute({ input, context }) {
+      assert.equal(input.learningAttemptId, attemptId);
+      assert.equal(input.sessionId, sessionId);
+      assert.equal(context.requestMeta.request.vibe64User, actor);
+      if (publishing && !held) { held = true; await resume.promise; }
+      const current = currentProjectRequestContext();
+      const practice = currentPracticeProjectScope(owner);
+      if (!access.allowed) {
+        denied.push(current.learningScope.attemptId);
+        throw Object.assign(new Error("Current lesson access denied"), { statusCode: 403 });
+      }
+      if (held) {
+        assert.equal(practice.access, "control", "delayed browser authorization never retains WRITE authority");
+        assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+      }
+      reads.push({ actorId: String(actor.uid), access: practice.access, attemptId: current.learningScope.attemptId });
+      const learning = captureProjectRequestContext();
+      return { actor: { id: String(actor.uid) }, vibe64Action: { user: actor, learning } };
+    } });
+    captures.onProviderCreated = provider => {
+      let goal = null;
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (threadId, input) => ({ goal: goal = { ...input, threadId,
+        status: "active", createdAt: 10, updatedAt: 10, tokensUsed: 0, timeUsedSeconds: 0 } });
+      provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
+      provider.clearGoal = async () => { goal = null; return {}; };
+    };
+    captures.onSessionChanged = (_id, event) => { if (event.reason === "codex-goal") publishing = true; };
+    try {
+      await runWithPracticeProjectContext(owner, scope, async () => {
+        const ready = await terminalService.ensureAgentSession(sessionId, { runtime, vibe64User: actor });
+        assert.equal(ready.ok, true, JSON.stringify(ready));
+        browser = await terminalService.openBrowserConversation(sessionId, { runtime, vibe64User: actor,
+          browserAuthority: { sessionId, learningAttemptId: attemptId, actorId: "42", requestContext } });
+        unsubscribe = await browser.subscribe(event => events.push(event));
+        expired = currentProjectRequestContext();
+        const segment = (await browser.read()).segmentId;
+        goalOperation = browser.updateGoal({ action: "set", expectedSegmentId: segment, expectedGoalId: null,
+          objective: "Keep the original browser authorization current" });
+        goalOperation.catch(() => {});
+        await waitForSessionValue(() => held, value => value, "the original native publication's fresh authorization");
+      });
+      await assert.rejects(() => runWithProjectRequestContext(expired, () => currentProjectRequestContext()),
+        { code: "vibe64_practice_scope_expired" });
+      resume.resolve();
+      await goalOperation;
+      assert.ok(events.some(event => event.type === "goal" &&
+        event.goal?.objective === "Keep the original browser authorization current"),
+        "the original subscriber receives this goal after expiry of the publishing callback");
+      assert.ok(reads.filter(read => read.attemptId === attemptId).length > 1, "publication reads fresh authority");
+      await browser.read();
+      assert.equal(reads.at(-1).access, "control", "browser observation retains only original CONTROL identity");
+      const beforeRevocation = events.length;
+      access.allowed = false;
+      await assert.rejects(browser.read(), { statusCode: 403 });
+      const deniedBeforePublication = denied.length;
+      emitCodexNotification(captures.subscribers, { method: "thread/goal/updated", params: {
+        threadId: captures.provider.threadId, goal: { objective: "Revoked private goal", status: "paused", createdAt: 10 }
+      } });
+      await waitForSessionValue(() => denied.length, count => count > deniedBeforePublication,
+        "the original subscriber's fresh authorization after revocation");
+      await flushPromises();
+      assert.equal(events.length, beforeRevocation, "genuine revocation still suppresses retained browser publication");
+      assert.equal(denied.at(-1), attemptId, "revocation rechecks the original saved attempt");
+    } finally {
+      resume.resolve();
+      await goalOperation?.catch(() => {});
+      await unsubscribe?.();
+    }
+  }, { actions, throughTerminalService: true });
+});

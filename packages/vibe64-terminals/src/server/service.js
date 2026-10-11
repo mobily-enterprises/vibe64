@@ -1185,13 +1185,16 @@ function createService({
       const authority = context.browserAuthority;
       if (!authority) return true; // Existing, already-authorized manager callers.
       if (!actions || authority.sessionId !== conversationId) return false;
-      const grant = await actions.execute({
+      // Delayed publications retain CONTROL identity, never a cached access grant.
+      const readGrant = () => actions.execute({
         actionId: "vibe64.sessions.conversation.context.read",
         input: authority.learningAttemptId
           ? { learningAttemptId: authority.learningAttemptId, sessionId: conversationId }
           : { projectSlug: authority.projectSlug, sessionId: conversationId },
         context: authority.requestContext
       });
+      const grant = await (context.browserProjectContext
+        ? runWithProjectRequestContext(context.browserProjectContext, readGrant) : readGrant());
       return grant.actor.id === authority.actorId;
     },
     host: {
@@ -4005,7 +4008,8 @@ function createService({
           code: "conversation_unsupported", statusCode: 400
         });
       }
-      const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId };
+      const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId,
+        browserProjectContext: captureProjectRequestContext() };
       const conversation = await mainConversations.open({ id: sessionId, context: current });
       const browser = Object.freeze({ ...conversation, async inspectDelivery(input) {
         const receipt = await conversation.inspectDelivery(input);
@@ -4031,7 +4035,8 @@ function createService({
         });
       }
       const context = await assistantSessionOptions(sessionId, options);
-      return mainConversations.open({ id: sessionId, context: { ...context, sessionId, temporaryConversationId: conversationId } });
+      return mainConversations.open({ id: sessionId, context: { ...context, sessionId, temporaryConversationId: conversationId,
+        browserProjectContext: captureProjectRequestContext() } });
     },
 
     agentSessionState(sessionId, options = {}) {

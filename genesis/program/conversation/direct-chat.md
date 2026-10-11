@@ -128,6 +128,15 @@ with the existing owners. After verified native cleanup, an interrupted
 checkpoint refusal is retained while the shared owner saves and publishes an
 inactive interruption; completed-answer checkpoints still gate settlement.
 
+The original Main and temporary browser openers also capture their server-owned
+Project CONTROL identity. Their common runtime uses that identity only while
+executing the original fresh conversation-context authorization action, so a
+request-lived publishing scope cannot expire a retained subscriber. The original
+request, current account/lesson/Project admission and exact actor comparison still
+run for every event; actual access revocation still removes the subscriber.
+No browser opener accepts an incoming replacement for this captured
+identity.
+
 The configured normal CLI adds only the existing SDK
 MCP declaration, preserving original source tools and permission defaults.
 
