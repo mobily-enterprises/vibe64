@@ -1218,6 +1218,16 @@ learner/session/pin/native-turn check and action admission. No WRITE grant or
 practice preparation barrier spans the native turn. Managed shell-command
 environment callbacks remain a separate authority path.
 
+The shared Codex driver captures its original notification queue's exact
+namespace while the Main binding opens under live admission. Its three delayed
+run drains use that same queue and key after the practice callback expires,
+including queued successors. This retains cleanup custody, not a WRITE or CONTROL
+grant; fresh actions and native final delivery still use their existing authority
+checks. Inspection, standalone disposal and provider release keep their original
+ambient namespace validation. Equal session IDs in different projects never share
+a drain, native thread or account/process owner.
+
+
 The internal teaching-context query still requires fresh WRITE eligibility for
 the exact learner, saved session, attempt and pin. It reads that grant in the
 resolver's captured CONTROL context, which cannot admit project effects. It does

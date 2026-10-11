@@ -13348,6 +13348,10 @@ test("R11 original persistent scoped Codex preserves history and excludes stoppe
 // admission and external Helper responses are controlled existing host facilities;
 // this is not actual Project admission or person gesture/browser acceptance.
 test("actual Codex Main retains collected practical evidence through repeated browser opens and native explanation receipts", { timeout: 60_000 }, async t => {
+  const { runWithPracticeProjectContext, currentProjectRequestContext } =
+    await import("@local/vibe64-core/server/projectRequestContext");
+  const practiceOwner = {};
+  let expiredScope;
   const { trainingTeachingFixture, mainTeachingTerminals } = await import("../fixtures/trainingTeachingFixture.js");
   const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
   const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
@@ -13387,7 +13391,11 @@ test("actual Codex Main retains collected practical evidence through repeated br
       controls: helperControls, helperCalls });
     learning = { slug: projectSlug, learningScope: scope, targetRoot: runtime.projectContextRoot,
       projectRuntimeRoot: runtime.stateRoot, projectSessionSourceRoot: runtime.projectSessionSourceRoot,
-      runLearningOperation: callback => runWithProjectRequestContext({ ...learning, vibe64User: f.actor }, callback) };
+      runLearningOperation: callback => runWithPracticeProjectContext(practiceOwner,
+        { ...learning, access: "write", vibe64User: f.actor }, () => {
+          expiredScope = currentProjectRequestContext();
+          return callback();
+        }) };
     const sessions = createSessionService({ project: projectService, terminals: terminalService });
     const definitions = [...createSessionActions({ sessions }), ...createLearningTeachingContextActions(),
       ...createTrainingActions({ catalogue: { readCatalogue: () => assert.fail("No catalogue mutation/read in native receipt proof") },
@@ -13432,6 +13440,9 @@ test("actual Codex Main retains collected practical evidence through repeated br
     const send = (messageId, text, data = {}) => browser.send({ messageId, text, data: { clientId, ...data } });
     const questionMessageId = randomUUID();
     assert.equal((await send(questionMessageId, "Please teach the practical.")).ok, true);
+    assert.ok(expiredScope, "the original send owns a real Core practice callback");
+    await assert.rejects(() => runWithProjectRequestContext(expiredScope, () => currentProjectRequestContext()),
+      { code: "vibe64_practice_scope_expired" });
     const call = async (id, name, input) => {
       const handler = registrations.get(nativeThreadId)?.handler;
       assert.equal(typeof handler, "function");
@@ -13463,6 +13474,7 @@ test("actual Codex Main retains collected practical evidence through repeated br
     await waitForSessionValue(() => store.readConversationLog(sessionId), rows => rows.some(row =>
       row.metadata.trainingQuestionDelivery?.phase === "delivered"), "actual practical question native checkpoint");
     await waitForSessionValue(async () => events, values => values.some(value => value.type === "settled"), "actual question settled");
+    assert.equal((await browser.read()).error, "", "the original shared driver drains without retaining expired WRITE scope");
     const captured = await f.owner.capturePractical({ actor: f.actor, reference });
     assert.deepEqual(captured.target, { projectSlug, sessionId });
     await main.focusPresentation({ ...bindingInput, input: { clientId, focus: { ...captured.target, pane: "preview" } } });
@@ -13523,6 +13535,7 @@ test("actual Codex Main retains collected practical evidence through repeated br
     captures.provider.status = "completed";
     emitCodexNotification(captures.subscribers, turnCompleted({ threadId: nativeThreadId, turnId: explanationNativeTurnId }));
     await waitForSessionValue(async () => events, values => values.filter(value => value.type === "settled").length === 2, "actual practical explanation settled");
+    assert.equal((await browser.read()).error, "", "the second native completion keeps the same scoped drain custody");
     const settledLog = await store.readConversationLog(sessionId);
     const settledAnswer = settledLog.find(row => row.turnId === authored.turnId);
     assert.deepEqual(settledAnswer.metadata.applicationTools.find(value => value.id === receipt.id), receipt,

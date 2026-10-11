@@ -107,6 +107,8 @@ Main confirms a diagram explanation from that turn's finished response before
 enabling **Continue**. Keep the same lesson and conversation open while it
 finishes. A stopped explanation or a response from a different turn cannot
 confirm the old diagram; read Main's current result before asking it to continue.
+The response may appear before **Continue** becomes ready; wait for its
+confirmation instead of resending that finished reply.
 
 If an operation is unconfirmed, read its current status before requesting a
 repeat. A reload or changed lesson/account cannot reuse an old cue confirmation.
