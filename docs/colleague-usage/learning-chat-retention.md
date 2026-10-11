@@ -7,6 +7,10 @@ saved lesson conversation to see its retained history and draft. The yellow L
 switch preserves where you were reading in each mode. Ordinary session selection
 and collapsing or reopening chat keep their existing scroll-to-latest behavior.
 
+Learning keeps its App controls in the supporting pane rather than the Working
+Preview toolbar. Returning to Working restores its existing toolbar without
+replacing either conversation.
+
 A lesson chat stays attached to the saved attempt you opened. Showing a different
 working project does not move that chat, its words or its pending request into
 that project. Changing account requires fresh access to your own saved lessons;

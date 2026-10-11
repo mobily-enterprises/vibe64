@@ -90,6 +90,12 @@ journal or a promise of hard-unload recovery.
 
 ## Original panel attachment
 
+The project page keeps its existing Preview toolbar host mounted across mode
+changes, hiding it in Learning and supplying an empty target to OutputControls’
+existing local placement. Working restores the same target before its retained
+controls return, avoiding a deferred Teleport into an absent host. Original
+Preview visibility outside mode changes remains unchanged.
+
 The retained Main wrapper distinguishes hiding through the Working/Learning
 purpose filter from ordinary tab or chat visibility. The existing session-purpose
 matcher supplies that reason; ConversationLog keeps one local visibility reason

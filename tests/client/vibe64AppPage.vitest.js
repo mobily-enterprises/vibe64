@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { createRenderer, defineComponent, h, nextTick, onBeforeUnmount, reactive, ref, shallowRef } from "vue";
+import { createRenderer, defineComponent, h, nextTick, Teleport, vShow, withDirectives, onBeforeUnmount, reactive, ref, shallowRef } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
@@ -325,4 +325,72 @@ it("original parent mount cannot overwrite an already selected Learning child an
   fixture.layout.value = fixture.learningLayout; fixture.view.value = fixture.learningView;
   fixture.app.unmount(); mountedPages.splice(mountedPages.indexOf(fixture.app), 1);
   expect(fixture.view.value).toBeNull(); expect(fixture.layout.value).toBeNull();
+});
+
+
+it("keeps mounted preview controls valid while Learning hides the Working toolbar target", async () => {
+  const source = readFileSync(new URL("../../src/pages/app/project/[slug].vue", import.meta.url), "utf8");
+  const expression = source.match(/:preview-toolbar-teleport-target="([^"]+)"/u)[1];
+  const targetForMode = new Function("learningMode", "previewToolbarTeleportTarget", `return (${expression});`);
+  const host = source.match(/<div\s+v-if="([^"]+)"\s+v-show="([^"]+)"\s+:id="previewToolbarHostId"/u);
+  const hostPresent = new Function("previewToolbarHostVisible", "learningMode", `return (${host[1]});`);
+  const hostShown = new Function("learningMode", `return (${host[2]});`);
+  const node = (tag, text = "") => ({ tag, text, props: {}, style: {}, children: [], parent: null });
+  const root = node("root");
+  const findTarget = parent => parent.props.id === "studio-home-shell-preview-toolbar"
+    ? parent : parent.children.map(findTarget).find(Boolean);
+  const detach = child => {
+    if (child.parent) child.parent.children.splice(child.parent.children.indexOf(child), 1);
+    child.parent = null;
+  };
+  const renderer = createRenderer({
+    createElement: tag => node(tag), createText: text => node("text", text),
+    createComment: text => node("comment", text),
+    insert(child, parent, anchor) {
+      detach(child); child.parent = parent;
+      const index = anchor ? parent.children.indexOf(anchor) : -1;
+      parent.children.splice(index < 0 ? parent.children.length : index, 0, child);
+    },
+    remove: detach, parentNode: child => child.parent,
+    nextSibling: child => child.parent?.children[child.parent.children.indexOf(child) + 1] || null,
+    setText: (child, text) => { child.text = text; },
+    setElementText: (child, text) => { child.text = text; child.children = []; },
+    patchProp: (child, key, _previous, value) => { child.props[key] = value; },
+    querySelector: selector => selector === "body" ? root : findTarget(root)
+  });
+  const mode = ref(false), text = ref("initial"), errors = [], warnings = [], controls = [];
+  const Controls = defineComponent({ props: ["target", "text"], setup(props) {
+    const owner = {}; controls.push(owner);
+    return () => h("section", [h(Teleport, { defer: true, disabled: !props.target, to: props.target || "body" },
+      [h("span", { title: props.text }, props.text)])]);
+  } });
+  let learningOpened = false;
+  const app = renderer.createApp(defineComponent({ setup() {
+    return () => {
+      if (mode.value) learningOpened = true;
+      const target = targetForMode(mode.value, "#studio-home-shell-preview-toolbar");
+      return h("main", [
+        hostPresent(true, mode.value) ? withDirectives(h("div", { id: "studio-home-shell-preview-toolbar" }),
+          [[vShow, hostShown(mode.value)]]) : null,
+        h(Controls, { key: "working", target: mode.value ? "" : target, text: text.value }),
+        learningOpened ? h(Controls, { key: "learning", target: mode.value ? target : "", text: text.value }) : null
+      ]);
+    };
+  } }));
+  app.config.errorHandler = error => errors.push(error);
+  app.config.warnHandler = message => warnings.push(message);
+  app.mount(root); mountedPages.push(app); await nextTick();
+  const working = controls[0];
+  expect(findTarget(root)).toBeTruthy();
+  mode.value = true; await nextTick();
+  const learning = controls[1];
+  expect(findTarget(root)).toBeTruthy();
+  expect(findTarget(root).style.display).toBe("none");
+  text.value = "updated after the mode change"; await nextTick();
+  expect(errors).toEqual([]); expect(warnings).toEqual([]);
+  mode.value = false; await nextTick();
+  expect(findTarget(root)).toBeTruthy();
+  expect(findTarget(root).style.display).not.toBe("none");
+  expect(controls).toEqual([working, learning]);
+  expect(errors).toEqual([]); expect(warnings).toEqual([]);
 });

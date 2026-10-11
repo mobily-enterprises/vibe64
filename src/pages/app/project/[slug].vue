@@ -177,7 +177,8 @@ function showProjectPane() {
             </button>
           </div>
           <div
-            v-if="previewToolbarHostVisible && !learningMode"
+            v-if="previewToolbarHostVisible"
+            v-show="!learningMode"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
           />
@@ -240,7 +241,7 @@ function showProjectPane() {
               create-session-teleport-target="#studio-home-shell-create-session"
               :github-actor-teleport-target="githubActorTeleportTarget"
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
-              :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
+              :preview-toolbar-teleport-target="learningMode ? '' : previewToolbarTeleportTarget"
               :project-pane="learningMode ? 'dashboard' : projectPane"
               @title-change="emitPageTitle"
               @chat-attention="setChatCollapsed(false)"
