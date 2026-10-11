@@ -26,7 +26,7 @@ function createTrainingAssessmentGrader({ content, helper } = {}) {
     throw new TypeError("Assessment grading requires installed content and the original retained Helper facility.");
   }
 
-  async function grade(state, { pin, assessmentId, evidence, question, assistance = "none", checkResult } = {}, context) {
+  async function grade(state, { pin, assessmentId, evidence, question, assistance = "none", checkResult, observedAction } = {}, context) {
     const proof = validateContent(evidenceSchema, evidence, "Admitted assessment evidence");
     if (!proof.text.trim()) throw new Error("Grade the learner's actual nonempty words or observation explanation.");
     if (!["none", "hint", "demonstration", "substantial"].includes(assistance)) throw new Error("Choose the retained assistance level.");
@@ -39,7 +39,7 @@ function createTrainingAssessmentGrader({ content, helper } = {}) {
     if (assessment.kind === "answer") {
       savedQuestion = validateContent(questionSchema, question, "Admitted question association");
       if (proof.kind !== "answer" || !proof.messageId || proof.questionId !== savedQuestion.id ||
-          savedQuestion.assessmentId !== assessmentId || checkResult !== undefined ||
+          savedQuestion.assessmentId !== assessmentId || checkResult !== undefined || observedAction !== undefined ||
           Object.keys(proof).some(key => !["kind", "learnerId", "attemptId", "text", "messageId", "questionId"].includes(key))) {
         throw new Error("Grade the actual admitted learner answer associated with this saved question.");
       }
@@ -58,12 +58,19 @@ function createTrainingAssessmentGrader({ content, helper } = {}) {
           throw new Error("The declared check owner must supply this exact observation's verified check result.");
         }
       } else if (checkResult !== undefined) throw new Error("This practical declares no executable check.");
+      if (observedAction !== undefined && (!observedAction ||
+          Object.keys(observedAction).sort().join(",") !== "observationId,text" ||
+          observedAction.observationId !== proof.observationId || typeof observedAction.text !== "string" ||
+          !observedAction.text.trim() || observedAction.text.length > 2048)) {
+        throw new Error("Supply only this admitted observation's bounded server action description.");
+      }
       if (proof.origin !== "learner" || checkResult?.outcome === "not-yet-passed") {
         return { outcome: "not-yet-passed", explanation: "This requires the learner's own observed action and a successful declared check; a demonstration or failed check does not pass." };
       }
     }
     const prompt = { assessment: { id: assessment.id, kind: assessment.kind, rubric: rubric.text },
-      evidence: proof, question: savedQuestion, assistance, ...(checkResult ? { checkResult } : {}) };
+      evidence: proof, question: savedQuestion, assistance, ...(checkResult ? { checkResult } : {}),
+      ...(observedAction ? { observedAction: { observationId: observedAction.observationId, text: observedAction.text } } : {}) };
     if (JSON.stringify(prompt).length > VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[workloadId].maxInputCharacters) {
       throw new Error("Assessment evidence and rubric exceed the bounded grading input. Shorten the authored rubric; evidence is not silently truncated.");
     }

@@ -619,7 +619,11 @@ learner, question, attempt, reserved project/session and authoritative assistanc
 this method does not create observations or prove browser gestures.
 
 Practical evidence uses the accepted canonical learner message's actual text,
-not the native factual observation text. It retains only original observation
+not the native factual observation text. The admitted owner separately forwards
+the already validated server observation's ID and bounded action description to
+the Helper as `observedAction`; neither field changes persisted evidence or replay
+comparison. The grader rejects a mismatched ID, blank or oversized description,
+extra fields and answer-mode action data. It retains only original observation
 evidence fields, maps native teacher origin to demonstration, and selects any
 check identifier from the exact installed assessment. The original grader checks
 producer/operation and the declared check result before inference, and receives

@@ -299,6 +299,8 @@ test("native practical grading shares retained Helper and progress replay with c
   const prompt = JSON.parse(f.calls.find(value => value.run).run.input.prompt);
   assert.equal(prompt.question, null);
   assert.equal(prompt.evidence.text, f.input.message.text);
+  assert.deepEqual(prompt.observedAction, { observationId: f.input.observation.observationId, text: f.input.observation.text });
+  assert.notEqual(prompt.observedAction.text, prompt.evidence.text);
   assert.match(prompt.assessment.rubric, /actual button/);
   assert.equal(f.state.record.summaryHelper, null);
   await f.teaching.prepareQuestion({ actor: f.actor, attemptId: f.input.attemptId, expectedRevision: 6,
@@ -319,7 +321,7 @@ test("native practical observations require exact learner question exercise and 
   for (const changes of [
     { kind: "answer" }, { learnerId: "another" }, { attemptId: "another" }, { questionId: "another" },
     { projectSlug: "another" }, { sessionId: "another" }, { assistance: "hint" }, { origin: "demonstration" },
-    { operationId: "" }, { text: "" }
+    { operationId: "" }, { text: "" }, { text: "x".repeat(2049) }
   ]) {
     await assert.rejects(f.owner.evaluatePractical({ ...f.input, observation: { ...f.input.observation, ...changes } }, f.facilities),
       { code: "VIBE64_TRAINING_PRACTICAL_UNADMITTED" });
@@ -428,5 +430,24 @@ test("the original assessment checks supplied native cancellation after its fina
   await assert.rejects(pending, /stopped during final authority refresh/);
   assert.equal(writes, 0);
   assert.deepEqual(await f.read(), before);
+  assert.equal(f.state.record.summaryHelper, null);
+});
+
+test("practical Helper action descriptions reject mismatched identity and unbounded data before inference", async t => {
+  const f = await fixture(t);
+  const input = { pin: f.input.pin, assessmentId: "try", evidence: {
+    kind: "observation", learnerId: "42", attemptId: f.input.evidence.attemptId,
+    text: "I pressed the button and saw its greeting.", observationId: "observed-42", observedAt: "2026-10-07T01:00:00.000Z",
+    projectSlug: "practice", sessionId: "2026-10-07_00-00-00", producer: "exercise", operation: "use-button", origin: "learner", check: "response"
+  }, checkResult: { check: "response", observationId: "observed-42", outcome: "passed" } };
+  for (const observedAction of [null, {}, { observationId: "other", text: "The server confirmed the response." },
+    { observationId: "observed-42", text: " " }, { observationId: "observed-42", text: "x".repeat(2049) },
+    { observationId: "observed-42", text: "The server confirmed the response.", outcome: "passed" }]) {
+    await assert.rejects(f.grader.grade(f.state, { ...input, observedAction }, f.context), /bounded server action description/);
+  }
+  await assert.rejects(f.grader.grade(f.state, { ...f.input,
+    observedAction: { observationId: "observed-42", text: "The server confirmed the response." }
+  }, f.context), /saved question/);
+  assert.equal(f.calls.length, 0, "invalid action data cannot start the Helper or its cleanup");
   assert.equal(f.state.record.summaryHelper, null);
 });

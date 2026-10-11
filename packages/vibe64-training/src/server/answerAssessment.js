@@ -97,7 +97,9 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     signal.throwIfAborted();
     const grader = createTrainingAssessmentGrader({ content, helper });
     const result = await grader.grade(state, { pin: attempt.pin, assessmentId: question.assessmentId, evidence,
-      ...(kind === "answer" ? { question: { id: question.id, assessmentId: question.assessmentId, text: question.text } } : { checkResult }),
+      ...(kind === "answer" ? { question: { id: question.id, assessmentId: question.assessmentId, text: question.text } } : {
+        checkResult, observedAction: { observationId: observation.observationId, text: observation.text }
+      }),
       assistance: question.assistance }, context);
     signal.throwIfAborted();
     await teaching.captureQuestion({ actor, reference });
