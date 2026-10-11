@@ -33,8 +33,10 @@ renew or open in a native terminal. Its supported Main chat still uses the same
 message and Stop controls. Project operations require an actual working or
 exercise project and its normal permissions.
 
-If lesson updates cannot load, inspect the same saved attempt and connection
-before retrying. A Working project list error is separate from that lesson's chat
+If lesson updates cannot load, use Reload chat to reconnect to the same saved
+lesson. Reload checks your current access and retains its history and draft; it
+does not repeat a teacher message. If recovery still fails, inspect the saved
+attempt and connection before retrying. A Working project list error is separate from that lesson's chat
 connection. A failed Working list refresh retains its background chats; it does
 not keep a lesson chat visible after your own lesson list no longer grants access.
 Colleague can explain the supported controls and offer authorized

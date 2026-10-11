@@ -1133,6 +1133,15 @@ practice preparation barrier again: the original lock would correctly refuse
 that nested acquisition as busy. Browser/supervisor and project/workspace
 operations keep their original barrier and exact Create-opener handling.
 
+The exact internal Sessions conversation-context query returns only the fresh
+contributor's actor, user and captured Project identity. It retains every fresh
+saved-attempt/session/pin, CONTROL Project and hosted-access check, but does not
+enter the practice operation again just to return that grant. Other observation,
+control and effect operations still re-enter their original practice owner;
+Main question reads retain their before/after fresh context checks. This is a
+necessary coordination adaptation for repeated Main subscription authorization,
+not a cached grant, deadline change or native-read shortcut.
+
 The internal teaching-context query still requires fresh WRITE eligibility for
 the exact learner, saved session, attempt and pin. It reads that grant in the
 resolver's captured CONTROL context, which cannot admit project effects. It does

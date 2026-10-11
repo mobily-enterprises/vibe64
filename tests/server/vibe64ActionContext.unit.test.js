@@ -406,3 +406,90 @@ test("practice Main actions use fresh original hosted authorization and callback
   await assert.rejects(() => execute("vibe64.test.practice-write"), { code: "saved_attempt_ended" });
   assert.equal(openerBarriers, 1);
 });
+
+test("the internal practice conversation identity grant stays fresh without duplicate operation admission", async () => {
+  const { createSessionActions, ACTION_READ_CONVERSATION_CONTEXT } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  const { assertProjectEffectAdmission, captureProjectRequestContext, currentPracticeProjectScope, runWithPracticeProjectContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const actor = { uid: 42, username: "learner", role: "member" };
+  const sessionId = `training-${learningAttempt}`;
+  const pin = { course: { courseId: "intro", release: "1" }, topic: { topicHash: "a".repeat(64) }, lesson: { hash: "b".repeat(64) } };
+  const learningScope = { learnerId: "42", attemptId: learningAttempt, pin, noExercise: false };
+  const scope = { slug: `training-${learningAttempt.replaceAll("-", "")}`, targetRoot: "/practice/source",
+    projectRuntimeRoot: "/practice/runtime", projectSessionSourceRoot: "/practice/session/source",
+    projectRecordPath: "/practice/project.json", systemRoot: "/system", projectsRoot: "/projects" };
+  const practiceOwner = {};
+  const practice = { ...scope, access: "control", training: { attemptId: learningAttempt, learnerKey: "NDI", pin } };
+  const state = { user: actor, active: true, allowed: true, foreignPin: false, control: true };
+  const calls = [];
+  const actions = createActionCatalogue();
+  const grant = { channels: ["api", "automation", "internal"], surfaces: ["app"],
+    ...createSessionActions({ sessions: {} }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT) };
+  const observe = withVibe64ActionContext({ id: "vibe64.test.practice-observe", kind: "query", channels: ["internal"], surfaces: ["app"],
+    input: { mode: "create", schema: createSchema({ sessionId: { type: "string", required: true } }) },
+    execute() { calls.push("data-read"); return { ok: true }; }
+  }, { learningAccess: "observe" });
+  actions.register({ contributorId: "practice-grants", domain: "test", actions: [grant, observe] });
+  registerVibe64ActionContext(actions, {
+    projectContext: { projectCatalogEnabled: true, currentPracticeProjectScope() {
+      assert.equal(currentProjectRequestContext().slug, scope.slug);
+      return { ...currentPracticeProjectScope(practiceOwner), access: state.control ? "control" : "observe" };
+    } },
+    resolveUser: async () => { calls.push("actor"); return state.user; },
+    async resolveLearningContext(input) {
+      calls.push("saved-admission");
+      assert.equal(input.actor, state.user);
+      assert.equal(input.attemptId, learningAttempt);
+      assert.equal(input.access, "observe");
+      if (!state.active) throw Object.assign(new Error("Ended saved attempt"), { code: "saved_attempt_ended" });
+      if (input.sessionId !== sessionId) throw Object.assign(new Error("Foreign saved session"), { code: "saved_session_mismatch" });
+      let learning;
+      await runWithPracticeProjectContext(practiceOwner, { ...practice, vibe64User: actor, learningScope }, () => {
+        learning = captureProjectRequestContext();
+      });
+      return { ...learning, learningScope: { ...learningScope,
+        pin: state.foreignPin ? { ...pin, lesson: { hash: "c".repeat(64) } } : pin },
+      async runLearningOperation(operation) {
+        calls.push("operation-admission");
+        return runWithPracticeProjectContext(practiceOwner, { ...practice, learningScope, access: input.access }, operation);
+      } };
+    },
+    async authorizeProject(input) {
+      calls.push("host");
+      assert.equal(input.user, state.user);
+      assert.equal(input.slug, scope.slug);
+      if (!state.allowed) throw Object.assign(new Error("Host denied"), { code: "actual_host_denied" });
+    }
+  });
+  const execute = (actionId = grant.id, input = {}, channel = "internal") => actions.execute({ actionId,
+    input: { learningAttemptId: learningAttempt, sessionId, ...input }, context: { channel, surface: "app" } });
+  for (let index = 0; index < 2; index++) {
+    const result = await execute();
+    assert.deepEqual(result.actor, { id: "42" });
+    assert.equal(result.user, actor);
+    assert.deepEqual(result.project.learningScope, learningScope);
+    await runWithProjectRequestContext(result.project, () => assert.throws(assertProjectEffectAdmission,
+      { code: "vibe64_practice_effect_admission_required" }));
+  }
+  assert.deepEqual(calls, ["actor", "saved-admission", "host", "actor", "saved-admission", "host"]);
+  await execute(observe.id);
+  assert.deepEqual(calls.slice(-5), ["actor", "saved-admission", "host", "operation-admission", "data-read"]);
+  state.allowed = false;
+  await assert.rejects(() => execute(), { code: "actual_host_denied" });
+  state.allowed = true;
+  state.active = false;
+  await assert.rejects(() => execute(), { code: "saved_attempt_ended" });
+  state.active = true;
+  await assert.rejects(() => execute(grant.id, { sessionId: "foreign" }), { code: "saved_session_mismatch" });
+  state.foreignPin = true;
+  await assert.rejects(() => execute(), { code: "vibe64_learning_scope_mismatch" });
+  state.foreignPin = false;
+  state.control = false;
+  await assert.rejects(() => execute(), { code: "vibe64_learning_scope_mismatch" });
+  state.control = true;
+  state.user = { ...actor, uid: 43 };
+  await assert.rejects(() => execute(), { code: "vibe64_learning_scope_mismatch" });
+  state.user = null;
+  await assert.rejects(() => execute(), { code: "vibe64_auth_required" });
+  assert.equal(calls.filter(value => value === "operation-admission").length, 1);
+  assert.equal(calls.filter(value => value === "data-read").length, 1);
+});

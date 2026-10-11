@@ -94,10 +94,12 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         // inside those checks; retain the original omitted-ID execution path.
         if (!projectScoped && context.trainingMain) return execute(trustedInput, context, deps);
         if (learning.learningScope.noExercise === false) {
-          if (definition.kind === "query" && learningAccess === "write") {
-            // The internal teaching grant reads fresh WRITE eligibility, not
-            // effects. Keep its captured CONTROL identity without reacquiring
-            // the preparation barrier already held by the enclosing Send.
+          if (definition.kind === "query" && (learningAccess === "write" ||
+              definition.id === "vibe64.sessions.conversation.context.read" &&
+              context.channel === "internal" && learningAccess === "observe")) {
+            // These identity grants return the contributor's fresh admission,
+            // not data or effects. Keep its captured CONTROL identity without
+            // entering the practice operation a second time.
             return runWithProjectRequestContext({ ...learning, vibe64User: user }, () => execute(trustedInput, context, deps));
           }
           if (definition.id === "vibe64.sessions.create" && learningAccess === "create") {
