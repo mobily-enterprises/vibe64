@@ -53,6 +53,10 @@ exact returned attempt through `vibe64.training.teaching-brief.read`; that owner
 provides the teaching text, rubrics and diagrams. A missing help topic is not
 evidence that an installed course's content is missing. If the native brief or
 preparation actually fails, report that result and retain its exact saved target.
+Main receives the complete bounded teaching brief, including its rubric and saved
+results. It does not shorten a valid lesson to fit a smaller tool response. A brief
+that exceeds the teaching owner's 128 KiB bound is refused; retain the saved attempt
+and ask the content author to shorten the lesson rather than retrying an unchanged read.
 
 A host-enabled Main lesson diagram uses the existing Preview area's lesson
 **Presentation**. Read `learning-mode-ui` for its actual view choices; **App**

@@ -1274,3 +1274,65 @@ test("teacher definitions register without Colleague and dispatch the current re
   assert.equal(calls.length, 4, "registration supplies no cached teacher or supervisor fallback");
   assert.deepEqual(await inventory(f.systemRoot), saved, "replay and refused authority do not change original saved learning");
 });
+
+
+test("Main Training reply budget preserves complete valid briefs while default and owner bounds still refuse oversize", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const original = await f.teachingBrief.readBrief({ actor: f.auth.user, attemptId: saved.attempt.attemptId });
+  const input = { attemptId: saved.attempt.attemptId };
+  const teachingText = `${original.lesson.teachingText}\n${"é".repeat(27 * 1024)}`;
+  const c = f.register(null, { teachingBrief: { async readBrief() {
+    return { ...original, lesson: { ...original.lesson, teachingText } };
+  } } });
+  const before = await inventory(f.systemRoot);
+  const api = await c.execute("teaching-brief.read", input);
+  const bytes = Buffer.byteLength(JSON.stringify(api));
+  assert.ok(bytes > 48 * 1024 && bytes <= 128 * 1024);
+  assert.deepEqual(await c.tool("teaching-brief.read", input), {
+    ok: false, error: { code: "assistant_tool_result_too_large",
+      message: "Tool result exceeds the assistant size limit. Narrow the request and try again.", status: 413 }
+  });
+
+  // The existing catalog option covers Training's bounded result plus discovery's
+  // identity envelope. Actual Main service composition is checked by the live brief.
+  const tools = createServiceToolCatalog(c.actions, { maxDirectTools: 100,
+    maxToolResultBytes: 128 * 1024 + 1024 });
+  const context = { channel: "automation", surface: "app" };
+  const direct = tools.resolveToolSet(context);
+  const definition = direct.tools.find(value => value.actionId === "vibe64.training.teaching-brief.read");
+  const reply = await tools.executeToolCall({ toolName: definition.name, toolSet: direct, context,
+    argumentsText: JSON.stringify(input) });
+  assert.equal(reply.ok, true, JSON.stringify(reply));
+  assert.deepEqual(reply.result, api);
+  assert.equal(reply.result.brief.lesson.teachingText, teachingText);
+  assert.deepEqual(reply.result.brief.lesson.assessments, api.brief.lesson.assessments);
+  assert.deepEqual(reply.result.brief.learning, api.brief.learning);
+
+  const discovered = tools.resolveToolSet(context, { discoveryOnly: true });
+  const contract = await tools.executeToolCall({ toolName: "assistant_action_contract", toolSet: discovered, context,
+    argumentsText: JSON.stringify({ actionId: definition.actionId }) });
+  assert.equal(contract.ok, true, JSON.stringify(contract));
+  const result = await tools.executeToolCall({ toolName: "assistant_action_execute", toolSet: discovered, context,
+    argumentsText: JSON.stringify({ actionId: definition.actionId, input }) });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.result, { actionId: definition.actionId, version: 1, result: api });
+  assert.ok(Buffer.byteLength(JSON.stringify(result.result)) - bytes <= 1024);
+  assert.deepEqual(await inventory(f.systemRoot), before);
+
+  const oversized = f.register(null, { teachingBrief: { async readBrief() {
+    return { ...original, lesson: { ...original.lesson, teachingText: "é".repeat(64 * 1024) } };
+  } } });
+  await assert.rejects(() => oversized.execute("teaching-brief.read", input), {
+    code: "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE"
+  });
+  const largeTools = createServiceToolCatalog(oversized.actions, { maxDirectTools: 100,
+    maxToolResultBytes: 128 * 1024 + 1024 });
+  const largeSet = largeTools.resolveToolSet(context);
+  const largeDefinition = largeSet.tools.find(value => value.actionId === definition.actionId);
+  const refused = await largeTools.executeToolCall({ toolName: largeDefinition.name, toolSet: largeSet, context,
+    argumentsText: JSON.stringify(input) });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error.code, "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE");
+  assert.deepEqual(await inventory(f.systemRoot), before);
+});

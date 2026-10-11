@@ -1166,6 +1166,8 @@ function createService({
     runNativeDetachedConversation
   });
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
+    // Training keeps complete results within 128 KiB; discovery adds an identity envelope.
+    maxToolResultBytes: 128 * 1024 + 1024,
     isActionAvailable: ({ actionId, context }) => Boolean(context.runtime?.learningScope &&
       context.runtime.learningTeaching?.actionIds.includes(actionId))
   }) : null;

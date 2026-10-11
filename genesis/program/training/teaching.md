@@ -433,7 +433,13 @@ state format, model-supplied evidence or parallel progress owner.
 operations: courses list, learning read, teaching-brief read, lesson start,
 lesson resume, lesson end and retained-pin lesson continuation. They use Core's fresh actor context and expose bounded teaching
 text and saved facts without source paths, executable controllers or shell
-authority. API and assistant tools share the saved teaching projections; the
+authority. Main configures its existing Training-only tool catalogue for the original 128 KiB
+result contract plus a bounded 1 KiB discovery envelope; the shared SDK default
+remains 48 KiB. Colleague already uses its own 256 KiB bounded consumer budget.
+The earlier Main default rejected valid complete briefs; this configuration retains
+full teaching/rubric/progress data, the action-owned 128 KiB refusal and existing
+fresh actor, attempt and action-availability checks. It adds no paging or truncation.
+API and assistant tools share the saved teaching projections; the
 configured learning-read browser identity is omitted from native tools as
 described below. A host supplies the
 existing exercise preparation/retirement owner; without its relevant method,
