@@ -318,9 +318,11 @@ Status inspection resolves the environment without provisioning resources or
 writing project environment files. Confirmed preview readiness supersedes a
 failed overlapping start request, so a running preview is not covered by an old
 startup error. Late start failures from a previous project or session are ignored.
-When automatic startup meets a temporary assistant-operation conflict, Preview
-shows a waiting message and retries through its existing cooldown. The cooldown
-survives a reload. Other startup failures appear once in Preview and require an
+When automatic startup receives the exact agent-write or saved-practice
+preparation-busy admission refusal, Preview shows the existing waiting message
+and retries through its existing cooldown. Neither refusal admits a start. The
+preparation lock and fresh practice authority remain unchanged; generic 409 or
+startup errors do not enable automatic retry. The cooldown survives a reload. Other startup failures appear once in Preview and require an
 explicit retry; startup errors are not also repeated as global toasts.
 
 The broad Genesis opening inspection is not launch admission. Existing-project

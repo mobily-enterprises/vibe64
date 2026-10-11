@@ -2403,7 +2403,7 @@ function launchPreviewInFlightText({
     return `Starting preview: ${outputTargetLabel(embeddedStartTarget || activeOutputTarget)}.`;
   }
   if (launchWaiting) {
-    return "Waiting for the assistant operation to finish. Preview will retry automatically.";
+    return "Waiting for the current workspace operation to finish. Preview will retry automatically.";
   }
   if (operationBusy && terminalCanRestart) {
     return `Restarting preview: ${outputTargetLabel(target)}.`;

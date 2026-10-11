@@ -186,7 +186,7 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewInFlightText({
       launchWaiting: true,
       loading: true
-    })).toBe("Waiting for the assistant operation to finish. Preview will retry automatically.");
+    })).toBe("Waiting for the current workspace operation to finish. Preview will retry automatically.");
 
     expect(launchPreviewInFlightText({
       embeddedStartTarget: {

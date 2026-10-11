@@ -880,3 +880,94 @@ it("practice output controls use captured Learning reads and named Stop while Wo
     } finally { workingApp.unmount(); }
   } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
 });
+
+it.each([
+  ["preparation admission refusal", "VIBE64_TRAINING_PREPARATION_BUSY", 409, true],
+  ["unclassified conflict", "unclassified_conflict", 409, false],
+  ["ordinary startup failure", "output_start_failed", 503, false]
+])("embedded practice auto-start handles %s without repeating unconfirmed work", async (_label, code, status, retry) => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const api = `/api/learning/${attemptId}/vibe64/sessions`;
+  const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
+  const session = Vue.ref({ sessionId: "saved-initial", metadata: {
+    source_kind: "session_clone", source_path: "/controlled/practice/sessions/active/saved-initial/source", source_path_authority: "managed_session_source"
+  } });
+  const binding = Vue.ref({ actorKey: "learning-member-42", viewerActorKey: "member-42", learnerId: "42",
+    learningAttemptId: attemptId, sessionId: "saved-initial", noExercise: false,
+    sourceProjectSlug: "exact-practice", sessionsApiPath: api });
+  const requests = [];
+  let starts = 0;
+  class ControlledSocket {
+    static OPEN = 1; static CLOSED = 3; static CLOSING = 2;
+    readyState = 1;
+    addEventListener() {}
+    send() {}
+    close() { this.readyState = 3; }
+  }
+  vi.useFakeTimers();
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
+    localStorage: fakeStorage(), sessionStorage: fakeStorage(), addEventListener() {}, removeEventListener() {},
+    setTimeout: (...args) => setTimeout(...args), clearTimeout: timer => clearTimeout(timer) });
+  vi.stubGlobal("WebSocket", ControlledSocket);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configureHttpWebClient({ request(url, options) {
+    requests.push({ url, options });
+    if (options.method === "POST") {
+      starts += 1;
+      if (starts === 1) return Promise.reject(Object.assign(new Error("Start refused."), { code, status }));
+      return Promise.resolve({ ok: true, id: "output-1", status: "running", metadata: { outputTargetId: "app", launchReady: true } });
+    }
+    return Promise.resolve({ ok: true, outputTargets: [target], activeTerminal: starts > 1
+      ? { id: "output-1", status: "running", metadata: { outputTargetId: "app", launchReady: true } } : null,
+      preview: starts > 1 ? { state: "ready", href: "http://127.0.0.1:3000/" } : { state: "idle" } });
+  } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session, learningBinding: binding, embeddedPreview: () => true,
+      autoStartTargetId: () => "app" });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "member-42");
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: "member-42" }));
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    await Vue.nextTick();
+    await vi.advanceTimersByTimeAsync(AUTO_START_STABILITY_DELAY_MS);
+    expect(starts).toBe(1);
+    expect(controls.launchWaiting.value).toBe(retry);
+    expect(controls.launchError.value).toBe(retry ? "" : "Start refused.");
+    if (retry) {
+      expect(launchPreviewInFlightText({ launchWaiting: true }))
+        .toBe("Waiting for the current workspace operation to finish. Preview will retry automatically.");
+    }
+    await vi.advanceTimersByTimeAsync(AUTO_START_ATTEMPT_COOLDOWN_MS - 100);
+    expect(starts).toBe(1);
+    await vi.advanceTimersByTimeAsync(AUTO_START_STABILITY_DELAY_MS + 200);
+    expect(starts).toBe(retry ? 2 : 1);
+    if (retry) {
+      expect(controls.launchWaiting.value).toBe(false);
+      expect(controls.launchError.value).toBe("");
+      expect(controls.previewState.value).toBe("ready");
+      expect(controls.terminalSessionId.value).toBe("output-1");
+    }
+    await vi.advanceTimersByTimeAsync(AUTO_START_ATTEMPT_COOLDOWN_MS + AUTO_START_STABILITY_DELAY_MS);
+    expect(starts).toBe(retry ? 2 : 1);
+    const posts = requests.filter(request => request.options.method === "POST");
+    expect(posts.map(request => request.url)).toEqual(Array(starts).fill(`${api}/saved-initial/output-runs`));
+    expect(posts.map(request => request.options.body.outputTargetId)).toEqual(Array(starts).fill("app"));
+    expect(session.value.sessionId).toBe("saved-initial");
+    expect(binding.value.learningAttemptId).toBe(attemptId);
+  } finally {
+    app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); vi.useRealTimers();
+  }
+});

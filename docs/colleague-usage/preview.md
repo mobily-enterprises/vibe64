@@ -48,6 +48,13 @@ remote previews or localhost on your own machine. If you denied access, change
 the site's microphone permission in the browser and retry. Colleague can explain
 these steps but cannot grant browser permission or record on your behalf.
 
+If automatic Preview opening meets a busy exercise preparation or assistant write
+operation, it waits and retries the same Preview through the existing cooldown.
+The message says **Waiting for the current workspace operation to finish. Preview
+will retry automatically.** This refusal happens before the app starts; it does
+not create another lesson attempt. Other startup errors still require an explicit
+retry after you inspect the failure.
+
 **Reload preview** refreshes the embedded page. **Restart preview** starts the
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not

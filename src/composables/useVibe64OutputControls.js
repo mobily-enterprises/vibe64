@@ -368,12 +368,13 @@ function launchStatusErrorText({
 }
 
 function launchStatusAgentWriteBusy(error = null) {
-  return String(
+  const code = String(
     error?.code ||
     error?.response?.code ||
     error?.response?.errors?.[0]?.code ||
     ""
-  ).trim() === "vibe64_agent_write_mode_busy";
+  ).trim();
+  return code === "vibe64_agent_write_mode_busy" || code === "VIBE64_TRAINING_PREPARATION_BUSY";
 }
 
 function browserSessionStorage() {
