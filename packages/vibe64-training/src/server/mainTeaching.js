@@ -136,18 +136,18 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           await freshAuthority(origin.current, runtime, sessionId, state.binding.actions);
           await origin.terminals.requireAssistantSelectionAccess(origin.current.assistantSelection, {
             vibe64User: authenticatedVibe64User(origin.current.browserAuthority.requestContext) });
-          origin.admitted.assertCurrent();
           if (state.binding !== binding || state.generation !== generation) throw failure("The original Main lesson binding changed.");
-          if (crossCarrier(authored)) {
-            const current = await (binding.native.readCompletedTurn
+          const current = await (binding.native.readCompletedTurn
             ? binding.native.readCompletedTurn({ threadId: nativeTurn.threadId, turnId: nativeTurn.turnId })
             : binding.native.readTurn());
-            if (!current || current.active || current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId ||
-                current.outerTurnId !== outerTurnId || !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
-                !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
-                  threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
-                }))) throw failure("The explanation's original native final changed.");
-          }
+          if (state.binding !== binding || state.generation !== generation || !current || current.active ||
+              current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId || current.outerTurnId !== outerTurnId ||
+              !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
+              !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
+                threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
+              }))) throw failure("The explanation's original native final changed.");
+          if (origin.admitted.assertCompletionCurrent) origin.admitted.assertCompletionCurrent();
+          else origin.admitted.assertCurrent();
           state.presentation.bindOutput(connection, { role: "assistant", status: "complete", outputId: final.outputId }, state.generation);
         } catch {
           state.presentation.failCue(connection, state.generation);
@@ -166,7 +166,6 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           await freshAuthority(origin.current, runtime, sessionId, binding.actions);
           await origin.terminals.requireAssistantSelectionAccess(origin.current.assistantSelection, {
             vibe64User: authenticatedVibe64User(origin.current.browserAuthority.requestContext) });
-          origin.admitted.assertCurrent();
           const current = await (binding.native.readCompletedTurn
             ? binding.native.readCompletedTurn({ threadId: nativeTurn.threadId, turnId: nativeTurn.turnId })
             : binding.native.readTurn());
@@ -176,6 +175,8 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
               !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
                 threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
               }))) return;
+          if (origin.admitted.assertCompletionCurrent) origin.admitted.assertCompletionCurrent();
+          else origin.admitted.assertCurrent();
           await transaction.updateTurnMetadata(carrier.turnId, {
             runtime: { ...carrier.metadata?.runtime, status: "complete" },
             trainingQuestionDelivery: { ...mark, turnId: carrier.turnId }

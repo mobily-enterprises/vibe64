@@ -103,6 +103,17 @@ it neither grades a final reply nor writes native output/status from the tool
 runtime. The Main read wrapper projects a bounded current reference only after
 fresh observation access, for the existing typed/voice capture owner.
 
+Cue binding and separate question-final delivery use the same accepted receipt's
+completion-only guard after fresh authority and current native reads. Live tool
+effects retain `assertCurrent()` unchanged. The common receipt preserves its last
+accepted request across settlement; newer accepted input, cancellation, disposal
+or a changed provider binding/segment retires it. Main also rechecks the exact
+current inactive native thread/turn/outer identity, assistant selection and
+unchanged original final snapshot for both cue carrier shapes. A historical
+completed final cannot confirm a newer autonomous turn, and idle alone is not
+authority. The original latest-user, pin, account, supersession and writer fences
+remain in place.
+
 The initial source composition covered Codex and OpenCode no-exercise Main only. The practice extension is described below. Ordinary Working,
 Temporary, Helper and Colleague compatibility callers retain their original
 defaults. Actual provider/model adoption and packaged desktop/mobile acceptance remain

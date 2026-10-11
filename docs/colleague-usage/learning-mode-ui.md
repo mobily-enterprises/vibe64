@@ -103,6 +103,11 @@ it from playing later when you ask a new question. With sound off, use
 **Continue** only after the explanation is ready. A visible diagram or saved
 state does not itself mean narration, motion or an assessment succeeded.
 
+Main confirms a diagram explanation from that turn's finished response before
+enabling **Continue**. Keep the same lesson and conversation open while it
+finishes. A stopped explanation or a response from a different turn cannot
+confirm the old diagram; read Main's current result before asking it to continue.
+
 If an operation is unconfirmed, read its current status before requesting a
 repeat. A reload or changed lesson/account cannot reuse an old cue confirmation.
 Switching the compact screen between chat and Preview retains the same active

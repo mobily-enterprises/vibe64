@@ -632,7 +632,7 @@ test("actual source-less visual HTTP routes reuse saved learner Main scope and o
 
 // Main consumes the original installed-content, learner and question fixture.
 // Native/Helper responses here are controlled owner contracts, not logged-in model acceptance.
-async function mainTeachingFixture(t, { actionLearners = null } = {}) {
+async function mainTeachingFixture(t, { actionLearners = null, mapAdmission = null } = {}) {
   const f = await fixture(t, { ready: false, exercise: false });
   const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
   const { createServiceToolCatalog } = await import("@jskit-ai/assistant-core/server");
@@ -694,11 +694,12 @@ async function mainTeachingFixture(t, { actionLearners = null } = {}) {
     context.runtime.learningTeaching?.actionIds.includes(actionId)) });
   async function admit(messageId, text, data) {
     const row = await runtime.store.writeConversationUserMessage(sessionId, { messageId, text, data });
-    return Object.freeze({ conversationId: sessionId, turnId: row.turnId, messageId, nativeTurnId: target.turnId,
+    const admitted = Object.freeze({ conversationId: sessionId, turnId: row.turnId, messageId, nativeTurnId: target.turnId,
       nativeThreadId: target.threadId, origin: "user", assertCurrent() {
         if (!controls.current) throw new Error("The original accepted request retired.");
         controller.signal.throwIfAborted();
       } });
+    return mapAdmission ? Object.freeze(mapAdmission(admitted)) : admitted;
   }
   async function execute(admitted, actionId, input) {
     const mapped = await bound.applicationTools.prepareContext(current, admitted);
@@ -882,8 +883,8 @@ test("Main nine teaching definitions retain original scopes and cannot borrow a 
 // Append to the SAME existing Teaching file after root review. These use its
 // original Main/Training/Store fixture; they are UNRUN component cases, not native
 // owner proof. The native harness must exercise the real Codex final-result owner.
-async function mainCueFinalFixture(t, { finalReader = true } = {}) {
-  const f = await mainTeachingFixture(t);
+async function mainCueFinalFixture(t, { finalReader = true, mapAdmission = null } = {}) {
+  const f = await mainTeachingFixture(t, { mapAdmission });
   const control = { result: null }, notifications = [];
   const native = { readTurn: async () => ({ ...f.target }),
     notifyPresentation: async event => { notifications.push(event); },
@@ -1780,5 +1781,88 @@ test("Main native presentation publication retains its captured Learning control
     }
     assert.deepEqual(await storedFiles(f.paths), before, "Publication does not write learner state");
     assert.deepEqual(await f.runtime.store.readConversationLog(f.sessionId), transcript, "Publication does not rewrite source/history");
+  }
+});
+
+
+test("Main cue settlement uses its completion receipt and current native owner for both final carriers", async t => {
+  for (const separate of [false, true]) for (const boundary of ["completed", "newer-autonomous", "retired"]) {
+    let live = true, completionChecks = 0;
+    const f = await mainCueFinalFixture(t, { mapAdmission: admitted => ({ ...admitted,
+      assertCurrent() {
+        if (!live) throw Object.assign(new Error("The active tool request finished."), { code: "conversation_tool_request_retired" });
+        admitted.assertCurrent();
+      },
+      assertCompletionCurrent() { completionChecks++; admitted.assertCurrent(); }
+    }) });
+    await f.arm();
+    if (separate) {
+      await f.runtime.store.conversationStorage.write(f.sessionId, transaction =>
+        transaction.updateTurnMetadata(f.admitted.turnId, { upstreamMessageId: "settlement-native-input" }));
+      await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+        { messageId: "settlement-preamble", outputId: "settlement-preamble", text: "I will explain the transition." });
+    }
+    const written = await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+      { messageId: "settlement-final", outputId: "settlement-final-output", text: "The original confirmed final explanation." });
+    assert.equal(written.turnId !== f.admitted.turnId, separate);
+    f.control.result = { threadId: f.target.threadId, turnId: f.target.turnId,
+      inputMessageId: "settlement-native-input", itemId: written.assistant.messageId, outputId: written.assistant.outputId,
+      text: written.assistant.text, conversationTurn: written };
+    f.target.active = false;
+    const completed = { ...f.target };
+    live = false;
+    assert.throws(() => f.admitted.assertCurrent(), { code: "conversation_tool_request_retired" });
+    if (boundary === "newer-autonomous") f.target.turnId = "newer-completed-autonomous-native-turn";
+    if (boundary === "retired") f.controls.current = false;
+    await f.main.completeConversation({ runtime: f.runtime, sessionId: f.sessionId,
+      outerTurnId: completed.outerTurnId, outcome: "completed", nativeTurn: completed });
+    const cue = (await f.main.readPresentation({ ...f.call, input: { clientId: "actual-browser" } })).cue;
+    assert.equal(cue.phase, boundary === "completed" ? "bound" : "failed", `${separate}/${boundary}`);
+    assert.equal(cue.canonicalFinal, boundary === "completed");
+    assert.equal(cue.outputId, boundary === "completed" ? written.assistant.outputId : "");
+    if (boundary === "completed") assert.equal(completionChecks, 1);
+    assert.equal(f.helperCalls.length, 0);
+  }
+});
+
+test("Main separate question final carrier uses its completion receipt after live tools finish", async t => {
+  for (const retired of [false, true]) {
+    let live = true, completionChecks = 0;
+    const f = await mainTeachingFixture(t, { mapAdmission: admitted => ({ ...admitted,
+      assertCurrent() {
+        if (!live) throw Object.assign(new Error("The active tool request finished."), { code: "conversation_tool_request_retired" });
+        admitted.assertCurrent();
+      },
+      assertCompletionCurrent() { completionChecks++; admitted.assertCurrent(); }
+    }) });
+    let result;
+    const native = { readTurn: async () => ({ ...f.target }), readFinalAssistantResult: () => result };
+    const bound = f.main.bindConversation({ runtime: f.runtime, sessionId: f.sessionId,
+      actions: f.actions, terminals: f.terminals, native });
+    await f.runtime.store.conversationStorage.write(f.sessionId, transaction =>
+      transaction.updateTurnMetadata(f.admitted.turnId, { upstreamMessageId: "settlement-question-input" }));
+    await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+      { messageId: "settlement-question-preamble", outputId: "settlement-question-preamble", text: "I will prepare the question." });
+    const { actor: _actor, ...input } = f.input;
+    const mapped = await bound.applicationTools.prepareContext(f.current, f.admitted);
+    const prepared = await f.actions.execute({ actionId: "vibe64.training.question.prepare", input,
+      context: { ...mapped, signal: f.current.signal } });
+    const written = await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+      { messageId: "settlement-question-final", outputId: "settlement-question-output", text: prepared.questionText });
+    assert.notEqual(written.turnId, f.admitted.turnId);
+    result = { threadId: f.target.threadId, turnId: f.target.turnId, inputMessageId: "settlement-question-input",
+      itemId: written.assistant.messageId, outputId: written.assistant.outputId,
+      text: written.assistant.text, conversationTurn: written };
+    live = false;
+    f.target.active = false;
+    if (retired) f.controls.current = false;
+    await f.main.completeConversation({ runtime: f.runtime, sessionId: f.sessionId,
+      outerTurnId: f.target.outerTurnId, outcome: "completed", nativeTurn: { ...f.target } });
+    assert.equal(completionChecks, 1);
+    assert.deepEqual(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+      context: f.current, actions: f.actions }), retired ? null : prepared.reference);
+    const original = (await f.runtime.store.readConversationLog(f.sessionId)).find(turn => turn.turnId === f.admitted.turnId);
+    assert.equal(original.metadata.trainingQuestionDelivery.phase, "prepared", "The original preparation audit stays unchanged");
+    assert.equal(f.helperCalls.length, 0);
   }
 });
