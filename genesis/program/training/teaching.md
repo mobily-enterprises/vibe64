@@ -1151,3 +1151,21 @@ that exact rejected request as failed and offers manual Retry, preserving its ID
 captured data and any newer draft. Failures after routing entry and unknown
 receipt inspection remain uncertain. This adds no native journal, historical
 receipt repair, automatic resubmission or change to teaching authority.
+
+
+### Main native final carrier association
+
+Main preserves the original transcript grouping when one native request publishes
+an assistant preamble and a later final answer. At the original completed native
+checkpoint, Training can associate its staged question with the exact canonical
+carrier returned by the original native final-result owner. The accepted row’s
+upstream native input, thread/turn/outer identity, saved message/output/text and
+current binding, account selection, actor, attempt and pin must match. Fresh
+completion authority is retained only within the original Main generation and
+retired with that owner; it grants no read-time or historical promotion.
+
+The existing delivery mark on the final carrier retains the original prepared
+reference and application message identity. The original authored preparation
+stays intact, and same-carrier delivery keeps its original flow. A visual cue
+likewise binds the verified final output while retaining its initiating turn for
+browser acknowledgement. Colleague grouping and cue coordination are unchanged.

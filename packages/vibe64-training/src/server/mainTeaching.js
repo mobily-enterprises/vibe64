@@ -80,6 +80,8 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
   async function completeConversation({ runtime, sessionId, outerTurnId, outcome, nativeTurn }) {
     if (!nativeTurn || nativeTurn.active || nativeTurn.outerTurnId !== outerTurnId) return;
     const state = conversations.get(`${runtime.stateRoot}\0${sessionId}`);
+    const binding = state?.binding;
+    const generation = state?.generation;
     await runtime.store.conversationStorage.write(sessionId, async transaction => {
       const ids = await transaction.listTurnIds();
       const log = await Promise.all(ids.map(id => transaction.readTurn(id)));
@@ -93,6 +95,27 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           mark.reference.topicHash === scope.pin.topic.topicHash && mark.reference.lessonHash === scope.pin.lesson.hash &&
           value.messages.some(message => message.messageId === mark.messageId && message.messageId === latest?.messageId && message.role === "user");
       });
+      let nativeFinal;
+      try {
+        nativeFinal = binding?.native.readFinalAssistantResult?.({
+          threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
+        });
+      } catch { /* An unavailable native final cannot establish a carrier. */ }
+      const written = nativeFinal?.conversationTurn;
+      const carrier = log.find(value => value.turnId === written?.turnId);
+      const final = carrier?.assistant;
+      const savedFinal = written?.assistant;
+      const canonicalFinal = final?.role === "assistant" && final.text.trim() && final.outputId &&
+        carrier.messages.some(message => message.role === "assistant" && message.messageId === final.messageId &&
+          message.outputId === final.outputId && message.text === final.text) &&
+        nativeFinal?.threadId === nativeTurn.threadId && nativeFinal.turnId === nativeTurn.turnId &&
+        savedFinal?.role === "assistant" && savedFinal.messageId === final.messageId &&
+        savedFinal.outputId === final.outputId && savedFinal.text === final.text &&
+        typeof nativeFinal.text === "string" && nativeFinal.text.trim() === final.text.trim() &&
+        !carrier.metadata?.runtime?.error && !carrier.metadata?.runtime?.supersededBy;
+      const crossCarrier = authored => canonicalFinal && authored?.turnId !== carrier.turnId &&
+        authored.metadata?.upstreamMessageId && nativeFinal.inputMessageId === authored.metadata.upstreamMessageId &&
+        nativeFinal.itemId === final.messageId && nativeFinal.outputId === final.outputId;
       for (const connection of state?.connections.values() || []) {
         const origin = connection.origin;
         const cue = connection.cue;
@@ -102,38 +125,67 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
         const authored = log.find(value => value.turnId === origin.admitted.turnId);
         const user = authored?.messages.find(message => message.role === "user" && message.receipt !== false &&
           message.messageId === origin.admitted.messageId && message.data?.clientId === connection.clientId);
-        const final = authored?.assistant;
-        const canonicalFinal = final?.role === "assistant" && final.text.trim() && final.outputId &&
-          authored.messages.some(message => message.role === "assistant" && message.messageId === final.messageId &&
-            message.outputId === final.outputId && message.text === final.text);
         try {
-          const nativeFinal = state.binding?.native.readFinalAssistantResult?.({
-            threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
-          });
-          const written = nativeFinal?.conversationTurn;
-          const savedFinal = written?.assistant;
           if (outcome !== "completed" || authored?.metadata?.runtime?.error ||
               !user || user.messageId !== latest?.messageId || !canonicalFinal || authored.metadata?.runtime?.supersededBy ||
               !state.binding || !isDeepStrictEqual(state.binding.scope, scope) ||
               nativeFinal?.threadId !== nativeTurn.threadId || nativeFinal.turnId !== nativeTurn.turnId ||
-              written?.turnId !== origin.admitted.turnId || savedFinal?.role !== "assistant" ||
-              savedFinal.messageId !== final.messageId || savedFinal.outputId !== final.outputId ||
-              savedFinal.text !== final.text || nativeFinal.text.trim() !== final.text.trim()) {
+              written?.turnId !== origin.admitted.turnId && !crossCarrier(authored)) {
             throw failure("The explanation was not confirmed by its original native final result.");
           }
           await freshAuthority(origin.current, runtime, sessionId, state.binding.actions);
+          await origin.terminals.requireAssistantSelectionAccess(origin.current.assistantSelection, {
+            vibe64User: authenticatedVibe64User(origin.current.browserAuthority.requestContext) });
           origin.admitted.assertCurrent();
+          if (state.binding !== binding || state.generation !== generation) throw failure("The original Main lesson binding changed.");
+          if (crossCarrier(authored)) {
+            const current = await binding.native.readTurn();
+            if (current.active || current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId ||
+                current.outerTurnId !== outerTurnId || !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
+                !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
+                  threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
+                }))) throw failure("The explanation's original native final changed.");
+          }
           state.presentation.bindOutput(connection, { role: "assistant", status: "complete", outputId: final.outputId }, state.generation);
         } catch {
           state.presentation.failCue(connection, state.generation);
         }
       }
       if (!turn) return;
+      if (outcome === "completed" && written?.turnId && written.turnId !== turn.turnId) {
+        if (!crossCarrier(turn) || final.text.trim() !== turn.metadata.trainingQuestionDelivery.questionText) return;
+        const origin = state?.questionOrigin;
+        const mark = turn.metadata.trainingQuestionDelivery;
+        if (!origin || origin.generation !== generation || origin.native !== binding.native || origin.admitted.turnId !== turn.turnId ||
+            origin.admitted.messageId !== mark.messageId || !isDeepStrictEqual(origin.reference, mark.reference) ||
+            !isDeepStrictEqual(binding.scope, scope) || turn.metadata.runtime?.error || turn.metadata.runtime?.supersededBy ||
+            carrier.metadata?.trainingQuestionDelivery) return;
+        try {
+          await freshAuthority(origin.current, runtime, sessionId, binding.actions);
+          await origin.terminals.requireAssistantSelectionAccess(origin.current.assistantSelection, {
+            vibe64User: authenticatedVibe64User(origin.current.browserAuthority.requestContext) });
+          origin.admitted.assertCurrent();
+          const current = await binding.native.readTurn();
+          if (state.binding !== binding || state.generation !== generation || current.active ||
+              current.threadId !== nativeTurn.threadId || current.turnId !== nativeTurn.turnId || current.outerTurnId !== outerTurnId ||
+              !isDeepStrictEqual(current.assistantSelection, origin.current.assistantSelection) ||
+              !isDeepStrictEqual(nativeFinal, binding.native.readFinalAssistantResult({
+                threadId: nativeTurn.threadId, turnId: nativeTurn.turnId
+              }))) return;
+          await transaction.updateTurnMetadata(carrier.turnId, {
+            runtime: { ...carrier.metadata?.runtime, status: "complete" },
+            trainingQuestionDelivery: { ...mark, turnId: carrier.turnId }
+          });
+          await promoteTrainingQuestionDeliveries([await transaction.readTurn(carrier.turnId)], sessionId, transaction);
+        } catch { return; }
+      }
       await transaction.updateTurnMetadata(turn.turnId, { runtime: { ...turn.metadata.runtime,
         status: outcome === "completed" ? "complete" : outcome } });
       turn.metadata.runtime = { ...turn.metadata.runtime, status: outcome === "completed" ? "complete" : outcome };
       await promoteTrainingQuestionDeliveries([turn], sessionId, transaction);
     });
+    if (state?.questionOrigin?.generation === generation && state.questionOrigin.admitted.nativeThreadId === nativeTurn.threadId &&
+        state.questionOrigin.admitted.nativeTurnId === nativeTurn.turnId) state.questionOrigin = null;
     if (state?.binding) await state.binding.native.notifyPresentation?.({ type: "configuration" });
   }
   async function readQuestion({ runtime, sessionId, context: current, actions }) {
@@ -191,6 +243,7 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
     state.generation += 1;
     state.connections.clear();
     state.binding = null;
+    state.questionOrigin = null;
   }
   function presentationResult(state, clientId) {
     const connection = state?.connections.get(clientId);
@@ -382,7 +435,7 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
             Object.assign(command.presentation, { navigationId: command.id, clientId: connection.clientId,
               conversationId, turnId: admitted.turnId });
             connection.origin = { admitted, current, nativeThreadId: target.threadId,
-              nativeTurnId: target.turnId, nativeOuterTurnId: target.outerTurnId, generation: helperState.generation };
+              nativeTurnId: target.turnId, nativeOuterTurnId: target.outerTurnId, generation: helperState.generation, terminals };
           }
           return helperState.presentation.begin(connection, command, { get generation() { return helperState.generation; } });
         },
@@ -404,9 +457,15 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
         async stageTrainingQuestion(reference, execution) {
           if (reference.attemptId !== scope.attemptId) throw failure("Prepare a question only for this bound attempt.");
           const { target } = await requireCurrent({ ...current, signal: execution.signal }, admitted);
-          return stageAdmittedTrainingQuestion(reference, { actor: authenticatedVibe64User(execution), teaching,
+          const generation = helperState.generation;
+          const mark = await stageAdmittedTrainingQuestion(reference, { actor: authenticatedVibe64User(execution), teaching,
             storage, storageId: sessionId, admitted: { ...admitted, nativeOuterTurnId: target.outerTurnId }, failure,
             requireCurrent: () => requireCurrent({ ...current, signal: execution.signal }, admitted) });
+          if (helperState.generation === generation && helperState.binding?.native === native) {
+            helperState.questionOrigin = { current, admitted, native,
+              reference: structuredClone(reference), generation, terminals };
+          }
+          return mark;
         },
         async readTrainingPractical(input, execution) {
           if (input.attemptId !== scope.attemptId) throw failure("Read only this bound attempt's practical facts.");

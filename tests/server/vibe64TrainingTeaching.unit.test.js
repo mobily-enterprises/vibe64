@@ -1596,3 +1596,103 @@ test("optional Learning IDs cannot replace Main ownership or bypass the saved-se
   }));
   assert.deepEqual(await storedFiles(f.paths), before, "foreign or missing native authority cannot save a question");
 });
+
+
+// Keep the original native multi-assistant grouping. The Main completion owner
+// must join its accepted input to the exact native-final canonical carrier.
+test("Main question completion associates a separate final carrier only through exact native receipt and fresh authority", async t => {
+  const f = await mainTeachingFixture(t);
+  const control = { result: null };
+  const terminals = { async requireAssistantSelectionAccess(selection, { vibe64User }) {
+    assert.deepEqual(selection, f.current.assistantSelection);
+    assert.equal(vibe64User.uid, f.actor.uid);
+  } };
+  const native = { readTurn: async () => ({ ...f.target }), readFinalAssistantResult: () => control.result };
+  let bound;
+  const bind = owner => bound = f.main.bindConversation({ runtime: f.runtime, sessionId: f.sessionId, actions: f.actions,
+    terminals, native: owner });
+  bind(native);
+  await f.runtime.store.conversationStorage.write(f.sessionId, transaction =>
+    transaction.updateTurnMetadata(f.admitted.turnId, { upstreamMessageId: "native-question-input" }));
+  await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+    { messageId: "question-preamble", outputId: "question-preamble-output", text: "I will prepare the question." });
+  const { actor: _actor, ...input } = f.input;
+  const executeQuestion = async () => {
+    const mapped = await bound.applicationTools.prepareContext(f.current, f.admitted);
+    return f.actions.execute({ actionId: "vibe64.training.question.prepare", input,
+      context: { ...mapped, signal: f.current.signal } });
+  };
+  const prepared = await executeQuestion();
+  const written = await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+    { messageId: "actual-question-final", outputId: "actual-question-final-output", text: prepared.questionText });
+  assert.notEqual(written.turnId, f.admitted.turnId, "The original writer keeps its multi-assistant grouping");
+  const proof = { threadId: f.target.threadId, turnId: f.target.turnId, inputMessageId: "native-question-input",
+    itemId: written.assistant.messageId, outputId: written.assistant.outputId,
+    text: written.assistant.text, conversationTurn: written };
+  const checkpoint = async (beforeComplete = () => {}) => {
+    f.target.active = true;
+    await executeQuestion();
+    f.target.active = false;
+    beforeComplete();
+    await f.main.completeConversation({ runtime: f.runtime, sessionId: f.sessionId,
+      outerTurnId: f.target.outerTurnId, outcome: "completed", nativeTurn: { ...f.target } });
+  };
+  for (const change of [{ threadId: "foreign-thread" }, { turnId: "foreign-native-turn" },
+    { inputMessageId: f.admitted.messageId }, { itemId: "foreign-message" }, { outputId: "foreign-output" },
+    { conversationTurn: { ...written, assistant: { ...written.assistant, text: "Other words." } } }]) {
+    control.result = { ...proof, ...change };
+    await checkpoint();
+    assert.equal(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+      context: f.current, actions: f.actions }), null, JSON.stringify(change));
+  }
+  control.result = proof;
+  const selection = f.target.assistantSelection;
+  await checkpoint(() => { f.target.assistantSelection = { ...selection, modelId: "foreign-selection" }; });
+  assert.equal(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+    context: f.current, actions: f.actions }), null);
+  f.target.assistantSelection = selection;
+  await checkpoint(() => { f.controls.current = false; });
+  assert.equal(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+    context: f.current, actions: f.actions }), null, "A retired accepted input cannot bind a later output");
+  f.controls.current = true;
+  await checkpoint(() => { f.auth.afterResolve = () => bind({ ...native }); });
+  f.auth.afterResolve = null;
+  assert.equal(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+    context: f.current, actions: f.actions }), null, "Binding retirement during fresh authority cannot publish delivery");
+  bind(native);
+  await checkpoint();
+  const log = await f.runtime.store.readConversationLog(f.sessionId);
+  assert.equal(log.find(turn => turn.turnId === f.admitted.turnId).metadata.trainingQuestionDelivery.phase, "prepared",
+    "Original authored preparation remains its unchanged audit record");
+  const delivery = log.find(turn => turn.turnId === written.turnId).metadata.trainingQuestionDelivery;
+  assert.equal(delivery.phase, "delivered");
+  assert.equal(delivery.turnId, written.turnId);
+  assert.equal(delivery.messageId, f.admitted.messageId);
+  assert.equal(delivery.outputId, written.assistant.outputId);
+  assert.deepEqual(await f.main.readQuestion({ runtime: f.runtime, sessionId: f.sessionId,
+    context: f.current, actions: f.actions }), prepared.reference);
+  assert.deepEqual(proof.conversationTurn, written, "Checkpoint cannot rewrite the original native final snapshot");
+  assert.equal((await f.read()).completion.passed, 0);
+  assert.equal(f.helperCalls.length, 0);
+});
+
+test("Main cue completion binds its exact separate final carrier without changing the initiating cue turn", async t => {
+  const f = await mainCueFinalFixture(t);
+  await f.arm();
+  await f.runtime.store.conversationStorage.write(f.sessionId, transaction =>
+    transaction.updateTurnMetadata(f.admitted.turnId, { upstreamMessageId: "native-cue-input" }));
+  await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+    { messageId: "cue-preamble", outputId: "cue-preamble-output", text: "I will explain the transition." });
+  const written = await f.runtime.store.writeConversationAssistantMessage(f.sessionId,
+    { messageId: "cue-native-final", outputId: "cue-native-final-output", text: "The exact final explanation." });
+  assert.notEqual(written.turnId, f.admitted.turnId);
+  f.control.result = { threadId: f.target.threadId, turnId: f.target.turnId, inputMessageId: "native-cue-input",
+    itemId: written.assistant.messageId, outputId: written.assistant.outputId,
+    text: written.assistant.text, conversationTurn: written };
+  const cue = await f.checkpoint();
+  assert.equal(cue.phase, "bound");
+  assert.equal(cue.canonicalFinal, true);
+  assert.equal(cue.outputId, written.assistant.outputId);
+  assert.equal(cue.turnId, f.admitted.turnId, "Cue acknowledgement still belongs to its initiating accepted input");
+  assert.equal(f.notifications.at(-1).type, "configuration");
+});

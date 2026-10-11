@@ -22,7 +22,7 @@ Do not start a fresh Colleague conversation midway through this question. If Col
 
 A practical observation can fail while your workspace action remains applied. Repeat that step when the saved session and Preview are ready; do not assume the action was undone. If the learner, lesson target, frame or question changed, return to the intended saved lesson and follow Main's current question. A synthetic click, automatic navigation or an old reply is not practical evidence.
 
-The teacher must genuinely finish delivering the question before practical observations can be accepted. The original server checks the saved lesson pin, native delivery, declared check and your explanation; these controls do not mark a pass themselves. An unavailable exercise or teacher operation must be reported as unavailable instead of granting credit.
+The teacher must genuinely finish delivering the question before practical observations can be accepted. A short preparation reply is not the question. Wait for Main’s full question even when it appears as a later reply in the same request. The original server checks the saved lesson pin, native delivery, declared check and your explanation; these controls do not mark a pass themselves. An unavailable exercise or teacher operation must be reported as unavailable instead of granting credit.
 
 Main grades your actual explanation alongside the server's description of your completed practical actions. The Helper checks both against the saved lesson rubric; it cannot perform missing steps for you. A saved **needs-review** result grants no pass. Ask Main about the missing evidence and use a fresh independent question when reassessment is appropriate; retrying a completed submission does not grade it again.
 
