@@ -3795,3 +3795,11 @@ HTTP tool callbacks therefore survive the finite Send callback without extending
 its borrowed practice write grant. Main actions still resolve the saved actor,
 lesson pin and exact initial session afresh and re-admit each effect through the
 original Learning owner; expired access and revoked accounts remain refusals.
+
+OpenCode’s per-message monitor captures the original Project CONTROL context
+before its preparation and observer creation. The shared owner re-enters that
+context for the complete retained monitor lifetime, including progress timers,
+reasoning publication and the terminal checkpoint. Send and reconciliation use
+the same factory; shared process startup and finite WRITE admission stay outside
+this boundary. Fresh Main action admission and exact native-final delivery guards
+remain unchanged.

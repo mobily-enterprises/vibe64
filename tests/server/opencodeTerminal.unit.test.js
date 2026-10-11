@@ -4965,7 +4965,8 @@ test("exercise-bearing Learning OpenCode Main installs its native learning bindi
   assert.equal(harness.promptCalls.length, 0, "Readiness must not issue a model query");
 });
 
-test("exercise Learning OpenCode tools re-enter only captured control after the finite Send callback ends", { timeout: 30_000 }, async t => {
+for (const finalScenario of [false, true]) {
+test(finalScenario ? "exercise Learning OpenCode final publication retains captured control after the finite Send callback ends" : "exercise Learning OpenCode tools re-enter only captured control after the finite Send callback ends", { timeout: 30_000 }, async t => {
   const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
   const { createStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
   const { createService: createProject } = await import("../../packages/vibe64-project/src/server/service.js");
@@ -4977,6 +4978,7 @@ test("exercise Learning OpenCode tools re-enter only captured control after the 
   const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
   const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
   const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+  const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
   const { createTrainingActions } = await import("../../packages/vibe64-training/src/server/actions.js");
   const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
   const { createOpenCodeConversationPlugin } = await import("@jskit-ai/assistant-core/server/opencode-process");
@@ -4992,8 +4994,9 @@ test("exercise Learning OpenCode tools re-enter only captured control after the 
   const nativeRows = [];
   const response = { messages: nativeRows, pending: true };
   let core, project, learning, runtime, expired;
+  let busy = true;
   const f = await mainOpenCodeServiceFixture(t, { actions, assistantResponses: [response],
-    sessionStatus: async () => ({ type: "busy" }),
+    sessionStatus: async () => ({ type: busy ? "busy" : "idle" }),
     beforePrompt({ input }) {
       expired = currentProjectRequestContext();
       assert.equal(core.currentPracticeProjectScope().access, "write");
@@ -5037,7 +5040,8 @@ test("exercise Learning OpenCode tools re-enter only captured control after the 
   const sessions = createSessionService({ actions, project: f.projectService, terminals: f.service });
   actions.register({ contributorId: "actual-practice-opencode-delayed-tools", domain: "training",
     actions: [...createSessionActions({ sessions }), ...createLearningTeachingContextActions(),
-      ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: teaching.learners, teachingBrief: brief })]
+      ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: teaching.learners, teachingBrief: brief }),
+      ...(finalScenario ? createTrainingTeachingActions() : [])]
       .map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
   let allowed = true;
   const callbackScopes = [];
@@ -5089,8 +5093,8 @@ test("exercise Learning OpenCode tools re-enter only captured control after the 
   const search = await call("delayed-practice-search", "assistant_action_search", { limit: main.actionIds.length });
   assert.equal(search.ok, true, JSON.stringify(search));
   assert.deepEqual(search.result.items.map(value => value.actionId).sort(),
-    ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read"],
-    "Search exposes exactly this fixture’s two contributed permitted Training actions");
+    ["vibe64.training.learning.read", ...(finalScenario ? ["vibe64.training.question.prepare"] : []), "vibe64.training.teaching-brief.read"],
+    "Search exposes exactly this fixture’s contributed permitted Training actions");
   const contract = await call("delayed-practice-contract", "assistant_action_contract", { actionId: "vibe64.training.learning.read" });
   assert.equal(contract.ok, true, JSON.stringify(contract));
   const read = await call("delayed-practice-read", "assistant_action_execute", { actionId: "vibe64.training.learning.read", input: {} });
@@ -5104,7 +5108,63 @@ test("exercise Learning OpenCode tools re-enter only captured control after the 
   assert.equal(f.promptCalls.length, 1, "Re-entry never dispatches another user query");
   const log = await f.store.readConversationLog(sessionId);
   assert.equal(log.flatMap(turn => turn.messages).filter(value => value.messageId === messageId).length, 1);
-  allowed = false;
-  await assert.rejects(call("revoked-delayed-practice-search", "assistant_action_search", {}), /Learning actor access revoked/);
-  assert.deepEqual(await readFile(teaching.paths[0]), progressBefore);
+  if (!finalScenario) {
+    allowed = false;
+    await assert.rejects(call("revoked-delayed-practice-search", "assistant_action_search", {}), /Learning actor access revoked/);
+    assert.deepEqual(await readFile(teaching.paths[0]), progressBefore);
+  } else {
+    const questionContract = await call("delayed-practice-question-contract", "assistant_action_contract", {
+      actionId: "vibe64.training.question.prepare" });
+    assert.equal(questionContract.ok, true, JSON.stringify(questionContract));
+    const prepared = await call("delayed-practice-question", "assistant_action_execute", {
+      actionId: "vibe64.training.question.prepare", input: {
+        attemptId: teaching.attemptId, expectedRevision: 3, requestId: teaching.input.requestId,
+        assessmentId: teaching.input.assessmentId, text: teaching.input.text, assistance: teaching.input.assistance
+      } });
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    assert.equal(prepared.result.result.delivery, "prepared", JSON.stringify(prepared));
+    assert.equal(prepared.result.result.replayed, false);
+    assert.equal(prepared.result.result.revision, 4);
+    const preparedLog = await f.store.readConversationLog(sessionId);
+    const canonical = preparedLog.find(turn => turn.messages.some(message => message.messageId === messageId));
+    assert.equal(canonical.metadata.trainingQuestionDelivery.phase, "prepared");
+    assert.equal(canonical.metadata.trainingQuestionDelivery.nativeThreadId, row.upstreamSessionId);
+    const nativeTurnId = f.promptCalls[0].input.id;
+    assert.equal(canonical.metadata.trainingQuestionDelivery.nativeTurnId, nativeTurnId);
+    const progressPrepared = await readFile(teaching.paths[0]);
+    nativeRows.push({ id: "exercise-control-final-question", type: "assistant", text: prepared.result.result.questionText,
+      finish: "stop", time: { created: Date.now(), completed: Date.now() } });
+    busy = false;
+    let delivered, run;
+    for (let index = 0; index < 500; index++) {
+      const rows = await f.store.readConversationLog(sessionId);
+      delivered = rows.find(turn => turn.turnId === canonical.turnId && turn.metadata.trainingQuestionDelivery?.phase === "delivered");
+      run = await f.store.readAgentRun(sessionId, "opencode_server");
+      if (delivered && run?.state === "completed" && run.active === false) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(delivered, "The actual exercise native final checkpoint must promote its exact prepared question");
+    assert.equal(run?.state, "completed", JSON.stringify(run));
+    assert.equal(run.active, false);
+    assert.equal(run.turnId, nativeTurnId);
+    const settled = await f.service.agentSessionState(sessionId, { runtime, vibe64User: teaching.actor });
+    assert.equal(settled.ok, true, JSON.stringify(settled));
+    assert.equal(settled.thread.id, row.upstreamSessionId);
+    assert.equal(settled.turn.id, nativeTurnId);
+    assert.equal(settled.turn.active, false);
+    assert.equal(delivered.metadata.trainingQuestionDelivery.nativeTurnId, nativeTurnId);
+    const final = delivered.messages.findLast(message => message.role === "assistant");
+    assert.equal(final.text, prepared.result.result.questionText);
+    assert.equal(final.outputId, final.messageId);
+    assert.equal(delivered.metadata.trainingQuestionDelivery.outputId, final.outputId);
+    assert.equal(delivered.metadata.trainingQuestionDelivery.reference.questionId, prepared.result.result.reference.questionId);
+    assert.deepEqual(await readFile(teaching.paths[0]), progressPrepared, "Final delivery cannot duplicate preparation or grade progress");
+    assert.equal((await teaching.read()).revision, 4);
+    assert.equal((await teaching.read()).completion.passed, 0);
+    assert.equal(f.promptCalls.length, 1, "Final publication cannot dispatch another native user input");
+    assert.equal((await f.store.readConversationLog(sessionId)).flatMap(turn => turn.messages)
+      .filter(message => message.messageId === messageId).length, 1);
+    assert.equal(nativeRows.filter(message => message.type === "user").length, 1);
+  }
 });
+}

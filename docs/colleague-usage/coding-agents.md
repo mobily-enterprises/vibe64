@@ -231,3 +231,8 @@ OpenCode Learning tools stay attached to the same saved lesson after **Send** is
 accepted. Each later tool checks current lesson and account access; it cannot
 retain permission to change the exercise from the earlier Send callback. If
 access ends, inspect the lesson and account before sending a new request.
+
+OpenCode keeps lesson progress and the final answer attached to the same accepted
+request after **Send** returns. A prepared lesson question is shown as delivered
+only when that request’s exact final answer is saved; a progress message alone
+does not confirm delivery.

@@ -3,6 +3,7 @@ import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-co
 import { VIBE64_AGENT_RUN_STATE, vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
 import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
@@ -244,7 +245,9 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
   }
 
   function messageMonitorProjection(context, applicationTools) {
+    const projectContext = captureProjectRequestContext();
     return {
+      runInContext: operation => runWithProjectRequestContext(projectContext || {}, operation),
       prepare(admitted, options) {
         const previous = context.session?.agentRuns?.find((run) => run.id === OPENCODE_AGENT_RUN_ID && run.turnId === admitted.id);
         const route = JSON.parse(context.session?.metadata?.assistant_routing_request || "null");
