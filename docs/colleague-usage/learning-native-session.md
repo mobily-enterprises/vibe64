@@ -104,6 +104,11 @@ source-availability checks and Git recovery checkpoints. A checkpoint failure
 is a workspace recovery problem; it does not prove a lesson pass or authorize
 another teaching request. Source-less lessons retain their no-Git result.
 Practice teaching-tool availability remains subject to the limits above.
+OpenCode uses the same lesson teaching controls for a prepared practice lesson
+as for a lesson without an exercise. Having practice source does not grant Main
+ordinary coding or shell tools. If a teaching tool reports no authorization,
+keep the saved attempt, source and history, and report the exact error to the
+installation owner before continuing.
 Sending in a prepared practice conversation checks fresh teaching access without
 starting setup again. Its installed lesson and exercise are checked together
 for that access read; this does not retain permission for a later request. A changed

@@ -276,7 +276,8 @@ function createOpenCodeHostPreparation({
     }), context.selection.modelProviderId);
     const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
     const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
-    const conversation = learningRoot && context.runtime.learningTeaching && options.applicationTools
+    const learningTeaching = Boolean(context.runtime.learningScope && context.runtime.learningTeaching);
+    const conversation = learningTeaching && options.applicationTools
       ? { systemPrompt: await context.runtime.getLearningInstructions(context.sessionId), nativeTools: false,
         tools: options.applicationTools } : null;
     // The original owner may already hold this shared-process target. Refresh
@@ -308,7 +309,7 @@ function createOpenCodeHostPreparation({
         env: commands.env,
         pathEntries: commands.shimDirs,
         projectContextRoot,
-        promptContext: learningRoot ? { scope: "learning",
+        promptContext: learningTeaching ? { scope: "learning",
           instructions: await context.runtime.getLearningInstructions(context.sessionId) }
           : promptContext("main", context.assistantScope),
         sessionId: context.sessionId,

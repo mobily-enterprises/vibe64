@@ -4900,3 +4900,67 @@ test("R20 OpenCode renewal requests its exact existing JSON acknowledgement cont
   assert.equal(metadata.agent_renewal_seed_thread_id, result.threadId);
   assert.equal(metadata.agent_renewal_seed_turn_id, result.turnId);
 });
+
+
+test("exercise-bearing Learning OpenCode Main installs its native learning binding while retaining the practice source", { timeout: 30_000 }, async t => {
+  const { rename } = await import("node:fs/promises");
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+  const { openCodeApplicationToolSchemas } = await import("@jskit-ai/assistant-core/server/opencode-process");
+  const teaching = await trainingTeachingFixture(t, { ready: true, exercise: true });
+  const saved = await teaching.learners.readExerciseProjectScope({ actor: teaching.actor, attemptId: teaching.attemptId, access: "control" });
+  assert.equal(saved.scope.noExercise, false, "This regression must exercise the actual practice role, not the source-less override");
+  const harness = await controllerHarness();
+  t.after(async () => {
+    try { await harness.controller.closeAllForProject(); }
+    finally { await rm(harness.root, { force: true, recursive: true }); }
+  });
+  const sessionId = saved.initialSessionId;
+  const originalSourceParent = path.dirname(harness.session.metadata.source_path);
+  const practiceSourceParent = path.join(path.dirname(originalSourceParent), sessionId);
+  await rename(originalSourceParent, practiceSourceParent);
+  harness.session.sessionId = sessionId;
+  harness.session.metadata.source_path = path.join(practiceSourceParent, "source");
+  const practiceSource = harness.session.metadata.source_path;
+  assert.ok(practiceSource);
+  harness.runtime.learningScope = saved.scope;
+  harness.runtime.learningTeaching = createTrainingMainTeaching({ teaching: teaching.owner,
+    assessment: createTrainingAnswerAssessment({ learners: teaching.learners, content: teaching.content, teaching: teaching.owner }) });
+  const brief = createTrainingTeachingBrief({ learners: teaching.learners, content: teaching.content });
+  let freshControlReads = 0;
+  harness.runtime.getNativeExecutionRoot = async id => {
+    assert.equal(id, sessionId);
+    const current = await teaching.learners.readExerciseProjectScope({ actor: teaching.actor, attemptId: teaching.attemptId, access: "control" });
+    freshControlReads += 1;
+    assert.deepEqual(current.scope, saved.scope);
+    assert.equal(current.initialSessionId, sessionId);
+    assert.equal(harness.session.sessionId, sessionId);
+    return harness.session.metadata.source_path;
+  };
+  harness.runtime.getLearningInstructions = async id => {
+    assert.equal(id, sessionId);
+    const current = await teaching.learners.readExerciseProjectScope({ actor: teaching.actor, attemptId: teaching.attemptId, access: "control" });
+    freshControlReads += 1;
+    assert.deepEqual(current.scope, saved.scope);
+    assert.equal(current.initialSessionId, sessionId);
+    return JSON.stringify(await brief.readBrief({ actor: teaching.actor, attemptId: teaching.attemptId }));
+  };
+  const ready = await harness.controller.ensureSession(sessionId, { runtime: harness.runtime, vibe64User: teaching.actor,
+    applicationTools: { schemas: openCodeApplicationToolSchemas } });
+  assert.equal(ready.ok, true, JSON.stringify(ready));
+  const registry = JSON.parse(await readFile(harness.processStarts[0].options.sessionEnvironmentRegistry, "utf8"));
+  const row = registry.sessions.find(candidate => candidate.upstreamSessionId === ready.thread.id);
+  assert.ok(row?.conversation, "Exercise-bearing Learning must install the same native Learning role before tool admission");
+  assert.ok(freshControlReads > 0, "Role setup must obtain current instructions through fresh saved practice control");
+  assert.equal(row.conversation.nativeTools, false);
+  assert.deepEqual(row.conversation.tools.schemas, openCodeApplicationToolSchemas);
+  assert.equal(row.conversation.tools.url, undefined, "Readiness does not invent an admitted effect transport");
+  assert.equal(row.promptContext.scope, "learning");
+  assert.equal(row.workdir, practiceSource, "Learning role must not replace the actual practice cwd with a source-less root");
+  assert.equal(row.projectContextRoot, harness.runtime.projectContextRoot);
+  assert.equal(harness.createdSessionInputs[0].agent, "jskit-assistant-actions");
+  assert.equal(harness.processStarts.length, 1);
+  assert.equal(harness.promptCalls.length, 0, "Readiness must not issue a model query");
+});

@@ -108,6 +108,13 @@ defaults. Actual provider/model adoption and packaged desktop/mobile acceptance 
 open; the later sections record the bounded presentation and practice additions. The native integration fixture reuses the exact original Teaching
 fixture through one shared test helper and the original Runtime/Store/controller
 lifecycle; its controlled provider completion is not live model acceptance.
+OpenCode selects its Learning conversation role from the saved runtime Learning
+scope and teaching owner for both source-less and source-bearing lessons. The
+source-less execution-root override is not a teaching-role predicate. A practice
+lesson keeps its original source cwd, Genesis/environment preparation and Git
+checkpoint owners; its teaching manifest denies native tools. Existing fresh
+learner/session/pin/account/native-turn checks still govern application tools.
+
 OpenCode uses the original shared process, native tool identity/input match and
 originating receipt. Same-turn steering retires the old authored tool callback
 without stopping its successor. Optional native output identity reaches the
