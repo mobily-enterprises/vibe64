@@ -216,6 +216,9 @@ Sessions with an unsupported format or unexpectedly missing checkout remain
 visible in an attention notice while healthy sessions stay usable. People can
 recheck them and copy recovery details for their administrator. These notices
 do not start AI repair, convert formats, or remove stored work.
+An in-progress new session stays out of the session list until its checkout
+creation finishes, so a refresh does not mistake it for lost source. Interrupted
+creation remains diagnosable after its creating process has stopped.
 Assistants have one discoverable command entry point for the session's preview,
 browser tests, environment, database and GitHub tools. Existing individual
 commands remain available so earlier conversation instructions keep working.
@@ -599,7 +602,12 @@ dialog and can be retried. Model changes wait for the active turn to
 finish. An idle paused goal permits Custom, Senior or Junior changes within its
 current orchestrator. Explicit selection updates its routing while retaining the
 paused native goal, objective, budget and progress; messages and Resume use the
-new selection. Auto, automatic review and orchestrator changes remain unavailable
+new selection. The native goal is the authority for its status in both the
+model picker and toolbar. Goals created by the assistant follow the same rule;
+explicit model selection refreshes missing or stale routing without recreating
+the goal. The shared theme gives status and recovery panels contrasting text
+on a tinted blue surface. Connection, test approval, renewal and future notices
+inherit that foreground/background pair; disabled notice controls remain readable. Auto, automatic review and orchestrator changes remain unavailable
 for an unfinished goal. The starred-files, attachments and goal controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so

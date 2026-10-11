@@ -4043,8 +4043,8 @@ function createService({
     prepareRoutingSelection,
 
     // Prepare a new routing pin without starting, clearing or changing the native goal.
-    async preparePausedGoalSelection(sessionId, selection, preferences, context) {
-      const prepared = await assistantRouting.prepareGoal(sessionId, { action: "rebind", selection }, {
+    async preparePausedGoalSelection(sessionId, selection, preferences, context, goal) {
+      const prepared = await assistantRouting.prepareGoal(sessionId, { action: "rebind", selection, goal }, {
         ...context, session: { ...context.session, metadata: { ...context.session.metadata,
           assistant_routing: JSON.stringify(preferences) } }
       });

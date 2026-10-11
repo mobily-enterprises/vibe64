@@ -326,47 +326,49 @@ class Vibe64SessionRuntime {
     sourceContext = {},
     status = VIBE64_SESSION_STATUS.ACTIVE
   } = {}) {
-    let session = await this.store.createSession({
+    const session = await this.store.createSession({
       runtimeKind: GENESIS_SESSION_KIND,
       metadata,
       sessionId,
       status
-    });
-    if (this.learningScope?.noExercise) {
-      // "genesis" remains the supported storage/runtime format, not a claim
-      // that this source-less learning session has a Genesis project.
-      return this.sessionView(session);
-    }
-    try {
-      if (this.createSessionSource) {
-        await this.createSessionSource({
-          ...(sourceContext && typeof sourceContext === "object" ? sourceContext : {}),
-          runtime: this,
-          session,
-          store: this.store
+    }, async (session) => {
+      if (this.learningScope?.noExercise) {
+        // "genesis" remains the supported storage/runtime format, not a claim
+        // that this source-less learning session has a Genesis project.
+        return session;
+      }
+      try {
+        if (this.createSessionSource) {
+          await this.createSessionSource({
+            ...(sourceContext && typeof sourceContext === "object" ? sourceContext : {}),
+            runtime: this,
+            session,
+            store: this.store
+          });
+          session = await this.store.readSession(session.sessionId);
+        }
+        if (!sessionHasSource(session)) {
+          throw vibe64Error(
+            this.createSessionSource
+              ? "Session source creation completed without attaching a source directory."
+              : "Session creation requires an existing source or a createSessionSource callback.",
+            this.createSessionSource
+              ? "vibe64_session_source_not_attached"
+              : "vibe64_session_source_creator_required"
+          );
+        }
+      } catch (error) {
+        await this.store.mutateSession(session.sessionId, async () => {
+          await Promise.all([
+            this.store.writeMetadataValue(session.sessionId, "source_creation_error", normalizeText(error?.message)),
+            this.store.writeMetadataValue(session.sessionId, "source_creation_failed", "yes"),
+            this.store.writeStatus(session.sessionId, VIBE64_SESSION_STATUS.BLOCKED)
+          ]);
         });
-        session = await this.store.readSession(session.sessionId);
+        throw error;
       }
-      if (!sessionHasSource(session)) {
-        throw vibe64Error(
-          this.createSessionSource
-            ? "Session source creation completed without attaching a source directory."
-            : "Session creation requires an existing source or a createSessionSource callback.",
-          this.createSessionSource
-            ? "vibe64_session_source_not_attached"
-            : "vibe64_session_source_creator_required"
-        );
-      }
-    } catch (error) {
-      await this.store.mutateSession(session.sessionId, async () => {
-        await Promise.all([
-          this.store.writeMetadataValue(session.sessionId, "source_creation_error", normalizeText(error?.message)),
-          this.store.writeMetadataValue(session.sessionId, "source_creation_failed", "yes"),
-          this.store.writeStatus(session.sessionId, VIBE64_SESSION_STATUS.BLOCKED)
-        ]);
-      });
-      throw error;
-    }
+      return session;
+    });
     return this.sessionView(session);
   }
 

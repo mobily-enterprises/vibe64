@@ -1775,7 +1775,7 @@ function createService({
           };
           const context = { runtime, session, vibe64User };
           const pausedGoal = goal?.status === "paused"
-            ? await terminals.preparePausedGoalSelection(sessionId, next, nextPreferences, context) : null;
+            ? await terminals.preparePausedGoalSelection(sessionId, next, nextPreferences, context, observedGoal?.status === "available" ? goal : null) : null;
           await terminals.prepareRoutingSelection(sessionId, next, context);
           if (pausedGoal) await runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(pausedGoal));
           await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));

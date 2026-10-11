@@ -4162,7 +4162,7 @@ function createVibe64SessionStore({
     runtimeKind = "",
     sessionId = "",
     status = VIBE64_SESSION_STATUS.ACTIVE
-  } = {}) {
+  } = {}, initialize = null) {
     if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA) ||
         admittedLearningScope?.noExercise && SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.some(name => Object.hasOwn(metadata, name))) {
       throw vibe64Error("Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
@@ -4186,86 +4186,95 @@ function createVibe64SessionStore({
         schemaVersion: 1, ...admittedLearningScope, conversationId: resolvedSessionId
       });
     }
-    return enqueueSessionMutation(sessionPaths.sessionRoot, async () => {
-      const release = await acquireStoreSessionLock(sessionPaths, "create", {
-        waitMs: SESSION_MUTATION_LOCK_WAIT_MS
-      });
-      if (!release) {
-        throw vibe64Error(
-          `Vibe64 session creation is already in progress: ${resolvedSessionId}`,
-          "vibe64_session_busy"
-        );
-      }
-      const stagingRoot = sessionCreationStagingRoot(rootPaths);
-      const stagedSessionRoot = path.join(
-        stagingRoot,
-        `${resolvedSessionId}.${process.pid}.${randomUUID()}`
-      );
-      const stagedPaths = pathsForSessionRoot(resolvedSessionId, stagedSessionRoot);
-      let published = false;
-      try {
-        if (await sessionRecordExists(rootPaths, resolvedSessionId)) {
-          throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
-        }
-        await mkdir(stagedSessionRoot, { recursive: true });
-        if (admittedLearningScope?.noExercise) await mkdir(path.join(stagedSessionRoot, "native"), { mode: 0o700 });
-        await Promise.all([
-          mkdir(stagedPaths.dropZoneRoot, { recursive: true }),
-          mkdir(stagedPaths.agentRunsRoot, {
-            recursive: true
-          }),
-          mkdir(stagedPaths.artifactsRoot, {
-            recursive: true
-          }),
-          mkdir(stagedPaths.backgroundTasksRoot, {
-            recursive: true
-          }),
-          mkdir(stagedPaths.metadataRoot, {
-            recursive: true
-          })
-        ]);
-        const normalizedRuntimeKind = normalizeText(runtimeKind);
-        const manifest = {
-          ...(normalizedRuntimeKind ? { runtimeKind: normalizedRuntimeKind } : {}),
-          createdAt,
-          product: "vibe64",
-          revision: 1,
-          schemaVersion: VIBE64_SESSION_SCHEMA_VERSION,
-          sessionId: resolvedSessionId,
-          updatedAt: createdAt
-        };
-        await Promise.all([
-          writeJsonFile(stagedPaths.manifestPath, manifest),
-          writeTextFile(stagedPaths.statusPath, `${normalizedStatus}\n`),
-          ...Object.entries(normalizedMetadata).map(([name, value]) => {
-            return writeTextFile(metadataFilePath(stagedPaths, name), `${value}\n`);
-          })
-        ]);
-        if (await sessionRecordExists(rootPaths, resolvedSessionId)) {
-          throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
-        }
-        await rename(stagedSessionRoot, sessionPaths.sessionRoot);
-        published = true;
-        await removeStaleSessionCreationStages(rootPaths, resolvedSessionId).catch(() => null);
-        return readSessionForRenewal(resolvedSessionId);
-      } catch (error) {
-        if (["EEXIST", "ENOTEMPTY"].includes(error?.code)) {
-          throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
-        }
-        throw error;
-      } finally {
-        if (!published) {
-          await rm(stagedSessionRoot, {
-            force: true,
-            recursive: true
-          });
-        }
-        await release();
-      }
+    const release = await acquireStoreSessionLock(sessionPaths, "create", {
+      waitMs: SESSION_MUTATION_LOCK_WAIT_MS
     });
+    if (!release) {
+      throw vibe64Error(
+        `Vibe64 session creation is already in progress: ${resolvedSessionId}`,
+        "vibe64_session_busy"
+      );
+    }
+    try {
+      const session = await enqueueSessionMutation(sessionPaths.sessionRoot, async () => {
+        const stagingRoot = sessionCreationStagingRoot(rootPaths);
+        const stagedSessionRoot = path.join(
+          stagingRoot,
+          `${resolvedSessionId}.${process.pid}.${randomUUID()}`
+        );
+        const stagedPaths = pathsForSessionRoot(resolvedSessionId, stagedSessionRoot);
+        let published = false;
+        try {
+          if (await sessionRecordExists(rootPaths, resolvedSessionId)) {
+            throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
+          }
+          await mkdir(stagedSessionRoot, { recursive: true });
+          if (admittedLearningScope?.noExercise) await mkdir(path.join(stagedSessionRoot, "native"), { mode: 0o700 });
+          await Promise.all([
+            mkdir(stagedPaths.dropZoneRoot, { recursive: true }),
+            mkdir(stagedPaths.agentRunsRoot, {
+              recursive: true
+            }),
+            mkdir(stagedPaths.artifactsRoot, {
+              recursive: true
+            }),
+            mkdir(stagedPaths.backgroundTasksRoot, {
+              recursive: true
+            }),
+            mkdir(stagedPaths.metadataRoot, {
+              recursive: true
+            })
+          ]);
+          const normalizedRuntimeKind = normalizeText(runtimeKind);
+          const manifest = {
+            ...(normalizedRuntimeKind ? { runtimeKind: normalizedRuntimeKind } : {}),
+            createdAt,
+            product: "vibe64",
+            revision: 1,
+            schemaVersion: VIBE64_SESSION_SCHEMA_VERSION,
+            sessionId: resolvedSessionId,
+            updatedAt: createdAt
+          };
+          await Promise.all([
+            writeJsonFile(stagedPaths.manifestPath, manifest),
+            writeTextFile(stagedPaths.statusPath, `${normalizedStatus}\n`),
+            ...Object.entries(normalizedMetadata).map(([name, value]) => {
+              return writeTextFile(metadataFilePath(stagedPaths, name), `${value}\n`);
+            })
+          ]);
+          if (await sessionRecordExists(rootPaths, resolvedSessionId)) {
+            throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
+          }
+          await rename(stagedSessionRoot, sessionPaths.sessionRoot);
+          published = true;
+          await removeStaleSessionCreationStages(rootPaths, resolvedSessionId).catch(() => null);
+          return readSessionForRenewal(resolvedSessionId);
+        } catch (error) {
+          if (["EEXIST", "ENOTEMPTY"].includes(error?.code)) {
+            throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
+          }
+          throw error;
+        } finally {
+          if (!published) {
+            await rm(stagedSessionRoot, {
+              force: true,
+              recursive: true
+            });
+          }
+        }
+      });
+      // Source initialization uses ordinary queued metadata mutations. Keep the
+      // creation lock, but release the publication queue before invoking it.
+      return initialize ? await initialize(session) : session;
+    } finally {
+      await release();
+    }
   }
 
-  async function createSession(options = {}) {
+  async function createSession(options = {}, initialize = null) {
+    if (initialize !== null && typeof initialize !== "function") {
+      throw new TypeError("Session initialization must be a function.");
+    }
     const status = assertVibe64SessionStatus(options.status);
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(status)) {
       throw vibe64Error(
@@ -4276,7 +4285,7 @@ function createVibe64SessionStore({
     return createSessionRecord({
       ...options,
       status
-    });
+    }, initialize);
   }
 
   async function quiesceSessionForRenewal({
@@ -4969,6 +4978,10 @@ function createVibe64SessionStore({
     unarchivedRecords = unarchivedRecords.filter(({ status }) => (
       sessionStatusMatchesListOptions(status, listOptions)
     ));
+    const creating = await Promise.all(unarchivedRecords.map(async ({ sessionId }) => (
+      !await sessionLockIsAbandoned(sessionLockPath(paths(sessionId), "create"))
+    )));
+    unarchivedRecords = unarchivedRecords.filter((_record, index) => !creating[index]);
     const unarchivedSessionIds = new Set(unarchivedRecords.map((record) => record.sessionId));
     const archivedRecords = sessionListMayIncludeArchived(listOptions)
       ? (await readSessionArchiveRecords())

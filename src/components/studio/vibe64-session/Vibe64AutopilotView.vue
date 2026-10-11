@@ -188,7 +188,6 @@
         <v-sheet
           v-if="connectionRecoveryVisible"
           class="studio-autopilot__connection-recovery"
-          color="surface-variant"
           rounded="lg"
           role="status"
           data-vibe64-connection-recovery
@@ -441,7 +440,7 @@
                 <div class="studio-autopilot__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
-                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
+                    :goal="readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal" :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
                     :connecting="['initializing', 'reconciling'].includes(props.agentConnectionStatus)"
                     :loading="assistantAccessLoading" :load-error="assistantAccessError" @reload="reloadAssistantAccess"
                     @saved="reloadAssistantAccess"
@@ -1831,6 +1830,9 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__connection-recovery {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.24);
+  color: rgb(var(--v-theme-on-surface));
   align-items: center;
   display: flex;
   flex-wrap: wrap;

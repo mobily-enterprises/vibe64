@@ -1356,11 +1356,18 @@ change within its current orchestrator. The selection writer retains its native
 turn/access checks and lock, prepares the replacement routing pin through
 `preparePausedGoalSelection` and the existing `prepareGoal` owner, then publishes
 the new goal pin/preferences/selection only after native preparation succeeds.
+The picker consumes the same retained native goal as the toolbar, rather than
+session snapshots or the routing pin. Rebind requires the selection writer's
+fresh available native paused goal; a stale or missing pin cannot veto it.
+Explicit selection creates or refreshes the pin with the native objective and
+current authorized configuration. Reads do not backfill routing metadata.
 The internal rebind action does not update or execute the native goal. It retains
 objective and budget/progress fields, captures current authorized routing, and
 keeps status paused; subsequent messages and Resume use the new pin. Active goals,
 active turns, Auto and cross-orchestrator changes remain blocked. The mode menu
-explains the restriction instead of silently disabling all choices.
+explains the restriction instead of silently disabling all choices. Connection
+recovery notices use a primary tint and on-surface text; disabled retry remains
+legible while native preparation is pending.
 
 The Custom dialog starts model catalogue reads for connected engines together
 when opened, through the existing capabilities endpoint. It reuses those

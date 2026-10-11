@@ -8,6 +8,13 @@ pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
 opens the new session. If creation fails, review the error and retry or dismiss
 the dialog. This works the same way on desktop and mobile.
 
+The new session appears in the session list after its source checkout is ready.
+Refreshing during creation does not report that checkout as missing. If a
+**session needs attention** notice remains after creation, use **Check again**;
+if the checkout is still missing, use **Copy recovery details** and ask your
+administrator to restore the original work from a verified backup. Colleague
+can explain the notice, but cannot restore missing source through session creation.
+
 Colleague can explain the choices or create a session through its session
 creation action when you explicitly ask it to do so.
 

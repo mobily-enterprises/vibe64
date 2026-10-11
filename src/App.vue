@@ -19,6 +19,17 @@ useVibe64InAppLinks();
 </template>
 
 <style>
+/* Notice colours and disabled controls use the shared semantic theme. */
+:is(.bg-surface-variant, [role="status"], [role="alert"]) .v-btn--disabled {
+  color: inherit !important;
+  opacity: 0.65;
+}
+
+:is(.bg-surface-variant, [role="status"], [role="alert"])
+  .v-btn--disabled:is(.v-btn--variant-flat, .v-btn--variant-elevated) {
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
 /* The shared goal control has no color prop for its hard-coded paused indicator. */
 .v-application .assistant-goal .assistant-goal__light--paused {
   background: rgb(var(--v-theme-warning));

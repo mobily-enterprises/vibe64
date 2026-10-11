@@ -10,6 +10,7 @@ so the same command works without a source checkout in the relocated runtime.
 
 - `index.html`
 - `src/main.js`
+- `src/App.vue`
 - `config/public.js`
 - `tooling/release/server-build.mjs`
 - `tooling/release/runtime-package.mjs`
@@ -167,3 +168,12 @@ minification choice to this public builder. They consume the materialized
 runtime, including installed external dependencies, without needing npm on the
 activation host. The builder accepts only an empty separate destination and
 never prunes the development node_modules directory.
+
+The application theme in `src/main.js` supplies paired `surface-variant` and
+`on-surface-variant` colours: pale blue/dark text in light mode, blue/light text
+in dark mode. Status sheets, session information, renewal messages and future
+notices using that semantic surface inherit the pair rather than choosing a
+background independently. `src/App.vue` keeps disabled actions on these surfaces
+legible through the shared semantic surface and status/alert roles. Connection recovery uses its primary tint and the same on-surface
+foreground. New notices use the theme surface/foreground pair, or a semantic
+warning/error alert; components do not introduce grey background constants.

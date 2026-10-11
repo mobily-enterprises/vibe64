@@ -63,6 +63,8 @@ const vuetify = createVuetify({
     themes: {
       light: {
         colors: {
+          "surface-variant": "#EEF3FA",
+          "on-surface-variant": "#1F2937",
           warning: "#725C0C",
           "on-warning": "#FFFFFF",
           "warning-container": "#F5F0E3",
@@ -71,6 +73,8 @@ const vuetify = createVuetify({
       },
       dark: {
         colors: {
+          "surface-variant": "#243342",
+          "on-surface-variant": "#EDF4FC",
           warning: "#DFC477",
           "on-warning": "#3D2F00",
           "warning-container": "#353126",

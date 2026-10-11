@@ -10,7 +10,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
-const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, requiredMode: { type: String, default: "" }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
+const props = defineProps({ session: { type: Object, default: null }, goal: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, requiredMode: { type: String, default: "" }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
@@ -36,11 +36,8 @@ const workflowChoices = computed(() => connectedWorkflows.value.map((choice) => 
   ...choice, props: { disabled: !choice.available, "aria-disabled": !choice.available ? "true" : undefined, subtitle: choice.error || undefined }
 })));
 const decisions = computed(() => props.purposes || {});
-const goal = computed(() => props.session?.agentSession?.goal || props.session?.agentGoal?.goal ||
-  JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
-const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
-  Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
-const goalLocksSelection = computed(() => hasGoal.value && (goal.value?.status || props.session?.agentSession?.turn?.goalStatus) !== "paused");
+const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].includes(props.goal.status)));
+const goalLocksSelection = computed(() => hasGoal.value && props.goal.status !== "paused");
 const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),

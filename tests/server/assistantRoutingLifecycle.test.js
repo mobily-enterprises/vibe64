@@ -1033,6 +1033,63 @@ test("Router gets only the last three visible messages, preserving their order a
 });
 
 
+test("a paused goal is explicitly repinned to a direct mode without native goal or selection writes", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+    objective: "Finish validation", status: "paused", tokenBudget: 20000, tokensUsed: 5000 };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  const original = { ...f.metadata };
+  f.agent.readGoal = async () => ({ status: "available", goal: { ...pinned } });
+  const prepared = await f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior, goal: pinned }, f.context);
+  assert.equal(prepared.pinned.mode, "senior");
+  const { selectionSource, ...selection } = f.assignments.senior;
+  assert.deepEqual(prepared.pinned.selection, selection);
+  for (const name of ["objective", "status", "tokenBudget", "tokensUsed"]) assert.equal(prepared.pinned[name], pinned[name]);
+  assert.deepEqual(f.metadata, original, "only the selection writer commits the new routing pin");
+  assert.equal(f.sends.length, 0);
+  f.metadata.assistant_routing_goal = JSON.stringify(prepared.pinned);
+  const resume = await f.service.prepareGoal("session-1", { action: "resume" }, f.context);
+  assert.equal(resume.pinned.mode, "senior");
+  assert.deepEqual(resume.pinned.selection, selection);
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.sends[0].selection.modelId, selection.modelId);
+  f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active" });
+  await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior, goal: { ...pinned, status: "active" } }, f.context), /Pause this goal/);
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.junior, goal: pinned }, f.context), /selected model changed/);
+});
+
+test("a native paused goal without a routing pin can select Junior without native goal changes", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  const goal = { status: "paused", objective: "Finish validation", tokenBudget: 20000, tokensUsed: 5000 };
+  const before = { ...f.metadata };
+  f.metadata.assistant_routing_goal = JSON.stringify({ status: "active", objective: "Stale objective" });
+  const stale = await f.service.prepareGoal("session-1", {
+    action: "rebind", selection: f.assignments.junior, goal
+  }, f.context);
+  assert.equal(stale.pinned.status, "paused");
+  assert.equal(stale.pinned.objective, goal.objective);
+  delete f.metadata.assistant_routing_goal;
+  const prepared = await f.service.prepareGoal("session-1", {
+    action: "rebind", selection: f.assignments.junior, goal
+  }, f.context);
+  assert.equal(prepared.pinned.status, "paused");
+  assert.equal(prepared.pinned.objective, goal.objective);
+  assert.equal(prepared.pinned.mode, "junior");
+  const { selectionSource, ...selection } = f.assignments.junior;
+  assert.deepEqual(prepared.pinned.selection, selection);
+  assert.deepEqual(f.metadata, before, "preparation does not write or backfill a routing pin");
+  assert.deepEqual(goal, { status: "paused", objective: "Finish validation", tokenBudget: 20000, tokensUsed: 5000 });
+  assert.equal(f.sends.length, 0);
+  await assert.rejects(f.service.prepareGoal("session-1", {
+    action: "rebind", selection: f.assignments.junior, goal: { ...goal, status: "active" }
+  }, f.context), /Pause this goal/);
+  await assert.rejects(f.service.prepareGoal("session-1", {
+    action: "rebind", selection: f.assignments.junior
+  }, f.context), /native goal is unavailable/);
+});
+
+
 test("delivery inspection exposes the original failed-before-admission receipt without sending", async t => {
   const f = await fixture(t, { mode: "junior", review: false });
   await assert.rejects(f.service.send("session-1", request, { ...f.context,

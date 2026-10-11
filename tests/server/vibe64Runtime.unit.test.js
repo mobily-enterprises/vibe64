@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -318,6 +318,79 @@ test("prompt rendering never falls back to a project context directory", async (
       { code: "vibe64_session_source_required" }
     );
     assert.equal(rendered, false);
+  });
+});
+
+test("session lists omit source creation across runtime instances until success or failure", async (t) => {
+  for (const fails of [false, true]) {
+    await t.test(fails ? "failed creation" : "successful creation", async () => {
+      await withTemporaryRoot(async (targetRoot) => {
+        const entered = Promise.withResolvers();
+        const proceed = Promise.withResolvers();
+        const options = {
+          inspectSourceByDefault: false,
+          projectContextRoot: targetRoot,
+          projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+        };
+        const runtime = new Vibe64SessionRuntime({
+          ...options,
+          createSessionSource: async ({ session, store }) => {
+            entered.resolve();
+            await proceed.promise;
+            if (fails) throw new Error("Clone failed.");
+            const metadata = sourceMetadata(targetRoot, session.sessionId);
+            await mkdir(metadata.source_path, { recursive: true });
+            await Promise.all(Object.entries(metadata).map(([name, value]) => (
+              store.writeMetadataValue(session.sessionId, name, value)
+            )));
+          }
+        });
+        const observer = new Vibe64SessionRuntime(options);
+        await observer.store.createSession({
+          runtimeKind: "genesis", sessionId: "healthy", metadata: sourceMetadata(targetRoot, "healthy")
+        });
+        await mkdir(sourcePath(targetRoot, "healthy"), { recursive: true });
+        const creating = runtime.createSession({ sessionId: "creating" });
+        const outcome = fails ? assert.rejects(creating, /Clone failed/u) : creating;
+        await entered.promise;
+        const duplicate = assert.rejects(observer.createSession({ sessionId: "creating" }), {
+          code: "vibe64_session_exists"
+        });
+        try {
+          // Another request can construct its own runtime while the clone waits.
+          const summaries = await observer.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+          assert.deepEqual(summaries.map(row => row.sessionId), ["healthy"]);
+          assert.equal(summaries[0].unavailable, undefined);
+          assert.deepEqual((await observer.listSessions({ statusGroup: "open" })).map(row => row.sessionId), ["healthy"]);
+        } finally {
+          proceed.resolve();
+          await outcome;
+          await duplicate;
+        }
+        const [listed] = await observer.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+        assert.equal(listed.sessionId, "creating");
+        assert.equal(listed.unavailable, undefined);
+        assert.equal(listed.status, fails ? "blocked" : "active");
+        if (fails) assert.equal(listed.metadata.source_creation_error, "Clone failed.");
+        else assert.equal(listed.sourcePath, sourcePath(targetRoot, "creating"));
+      });
+    });
+  }
+});
+
+test("an abandoned creation lock does not hide a missing checkout", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    await runtime.store.createSession({ runtimeKind: "genesis", sessionId: "interrupted-create" });
+    const lock = path.join(runtime.store.paths().sessionsRoot, ".locks", "interrupted-create", "create.lock");
+    await mkdir(lock, { recursive: true });
+    await writeFile(path.join(lock, "owner.json"), JSON.stringify({ pid: 2147483647 }));
+    const [listed] = await runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+    assert.equal(listed.sessionId, "interrupted-create");
+    assert.equal(listed.unavailable.code, "vibe64_session_source_required");
   });
 });
 

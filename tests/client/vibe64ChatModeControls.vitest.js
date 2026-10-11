@@ -158,7 +158,7 @@ it("blocks selection changes during reconnection and permits them when preparati
 it("lets an idle paused goal change direct modes and open Custom while retaining the goal", async () => {
   const goal = { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000 };
   const openPicker = vi.fn();
-  const state = mount(undefined, false, { onCustom: openPicker, session: { sessionId: "session-1", agentSession: { goal },
+  const state = mount(undefined, false, { goal, onCustom: openPicker, session: { sessionId: "session-1", agentSession: { goal },
     metadata: { assistant_routing: JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex", override }) } } });
   expect(state.hasGoal).toBe(true);
   expect(state.goalLocksSelection).toBe(false);
@@ -178,9 +178,25 @@ it("lets an idle paused goal change direct modes and open Custom while retaining
   expect(openPicker).toHaveBeenCalledOnce();
   app._instance.props.active = false;
   goal.status = "active";
-  app._instance.props.session = { ...app._instance.props.session, agentSession: { goal: { ...goal } } };
+  app._instance.props.goal = { ...goal };
   await nextTick();
   expect(state.goalLocksSelection).toBe(true);
   await state.save("junior");
   expect(mocks.save).not.toHaveBeenCalled();
+});
+
+
+it("uses the shared native goal rather than stale session and routing snapshots", async () => {
+  const state = mount(undefined, false, { goal: { status: "paused", objective: "Native goal" },
+    session: { sessionId: "session-1", agentSession: { goal: { status: "active" }, turn: { goalStatus: "active" } },
+      metadata: { assistant_routing: JSON.stringify({ mode: "senior", workflowEngineId: "codex" }),
+        assistant_routing_goal: JSON.stringify({ status: "active" }) } } });
+  expect(state.hasGoal).toBe(true);
+  expect(state.goalLocksSelection).toBe(false);
+  await state.save("junior");
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "codex" });
+  app._instance.props.goal = null;
+  await nextTick();
+  expect(state.hasGoal).toBe(false);
+  expect(state.goalLocksSelection).toBe(false);
 });

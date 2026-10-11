@@ -4624,7 +4624,7 @@ test("source-bearing Learning creation retains the original source context, poli
 
 test("paused goals change direct mode or model within their agent without clearing or resuming the goal", async () => {
   for (const mode of ["custom", "senior", "junior"]) {
-    for (const failure of ["", "active", "other-agent", "rebind", "prepare"]) {
+    for (const failure of ["", "active", "other-agent", "rebind", "prepare", "missing-pin", "stale-pin", "goal-unavailable"]) {
       const lock = agentWriteLockHarness();
       const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
         modelId: "gpt-6-sol", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
@@ -4635,19 +4635,27 @@ test("paused goals change direct mode or model within their agent without cleari
         assistant_selection: JSON.stringify(current), assistant_routing_goal: JSON.stringify(pinned),
         assistant_routing: JSON.stringify({ mode: "custom", review: false, workflowEngineId: "codex", override: current })
       } };
+      if (failure === "missing-pin") delete session.metadata.assistant_routing_goal;
+      if (failure === "stale-pin") session.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active", objective: "Old objective" });
       const original = { ...session.metadata };
       const calls = [];
       const runtime = { async getSession() { return session; }, store: { ...lock.store,
         async writeMetadataValue(_id, name, value) { calls.push(name); session.metadata[name] = value; }
       } };
       const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
-        async readAgentGoal() { return { status: "available", goal: nativeGoal }; },
+        async readAgentGoal() { return { status: failure === "goal-unavailable" ? "unavailable" : "available", goal: nativeGoal }; },
         async resolveAssistantSelection() { return next; },
         async resolveAssistantPurpose() { return { available: true, effectiveSelection: next, connectionIdentity: "same-account" }; },
         async requireAssistantSelectionAccess() {},
         async agentSessionState() { return { turn: { active: failure === "active" }, goal: nativeGoal }; },
-        async preparePausedGoalSelection(id, selected, preferences) {
+        async preparePausedGoalSelection(id, selected, preferences, context, goal) {
           assert.equal(id, session.sessionId); assert.deepEqual(selected, next); assert.equal(preferences.mode, mode);
+          assert.equal(context.session, session);
+          if (failure === "goal-unavailable") {
+            assert.equal(goal, null, "unavailable native reads cannot authorize a routing rebind");
+            throw new Error("The native goal is unavailable.");
+          }
+          assert.equal(goal, nativeGoal);
           calls.push("rebind");
           if (failure === "rebind") throw new Error("Routing changed; choose the model again.");
           return { ...pinned, mode, selection: next };
@@ -4659,7 +4667,7 @@ test("paused goals change direct mode or model within their agent without cleari
         assistantRouting: { mode, review: false, workflowEngineId: "codex", ...(mode === "custom" ? { override: next } : {}) },
         vibe64User: { role: "owner", username: "owner" }
       });
-      if (failure) {
+      if (failure && !["missing-pin", "stale-pin"].includes(failure)) {
         assert.equal(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
         assert.deepEqual(session.metadata, original);
       } else {

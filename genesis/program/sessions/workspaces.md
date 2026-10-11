@@ -58,6 +58,13 @@ the canonical project and from other sessions.
 
 ## Public contract
 
+The Store retains its existing filesystem creation lock through Runtime source
+initialization, outside the publication mutation queue so ordinary metadata
+writes can finish. Session lists omit records whose creation lock still has a
+live or unconfirmed owner. Success and recorded creation failure release the
+lock and expose the original result; an abandoned lock does not hide a missing
+checkout after interruption. No new persisted status or read-time repair is used.
+
 Session URL selection initializes the current session and follows subsequent
 navigation. Available-session reconciliation preserves a newer explicit tab
 selection instead of repeatedly restoring the session from the earlier URL.
