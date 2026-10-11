@@ -652,6 +652,9 @@ space without new measurements, preferences or state, preventing the floating
 avatar from intercepting the recovery pointer target. The compact natural-height
 warning and original loaded history remain; clearing the error restores the
 floating layout. The temporary avatar space reduces the visible history height.
+The error grid reserves the warning's intrinsic height; a short conversation scrolls
+vertically when the avatar, warning and composer cannot fit together. The retained
+message body keeps its original independent scroll owner.
 A fully cancelled request no longer displays its earlier error above the composer,
 including after reload. Pending helper cleanup and unconfirmed delivery retain
 their notices. The saved request remains available as operational evidence.

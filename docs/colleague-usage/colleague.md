@@ -133,6 +133,7 @@ While the warning is present, the avatar and its controls move above the message
 to leave the text and **Reload chat** reachable. This temporarily leaves less
 visible history; clearing the warning restores the floating avatar without
 changing its size preference, loaded messages or your draft.
+Scroll chat if a short phone view cannot fit the warning and composer together.
 
 When a question needs a lookup or another product action, Colleague can show
 and speak a short progress sentence before its final answer. Each is spoken once;

@@ -24,6 +24,7 @@ While that warning is shown, the avatar and its controls occupy space above the
 messages so they cannot cover the warning or **Reload chat**, including on a
 phone. History has less visible height until the warning clears; your avatar
 preference, loaded messages and draft stay intact.
+Scroll chat if a short phone view cannot fit the warning and composer together.
 
 ## Send, steer and stop
 
