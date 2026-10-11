@@ -911,3 +911,48 @@ test("already-loaded older OpenCode turn adapters skip the compiler when the hos
     assert.equal(result.stderr, "");
   });
 });
+
+
+test("Learning registry context selects native delivery without extending the ordinary Genesis driver", async () => {
+  const { createConversationHookBridge } = await import("@jskit-ai/assistant-core/server/conversation");
+  await withTemporaryRoot(async projectRoot => {
+    const registryPath = path.join(projectRoot, "learning-context-registry.json");
+    const request = { data: { registryPath }, providerSessionId: "learning-native", scope: "session" };
+    const instructions = "Teach the exact saved learner and pinned lesson through its admitted Main tools.";
+    const writeContext = (promptContext, conversation = { nativeTools: false }) => writeFile(registryPath, JSON.stringify({ sessions: [{
+      upstreamSessionId: "learning-native", workdir: projectRoot, promptContext, conversation
+    }] }));
+    const context = { scope: "learning", instructions };
+    await writeContext(context);
+    const read = input => vibe64DriverInputFromRegistry(input, { workdir: projectRoot });
+    const binding = await read(request);
+    assert.deepEqual(binding, context);
+    assert.notEqual(binding, context, "The resolver returns its own validated native binding");
+    const deliver = createConversationHookBridge({ resolveConversation: async input =>
+      await read(input) ? { delivery: "native" } : null });
+    assert.deepEqual(await deliver(request), { kind: "delivery", text: "" });
+    assert.throws(() => vibe64Driver(context), /supports session and ephemeral scopes only/);
+    await assert.rejects(vibe64DriverInputFromRegistry(request, {
+      workdir: path.join(projectRoot, "foreign-practice")
+    }), /different project directory/);
+    assert.deepEqual(await read({ ...request, providerSessionId: "learning-child", parentSessionIds: ["learning-native"] }), context);
+    await assert.rejects(read({ ...request, parentSessionIds: "unverified" }), /Invalid native conversation ancestry/);
+    assert.equal(await read({ ...request, providerSessionId: "foreign-native" }), null);
+    assert.equal(await read({ ...request, scope: "turn" }), null);
+    for (const accepted of ["x".repeat(64 * 1024 + 1), "x".repeat(128 * 1024)]) {
+      await writeContext({ scope: "learning", instructions: accepted });
+      assert.deepEqual(await read(request), { scope: "learning", instructions: accepted });
+      assert.deepEqual(await deliver(request), { kind: "delivery", text: "" });
+    }
+    for (const invalid of ["", " ", "x".repeat(128 * 1024 + 1), "é".repeat(64 * 1024 + 1), null, {}, 42]) {
+      await writeContext({ scope: "learning", instructions: invalid });
+      await assert.rejects(read(request), /bounded nonempty teaching instructions/);
+    }
+    await writeContext({ ...context, effect: "untrusted" });
+    await assert.rejects(read(request), /unsupported fields/);
+    for (const conversation of [{}, { nativeTools: true }, null]) {
+      await writeContext(context, conversation);
+      await assert.rejects(read(request), /native.*tool|native.*binding/iu);
+    }
+  });
+});

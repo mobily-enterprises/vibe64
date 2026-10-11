@@ -2,6 +2,7 @@
 
 ## Sources
 
+- `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-training/src/server/teachingBrief.js`
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/learnerState.js`
@@ -114,6 +115,16 @@ source-less execution-root override is not a teaching-role predicate. A practice
 lesson keeps its original source cwd, Genesis/environment preparation and Git
 checkpoint owners; its teaching manifest denies native tools. Existing fresh
 learner/session/pin/account/native-turn checks still govern application tools.
+
+The Genesis registry resolver handles the bound Learning instruction handoff
+only after its original native ancestry and cwd checks. It validates Main's
+nonempty instructions within the 128 KiB bound and the native-tools denial,
+then returns the validated binding to the original bridge to claim native
+instruction delivery. OpenCode's existing plugin supplies those instructions. This
+role is independent of the source-less execution-root override; the generic
+driver keeps its session/ephemeral contract and does not replace the Main lesson
+with ordinary project guidance. Instruction loading grants no teaching effect
+or shell access; the existing fresh authority checks still own each action.
 
 OpenCode uses the original shared process, native tool identity/input match and
 originating receipt. Same-turn steering retires the old authored tool callback

@@ -91,8 +91,11 @@ accept no new teaching. Resume the confirmed active attempt or explicitly start
 a new one. A delayed completion remains attached to its own attempt when you
 switch to Working; it does not change the selected Working project.
 
-If the AI connection or instructions are unavailable, retain the attempt and
-resolve that preparation failure before retrying. If a retained conversation
+If the AI connection is unavailable, retain the attempt and resolve that
+preparation failure before retrying. If Main reports that lesson instructions
+could not be loaded, keep the saved attempt, source and history, and report the
+exact error to the installation owner. Resolve that installation failure before
+sending another teaching request. If a retained conversation
 reports different application tool entry points, ask the installation owner to
 resolve its supported recovery. Do not erase history or recreate the conversation
 to bypass the mismatch. An unconfirmed Helper cleanup must be resolved before
