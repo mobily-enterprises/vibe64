@@ -269,8 +269,16 @@ test("interface explanations separate Description and Steps caches and reject ch
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /Do not emit pseudocode or pseudo-variables/u);
   assert.match(prompts[1], /numbered steps in English as pseudocode/u);
-  assert.match(prompts[1], /Start with a short purpose statement, then use numbered steps/u);
-  assert.match(prompts[1], /at most 12 concise steps, within 250 words total/u);
+  for (const prompt of prompts) {
+    assert.match(prompt, /labelled \*\*Inputs\*\* and \*\*Outputs and use\*\* sections/u);
+    assert.match(prompt, /name the parameters or configuration callers supply/u);
+    assert.match(prompt, /state what is actually returned and how callers use it/u);
+    assert.match(prompt, /Name the useful returned fields and operations/u);
+    assert.match(prompt, /Explain observable effects separately from returned data/u);
+    assert.match(prompt, /state that briefly rather than guessing/u);
+  }
+  assert.match(prompts[1], /\*\*Steps\*\* with at most 12 concise numbered steps/u);
+  assert.match(prompts[0], /The caller's inputs and practical outputs are essential/u);
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
   const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
   assert.equal(stale.ok, false);
@@ -456,6 +464,7 @@ test('document explanations include every line within the byte budget and admit 
   assert.equal((await fixture.service.explainSelection(input)).ok, true);
   assert.ok(prompts[0].includes(text), 'file explanation receives the complete saved file, including its middle');
   assert.doesNotMatch(prompts[0], /File excerpt|lines omitted from the middle/u);
+  assert.match(prompts[0], /Give the practical caller contract more space than implementation details/u);
   await writeCallableAnalysis(fixture, text);
   const indexPath = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
   const index = JSON.parse(await readFile(indexPath, 'utf8'));

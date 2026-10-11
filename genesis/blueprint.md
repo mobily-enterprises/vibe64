@@ -1726,8 +1726,10 @@ comparisons within their subsystem. Tight signature rows and compact headers
 preserve reading space. The existing single-file viewer retains signatures,
 recorded returns, authored Genesis Program descriptions, on-demand file overviews
 in an Explanation field with Generate/Update controls, function purpose and
-pseudocode in an inline Pseudocode field without an embedded chat,
-exact symbol Code and read-only whole-file Code. Generated interpretations are
+pseudocode in an inline Pseudocode field without an embedded chat. Explanations
+identify caller inputs and practical outputs: what is supplied, what is returned,
+and how to read the returned data or invoke its operations, separately from effects.
+The viewer also retains exact symbol Code and read-only whole-file Code. Generated interpretations are
 informational only, cached privately against actual saved source and guidance,
 and regenerated on the next explicit explanation request after changes. Opening a file or
 selecting a declaration makes no Helper query. Dashboard Files retains editing.

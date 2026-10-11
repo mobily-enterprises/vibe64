@@ -415,7 +415,7 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 function sourceEditorInterfacePromptVersion(presentation) {
-  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v2' : ':pseudocode-v2'}`;
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v3' : ':pseudocode-v3'}`;
 }
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
@@ -4148,10 +4148,16 @@ function sourceEditorExplanationPrompt({
       : "The user selected a specific range. Explain that range first, then explain how it fits into the surrounding file and wider project.",
     "Use only the bounded source context supplied below. Do not inspect the repository, use tools, access the network, or edit files. Be explicit when you infer something from context.",
     ...(range.presentation ? [sourceExplanationGuidance({ presentation: range.presentation, scope: range.scope })] : []),
+    ...(range.presentation ? [
+      "The caller's inputs and practical outputs are essential. After the purpose sentence, include labelled **Inputs** and **Outputs and use** sections before describing internal behavior.",
+      "Inputs: name the parameters or configuration callers supply, their practical meaning and expected shape, and important required/optional distinctions, defaults or constraints evidenced by this code. For a file, cover its main callable exports; group related options instead of documenting every parameter.",
+      "Outputs and use: state what is actually returned and how callers use it. Name the useful returned fields and operations, what callers read or invoke and what those operations provide. Distinguish live state from snapshots, awaitable results and no useful return value when evidenced. Explain observable effects separately from returned data; merely saying 'returns an object', 'reactive state' or a type name is insufficient.",
+      "For components, services, values or types, explain the analogous incoming data and provided interface or observable result without inventing a function return. If a parameter contract, return shape or usage cannot be established from the supplied code, state that briefly rather than guessing. A tiny usage example is welcome only when its calls and member names are evidenced; do not invent callers or dependencies."
+    ] : []),
     range.presentation === "steps"
-      ? "Start with a short purpose statement, then use numbered steps. Return only that sentence and at most 12 concise steps, within 250 words total. Each step describes an action, decision, effect or return; include meaningful failure conditions in the step where they occur. Group related handlers or returned operations rather than writing an essay about each one. Do not add introductory, API-contract or cache commentary."
+      ? "Start with a short purpose statement, then the Inputs and Outputs and use sections, then **Steps** with at most 12 concise numbered steps, within 300 words total. Each step describes an action, decision, effect or return; include meaningful failure conditions in the step where they occur. Group related handlers or returned operations rather than writing an essay about each one. Prioritize the practical caller contract over internal implementation detail. Do not add introductory, API-intent or cache commentary."
       : wholeFile && range.presentation === 'description'
-      ? "Write a readable file explanation in 80–140 words. Start with one sentence describing its purpose, then 3–5 concise bullets covering its main responsibilities, inputs/outputs, effects and important dependencies when evidenced. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
+      ? "Write a readable file explanation in 150–250 words. Start with one sentence describing its purpose, then the Inputs and Outputs and use sections, then **Behavior** with at most 3 concise bullets for important effects, constraints and dependencies. Give the practical caller contract more space than implementation details. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
       : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
     "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
     `Return concise user-facing Markdown no longer than ${SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS.toLocaleString("en-US")} characters.`,

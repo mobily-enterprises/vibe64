@@ -48,11 +48,18 @@ the configured Helper. Saved text is shown automatically when you reopen the fil
 stays readable while an update runs. A short status marks an out-of-date answer.
 These explanations describe the saved file, not a chat transcript or an authored
 Genesis Program. A file explanation needs no project index.
+Generated explanations lead with **Inputs** and **Outputs and use**: what callers
+pass, what they receive, and which returned data or operations they read or invoke.
+Required options, important defaults, live state, snapshots, awaitable results and
+side effects are distinguished when the supplied source establishes them. Missing
+contracts remain explicit. Press **Update explanation** to refresh an older answer
+marked out of date after this guidance change.
 
 Select a callable signature to reveal its **Pseudocode** field directly beneath
 that signature. **Generate pseudocode** fills it with a purpose statement and
-English steps. The Helper is asked for a short purpose sentence and up to twelve
-concise steps, grouping related operations in large declarations.
+English steps. The Helper is asked for a short purpose sentence, the same input
+and practical-output sections, then up to twelve concise steps, grouping related
+operations in large declarations.
 A saved answer appears when that declaration is selected;
 **Update pseudocode** regenerates it. **Code** shows the exact declaration; **Pseudocode** returns to saved steps without generating again.
 Components, values and types offer Code without an inapplicable pseudocode field.
