@@ -415,7 +415,7 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 function sourceEditorInterfacePromptVersion(presentation) {
-  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v2' : ''}`;
+  return `${SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION}:${presentation}:${SOURCE_EXPLANATION_PROMPT_VERSION}${presentation === 'description' ? ':overview-v2' : ':pseudocode-v2'}`;
 }
 
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
@@ -4149,7 +4149,7 @@ function sourceEditorExplanationPrompt({
     "Use only the bounded source context supplied below. Do not inspect the repository, use tools, access the network, or edit files. Be explicit when you infer something from context.",
     ...(range.presentation ? [sourceExplanationGuidance({ presentation: range.presentation, scope: range.scope })] : []),
     range.presentation === "steps"
-      ? "Start with a short purpose statement, then use numbered steps. Include meaningful failure conditions in the step where they occur."
+      ? "Start with a short purpose statement, then use numbered steps. Return only that sentence and at most 12 concise steps, within 250 words total. Each step describes an action, decision, effect or return; include meaningful failure conditions in the step where they occur. Group related handlers or returned operations rather than writing an essay about each one. Do not add introductory, API-contract or cache commentary."
       : wholeFile && range.presentation === 'description'
       ? "Write a readable file explanation in 80–140 words. Start with one sentence describing its purpose, then 3–5 concise bullets covering its main responsibilities, inputs/outputs, effects and important dependencies when evidenced. Describe behavior, not syntax. Distinguish inference or omitted context in one short note only when needed. Do not include a chat greeting, repeat the request, or invent empty sections."
       : "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",

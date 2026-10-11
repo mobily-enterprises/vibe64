@@ -51,10 +51,14 @@ Genesis Program. A file explanation needs no project index.
 
 Select a callable signature to reveal its **Pseudocode** field directly beneath
 that signature. **Generate pseudocode** fills it with a purpose statement and
-English steps. A saved answer appears when that declaration is selected;
+English steps. The Helper is asked for a short purpose sentence and up to twelve
+concise steps, grouping related operations in large declarations.
+A saved answer appears when that declaration is selected;
 **Update pseudocode** regenerates it. **Code** shows the exact declaration; **Pseudocode** returns to saved steps without generating again.
 Components, values and types offer Code without an inapplicable pseudocode field.
 **Code · whole file** opens the source view; **Interface** returns to the document.
+The Architecture reader's source view uses the full width without an explanation
+chat dock. Discussion belongs in the project's agent conversation.
 Opening a file or selecting a signature makes no Helper query.
 
 Both generated fields use the existing private source-editor cache, keyed to saved

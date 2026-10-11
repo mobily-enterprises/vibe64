@@ -323,6 +323,16 @@ describe("source explanation Material interaction", () => {
 
 
 describe("embedded explanation document", () => {
+  it("keeps the conversation dock out of the single-file reader's Code view", () => {
+    const editor = readFileSync(new URL(
+      "../../src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue",
+      import.meta.url
+    ), "utf8");
+    expect(editor).toContain('v-if="!singleFile && editor.activeExplanation.value && filePresentation === \'code\'"');
+    expect(editor).toContain("'vibe64-source-editor__workspace--with-explanation': !singleFile");
+    expect(editor).toContain("'vibe64-source-editor__workspace--explanation-collapsed': !singleFile");
+  });
+
   it("renders the saved answer without user prompts, speaker labels or a chat composer", async () => {
     const html = await renderExplanationPanel({ embedded: true, explanation: {
       ...cachedExplanation,

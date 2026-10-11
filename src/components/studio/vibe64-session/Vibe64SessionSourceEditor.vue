@@ -455,8 +455,8 @@
         <div
           class="vibe64-source-editor__workspace"
           :class="{
-            'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value && filePresentation === 'code',
-            'vibe64-source-editor__workspace--explanation-collapsed': editor.activeExplanation.value && explanationCollapsed && filePresentation === 'code'
+            'vibe64-source-editor__workspace--with-explanation': !singleFile && editor.activeExplanation.value && filePresentation === 'code',
+            'vibe64-source-editor__workspace--explanation-collapsed': !singleFile && editor.activeExplanation.value && explanationCollapsed && filePresentation === 'code'
           }"
         >
           <v-btn v-if="singleFile && filePresentation === 'code'" variant="text" @click="filePresentation = 'interface'">Interface</v-btn>
@@ -536,7 +536,7 @@
             />
           </div>
           <div
-            v-if="editor.activeExplanation.value && filePresentation === 'code'"
+            v-if="!singleFile && editor.activeExplanation.value && filePresentation === 'code'"
             class="vibe64-source-editor__explanation-dock"
             :class="{ 'vibe64-source-editor__explanation-dock--collapsed': explanationCollapsed }"
           >
