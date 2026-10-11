@@ -226,8 +226,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
         if (options.method === "POST") {
           expect(savedVisual?.scope).toBe(scope);
           if (url.startsWith("/api/learning/")) {
-            if (practiceLearning) expect(options.body.projectSlug).toBe(props.conversationRuntime.identity.sourceProjectSlug);
-            else expect(Object.hasOwn(options.body, "projectSlug")).toBe(false);
+            expect(Object.hasOwn(options.body, "projectSlug")).toBe(false);
           }
           else expect(options.body.projectSlug).toBe(props.projectSlug);
           expect(options.body.sessionId).toBe(props.sessionId);
@@ -1558,7 +1557,7 @@ it("opens the same lesson player for a captured practice Main target and retires
     expect(await command).toMatchObject({ ok: true, commandId: "practice-advance", phase: "completed", state: "arrived" });
     expect(fixture.checkpointWrites[0].url).toBe(expectedUrl);
     expect(fixture.checkpointWrites[0].options.body).toEqual({ requestId: expect.any(String), expectedRevision: 0,
-      projectSlug: "practice-confirmed", sessionId: fixture.props.sessionId,
+      sessionId: fixture.props.sessionId,
       snapshot: { state: "arrived", paused: true, labels: {} } });
     expect(fixture.button("App")).toBeNull(); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
     expect(fixture.reads).toHaveLength(0); expect(fixture.writes).toHaveLength(0);

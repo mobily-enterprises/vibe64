@@ -70,8 +70,9 @@ command or pause, the player saves its semantic state and labels. Reopening the
 same attempt restores its last confirmed state without replaying sound or motion.
 **Retry diagram checkpoint** retains an unconfirmed save identity; after a
 revision conflict, **Save current diagram** captures fresh state. Keep the player
-open until confirmation. A changed account, attempt or conversation retires its
-old handle; an error never grants a pass.
+open until confirmation. Practice lesson diagrams save to that same lesson and
+Main conversation. A changed account, attempt or conversation retires its old
+handle; an error never grants a pass.
 
 If Start is unconfirmed, **Retry lesson start** keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.

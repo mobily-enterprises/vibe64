@@ -176,6 +176,13 @@ introduced. Main supplies its canonical question/cue/navigation/ACK integration 
 same original owners. Actual installed/native/browser/device acceptance remains
 a separate gate.
 
+A captured Learning checkpoint uses its exact attempt/session resource URL and
+omits a Working project selector, including when the lesson has a practice
+project. The existing Learning admission resolves and verifies that saved source,
+learner and pin before the original checkpoint writer. Ordinary Working visual
+saves retain their project selector. The same captured retry body, player/actor
+fences, fresh revision read and CAS writer remain unchanged.
+
 Original checkpoint/cue methods retain their implementation. Exact before-source
 runs exposed a prior hidden-pause race: a genuine second hide was dropped while
 an earlier pause waited for fresh checkpoint authority. The existing pause owner

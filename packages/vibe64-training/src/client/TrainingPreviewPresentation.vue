@@ -243,7 +243,7 @@ async function saveCheckpoint(expected, transition) {
   if (transition !== transitionRevision || instance !== value.playerInstanceId) return;
   checkpointOperation = { expected, instance, transition, actor: actorKey.value, projectSlug: props.projectSlug,
     body: { requestId: crypto.randomUUID(), expectedRevision: fresh.revision,
-      ...(!expected.learningBinding || expected.learningBinding.noExercise === false ? { projectSlug: props.projectSlug } : {}),
+      ...(!expected.learningBinding ? { projectSlug: props.projectSlug } : {}),
       sessionId: props.sessionId, snapshot: value.snapshot } };
   await retryCheckpoint();
 }
