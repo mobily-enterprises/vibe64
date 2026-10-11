@@ -3803,3 +3803,11 @@ reasoning publication and the terminal checkpoint. Send and reconciliation use
 the same factory; shared process startup and finite WRITE admission stay outside
 this boundary. Fresh Main action admission and exact native-final delivery guards
 remain unchanged.
+
+Main’s existing settled event invalidates only its current viewer’s existing
+Learning progress query whose saved active attempt matches the retained binding.
+The actor-tagged cache distinguishes ordinary and author-preview namespaces;
+only the matching resource refetches through its original guarded endpoint
+observer. Working, other attempts, courses and absent queries are unchanged.
+Retired readers cannot invalidate a new actor’s progress. This adds no progress
+store, polling, admission or implicit lesson operation.

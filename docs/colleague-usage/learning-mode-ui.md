@@ -96,3 +96,9 @@ lesson; selecting a different session or account retires its old presentation.
 While a lesson’s narrated visual explanation awaits its final response, optional
 thinking and interim speech stay silent too. Your speech preferences remain saved;
 fresh confirmed replies use the same voice controls. This does not hide chat text.
+
+After Main finishes a Learning turn, **Lessons** refreshes the saved progress
+for that same lesson. An owner’s author trial remains separate from ordinary
+lesson progress. If updates were disconnected, use **Refresh lessons** to read
+the current saved results before choosing Start or Resume. The saved checkpoint
+question may already have been assessed; it is not a new unanswered question.

@@ -972,3 +972,67 @@ it("retains component-provided practical facilities when the saved Learning iden
   f.app.unmount();
   expect(channel.value).toBe(fallback);
 });
+
+it.each(["learning", "author-preview"])("refreshes only the owning %s progress resource when the current Learning Main settles", async namespace => {
+  const { createRouter, createMemoryHistory } = await import("vue-router");
+  const { useVibe64LearningMode } = await import("../../src/composables/useVibe64LearningMode.js");
+  const attempt = "11111111-1111-4111-8111-111111111111";
+  const other = "22222222-2222-4222-8222-222222222222";
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { render: () => null } }] });
+  await router.push("/?mode=learning");
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  releases.push(() => queryClient.clear());
+  let mode, revision = 10, actor = "owner";
+  const reads = { courses: 0, learning: 0, "author-preview": 0 };
+  const f = fixture({ projectSlug: "", sessionId: `learning-${attempt}`, learningAttemptId: attempt,
+    learnerId: "1000", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    beforeMount(app) {
+      app.use(router); app.use(VueQueryPlugin, { queryClient });
+      const readConversation = mocks.read.getMockImplementation();
+      mocks.read.mockImplementation((url, options) => {
+        const resource = url.split("/").at(-1);
+        if (!url.startsWith("/api/vibe64/training/") || !Object.hasOwn(reads, resource)) return readConversation(url, options);
+        reads[resource] += 1;
+        if (resource === "courses") return { ok: true, courses: [] };
+        return { ok: true, available: true, learnerId: "1000", authorPreview: resource === "author-preview",
+          revision: resource === namespace ? revision : 0,
+          active: { attemptId: actor === "owner" && resource === namespace ? attempt : other }, history: [] };
+      });
+    },
+    provideShell() { mode = useVibe64LearningMode({ authorPreview: true }); }
+  });
+  const resource = namespace === "learning" ? mode.learningResource : mode.authorPreviewResource;
+  await vi.waitFor(() => expect(resource.data.value?.revision).toBe(10));
+  await vi.waitFor(() => expect(f.runtime.value?.available.value).toBe(true));
+  const currentId = mainConversationId(f.runtime.value.identity);
+  const before = { ...reads };
+  revision = 11;
+  f.socket.notify({ type: "phase" }, currentId);
+  f.socket.notify({ type: "settled" }, "foreign-conversation");
+  await nextTick();
+  expect(reads).toEqual(before);
+  expect(resource.data.value.revision).toBe(10);
+  f.socket.notify({ type: "settled" }, currentId);
+  await vi.waitFor(() => expect(resource.data.value.revision).toBe(11));
+  expect(reads).toEqual({ ...before, [namespace]: before[namespace] + 1 });
+  expect(mocks.request).not.toHaveBeenCalled();
+
+  actor = "member";
+  f.viewer.value = { actorKey: actor };
+  expect(resource.data.value).toBeNull();
+  await vi.waitFor(() => expect(resource.data.value?.active?.attemptId).toBe(other));
+  const retiredReads = { ...reads };
+  f.socket.notify({ type: "settled" }, currentId);
+  await nextTick();
+  expect(reads).toEqual(retiredReads);
+  expect(queryClient.getQueryData(["vibe64", "training", namespace, "owner"]).value.revision).toBe(11);
+
+  Object.assign(f.selected, { learningAttemptId: undefined, learnerId: undefined,
+    projectSlug: "working", sessionId: "ordinary-work", sessionsApiPath: "/api/vibe64/sessions" });
+  await vi.waitFor(() => expect(f.runtime.value.identity.projectSlug).toBe("working"));
+  const workingReads = { ...reads };
+  f.socket.notify({ type: "settled" }, mainConversationId(f.runtime.value.identity));
+  await nextTick();
+  expect(reads).toEqual(workingReads);
+  expect(queryClient.getQueryState(["vibe64", "training", "author-preview", "absent-actor"])).toBeUndefined();
+});

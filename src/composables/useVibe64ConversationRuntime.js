@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/vue-query";
 import { computed, inject, onScopeDispose, proxyRefs, ref, toValue, watch } from "vue";
 import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
 import { useTrainingWorkspaceObservation } from "@local/vibe64-training/client/workspace-observation";
@@ -192,6 +193,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
 /** Main text and voice consume one supplied retained conversation. */
 function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, learningAttemptId, learnerId, noExercise, sourceProjectSlug, active = true, summarySession } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  const queryClient = useQueryClient();
   // The retained factory runs outside this component's setup after selection.
   // Capture its existing shell facilities while ancestor providers are current.
   const channel = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
@@ -232,7 +234,22 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
     },
     actorKey: () => identity.value.actorKey, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
     workspaceSlug: "", active, goal: true, deferWhileWorking: true,
-    onEvent: event => binding.runtime.value?.application.presentation?.receiveEvent(event), draftStorage: () => browserDraftStorage(identity.value),
+    onEvent(event) {
+      const application = binding.runtime.value?.application;
+      const presentation = application?.presentation?.receiveEvent(event);
+      const target = application?.identity;
+      if (event.type === "settled" && target?.learningAttemptId !== undefined &&
+          target.viewerActorKey === toValue(viewer)?.actorKey) {
+        for (const resource of ["learning", "author-preview"]) {
+          const queryKey = ["vibe64", "training", resource, target.viewerActorKey];
+          const saved = queryClient.getQueryData(queryKey);
+          if (saved?.reader === target.viewerActorKey && saved.value?.active?.attemptId === target.learningAttemptId) {
+            void queryClient.invalidateQueries({ queryKey, exact: true });
+          }
+        }
+      }
+      return presentation;
+    }, draftStorage: () => browserDraftStorage(identity.value),
     api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
       resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
     application(conversation) {
