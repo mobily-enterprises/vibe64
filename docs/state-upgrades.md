@@ -1118,3 +1118,16 @@ without it retain ordinary selection/whole-file behavior. Reads preserve a
 present identity and do not infer one for old records. This additive attribute
 requires no historical transformation; the existing ephemeral explanation and
 durable cleanup lifetimes are unchanged.
+
+
+## Upgrade backup retention
+
+The registry's `maintainStateUpgradeBackups` operation provides read-only dry run
+and cleanup under the same `upgrades/apply.lock` used by upgrades and explicit
+repairs. Hosted daily maintenance may remove a known completed upgrade's backup
+tree only after 14 days from both ledger completion and the latest filesystem
+change anywhere in that tree. New repair copies extend that window. Invalid
+ledgers, unknown or unfinished upgrades, symlinks and unverified ownership retain
+the copies and report a reason. The applied ledger and original numbered scripts
+are unchanged. These private workspace copies can contain credentials and several
+projects' data; they never appear in the user-facing Project Backups folder.

@@ -89,6 +89,9 @@ function helperOperationForRequest(request = {}) {
   if (request.purpose === "github-api") {
     return "github-api-command";
   }
+  if (request.purpose === "workspace-cache") {
+    return "workspace-cache-command";
+  }
   if (request.purpose === "health") {
     return "health-status";
   }

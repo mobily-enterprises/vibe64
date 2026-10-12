@@ -391,14 +391,17 @@ switching sessions.
 Selecting a session keeps those details closed until the pointer leaves and
 enters its tab again. Deliberate keyboard focus and its info button still make
 the details available on demand.
-Files separates the repository, a per-session Drop Zone, and the session's
+Files separates the repository, a per-session Session Dropzone, and the session's
 read-only runtime tree with distinct area icons. The workspace owner can browse
-Session files, including archived history; other project members see Repo and
-Drop Zone. People and the AI can exchange files outside the repository through
+Session files, including archived history; other project members see Repo, Session Dropzone and Project Backups (2w retention). People and the AI can exchange files outside the repository through
 the Drop Zone. People can upload, drop multiple files, download, edit, rename,
 and delete its contents. This temporary exchange is excluded from saved work
 and archives and disappears after successful archival; a renewed session
-starts with an empty Drop Zone.
+starts with an empty Drop Zone. Project Backups is a normal directory shared
+by all sessions of its project, outside Git and session archives. Users and coding
+agents can add files with the same Files controls. Hosted daily maintenance
+expires files after 14 days without a write or filesystem change, and Files shows
+their expiry dates. This is temporary storage, not an automatic project snapshot.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.

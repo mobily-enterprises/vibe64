@@ -33,6 +33,7 @@ const VIBE64_COMMAND_PURPOSES = Object.freeze([
   "output",
   "deployment",
   "health",
+  "workspace-cache",
   "source"
 ]);
 const VIBE64_COMMAND_MODES = Object.freeze([

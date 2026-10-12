@@ -40,7 +40,8 @@ const ALLOWED_OPERATIONS = new Set([
   "managed-execution",
   "managed-service",
   "opencode-app-server",
-  "vibe64-command"
+  "vibe64-command",
+  "workspace-cache-command"
 ]);
 const ALLOWED_COMMANDS = new Set([
   "bash",
@@ -2113,6 +2114,16 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
 } = {}) {
   if (operation === "health-status") {
     return workspaceTempRoot(ownerUsername);
+  }
+  if (operation === "workspace-cache-command") {
+    const root = path.join(targetUser.home, ".local/state/vibe64/cache-maintenance");
+    const resolved = canonicalPath(cwd);
+    const parts = relativePathParts(root, resolved);
+    if (targetUser.username !== ownerUsername || canonicalPath(root) !== root || resolved !== cwd ||
+        parts.length !== 1 || !/^[a-z][a-z0-9-]*-[A-Za-z0-9]{6}$/u.test(parts[0])) {
+      throw new Error("Cache maintenance requires an owned workspace scratch directory.");
+    }
+    return resolved;
   }
   const normalized = String(cwd || "").trim();
   if (!normalized) {

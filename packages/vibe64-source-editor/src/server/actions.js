@@ -45,7 +45,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
   return [
     action("file-areas.read", {}, (input) => sourceEditor.fileArea(input, "areas"), query),
     ...["tree", "file", "download", "archive", "upload", "save", "rename", "mkdir", "delete"].map((operation) => action(`file-area.${operation}`, {
-      area: { type: "string", enum: ["session", "drop-zone"], required: true },
+      area: { type: "string", enum: ["session", "drop-zone", "backups"], required: true },
       path: { ...filePath, required: !["tree", "archive", "upload"].includes(operation) },
       ...(operation === "tree" ? { offset: text } : {}),
       ...(operation === "rename" ? { destination: { ...filePath, required: true } } : {}),

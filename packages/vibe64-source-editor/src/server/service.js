@@ -1,3 +1,4 @@
+import { BACKUP_RETENTION_MS, withProjectBackupsLock } from "@local/vibe64-runtime/server/projectBackups";
 import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
 import crypto from "node:crypto";
 import { constants, createWriteStream } from "node:fs";
@@ -966,12 +967,12 @@ function createService({
       }
       const owner = !requestContext.vibe64User || requestContext.vibe64User.role === "owner";
       const area = String(input.area || "");
-      const writable = area === "drop-zone";
+      const writable = ["drop-zone", "backups"].includes(area);
       const reads = ["tree", "file", "download", "archive"];
       const writes = ["upload", "save", "rename", "delete", "mkdir"];
       const writing = writes.includes(operation);
       if (operation !== "areas" && (
-        !["session", "drop-zone"].includes(area) || (!reads.includes(operation) && !writing)
+        !["session", "drop-zone", "backups"].includes(area) || (!reads.includes(operation) && !writing)
       )) {
         throw sourceEditorError("Unknown file area or operation.", "vibe64_files_invalid_area", {}, 404);
       }
@@ -987,7 +988,7 @@ function createService({
       // not resolve. Reading the summary also enforces renewal visibility.
       const session = await runtime.store.readSessionSummary(sessionId);
       if (operation === "areas") {
-        return { ok: true, areas: ["repo", "drop-zone", ...(owner ? ["session"] : [])] };
+        return { ok: true, areas: ["repo", "drop-zone", "backups", ...(owner ? ["session"] : [])] };
       }
       const policy = {
         ...sourceEditorFilePolicy(),
@@ -1003,23 +1004,28 @@ function createService({
         return downloadSessionFile({ sourceRoot: path.dirname(session.archivePath), policy }, path.basename(session.archivePath));
       }
       const perform = async (sessionPaths) => {
-        const sourceRoot = writable ? sessionPaths.dropZoneRoot : sessionPaths.sessionRoot;
+        const sourceRoot = area === "backups" ? sessionPaths.projectBackupsRoot
+          : writable ? sessionPaths.dropZoneRoot : sessionPaths.sessionRoot;
         const context = { policy, sourceRoot, sourceEditorTempRoot: sourceRoot };
         await sourceEditorPathStats(sourceRoot);
         const relativePath = normalizeSourceEditorRelativePath(input.path);
         if (["mkdir", "delete", "rename"].includes(operation) && !relativePath) {
-          throw sourceEditorError("Choose an item inside the Drop Zone.", "vibe64_invalid_source_editor_path");
+          throw sourceEditorError("Choose an item inside this folder.", "vibe64_invalid_source_editor_path");
         }
         switch (operation) {
-          case "tree":
-            return {
-              ok: true,
-              location: writable ? sourceRoot : "",
-              tree: await sourceEditorDirectoryPage(context, {
-                path: relativePath,
-                offset: sourceEditorResultOffset(input.offset)
-              })
-            };
+          case "tree": {
+            const tree = await sourceEditorDirectoryPage(context, {
+              path: relativePath, offset: sourceEditorResultOffset(input.offset)
+            });
+            if (area === "backups") {
+              for (const entry of tree.children) {
+                if (entry.type !== "file") continue;
+                const info = await sourceEditorPathStats(sourceRoot, entry.path);
+                entry.expiresAt = new Date(Math.max(info.mtimeMs, info.ctimeMs) + BACKUP_RETENTION_MS).toISOString();
+              }
+            }
+            return { ok: true, location: writable ? sourceRoot : "", tree };
+          }
           case "file":
             return { ok: true, file: await readSourceEditorFile(context, relativePath) };
           case "download":
@@ -1052,6 +1058,20 @@ function createService({
           }
         }
       };
+      if (area === "backups") {
+        const paths = runtime.store.paths(sessionId);
+        if (!writing) {
+          try { return await perform(paths); }
+          catch (error) {
+            if (!isMissingPathError(error) || input.path || operation !== "tree") throw error;
+            return { ok: true, location: paths.projectBackupsRoot, tree: directoryNode("", [], { loaded: true }) };
+          }
+        }
+        return withProjectBackupsLock(paths.stateRoot, async () => {
+          await mkdir(paths.projectBackupsRoot, { recursive: true, mode: 0o700 });
+          return perform(paths);
+        });
+      }
       const livePaths = session.sessionRoot ? {
         sessionRoot: session.sessionRoot,
         dropZoneRoot: path.join(session.sessionRoot, "drop-zone")

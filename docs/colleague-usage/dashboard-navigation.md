@@ -10,8 +10,9 @@ to choose a tool and **Back to dashboard** to return from its detail. **Show cha
 returns to the coding conversation. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
 
-Files provides **Repo** for source and **Drop Zone** for exchanging files with the
-selected session. Choose an area to browse its folders and files; searching is
+Files provides **Repo** for source and **Session Dropzone** for exchanging files with the
+selected session, plus **Project Backups (2w retention)** shared by all sessions
+of the project. Choose an area to browse its folders and files; searching is
 optional. The workspace owner also sees the read-only **Session** area.
 Access follows the signed-in account; changing a link cannot select another role.
 Changes shows the session's source changes. AI Terminal shows the coding agent's
@@ -29,3 +30,28 @@ Code, file, terminal and visual investigation belongs to a coding conversation;
 Colleague can ask that agent and relay its result, but cannot itself read source,
 execute a shell command or inspect the screen. A navigation request does not
 authorize editing source, stopping work or changing settings.
+
+
+In **Files → Project Backups (2w retention)**, use **Upload**, drag files into the
+folder, or choose **New folder**. Open a text file to edit it and choose **Save**;
+use its menu for **Rename** or **Delete**, and **Download** to keep a permanent
+copy. The same controls are available in Session Dropzone. On phones, file
+browsing and editing share the pane and secondary actions are in the file menu.
+Uploads accept individual files up to 100 MiB; use a zip to exchange a directory.
+
+Project Backups is an ordinary directory outside Git. The coding agent can put
+files there using its supplied path; **Copy AI path** lets you refer to that same
+directory. Switching, renewing or archiving a session does not remove the
+project's backups. Every file displays an expiry date. Hosted daily maintenance
+deletes files after 14 days without a write or filesystem change; a newly copied
+file gets a fresh window even if it preserves an older modification date. Download
+anything you want to retain permanently. This folder does not automatically
+snapshot your project. Session Dropzone is temporary and disappears when its
+session is successfully archived.
+
+Colleague can explain these controls and open Files. Ask the coding agent to
+create or inspect backup files; Colleague itself has no filesystem or shell
+access. If a backup operation reports busy, wait for the current upload or
+maintenance to finish and retry. Symbolic links are not browsable or cleaned
+automatically. Workspace upgrade recovery copies remain private operator data
+and are not exposed in the project's backup folder.

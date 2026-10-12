@@ -672,3 +672,9 @@ The read-only runtime-root inventory and original project-slug validator are
 owned by Core `projectState.js`;
 `studioProjectContext.js` retains its existing export. Offline upgrades use that
 small owner without loading live project execution or Genesis dependencies.
+
+
+The session path contract also exposes `projectBackupsRoot` under the owning
+project's runtime directory. This folder is shared across sessions, is excluded
+from session archives by location, and is not removed by renewal or archival.
+The Files owner manages its operations; hosted maintenance schedules retention.

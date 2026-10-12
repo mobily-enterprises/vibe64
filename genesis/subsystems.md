@@ -361,6 +361,10 @@ authoring, learner and pinned-recovery topics through the original usage reader.
 
 ## `packages-vibe64-source-editor` Source & interfaces
 
+Owns the project-shared Backups area in Files, reusing ordinary file operations;
+the runtime supplies its project path and retention operation, and the host
+schedules cleanup. It is separate from private workspace upgrade recovery data.
+
 Owns editing and reviewing project source changes, including derived
 filename and content indexes for each working session.
 Its ordinary source-editor operations share named action contracts and current
@@ -855,6 +859,7 @@ Persisted-state upgrades use the existing numbered registry, preflight, backups 
 
 ## `packages-vibe64-execution` Command execution
 
+Owns the bounded workspace cache-maintenance command purpose and its daemon-only scratch-path admission.
 Owns managed command execution and its native stdio
 transport, PTY admission/I/O/subscription/cleanup and workflow accounting. Conversation
 engines consume this host facility; JSKIT owns their command/protocol setup.

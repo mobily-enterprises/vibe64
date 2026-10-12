@@ -301,3 +301,11 @@ learned profiles, admission policy and user-visible recovery belong to the
 provider, not these generic execution operations.
 Terminal closure awaits these callbacks without an elapsed-time failure, so
 provider queue contention keeps cleanup pending rather than falsely failed.
+
+
+Workspace package-cache maintenance is an explicit finite command purpose. Its
+host operation only admits an exact scratch child under the owning daemon's
+private `cache-maintenance` directory, with no project source or arbitrary home
+path substitution. It reuses ordinary runtime declarations, job accounting,
+timeouts and process cleanup. The host schedules cache work and the package
+manager retains its format and garbage-collection rules.

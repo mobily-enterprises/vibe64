@@ -2,7 +2,8 @@
   <section class="vibe64-session-files" :class="$attrs.class" :style="$attrs.style" aria-label="Session files">
     <v-tabs v-model="area" density="compact" aria-label="File areas" :disabled="loadingAreas">
       <v-tab :disabled="archived || !repoAvailable" value="repo" :prepend-icon="mdiSourceRepository">Repo</v-tab>
-      <v-tab v-if="areas.includes('drop-zone')" value="drop-zone" :prepend-icon="mdiTrayArrowUp">Drop Zone</v-tab>
+      <v-tab v-if="areas.includes('drop-zone')" value="drop-zone" :prepend-icon="mdiTrayArrowUp">Session Dropzone</v-tab>
+      <v-tab v-if="areas.includes('backups')" value="backups" :prepend-icon="mdiArchiveClockOutline">Project Backups (2w retention)</v-tab>
       <v-tab v-if="areas.includes('session')" value="session" :prepend-icon="mdiArchiveClockOutline">Session</v-tab>
     </v-tabs>
     <v-alert v-if="areaError" type="error" variant="tonal" density="compact">

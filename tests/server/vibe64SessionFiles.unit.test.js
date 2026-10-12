@@ -45,8 +45,8 @@ async function fixture(t) {
 test("one Files boundary enforces project/session/area access for every operation", async (t) => {
   const { call, service } = await fixture(t);
   assert.equal((await service.fileArea({ sessionId: "shared-id" }, "areas")).statusCode, 403);
-  assert.deepEqual((await call("areas", {}, "member")).areas, ["repo", "drop-zone"]);
-  assert.deepEqual((await call("areas")).areas, ["repo", "drop-zone", "session"]);
+  assert.deepEqual((await call("areas", {}, "member")).areas, ["repo", "drop-zone", "backups"]);
+  assert.deepEqual((await call("areas")).areas, ["repo", "drop-zone", "backups", "session"]);
   for (const operation of ["tree", "file", "download", "archive", "save", "upload", "rename", "delete", "mkdir"]) {
     const input = { area: "session", path: "private.txt", vibe64User: { role: "owner" }, root: "/", sourceRoot: "/" };
     assert.equal((await call(operation, input, "member")).statusCode, 403, operation);
@@ -220,4 +220,36 @@ test("renewal snapshots exclude the old Drop Zone and a successor starts empty",
   const listing = (await exec("tar", ["-tzf", prepared.archivePath])).stdout;
   assert.ok(!listing.includes("drop-zone"));
   assert.equal(await readFile(path.join(store.paths(sourceSessionId).dropZoneRoot, "shared.txt"), "utf8"), "one exchange");
+});
+
+
+test("project backups share files across sessions, survive archival, and keep project boundaries", async (t) => {
+  const { stores, call } = await fixture(t);
+  const store = stores.get("one");
+  const input = { area: "backups" };
+  const before = await call("tree", input, "member");
+  assert.equal(before.ok, true);
+  assert.equal(before.location, store.paths().projectBackupsRoot);
+  await assert.rejects(readdir(before.location), { code: "ENOENT" });
+  const readUpload = async function* () { yield { type: "file", fieldname: "file", file: Readable.from(["backup bytes"]) }; };
+  assert.equal((await call("upload", { ...input, path: "copy.txt" }, "member", "one", { readUpload })).ok, true);
+  assert.equal((await call("file", { ...input, sessionId: "one-only", path: "copy.txt" }, "member")).file.text, "backup bytes");
+  assert.equal((await call("file", { ...input, path: "copy.txt" }, "member", "two")).ok, false);
+  const listed = await call("tree", input, "member");
+  assert.ok(Date.parse(listed.tree.children[0].expiresAt) > Date.now() + 13 * 86400000);
+  await symlink(store.paths("shared-id").sessionRoot, path.join(before.location, "escape"));
+  for (const operation of ["file", "download", "delete", "mkdir"]) {
+    assert.equal((await call(operation, { ...input, path: "escape/private.txt" }, "member")).ok, false);
+    assert.equal((await call(operation, { ...input, path: "../private.txt" }, "member")).ok, false);
+  }
+  await store.writeStatus("shared-id", "archived");
+  await store.publishSessionArchive("shared-id");
+  const file = (await call("file", { ...input, path: "copy.txt" }, "member")).file;
+  assert.equal(file.text, "backup bytes");
+  assert.equal((await call("save", { ...input, path: "copy.txt", baseHash: file.hash, text: "updated" }, "member")).ok, true);
+  const { withProjectBackupsLock } = await import("../../packages/vibe64-runtime/src/server/projectBackups.js");
+  await withProjectBackupsLock(store.paths().stateRoot, async () => {
+    assert.equal((await call("delete", { ...input, path: "copy.txt" }, "member")).ok, false);
+  });
+  assert.equal((await call("delete", { ...input, path: "copy.txt" }, "member")).ok, true);
 });

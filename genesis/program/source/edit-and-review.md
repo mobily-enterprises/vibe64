@@ -5,6 +5,8 @@ from saved project work, and inspect one exact file change at a time.
 
 ## Sources
 
+- `packages/vibe64-runtime/src/server/projectBackups.js`
+
 - `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionFileArea.vue`
 - `src/components/studio/ArchivedVibe64SessionDetail.vue`
@@ -136,14 +138,14 @@ provider-side permissions. Application extensions remain with the ordinary form
 or coding agents. Named Development slot and registration changes share the
 canonical save action.
 
-Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
+Files presents Repo, Session Dropzone, Project Backups (2w retention) and Session as icon-labelled areas, separate from
 folder navigation. Repo retains source editing, stars, explanations and selected
 file sync. Drop Zone belongs to the selected session and lives outside its Git
 source. Project members may list, preview, download, upload, create folders,
 rename, edit text and delete files or directory trees there. Upload and file
 drag-and-drop accept multiple files sequentially, up to 100 MiB each, and never
 overwrite an existing item. Larger files placed there by the assistant remain
-downloadable. Drag-and-drop upload is confined to Drop Zone. Unsaved text stays
+downloadable. Drag-and-drop upload is available in Session Dropzone and Project Backups. Unsaved text stays
 in its area when switching tabs; uploads cannot discard it.
 Malformed uploads with extra fields or files fail promptly and leave no partial
 file, including when the multipart parser closes the file stream before copying starts.
@@ -1609,3 +1611,14 @@ Architecture and Files share this viewer/editor and its existing autosave,
 conflict, download and source-navigation coordination. Architecture hides the
 file browser while reading a selected file or Program; it does not make whole-file
 Code read-only or construct a second editing implementation.
+
+Project Backups uses the same authorized Files operation boundary and file
+primitives as Session Dropzone. Its root is the project's private runtime
+`backups` directory, so session changes, renewal and archival preserve it. The
+session store supplies that trusted path and agent command environments expose
+`VIBE64_PROJECT_BACKUPS`. Mutations and retention share one project filesystem
+lock through the existing JSKIT lock facility. Reads do not create the folder.
+Hosted maintenance expires regular, unlinked files individually after 14 days
+from the later of mtime and ctime, rechecks identity before unlinking, never follows
+symlinks, and never recursively deletes user folders. Unknown entries remain for
+inspection. Files reports the same timestamp-based expiry, including copied files.

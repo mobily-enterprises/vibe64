@@ -2,7 +2,7 @@
   <section
     class="session-file-area"
     :class="{ 'session-file-area--mobile': mobile }"
-    :aria-label="area === 'session' ? 'Session files, read only' : 'Drop Zone files'"
+    :aria-label="areaLabel"
     @dragenter.prevent="dragEnter"
     @dragover.prevent="dragOver"
     @dragleave.prevent="dragLeave"
@@ -14,7 +14,7 @@
     </div>
     <div v-if="!mobile || !file" class="d-flex align-center ga-2 flex-wrap px-3 pt-2">
       <span class="text-body-small flex-grow-1">
-        {{ area === 'session' ? 'Session runtime files · Read only' : 'Temporary file exchange · Deleted when this session is archived' }}
+        {{ areaDescription }}
       </span>
       <v-btn v-if="archived && area === 'session'" :prepend-icon="mdiDownload" size="small" variant="text" :disabled="busy" @click="download(`${sessionId}.tar.gz`, 'archive')">Download archive</v-btn>
       <v-btn v-if="location" :prepend-icon="mdiContentCopy" size="small" variant="text" @click="copyLocation">Copy AI path</v-btn>
@@ -65,7 +65,7 @@
     </template>
     <template v-else>
       <v-list v-if="entries.length" class="session-file-area__listing" aria-label="Files and folders">
-        <v-list-item v-for="entry in entries" :key="entry.path" :title="entry.name" :subtitle="entry.type === 'file' ? formatSize(entry.size) : 'Folder'" :prepend-icon="entry.type === 'directory' ? mdiFolderOutline : mdiFileOutline" :disabled="busy" @click="openEntry(entry)">
+        <v-list-item v-for="entry in entries" :key="entry.path" :title="entry.name" :subtitle="entrySubtitle(entry)" :prepend-icon="entry.type === 'directory' ? mdiFolderOutline : mdiFileOutline" :disabled="busy" @click="openEntry(entry)">
           <template #append>
             <v-btn v-if="entry.type === 'file'" :icon="mdiDownload" :aria-label="`Download ${entry.name}`" variant="text" @click.stop="download(entry.path)" />
             <v-menu v-if="writable" :close-on-content-click="true">
@@ -80,11 +80,11 @@
           </template>
         </v-list-item>
       </v-list>
-      <p v-else class="pa-4 text-body-medium">{{ expired ? 'This session’s Drop Zone has expired.' : writable ? 'Nothing here yet. Drop files here, use Upload, or ask the AI to put files in this session’s Drop Zone.' : 'This folder is empty.' }}</p>
+      <p v-else class="pa-4 text-body-medium">{{ expired ? 'This Session Dropzone has expired.' : writable ? `Nothing here yet. Drop files here, use Upload, or ask the AI to put files in ${areaLabel}.` : 'This folder is empty.' }}</p>
       <v-btn v-if="hasMore" class="ma-3 align-self-start" variant="text" :disabled="busy" @click="loadDirectory(directory, true)">Load more</v-btn>
     </template>
     <v-dialog v-model="dialogOpen" max-width="460" :persistent="busy">
-      <v-card :title="dialogOperation === 'delete' ? 'Delete from Drop Zone?' : dialogOperation === 'rename' ? 'Rename item' : 'New folder'">
+      <v-card :title="dialogOperation === 'delete' ? `Delete from ${areaLabel}?` : dialogOperation === 'rename' ? 'Rename item' : 'New folder'">
         <v-card-text>
           <p v-if="dialogOperation === 'delete'">{{ dialogEntry?.name }}{{ dialogEntry?.type === 'directory' ? ' and everything inside it will be deleted.' : ' will be deleted.' }}</p>
           <v-text-field v-else v-model="dialogName" label="Name" autofocus :disabled="busy" :error-messages="nameError" @keyup.enter="confirmDialog" />
@@ -119,7 +119,12 @@ const props = defineProps({
   agentActive: { type: Boolean, default: false }
 });
 const { smAndDown: mobile } = useDisplay();
-const writable = computed(() => props.area === "drop-zone");
+const writable = computed(() => ["drop-zone", "backups"].includes(props.area));
+const areaLabel = computed(() => props.area === "backups" ? "Project Backups" : props.area === "drop-zone" ? "Session Dropzone" : "Session files, read only");
+const areaDescription = computed(() => props.area === "backups"
+  ? "Shared across this project · Files automatically deleted after 2 weeks without changes"
+  : props.area === "session" ? "Session runtime files · Read only"
+  : "Temporary file exchange · Deleted when this session is archived");
 const base = computed(() => `${props.sessionsApiPath}/${encodeURIComponent(props.sessionId)}/files/${encodeURIComponent(props.area)}`);
 const directory = ref("");
 const entries = ref([]);
@@ -145,7 +150,7 @@ const feedback = useUiFeedback({ source: "vibe64.files" });
 let generation = 0;
 let pendingRefresh = false;
 const breadcrumbs = computed(() => [
-  { title: writable.value ? "Drop Zone" : "Session", path: "" },
+  { title: areaLabel.value, path: "" },
   ...directory.value.split("/").filter(Boolean).map((name, i, parts) => ({ title: name, path: parts.slice(0, i + 1).join("/") }))
 ]);
 function url(operation, filePath, offset = 0) {
@@ -317,6 +322,11 @@ function refresh() {
   }
   pendingRefresh = false;
   return file.value ? openEntry({ type: "file", path: file.value.path }) : loadDirectory(directory.value);
+}
+function entrySubtitle(entry) {
+  if (entry.type !== "file") return "Folder";
+  const expiry = entry.expiresAt ? ` · Expires ${new Date(entry.expiresAt).toLocaleString()}` : "";
+  return `${formatSize(entry.size)}${expiry}`;
 }
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;

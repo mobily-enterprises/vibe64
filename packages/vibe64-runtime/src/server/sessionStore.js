@@ -873,6 +873,7 @@ function sessionPathsFromRoot({
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
     projectContextRoot,
+    projectBackupsRoot: stateRoot ? path.join(stateRoot, "backups") : "",
     sessionId,
     sessionRoot,
     sessionsRoot,

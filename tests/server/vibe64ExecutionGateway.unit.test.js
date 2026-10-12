@@ -1709,6 +1709,7 @@ test("execution helper operation policy distinguishes account auth from GitHub w
   assert.equal(helperOperationForRequest({
     purpose: "health"
   }), "health-status");
+  assert.equal(helperOperationForRequest({ purpose: "workspace-cache" }), "workspace-cache-command");
   assert.equal(helperOperationForRequest({
     purpose: "codex"
   }), "vibe64-command");

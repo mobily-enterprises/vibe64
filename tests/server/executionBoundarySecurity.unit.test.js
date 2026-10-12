@@ -141,3 +141,21 @@ test("the daemon's generic commands admit only exact private Colleague workspace
   assert.throws(() => resolveAllowedCwd(workspace, "v64d_another", options));
   assert.throws(() => resolveAllowedCwd(workspace, owner.username, { ...options, operation: "github-workflow-command" }));
 });
+
+
+test("workspace cache jobs use an exact daemon scratch directory without opening other private state", async (t) => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "cache-job-boundary-"));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const root = path.join(home, ".local/state/vibe64/cache-maintenance");
+  await mkdir(root, { recursive: true });
+  const cwd = await mkdtemp(path.join(root, "composer-"));
+  const owner = { username: "v64d_workspace", home };
+  const options = { operation: "workspace-cache-command", targetUser: owner };
+  assert.equal(resolveAllowedCwd(cwd, owner.username, options), cwd);
+  for (const refused of [home, root, path.dirname(root)]) {
+    assert.throws(() => resolveAllowedCwd(refused, owner.username, options));
+  }
+  assert.throws(() => resolveAllowedCwd(cwd, "v64d_other", options));
+  await symlink(home, path.join(root, "npm-abcdef"));
+  assert.throws(() => resolveAllowedCwd(path.join(root, "npm-abcdef"), owner.username, options));
+});

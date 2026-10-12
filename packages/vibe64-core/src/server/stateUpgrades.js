@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import codexLoginId from "./stateUpgrades/20260923-codex-login-id.js";
 import routingV2 from "./stateUpgrades/20260923-routing-v2.js";
@@ -146,4 +146,83 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
   }
 }
 
-export { runStateUpgrades };
+// Retention belongs to the registry, not the immutable historical scripts.
+// Only a known, completed upgrade's regular backup tree is eligible. The same
+// apply.lock excludes ordinary upgrades and explicit repair invocations.
+async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = Date.now(), signal } = {}) {
+  if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) === path.parse(systemRoot).root) {
+    throw new Error("Backup retention requires an absolute, non-root Vibe64 system directory.");
+  }
+  const result = { status: "success", reclaimedBytes: 0, eligibleBytes: 0, retainedBytes: 0, issues: [] };
+  const upgradeRoot = path.join(systemRoot, "upgrades");
+  const root = path.join(upgradeRoot, "backups");
+  try {
+    if (!(await lstat(root)).isDirectory() || await realpath(root) !== root) {
+      return { ...result, status: "partial", issues: [{ code: "upgrade_backup_path_unverified" }] };
+    }
+  } catch (error) { if (error.code === "ENOENT") return result; throw error; }
+  const lockPath = path.join(upgradeRoot, "apply.lock");
+  let lock;
+  try {
+    if (dryRun) {
+      try { await lstat(lockPath); return { ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] }; }
+      catch (error) { if (error.code !== "ENOENT") throw error; }
+    } else {
+      try { lock = await open(lockPath, "wx", 0o600); }
+      catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        return { ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] };
+      }
+    }
+    const ledger = await readLedger(path.join(upgradeRoot, "applied.json"));
+    const completed = new Map(ledger.applied.map(entry => [entry.id, Date.parse(entry.completedAt)]));
+    const cutoff = Number(now) - 14 * 86400000;
+    if (!Number.isFinite(cutoff)) throw new Error("Invalid backup maintenance time.");
+    for (const name of await readdir(root)) {
+      signal?.throwIfAborted();
+      const target = path.join(root, name);
+      const completedAt = completed.get(name);
+      if (completedAt === undefined) {
+        result.issues.push({ code: "upgrade_backup_completion_unverified" });
+        continue;
+      }
+      let bytes = 0, newest = completedAt, entries = 0;
+      const identities = [];
+      async function inspect(file) {
+        signal?.throwIfAborted();
+        if (++entries > 100_000) throw new Error("upgrade_backup_scan_limit");
+        const info = await lstat(file);
+        if (info.uid !== process.getuid() || info.isSymbolicLink() || (!info.isDirectory() && !info.isFile()) ||
+            (info.isFile() && info.nlink !== 1)) throw new Error("upgrade_backup_path_unverified");
+        if (await realpath(file) !== file) throw new Error("upgrade_backup_path_unverified");
+        newest = Math.max(newest, info.mtimeMs, info.ctimeMs);
+        identities.push([file, info]);
+        if (info.isFile()) bytes += info.blocks * 512;
+        else for (const child of await readdir(file)) await inspect(path.join(file, child));
+      }
+      try {
+        await inspect(target);
+        if (newest > cutoff) { result.retainedBytes += bytes; continue; }
+        for (const [file, original] of identities) {
+          signal?.throwIfAborted();
+          const current = await lstat(file);
+          if (current.ino !== original.ino || current.dev !== original.dev || current.mtimeMs !== original.mtimeMs ||
+              current.ctimeMs !== original.ctimeMs) throw new Error("upgrade_backup_changed");
+        }
+        result.eligibleBytes += bytes;
+        if (dryRun) result.retainedBytes += bytes;
+        else { await rm(target, { recursive: true }); result.reclaimedBytes += bytes; }
+      } catch (error) {
+        signal?.throwIfAborted();
+        result.retainedBytes += bytes;
+        result.issues.push({ code: error.message.startsWith("upgrade_backup_") ? error.message : "upgrade_backup_inspection_failed" });
+      }
+    }
+    if (result.issues.length) result.status = "partial";
+    return result;
+  } finally {
+    if (lock) { await lock.close(); await rm(lockPath); }
+  }
+}
+
+export { maintainStateUpgradeBackups, runStateUpgrades };
