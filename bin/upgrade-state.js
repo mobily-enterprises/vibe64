@@ -6,7 +6,7 @@ import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
 import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "@local/vibe64-colleague/server/conversationUpgrade";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
 import { upgradePlanProgress, upgradeAssistantWorkflow } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
@@ -17,14 +17,16 @@ try {
   const { values } = parseArgs({ options: {
     "system-root": { type: "string" },
     check: { type: "boolean" },
-    apply: { type: "boolean" }
+    apply: { type: "boolean" },
+    "repair-colleague-retired-operation": { type: "boolean" }
   } });
   if (Boolean(values.check) === Boolean(values.apply)) {
-    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path (--check | --apply). Stop the service before --apply.");
+    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path (--check | --apply) [--repair-colleague-retired-operation]. Stop all writers before --apply.");
   }
   await runStateUpgrades({
     systemRoot: values["system-root"],
     apply: Boolean(values.apply),
+    repairRetiredOperation: Boolean(values["repair-colleague-retired-operation"]),
     upgradeAssistantRouting,
     upgradeAssistantRoles,
     upgradeAssistantHelpers,
@@ -37,6 +39,7 @@ try {
     upgradeColleagueNativeContinuity,
     upgradeColleagueCodexCompletedPolicy,
     upgradeColleagueNativeInstructions,
+    repairColleagueRetiredOperation,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
     upgradePlanProgress,

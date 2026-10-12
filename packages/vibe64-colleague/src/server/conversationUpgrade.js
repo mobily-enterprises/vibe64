@@ -5,6 +5,7 @@ import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 
 export { upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "./nativeConversationUpgrade.js";
+export { repairColleagueRetiredOperation } from "./retiredOperationUpgrade.js";
 
 /** Offline conversion only. Native histories remain untouched and no work resumes. */
 export async function upgradeColleagueConversations({ systemRoot, apply, backupRoot, report }) {

@@ -35,10 +35,11 @@ import colleagueCodexCompletedPolicy from "./stateUpgrades/20261010-colleague-co
 import colleagueNativeInstructions from "./stateUpgrades/20261010-colleague-native-instructions.js";
 
 import assistantWorkflow from "./stateUpgrades/20261010-assistant-workflow.js";
+import colleagueRetiredOperation from "./stateUpgrades/20261012-colleague-retired-operation-receipt.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -60,7 +61,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow,
+async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, repairColleagueRetiredOperation, repairRetiredOperation = false,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -82,7 +83,7 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
     const ledger = await readLedger(ledgerPath);
     const pending = upgrades.slice(ledger.applied.length);
     report("info", `${pending.length} pending state upgrade(s).`);
-    const run = (upgrade, write) => upgrade.run({
+    const run = (upgrade, write, backupSuffix = "") => upgrade.run({
       systemRoot,
       apply: write,
       // The composition root supplies feature-owned migration operations.
@@ -104,11 +105,17 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
       upgradeColleagueCodexCompletedPolicy,
       upgradeColleagueNativeInstructions,
       upgradeAssistantWorkflow,
-      backupRoot: path.join(upgradeRoot, "backups", upgrade.id),
+      repairColleagueRetiredOperation,
+      backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
       throw new Error(`${upgrade.id}: ${error.message}`, { cause: error });
     });
+    if (repairRetiredOperation) {
+      report("warning", "Explicit retired-operation repair only; the ordered upgrade ledger is unchanged. Stop all writers before apply, then run ordinary candidate check/apply.");
+      await run(colleagueRetiredOperation, apply, "before-continuity-bootstrap");
+      return { pending: pending.map(upgrade => upgrade.id), applied: [] };
+    }
     // Check all pending work before the first mutation. Apply re-reads each input.
     for (const upgrade of pending) await run(upgrade, false);
     if (!apply) return { pending: pending.map(upgrade => upgrade.id), applied: [] };

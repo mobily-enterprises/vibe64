@@ -11,7 +11,7 @@ import { markCodexAuthReconnecting } from "../../packages/vibe64-core/src/server
 import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import { openCodeDetachedPrompt } from "@jskit-ai/assistant-core/server/opencode-turn";
 import { createConversationRuntime, createMemoryConversationStorage, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-runtime-upgrade-"));
@@ -1047,4 +1047,125 @@ test("native continuity retries its original prepared empty configuration before
   const backupRoot = path.join(f.systemRoot, "upgrades/backups", nativeInstructionsUpgrade.id);
   await upgradeColleagueNativeInstructions({ systemRoot: f.systemRoot, backupRoot, apply: true, report() {} });
   assert.equal(JSON.parse(await readFile(f.filePath, "utf8")).conversationMetadata.runtime.configuration.systemPrompt, instructions);
+});
+
+
+async function retiredOperationFixture(t) {
+  const f = await fixture(t);
+  f.backupRoot = path.join(f.systemRoot, "upgrades", "backups", "retired-operation");
+  const saved = {
+    schemaVersion: 3, scopeId: "colleague_retained", runtimeId: "owner", status: "ready", error: "",
+    assistantSelection: { engineId: "codex", modelProviderId: "openai", modelId: "selected" },
+    previousConversations: [], conversationMetadata: {}, watches: [{ watchId: "retained" }],
+    conversationLog: [{ turnId: "000001", messages: [{ role: "user", text: "Ordinary question", messageId: "accepted" },
+      { role: "assistant", text: "Retained answer", messageId: "written" }] }]
+  };
+  saved.retiredConversation = { conversationId: "original-native", runId: "original-run", currentTurnId: "000001",
+    assistantSelection: structuredClone(saved.assistantSelection), operation: { id: "306b972e-5b6c-483c-8b5e-616c2d23d1c3", status: "completed",
+      toolName: "assistant_action_execute", arguments: '{"actionId":"vibe64.colleague.conversation-summary.read","version":1,"input":{"projectSlug":"canary","sessionId":"original-session"}}', result: { ok: true, result: { actionId: "vibe64.colleague.conversation-summary.read", version: 1, result: { ok: true, messages: [] } } }, at: "2026-10-01T00:00:00Z" } };
+  const filePath = await f.write("owner", saved);
+  const run = (apply, backupRoot = f.backupRoot) => repairColleagueRetiredOperation({ systemRoot: f.systemRoot,
+    backupRoot, apply, report: (level, message) => f.reports.push({ level, message }) });
+  return { ...f, saved, filePath, run };
+}
+
+test("completed retired marker repair is read-only before apply and preserves every other byte of state semantically", async t => {
+  const f = await retiredOperationFixture(t);
+  const before = await readFile(f.filePath, "utf8");
+  const native = path.join(path.dirname(f.filePath), "original-native.jsonl");
+  await writeFile(native, "immutable native completion and account receipts");
+  await f.run(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.run(true);
+  const afterBytes = await readFile(f.filePath, "utf8"), after = JSON.parse(afterBytes);
+  const { operation, ...retired } = f.saved.retiredConversation;
+  assert.deepEqual(after, { ...f.saved, retiredConversation: { ...retired, completedOperationReceipt: operation } });
+  assert.equal(await readFile(native, "utf8"), "immutable native completion and account receipts");
+  const relative = path.relative(f.systemRoot, f.filePath);
+  assert.equal(await readFile(path.join(f.backupRoot, "before", relative), "utf8"), before);
+  assert.equal(await readFile(path.join(f.backupRoot, "after", relative), "utf8"), afterBytes);
+  assert.equal((await stat(f.filePath)).mode & 0o777, 0o600);
+  await f.run(false); await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), afterBytes);
+  // The later ordinary ledger uses a separate backup root after native continuity.
+  await f.run(true, path.join(f.systemRoot, "upgrades", "backups", "later-normal"));
+  await assert.rejects(stat(path.join(f.systemRoot, "upgrades", "backups", "later-normal")), { code: "ENOENT" });
+  assert.ok(f.reports.some(({ level }) => level === "warning"));
+});
+
+for (const [name, alter] of [
+  ["unfinished", saved => { saved.retiredConversation.operation.status = "executing"; }],
+  ["unknown", saved => { saved.retiredConversation.operation.status = "unknown"; }],
+  ["conflicting receipt", saved => { saved.retiredConversation.completedOperationReceipt = {}; }],
+  ["changed selection", saved => { saved.assistantSelection.modelId = "different"; }],
+  ["active application", saved => { saved.status = "working"; }],
+  ["current operation", saved => { saved.operation = { status: "completed" }; }],
+  ["missing result", saved => { delete saved.retiredConversation.operation.result; }],
+  ["failed result", saved => { saved.retiredConversation.operation.result.ok = false; }],
+  ["different result action", saved => { saved.retiredConversation.operation.result.result.actionId = "vibe64.projects.list"; }],
+  ["different result version", saved => { saved.retiredConversation.operation.result.result.version = 2; }],
+  ["failed nested result", saved => { saved.retiredConversation.operation.result.result.result.ok = false; }],
+  ["invalid arguments", saved => { saved.retiredConversation.operation.arguments = "private text"; }],
+  ["object arguments", saved => { saved.retiredConversation.operation.arguments = {}; }],
+  ["array arguments", saved => { saved.retiredConversation.operation.arguments = "[]"; }],
+  ["invalid ID", saved => { saved.retiredConversation.operation.id = ""; }],
+  ["invalid tool", saved => { saved.retiredConversation.operation.toolName = ""; }],
+  ["pending delivery", saved => { saved.conversationMetadata.request = {}; }],
+  ["unconfirmed tool", saved => { saved.conversationLog[0].metadata = { applicationTools: [{ status: "unknown" }] }; }],
+  ["reserved assignment", saved => { saved.assignments = [{ turns: [{ status: "reserved" }] }]; }],
+  ["earlier outer schema", saved => { saved.schemaVersion = 2; }]
+]) test(`completed retired marker repair refuses ${name} without publication`, async t => {
+  const f = await retiredOperationFixture(t); alter(f.saved);
+  await writeFile(f.filePath, JSON.stringify(f.saved));
+  const before = await readFile(f.filePath, "utf8");
+  await assert.rejects(f.run(false), /unchanged completed legacy receipt/);
+  await assert.rejects(f.run(true), /unchanged completed legacy receipt/);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+test("completed retired marker repair leaves other engines, current runtime and fresh history unchanged", async t => {
+  for (const alter of [saved => { saved.retiredConversation.assistantSelection.engineId = "claude"; },
+    saved => { saved.conversationMetadata.runtime = { version: 3 }; },
+    saved => { saved.freshOperation = { operationId: "existing-fresh" }; },
+    saved => { delete saved.retiredConversation.operation; }]) {
+    const f = await retiredOperationFixture(t); alter(f.saved); await writeFile(f.filePath, JSON.stringify(f.saved));
+    const before = await readFile(f.filePath, "utf8"); await f.run(true);
+    assert.equal(await readFile(f.filePath, "utf8"), before);
+    await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  }
+});
+
+test("completed retired marker repair resumes exact BEFORE and rejects modified destination or backup", async t => {
+  const f = await retiredOperationFixture(t);
+  const before = await readFile(f.filePath, "utf8"); await f.run(true);
+  const after = await readFile(f.filePath, "utf8");
+  await writeFile(f.filePath, before); await f.run(true);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  await writeFile(f.filePath, after + " ");
+  await assert.rejects(f.run(true), /differs from both upgrade copies/);
+  await writeFile(f.filePath, after);
+  const relative = path.relative(f.systemRoot, f.filePath);
+  await writeFile(path.join(f.backupRoot, "before", relative), before + " ");
+  await assert.rejects(f.run(true), /before copy is missing or changed/);
+});
+
+test("completed retired marker repair rejects a new eligible owner after manifest preparation", async t => {
+  const f = await retiredOperationFixture(t); await f.run(true);
+  const next = { ...f.saved, runtimeId: "another", scopeId: "colleague_another" };
+  await f.write("another", next);
+  await assert.rejects(f.run(true), /new eligible Colleague owner/);
+});
+
+
+test("completed marker repair leaves the unchanged native continuity proof mandatory", async t => {
+  const f = await retiredOperationFixture(t);
+  const runContinuity = () => upgradeColleagueNativeContinuity({ systemRoot: f.systemRoot,
+    backupRoot: path.join(f.systemRoot, "upgrades", "backups", "native-continuity"), apply: false, report() {} });
+  await assert.rejects(runContinuity(), /unfinished\/unsupported state/);
+  await f.run(true);
+  // The toy fixture has no real native UUID/history: removing the completed
+  // application marker must not turn it into a qualified native binding.
+  await assert.rejects(runContinuity(), /unfinished\/unsupported state/);
 });

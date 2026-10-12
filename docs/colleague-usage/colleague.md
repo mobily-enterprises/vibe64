@@ -203,7 +203,12 @@ After an application upgrade, an older Colleague history may require the
 installation's state upgrade before it can open. The workspace operator runs the
 candidate release's upgrade command with services stopped; Colleague cannot do
 this through chat. Written history is preserved, and interrupted operations are
-not repeated.
+not repeated. A stale completed operation marker may require the operator’s
+explicit receipt repair before the ordinary upgrade can finish. That repair keeps
+the complete operation receipt and conversation history; the native continuity
+checks still run afterward. Do not delete the conversation, start fresh, or resend
+the old request to bypass an upgrade error. This maintenance is human-only and
+cannot be performed by Colleague.
 
 ## Ask Colleague to coordinate
 

@@ -52,6 +52,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-colleague/src/server/conversationUpgrade.js`
 - `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`
+- `packages/vibe64-colleague/src/server/retiredOperationUpgrade.js`
 
 ## Public contract
 
@@ -1106,3 +1107,18 @@ row, error, full transcript, binding/account and seen cursor remain unchanged,
 with no inference, credential operation, native file write or automatic resend.
 The original upgrade file exercises the actual shared SDK open validation before
 and after repair, instead of treating metadata shape validation as usability.
+
+
+The separate `20261012-colleague-retired-operation-receipt` repair preserves a
+proven completed legacy Codex application marker in the inert
+`retiredConversation.completedOperationReceipt` field. Only the old active-marker
+field is removed; its exact arguments encoding, result and other fields remain.
+Ready current schema-three legacy records qualify, while changed selection,
+conflicting receipts, pending delivery and uncertain effects refuse. The existing
+native continuity owner remains immutable and independently validates native
+completion and identity before continuation. The explicit stopped-writer bootstrap
+uses the ordinary upgrade lock but leaves the ordered ledger unchanged, with a
+separate before-continuity backup root. The later normal numbered operation can
+record its no-op after continuity; retries of either publication verify original
+and prepared bytes through the existing Core publisher. There is no runtime
+backfill, native file mutation, replay or fresh conversation creation.

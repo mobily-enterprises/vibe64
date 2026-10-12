@@ -1012,3 +1012,42 @@ Check is read-only. The script owns verified before/after backups under
 Unreadable or unsupported records block publication with an actionable error.
 Resolve the cause and retry the same backup; changed original or prepared bytes
 are refused. No opening, read handler or startup performs this conversion.
+
+
+## Completed retired Colleague operation receipts
+
+`20261012-colleague-retired-operation-receipt` retains a stale completed legacy
+Codex operation marker as `retiredConversation.completedOperationReceipt` and
+removes only `retiredConversation.operation`. The complete marker, including its
+original JSON-string arguments, result and timestamps, remains in the record.
+Only a ready schema-three current legacy conversation with unchanged selection,
+no common runtime or fresh-chat history and no active, pending or uncertain
+application work qualifies. Unknown, unfinished, malformed or conflicting markers
+refuse publication. Native history, canonical messages, account pins and native
+files are not changed or replayed.
+
+The published native continuity upgrade remains unchanged and still proves the
+original native identity, completed request/final answer, private scope and account
+custody. A completed application marker alone does not establish native continuity.
+Because the runner checks every pending upgrade before applying any, an earlier
+continuity refusal can require this explicit operator bootstrap first:
+
+```sh
+node /candidate/bin/upgrade-state.js --system-root=/absolute/vibe64/state --check --repair-colleague-retired-operation
+# Stop the service and every other application/native writer before apply.
+node /candidate/bin/upgrade-state.js --system-root=/absolute/vibe64/state --apply --repair-colleague-retired-operation
+# Then run the ordinary full check/apply through the stopped-service owner.
+```
+
+Bootstrap uses the existing upgrade lock and validates the existing ledger without
+changing it. The script owns verified before/after copies under
+`upgrades/backups/20261012-colleague-retired-operation-receipt/before-continuity-bootstrap/`.
+The later ordinary numbered entry uses its separate normal backup root, avoiding
+collision with a full-record rewrite by native continuity. Retry verifies both
+saved sides and reconstructs the exact expected replacement from the original
+backup; changed product, backup or newly eligible owner refuses publication.
+A missing marker after legitimate downstream conversion is a no-op for the later
+numbered entry. Keep the same bootstrap backup for retries and do not edit the
+upgrade ledger or the published continuity script. Failed continuity still blocks
+activation; complete the candidate workflow or restore compatible state before
+starting a service.
