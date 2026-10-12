@@ -3,6 +3,11 @@
 Open the project's **Env** view and select **Development**. Enter the variable
 name and value, enable **Secret** for credentials, then choose **Add** or
 **Replace value**. Existing editable rows also offer **Save**.
+Stack defaults are editable fallbacks: saving one creates a project override,
+and removing that override reveals the current declared default again. Defaults
+are user-owned in Env; platform-injected runtime values remain system-owned and
+non-editable, even when Stack declares the same name. Reserved Vibe64-prefixed
+names require a Stack declaration before a user can supply them.
 
 Saved development values are available to the coding agent, its managed browser,
 and managed Playwright commands. For an authorized external site, tell the coding

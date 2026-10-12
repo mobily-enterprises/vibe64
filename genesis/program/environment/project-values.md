@@ -37,7 +37,10 @@ pending state before attempting a connection or falling back to application
 configuration.
 
 The environment view distinguishes editable user values from host-owned system
-values, masks secrets, supports explicit add, replace, and confirmed removal,
+values. Stack defaults are editable user-owned fallbacks: a saved project value
+overrides them, and deleting that override reveals the current declaration.
+A platform-managed value for the same key remains protected. The view masks
+secrets, supports explicit add, replace, and confirmed removal,
 and applies values to session preparation, checks, launches, and agent work.
 Codex, Claude, and OpenCode session commands receive the resolved development
 environment. The authenticated shell broker reads current project Env for every

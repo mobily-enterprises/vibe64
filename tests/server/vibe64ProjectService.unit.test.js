@@ -1262,6 +1262,73 @@ test("Env is user-owned and reaches Genesis sessions without an adapter", async 
   });
 });
 
+test("Genesis Stack defaults remain editable fallbacks for project Env values", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let fallback = ".vibe64-online/public-source";
+    const service = projectService(targetRoot, {
+      inspectEnvironment() {
+        return {
+          components: [],
+          environmentDefaults: [{
+            name: "VIBE64_PUBLIC_SOURCE_ROOT",
+            value: fallback
+          }],
+          files: [],
+          resources: [],
+          status: "ready"
+        };
+      }
+    });
+
+    const initial = await service.readEnv();
+    assert.deepEqual(initial.env.records.find((record) => record.key === "VIBE64_PUBLIC_SOURCE_ROOT"), {
+      editable: true,
+      key: "VIBE64_PUBLIC_SOURCE_ROOT",
+      missing: false,
+      owner: "user",
+      requiredFor: [],
+      scope: "dev",
+      secret: false,
+      source: "genesis-stack:default",
+      value: ".vibe64-online/public-source",
+      valuePresent: true
+    });
+
+    const saved = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        VIBE64_PUBLIC_SOURCE_ROOT: {
+          secret: false,
+          value: "/srv/vibe64/sessions/selected/source"
+        }
+      }
+    });
+    assert.equal(saved.ok, true);
+    assert.equal(saved.env.records.find((record) => record.key === "VIBE64_PUBLIC_SOURCE_ROOT").value,
+      "/srv/vibe64/sessions/selected/source");
+    assert.deepEqual(await service.projectExecutionEnvironment({ scope: "dev" }), {
+      VIBE64_PUBLIC_SOURCE_ROOT: "/srv/vibe64/sessions/selected/source"
+    });
+
+    fallback = ".vibe64-online/current-public-source";
+    const removed = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        VIBE64_PUBLIC_SOURCE_ROOT: { remove: true }
+      }
+    });
+    const restored = removed.env.records.find((record) => record.key === "VIBE64_PUBLIC_SOURCE_ROOT");
+    assert.equal(restored.source, "genesis-stack:default");
+    assert.equal(removed.ok, true);
+    assert.equal(restored.value, fallback);
+    assert.equal(restored.owner, "user");
+    assert.equal(restored.editable, true);
+    assert.deepEqual(await service.projectExecutionEnvironment({ scope: "dev" }), {
+      VIBE64_PUBLIC_SOURCE_ROOT: fallback
+    });
+  });
+});
+
 test("lazy prompt environment stays with the runtime's project when resolved from another request", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const contexts = ["alpha", "beta"].map((slug) => ({

@@ -224,15 +224,17 @@ function environmentRecord(value = {}) {
     .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)));
 }
 
-function systemEnvironmentRecords(environment = {}, {
+function environmentRecords(environment = {}, {
+  editable = false,
+  owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
   secretKeys = new Set(),
   source = "system",
   sources = {}
 } = {}) {
   return Object.entries(environmentRecord(environment)).map(([key, value]) => ({
-    editable: false,
+    editable,
     key,
-    owner: "system",
+    owner,
     requiredFor: [],
     scope: RUNTIME_CONFIG_SCOPES.DEV,
     secret: secretKeys.has(key) ? true : undefined,
@@ -586,10 +588,12 @@ function createService({
     const resolved = await resolvedProjectEnvironment(input, userRecords);
     return {
       records: [
-        ...systemEnvironmentRecords(resolved.defaultEnvironment, {
+        ...environmentRecords(resolved.defaultEnvironment, {
+          editable: true,
+          owner: RUNTIME_CONFIG_OWNERS.USER,
           source: "genesis-stack:default"
         }),
-        ...systemEnvironmentRecords(resolved.platformEnvironment, {
+        ...environmentRecords(resolved.platformEnvironment, {
           secretKeys: resolved.platformEnvironmentSecrets,
           source: "vibe64-host:managed-resource",
           sources: resolved.platformEnvironmentSources
