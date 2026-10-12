@@ -31,6 +31,9 @@ and undone-turn receipts are retained; the upgrade does not resend messages.
 
 ## Read older messages while replies arrive
 
+Message timestamps show both the calendar date and time in your browser's local
+timezone on desktop and phone. Use them to distinguish replies from different days.
+
 Scroll up and use **Load older messages** when it is shown. Incoming replies
 retain the history you loaded and your place in it, including on phone. Your
 unsent draft and selection remain intact. Updated or removed saved messages

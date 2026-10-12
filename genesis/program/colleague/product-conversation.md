@@ -3,6 +3,9 @@
 Colleague gives the user a continuing conversation for discussing intentions and
 operating Vibe64, independently of any development session.
 
+The same shared assistant transcript displays available message timestamps with
+both calendar date and time in the browser's locale and local timezone.
+
 Colleague can inspect the actor's configured coding destinations and change the
 requested session's chat mode or assistant through the existing selection action.
 Its bounded inspection distinguishes saved `chatMode`, workflow and review

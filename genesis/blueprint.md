@@ -65,6 +65,8 @@ written discussion. Uncertain history or account ownership requires inspection;
 the correction never resends an old request or grants a different account access.
 The current text
 conversation supports an Online host's global voice controls and configured display name.
+Chat message timestamps include the calendar date and local time, so people can
+distinguish messages from different days in Main and Colleague.
 Colleague displays reply text incrementally and a voice host can speak readable
 phrases before completion; only the completed answer enters saved history.
 Before a tool-based answer, Colleague gives one brief, natural progress sentence

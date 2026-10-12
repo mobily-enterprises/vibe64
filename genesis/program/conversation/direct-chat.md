@@ -3,6 +3,9 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+The shared assistant transcript displays each available message timestamp with
+its calendar date and time in the browser's locale and local timezone.
+
 The existing authorized configuration resolver calls the pure
 `packages/vibe64-terminals/src/server/conversationConfiguration.js` mapping after
 its unchanged access check. The offline Colleague upgrade reuses that mapping:

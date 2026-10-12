@@ -10,6 +10,8 @@ Chat/live updates use your Studio login. If it expires, sign in yourself and reo
 check uncertain delivery before retrying. Colleague can explain the steps.
 Replies default to one or two short sentences; ask for detail when needed.
 Greetings get greetings; project/page details appear only when relevant.
+Message timestamps include the calendar date and time in your browser's local
+timezone, on desktop and phone.
 
 The face starts at the message area's top right below the header, with Talk and
 speaker beneath it. The row's round minus, **Minimise avatar**, hides face/controls
