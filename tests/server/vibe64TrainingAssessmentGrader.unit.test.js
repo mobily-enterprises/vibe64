@@ -399,7 +399,7 @@ test("the original admitted assessment accepts a supplied native lifetime withou
   assert.equal(result.attempt.learning.submissions[0].evidence.text, f.input.message.text);
   assert.equal(result.attempt.learning.submissions[0].outcome, "passed");
   assert.equal(f.state.record.summaryHelper, null, "the original retained Helper cleaned its receipt");
-  assert.equal(checks, 4);
+  assert.equal(checks, 5);
   const before = await f.read();
   const runs = f.calls.filter(value => value.run).length;
   controller.abort(new Error("The admitted native tool was stopped before replay"));

@@ -168,7 +168,16 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
       ok: false
     };
   }
-  const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing });
+  let learningRoot;
+  try {
+    learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing });
+  } catch (error) {
+    if (error?.code !== "vibe64_session_source_required" || runtime.learningScope?.noExercise !== false ||
+        !codexSessionWorktreeWasRemoved(session)) throw error;
+    return codexHost.unavailableWorktree(runtime, sessionId, codexSessionWorktreeUnavailableFailure({
+      session, workdir: terminalWorktreePath(session)
+    }));
+  }
   const executionRoot = learningRoot || terminalSessionSourceRoot(session);
   if (!executionRoot) {
     return retryableTerminalFailure({

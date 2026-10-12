@@ -524,7 +524,9 @@ PY` };
   await writeFile(path.join(cwd, "referenced.js"), "export const reference = 'original';\n");
   await mkdir(path.join(cwd, "genesis", "program", "reference"), { recursive: true });
   await writeFile(path.join(cwd, "genesis", "program", "reference", "read-reference.md"),
-    "# Read reference\n\n## Sources\n\n- `referenced.js`\n\n## Public contract\n\nRead the project's current reference.\n");
+    "# Read reference\n\n## Sources\n\n- Main: `referenced.js`\n\n## Public contract\n\nRead the project's current reference.\n");
+  await writeFile(path.join(cwd, "genesis", "subsystems.md"),
+    "# Subsystems\n\n## `reference` Reference\n\nOwns reading the current reference.\n\n### Source\n- Directory `.`\n\n### Program\n- `genesis/program/reference/read-reference.md`\n\n### Data owned\n- Nothing.\n\n### Data used\n- Nothing.\n");
   const promptContext = { scope: "session", conversationKind: "main", session: {
     managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false
   } };

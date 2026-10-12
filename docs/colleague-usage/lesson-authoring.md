@@ -131,7 +131,10 @@ Keep the course file outside the source topics and name it `course.json`, not
 `course.lock.json`; output paths that could change these inputs are refused.
 Success writes `course.lock.json` beside the course file, including exact commits,
 manifest hashes and every lesson in topic order. Dirty or changed inputs require
-the author to commit the intended version and retry. A preview remains a preview;
+the author to commit the intended version and retry. Git inspection uses the
+existing managed execution controls. If it is refused or cannot finish, keep the
+topic source and ask the platform owner to restore Git access before retrying.
+A preview remains a preview;
 required draft lessons prevent a released course. This command does not publish
 a remote release, install a topic or make a learner course available.
 The managed session command rejects `install-topic`, `installed-courses`,

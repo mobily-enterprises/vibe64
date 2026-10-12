@@ -2200,9 +2200,9 @@ test("model routing setup initializes compatible missing roles once and preserve
     assert.equal(first.initialized.length, 5);
     const saved = await f.store.read();
     assert.equal(saved.orchestrators.codex.senior.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.junior.modelId, "deepseek-flash");
-    assert.equal(saved.orchestrators.codex.helper.modelId, "deepseek-flash");
-    assert.equal(saved.orchestrators.codex.router.modelId, "deepseek-flash");
+    assert.equal(saved.orchestrators.codex.junior.modelId, "gpt-6-astra");
+    assert.equal(saved.orchestrators.codex.helper.modelId, "gpt-6-astra");
+    assert.equal(saved.orchestrators.codex.router.modelId, "gpt-6-astra");
     assert.equal(saved.orchestrators.codex.sharedBackup.modelId, "deepseek-flash");
     assert.equal(saved.orchestrators.opencode, undefined, "only the newly usable orchestrator is initialized");
     assert.deepEqual(await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner }), { ok: true, initialized: [] });

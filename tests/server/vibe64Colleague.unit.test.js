@@ -1245,12 +1245,19 @@ test("Main conversation observations keep implementation handoffs working and in
     ? { status: "active", agentSession: { turn: { id: "main-1", active: false, state: "completed" } },
       metadata: { assistant_routing_request: JSON.stringify(route) } }
     : { conversationLog: [{ messages: [{ role: "assistant", text: "Done: first part. Other work remains." }] }] } };
-  for (const status of ["implementation_pending", "implementation_sending", "implementation_uncertain", "done"]) {
-    route = { status, ...(status === "done" ? { outcome: { decision: "wait", reason: "blocked" } } : {}) };
+  for (const [status, delivery, working, attention, needsUser] of [
+    ["working", "pending", true, false, false],
+    ["working", "sending", true, false, false],
+    ["waiting", "uncertain", false, true, true],
+    ["waiting", "accepted", false, true, true],
+    ["complete", "accepted", false, false, false]
+  ]) {
+    route = { schemaVersion: 5, status, delivery, stage: "implementation",
+      ...(status === "waiting" ? { outcome: { decision: "wait", explanation: "blocked" } } : {}) };
     const observed = await readWatchedConversation(actions, { sessionId: "session-1", projectSlug: "alpha" }, {});
-    assert.equal(observed.working, ["implementation_pending", "implementation_sending"].includes(status));
-    assert.equal(observed.attention, ["implementation_uncertain", "done"].includes(status));
-    assert.equal(observed.needsUser, status === "done");
+    assert.equal(observed.working, working);
+    assert.equal(observed.attention, attention);
+    assert.equal(observed.needsUser, needsUser);
   }
 });
 
@@ -5347,13 +5354,16 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
 
 // Frozen first-progress test261 requires the acknowledgement to stay out of
 // canonical history while the actual application effect is still pending.
-// This companion supplies completed native commentary before the unchanged
-// native contract/execute calls; it does not replace the original API case.
+// The completed-envelope owner retains its exact private native carrier, while
+// the product's progress and visible history retain the original separation.
+// This native companion does not replace the unchanged original API case.
 test("native Colleague progress remains transient at the pending application effect", async t => {
   const operation = Promise.withResolvers();
   t.after(() => operation.resolve());
   const progress = "Let me check your projects.";
-  const f = await fixture(t, [{ progress, tool: { actionId: "vibe64.test.operate", input: { value: "native-progress" } }, text: "One project is open." }], { native: true });
+  const envelope = JSON.stringify({ kind: "tool", text: progress, toolName: "vibe64_test_operate",
+    arguments: JSON.stringify({ value: "native-progress" }) });
+  const f = await fixture(t, [{ text: envelope }, { text: reply("One project is open.") }], { native: true });
   f.observations.onOperation = () => operation.promise;
   const initial = await f.service.read({}, f.context);
   const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
@@ -5372,11 +5382,21 @@ test("native Colleague progress remains transient at the pending application eff
     nativeProgress, canonical: saved.conversationLog.map(turn => ({ turnId: turn.turnId,
       nativeTurnId: turn.metadata?.runtime?.nativeTurnId,
       messages: turn.messages.map(message => ({ messageId: message.messageId, outputId: message.outputId, role: message.role })) })) }));
-  assert.equal(JSON.stringify(saved).includes(progress), false,
-    "completed native acknowledgement must remain absent from canonical conversation.json at the real pending-effect barrier");
+  assert.equal(JSON.stringify(saved.conversationLog.filter(turn => !turn.metadata?.runtime?.completedEnvelope)).includes(progress), false,
+    "native acknowledgement must remain absent from saved product history at the real pending-effect barrier");
+  assert.ok(saved.conversationLog.some(turn => turn.metadata?.runtime?.completedEnvelope && turn.assistant?.text === envelope),
+    "the original private completed tool envelope remains exact at the real pending-effect barrier");
   assert.equal(checking.streamingReply.text, progress);
   assert.equal(checking.streamingReply.status, "completed");
-  assert.equal((await browser.read()).interimReply.text, progress);
+  const browserState = await browser.read();
+  assert.equal(browserState.interimReply.text, progress);
+  assert.equal(JSON.stringify(browserState.conversationLog).includes(progress), false,
+    "the common HTTP/browser history projection must exclude private tool intent");
+  for (const event of f.observations.realtime) {
+    const payload = event.realtime?.payload;
+    assert.equal(JSON.stringify([payload?.conversationLog, payload?.messages]).includes(progress), false,
+      "realtime history excludes private carriers while the separate interim reply may display transient intent");
+  }
   assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
   operation.resolve();
   const final = await f.service.wait(f.context);
@@ -5385,9 +5405,16 @@ test("native Colleague progress remains transient at the pending application eff
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
   assert.equal((await browser.read()).interimReply, null);
   const after = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  assert.equal(JSON.stringify(after).includes(progress), false, "only the final answer is saved, not the acknowledgement");
-  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
-    "native progress must not require an extra explicit inference");
+  assert.equal(JSON.stringify(after.conversationLog.filter(turn => !turn.metadata?.runtime?.completedEnvelope)).includes(progress), false,
+    "only the final answer is saved in product history, not the acknowledgement");
+  assert.ok(after.conversationLog.some(turn => turn.metadata?.runtime?.completedEnvelope && turn.assistant?.text === envelope));
+  assert.equal(after.conversationLog.filter(turn => turn.user?.messageId === "user-1").length, 1,
+    "one authored request owns the private tool carrier and its final continuation");
+  const trace = await f.native.trace();
+  assert.equal(trace.filter(row => row.method === "turn/start").length, 2,
+    "one completed tool carrier and its final continuation serve the same authored request");
+  assert.deepEqual(completedColleagueNativeInputs(trace).map(input => input.data.userMessages.map(message => message.messageId)),
+    [["user-1"], []]);
 });
 
 // Storage-only companion of frozen first-progress test261. The separate native

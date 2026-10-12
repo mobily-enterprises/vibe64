@@ -100,6 +100,8 @@ lost receipt stays uncertain until the delivery check confirms it. If Vibe64 sav
 that this exact request failed before sending, or was definitely rejected, **Check
 delivery** confirms it was not sent and restores **Retry**, **Edit** and **Cancel**.
 Checking never sends it; **Retry** is a separate deliberate action.
+After changing the signed-in person or AI connection, resolve that change before
+checking the original request; a different account cannot confirm it was not sent.
 If OpenCode cannot confirm delivery, checking its status does not send the request
 again. An unavailable receipt remains uncertain; inspect the conversation before
 deciding what to send next. This also applies to steering instructions.
@@ -204,6 +206,10 @@ answer is ready. They remain attached to the same conversation after reconnectin
 
 For goal controls and changing models while a goal is paused, read
 [Goals and model changes](coding-agent-goals.md).
+
+If a Learning practice conversation's source clone was removed, Codex shows the
+same clone-recovery notice as a Working conversation. Keep the saved lesson and
+request while resolving the missing clone before retrying.
 
 If Codex cannot load its model catalogue, ask the operator to check its
 installation/connection and restart the assistant service. Colleague can explain

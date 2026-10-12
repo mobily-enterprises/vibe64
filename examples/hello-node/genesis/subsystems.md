@@ -5,6 +5,9 @@
 Owns serving the editable welcome page, its browser-local click counter, and
 the health endpoint. It stores no persistent application data.
 
+### Source
+- Directory `.`
+
 ### Program
 - `genesis/program/welcome.md`
 

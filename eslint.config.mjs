@@ -5,6 +5,7 @@ export default [
     ignores: [
       "dist/**",
       ".vibe64-release/**",
+      ".vibe64-local/**",
       "server.static.mjs",
       "server.bundle.mjs",
       ".jskit/static-server-provider-registry.mjs",

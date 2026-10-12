@@ -22,6 +22,10 @@ results still use the ordinary Preview controls.
 
 Start can replace a running output, even without forcing restart. Colleague must
 inspect current state before starting and must not repeat an uncertain start.
+An unchanged target, parameters and configured environment reuse the original
+running terminal and resource workflow. The web spec supplies an allocation-free
+environment fingerprint: generated loopback ports do not change that identity,
+while runtime invocations retain their actual allocated URL and authentication.
 Running and closing acknowledgements are not readiness or completed cleanup;
 the model inspects the actual preview/terminal state. Stop retains the log;
 Close waits for cleanup and removes the terminal and its log. Coding agents and
@@ -58,6 +62,7 @@ Close, Stop and collapsible task details retain their own existing behavior.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/studio-terminal-core/src/server/launchTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/browserTestCleanup.js`
@@ -85,8 +90,12 @@ be restarted soon** while queued or running. Successful readiness or a new
 editing turn permits another attempt; failure retains ordinary diagnostics and
 manual recovery rather than a retry loop. The mounted surface owns the notice
 and invokes the existing admitted output commands; it adds no technology-specific
-preparation, execution, resource or database owner. Managed browser-test notices
-exclude this automatic recovery so their original lifecycle retains control.
+preparation, execution, resource or database owner. Resource admissions and test
+approvals, as well as managed browser-test notices, exclude automatic recovery so
+their original lifecycle retains control. Before recovery the same output owner
+refreshes status and rechecks the current project/session, health, load errors,
+editing, source operations and admission holds. A preview already started by the
+person's retry is retained rather than force-restarted from stale browser state.
 
 Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
 Outputs grammar. This optional field reaches target views unchanged. Test-data

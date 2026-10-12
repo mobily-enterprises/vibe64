@@ -12,7 +12,7 @@ test("a sole agent invites the user before continuing its own browser checks", (
 
 test("automatic implementation hands browser verification to its separate Senior", () => {
   const prompt = assistantModePrompt("junior", "Implement the feature.", {
-    intent: "explicit_implementation", browserReview: true
+    intent: "implementation", browserReview: true
   });
   assert.match(prompt, /Senior review owns in-depth browser testing and visual inspection/);
   assert.match(prompt, /Do not run those checks in this implementation turn/);
@@ -35,7 +35,7 @@ test("Senior review explicitly owns functional browser and visual verification",
 });
 
 test("discussion, planning and cleanup do not invite use of an unimplemented feature", () => {
-  for (const intent of ["discussion", "planning", "deslop"]) {
+  for (const intent of ["conversation", "planning", "deslop"]) {
     assert.doesNotMatch(assistantModePrompt("junior", "Discuss the feature.", {
       intent, browserReview: true
     }), /Ready to try|You own the remaining verification/);

@@ -166,7 +166,7 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });

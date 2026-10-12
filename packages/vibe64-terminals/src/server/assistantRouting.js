@@ -631,7 +631,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   function inspectDelivery(sessionId, { messageId }, options) {
     return exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
-      if (state?.messageId === messageId && activeMessage(state).messageId === messageId &&
+      if (state?.messageId === messageId && (activeMessage(state).messageId || state.messageId) === messageId &&
           state.delivery === "failed" && !state.followup && !state.stopped && !state.attemptedMessageId && !state.helper &&
           !running.has(keyFor(sessionId, context))) {
         // Failed is the original coordinator's persisted pre-dispatch or

@@ -164,8 +164,8 @@ an unrun check passed or that passing checks prove the whole product.
 Maintain `genesis/subsystems.md` in the same implementation turn when a change
 adds, removes, or changes a subsystem responsibility, Program membership, or
 data ownership/use. Read the map before changing related code. Reuse existing
-subsystems unless a distinct responsibility is evidenced. Declare each Program
-module exactly once; folders do not determine membership. Keep table references
+subsystems unless a distinct responsibility is evidenced. Require one Source Directory per subsystem and declare each Program module
+exactly once; Program folder names do not determine membership. Keep table references
 grounded in schema/migrations; Genesis does not inspect databases. Private
 helper changes need no map edit when these associations remain unchanged.
 

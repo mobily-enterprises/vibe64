@@ -76,6 +76,10 @@ compares every included input against the exact Git commit before atomically
 replacing the sibling `course.lock.json`. Repository metadata comes from the
 pinned commit rather than a later working-tree read. Output cannot replace its
 input descriptor or live inside a pinned source topic, including physical aliases.
+Pinned Git inspection uses the existing Vibe64 execution gateway's daemon source
+command with the exact root, Git runtime and bounded capture. Immutable file reads
+use its binary output encoding before the original byte/hash comparison; execution
+refusals and cleanup failures stop manifest generation without changing source.
 Locks contain repository, immutable commit, manifest hash and ordered lesson
 identities. Released courses require
 released topics without required drafts. This is local authoring, with no Git

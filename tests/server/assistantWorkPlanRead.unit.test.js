@@ -40,11 +40,11 @@ test("plan service reads the actual session without AI and preserves private ren
   const stale = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: "f".repeat(64) });
   assert.equal(stale.code, "vibe64_work_plan_changed");
   assert.equal((await service.readSessionWorkPlan(sessionId)).available, true);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "review_pending" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "working", delivery: "pending", stage: "review", workflow: true }));
   const busy = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: first.revision });
   assert.equal(busy.ok, false);
   assert.match(busy.error, /review to finish/);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "done" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "complete", delivery: "accepted" }));
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: first.revision });
   assert.equal(archived.ok, true);
   assert.equal(archived.available, false);
@@ -53,10 +53,10 @@ test("plan service reads the actual session without AI and preserves private ren
   assert.equal(archived.history[0].status, "active", "archiving is not completion");
   assert.equal((await service.readSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).text,
     "Status: active\nKeep whitespace 🙂\n  ");
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "review_pending" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "working", delivery: "pending", stage: "review", workflow: true }));
   assert.match((await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).error, /review to finish/);
   assert.equal((await service.readSessionWorkPlan(sessionId)).current, null);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "done" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "complete", delivery: "accepted" }));
   const restored = await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id });
   assert.equal(restored.ok, true);
   assert.equal(restored.status, "active");

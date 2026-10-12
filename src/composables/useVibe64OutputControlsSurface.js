@@ -917,19 +917,32 @@ function useVibe64OutputControlsSurface(props) {
     ? "Server will be restarted soon"
     : props.busy || props.sourceOperationsSuspended ? "Work in progress" : "");
   watch([() => props.session?.sessionId, () => props.busy, () => props.sourceOperationsSuspended,
-    previewState, operationBusy, terminalCanRestart, terminalCanRetry, previewCanRestart, previewTestNotice],
+    previewState, operationBusy, terminalCanRestart, terminalCanRetry, previewCanRestart, previewTestNotice,
+    resourceAdmissionId, testApproval],
   async ([sessionId, busy, suspended, state], previous = []) => {
     if (sessionId !== previous[0] || state === "ready") {
       previewRestartAttempted = false;
       previewRestartPending.value = false;
     }
     if (busy && !previous[1]) previewRestartAttempted = false;
-    if (!props.embeddedPreview || previewTestNotice.value || !["stale", "failed"].includes(state) ||
+    if (resourceAdmissionId.value || testApproval.value || previewTestNotice.value) {
+      previewRestartPending.value = false;
+      return;
+    }
+    if (!props.embeddedPreview || !["stale", "failed"].includes(state) ||
         !(terminalCanRestart.value || terminalCanRetry.value || previewCanRestart.value) || previewRestartAttempted) return;
     previewRestartPending.value = true;
     if (busy || suspended || operationBusy.value) return;
     previewRestartAttempted = true;
+    const project = projectSlug.value;
     try {
+      await refreshOutputs();
+      await nextTick();
+      if (project !== projectSlug.value || sessionId !== props.session?.sessionId || loadError.value ||
+          props.busy || props.sourceOperationsSuspended || operationBusy.value ||
+          resourceAdmissionId.value || testApproval.value || previewTestNotice.value ||
+          !["stale", "failed"].includes(previewState.value) ||
+          !(terminalCanRestart.value || terminalCanRetry.value || previewCanRestart.value)) return;
       await recoverEmbeddedPreview();
     } finally {
       if (props.session?.sessionId === sessionId) previewRestartPending.value = false;

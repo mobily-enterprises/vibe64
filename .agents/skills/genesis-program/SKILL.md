@@ -43,12 +43,21 @@ One short explanation of why the boundary exists.
 
 ## Sources
 
-- `exact/authored/source/path`
+- Main: `exact/authored/main/source/path`
+- `exact/authored/supporting/source/path`
 
 ## Public contract
 
 Meaningful inputs, outputs, effects, failures, and guarantees.
 ```
+
+Every module requires exactly one `- Main:` source bullet. Choose the main
+source explicitly as the place to start reading the implementation; it need not
+be an executable entry point. It must belong to the module's owning subsystem,
+respecting more specific nested directory owners. Other Sources may cite shared
+libraries in other subsystems. Never infer the main file from source-list order,
+imports or file naming. When reconciling older modules, inspect the source and
+mark the anchor explicitly; indexing does not assign one for you.
 
 An optional `## Implementation map` may name only private helpers or seams that
 materially help a future agent change, trace, or debug the operation. It is
@@ -82,6 +91,9 @@ Use this exact version-zero grammar:
 
 Owns reusable form rendering, validation, and submission capture.
 
+### Source
+- Directory `packages/forms`
+
 ### Program
 - `genesis/program/forms/render.md`
 
@@ -93,10 +105,35 @@ Owns reusable form rendering, validation, and submission capture.
 ```
 
 Use one stable lowercase hyphenated id and a human title per subsystem. Each
-entry needs responsibility prose and exactly the three sections shown. Empty
+entry needs responsibility prose and the Program, Data owned and Data used sections.
+Responsibility prose is the subsystem's full explanation, not a map caption.
+Explain its purpose, scope, important parts and collaboration with other owners.
+Preserve substantive existing descriptions; do not replace them with one-line
+labels to suit a visualisation. A consumer can shorten the displayed preview.
+Simple support directories may need only a short explanation.
+The required Source section contains exactly one `- Directory` entry with a backticked path: a
+canonical project-relative directory, with `.` allowed for the project root.
+Every subsystem has one directory root; never declare dispersed or multiple
+roots. Stack parent-directory rules discover default subsystem roots but are not
+exhaustive. An agent may recognise and declare another root elsewhere from
+actual responsibility and source evidence. The authored declaration persists
+through ordinary indexing. The authored map is the canonical owner list once ready; Stack roots are adoption
+hints and never create additional owners or split an authored boundary. Cover every
+indexed source, using a project-root owner for remaining support files if needed. UI components and Engine code may
+share one root; UI projection does not change ownership. Empty
 sections say `- Nothing.`; a new empty map contains only `# Subsystems` and
-`- Nothing.`. Every Program module belongs to exactly one subsystem. No folder
-inference, globs, duplicated operations, or duplicated table owners.
+`- Nothing.`. Every Program module belongs to exactly one subsystem. Program directory names do not assign ownership. Sources may cite another
+subsystem’s libraries without giving the operation or implementation two owners.
+Do not use globs, duplicate operations or duplicate table owners.
+
+When regenerating or deliberately splitting the map, reconcile the explanations
+with the new directory owners. Transfer the applicable responsibility prose and
+explicit Program assignments together, preserving stable ids where the boundary
+is unchanged. Recheck every Program's required main source against its current
+owner, including nested owners; library references retain their own ownership.
+Use the current declarations rather than an earlier consumer's hardcoded names,
+directory layout or cached list. Inspect subsystems and Program and resolve
+missing/duplicate membership and invalid main anchors before claiming completion.
 
 A table identity is three separate exact backticked values: the declared Stack
 resource id, schema, and table. `default` means the resource's default schema;

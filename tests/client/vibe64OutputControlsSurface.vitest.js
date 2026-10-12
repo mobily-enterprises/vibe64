@@ -688,6 +688,48 @@ it("does not loop after a failed recovery or interfere with managed browser test
   await nextTick();
   expect(f.outputs.run).toHaveBeenCalledTimes(1);
 });
+
+it.each(["resourceAdmissionId", "testApproval"])("leaves %s recovery to its original controls", async field => {
+  const f = mountOrientationSurface();
+  f.outputs.terminalCanRestart.value = true;
+  f.outputs[field].value = field === "resourceAdmissionId" ? "held-admission" : { state: "waiting" };
+  f.outputs.previewState.value = "failed";
+  await nextTick(); await nextTick();
+  expect(f.outputs.refresh).not.toHaveBeenCalled();
+  expect(f.outputs.run).not.toHaveBeenCalled();
+  expect(f.state.previewWorkNotice.value).toBe("");
+});
+
+it.each(["ready", "starting"])("keeps a %s preview found by the fresh recovery read", async state => {
+  const f = mountOrientationSurface();
+  f.outputs.terminalCanRestart.value = true;
+  f.outputs.refresh.mockImplementation(async () => { f.outputs.previewState.value = state; });
+  f.outputs.previewState.value = "failed";
+  await vi.waitFor(() => expect(f.outputs.refresh).toHaveBeenCalledTimes(1));
+  await nextTick(); await nextTick();
+  expect(f.outputs.run).not.toHaveBeenCalled();
+  expect(f.state.previewWorkNotice.value).toBe("");
+});
+
+it.each(["project", "session"])("does not recover a changed %s after the fresh status read", async scope => {
+  const f = mountOrientationSurface();
+  const read = Promise.withResolvers();
+  const successorRead = Promise.withResolvers();
+  f.outputs.terminalCanRestart.value = true;
+  f.outputs.refresh.mockReturnValueOnce(read.promise).mockReturnValue(successorRead.promise);
+  f.outputs.previewState.value = "failed";
+  await vi.waitFor(() => expect(f.outputs.refresh).toHaveBeenCalledTimes(1));
+  if (scope === "project") surfaceHost.projectSlug.value = "another-project";
+  else f.props.session.sessionId = "session-b";
+  read.resolve();
+  await nextTick(); await nextTick(); await nextTick();
+  expect(f.outputs.run).not.toHaveBeenCalled();
+  // A new session owns a separate refresh; the retired read cannot start it.
+  f.outputs.previewState.value = "ready";
+  successorRead.resolve();
+  await nextTick(); await nextTick();
+  expect(f.outputs.run).not.toHaveBeenCalled();
+});
 afterEach(() => {
   for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
   vi.unstubAllGlobals();
@@ -711,7 +753,7 @@ function mountOrientationSurface({ createOwner = null } = {}) {
   ].map(name => [name, ref(false)]));
   const target = { id: "app", presentation: { kind: "web" } };
   Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
-    previewTestNotice: ref(null), run: vi.fn(async () => ({ ok: true })),
+    previewTestNotice: ref(null), resourceAdmissionId: ref(""), testApproval: ref(null), run: vi.fn(async () => ({ ok: true })),
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
     launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;

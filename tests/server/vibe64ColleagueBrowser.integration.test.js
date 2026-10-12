@@ -169,7 +169,9 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
   assert.deepEqual(await readdir(path.join(systemRoot, "colleague")), [localKey]);
   const saved = JSON.parse(await readFile(path.join(systemRoot, "colleague", localKey, "conversation.json"), "utf8"));
   assert.equal(saved.scopeId, id);
-  assert.equal(saved.schemaVersion, 2);
+  assert.equal(saved.schemaVersion, 3);
+  assert.equal(saved.runtimeId, localKey);
+  assert.deepEqual(saved.previousConversations, []);
   assert.equal(saved.assistantSelection, null);
   assert.equal(saved.conversationMetadata?.runtime, undefined, "Browser opening must not initialize an AI runtime");
   assert.deepEqual(saved.conversationLog, []);

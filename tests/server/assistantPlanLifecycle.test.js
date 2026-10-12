@@ -118,7 +118,7 @@ test("concurrent updates cannot overwrite newer evidence and invalid plan writes
 
 test("the installed plan command uses the admitted role, emits live changes and ignores a forged role", async t => {
   const f = await fixture(t);
-  let request = { status: "sent", resolvedMode: "senior" };
+  let request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const events = [];
   const store = { ...f.context.runtime.store, readMetadataValue: async () => JSON.stringify(request),
     readSessionSourceDescriptor: async () => ({ sessionId: f.context.session.sessionId,
@@ -137,21 +137,21 @@ test("the installed plan command uses the admitted role, emits live changes and 
   });
   const first = await command("new", { text: openText });
   assert.equal(first.status, "active");
-  request = { status: "sent", resolvedMode: "junior" };
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "junior" };
   await assert.rejects(command("complete", { role: "senior", expectedRevision: first.revision }), /Only Senior/);
   const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
-  request = { status: "reviewing", resolvedMode: "junior" };
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, resolvedMode: "junior" };
   assert.equal((await command("complete", { expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision })).status, "completed");
-  request = { status: "sent", resolvedMode: "senior", reason: "discussion" };
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
   await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
   assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 3);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
-  request = { status: "sent", resolvedMode: "senior" };
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const reopened = await command("reopen", { expectedRevision: (await command("read")).revision,
     expectedProgressRevision: (await command("read")).progressRevision });
-  request = { status: "sent", resolvedMode: "junior" };
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "junior" };
   const expectedProgress = "# Progress\n" + "native helper evidence 🙂\n".repeat(1200);
   await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision });
   let page = await command("read"); const readRevision = page.revision; const progressRevision = page.progressRevision;

@@ -7,6 +7,7 @@ import test from "node:test";
 import nativeInstructionsUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-native-instructions.js";
 import { instructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { publishStateUpgradeFiles } from "../../packages/vibe64-core/src/server/stateUpgradeFiles.js";
+import { markCodexAuthReconnecting } from "../../packages/vibe64-core/src/server/codexAuthState.js";
 import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import { openCodeDetachedPrompt } from "@jskit-ai/assistant-core/server/opencode-turn";
 import { createConversationRuntime, createMemoryConversationStorage, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
@@ -674,7 +675,7 @@ test("native continuity verifies original external Claude key pins and translate
 for (const [name, change] of [
   ["missing original external Claude key", f => rm(f.connectionPath)],
   ["replaced original external Claude key", f => writeFile(f.connectionPath, JSON.stringify({ apiKey: "fixture-replacement-key", claudeReady: true }))],
-  ["unverified external Claude connection", f => writeFile(f.connectionPath, JSON.stringify({ apiKey: f.apiKey, claudeReady: false }))]
+  ["unverified external Claude connection", f => markCodexAuthReconnecting(path.dirname(f.connectionPath))]
 ]) test(`native continuity refuses ${name} without touching product or credentials`, async t => {
   const f = await externalClaudeContinuityFixture(t);
   await change(f);

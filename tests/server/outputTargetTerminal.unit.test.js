@@ -1190,6 +1190,10 @@ test("web launch target passes resolved env to the host launch command and redac
     assert.equal(env.AUTH_SUPABASE_PUBLISHABLE_KEY, "pk_test_value");
     assert.equal(env.DB_PASSWORD, "database-password");
     assert.equal(env.VISIBLE_VALUE, "visible");
+    const fingerprintEnv = spec.env({ fingerprint: true });
+    assert.equal(fingerprintEnv.VIBE64_LAUNCH_AGENT_HREF, "http://127.0.0.1:0/");
+    assert.equal(fingerprintEnv.VISIBLE_VALUE, env.VISIBLE_VALUE);
+    assert.equal(fingerprintEnv.DB_PASSWORD, env.DB_PASSWORD);
     const args = spec.args({
       id: "terminal-1"
     });

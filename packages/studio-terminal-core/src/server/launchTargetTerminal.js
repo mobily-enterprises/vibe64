@@ -614,8 +614,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     const projectScope = normalizeText(launch.projectScope) || currentProjectScopeKey();
     const agentTargetHref = targetUrl;
     const launchAgentEnv = {
-      VIBE64_LAUNCH_AGENT_HOST: "127.0.0.1",
-      VIBE64_LAUNCH_AGENT_HREF: agentTargetHref
+      VIBE64_LAUNCH_AGENT_HOST: "127.0.0.1"
     };
     const metadata = {
       ...(launch.metadata || {}),
@@ -668,7 +667,10 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       command: "bash",
       commandPreview: startupCommands.map((entry) => entry.commandPreview || entry.command).join("\n"),
       cwd: workdir,
-      env: ({ id } = {}) => {
+      env: ({ id, fingerprint = false } = {}) => {
+        // Allocation is runtime identity; configured path and environment still
+        // participate in reuse. Port zero keeps the fingerprint allocation-free.
+        const environmentTargetHref = fingerprint ? `http://127.0.0.1:0${urlPath}` : agentTargetHref;
         const previewAuthSecret = previewAuthSecretValue && !id
           ? PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER
           : previewAuthSecretValue;
@@ -687,6 +689,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         return normalizeLaunchEnv({
           ...(launch.env || {}),
           ...launchAgentEnv,
+          VIBE64_LAUNCH_AGENT_HREF: environmentTargetHref,
           ...previewAuthEnvironment({
             kind: previewAuthKind,
             previewIdentity,
@@ -694,7 +697,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
             secret: previewAuthSecret,
             sessionSourceRoot: resolvedWorktreeRoot,
             sessionId: session.sessionId || "",
-            targetHref: targetUrl,
+            targetHref: environmentTargetHref,
             terminalSessionId: id || ""
           }),
           ...(profilePath ? { VIBE64_PREVIEW_AUTH_PROFILE_FILE: profilePath } : {})

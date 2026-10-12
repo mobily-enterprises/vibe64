@@ -83,11 +83,11 @@ test("new assistant turns explicitly replace the session Git actor", async () =>
   // the application still owns Git identity and persistence.
   assert.match(
     createOpenCodeSharedRuntime.toString(),
-    /const currentMonitor = monitors\.get\(key\);[\s\S]*?application\.prepare\(\{\s*overwrite: !currentMonitor,\s*threadId: currentThreadId\s*\}\)/u
+    /let currentMonitor = monitors\.get\(key\);[\s\S]*?application\.prepare\(\{\s*overwrite: !currentMonitor,\s*threadId: currentThreadId\s*\}\)/u
   );
   assert.match(
     openCodeSource,
-    /async prepare\(\{\s*overwrite,\s*threadId\s*\}\)\s*\{\s*const actor = await recordGitActor\(\{\s*env,\s*overwrite,\s*reason: "agent-message"/u
+    /async prepare\(\{\s*overwrite,\s*threadId\s*\}\)\s*\{\s*const learningRoot = await learningSessionExecutionRoot\(context\.runtime, context\.sessionId\);\s*const actor = learningRoot \? null : await recordGitActor\(\{\s*env,\s*overwrite,\s*reason: "agent-message"/u
   );
 });
 

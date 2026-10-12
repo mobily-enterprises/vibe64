@@ -141,7 +141,10 @@ test("project and sessions register routes and captured actions during setup", a
     ...["list", "read", "create", "edit", "comment", "edit-comment", "state", "labels", "create-label", "set-labels", "mentions"].map((operation) => `vibe64.project.issues.${operation}`),
     ...["list", "read", "ready", "update-branch", "merge"].map((operation) => `vibe64.project.pull-requests.${operation}`)
   ].sort());
-  assert.equal(projectRoutes.length, projectActions[0].actions.length);
+  assert.equal(projectRoutes.length, projectActions[0].actions.length + 1);
+  assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")).map(([method, route]) => [method, route]), [
+    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding"]
+  ]);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,
@@ -210,6 +213,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.changes.inspect",
     "vibe64.sessions.conversation-log.read",
     "vibe64.sessions.conversation.context.read",
+    "vibe64.sessions.conversation.teaching-context.read",
     "vibe64.sessions.create",
     "vibe64.sessions.current.update",
     "vibe64.sessions.inspect",
@@ -235,8 +239,11 @@ test("project and sessions register routes and captured actions during setup", a
   const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
   assert.deepEqual(contextRead.channels, ["internal"]);
   assert.equal(contextRead.extensions?.assistant, undefined);
-  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 1,
-    "the internal conversation access query has no HTTP route");
+  const teachingContextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.teaching-context.read");
+  assert.deepEqual(teachingContextRead.channels, ["internal"]);
+  assert.equal(teachingContextRead.extensions?.assistant, undefined);
+  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 2,
+    "the internal conversation and teaching access queries have no HTTP routes");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
   const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
     turnId: "000001", requestId: "a".repeat(64)

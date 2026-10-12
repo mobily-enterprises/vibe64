@@ -11,7 +11,9 @@ to stop; interrupting a turn does not cancel that queued recovery. It makes one
 automatic attempt. If that fails, the existing error and recovery controls remain
 available; use **Restart preview** or ask the coding agent to repair the failure.
 Application page errors that do not change the output's health remain visible in
-the app itself. Managed browser tests retain their own recovery lifecycle.
+the app itself. Resource holds and managed browser tests retain their own recovery
+controls. After a hold is retried, Vibe64 checks current output status before
+automatic recovery; a Preview that has already started stays running.
 Colleague can explain these controls and offer supported recovery assistance.
 
 An amber **Test Preview** bar means the selected app target declares isolated
@@ -59,6 +61,10 @@ retry after you inspect the failure.
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not
 stop the application.
+Retrying the same output reuses its running application when its settings and
+environment still match. It does not start another process merely because a
+new Preview address could be allocated. Use **Restart preview** when you intend
+to replace that run.
 Stopping or restarting a hosted Preview includes processes in its child groups,
 that are owned by that output. Wait for cleanup to finish before starting
 another run. If cleanup fails, open **Resources** for the reported operation

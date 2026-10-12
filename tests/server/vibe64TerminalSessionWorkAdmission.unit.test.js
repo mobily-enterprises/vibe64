@@ -189,7 +189,7 @@ async function terminalServiceFixture(t, lock, {
       return path.join(root, "service-data");
     },
     createSessionStore() {
-      return {};
+      return sessionStore;
     },
     createRuntime() {
       return runtime;
@@ -304,7 +304,7 @@ test("native replacement rejects active work and pending routing before changing
   f.session.agentRuns = [{ id: "run", state: "active" }];
   await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /idle, open session/);
   f.session.agentRuns = [];
-  f.session.metadata.assistant_routing_request = JSON.stringify({ status: "routing" });
+  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, status: "working", delivery: "routing" });
   await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /pending routing/);
   assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
   assert.equal(f.session.metadata.assistant_changeover, undefined);
@@ -589,14 +589,14 @@ test("integration continuation recovers provider acceptance after local write fa
   assert.equal(provider.promptCalls.length, 1);
 });
 
-test("integration continuation uses a member's shared Junior destination without changing Senior preferences or adding review", async (t) => {
+test("integration continuation uses a member's shared Junior destination without changing Senior preferences or adding review", { timeout: 30_000 }, async (t) => {
   const provider = await controllerHarness();
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
   const completed = Promise.withResolvers();
   const { service, runtime, session, root } = await terminalServiceFixture(t, { store: {} }, {
     opencodeTerminalController: provider.controllerOptions,
     publishSessionChanged: { agentTerminal: async (_id, event) => {
-      if (event.payload?.assistantRoutingRequest?.status === "done") completed.resolve();
+      if (event.payload?.assistantRoutingRequest?.status === "complete") completed.resolve();
     } }
   });
   const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
@@ -627,11 +627,16 @@ test("integration continuation uses a member's shared Junior destination without
   });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.integrationSetup.continuation.status, "accepted");
-  await completed.promise;
+  await Promise.race([completed.promise, new Promise((_, reject) => {
+    const timeout = setTimeout(() => reject(new Error("The original member continuation did not complete within 10 seconds.")), 10_000);
+    timeout.unref();
+    completed.promise.finally(() => clearTimeout(timeout));
+  })]);
   assert.equal(provider.promptCalls.length, 1);
   assert.deepEqual(provider.promptCalls[0].input.model, { providerID: "deepseek", id: "deepseek-chat", variant: "high" });
   assert.match(provider.promptCalls[0].input.prompt.text, /Vibe64 role: Junior/);
   const route = JSON.parse(session.metadata.assistant_routing_request);
+  assert.equal(route.status, "complete");
   assert.equal(route.resolvedMode, "junior");
   assert.equal(route.review, false);
   assert.equal(route.decision.backupUsed, true);
@@ -1838,18 +1843,18 @@ test("source read retains original active turn and native goal guards without st
 test("source read preserves pending routing, helper and replacement guards before source acquisition", async t => {
   const f = await exclusiveSourceReadFixture(t);
   const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Unfinished coordination must retain source."));
-  for (const request of [{ status: "routing" }, { status: "review_pending" }, { status: "complete", helper: { conversationId: "helper-cleanup" } }]) {
+  for (const request of [{ schemaVersion: 5, status: "working", delivery: "routing" }, { schemaVersion: 5, status: "working", delivery: "pending", stage: "review" }, { status: "complete", helper: { conversationId: "helper-cleanup" } }]) {
     f.session.metadata.assistant_routing_request = JSON.stringify(request);
     await assert.rejects(read(), { code: "vibe64_assistant_routing_pending", retryable: true });
     assert.deepEqual(JSON.parse(f.session.metadata.assistant_routing_request), request);
   }
   delete f.session.metadata.assistant_routing_request;
   await f.runtime.store.writeSessionConversation(f.session.sessionId, "pending-review", {
-    routingMetadata: { assistant_routing_request: JSON.stringify({ status: "review_pending" }) }
+    routingMetadata: { assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "working", delivery: "pending", stage: "review" }) }
   });
   try {
     await assert.rejects(read(), { code: "vibe64_assistant_routing_pending" });
-    assert.equal(JSON.parse((await f.runtime.store.readSessionConversation(f.session.sessionId, "pending-review")).routingMetadata.assistant_routing_request).status, "review_pending");
+    assert.equal(JSON.parse((await f.runtime.store.readSessionConversation(f.session.sessionId, "pending-review")).routingMetadata.assistant_routing_request).delivery, "pending");
   } finally { await f.runtime.store.deleteSessionConversation(f.session.sessionId, "pending-review"); }
   f.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "preparing" } });
   await assert.rejects(read(), { code: "vibe64_conversation_replacement_pending" });

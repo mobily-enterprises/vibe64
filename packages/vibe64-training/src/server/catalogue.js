@@ -1,33 +1,36 @@
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { realpath } from "node:fs/promises";
-import { promisify } from "node:util";
+import { runVibe64Command } from "@local/vibe64-execution/server";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js";
 
-const runFile = promisify(execFile);
-
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);
-  const git = async (...args) => {
-    const { stdout } = await runFile("git", ["-C", root, ...args], { maxBuffer: 1024 * 1024 });
-    return stdout.trim();
+  const git = async (args, outputEncoding = "utf8") => {
+    const result = await runVibe64Command({
+      actor: "daemon", allowedRoots: [root], args: ["-C", root, ...args],
+      command: "git", cwd: root, envPolicy: "project", gitSafeDirectories: [root],
+      maxBuffer: 1024 * 1024, mode: "capture", outputEncoding,
+      purpose: "source", runtimes: ["git"], timeout: 60_000
+    });
+    if (result.ok !== true) throw Object.assign(new Error(result.error || "Git could not read the pinned topic."), { code: result.code });
+    return outputEncoding === "base64" ? Buffer.from(result.stdout, "base64") : result.stdout.trim();
   };
-  if (await realpath(await git("rev-parse", "--show-toplevel")) !== root) {
+  if (await realpath(await git(["rev-parse", "--show-toplevel"])) !== root) {
     throw new Error("Choose the topic repository root.");
   }
-  const commit = await git("rev-parse", "HEAD");
-  if (await git("status", "--porcelain", "--untracked-files=all")) throw new Error("Commit the topic content before generating a pinned course manifest.");
+  const commit = await git(["rev-parse", "HEAD"]);
+  if (await git(["status", "--porcelain", "--untracked-files=all"])) throw new Error("Commit the topic content before generating a pinned course manifest.");
   const result = await validateTopic(root);
-  const metadata = JSON.parse(await git("show", `${commit}:package.json`));
+  const metadata = JSON.parse(await git(["show", `${commit}:package.json`]));
   const repository = String(metadata.repository?.url || "").match(/^https:\/\/github\.com\/([a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+)\.git$/u)?.[1];
   if (!repository) throw new Error("Topic package needs its canonical https://github.com/<owner>/learn-<topic>.git repository URL.");
   // Prove every hashed input is from the pinned commit, including transient worktree edits.
   for (const file of bundleFiles([result.topicManifest, ...result.bundles.map(bundle => bundle.manifest)])) {
-    const { stdout } = await runFile("git", ["-C", root, "show", `${commit}:${file.path}`], { encoding: null, maxBuffer: 1024 * 1024 });
+    const stdout = await git(["show", `${commit}:${file.path}`], "base64");
     if (createHash("sha256").update(stdout).digest("hex") !== file.sha256 || stdout.length !== file.bytes) throw new Error(`Topic input differs from its pinned commit: ${file.path}.`);
   }
-  if (await git("rev-parse", "HEAD") !== commit || await git("status", "--porcelain", "--untracked-files=all")) throw new Error("Topic changed during manifest generation. Commit and retry.");
+  if (await git(["rev-parse", "HEAD"]) !== commit || await git(["status", "--porcelain", "--untracked-files=all"])) throw new Error("Topic changed during manifest generation. Commit and retry.");
   return {
     topicId: result.topic.topicId, release: result.release, repository, commit,
     topicManifest: result.topicManifest, topicHash: result.topicHash

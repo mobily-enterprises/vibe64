@@ -1454,7 +1454,8 @@ function composeLaunchTerminalEnvironment({
     : terminalEnv;
   const staticSpecEnv = launchSpecEnvironment(specEnv, {
     id: "",
-    namespace: ""
+    namespace: "",
+    fingerprint: true
   });
   const hashEnv = {
     ...resolvedHashBase,

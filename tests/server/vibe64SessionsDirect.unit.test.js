@@ -3742,7 +3742,7 @@ test("named chat modes switch workflow through authorized native handover and pr
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
         assistant_selection: JSON.stringify(current),
         assistant_routing: JSON.stringify({ mode, review: mode === "auto", workflowEngineId: "codex", override: current }),
-        ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ status: "review_pending", messageId: "old-request" }) } : {}),
+        ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "working", delivery: "pending", stage: "review", workflow: true, messageId: "old-request" }) } : {}),
         ...(failure === "goal" ? { assistant_routing_goal: JSON.stringify({ status: "active" }) } : {})
       } };
       const original = { ...session.metadata };
@@ -3773,7 +3773,7 @@ test("named chat modes switch workflow through authorized native handover and pr
           assert.equal(options.vibe64User, actor);
           const cancelled = await runtime.store.runSessionExclusive(id, "cancel-routing", async () => {
             operations.push("cancel");
-            session.metadata.assistant_routing_request = JSON.stringify({ status: "done", messageId, stopped: true, review: false });
+            session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "pending", messageId, stopped: true, review: false });
           });
           assert.equal(cancelled.acquired, true, "cancel must run after the selection lock is released");
         },
@@ -3814,7 +3814,10 @@ test("credit exhaustion permits an authorized assistant change without replaying
       const current = { schema: "vibe64.assistant-selection.v1", engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
         modelId: "opus", variantId: "medium", catalogRevision: `sha256:${"a".repeat(64)}` };
       const next = { ...current, engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra" };
-      const original = { status, messageId: "original-request", attemptedMessageId: "original-continuation", threadId: "original-thread",
+      const delivery = status === "sent" ? "accepted" : status.split("_").at(-1);
+      const original = { schemaVersion: 5, status: "working", delivery, workflow: true,
+        stage: status.startsWith("review") ? "review" : status.startsWith("planning") ? "planning" : "implementation",
+        messageId: "original-request", attemptedMessageId: "original-continuation", threadId: "original-thread",
         workflowEngineId: "claude", deliverySelection: current, review: true, resolvedMode: "junior", error: "Claude has no active turn for this message.",
         ...(failure === "helper-cleanup" ? { helper: { conversationId: "retained-helper", scope: {} } } : {}) };
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
@@ -3858,10 +3861,11 @@ test("credit exhaustion permits an authorized assistant change without replaying
         assert.notEqual(result.ok, false, `${status}: ${JSON.stringify(result)}`);
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
         assert.equal(retained.stopped, true);
-        assert.equal(retained.review, false);
+        assert.equal(retained.review, original.review, "Stopping preserves the saved preference; stopped custody forbids automatic follow-up.");
+        assert.equal(retained.delivery, original.delivery, "Selection never invents a new delivery result.");
         assert.equal(prepared, true);
         assert.equal(accesses, 2);
-        if (status.endsWith("uncertain")) assert.equal(retained.status, status);
+        if (status.endsWith("uncertain")) assert.equal(retained.delivery, "uncertain");
       }
     }
   }

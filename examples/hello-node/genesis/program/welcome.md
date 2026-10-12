@@ -5,7 +5,7 @@ People open the app to see a welcome message and click a counter. Editing
 The counter belongs to the current browser document and resets on reload.
 
 ## Sources
-- `server.js`
+- Main: `server.js`
 - `index.html`
 - `test/server.test.js`
 

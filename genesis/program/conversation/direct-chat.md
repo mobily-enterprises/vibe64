@@ -1162,7 +1162,10 @@ An idle attempted changeover still recovers through its original owner, which
 writes the authored receipt before clearing the existing pending journal.
 Inspection rechecks authorization after native I/O and never resubmits a prompt.
 Main also consults the original routing inspector after an unknown native
-receipt. Its persisted failed delivery conclusion can report not-sent only for
+receipt. Failed-request inspection uses the same effective message ID as delivery:
+the active input ID when present, otherwise the original saved request ID. The
+coordinator does not duplicate that ID into its saved input. Its persisted failed
+delivery conclusion can report not-sent only for
 the exact original active UUID, without an attempted prompt, helper or running
 owner, and with the same submitter, selected destination and fresh account
 admission. Canonical acceptance wins first. Missing routing or continuity fields
@@ -3224,6 +3227,12 @@ Application startup status is projected by `codexStartupHealth`: the original
 background-task ID, health-attempt matching, ready-state deduplication and
 publication/error order stay in Vibe64. The shared native readiness owner calls
 these same application effects; the projection owns no process or lifecycle map.
+Source-bearing Learning keeps the same removed-clone projection after its one
+fresh trusted execution-root read. Only the original source-required error with
+explicit source-bearing scope and the saved removed marker reaches that existing
+Codex handler. Inactive, mismatched and native-directory failures still propagate;
+no source reader is skipped or retried.
+
 Its separate unavailable-worktree handler re-reads the session, resolves the current
 authorized runtime options and awaits the existing native retirement API before
 publishing blocked health. A failed retirement still prevents that publication;
