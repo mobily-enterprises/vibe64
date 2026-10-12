@@ -1077,3 +1077,16 @@ separate backup root and is a no-op for the already verified common binding.
 Bootstrap retries re-inspect the original native evidence and exact prepared
 replacement; changed native or product bytes refuse retry. Physical old native
 history and the full written chat remain intact.
+
+
+## Historical continuity applicability
+
+`20261012-colleague-continuity-scope` records the correction to the shared
+historical inspector's applicability. Explicit boolean autonomous inputs belong
+to the original strict operation and are left byte-for-byte unchanged by the
+historical correction. Their original strict completion and identity validation
+still runs; an explicit mode never proves continuity by itself. Missing-mode
+inputs still require the exact qualified historical producer and every native
+proof. The original numbered script files are immutable and unchanged; this
+separate appended entry records the shared-owner correction. No current binding,
+message, account or native file is changed by the applicability no-op.

@@ -255,6 +255,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
         if (error instanceof SyntaxError) refuse("The original Codex rollout contains an unreadable native record. Inspect it privately before retrying.");
         throw error;
       } finally { await file.close(); }
+      // Current explicit-mode inputs belong to the original strict upgrade.
+      // This historical correction must not claim or reject their binding.
+      if (historicalInteractive && typeof lastInput?.autonomous === "boolean") return null;
       if (historicalInteractive && (autonomous || !originalInteractiveInputs)) {
         refuse("The original Codex input is not the known pre-autonomous interactive protocol.");
       }

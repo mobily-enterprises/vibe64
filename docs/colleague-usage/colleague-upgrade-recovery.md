@@ -31,3 +31,7 @@ qualified historical correction after checking the exact original native input,
 completed answer and account/scope custody. It preserves the chat and its native
 identity. A missing flag by itself is not permission to resume or resend anything;
 unsupported or uncertain native evidence still prevents activation.
+
+Current chat formats continue through their original migration; the historical
+correction leaves them unchanged. A continuity error still requires the operator
+to inspect its exact evidence before activation.

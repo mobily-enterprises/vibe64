@@ -1133,3 +1133,11 @@ goal, final-answer, authored-input and custody fence. This correction sends no
 request and changes no native file; it retains canonical history and the completed
 receipt. Its explicit operator bootstrap and later numbered ledger entry have
 separate backup namespaces and reuse the original publisher and apply exclusion.
+
+
+The appended `20261012-colleague-continuity-scope` correction records explicit-mode
+inputs as outside the historical inspector's scope. They remain with the original
+strict owner and do not produce a historical replacement or backup. Missing-mode
+inputs retain all qualified protocol and native proofs. Both old numbered script
+files remain unchanged; the shared owner fixes applicability without weakening
+continuity eligibility or modifying current chat/native state.

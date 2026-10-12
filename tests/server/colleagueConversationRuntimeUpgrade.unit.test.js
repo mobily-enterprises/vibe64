@@ -1205,8 +1205,6 @@ test("separate original interactive correction preserves native identity and his
 });
 
 for (const [name, alter] of [
-  ["autonomous input", f => { f.input.autonomous = true; }],
-  ["modern input", f => { f.input.autonomous = false; }],
   ["observed update", f => { f.input.observations.push({ id: "watched" }); }],
   ["read-only update", f => { f.input.readOnly = true; }],
   ["unknown protocol field", f => { f.input.foreign = true; }],
@@ -1220,4 +1218,17 @@ for (const [name, alter] of [
   await assert.rejects(f.runHistorical(false)); await assert.rejects(f.runHistorical(true));
   assert.deepEqual(await readFile(f.filePath), before); assert.deepEqual(await readFile(f.nativePath), native);
   await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+});
+
+
+test("historical continuity leaves current interactive/autonomous protocol untouched and with its strict original owner", async t => {
+  for (const autonomous of [false, true]) {
+    const f = await historicalInteractiveFixture(t); f.input.autonomous = autonomous; await f.writeInput();
+    const before = await readFile(f.filePath), native = await readFile(f.nativePath);
+    await f.runHistorical(false); await f.runHistorical(true);
+    assert.deepEqual(await readFile(f.filePath), before); assert.deepEqual(await readFile(f.nativePath), native);
+    await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+    if (!autonomous) { await f.run(false); await f.run(true); assert.equal(JSON.parse(await readFile(f.filePath)).conversationMetadata.runtime.binding.threadId, f.product.conversationId); }
+    else { await assert.rejects(f.run(false), /exact final admitted product request/); }
+  }
 });
