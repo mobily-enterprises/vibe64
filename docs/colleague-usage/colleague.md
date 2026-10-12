@@ -199,16 +199,9 @@ Review and recording controls live beside the same typed composer. Microphone pe
 and recording require your interaction; Colleague can explain the steps but cannot
 grant permission or press them for you.
 
-After an application upgrade, an older Colleague history may require the
-installation's state upgrade before it can open. The workspace operator runs the
-candidate release's upgrade command with services stopped; Colleague cannot do
-this through chat. Written history is preserved, and interrupted operations are
-not repeated. A stale completed operation marker may require the operator’s
-explicit receipt repair before the ordinary upgrade can finish. That repair keeps
-the complete operation receipt and conversation history; the native continuity
-checks still run afterward. Do not delete the conversation, start fresh, or resend
-the old request to bypass an upgrade error. This maintenance is human-only and
-cannot be performed by Colleague.
+After an application upgrade, an older Colleague history may require an operator
+state upgrade before it can open. Written history is preserved; interrupted work
+is not repeated. See [Colleague upgrade recovery](colleague-upgrade-recovery.md).
 
 ## Ask Colleague to coordinate
 
