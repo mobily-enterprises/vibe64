@@ -11,7 +11,7 @@ import { markCodexAuthReconnecting } from "../../packages/vibe64-core/src/server
 import codexCompletedPolicyUpgrade from "../../packages/vibe64-core/src/server/stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import { openCodeDetachedPrompt } from "@jskit-ai/assistant-core/server/opencode-turn";
 import { createConversationRuntime, createMemoryConversationStorage, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-runtime-upgrade-"));
@@ -1168,4 +1168,56 @@ test("completed marker repair leaves the unchanged native continuity proof manda
   // The toy fixture has no real native UUID/history: removing the completed
   // application marker must not turn it into a qualified native binding.
   await assert.rejects(runContinuity(), /unfinished\/unsupported state/);
+});
+
+
+async function historicalInteractiveFixture(t) {
+  const f = await codexContinuityFixture(t);
+  const inputRow = f.rows.find(row => row.type === "response_item" && row.payload.role === "user");
+  const original = JSON.parse(inputRow.payload.content[0].text);
+  const input = { focus: { projectSlug: "original" }, userMessages: original.userMessages,
+    observations: [], readOnly: false, recentConversation: [], previousOperation: null, feedback: "", tools: [] };
+  inputRow.payload.content[0].text = JSON.stringify(input);
+  await f.writeNative();
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/historical-interactive/before-continuity-bootstrap");
+  return { ...f, input, inputRow, backupRoot, writeInput: async () => { inputRow.payload.content[0].text = JSON.stringify(input); await f.writeNative(); },
+    runHistorical: apply => upgradeColleagueHistoricalInteractiveContinuity({ systemRoot: f.systemRoot, backupRoot, apply, env: f.env, report() {} }) };
+}
+
+test("separate original interactive correction preserves native identity and history while strict published owner still refuses missing autonomous", async t => {
+  const f = await historicalInteractiveFixture(t);
+  const before = await readFile(f.filePath, "utf8"), native = await readFile(f.nativePath), goals = await readFile(f.goalPath);
+  await assert.rejects(f.run(false), /exact final admitted product request/);
+  await f.runHistorical(false);
+  assert.equal(await readFile(f.filePath, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await f.runHistorical(true);
+  const after = await readFile(f.filePath, "utf8"), next = JSON.parse(after);
+  const { conversationMetadata, ...retained } = next;
+  assert.deepEqual(retained, JSON.parse(before));
+  assert.equal(conversationMetadata.runtime.binding.threadId, f.product.conversationId);
+  assert.equal(conversationMetadata.runtime.binding.executionId, "");
+  assert.deepEqual(await readFile(f.nativePath), native);
+  assert.deepEqual(await readFile(f.goalPath), goals);
+  await f.runHistorical(false); await f.runHistorical(true);
+  assert.equal(await readFile(f.filePath, "utf8"), after);
+  await f.run(false); // Current common owner is never reimported by the old script.
+});
+
+for (const [name, alter] of [
+  ["autonomous input", f => { f.input.autonomous = true; }],
+  ["modern input", f => { f.input.autonomous = false; }],
+  ["observed update", f => { f.input.observations.push({ id: "watched" }); }],
+  ["read-only update", f => { f.input.readOnly = true; }],
+  ["unknown protocol field", f => { f.input.foreign = true; }],
+  ["different authored words", f => { f.input.userMessages[0].text = "foreign"; }],
+  ["missing tools", f => { delete f.input.tools; }],
+  ["unfinished native turn", f => { f.rows.pop(); }],
+  ["different native final", f => { f.rows.at(-1).payload.last_agent_message = JSON.stringify({ kind: "reply", text: "foreign", toolName: "", arguments: "" }); }]
+]) test(`original interactive correction refuses ${name} and leaves native/product bytes intact`, async t => {
+  const f = await historicalInteractiveFixture(t); alter(f); await f.writeInput();
+  const before = await readFile(f.filePath), native = await readFile(f.nativePath);
+  await assert.rejects(f.runHistorical(false)); await assert.rejects(f.runHistorical(true));
+  assert.deepEqual(await readFile(f.filePath), before); assert.deepEqual(await readFile(f.nativePath), native);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
 });

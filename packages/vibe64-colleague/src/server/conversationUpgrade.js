@@ -4,7 +4,7 @@ import path from "node:path";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 
-export { upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "./nativeConversationUpgrade.js";
+export { upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeColleagueHistoricalInteractiveContinuity } from "./nativeConversationUpgrade.js";
 export { repairColleagueRetiredOperation } from "./retiredOperationUpgrade.js";
 
 /** Offline conversion only. Native histories remain untouched and no work resumes. */

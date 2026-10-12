@@ -55,7 +55,16 @@ function parse(source, label) {
 }
 
 /** Stopped-service conversion of confirmed original native bindings, never requests. */
-export async function upgradeColleagueNativeContinuity({ systemRoot, apply, backupRoot, report, env = process.env }) {
+export async function upgradeColleagueNativeContinuity(context) {
+  return restoreColleagueNativeContinuity(context);
+}
+
+/** Separate correction for the byte-qualified pre-autonomous interactive producer. */
+export async function upgradeColleagueHistoricalInteractiveContinuity(context) {
+  return restoreColleagueNativeContinuity(context, true);
+}
+
+async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot, report, env = process.env }, historicalInteractive = false) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   const entries = await readdir(root, { withFileTypes: true }).catch(error => {
@@ -104,6 +113,7 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
     const retired = saved.schemaVersion === 1 ? saved : saved.retiredConversation;
     if (!retired || !restoredNative(retired.assistantSelection)) return null;
     const engine = retired.assistantSelection.engineId;
+    if (historicalInteractive && (engine !== "codex" || saved.schemaVersion !== 3)) return null;
     const label = engine === "claude" ? "Claude" : engine === "codex" ? "Codex" : "OpenCode";
     // Current common owners and explicit fresh-chat transitions are not legacy imports.
     if (saved.conversationMetadata?.runtime || saved.previousConversations?.length || saved.freshOperation) return null;
@@ -173,7 +183,7 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
       if (!before.isFile() || before.isSymbolicLink() || await realpath(nativePath) !== nativePath) refuse("The original Codex rollout is not a canonical regular file.");
       const file = await open(nativePath, "r");
       let metadataCount = 0, activeRun = "", lastRun = "", lastInput = null, lastAuthoredInput = null,
-        finalText = "", lastCompletedRun = "", completionError = null, contextCount = 0;
+        finalText = "", lastCompletedRun = "", completionError = null, contextCount = 0, originalInteractiveInputs = true;
       try {
         for await (const { row } of readCodexHistoryRows(file, 0, before.size, new AbortController().signal, { strictComplete: true })) {
           const value = row.payload;
@@ -204,6 +214,19 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
             if (!activeRun) refuse("The original Codex rollout has a newer or unattributed native input.");
             const text = (value.content || []).filter(part => ["input_text", "text"].includes(part.type)).map(part => part.text).join("\n");
             try { lastInput = JSON.parse(text); } catch { lastInput = null; }
+            // Original31d4c318^ service prompt: every interactive exchange has
+            // this exact shape, no autonomous field, no observed watch update.
+            if (historicalInteractive) {
+              const originalKeys = ["focus", "userMessages", "observations", "readOnly", "recentConversation", "previousOperation", "feedback", "tools"];
+              originalInteractiveInputs &&= Boolean(lastInput && Object.keys(lastInput).every(key => originalKeys.includes(key)) &&
+                lastInput.focus && typeof lastInput.focus === "object" && !Array.isArray(lastInput.focus) &&
+                lastInput.readOnly === false && Array.isArray(lastInput.userMessages) &&
+                Array.isArray(lastInput.observations) && lastInput.observations.length === 0 &&
+                typeof lastInput.feedback === "string" && Array.isArray(lastInput.tools) &&
+                Object.hasOwn(lastInput, "previousOperation") &&
+                (lastInput.previousOperation === null || typeof lastInput.previousOperation === "object" && !Array.isArray(lastInput.previousOperation)) &&
+                (!Object.hasOwn(lastInput, "recentConversation") || Array.isArray(lastInput.recentConversation)));
+            }
             if (lastInput?.userMessages?.length) lastAuthoredInput = lastInput;
           }
           if (row.type === "response_item" && value?.type === "message" && value.role === "assistant" &&
@@ -232,11 +255,14 @@ export async function upgradeColleagueNativeContinuity({ systemRoot, apply, back
         if (error instanceof SyntaxError) refuse("The original Codex rollout contains an unreadable native record. Inspect it privately before retrying.");
         throw error;
       } finally { await file.close(); }
+      if (historicalInteractive && (autonomous || !originalInteractiveInputs)) {
+        refuse("The original Codex input is not the known pre-autonomous interactive protocol.");
+      }
       if (metadataCount !== 1 || activeRun || lastRun !== retired.runId || lastCompletedRun !== retired.runId || completionError || contextCount < 1 ||
           (autonomous ? lastInput?.autonomous !== true || typeof lastInput.readOnly !== "boolean" ||
             !Array.isArray(lastInput.userMessages) || lastInput.userMessages.length ||
             !Array.isArray(lastInput.observations) || !lastInput.observations.length :
-            lastInput?.autonomous !== false || typeof lastInput.readOnly !== "boolean" || !Array.isArray(lastInput.userMessages) ||
+            (lastInput?.autonomous !== false && !(historicalInteractive && originalInteractiveInputs && lastAuthoredInput)) || typeof lastInput.readOnly !== "boolean" || !Array.isArray(lastInput.userMessages) ||
             lastAuthoredInput?.userMessages?.at(-1)?.messageId !== authored.messageId ||
             lastAuthoredInput?.userMessages?.at(-1)?.text !== authored.text)) {
         refuse("The original Codex history does not prove the exact final admitted product request with no newer native work.");

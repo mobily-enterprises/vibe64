@@ -1051,3 +1051,29 @@ numbered entry. Keep the same bootstrap backup for retries and do not edit the
 upgrade ledger or the published continuity script. Failed continuity still blocks
 activation; complete the candidate workflow or restore compatible state before
 starting a service.
+
+
+## Original interactive Codex input protocol
+
+`20261012-colleague-interactive-continuity` qualifies the original Colleague
+interactive prompt from service source `31d4c318^`, which predates `autonomous`,
+assignments and the configured assistant name. It reuses the same native inspector
+and publication owner; the published earlier upgrade's default strict behavior
+and numbered script are unchanged. Every admitted native input must match that
+original field set and types, have `readOnly:false` and no watched observations.
+The exact last authored ID/words, final product reply, saved/native run, original
+private scope/provider/model, stopped native goal and unchanged rollout custody
+remain mandatory. Modern, autonomous, uncertain or foreign formats are refused.
+No native file, credentials, authored message or previous operation receipt is
+rewritten, and no old request is sent.
+
+If the earlier strict entry blocks this confirmed original format, use the same
+stopped-writer procedure with the existing candidate CLI option
+`--repair-colleague-interactive-continuity`, one explicit correction at a time.
+Its bootstrap takes the ordinary apply lock without changing the ledger and owns
+verified copies under the new ID's `before-continuity-bootstrap` directory.
+Then run ordinary full candidate check/apply. The later numbered entry uses a
+separate backup root and is a no-op for the already verified common binding.
+Bootstrap retries re-inspect the original native evidence and exact prepared
+replacement; changed native or product bytes refuse retry. Physical old native
+history and the full written chat remain intact.

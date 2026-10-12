@@ -24,3 +24,10 @@ old action to manufacture a completion receipt.
 The same recovery applies on desktop and mobile. Colleague can explain the error
 and guide you to the available application controls, but this maintenance requires
 the operator's interaction and cannot be executed through Colleague actions.
+
+An older interactive chat may also use a native input format from before the
+application recorded its autonomous flag. The operator can apply the separate
+qualified historical correction after checking the exact original native input,
+completed answer and account/scope custody. It preserves the chat and its native
+identity. A missing flag by itself is not permission to resume or resend anything;
+unsupported or uncertain native evidence still prevents activation.

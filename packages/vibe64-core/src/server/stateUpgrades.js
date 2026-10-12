@@ -36,10 +36,11 @@ import colleagueNativeInstructions from "./stateUpgrades/20261010-colleague-nati
 
 import assistantWorkflow from "./stateUpgrades/20261010-assistant-workflow.js";
 import colleagueRetiredOperation from "./stateUpgrades/20261012-colleague-retired-operation-receipt.js";
+import colleagueInteractiveContinuity from "./stateUpgrades/20261012-colleague-interactive-continuity.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -61,7 +62,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, repairColleagueRetiredOperation, repairRetiredOperation = false,
+async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, repairRetiredOperation = false, repairInteractiveContinuity = false,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -106,14 +107,16 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
       upgradeColleagueNativeInstructions,
       upgradeAssistantWorkflow,
       repairColleagueRetiredOperation,
+      upgradeColleagueHistoricalInteractiveContinuity,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
       throw new Error(`${upgrade.id}: ${error.message}`, { cause: error });
     });
-    if (repairRetiredOperation) {
-      report("warning", "Explicit retired-operation repair only; the ordered upgrade ledger is unchanged. Stop all writers before apply, then run ordinary candidate check/apply.");
-      await run(colleagueRetiredOperation, apply, "before-continuity-bootstrap");
+    if (repairRetiredOperation || repairInteractiveContinuity) {
+      if (repairRetiredOperation && repairInteractiveContinuity) throw new Error("Choose one explicit Colleague repair at a time.");
+      report("warning", "Explicit Colleague repair only; the ordered upgrade ledger is unchanged. Stop all writers before apply, then run ordinary candidate check/apply.");
+      await run(repairInteractiveContinuity ? colleagueInteractiveContinuity : colleagueRetiredOperation, apply, "before-continuity-bootstrap");
       return { pending: pending.map(upgrade => upgrade.id), applied: [] };
     }
     // Check all pending work before the first mutation. Apply re-reads each input.
