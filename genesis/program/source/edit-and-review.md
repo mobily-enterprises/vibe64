@@ -16,7 +16,7 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/docs/application-google-ads.md`
 - `src/composables/useVibe64Integrations.js`
 - `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
-- `packages/vibe64-source-editor/src/server/service.js`
+- Main: `packages/vibe64-source-editor/src/server/service.js`
 - `packages/vibe64-source-editor/src/server/fileIndex.js`
 - `packages/vibe64-source-editor/src/server/searchIndex.js`
 - `packages/vibe64-source-editor/src/server/searchIndexWorker.js`

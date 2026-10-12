@@ -127,7 +127,7 @@ replayed; an unreadable or absent receipt remains uncertain.
 - `packages/vibe64-terminals/src/server/codexHelperThreadLedger.js`
 - `packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js`
 - `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
-- `packages/vibe64-terminals/src/server/sessionConversations.js`
+- Main: `packages/vibe64-terminals/src/server/sessionConversations.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-sessions/src/server/sessionPresence.js`

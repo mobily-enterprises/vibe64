@@ -47,7 +47,7 @@ Close, Stop and collapsible task details retain their own existing behavior.
 - `packages/current-app/src/server/actions.js`
 - `packages/current-app/src/server/inputSchemas.js`
 - `packages/current-app/src/server/registerRoutes.js`
-- `packages/current-app/src/server/service.js`
+- Main: `packages/current-app/src/server/service.js`
 - `packages/vibe64-terminals/src/server/actions.js`
 - `packages/vibe64-terminals/src/server/outputAssistantContracts.js`
 - `packages/vibe64-terminals/src/server/inputSchemas.js`

@@ -24,7 +24,7 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
-- `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
+- Main: `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
 - `packages/vibe64-training/src/client/useTrainingLearnerGestures.js`
 - `packages/vibe64-training/src/client/useTrainingWorkspaceObservation.js`
 - `src/components/Vibe64AssistantShellContext.vue`

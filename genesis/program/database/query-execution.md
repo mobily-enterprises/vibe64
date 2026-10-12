@@ -17,7 +17,7 @@ connection and share one query-ownership boundary.
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
-- `packages/vibe64-database-tools/src/server/queryExecutor.js`
+- Main: `packages/vibe64-database-tools/src/server/queryExecutor.js`
 - `packages/vibe64-database-tools/src/server/sqlPolicy.js`
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`
 - `packages/vibe64-database-tools/src/server/sqliteClient.js`

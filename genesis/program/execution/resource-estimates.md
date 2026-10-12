@@ -6,7 +6,7 @@ turning those hints into required capacity or host settings.
 ## Sources
 
 - `packages/vibe64-genesis/src/server/index.js`
-- `packages/vibe64-genesis/src/server/resourceEstimates.js`
+- Main: `packages/vibe64-genesis/src/server/resourceEstimates.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-genesis/src/server/workspaceSetup.js`
 - `packages/vibe64-genesis/src/server/stackOperation.js`

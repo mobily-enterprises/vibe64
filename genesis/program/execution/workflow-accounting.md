@@ -6,7 +6,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 ## Sources
 
 - `packages/vibe64-execution/src/server/index.js`
-- `packages/vibe64-execution/src/server/managedExecution.js`
+- Main: `packages/vibe64-execution/src/server/managedExecution.js`
 - `packages/vibe64-execution/src/server/conversationExecution.js`
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 - `packages/vibe64-execution/src/server/request.js`

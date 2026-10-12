@@ -5,7 +5,7 @@ requiring every table and field to be read at once.
 
 ## Sources
 
-- `packages/vibe64-database-tools/src/client/components/DatabaseErd.vue`
+- Main: `packages/vibe64-database-tools/src/client/components/DatabaseErd.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdNode.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseTableList.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdEdge.vue`

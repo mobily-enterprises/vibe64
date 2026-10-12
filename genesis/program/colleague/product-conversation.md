@@ -28,7 +28,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
 - `packages/vibe64-colleague/src/server/actions.js`
-- `packages/vibe64-colleague/src/server/service.js`
+- Main: `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/attention.js`
 - `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`

@@ -6,7 +6,7 @@ Dashboard without opening a session.
 ## Sources
 
 - `packages/vibe64-project/src/server/githubApi.js`
-- `packages/vibe64-project/src/server/githubIssues.js`
+- Main: `packages/vibe64-project/src/server/githubIssues.js`
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/actions.js`

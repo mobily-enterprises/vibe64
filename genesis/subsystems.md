@@ -120,6 +120,10 @@ and same-session review to requested native Save/PR publication, while retaining
 the coding/CLI and operator boundaries. Teaching usage is split into bounded
 authoring, learner and pinned-recovery topics through the original usage reader.
 
+### Source
+
+- Directory `packages/vibe64-training`
+
 ### Program
 
 - `genesis/program/training/content.md`
@@ -134,6 +138,7 @@ authoring, learner and pinned-recovery topics through the original usage reader.
 
 - Nothing.
 
+
 ## `projects` Project definition
 
 Owns project discovery, the portable collaboration, engineering and deployment
@@ -146,14 +151,26 @@ Colleague shares these actions for collaboration preferences, engineering
 profiles, prompt suggestions, pull-request policy and development database scope
 through bounded settings results.
 
+Owns project values supplied to managed application work.
+Colleague uses the canonical Project Env read/save actions through a bounded
+metadata presentation and explicit user-value patches. Shared service guards
+protect host-owned values; stored-value inspection and secret reveal stay in Env.
+
+### Source
+
+- Directory `packages/vibe64-project`
+
 ### Program
 
-- `genesis/program/projects/application-deployment.md`
 - `genesis/program/projects/catalog.md`
 - `genesis/program/projects/collaboration-approach.md`
 - `genesis/program/projects/engineering-approach.md`
 - `genesis/program/projects/github-issues.md`
 - `genesis/program/projects/github-pull-requests.md`
+
+- `genesis/program/environment/project-values.md`
+
+- `genesis/program/preview/application-identities.md`
 
 ### Data owned
 
@@ -162,6 +179,7 @@ through bounded settings results.
 ### Data used
 
 - Nothing.
+
 
 ## `sessions` Session workspaces
 
@@ -178,6 +196,10 @@ Its open/archive list actions also own bounded Colleague discovery pages and
 archival timestamps; native lists and unavailable-record diagnosis retain their
 existing owner and format.
 
+### Source
+
+- Directory `packages/vibe64-sessions`
+
 ### Program
 
 - `genesis/program/sessions/workspaces.md`
@@ -189,6 +211,7 @@ existing owner and format.
 ### Data used
 
 - Nothing.
+
 
 ## `conversation` Agent conversation
 
@@ -549,11 +572,18 @@ OpenCode native-target attach/reuse and terminal-ID detach use its same shared
 owner; the existing application terminal read/close/namespace facility remains
 the sole PTY host. Terminal transport stays distinct from conversation send/open.
 
+### Source
+
+- Directory `packages/vibe64-terminals`
+
 ### Program
 
 - `genesis/program/conversation/direct-chat.md`
-- `genesis/program/conversation/voice-chat.md`
 - `genesis/program/conversation/temporary-assistance.md`
+
+- `genesis/program/execution/workspace-setup.md`
+
+- `genesis/program/source/save-work.md`
 
 ### Data owned
 
@@ -562,6 +592,7 @@ the sole PTY host. Terminal transport stays distinct from conversation send/open
 ### Data used
 
 - Nothing.
+
 
 ## `accounts` Agent connections
 
@@ -581,6 +612,10 @@ and paged role choices; there is no second routing store or permission policy.
 The existing connection list supplies an owner-only, bounded Colleague projection
 of regular Z.AI saved setup facts. Account writes and paid consent remain excluded.
 
+### Source
+
+- Directory `packages/vibe64-accounts`
+
 ### Program
 
 - `genesis/program/accounts/connections-and-health.md`
@@ -593,6 +628,7 @@ of regular Z.AI saved setup facts. Account writes and paid consent remain exclud
 
 - Nothing.
 
+
 ## `execution` Managed execution
 
 Owns workspace preparation, managed command execution and its native stdio
@@ -600,11 +636,13 @@ transport, PTY admission/I/O/subscription/cleanup, execution resource estimates
 and workflow accounting. Conversation
 engines consume this host facility; JSKIT owns their command/protocol setup.
 
+### Source
+
+- Directory `packages/vibe64-execution`
+
 ### Program
 
-- `genesis/program/execution/resource-estimates.md`
 - `genesis/program/execution/workflow-accounting.md`
-- `genesis/program/execution/workspace-setup.md`
 
 ### Data owned
 
@@ -613,6 +651,7 @@ engines consume this host facility; JSKIT owns their command/protocol setup.
 ### Data used
 
 - Nothing.
+
 
 ## `preview` Application preview
 
@@ -627,9 +666,12 @@ identity list. Browser identity exchange and downloads remain UI operations.
 Current-app output discovery uses the same fresh project authority before
 inspecting the selected project or session declaration.
 
+### Source
+
+- Directory `packages/current-app`
+
 ### Program
 
-- `genesis/program/preview/application-identities.md`
 - `genesis/program/preview/managed-application.md`
 
 ### Data owned
@@ -640,24 +682,6 @@ inspecting the selected project or session declaration.
 
 - Nothing.
 
-## `environment` Project environment
-
-Owns project values supplied to managed application work.
-Colleague uses the canonical Project Env read/save actions through a bounded
-metadata presentation and explicit user-value patches. Shared service guards
-protect host-owned values; stored-value inspection and secret reveal stay in Env.
-
-### Program
-
-- `genesis/program/environment/project-values.md`
-
-### Data owned
-
-- Nothing.
-
-### Data used
-
-- Nothing.
 
 ## `source` Source work
 
@@ -672,10 +696,13 @@ preserves unrequested records and extensions. The existing setup owner retains c
 payment and advertising authorization and revision checks. Source tools remain
 with coding conversations; Colleague delegates source investigation.
 
+### Source
+
+- Directory `packages/vibe64-source-editor`
+
 ### Program
 
 - `genesis/program/source/edit-and-review.md`
-- `genesis/program/source/save-work.md`
 
 ### Data owned
 
@@ -684,6 +711,7 @@ with coding conversations; Colleague delegates source investigation.
 ### Data used
 
 - Nothing.
+
 
 ## `database` Database exploration
 
@@ -711,6 +739,10 @@ visible semantic state and selected Data table identity to the Colleague host.
 Runtime activity comes from the executor's
 existing project/session query reservations, without a separate persisted tracker.
 
+### Source
+
+- Directory `packages/vibe64-database-tools`
+
 ### Program
 
 - `genesis/program/database/diagram-exploration.md`
@@ -724,15 +756,24 @@ existing project/session query reservations, without a separate persisted tracke
 
 - Nothing.
 
+
 ## `understanding` Project understanding
 
 Owns presenting Genesis explanations, authored subsystems and source Cities.
 System Graph reads and refresh share named actions and actor/project authority
 across HTTP and direct callers; coding conversations own engineering investigation.
 
+### Source
+
+- Directory `packages/vibe64-genesis`
+
 ### Program
 
 - `genesis/program/understanding/genesis-context.md`
+
+- `genesis/program/projects/application-deployment.md`
+
+- `genesis/program/execution/resource-estimates.md`
 
 ### Data owned
 
@@ -742,6 +783,7 @@ across HTTP and direct callers; coding conversations own engineering investigati
 
 - Nothing.
 
+
 ## `distribution` Runtime distribution
 
 Owns the shared compact runtime builder, npm artifact preparation, isolated
@@ -749,6 +791,15 @@ installation proof, and the complete development preview with its bundled
 example project. It also owns the numbered persisted-state upgrade runner and
 its completion ledger. Hosted consumers supply their private runtime requirements
 and coordinate stopped-service upgrades before activation.
+
+The project root also supplies the existing application/bootstrap and shared
+Core, Runtime and host-composition support outside the more specific package
+roots below. Those libraries keep their implementation and existing consumers;
+this source map moves no files or runtime ownership.
+
+### Source
+
+- Directory `.`
 
 ### Program
 
@@ -761,6 +812,7 @@ and coordinate stopped-service upgrades before activation.
 ### Data used
 
 - Nothing.
+
 
 
 ## `colleague` Product conversation
@@ -806,9 +858,37 @@ It consumes existing native conversation, the JSKIT instruction lifecycle runtim
 transcript policy and action catalogues. Coding work and ordinary product operations retain their
 existing subsystem owners. State is private application filesystem data.
 
+### Source
+
+- Directory `packages/vibe64-colleague`
+
 ### Program
 
 - `genesis/program/colleague/product-conversation.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `voice` Voice conversation hosting
+
+Owns the existing shared voice host, project conversation voice binding and
+Voice provider composition. Main, temporary conversations, Learning and Colleague
+retain their ordinary message admission and current conversation authority;
+JSKIT retains speech capture, stream and playback facilities. This is the
+existing isolated Voice package, not a new runtime or alternate speech owner.
+
+### Source
+
+- Directory `packages/vibe64-voice`
+
+### Program
+
+- `genesis/program/conversation/voice-chat.md`
 
 ### Data owned
 

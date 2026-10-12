@@ -13,7 +13,7 @@ so the same command works without a source checkout in the relocated runtime.
 - `src/App.vue`
 - `config/public.js`
 - `tooling/release/server-build.mjs`
-- `tooling/release/runtime-package.mjs`
+- Main: `tooling/release/runtime-package.mjs`
 - `bin/upgrade-state.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-routing-v2.js`
 - `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`

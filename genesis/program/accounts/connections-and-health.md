@@ -72,7 +72,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
-- `packages/vibe64-accounts/src/server/service.js`
+- Main: `packages/vibe64-accounts/src/server/service.js`
 - `packages/vibe64-accounts/src/server/registerRoutes.js`
 - `packages/vibe64-core/src/server/terminalWebSocketRoutes.js`
 - `packages/vibe64-core/src/server/localStudioRequest.js`

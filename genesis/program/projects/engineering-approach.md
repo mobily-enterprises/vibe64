@@ -11,7 +11,7 @@ choice into machine-local Vibe64 metadata.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
-- `packages/vibe64-project/src/server/service.js`
+- Main: `packages/vibe64-project/src/server/service.js`
 - `src/components/studio/ProjectSettingsPanel.vue`
 - `src/lib/studioGateApi.js`
 - `src/lib/studioUrls.js`

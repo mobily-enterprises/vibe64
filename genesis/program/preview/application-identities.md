@@ -5,7 +5,7 @@ users without turning that convenience into a production sign-in mechanism.
 
 ## Sources
 
-- `packages/vibe64-project/src/server/previewApplicationIdentities.js`
+- Main: `packages/vibe64-project/src/server/previewApplicationIdentities.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`

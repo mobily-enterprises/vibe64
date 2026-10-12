@@ -20,7 +20,7 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/server/content.js`
 - `packages/vibe64-training/src/server/catalogue.js`
 - `packages/vibe64-training/src/server/installedCatalogue.js`
-- `packages/vibe64-training/src/server/cli.js`
+- Main: `packages/vibe64-training/src/server/cli.js`
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
 - `packages/vibe64-training/src/server/learnerState.js`

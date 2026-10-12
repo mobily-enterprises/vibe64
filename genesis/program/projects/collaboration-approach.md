@@ -12,7 +12,7 @@ conveniences outside agent prompts.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
-- `packages/vibe64-project/src/server/service.js`
+- Main: `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-core/src/server/projectPromptHints.js`
 - `src/components/studio/ProjectSettingsPanel.vue`
 - `src/composables/useVibe64SessionPanel.js`

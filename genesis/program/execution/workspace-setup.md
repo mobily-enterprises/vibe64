@@ -5,7 +5,7 @@ contract transported by the project's Stack.
 
 ## Sources
 
-- `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- Main: `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-runtime/src/server/workspaceSetupState.js`

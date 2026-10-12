@@ -22,7 +22,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js`
 - `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
-- `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- Main: `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`

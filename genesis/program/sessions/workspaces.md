@@ -11,7 +11,7 @@ the canonical project and from other sessions.
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-core/src/server/projectState.js`
 
-- `packages/vibe64-sessions/src/server/service.js`
+- Main: `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`

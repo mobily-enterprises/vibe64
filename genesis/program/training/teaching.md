@@ -24,7 +24,7 @@
 - `packages/vibe64-training/src/server/presentationCoordination.js`
 - `packages/vibe64-training/src/client/presentationOperation.js`
 - `packages/vibe64-training/src/server/deliveryProof.js`
-- `packages/vibe64-training/src/server/mainTeaching.js`
+- Main: `packages/vibe64-training/src/server/mainTeaching.js`
 - `packages/vibe64-runtime/src/shared/trainingQuestionReference.js`
 - `tests/fixtures/trainingTeachingFixture.js`
 - `tests/server/vibe64TrainingTeaching.unit.test.js`

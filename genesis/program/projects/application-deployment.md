@@ -7,7 +7,7 @@ guessing.
 ## Sources
 
 - `packages/vibe64-genesis/src/server/index.js`
-- `packages/vibe64-genesis/src/server/applicationDeployment.js`
+- Main: `packages/vibe64-genesis/src/server/applicationDeployment.js`
 
 ## Public contract
 

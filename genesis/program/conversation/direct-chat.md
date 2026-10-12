@@ -1089,7 +1089,7 @@ resource edits refreshes facts without restarting the native conversation.
 - `packages/vibe64-terminals/src/server/openCodeConversationStorage.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
-- `packages/vibe64-terminals/src/server/mainConversationBinding.js`
+- Main: `packages/vibe64-terminals/src/server/mainConversationBinding.js`
 - `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/vibe64-terminals/src/server/sessionConversations.js`

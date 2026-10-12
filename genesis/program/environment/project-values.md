@@ -11,7 +11,7 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
-- `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
+- Main: `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`

@@ -6,7 +6,7 @@ work as a new PR. GitHub remains the PR store.
 ## Sources
 
 - `packages/vibe64-project/src/server/githubApi.js`
-- `packages/vibe64-project/src/server/githubPullRequests.js`
+- Main: `packages/vibe64-project/src/server/githubPullRequests.js`
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/actions.js`
