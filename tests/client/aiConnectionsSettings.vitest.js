@@ -182,11 +182,11 @@ it("keeps unavailable configured pairs in their own groups for reconnection", ()
   expect(state.nativeSetupProviderId).toBe("claude");
 });
 
-it("removes a shared key through its existing owner regardless of the selected group", async () => {
+it("removes only the selected orchestrator key through its existing owner", async () => {
   const state = mount();
   const account = state.configuredAiGroups[1].accounts.find(account => account.id === "deepseek");
   state.requestRemove(account);
   await state.confirmRemove();
-  expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ modelProviderId: "deepseek", remove: true });
+  expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "deepseek", remove: true });
   expect(state.removeOpen).toBe(false);
 });

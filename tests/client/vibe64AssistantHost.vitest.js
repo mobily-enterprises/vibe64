@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import * as Vue from "vue";
 import { afterEach, expect, it } from "vitest";
-import { VIBE64_ASSISTANT_HOST_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const source = readFileSync(new URL(
   "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -17,7 +17,8 @@ function mountLayer() {
   const bindings = {
     computed: Vue.computed, inject: Vue.inject,
     onBeforeUnmount: Vue.onBeforeUnmount, reactive: Vue.reactive, watchEffect: Vue.watchEffect,
-    VIBE64_ASSISTANT_HOST_KEY, props, temporaryAiWorkspace, sessionId: Vue.ref("session-a")
+    VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY,
+    chatCollapsed: Vue.ref(false), props, temporaryAiWorkspace, sessionId: Vue.ref("session-a")
   };
   const setupLayer = new Function(...Object.keys(bindings), `${layerSource}\nreturn assistantLayer;`);
   let layer;

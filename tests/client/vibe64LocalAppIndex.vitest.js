@@ -211,7 +211,7 @@ it("keeps the original empty Temporary host out of Learning and fences its late 
 });
 
 
-it("actual root Learning controls forward the real click and do not count automatic lesson opening", async () => {
+it("actual root Learning controls forward the real click and keep teacher chat visible without inventing a show gesture", async () => {
   const event = { type: "click", isTrusted: true };
   const choice = { sessionId: "saved-initial", attemptId: "saved-attempt", learnerId: "learner", projectSlug: "practice" };
   const effects = [];
@@ -226,12 +226,9 @@ it("actual root Learning controls forward the real click and do not count automa
     expect(project).toBeTruthy(); project.props.onClick(event);
     expect(view.calls.practice).toEqual({ choice, event });
     const show = nodes(view.root).find(node => node.props?.onClick && nodes(node).some(child => child.text?.trim() === "Show chat"));
-    expect(show).toBeTruthy(); show.props.onClick(event); await Vue.nextTick();
-    expect(effects).toEqual([[event, "chat-show"], [ticket]]);
+    expect(show).toBeUndefined();
     expect(view.calls.panelProps.chatCollapsed).toBe(false);
-    // Hide is not an independently graded show gesture.
-    show.props.onClick(event); await Vue.nextTick();
-    expect(effects).toHaveLength(2);
+    expect(effects).toEqual([], "Learning chat is already visible; automatic opening cannot count a human Show chat gesture.");
   } finally { view.app.unmount(); }
 });
 

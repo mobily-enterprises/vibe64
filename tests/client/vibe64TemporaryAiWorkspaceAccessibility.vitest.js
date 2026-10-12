@@ -216,6 +216,7 @@ function testRenderer() {
       parent: null,
       props: {},
       scrollIntoView: vi.fn(),
+      style: {},
       type
     }),
     createText: (text) => ({ text, type: "text" }),

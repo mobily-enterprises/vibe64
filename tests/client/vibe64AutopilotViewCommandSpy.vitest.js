@@ -755,9 +755,9 @@ describe("Vibe64 direct session view", () => {
 
     expect(component).toContain("<Vibe64ConversationLog");
     expect(component).toContain(':welcome-message="emptyConversationWelcome"');
-    expect(component).toContain(':source-operations-suspended="sourceOperationsSuspended"');
+    expect(component).toContain(':source-operations-suspended="props.sourceWorkspaceAvailable ? sourceOperationsSuspended : agentActive"');
     expect(component).not.toContain(':source-operations-suspended="sourceOperationsSuspended || agentActive"');
-    expect(component).toContain(':busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"');
+    expect(component).toContain(':busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"');
     expect(component).toContain("<Vibe64AutopilotPromptTextarea");
     for (const retiredName of retiredNames) {
       expect(component).not.toContain(retiredName);
@@ -1039,7 +1039,7 @@ describe("Vibe64 direct session view", () => {
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"props.sourceWorkspaceAvailable && assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");
@@ -1085,8 +1085,10 @@ it("projects actual source availability without suppressing suspended Working co
   const temporary = component.slice(component.indexOf('<Vibe64TemporaryAiWorkspace'), component.indexOf('/>', component.indexOf('<Vibe64TemporaryAiWorkspace')));
   expect(temporary).toContain('v-if="props.sourceWorkspaceAvailable"');
   const presentation = component.slice(component.indexOf('<TrainingPreviewPresentation'), component.indexOf('</TrainingPreviewPresentation>'));
-  expect(presentation).toContain('v-if="props.sourceWorkspaceAvailable"');
-  expect(presentation).toContain(':app-available="props.sourceWorkspaceAvailable"');
+  expect(presentation).toContain('v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"');
+  expect(presentation).toContain(':app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"');
+  expect(presentation).toContain(':learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"');
+  expect(presentation).toContain(':attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"');
   expect(presentation).toContain('<template #lessons>');
   expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Lessons"');
   expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');

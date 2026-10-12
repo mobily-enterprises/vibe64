@@ -74,7 +74,8 @@ describe("vibe64 agent execution profiles", () => {
       PROMPT_HINT: "prompt_hint",
       REQUEST_ROUTING: "request_routing",
       SESSION_TITLE: "session_title",
-      SOURCE_EXPLANATION: "source_explanation"
+      SOURCE_EXPLANATION: "source_explanation",
+      TRAINING_ASSESSMENT: "training_assessment"
     });
     expect(Object.isFrozen(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)).toBe(true);
   });

@@ -199,6 +199,8 @@ function projectPage(setChatCollapsed, chatCollapsed) {
         chatCollapsed,
         chatToggleIcon: "",
         chatToggleTitle: "Show chat",
+        learning: { setLearningMode: vi.fn() },
+        learningMode: ref(false), purposeFilter: ref("working"), learningResource: null,
         dashboardRouteActive: ref(false),
         emitPageTitle: vi.fn(),
         handleProjectSelectionError: vi.fn(),

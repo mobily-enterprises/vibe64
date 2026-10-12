@@ -125,6 +125,7 @@ function findNode(node, predicate) {
 function mountProjectQueries(slug, { catalog = null } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const requests = [];
+  const learningRequests = [];
   const listeners = new Map();
   const socket = {
     on(event, handler) {
@@ -138,6 +139,10 @@ function mountProjectQueries(slug, { catalog = null } = {}) {
   configureHttpWebClient({
     request(url, options) {
       expect(options.method).toBe("GET");
+      if (["/api/vibe64/training/courses", "/api/vibe64/training/learning"].includes(url)) {
+        learningRequests.push(url);
+        return Promise.resolve({ ok: true, available: false, courses: [], sessions: [] });
+      }
       const response = Promise.withResolvers();
       requests.push({ url, ...response });
       return response.promise;
@@ -147,7 +152,7 @@ function mountProjectQueries(slug, { catalog = null } = {}) {
   const route = Vue.reactive({ params: { slug }, path: projectAppPath(slug), query: {} });
   projectQueryMocks.route = route;
   const renderer = Vue.createRenderer({
-    createElement: (type) => ({ type, children: [], props: {}, parent: null }),
+    createElement: (type) => ({ type, children: [], props: {}, parent: null, style: {} }),
     createComment: (text) => ({ type: "comment", text, children: [], props: {} }),
     createText: (text) => ({ type: "text", text, children: [], props: {} }),
     insert(child, parent, anchor = null) {
@@ -184,6 +189,7 @@ function mountProjectQueries(slug, { catalog = null } = {}) {
   return {
     queryClient,
     requests,
+    learningRequests,
     route,
     renderedProject: () => findNode(container, (node) => node.type === "article")?.props["data-project-slug"],
     navigationVisible: () => Boolean(findNode(container, (node) => node.props.role === "tablist")),
@@ -400,6 +406,7 @@ describe("Vibe64 project client scope", () => {
     const slug = "shared-query-project";
     const fixture = mountProjectQueries(slug);
     try {
+      expect(fixture.learningRequests).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning"]);
       expect(fixture.requests.map(({ url }) => url)).toEqual([
         `/api/app/${slug}/vibe64/projects`
       ]);
@@ -586,7 +593,11 @@ describe("Vibe64 project client scope", () => {
     expect(source).toContain("const selected = await createProject();");
     expect(source).toContain("const selected = await selectProject(slug);");
     expect(source).toContain("router.push(projectAppPath(selected))");
-    expect(source).toContain('v-if="!displayError && (selectionInitialLoading || !runtimeReady)"');
+    expect(source).toContain('v-if="loadingVisible"');
+    expect(source).toContain('const loadingVisible = computed(() => !props.independentContent && !displayError.value &&');
+    expect(source).toContain('(selectionInitialLoading.value || !props.runtimeReady));');
+    expect(source).toContain(':inert="!contentActive"');
+    expect(source).toContain(`:aria-hidden="!contentActive ? 'true' : undefined"`);
     expect(source).toContain("<v-skeleton-loader");
   });
 });
