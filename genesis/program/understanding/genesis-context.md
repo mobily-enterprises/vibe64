@@ -22,6 +22,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/client/components/Vibe64LayerDiagram.vue`
 - `packages/vibe64-system-graph/src/client/architectureModel.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue`
 - `packages/vibe64-system-graph/src/client/layeredGraph.js`
 - `packages/vibe64-genesis/src/server/architectureInspection.js`
@@ -138,11 +139,11 @@ The three-dimensional City presentation and its camera controls are retired.
 
 Architecture is the sole subsystem and Program presentation. It reuses the
 canonical directory-bound owners and descriptions from `genesis/subsystems.md`.
-Each Program operation belongs to one owner. Its contract and cited files appear
-inside the subsystem and its required main source view. Each module explicitly
+Each Program operation belongs to one owner. The subsystem lists its capabilities;
+selecting one opens its contract and cited files in a dedicated Program reader. Each module explicitly
 names a reading anchor in its owning subsystem, exposed by Genesis as mainSource.
 File icons distinguish it with a gold border, star and Main label. Other files
-show only Part of links to that anchor; cross-subsystem library citations remain
+show only Part of links to the Program reader; cross-subsystem library citations remain
 visible without changing ownership. The former list-and-detail screen is retired.
 Program is fallible authored explanation, not proof of a function's behavior or
 of current source freshness. Missing Program facts remain explicit.
@@ -182,12 +183,16 @@ path/hash/name/range joins resolve aliases to one native declaration. Stale,
 ambiguous and opaque targets have no guessed source link. Other public exports
 in externally used files remain review candidates; internal exports remain in
 the file viewer. Kinds/recorded returns require no language renderer branches.
-Import paths are secondary. Directory ownership supplies the file icon tree;
+Import paths are secondary. Each signature can disclose its importing file paths
+and follow them inside Architecture. Local imports remain visible for other
+available exports; file-level evidence is labelled separately from specific
+declaration imports, and no recorded imports never proves an unused export.
+Generic group definitions belong on hover. Directory ownership supplies the file icon tree;
 bars/heights compare measured source within the owner.
 
 Semantic zoom changes a circle into one square on the same sheet, retaining a
 faint circular backdrop. The square/skeleton paint before its detail prepares.
-Files, Interface and Programs shortcuts jump within the retained subsystem
+Explanation, Programs, Interface and Files shortcuts jump within the retained subsystem
 document; empty Program sections are omitted. Compact signatures precede
 grouped file icons with search, disclosures,
 name/type/size sorting, single-click/tap and keyboard access. Direct files
@@ -218,8 +223,8 @@ does not restore oversized icons that cover the surrounding canvas.
 The Back control retraces followed file links, retaining the previous exact
 declaration and its enclosing camera/owner. The single-file host reports its
 current selected declaration and presentation; this is navigation state, not
-source analysis. Close, Esc, Engine and subsystem breadcrumbs discard that
-local file history and return to their enclosing view.
+source analysis. Close and Esc use that same history for one-level returns. Engine and subsystem
+breadcrumbs jump directly to their enclosing view and clear nested history.
 
 The host's `file-interface` slot embeds the existing
 `Vibe64SessionSourceEditor` in single-file mode with the requested path/native
@@ -233,13 +238,14 @@ Generate/Update controls and exact Code. No chat transcript or composer appears
 in the file interface; discussion remains in the agent’s conversation. File
 overviews are on-demand, informational and hashed against the whole saved file;
 they do not require an index or replace authored Program text. Authored Program
-context appears at its main source; supporting files link there. Whole-file source
-is read-only. Missing return/parser/Helper evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
+context appears in its dedicated Program reader; main and supporting source files
+link there without repeating it. Whole-file Code uses the shared editable Files
+implementation, including save/conflict coordination, Undo/Redo and download. Missing return/parser/Helper evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
 heading and detached detail card.
 The subsystem square shows its authored Genesis responsibility in an Explanation
-field, followed by associated capability explanations. Invalid Program evidence
-keeps that responsibility visible and exposes the source-citation diagnostic and
-document navigation. Its text and signatures can be selected without activating
+field, followed by links to associated capability readers. Invalid Program evidence
+keeps that responsibility visible and exposes the source-citation diagnostic in
+Analysis details, without raw-document navigation. Its text and signatures can be selected without activating
 the signature. The file view explains common definition kinds and distinguishes a file export
 from the subsystem's intended API. Missing-Helper status appears before selection,
 with disabled English modes and available whole-file Code stated directly.
@@ -296,3 +302,12 @@ snapshots. Filesystem identity/revision changes invalidate reuse; failed or
 in-flight replacement reads cannot publish stale facts. Interface preparation
 uses loaded common facts and only the selected owner rather than rebuilding its
 layered file graph or the mounted overview.
+
+Subsystem descriptions are substantive authored responsibilities, rendered inline.
+Each subsystem lists its Programs; a selected Program has its own Architecture
+view with its explanation, required main source and supporting file icons.
+Source links use the existing Files viewer and editor inside Architecture.
+Back, Escape and close return through the retained view history. File membership
+links open the Program view, never its Markdown source or an inferred entry file.
+Regenerated canonical directory owners and Program assignments replace the shown
+facts; no consumer-owned subsystem catalogue or explanation store is introduced.

@@ -10,6 +10,7 @@ vi.mock('vuetify/components/VAlert', () => ({ VAlert: {
 } }));
 import Interface from '../../src/components/studio/vibe64-session/Vibe64SourceInterface.vue';
 import Inspector from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue';
+import ProgramInspector from '../../packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue';
 import TreeBranch from '../../packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue';
 
 async function renderInterface(overrides = {}) {
@@ -88,12 +89,15 @@ it('supporting files show membership only, without repeating the Program explana
   expect(missing).toContain('No explanation yet.');
 });
 
-it('only the explicitly designated main source carries the Program explanation', async () => {
+it('the main source is distinctive and links to the Program view without duplicating its text', async () => {
   const program = { id: 'load', path: 'genesis/program/load.md', mainSource: 'engine.rs', title: 'Load saved work', description: 'Restores saved work.', sources: ['storage.py', 'engine.rs'], publicContract: 'Retains work on failure.' };
   const main = await renderInterface({ programs: [program], programStatus: 'valid' });
   expect(main).toContain('Main Program file');
   expect(main).toContain('source-interface__main');
-  expect(main).toContain('Restores saved work.');
+  expect(main).not.toContain('Restores saved work.');
+  expect(main).toContain('Load saved work');
+  expect(main).not.toContain('Read Program');
+  expect(main).not.toContain('genesis/program/load.md');
   const legacy = await renderInterface({ programs: [{ ...program, mainSource: undefined }] });
   expect(legacy).toContain('Part of');
   expect(legacy).not.toContain('Main Program file');
@@ -144,7 +148,8 @@ it('file icons distinguish the explicit main source from same-named and shared s
 it('many memberships cannot bury the main marker or repeat capability bodies', async () => {
   const programs = [{ id: 'other', title: 'Other capability', mainSource: 'other.py', description: 'Long repeated body.' }, { id: 'main', title: 'Main capability', mainSource: 'engine.rs' }, { id: 'another', title: 'Another capability', mainSource: 'another.py' }];
   const html = await renderInterface({ programs });
-  expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Part of 2 other Programs'));
+  expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Other capability'));
+  expect(html.indexOf('Main capability')).toBeLessThan(html.indexOf('Another capability'));
   expect(html).not.toContain('Long repeated body.');
   const icons = await renderToString(Vue.createSSRApp(TreeBranch, { items: [{ id: 'file', kind: 'file', name: 'engine.rs', file: { path: 'engine.rs', sourceLines: 12 }, volume: .3, reasons: [], programs }] }));
   expect(icons.indexOf('Main ·')).toBeLessThan(icons.indexOf('Part of ·'));
@@ -179,15 +184,50 @@ it('subsystem reading offers Files immediately and omits an empty Program sectio
   expect(html).not.toContain('aria-label="Subsystem Program"');
   expect(html).toContain('aria-label="Subsystem explanation"');
   expect(html).toContain('Runs the application.');
-  expect(html).toContain('Open Genesis explanation');
+  expect(html).not.toContain('Open Genesis explanation');
+  expect(html).not.toContain('genesis/subsystems.md');
 });
 
-it('invalid Genesis capabilities retain the subsystem responsibility and expose the exact repair document', async () => {
+it('invalid Programs retain responsibility without raw document navigation', async () => {
   const outline = { owner: { id: 'directory:app', title: 'Application', root: 'app', description: 'Coordinates application requests.' }, files: [], programs: [], programStatus: 'invalid', programDiagnostics: [{ code: 'PROGRAM_SOURCE_MISSING', details: { path: 'genesis/program/app/run.md', sourcePath: 'app/missing.go' }, message: 'Missing source citation.' }], operations: [], publicEntries: [], publicSymbols: [], boundarySymbols: [], observedSymbols: [], availableSymbols: [], tree: [] };
   const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
   expect(html).toContain('Coordinates application requests.');
-  expect(html).toContain('Genesis capability explanations need repair.');
-  expect(html).toContain('app/missing.go');
-  expect(html).toContain('Review document');
+  expect(html).toContain('Program descriptions need refresh.');
+  expect(html).toContain('Missing source citation.');
+  expect(html).not.toContain('Review document');
+  expect(html).not.toContain('genesis/program/app/run.md');
   expect(html).not.toContain('Program unavailable');
+});
+
+it('subsystem import evidence exposes importing file paths without claiming individual use for file-level candidates', async () => {
+  const consumer = { id: 'file:ui/view.go', path: 'ui/view.go', subsystemId: 'directory:ui' };
+  const source = { path: 'engine/api.go', symbolId: 'run', line: 7 };
+  const outline = { owner: { id: 'directory:engine', title: 'Engine', root: 'engine' }, files: [], programs: [], programStatus: 'valid', dependencyCoverage: 'complete', operations: [], publicEntries: [], publicSymbols: [], availableSymbols: [], tree: [],
+    observedSymbols: [{ id: 'run', name: 'Run', kind: 'function', source, consumers: [consumer] }],
+    boundarySymbols: [{ id: 'other', name: 'Other', kind: 'value', source: { ...source, symbolId: 'other' }, consumers: [consumer] }] };
+  const html = await renderToString(Vue.createSSRApp(Inspector, { outline, embedded: true }));
+  expect(html).toContain('Imported by 1 subsystem · 1 file');
+  expect(html).toContain('Show files that import this declaration.');
+  expect(html).toContain('ui/view.go');
+  expect(html).toContain('Exports from externally used files');
+  expect(html).not.toContain('API review candidates');
+  const candidates = await renderToString(Vue.createSSRApp(Inspector, { outline: { ...outline, observedSymbols: [] }, embedded: true }));
+  expect(candidates).toContain('Source file imported by 1 subsystem · 1 file');
+  expect(candidates).toContain('use of this particular export is unproven.');
+  expect(candidates).toContain('ui/view.go');
+});
+
+
+it('a Program reader shows its complete explanation and actual main/supporting sources using shared file icons', async () => {
+  const program = { id: 'program:load', title: 'Load records', description: 'Restores saved records.', publicContract: 'Returns records while preserving failures.', mainSource: 'engine/storage.rs', sources: ['engine/storage.rs', 'shared/codec.py'] };
+  const architecture = { files: [{ id: 'file:main', path: 'engine/storage.rs', sourceLines: 20 }, { id: 'file:codec', path: 'shared/codec.py', sourceLines: 10 }] };
+  const html = await renderToString(Vue.createSSRApp(ProgramInspector, { program, architecture, owner: { title: 'Storage' } }));
+  expect(html).toContain('aria-label="Program explanation"');
+  expect(html).toContain('Restores saved records.');
+  expect(html).toContain('Returns records while preserving failures.');
+  expect(html).toContain('Main source file');
+  expect(html).toContain('data-file-path="engine/storage.rs"');
+  expect(html).toContain('data-file-path="shared/codec.py"');
+  expect(html).toContain('subsystem-tree__file--main');
+  expect(html).not.toContain('genesis/program/');
 });

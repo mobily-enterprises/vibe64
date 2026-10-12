@@ -16,26 +16,12 @@
         <p v-else class="source-interface__hint">{{ !assistantAvailable ? 'Choose a Helper in Model routing to generate an explanation.' : 'No explanation yet.' }}</p>
       </div>
     </section>
-    <section v-if="mainPrograms.length" class="source-interface__interpretation" aria-label="Main Program file">
-      <details v-for="program in mainPrograms" :key="program.id" class="source-interface__program" @toggle="$event.target.open && expandedPrograms.add(program.id)">
-        <summary><small class="source-interface__main">Main</small><strong>{{ program.title }}</strong></summary>
-        <p class="source-interface__program-description">{{ program.description }}</p>
-        <div v-if="expandedPrograms.has(program.id)"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(program.publicContract)" @link-click="openProgramLink($event, program.path)" />
-          <div class="source-interface__program-sources"><button v-for="path in program.sources" :key="path" type="button" :title="path" @click="$emit('open-source', { path })">{{ path }} ↗</button></div>
-          <v-btn size="small" min-height="44" variant="text" @click="$emit('open-source', { path: program.path, presentation: 'code' })">Read Program</v-btn>
-        </div>
-      </details>
-    </section>
-    <nav v-if="memberPrograms.length === 1" class="source-interface__membership" aria-label="Program membership">
-      <span v-for="program in memberPrograms" :key="program.id">Part of <button type="button" :title="program.mainSource ? `Open main source: ${program.mainSource}` : 'Read Program document'" @click="$emit('open-source', { path: program.mainSource || program.path, ...(program.mainSource ? {} : { presentation: 'code' }) })">{{ program.title }} ↗</button></span>
+    <nav v-if="programs.length" class="source-interface__membership" aria-label="Program membership">
+      <span v-for="program in orderedPrograms" :key="program.id"><small v-if="program.mainSource === filePath" class="source-interface__main">Main Program file</small><span v-else>Part of </span><button type="button" @click="$emit('open-program', program.id)">{{ program.title }} →</button></span>
     </nav>
-    <details v-else-if="memberPrograms.length > 1" class="source-interface__memberships">
-      <summary>Part of {{ memberPrograms.length }} {{ mainPrograms.length ? 'other Programs' : 'Programs' }}</summary>
-      <nav class="source-interface__membership" aria-label="Program membership"><span v-for="program in memberPrograms" :key="program.id"><button type="button" :title="program.mainSource ? `Open main source: ${program.mainSource}` : 'Read Program document'" @click="$emit('open-source', { path: program.mainSource || program.path, ...(program.mainSource ? {} : { presentation: 'code' }) })">{{ program.title }} ↗</button></span></nav>
-    </details>
     <p v-if="interpretationWarning" class="source-interface__hint" role="status">{{ interpretationWarning }}</p>
-    <h4 class="source-interface__exports-heading">File exports <span>{{ symbols.length }}</span></h4>
-    <details class="source-interface__analysis"><summary>Analysis details</summary><p class="source-interface__hint">{{ coverage }}. File exports may be internal to the subsystem. Unrecorded returns are omitted.</p><p v-if="programStatus !== 'valid'" class="source-interface__hint">Program unavailable.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'A Helper is needed to generate explanations.' }}</p></details>
+    <h4 class="source-interface__exports-heading" :title="`${coverage}. File exports may be internal to the subsystem. Unrecorded returns are omitted.`">File exports <span>{{ symbols.length }}</span></h4>
+    <details v-if="programStatus !== 'valid' || !assistantAvailable" class="source-interface__analysis"><summary>Analysis details</summary><p v-if="programStatus !== 'valid'" class="source-interface__hint">Program unavailable.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'A Helper is needed to generate explanations.' }}</p></details>
     <div class="source-interface__layout">
       <nav class="source-interface__symbols" aria-label="Exported and public symbols">
         <div v-for="symbol in symbols" :key="symbol.id" class="source-interface__symbol-row">
@@ -64,21 +50,21 @@
   </section>
 </template>
 <script setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { LongTextPreviewBlocks } from '@jskit-ai/assistant-core/client/conversation';
 import { sourceEditorLinkTarget } from '@/lib/vibe64SourceEditorLinks.js';
 import { parseLongTextReviewBlocks } from '@jskit-ai/assistant-core/shared/conversation';
 const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, activeFileInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
-const emit = defineEmits(['select-symbol', 'present-symbol', 'explain-file', 'whole-file-code', 'open-source']);
-const expandedPrograms = ref(new Set());
-const mainPrograms = computed(() => props.programs.filter(program => program.mainSource === props.filePath));
-const memberPrograms = computed(() => props.programs.filter(program => program.mainSource !== props.filePath));
+const emit = defineEmits(['select-symbol', 'present-symbol', 'explain-file', 'whole-file-code', 'open-source', 'open-program']);
+const orderedPrograms = computed(() => [...props.programs.filter(program => program.mainSource === props.filePath), ...props.programs.filter(program => program.mainSource !== props.filePath)]);
 function openProgramLink({ event, href }, sourcePath) {
   const relative = href && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(href);
   const target = sourceEditorLinkTarget({ href: relative && sourcePath ? new URL(href, `https://source.invalid/${sourcePath}`).pathname.slice(1) : href });
   if (!target) return;
   event?.preventDefault();
-  emit('open-source', target);
+  const program = props.programs.find(program => program.path === target.path);
+  if (program) emit('open-program', program.id);
+  else if (target.path !== 'genesis/subsystems.md' && !target.path.startsWith('genesis/program/')) emit('open-source', target);
 }
 const selectedSymbol = computed(() => props.symbols.find(symbol => symbol.id === props.selectedId));
 const explanationDisabled = computed(() => props.busy || props.dirty || !props.assistantAvailable);
@@ -113,11 +99,8 @@ const interpretationBlocks = computed(() => parseLongTextReviewBlocks(selectedIn
 .source-interface__layout { display: flex; flex-direction: column; gap: 10px; }
 .source-interface__exports-heading { font-size: 15px; margin: 10px 0 4px; }
 .source-interface__exports-heading span { font-weight: normal; font-size: 12px; opacity: .65; }
-.source-interface__interpretation { padding: 0 10px; border: 1px solid #d8c18e; border-left: 3px solid #aa812c; border-radius: 6px; margin: 4px 0 8px; background: #fcfaf5; }
 .source-interface__membership { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; font-size: 12px; margin: 2px 0 6px; color: #69847d; }
 .source-interface__membership button { color: #367e8a; min-height: 44px; text-align: left; }
-.source-interface__memberships { font-size: 12px; margin: 2px 0 6px; color: #69847d; }
-.source-interface__memberships summary { cursor: pointer; min-height: 44px; align-content: center; }
 .source-interface__main { display: inline-block; color: #755616; background: #f1e5c6; border-radius: 4px; padding: 2px 5px; font-size: 10px; text-transform: uppercase; margin-right: 8px; }
 .source-interface__symbols, .source-interface__detail { min-width: 0; }
 .source-interface__symbols { width: 100%; }
@@ -140,9 +123,4 @@ button:focus-visible { outline: 3px solid rgb(var(--v-theme-primary)); outline-o
 @media(max-width: 759px) { .source-interface { padding: 12px; } }
 .source-interface__analysis { font-size: 12px; opacity: .72; margin-bottom: 6px; }
 .source-interface__analysis summary { cursor: pointer; }
-.source-interface__program { padding: 6px 0; }
-.source-interface__program summary { cursor: pointer; font-size: 13px; min-height: 44px; align-content: center; }
-.source-interface__program-description { margin: 0 0 6px; font-size: 12px; line-height: 18px; }
-.source-interface__program-sources { display: flex; gap: 4px 8px; flex-wrap: wrap; }
-.source-interface__program-sources button { background: transparent; border: 0; cursor: pointer; color: #367e8a; min-height: 44px; overflow-wrap: anywhere; text-align: left; font-size: 12px; }
 </style>

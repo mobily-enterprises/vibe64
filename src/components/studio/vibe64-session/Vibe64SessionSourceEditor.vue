@@ -10,11 +10,11 @@
     aria-label="Session source editor"
   >
     <header
-      v-if="!singleFile"
+      v-if="!singleFile || filePresentation === 'code'"
       class="vibe64-source-editor__header"
     >
       <v-btn
-        v-if="mobile && !codeFocusMode"
+        v-if="!singleFile && mobile && !codeFocusMode"
         :aria-expanded="!fileListCollapsed"
         :aria-label="fileListCollapsed ? 'Show files' : 'Hide files'"
         :icon="fileListCollapsed ? mdiFolderOutline : mdiClose"
@@ -76,6 +76,7 @@
               @click="runEditorCommand('redo')"
             />
             <v-list-item
+              v-if="!singleFile"
               title="Explain file or selection"
               :prepend-icon="mdiRobotOutline"
               :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
@@ -147,6 +148,7 @@
           @click="editor.saveNow"
         />
         <v-btn
+          v-if="!singleFile"
           class="vibe64-source-editor__explain-button"
           :aria-busy="editor.explanationBusy.value || editor.explanationClosing.value ? 'true' : 'false'"
           color="primary"
@@ -164,6 +166,7 @@
           {{ editor.explanationClosing.value ? "Closing…" : editor.explanationBusy.value ? "Working…" : "Explain" }}
         </v-btn>
         <v-btn
+          v-if="!singleFile"
           :disabled="editor.loadingTree.value"
           :icon="mdiRefresh"
           :aria-busy="editor.loadingTree.value"
@@ -459,7 +462,6 @@
             'vibe64-source-editor__workspace--explanation-collapsed': !singleFile && editor.activeExplanation.value && explanationCollapsed && filePresentation === 'code'
           }"
         >
-          <v-btn v-if="singleFile && filePresentation === 'code'" variant="text" @click="filePresentation = 'interface'">Interface</v-btn>
           <div
             ref="editorElement"
             v-show="filePresentation === 'code'"
@@ -492,6 +494,7 @@
             @explain-file="presentFileOverview"
             @whole-file-code="showWholeFileCode"
             @open-source="$emit('open-source-file', $event)"
+            @open-program="$emit('open-program', $event)"
           >
             <template #explanation="{ savedBody }">
               <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation || activeFileInterpretation" embedded
@@ -782,7 +785,7 @@ const props = defineProps({
     type: Boolean
   }
 });
-const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location"]);
+const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location", "open-program"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -1397,8 +1400,6 @@ function createEditor() {
       doc: editor.text.value,
       extensions: [
         editorPerformanceSetup,
-        EditorState.readOnly.of(props.singleFile),
-        EditorView.editable.of(!props.singleFile),
         sourcePathClickExtension,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
         lineWrappingCompartment.of(sourceEditorLineWrappingExtension(editor.selectedPath.value)),

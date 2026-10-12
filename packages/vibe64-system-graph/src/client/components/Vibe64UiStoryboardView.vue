@@ -27,7 +27,7 @@
         </v-menu>
       </div>
     </header>
-    <div ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), fileRequest ? closeFile() : closeDetail($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
+    <div ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), goBack($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
       <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}<details v-if="refreshOutput"><summary>Command output</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ refreshOutput }}</pre></details></v-alert>
       <v-alert v-if="!refreshing && architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Re-scan project</v-btn></v-alert>
       <VueFlow v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
@@ -59,15 +59,18 @@
             <nav class="subsystem-zoom__breadcrumbs" aria-label="Architecture location">
               <button type="button" class="subsystem-zoom__back nodrag nopan" aria-label="Back to previous view" @click="goBack">← Back</button>
               <button type="button" class="nodrag nopan" @click="closeDetail">Engine</button><span>›</span>
-              <button v-if="fileRequest" type="button" class="nodrag nopan" @click="closeFile">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
+              <button v-if="fileRequest || programId" type="button" class="nodrag nopan" @click="showSubsystem">{{ data.owner.title }}</button><strong v-else>{{ data.owner.title }}</strong>
+              <template v-if="currentProgram"><span>›</span><strong>{{ currentProgram.title }}</strong></template>
+              <template v-else-if="fileRequest && parentProgram"><span>›</span><button type="button" @click="openProgram(parentProgram.id)">{{ parentProgram.title }}</button></template>
               <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
-              <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest ? 'Back to subsystem' : 'Back to Engine'" title="Close this view (Esc)" @click="fileRequest ? closeFile() : closeDetail($event)">×</button>
+              <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest || programId ? 'Back to previous view' : 'Back to Engine'" title="Close this view (Esc)" @click="goBack($event)">×</button>
             </nav>
             <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
-            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :open-file="openFile" :update-location="updateFileLocation"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
-            <div v-show="!fileRequest" class="subsystem-zoom__body">
-              <div v-if="!data.outline" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
-              <Vibe64SubsystemInspector v-else embedded :outline="data.outline" @inspect="openFile" @open-source="emit('open-source-file', $event)"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
+            <div v-if="retainedFileRequest" v-show="fileRequest" class="subsystem-zoom__file"><slot name="file-interface" :request="retainedFileRequest" :active="!!fileRequest" :architecture="architecture" :open-file="openFile" :update-location="updateFileLocation" :open-program="openProgram"><button type="button" @click="emit('inspect-file', retainedFileRequest)">Open {{ retainedFileRequest.path }} interface</button></slot></div>
+            <Vibe64ProgramInspector v-if="retainedProgram" v-show="programId" :key="retainedProgram.id" :program="retainedProgram" :architecture="architecture" :owner="architecture.subsystems.find(owner => owner.id === retainedProgram.subsystemId)" @inspect="openFile"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64ProgramInspector>
+            <div v-show="!fileRequest && !programId" class="subsystem-zoom__body">
+              <div v-if="retainedOutline?.owner.id !== data.owner.id" class="subsystem-zoom__loading" role="status" aria-busy="true" aria-label="Loading subsystem interface"><h2>{{ data.owner.title }}</h2><p>{{ data.owner.root }}</p><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><div class="subsystem-zoom__skeleton" /><p>Preparing interface and files…</p></div>
+              <Vibe64SubsystemInspector v-if="retainedOutline" v-show="retainedOutline.owner.id === data.owner.id" embedded :outline="retainedOutline" @inspect="openFile" @open-program="openProgram"><template #text="context"><slot name="text" v-bind="context" :open-source="openFile">{{ context.text }}</slot></template></Vibe64SubsystemInspector>
             </div>
           </article></div>
         </template>
@@ -123,9 +126,10 @@ import { computed, markRaw, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, t
 import { BaseEdge, Handle, MarkerType, Position, VueFlow } from '@vue-flow/core';
 import { useVibe64SystemGraph } from '../composables/useVibe64SystemGraph.js';
 import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
+import Vibe64ProgramInspector from './Vibe64ProgramInspector.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
-const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 } });
+const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: Object });
 const { architecture, error, loading, refreshing, refreshProgress, refreshOutput, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion'), projection: 'architecture'
 });
@@ -136,6 +140,7 @@ watch(error, () => { dismissedError.value = ''; });
 const expandedSubsystemId = ref('');
 const compact = ref(false);
 const outline = shallowRef(null);
+const retainedOutline = shallowRef(null);
 const focusOwner = computed(() => {
   const native = architecture.value?.subsystems?.find(owner => owner.id === expandedSubsystemId.value);
   return native ? { ...native, ...(overview.value.nodes.find(node => node.id === native.id)?.data || {}) } : null;
@@ -157,7 +162,12 @@ watch([expandedSubsystemId, architecture], async ([id], previous, onCleanup) => 
 const layoutPositions = ref({});
 const fileRequest = ref(null);
 const retainedFileRequest = shallowRef(null);
-const fileHistory = shallowRef([]);
+const viewHistory = shallowRef([]);
+const programId = ref('');
+const retainedProgramId = ref('');
+const currentProgram = computed(() => architecture.value?.program?.modules?.find(program => program.id === programId.value));
+const retainedProgram = computed(() => architecture.value?.program?.modules?.find(program => program.id === retainedProgramId.value));
+const parentProgram = computed(() => architecture.value?.program?.modules?.find(program => program.id === viewHistory.value.findLast(entry => entry.programId)?.programId));
 let dragging = false;
 let lastDragEnded = 0;
 let zoomAnchor;
@@ -241,8 +251,8 @@ async function closeDetail(event) {
   transitioning = true;
   expandedSubsystemId.value = '';
   fileRequest.value = null;
-  retainedFileRequest.value = null;
-  fileHistory.value = [];
+  retainedFileRequest.value = null; retainedOutline.value = null; programId.value = ''; retainedProgramId.value = '';
+  viewHistory.value = [];
   zoomTarget = undefined;
   await nextTick();
   if (!external && parentViewport && parentNode && currentViewport) {
@@ -261,12 +271,34 @@ async function closeDetail(event) {
   }
   transitioning = false;
 }
-async function openFile(request) {
-  if (fileRequest.value?.path === request.path && !request.symbolId && !request.symbol && !request.presentation) return;
-  if (fileRequest.value) fileHistory.value = [...fileHistory.value, {
-    request: { ...fileRequest.value }, ownerId: expandedSubsystemId.value,
+function rememberView() {
+  viewHistory.value = [...viewHistory.value, {
+    request: fileRequest.value && { ...fileRequest.value }, programId: programId.value, ownerId: expandedSubsystemId.value,
     parentNode, parentViewport, fileParentViewport, viewport: { ...flow.getViewport() }
   }];
+}
+async function openProgram(id) {
+  const program = architecture.value?.program?.modules?.find(program => program.id === id);
+  if (!program || programId.value === id) return;
+  rememberView();
+  const ownerNode = nodes.value.find(node => node.id === program.subsystemId);
+  if (ownerNode && program.subsystemId !== expandedSubsystemId.value) {
+    parentNode = { position: { ...ownerNode.position }, style: { ...ownerNode.style } };
+    expandedSubsystemId.value = program.subsystemId;
+  }
+  programId.value = id;
+  retainedProgramId.value = id;
+  fileRequest.value = null;
+  await readingViewport();
+}
+async function openFile(request) {
+  // Explanatory documents are Program views, never file-navigation targets.
+  const program = architecture.value?.program?.modules?.find(program => program.path === request.path);
+  if (program) return openProgram(program.id);
+  if (request.path === 'genesis/subsystems.md' || request.path.startsWith('genesis/program/')) return;
+  if (fileRequest.value?.path === request.path && !request.symbolId && !request.symbol && !request.presentation) return;
+  rememberView();
+  programId.value = '';
   const file = architecture.value?.files?.find(file => file.path === request.path);
   const ownerNode = nodes.value.find(node => node.id === file?.subsystemId);
   if (ownerNode && file.subsystemId !== expandedSubsystemId.value) {
@@ -288,30 +320,35 @@ function updateFileLocation(location) {
   retainedFileRequest.value = fileRequest.value;
 }
 async function goBack(event) {
-  const previous = fileHistory.value.at(-1);
-  if (!fileRequest.value || !previous) return fileRequest.value ? closeFile() : closeDetail(event);
+  const previous = viewHistory.value.at(-1);
+  if (!previous) return closeDetail(event);
   ++navigationVersion;
   stopZoomMotion();
   gestureTarget = undefined;
   transitioning = false;
-  fileHistory.value = fileHistory.value.slice(0, -1);
-  expandedSubsystemId.value = previous.ownerId;
+  viewHistory.value = viewHistory.value.slice(0, -1);
+  expandedSubsystemId.value = previous.request
+    ? architecture.value.files.find(file => file.path === previous.request.path)?.subsystemId || previous.ownerId
+    : architecture.value.program?.modules?.find(program => program.id === previous.programId)?.subsystemId || previous.ownerId;
   parentNode = previous.parentNode;
   parentViewport = previous.parentViewport;
   fileParentViewport = previous.fileParentViewport;
   fileRequest.value = previous.request;
-  retainedFileRequest.value = previous.request;
+  if (previous.request) retainedFileRequest.value = previous.request;
+  programId.value = previous.programId || '';
+  if (previous.programId) retainedProgramId.value = previous.programId;
   await nextTick();
   await flow.setViewport(previous.viewport, { duration: 0 });
 }
-async function closeFile() {
+async function showSubsystem() {
   ++navigationVersion;
   stopZoomMotion();
   if (gestureTarget) gestureTarget.consumed = true;
   transitioning = true;
   canvas.value?.focus({ preventScroll: true });
   fileRequest.value = null;
-  fileHistory.value = [];
+  programId.value = '';
+  viewHistory.value = [];
   await nextTick();
   moveCamera(fileParentViewport || { x: 24, y: 24, zoom: 1 }, { done: () => { transitioning = false; } });
 }
@@ -423,7 +460,7 @@ function viewportChanged(viewport) {
   const rect = canvas.value.getBoundingClientRect();
   if (outline.value && !outline.value.owner.opaque) {
     if (viewport.zoom < 0.7) {
-      if (fileRequest.value) void closeFile();
+      if (fileRequest.value || programId.value) void goBack();
       else void closeDetail();
     }
     return;
@@ -456,6 +493,7 @@ function controllerPath(edge) {
   return `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
 }
 let flow;
+const flowReady = ref(false);
 let fitPending = true;
 async function fit(ids) {
   if (!flow || !props.active || !contentCount.value) return;
@@ -464,7 +502,7 @@ async function fit(ids) {
   gestureTarget = undefined;
   transitioning = true;
   if (focusOwner.value && !focusOwner.value.opaque) {
-    expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; fileHistory.value = [];
+    expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; retainedOutline.value = null; programId.value = ''; retainedProgramId.value = ''; viewHistory.value = [];
     ids = undefined;
   }
   await nextTick();
@@ -474,13 +512,21 @@ async function fit(ids) {
   transitioning = false;
   fitPending = false;
 }
-function initialize(instance) { flow = instance; void fit(initialIds.value); }
+async function initialize(instance) { flow = instance; await fit(initialIds.value); flowReady.value = true; }
 function fitIfPending() { if (fitPending) void fit(initialIds.value); }
 // Index snapshots are immutable. Traversing reactive proxies for every symbol
 // adds work without making the displayed facts any more current.
 const overview = computed(() => architectureOverview(toRaw(architecture.value)));
 watch([overview, expandedSubsystemId, layoutPositions], ([diagram, expanded, positions], previous) => {
-  if (architecture.value && expanded && !focusOwner.value) expandedSubsystemId.value = '';
+  if (architecture.value && expanded) {
+    const currentOwner = fileRequest.value
+      ? architecture.value.files.find(file => file.path === fileRequest.value.path)?.subsystemId
+      : currentProgram.value?.subsystemId;
+    if (currentOwner && currentOwner !== expanded) expandedSubsystemId.value = currentOwner;
+    else if (!focusOwner.value) {
+      expandedSubsystemId.value = ''; fileRequest.value = null; programId.value = ''; viewHistory.value = [];
+    }
+  }
   const arranged = diagram.nodes.map(node => ({ ...node, class: node.class || '', position: { ...node.position } }));
   for (const node of arranged) if (node.data.arrangeable && positions[node.id]) {
     const [minimum, maximum] = node.extent;
@@ -501,14 +547,26 @@ watch([overview, expandedSubsystemId, layoutPositions], ([diagram, expanded, pos
   initialIds.value = diagram.initialIds;
   if (!previous || diagram !== previous[0]) {
     fitPending = true;
-    void fit(initialIds.value);
+    if (!expandedSubsystemId.value) void fit(initialIds.value);
   }
 }, { immediate: true });
-watch(outline, detail => {
+watch([outline, fileRequest, programId], ([detail, file, program]) => {
   // Detail arriving must not rebuild the retained map during its animation.
   flow?.updateNodeData('visual:subsystem-detail', { outline: detail });
+  // Following a consumer into another owner must not replace the hidden
+  // signature list, file disclosures or search that Back will return to.
+  if (detail && detail.owner.id === expandedSubsystemId.value && !file && !program) retainedOutline.value = detail;
 });
-watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; fileHistory.value = []; selectedPageId.value = ''; showCalls.value = false; layoutPositions.value = {}; zoomAnchor = undefined; zoomTarget = undefined; parentViewport = undefined; fileParentViewport = undefined; });
+watch(() => props.sessionId, () => { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; expandedSubsystemId.value = ''; fileRequest.value = null; retainedFileRequest.value = null; retainedOutline.value = null; programId.value = ''; retainedProgramId.value = ''; viewHistory.value = []; selectedPageId.value = ''; showCalls.value = false; layoutPositions.value = {}; zoomAnchor = undefined; zoomTarget = undefined; parentViewport = undefined; fileParentViewport = undefined; });
+let handledProgramRequest;
+watch([() => props.openProgramRequest, architecture, () => props.active, flowReady], ([request, snapshot, active, ready]) => {
+  if (!ready || !active || !request || handledProgramRequest === request || !snapshot?.program?.modules.some(program => program.id === request.id)) return;
+  handledProgramRequest = request;
+  void openProgram(request.id);
+});
+watch(architecture, snapshot => {
+  if (programId.value && !snapshot?.program?.modules.some(program => program.id === programId.value)) void showSubsystem();
+});
 watch(() => props.active, active => { if (!active) { ++navigationVersion; stopZoomMotion(); clearTimeout(gestureTimer); gestureTarget = undefined; transitioning = false; } else if (fitPending) void fit(initialIds.value); });
 watch(canvas, (element, previous, onCleanup) => {
   if (!element) return;
@@ -517,7 +575,7 @@ watch(canvas, (element, previous, onCleanup) => {
   const pageEscape = event => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.target !== document.body || !props.active || !expandedSubsystemId.value) return;
     event.preventDefault();
-    fileRequest.value ? closeFile() : closeDetail(event);
+    void goBack(event);
   };
   document.addEventListener('keydown', pageEscape);
   let width = element.clientWidth;
@@ -539,7 +597,7 @@ watch(canvas, (element, previous, onCleanup) => {
     gestureTarget = undefined; zoomTarget = undefined; zoomAnchor = undefined;
     transitioning = false;
     fileParentViewport = adapt(fileParentViewport);
-    fileHistory.value = fileHistory.value.map(entry => ({ ...entry, viewport: adapt(entry.viewport), fileParentViewport: adapt(entry.fileParentViewport) }));
+    viewHistory.value = viewHistory.value.map(entry => ({ ...entry, viewport: adapt(entry.viewport), fileParentViewport: adapt(entry.fileParentViewport) }));
     void flow.setViewport(adapt(flow.getViewport()), { duration: 0 });
   });
   observer.observe(element);

@@ -279,11 +279,24 @@ export function subsystemOutline(architecture, subsystemId) {
   const symbolsById = new Map((architecture?.symbols || []).map(symbol => [symbol.id, symbol]));
   const observed = new Map();
   const fileLinks = new Map();
+  const importsByFile = new Map();
+  const importsBySymbol = new Map();
+  const exposedFiles = new Set(publicEntries.flatMap(entry => entry.symbols.map(symbol => sourceFilesByPath.get(symbol.source?.path)?.id)).filter(Boolean));
   for (const relation of architecture?.relations || []) {
     if (relation.resolution !== 'resolved') continue;
     const from = files.get(relation.fromFileId);
     const to = files.get(relation.targetFileId) || packages.get(relation.targetPackageId);
     if (!from || !to) continue;
+    if (localIds.has(to.id) || exposedFiles.has(to.id)) {
+      if (!importsByFile.has(to.id)) importsByFile.set(to.id, new Map());
+      importsByFile.get(to.id).set(from.id, from);
+      for (const id of relation.importedSymbolIds || []) {
+        const symbol = symbolsById.get(id);
+        if (!symbol || symbol.fileId !== to.id || symbol.visibility !== 'public') continue;
+        if (!importsBySymbol.has(id)) importsBySymbol.set(id, new Map());
+        importsBySymbol.get(id).set(from.id, from);
+      }
+    }
     if (localIds.has(to.id) && !localIds.has(from.id)) {
       addEntry(to, 'Used by other subsystems').consumers.set(from.id, from);
       for (const id of relation.importedSymbolIds || []) {
@@ -352,6 +365,13 @@ export function subsystemOutline(architecture, subsystemId) {
   const candidates = new Set(boundarySymbols.map(symbol => symbol.id));
   const availableSymbols = local.flatMap(file => (symbolsByFile.get(file.id) || []).filter(symbol => !declaredSymbolIds.has(symbol.id) && !observed.has(symbol.id) && !candidates.has(symbol.id))
     .map(symbol => ({ ...symbol, source: { path: file.path, symbolId: symbol.id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line } })));
+  for (const symbol of [...publicSymbols.values(), ...observedSymbols, ...boundarySymbols, ...availableSymbols]) {
+    if (!symbol.source) continue;
+    const exact = [...(importsBySymbol.get(symbol.source.symbolId)?.values() || [])];
+    const sourceFile = sourceFilesByPath.get(symbol.source.path);
+    symbol.consumers = (exact.length ? exact : [...(importsByFile.get(sourceFile?.id)?.values() || [])]).sort((a, b) => a.path.localeCompare(b.path));
+    symbol.consumerEvidence = exact.length ? 'declaration' : 'file';
+  }
   return { owner, tree: root.children, files: local, programs, programStatus: architecture?.program?.status || 'unavailable', programDiagnostics: architecture?.program?.diagnostics || [], entryFiles, publicEntries, publicSymbols: [...publicSymbols.values()], observedSymbols, boundarySymbols, availableSymbols, operations, fileLinks: [...fileLinks.values()], dependencyCoverage: architecture?.ui?.capabilities?.imports || architecture?.capabilities?.dependencies || 'unconfigured', exportCount: local.reduce((count, file) => count + (symbolsByFile.get(file.id)?.length || 0), 0) };
 }
 

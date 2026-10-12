@@ -111,3 +111,49 @@ Explain its purpose, scope, important parts and collaboration with other owners.
 Preserve substantive existing descriptions; do not replace them with one-line
 labels to suit a visualisation. A consumer can shorten the displayed preview.
 Simple support directories may need only a short explanation.
+The required Source section contains exactly one `- Directory` entry with a backticked path: a
+canonical project-relative directory, with `.` allowed for the project root.
+Every subsystem has one directory root; never declare dispersed or multiple
+roots. Stack parent-directory rules discover default subsystem roots but are not
+exhaustive. An agent may recognise and declare another root elsewhere from
+actual responsibility and source evidence. The authored declaration persists
+through ordinary indexing. The authored map is the canonical owner list once ready; Stack roots are adoption
+hints and never create additional owners or split an authored boundary. Cover every
+indexed source, using a project-root owner for remaining support files if needed. UI components and Engine code may
+share one root; UI projection does not change ownership. Empty
+sections say `- Nothing.`; a new empty map contains only `# Subsystems` and
+`- Nothing.`. Every Program module belongs to exactly one subsystem. Program directory names do not assign ownership. Sources may cite another
+subsystem’s libraries without giving the operation or implementation two owners.
+Do not use globs, duplicate operations or duplicate table owners.
+
+When regenerating or deliberately splitting the map, reconcile the explanations
+with the new directory owners. Transfer the applicable responsibility prose and
+explicit Program assignments together, preserving stable ids where the boundary
+is unchanged. Recheck every Program's required main source against its current
+owner, including nested owners; library references retain their own ownership.
+Use the current declarations rather than an earlier consumer's hardcoded names,
+directory layout or cached list. Inspect subsystems and Program and resolve
+missing/duplicate membership and invalid main anchors before claiming completion.
+
+A table identity is three separate exact backticked values: the declared Stack
+resource id, schema, and table. `default` means the resource's default schema;
+use an explicit schema where applicable. Never record a host database name,
+credential, SQL expression, or environment value. Data used references a table
+owned by another declared subsystem. A subsystem may own data without Program
+operations, or operations without data. Read the real schema/migrations before
+assigning ownership; report uncertainty instead of inventing associations.
+
+Maintain `genesis/subsystems.md` in the same implementation turn when a change
+adds, removes, or changes a subsystem responsibility, Program membership, or
+data ownership/use. Read the map before changing related code. Reuse existing
+subsystems unless a distinct responsibility is evidenced. Declare each Program
+module exactly once; folders do not determine membership. Keep table references
+grounded in schema/migrations; Genesis does not inspect databases. Private
+helper changes need no map edit when these associations remain unchanged.
+
+If `genesis/subsystems.md` is missing, or is empty in an existing explained
+application, create it from the actual source, schema, and existing Program
+before implementation. This is ordinary explanatory adoption, not a blocker or
+a reason to ask permission again. Preserve the existing Program and source;
+inspect the relevant responsibilities and complete the smallest truthful map.
+Initialization can create the empty file, but only the agent authors its meaning.

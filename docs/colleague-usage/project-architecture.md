@@ -29,6 +29,9 @@ there is no source tree or invented source-line count. Close the panel with **×
 Package and source-owner discovery belong to the selected analysers, so the
 viewer needs no language or package-manager-specific controls.
 
+For text ownership, generation triggers and freshness, see
+[Where Architecture explanations come from](architecture-explanations.md).
+
 ## Explore by zooming
 
 1. Click or tap a subsystem to enter with a smooth zoom. Alternatively,
@@ -37,31 +40,26 @@ viewer needs no language or package-manager-specific controls.
    pointer. The circle grows and moves towards the centre together.
 2. At reading size it becomes a square on the same canvas. A faint circle remains
    behind it. A compact skeleton appears while the interface is prepared.
-3. **Explanation · Genesis** shows the subsystem's authored responsibility and
-   its owned Program capabilities when present. **Open Genesis explanation**
-   opens the subsystem map; edit it through **Dashboard → Files → Repo**.
-   If **Genesis capability explanations need repair** appears, **Review document**
-   opens the diagnostic's document. Correct the source citation or missing source,
-   then use **Architecture options → Re-scan project** to update its index.
-   The declared subsystem responsibility remains readable during that failure.
-   Expand one to read its contract and follow its cited files. File icons also
-   name the capabilities that cite them. Each Program explicitly names one main
-   source in its owning subsystem. Its icon has a gold border, star and **Main · …**
-   label; supporting icons say **Part of · …**. Main stays first even when the
-   source participates in other capabilities. Additional icon memberships show a
-   count with titles on hover. Expand a Program and select its **Main** link to
-   open that anchor. A library can participate in another
-   subsystem's Program without changing ownership. These authored explanations
-   can lag behind code. **Interface** lists recorded signatures directly: functions,
-   methods, components, values and types keep their recorded kinds. Select a
-   signature to reach its implementation file and that exact declaration.
-   Unknown return information is omitted from these compact rows; coverage
-   remains explicit. Hover a shortened signature to read its complete text.
-   Drag across text to select and copy it. Selecting signature text does not open
-   the implementation; an ordinary click or keyboard activation still does.
+3. **Explanation** shows the subsystem’s full authored responsibility inline.
+   The shortcuts follow reading order: **Explanation**, **Programs** when present,
+   **Interface**, then **Files**.
+   **Programs** lists its associated capabilities. Select a Program to open its
+   own explanation view inside Architecture, with **Main source file** and
+   **Supporting files**. Click a source icon to open that file with the shared
+   Files viewer. A gold border, star and **Main · …** identify the mandatory main
+   source; supporting icons say **Part of · …**. A library can participate in
+   another subsystem’s Program without changing source ownership.
+   There are no links to the raw Genesis subsystem or Program documents here.
+   If Program descriptions need refresh, correct the authored declarations through
+   normal Files editing and use **Architecture options → Re-scan project**.
+   The subsystem responsibility stays readable while Program evidence is invalid.
+   **Interface** lists recorded functions, methods, components, values and types.
+   Select a signature to reach its implementation and exact declaration.
+   Unknown return information is omitted. Drag across text to select and copy it;
+   selecting signature text does not open the implementation.
 4. Graphical **Files** appear below the interface as soon as the selected
    subsystem's detail is ready. Use the **Files** shortcut at the top to reach them immediately, or scroll down.
-   **Interface** and **Explanation** jump to their sections in the same retained document. Direct files appear before subdirectories at every level.
+   **Interface**, **Explanation** and **Programs** jump to their sections in the same retained document. Direct files appear before subdirectories at every level.
    Open a folder's disclosure arrow; **Find a file** filters
    names and paths and exposes matching folders. File bars and icon heights
    compare measured source size within this subsystem. A dash means unavailable
@@ -78,14 +76,15 @@ viewer needs no language or package-manager-specific controls.
    saved text. Reopening displays the saved explanation directly, without a chat.
    Select a callable signature to reveal its **Pseudocode** field and use
    **Generate pseudocode**, **Update pseudocode** or **Code**. **Code · whole file**
-   is read-only here; **Interface** returns to the document. **Part of …** links to
-   the Program's main source, where its authored explanation appears. Helper
+   uses the same editor, Save now, autosave, Undo/Redo and download controls as
+   Files, with its file browser hidden. **Interface** returns to the document.
+   **Part of …** and **Main Program file** open the dedicated Program view. Helper
    progress and **Stop** stay in the field while generation runs. These cached
    interpretations check saved source and remain informational; they do not change
    Genesis documents or enter the coding agent's context.
    See [Read file interfaces](file-interfaces.md).
 7. Scroll out on the uncovered canvas outside the square to return through the
-   enclosing views, or use the breadcrumb: **Engine → subsystem → file**.
+   enclosing views, or use the breadcrumb: **Engine → subsystem → Program → file**.
    Inside the square, a mouse wheel, two-finger touchpad movement or a one-finger
    phone swipe scrolls its contents. Reaching the top or bottom does not turn
    scrolling into zoom. Pinch or Ctrl-scroll explicitly zooms anywhere, including
@@ -97,15 +96,16 @@ viewer needs no language or package-manager-specific controls.
    Esc also works after generation temporarily releases keyboard focus.
    A compact reminder beneath the breadcrumb shows these scroll, zoom and return rules.
 
-**← Back** retraces file-to-file links, including links to another subsystem.
-It restores the previous file and selected declaration. With no file history,
+**← Back**, **×** and Esc retrace Program and file links, including links to
+another subsystem. Back restores the previous file and exact declaration, or
+the Program and its source icons. With no nested view history,
 it returns to the enclosing subsystem or map. **×** and Esc always close the
 current level; breadcrumbs jump directly to their named view.
 
 The map stays mounted while hidden, retaining its arrangement. The file browser
 stays mounted behind a file interface, retaining its search, folder disclosures
 and selection. The latest file viewer also stays mounted while hidden within
-that subsystem; reopening it returns to Interface. Re-entering a subsystem and interrupted gestures use the same
+that subsystem, including behind a Program view. Re-entering a subsystem and interrupted gestures use the same
 navigation. The file viewer reuses the sheet's analysis; hiding views suspends
 their reads while retaining existing facts. A session change resets the local view. The square has compact
 signature rows instead of equal-height cards. The square fits the canvas height;
@@ -121,14 +121,26 @@ side pane, extra toolbar row or pane-balance slider.
 **Imported by other subsystems** identifies particular declarations named in
 cross-boundary imports, with consumer counts. It does not prove runtime calls or
 intended API membership. **Declared API** shows explicit package/module exports;
-**API review candidates** are exports from externally imported files whose individual
-usage is not established. **Other available exports** is collapsed initially and
+**Exports from externally used files** are exports from files imported across
+the boundary; use of those individual exports is not established. **Other available exports** is collapsed initially and
 can include internal or unused declarations. **Find a signature** searches these
 groups. **Import paths** are the names another part imports to access the API, such as
 `@local/vibe64-voice/client`. They explain how to reach an interface; the
 signatures explain what it offers. They remain secondary detail.
-**Analysis details** holds the longer evidence definitions. Short notices keep
-missing intended API and partial import coverage visible beside the signatures.
+Hover a group heading for its definition. Short notices keep missing intended
+API and partial import coverage visible beside the signatures.
+
+Expand **Imported by …** beneath a signature to see full paths of its importing
+files. Click a path to open that file inside Architecture; **← Back**, **×** or Esc
+returns to the signature list with the disclosure retained. The same disclosure
+is available under **Other available exports** and **Declared API**. Imports within
+the same subsystem are included; the group still reflects cross-boundary
+classification. **No recorded imports** means the current analysis found none,
+not that an export is unused. **Source file imported
+by …** shows file-level evidence only: these consumers import the source file,
+without proving that they import the particular export. These groups do not divide
+public from private or used from unused. The list reflects recorded imports,
+not every possible runtime consumer.
 
 Missing declarations do not mean an empty API. Import coverage is shown explicitly;
 namespace, dynamic, build-dependent or unresolved imports may remain partial.

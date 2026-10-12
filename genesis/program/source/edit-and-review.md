@@ -1551,9 +1551,9 @@ language declaration keywords; grouped values can share their exact declaration
 range. Public fields/properties/constants and types supplement callable symbols
 through the existing native index, while local declarations remain internal.
 A callable has a Pseudocode field (a short purpose statement followed by informational English
-steps), and exact Code. Supporting files show compact Part of links to
-the explicitly authored main source; only that anchor file contains the Program
-explanation and contract. Gold main-file icons distinguish it in the browser.
+steps), and exact Code. File membership links open the dedicated Program explanation inside Architecture,
+with its mandatory main source and supporting files; they never open the authored
+Markdown document. Gold main-file icons distinguish it in the browser.
 The Program explains a capability, not each declaration. The file opens as a
 document: an empty Explanation field offers Generate explanation, and saved text
 appears directly with Update explanation. Selecting a callable expands its
@@ -1604,3 +1604,8 @@ Generate/Update explanation or pseudocode request regenerates its stale answer; 
 no background summary job. Only user-visible Helper progress classifications
 are forwarded during generation, followed by the validated final answer. These
 interpretations are not Program contracts or coding-agent context.
+
+Architecture and Files share this viewer/editor and its existing autosave,
+conflict, download and source-navigation coordination. Architecture hides the
+file browser while reading a selected file or Program; it does not make whole-file
+Code read-only or construct a second editing implementation.

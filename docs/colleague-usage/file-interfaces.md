@@ -1,5 +1,8 @@
 # Read file interfaces and exact code
 
+See [Where Architecture explanations come from](architecture-explanations.md)
+for authorship, cache ownership and freshness.
+
 Open **Dashboard → Files → Repo**, then select a source file. The default view is
 **Interface**, showing **File exports** available from the
 project's selected language parser. Visibility follows that language's conventions.
@@ -20,26 +23,23 @@ attributes. A grouped declaration can include more than one named value. Build
 configuration, macro expansion and conditional compilation remain outside static
 coverage; use the project's declared preparation/verification for runtime proof.
 
-**Part of …** links a supporting file to its Program's main source file. The
-browser does not repeat the explanation in supporting files. **← Back** restores
-the file you came from. Shared files can belong to several Programs; expand
-**Part of … Programs** to choose a link when there are several memberships.
+**Part of …** and **Main Program file** open the capability’s Program view
+inside Architecture. That view contains its explanation, a clearly marked
+**Main source file** and **Supporting files**. Select a source icon to open its
+file interface; **← Back**, **×** or Esc returns to the Program. The browser
+retains its directory navigation. Program membership never links to a raw Genesis
+Markdown document or guesses an entry file.
 
-Main file icons have a gold border, star and **Main · …** label. In that file's
-interface, expand its **Main** Program title to read the authored explanation,
-contract and participating files. **Read Program** opens the Genesis document;
-use **Dashboard → Files → Repo** to edit it. The Architecture viewer is read-only.
-The anchor is the place to start reading, not necessarily an executable entry
-point. It belongs to the Program's owning subsystem; supporting files may be
-shared libraries elsewhere. These explanations describe the capability, not each
-individual function. The **Explanation** field provides a separate, informational overview of
-the saved file; it does not edit Genesis Program or subsystem responsibilities.
+Main file icons have a gold border, star and **Main · …** label. The anchor is the
+place to start reading, not necessarily an executable entry point. It belongs to
+the Program’s owning subsystem; supporting files may be shared libraries elsewhere.
+Program explanations describe the capability rather than each individual function.
+The file’s **Explanation** is a separate informational overview of its saved source.
 
-Genesis requires exactly one `- Main: \`project/relative/source\`` bullet in each
-Program's **Sources**. An agent must inspect the implementation and choose it
-explicitly. After updating the documents, use **Re-scan project**. An older
-cached index without an anchor links to the Program document until re-scanned;
-the viewer never guesses a main file.
+Genesis requires exactly one explicit main source per Program. After deliberate
+changes to the authored subsystem map or Program, use **Architecture options →
+Re-scan project** to load their current owners and memberships. Missing main
+anchors require correction rather than an inferred file or document link.
 
 The file opens as a document, with an **Explanation** field above its exports.
 An empty field offers **Generate explanation**. Press it to fill the field through
@@ -123,7 +123,8 @@ subsystem square. Selecting a subsystem public signature goes directly to its
 implementation file and selects that exact declaration, including a resolved
 re-export's original implementation. The same interface and explanation service
 is used; there is no project-wide folder tree, Open file or Find in files in
-this file view. Whole-file Code is read-only. A mouse wheel, two-finger touchpad
+this file view. Whole-file Code uses the shared Files editor, with Save now, autosave, Undo/Redo,
+download and conflict controls; only its browser is hidden. A mouse wheel, two-finger touchpad
 movement or a one-finger phone swipe scrolls the file, even at a scroll boundary.
 Scroll out on the canvas outside the square, or Ctrl-scroll/pinch anywhere, to
 return to its file icons. Outward zoom never opens a file. **×** at the top right

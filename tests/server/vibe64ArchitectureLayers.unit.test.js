@@ -444,6 +444,28 @@ test('observed signatures use declaration evidence, not every export in an impor
   }
 });
 
+test('available exports retain local declaration imports and distinguish file-level evidence from no recorded imports', () => {
+  for (const extension of ['js', 'rs', 'cs', 'py']) {
+    const architecture = {
+      subsystems: [{ id: 'owner', root: 'engine', fileIds: ['api', 'caller', 'other'] }],
+      files: [{ id: 'api', path: `engine/api.${extension}`, subsystemId: 'owner' }, { id: 'caller', path: `engine/caller.${extension}`, subsystemId: 'owner' }, { id: 'other', path: `engine/other.${extension}`, subsystemId: 'owner' }],
+      symbols: [{ id: 'run', fileId: 'api', name: 'run', visibility: 'public' }, { id: 'otherExport', fileId: 'api', name: 'otherExport', visibility: 'public' }, { id: 'future', fileId: 'other', name: 'future', visibility: 'public' }],
+      relations: [{ fromFileId: 'caller', targetFileId: 'api', resolution: 'resolved', importedSymbolIds: ['run'] },
+        { fromFileId: 'caller', targetFileId: 'api', resolution: 'resolved', importedSymbolIds: ['run'], typeOnly: true },
+        { fromFileId: 'caller', targetFileId: 'other', resolution: 'unresolved', importedSymbolIds: ['future'] }]
+    };
+    const outline = subsystemOutline(architecture, 'owner');
+    assert.equal(outline.observedSymbols.length, 0, 'local imports do not create cross-subsystem evidence');
+    assert.equal(outline.boundarySymbols.length, 0);
+    const [run, otherExport, future] = outline.availableSymbols;
+    assert.equal(run.consumerEvidence, 'declaration');
+    assert.deepEqual(run.consumers.map(file => file.path), [`engine/caller.${extension}`], 'repeated and type-only imports deduplicate by file');
+    assert.equal(otherExport.consumerEvidence, 'file');
+    assert.deepEqual(otherExport.consumers.map(file => file.path), [`engine/caller.${extension}`]);
+    assert.deepEqual(future.consumers, [], 'unresolved imports are not invented evidence');
+  }
+});
+
 test('opening subsystem detail keeps the map and exact controller port intact', () => {
   const architecture = {
     ui: {pages:[{id:'page',title:'Page'}],connections:[{id:'call',parentId:'page',resolution:'resolved',controllerFileId:'receiver',key:{protocol:'local',operation:'receive'}}]},

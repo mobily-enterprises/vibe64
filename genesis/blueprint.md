@@ -729,8 +729,10 @@ source files through the Architecture canvas. Genesis's directory-bound map is
 the canonical owner list: each Program capability belongs to exactly one owner,
 while its Sources may include another owner's libraries.
 Each capability has a visibly distinct main source file where people begin
-reading its implementation. Other participating files link back to it instead
-of repeating the explanation. Responsibilities and
+reading its implementation. Other participating files link to the Program view instead
+of repeating its explanation. Each subsystem lists its associated Programs; a
+Program opens as a dedicated explanation with the required main source and its
+supporting files. All source navigation stays inside Architecture. Responsibilities and
 Program contracts remain editable explanations, with source evidence for review.
 They are not proof of API intent or current behavior. There is no separate
 subsystem/Program list screen. The database overview continues to explain data.
@@ -1731,12 +1733,14 @@ identify applicable caller inputs and practical outputs: what is supplied, what 
 and how to read the returned data or invoke its operations, separately from effects.
 File overviews explain scope and behavior without function input/output sections.
 Subsystems display their Genesis-authored responsibility and associated capability
-explanations. Source-citation failures remain visible with document navigation;
+explanations in dedicated Program views. No action links to the raw subsystem
+or Program Markdown files. Source-citation failures remain visible;
 text can be selected without activating a signature.
-The viewer also retains exact symbol Code and read-only whole-file Code. Generated interpretations are
+The viewer also retains exact symbol Code. Whole-file Code uses the same viewer,
+editing, autosave, conflict and file controls as Files, with its browser hidden. Generated interpretations are
 informational only, cached privately against actual saved source and guidance,
 and regenerated on the next explicit explanation request after changes. Opening a file or
-selecting a declaration makes no Helper query. Dashboard Files retains editing.
+selecting a declaration makes no Helper query. Files retains its full browser.
 
 Purple protocol-neutral page/controller bridges remain evidenced and hidden
 initially; page selection focuses its calls and the menu can show all.

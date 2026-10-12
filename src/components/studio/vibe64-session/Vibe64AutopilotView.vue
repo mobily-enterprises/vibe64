@@ -682,6 +682,7 @@
           :session-id="sessionId"
           :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
           @ask-codex-about-file="askCodexAboutSourceEditorFile"
+          @open-program="architectureProgramRequest = { id: $event }; selectSessionTool('system')"
         />
       </section>
 
@@ -728,6 +729,7 @@
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
+          :open-program-request="architectureProgramRequest"
           :reload-version="systemReloadVersion"
           :project-slug="projectSlug"
           @open-table="openSubsystemTable"
@@ -741,9 +743,13 @@
             <v-btn :prepend-icon="mdiArrowLeft" size="x-small" type="button" variant="text" @click="backToDashboard">Back to dashboard</v-btn>
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
-          <template #file-interface="{ request, active, architecture, openFile, updateLocation }">
-            <Vibe64SessionSourceEditor single-file :key="request.path" :active="props.active && active" :agent-active="agentActive"
+          <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
+            <Vibe64SessionSourceEditor single-file :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture"
+              :file-bookmarks="fileBookmarks"
+              :ask-codex-available="sourceEditorAskCodexAvailable"
+              @ask-codex-about-file="askCodexAboutSourceEditorFile"
+              @open-program="openProgram"
               :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openFile"
@@ -950,7 +956,8 @@ const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
 const architectureFileRequest = ref(null);
-watch(() => props.session?.sessionId, () => { architectureFileRequest.value = null; });
+const architectureProgramRequest = ref(null);
+watch(() => props.session?.sessionId, () => { architectureFileRequest.value = null; architectureProgramRequest.value = null; });
 const resourceRetryBusy = ref(false);
 function openSubsystemTextLink({ event, href }, sourcePath, openSource) {
   // Markdown links are relative to their declaration, not the dashboard URL.
