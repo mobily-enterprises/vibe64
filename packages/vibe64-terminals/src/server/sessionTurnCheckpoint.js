@@ -46,7 +46,7 @@ async function checkpointSessionTurn({
     },
     patch: {
       ...(checkpoint ? { checkpointCommit: checkpoint.commit } : {}),
-      checkpointOutcome: outcome,
+      checkpointOutcome: checkpoint?.outcome || outcome,
       checkpointTurnId: outerTurnId,
       error: failure,
       status

@@ -1118,10 +1118,13 @@ test("Claude shared API access requires native verification and reports connecti
     const unchecked = await f.provider.assistantAccess(context);
     assert.equal(unchecked.available, false, "Codex key verification does not prove the Claude endpoint works");
     assert.equal(unchecked.ownerOnly, providerId !== "deepseek");
-    await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "private-key", claudeReady: true }));
+    const claudeRoot = path.join(f.providerOptions.systemRoot, "ai-connections", "claude", providerId);
+    await mkdir(path.join(claudeRoot, "auth", "codex"), { recursive: true });
+    await writeFile(path.join(claudeRoot, "connection.json"), JSON.stringify({ apiKey: "claude-private-key" }));
+    await writeFile(path.join(claudeRoot, "auth", "codex", "status.json"), JSON.stringify({ connected: true, generation: "fixture-generation" }));
     const verified = await f.provider.assistantAccess(context);
     assert.equal(verified.available, true);
-    assert.equal(verified.connectionIdentity, `curated:${providerId}:fixture-generation`);
+    assert.equal(verified.connectionIdentity, `curated:claude:${providerId}:fixture-generation`);
     assert.doesNotMatch(JSON.stringify(verified), /private-key/);
     const catalog = await f.provider.capabilities(context, { modelProviderId: providerId });
     assert.equal(catalog.modelProviders.find(({ id }) => id === providerId).connected, true);
@@ -1276,9 +1279,10 @@ test("Claude helpers still reject oversized answer text and structured results",
 
 test("Claude changes provider controls before model and keeps the native conversation", async (t) => {
   const f = await fixture(t);
-  const home = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
-  await mkdir(home, { recursive: true });
-  await writeFile(path.join(home, "connection.json"), JSON.stringify({ apiKey: "fixture-deepseek-secret", claudeReady: true }));
+  const home = path.join(f.providerOptions.systemRoot, "ai-connections", "claude", "deepseek");
+  await mkdir(path.join(home, "auth", "codex"), { recursive: true });
+  await writeFile(path.join(home, "connection.json"), JSON.stringify({ apiKey: "fixture-deepseek-secret" }));
+  await writeFile(path.join(home, "auth", "codex", "status.json"), JSON.stringify({ connected: true, generation: "fixture-controls" }));
   const first = await f.provider.sendMessage(f.context, { message: "Plan this", messageId: "plan" });
   const native = f.processes[0];
   await native.options.onEvent({ type: "result", subtype: "success", result: "Agreed." });
@@ -1312,9 +1316,9 @@ test("Claude changes provider controls before model and keeps the native convers
 
 test("Claude-only keys work in the catalogue, access check, chat and native terminal", async (t) => {
   const f = await fixture(t);
-  const root = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
+  const root = path.join(f.providerOptions.systemRoot, "ai-connections", "claude", "deepseek");
   await mkdir(path.join(root, "auth", "codex"), { recursive: true });
-  await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "claude-only-key", codexDisabled: true, claudeReady: true }));
+  await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "claude-only-key" }));
   await writeFile(path.join(root, "auth", "codex", "status.json"), JSON.stringify({ connected: true, generation: "test" }));
   f.context.assistantSelection = { ...f.context.assistantSelection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
   const access = await f.provider.assistantAccess(f.context);

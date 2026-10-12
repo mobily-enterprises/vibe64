@@ -83,3 +83,14 @@ it("reports a newly stopped active workflow once through the snackbar", async ()
   expect(feedback.report).toHaveBeenCalledWith(expect.objectContaining({ message: "Paused at your request.", channel: "snackbar" }));
   f.props.value.request = { ...f.props.value.request }; await nextTick(); expect(feedback.report).toHaveBeenCalledTimes(1);
 });
+
+it("explains an old uncertain attempt after changing assistants while preserving its receipt", async () => {
+  const original = { engineId: "claude", modelProviderId: "anthropic", modelId: "opus", agentId: "claude", variantId: "medium" };
+  const selection = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", agentId: "codex", variantId: "high" };
+  const value = request("implementation", "uncertain", { stopped: true, attemptedMessageId: "original-delivery", deliverySelection: original, error: "Original receipt unknown." });
+  const f = mount(value); expect(f.state().previousAttempt).toBe(false);
+  f.props.value.selection = selection; await nextTick(); expect(f.state().previousAttempt).toBe(true);
+  const html = await render(value, selection); expect(html).toContain("Previous assistant delivery unconfirmed");
+  expect(html).toContain("Send a new message to continue with your selected assistant."); expect(html).toContain("Check delivery only checks the previous attempt.");
+  expect(html).toContain("Check delivery"); expect(value.attemptedMessageId).toBe("original-delivery");
+});

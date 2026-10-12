@@ -28,15 +28,17 @@ import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.
 import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";
 import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";
 import planProgress from "./stateUpgrades/20261008-plan-progress.js";
-import colleagueCodexCompletedPolicy from "./stateUpgrades/20261010-colleague-codex-completed-policy.js";
+
+import independentProviderCredentials from "./stateUpgrades/20261009-independent-provider-credentials.js";
 import colleagueNativeContinuity from "./stateUpgrades/20261009-colleague-native-continuity.js";
+import colleagueCodexCompletedPolicy from "./stateUpgrades/20261010-colleague-codex-completed-policy.js";
 import colleagueNativeInstructions from "./stateUpgrades/20261010-colleague-native-instructions.js";
 
 import assistantWorkflow from "./stateUpgrades/20261010-assistant-workflow.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -58,7 +60,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow,
+async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -97,10 +99,11 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
       inspectConversationUndoRetirement,
       upgradeLearningPracticeHistory,
       upgradePlanProgress,
+      upgradeIndependentProviderCredentials,
+      upgradeColleagueNativeContinuity,
       upgradeColleagueCodexCompletedPolicy,
       upgradeColleagueNativeInstructions,
       upgradeAssistantWorkflow,
-      upgradeColleagueNativeContinuity,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {

@@ -23,10 +23,8 @@ const provider = computed(() => curatedCodexProvider(providerId.value));
 const connection = computed(() => connections.value.find(({ id }) => id === providerId.value));
 const engineLabel = computed(() => props.engineId === "claude" ? "Claude Code" : "Codex");
 const connected = computed(() => props.engineId === "claude" ? connection.value?.claudeReady : connection.value?.connected);
-const useExistingKey = computed(() => props.adding && connection.value?.status === "connected");
-const connectedEngines = computed(() => [
-  ...(connection.value?.connected ? ["codex"] : []), ...(connection.value?.claudeReady ? ["claude"] : [])
-]);
+const connectionStatus = computed(() => connection.value?.engineStates?.[props.engineId]?.status || "not_connected");
+const useExistingKey = computed(() => props.adding && connectionStatus.value === "connected");
 const choices = computed(() => [
   props.engineId === "claude" ? { id: "anthropic", label: "Claude Code - Claude · Claude subscription" }
     : { id: "openai", label: "Codex - GPT · ChatGPT or OpenAI API key" },
@@ -91,9 +89,8 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         </div>
         <p class="text-body-medium mb-3">{{ provider.description }}.</p>
         <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
-        <p v-if="connection?.status === 'connected'" class="text-body-small mb-3">
-          Ready for {{ connectedEngines.map(id => id === 'claude' ? 'Claude Code' : 'Codex').join(' and ') }}.
-          <template v-if="!connected">Connect {{ engineLabel }} using the saved key.</template>
+        <p v-if="connectionStatus === 'connected'" class="text-body-small mb-3">
+          Saved for {{ engineLabel }} only. Each orchestrator has its own connection.
         </p>
         <div class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
           <v-chip v-for="model in provider.models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>
@@ -105,23 +102,23 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         <v-form v-else :disabled="!actionsEnabled || busy" @submit.prevent="save()">
           <v-text-field
             v-if="!useExistingKey"
-            v-model="apiKey" :label="connection?.status === 'connected' ? 'Replace API key' : 'API key'" :type="visible ? 'text' : 'password'"
+            v-model="apiKey" :label="connectionStatus === 'connected' ? 'Replace API key' : 'API key'" :type="visible ? 'text' : 'password'"
             :append-inner-icon="visible ? mdiEyeOffOutline : mdiEyeOutline" autocomplete="off" spellcheck="false"
             variant="outlined" hint="Stored privately outside your projects. Existing keys are never shown." persistent-hint
             @click:append-inner="visible = !visible"
           />
-          <p class="text-body-small my-3">Checks {{ engineLabel }} first, then the other orchestrator. These small requests use API credit or plan quota.</p>
+          <p class="text-body-small my-3">Checks {{ engineLabel }} only. This small request uses API credit or plan quota.</p>
           <div class="d-flex flex-wrap ga-2 align-center">
             <v-btn
               type="submit" color="primary" variant="flat"
               :disabled="!actionsEnabled || (!useExistingKey && !apiKey.trim()) || busy"
             >
-              {{ busy ? 'Checking…' : useExistingKey || connection?.status !== 'connected' ? 'Check and connect' : 'Check and replace key' }}
+              {{ busy ? 'Checking…' : useExistingKey || connectionStatus !== 'connected' ? 'Check and connect' : 'Check and replace key' }}
             </v-btn>
-            <v-btn v-if="!adding && connection?.status === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
+            <v-btn v-if="!adding && connectionStatus === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
             <v-btn :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
             <v-btn
-              v-if="!adding && connection?.status && connection.status !== 'not_connected'" variant="text"
+              v-if="!adding && connectionStatus !== 'not_connected'" variant="text"
               :disabled="!actionsEnabled || busy" @click="confirmRemove = true"
             >
               Disconnect
@@ -130,7 +127,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         </v-form>
         <p v-if="provider.ownerOnly" class="text-body-small mt-3">This plan connection is available to the workspace owner.</p>
         <v-alert v-if="confirmRemove" variant="tonal" class="mt-3">
-          Disconnect {{ provider.label }} from Codex and Claude Code? Work using this key will stop. Your conversations and files remain.
+          Disconnect {{ provider.label }} from {{ engineLabel }}? Work using this connection will stop. Your conversations and files remain.
           <div class="d-flex ga-2 mt-2">
             <v-btn :disabled="busy" @click="confirmRemove = false">Keep connected</v-btn>
             <v-btn color="error" :disabled="busy" @click="save({ remove: true })">{{ busy ? "Disconnecting…" : "Disconnect" }}</v-btn>

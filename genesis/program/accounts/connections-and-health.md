@@ -291,14 +291,12 @@ so untouched absent roles do not become deliberately disabled. Customize carries
 proposals into the normal form; Keep current routing closes without saving.
 Adding a lower-priority provider does not replace a better choice.
 
-Curated external keys are checked separately against Responses for Codex and
-Messages for Claude Code. Setup requires the selected orchestrator's check to
-succeed, then checks the other independently. Failure of that optional check
-does not prevent connecting the selected orchestrator. Check saved key verifies
-the server-held credential without returning it to the browser. Claude readiness requires its successful protocol
-check; a failed Claude check leaves a working Codex connection usable. Older
-keys must be checked again before they become Claude-ready. Only readiness and
-redacted connection metadata reach the client. Provider URLs remain curated.
+Curated external keys are independently saved and checked against Responses for
+Codex and Messages for Claude Code. Setup validates only the selected
+orchestrator. Check saved key reads only that pair's server-held credential,
+without returning it to the browser. Failed validation leaves the prior working
+key and every other orchestrator/provider untouched. Readiness and redacted
+metadata reach the client; provider URLs remain curated.
 Claude's access reader applies the connection's scope: DeepSeek API access is
 shared, while the GLM Coding Plan and native Claude subscription are personal.
 The separate `zai` API connection declares workspace access; its setup requires
@@ -338,9 +336,9 @@ providers. Manage has no provider selector. Native expired/reconnecting
 accounts and configured external pairs remain in Manage. OpenCode availability
 comes from its refreshed catalogue; loading or failure is not treated as
 exhaustion. When no supported connections remain, Add connection is disabled.
-Adding an orchestrator for an existing shared key checks that saved key without
-exposing replacement or disconnect actions. Shared keys remain one credential: removal
-explicitly identifies its effect on both Codex and Claude Code. The regular Z.AI
+Adding an orchestrator requires its own independent key entry and verification.
+The same key may be entered deliberately for several pairs; no key is copied.
+Removal confirms the exact owning orchestrator/provider. The regular Z.AI
 recommendation is hidden for a connected regular API or Coding Plan key in
 OpenCode, or a Coding Plan key verified for Codex or Claude Code.
 
@@ -397,20 +395,38 @@ Responses key probe to JSKIT's existing Codex configuration owner, and its
 Messages key probe to JSKIT's Claude process/account owner. These operations
 retain the original single bounded request, native response validation and
 sanitized failure wording. Vibe64 still authorizes the curated provider/key,
-checks the selected orchestrator before its optional counterpart, serializes
-changes, invalidates owned runtimes before writing private files, and publishes
-the existing connection generation. Failed verification does not reach runtime
-invalidation or key writes; failed exit proof retains the original retry state.
-The optional `codexDisabled` field records an unsuccessful Codex
-check; absence means Codex remains enabled, as it was for every previously
-saved key. `claudeReady` retains its independent opt-in meaning. The numbered
-native-provider-readiness release boundary needs no historical conversion or
-provider calls. Replacement or removal marks that provider unavailable, drains only
-its owned runtimes, and updates its private native configuration and auth
-generation. Failure to prove process exit leaves the transition unavailable for
-retry. Each curated provider has a separate home under the installation's
-private `ai-connections/codex` state; OpenAI's credential home stays independent.
-Disconnect removes credentials while retaining native conversation history.
+checks only the selected orchestrator, serializes changes by that exact pair,
+and publishes that pair's connection generation. Codex and Claude records live
+under `ai-connections/<engine>/<provider>`; OpenCode retains its original store.
+Every runtime lookup names its intended orchestrator. Regular GLM API and Coding
+Plan remain separate providers; existing model and billing/access policies stay
+with their exact routes. Subscription credentials and native history retain the
+host's original HOME, including existing Claude API history; new saved records
+do not copy keys or claim a historical native binding has been restored.
+
+Codex provider mutation uses the existing native owner to enumerate trusted
+loaded thread/provider identities, pause selected goals, stop selected turns,
+unsubscribe selected observers and prove those threads are not loaded before
+publishing. Filtered observation journals and context generations preserve other
+threads' work, queues and shared server. Unknown inventories or retained native
+subscribers block publication with explicit retry guidance. Genuine account,
+socket and execution changes retain the original whole-runtime lifecycle.
+Intentional account changes do not bypass the native account identity guard.
+
+The new explicit `20261009-independent-provider-credentials` upgrade is prepared
+for later stopped-service execution. It appends after the existing assistant-
+workflow boundary without inserting into or reordering the published ledger
+prefix, including installations that have already applied that workflow. Its existing verified publisher owns private
+before/after copies and exact retry. It clears all three providers from both
+curated stores, the original OpenCode store and generated native credential
+files, including isolated Codex helper config and exact managed OpenCode
+`verify-<UUID>` auth files left when a key check crashes before its normal cleanup.
+It preserves unrelated provider
+configuration, native history/subscription credentials, project files and saved
+routing. Removed routes remain unavailable until independently reconnected.
+The historical routing helper freezes the original shared-store flag inventory
+so older upgrades preserve original choices before this new reset. No request,
+read or startup migrates or copies credentials.
 
 The setup form uses the shared Accounts command feedback, clears unsaved keys
 when changing providers, and keeps an in-flight save open. The shared AI Accounts list composes this form in both editions. DeepSeek is a
@@ -625,3 +641,20 @@ access fail before native catalogue discovery;
 eligible destinations still require the current catalogue before dispatch.
 Senior and Junior
 continue sharing the workflow orchestrator selected above the role fields.
+
+OpenCode native provider configuration is cached for the shared server lifetime.
+Credential mutation validates the selected provider first, then enters the existing
+shared owner acquisition fence before publishing the private store. Pending starts
+are drained. Other-provider users, unowned common-driver users and unconfirmed native
+terminals refuse the change before Stop or write, with close/retry guidance. When
+only owned selected users remain, original cleanup and verified shared process exit
+retire that cache before publication; the existing database and native IDs survive.
+The default store remains usable independently; its optional private publication
+facility is supplied only by the server composition, never browser or action input.
+
+Claude credential mutation uses the existing manager's terminal opening fence before
+its reconnect marker and private-key publication. Pending PTY openings drain first;
+selected bindings and live PTYs without a confirmed provider binding refuse before
+marker, runtime invalidation or key writes. Known other-provider PTYs stay running.
+The server-private prepare/publication continuations place the existing marker and
+write operations within that same fence; no HTTP/action input supplies them.

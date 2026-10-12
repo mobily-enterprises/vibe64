@@ -60,10 +60,14 @@ function assistantRoutingStatusIsPending(request) {
   return request?.status !== "complete" && ["routing", "pending", "sending", "uncertain"].includes(request?.delivery);
 }
 
-// A new request can replace a failed handoff only before any delivery attempt.
-function assistantRoutingRequestCanBeReplaced(request) {
-  return request?.delivery === "pending" && (request.status === "waiting" || Boolean(request.error)) &&
-    !request.helper && !request.attemptedMessageId;
+// Delivery belongs to the original message and assistant, independently of stage.
+function assistantRoutingRequestCanBeReplaced(request, selection) {
+  if (request?.helper) return false;
+  const previous = request?.deliverySelection || request?.observedSelection;
+  if (request?.stopped && previous && selection &&
+      ["engineId", "modelProviderId", "modelId", "agentId", "variantId"].some(
+        key => String(previous[key] || "").trim() !== String(selection[key] || "").trim())) return true;
+  return request?.delivery === "pending" && (request.status === "waiting" || Boolean(request.error)) && !request.attemptedMessageId;
 }
 
 function hasConnectedAssistantModels(engine) {

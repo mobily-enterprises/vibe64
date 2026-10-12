@@ -6,6 +6,8 @@ Git commands.
 
 ## Sources
 
+- `packages/vibe64-execution/src/server/gitTurnCheckpoint.js`
+
 - `packages/vibe64-core/src/server/projectRepository.js`
 - `packages/vibe64-project/src/server/repositoryBranches.js`
 - `packages/vibe64-project/src/server/actions.js`
@@ -37,6 +39,16 @@ Git commands.
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 
 ## Public contract
+
+Each outer assistant turn owns one private Git checkpoint. Later failed,
+cancelled or interrupted observations of the same session and turn validate
+and reuse the first checkpoint's exact tree, commit and recorded outcome.
+Outcome is an observation, not another identity. Confirmation projects that
+recorded outcome into the existing background task and clears a failed retry's
+warning; it does not replace source or move a newer latest ref backwards.
+Validation still requires the complete canonical checkpoint message for that
+session and turn and a supported recorded outcome. Foreign or malformed refs
+remain errors.
 
 Colleague can inspect work, Save, check for updates and apply an Update through
 the same session actions as the UI. Its bounded results include changed-file

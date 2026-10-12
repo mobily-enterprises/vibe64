@@ -4388,6 +4388,30 @@ test("R19 a late recovery ACK cannot replace admitted B or bypass its authored-r
   assert.deepEqual(harness.systemMessages, []);
 });
 
+
+test("prepared credential publication retires only selected native users before replacement and retains history", async (t) => {
+  const harness = await controllerHarness();
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = { runtime: harness.runtime, session: harness.session, vibe64User: { username: "ada" } };
+  const first = await harness.controller.ensureSession("session-1", options);
+  const result = await harness.controller.invalidateRuntimes({ modelProviderId: "deepseek", reason: "replaced", publish() {
+    assert.equal(harness.processStops.length, 1);
+    harness.connection.apiKey = "fixture-replacement";
+    harness.connection.fingerprint = `sha256:${"3".repeat(64)}`;
+  } });
+  assert.equal(result.ok, true);
+  const second = await harness.controller.ensureSession("session-1", options);
+  const starts = harness.processStarts.filter(entry => entry.options.execution.operationId === "opencode-server");
+  assert.equal(first.thread.id, second.thread.id);
+  assert.equal(starts.length, 2);
+  assert.equal(starts[0].options.dbPath, starts[1].options.dbPath);
+  assert.equal(starts[1].options.providerConnections[0].apiKey, "fixture-replacement");
+  assert.equal(harness.createdSessions.filter(entry => entry.id === first.thread.id).length, 1);
+});
+
 // These companions use the original Main controller and native-history fixture.
 // A prompt ACK deliberately precedes native user creation, as prompt_async does.
 for (const order of ["later", "safe-tie", "unsafe-tie"]) {
@@ -4685,6 +4709,7 @@ for (const failureAt of ["R", "B"]) {
     }
   });
 }
+
 
 test("R20 hidden renewal successor preserves the original invalid-ACK boundary through the real store", { timeout: 15_000 }, async t => {
   const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");

@@ -468,7 +468,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         delete state.error;
         await save(context, state);
       }
-      if (assistantRoutingStatusIsPending(state) && state.messageId !== input.messageId) throw failure("Resolve or cancel the pending request before sending another.");
+      if (assistantRoutingStatusIsPending(state) && state.messageId !== input.messageId &&
+          !assistantRoutingRequestCanBeReplaced(state, vibe64AssistantSelectionFromMetadata(context.session.metadata))) {
+        throw failure("Resolve or cancel the pending request before sending another.");
+      }
       if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");
       if (state?.messageId !== input.messageId && state?.status === "working" && state.delivery === "accepted" && state.workflow === true) {
         throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.");
@@ -655,11 +658,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     });
   }
 
-  async function cancel(sessionId, options, { waitForCleanup = false } = {}) {
+  async function cancel(sessionId, options, { waitForCleanup = false, expectedMessageId } = {}) {
     let stop;
     let finished;
     const result = await exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
+      if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) throw failure("The routing request changed. Retry the assistant selection.");
       const task = running.get(keyFor(sessionId, context));
       liveFollowupRequests.delete(keyFor(sessionId, context));
       if (task) { task.cancelled = true; stop = task.stop; finished = task.finished.promise; }
@@ -676,6 +680,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     });
     await stop?.();
     if (waitForCleanup) await finished;
+    if (waitForCleanup) await exclusive(sessionId, options, async context => {
+      if ((await read(context.runtime.store, sessionId))?.helper) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+    });
     return result;
   }
 

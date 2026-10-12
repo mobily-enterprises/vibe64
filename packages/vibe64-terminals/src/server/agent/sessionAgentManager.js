@@ -1,4 +1,5 @@
 import path from "node:path";
+import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { openMainConversation } from "../mainConversationBinding.js";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS, recommendedRoutingAssignments,
@@ -259,6 +260,15 @@ function createSessionAgentManager({
   const bindings = new Map();
   const bindingTokens = new Map();
   const terminalBindings = new Map();
+  const terminalStarts = new Set();
+  const connectionChanges = new Set();
+
+  function connectionChangeBusy(engineId = "opencode") {
+    const label = engineId === "claude" ? "Claude Code" : "OpenCode";
+    return Object.assign(new Error(`Close ${label} native terminals, then retry this connection change. The saved connection has not changed.`), {
+      code: `vibe64_${engineId}_connection_in_use`, statusCode: 409
+    });
+  }
   const operations = new Map();
   // A full profile selects provider-owned execution details. Only the exact
   // in-process object issued by this manager may carry those details into a
@@ -563,7 +573,17 @@ function createSessionAgentManager({
       metadata: { ...options.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) } } };
   }
 
-  async function callSessionProvider(method = "", sessionId = "", input = {}, options = {}, {
+  async function callSessionProvider(method, ...args) {
+    const opening = method === "startTerminal" ? Promise.withResolvers() : null;
+    if (opening) terminalStarts.add(opening.promise);
+    try {
+      return await invokeSessionProvider(method, ...args);
+    } finally {
+      if (opening) { terminalStarts.delete(opening.promise); opening.resolve(); }
+    }
+  }
+
+  async function invokeSessionProvider(method = "", sessionId = "", input = {}, options = {}, {
     coalesceIdentity = ""
   } = {}) {
     let operationOptions = {
@@ -590,6 +610,9 @@ function createSessionAgentManager({
         expectedConnectionIdentity: terminalBinding.connectionIdentity };
     }
     const provider = boundTerminal ? providerById.get(terminalBinding.providerId) : bindSession(sessionId, operationOptions);
+    if (method === "startTerminal" && connectionChanges.has(provider.id)) {
+      throw connectionChangeBusy(provider.id);
+    }
     const operation = attachments?.[method] || conversationOperation(provider, method) || provider[method];
     if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
@@ -1352,8 +1375,31 @@ function createSessionAgentManager({
     hasActiveTemporaryConversation: sessionMethod("hasActiveTemporaryConversation"),
     interruptDetachedChatTurn: sessionMethod("interruptDetachedChatTurn"),
     interruptTurn: sessionMethod("interruptTurn"),
-    invalidateRuntimes(input = {}, options = {}) {
-      return callAllProviders("invalidateRuntimes", input, options);
+    async invalidateRuntimes(input = {}, options = {}) {
+      const engineId = input.provider;
+      const credentialChange = typeof input.publish === "function" &&
+        (engineId === "opencode" || engineId === "claude" && input.reason === "provider-key-change");
+      if (!credentialChange) return callAllProviders("invalidateRuntimes", input, options);
+      if (connectionChanges.has(engineId)) throw connectionChangeBusy(engineId);
+      connectionChanges.add(engineId);
+      try {
+        await Promise.all([...terminalStarts]);
+        const bound = [...terminalBindings.entries()].filter(([, binding]) => binding.providerId === engineId);
+        if (bound.some(([, binding]) => engineId === "opencode" || binding.selection?.modelProviderId === input.modelProviderId)) {
+          throw connectionChangeBusy(engineId);
+        }
+        if (engineId === "claude") {
+          const known = new Set(bound.map(([id]) => id));
+          if (listTerminalSessions({ namespacePrefix: "vibe64-claude:" })
+            .some(terminal => terminal.status !== "exited" && !known.has(terminal.id))) throw connectionChangeBusy(engineId);
+          await input.prepare();
+        }
+        const result = await callAllProviders("invalidateRuntimes", input, { ...options, engineId });
+        if (engineId === "claude" && result?.ok !== false) await input.publish();
+        return result;
+      } finally {
+        connectionChanges.delete(engineId);
+      }
     },
     async listCapabilities(input = {}, options = {}) {
       const requestedEngineId = normalizeText(input?.engineId);

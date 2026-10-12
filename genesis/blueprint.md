@@ -966,15 +966,16 @@ message or stopping the main assistant.
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
 Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
-sign-in. Connections are grouped by orchestrator, with each configured provider
-listed under every orchestrator it supports. Manage opens that exact pair with
+sign-in. Connections are grouped by orchestrator, with each independently configured provider
+listed under its owning orchestrator. Manage opens that exact pair with
 no provider selector. After connecting, optional routing suggestions and the
 Configure routing button stay with the orchestrator selected for setup, even
 when the same key also works with another orchestrator. Add connection offers only orchestrators with missing
 connection options, then only their unconfigured providers. Expired or failed
 configured connections remain under Manage for reconnection. When every
-available connection is configured, Add connection is disabled. Shared-key removal explains
-that it affects both Codex and Claude Code. The Add GLM shortcut
+available connection is configured, Add connection is disabled. Each saved DeepSeek or GLM connection belongs to one orchestrator/provider.
+Different keys or deliberately equal keys can be saved independently. Setup,
+checks, replacement and removal affect only that pair. The Add GLM shortcut
 is hidden when GLM is already connected through Codex, Claude Code or OpenCode.
 Provider credentials and shared model-routing assignments belong to the
 editor's account storage, outside the project. Native Codex and Claude credentials keep
@@ -1023,6 +1024,12 @@ recovery model and give the owner a warned switch for broader access. Starting
 a session presents the configured list promptly without waiting for an AI
 provider to start or discover models. People can switch the assistant application,
 provider or model between turns without replacing the session or its files.
+An exhausted provider cannot trap an idle conversation behind a pending
+automatic continuation or review. Choosing another permitted assistant cancels
+that scheduling, confirms helper cleanup and retains uncertain delivery evidence
+without resending. An existing turn checkpoint remains valid when later failure,
+Stop or restart observations describe a different outcome for that same turn;
+the first checkpoint retains its tree and original outcome.
 Returning to an application reuses its previous native conversation. OpenCode
 creates its own conversation IDs; Vibe64 saves them across restarts and application
 switches. The next
@@ -1499,10 +1506,9 @@ terminal surfaces. The owner signs in to their Claude subscription through a
 guided browser-and-code flow in AI Accounts. The official CLI owns credentials,
 and Vibe64 confirms the connected account automatically. Its setup also offers
 DeepSeek API and GLM Coding Plan keys, using the same connection form as Codex.
-An existing external key can be checked for either orchestrator without entering
-it again. Each orchestrator is enabled only after its own verification succeeds;
-Claude can connect even when Codex verification fails. Disconnecting the shared
-key stops its use in both orchestrators.
+A saved external key can be checked only for its owning orchestrator without
+entering it again. Each orchestrator is enabled only after its own verification
+succeeds. Connecting or disconnecting one pair never changes another pair.
 Senior and Junior can use Claude and an external model within one native Claude
 Code conversation. Provider switches retain native history, tool results and
 compaction. Background calls stay with the selected provider, and returning to

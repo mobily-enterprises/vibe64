@@ -1144,7 +1144,7 @@ function createService({
   const providerUsage = createProviderUsage({
     resolveConnection: (selection) => selection.engineId === "opencode"
       ? assistantRuntime.resolveConnection(selection)
-      : codexProviderConnections.read(selection.modelProviderId)
+      : codexProviderConnections.read(selection.modelProviderId, selection.engineId)
   });
   const runNativeDetachedConversation = request => mainConversations.runNativeDetachedConversation(request);
   const codex = createCodexSessionRegistration({
@@ -3528,7 +3528,7 @@ function createService({
       else if (assistantSelection.engineId === "claude") connection = await codexProviderConnections.claudeProviderSettings(integrationId);
       else {
         await codexProviderConnections.runtimeOptions(integrationId);
-        connection = await codexProviderConnections.read(integrationId);
+        connection = await codexProviderConnections.read(integrationId, "codex");
       }
       if (!connection?.apiKey) throw new Error("Reconnect the selected AI account before continuing.");
       return { providerId: integrationId, model: assistantSelection.modelId, apiKey: connection.apiKey,
@@ -4055,6 +4055,10 @@ function createService({
           assistant_routing: JSON.stringify(preferences) } }
       });
       return prepared.pinned;
+    },
+
+    cancelAssistantRoutingForSelection(sessionId, messageId, options = {}) {
+      return assistantRouting.cancel(sessionId, options, { waitForCleanup: true, expectedMessageId: messageId });
     },
 
     globalCodexTerminalState() {

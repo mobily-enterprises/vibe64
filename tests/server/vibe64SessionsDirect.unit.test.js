@@ -49,6 +49,7 @@ import {
   createService
 } from "../../packages/vibe64-sessions/src/server/service.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import {
   developmentDatabasePolicy
@@ -3741,7 +3742,7 @@ test("named chat modes switch workflow through authorized native handover and pr
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
         assistant_selection: JSON.stringify(current),
         assistant_routing: JSON.stringify({ mode, review: mode === "auto", workflowEngineId: "codex", override: current }),
-        ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ status: "review_pending" }) } : {}),
+        ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ status: "review_pending", messageId: "old-request" }) } : {}),
         ...(failure === "goal" ? { assistant_routing_goal: JSON.stringify({ status: "active" }) } : {})
       } };
       const original = { ...session.metadata };
@@ -3766,6 +3767,16 @@ test("named chat modes switch workflow through authorized native handover and pr
         },
         async agentSessionState() { return { turn: { active: failure === "active" } }; },
         async readAgentGoal() { return { status: "unavailable" }; },
+        async cancelAssistantRoutingForSelection(id, messageId, options) {
+          assert.equal(id, session.sessionId);
+          assert.equal(messageId, "old-request");
+          assert.equal(options.vibe64User, actor);
+          const cancelled = await runtime.store.runSessionExclusive(id, "cancel-routing", async () => {
+            operations.push("cancel");
+            session.metadata.assistant_routing_request = JSON.stringify({ status: "done", messageId, stopped: true, review: false });
+          });
+          assert.equal(cancelled.acquired, true, "cancel must run after the selection lock is released");
+        },
         async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session.metadata.assistant_selection, original.assistant_selection);
@@ -3777,7 +3788,7 @@ test("named chat modes switch workflow through authorized native handover and pr
       const result = await service.updateAssistantSelection(session.sessionId, {
         assistantRouting: { mode, review: mode === "auto", workflowEngineId: "claude" }, vibe64User: actor
       });
-      if (failure && failure !== "same-native-backup") {
+      if (failure && !["same-native-backup", "pending"].includes(failure)) {
         assert.equal(result.ok, false, `${mode}: ${failure}`);
         assert.deepEqual(session.metadata, original);
         assert.ok(!operations.includes("write"));
@@ -3786,12 +3797,75 @@ test("named chat modes switch workflow through authorized native handover and pr
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
         assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", workflowEngineId: "claude" });
-        assert.deepEqual(operations, ["resolve", "access", "prepare", "write", "write"]);
+        assert.deepEqual(operations, failure === "pending"
+          ? ["resolve", "access", "cancel", "resolve", "access", "prepare", "write", "write"]
+          : ["resolve", "access", "prepare", "write", "write"]);
       }
     }
   }
 });
 
+
+test("credit exhaustion permits an authorized assistant change without replaying uncertain delivery", async () => {
+  for (const status of ["routing", "sending", "uncertain", "review_pending", "review_sending", "review_uncertain",
+    "planning_pending", "planning_sending", "planning_uncertain", "implementation_pending", "implementation_sending", "implementation_uncertain", "sent"]) {
+    for (const failure of ["", "helper-cleanup", "access-changed", "native-started", "request-changed"]) {
+      const lock = agentWriteLockHarness();
+      const current = { schema: "vibe64.assistant-selection.v1", engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
+        modelId: "opus", variantId: "medium", catalogRevision: `sha256:${"a".repeat(64)}` };
+      const next = { ...current, engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra" };
+      const original = { status, messageId: "original-request", attemptedMessageId: "original-continuation", threadId: "original-thread",
+        workflowEngineId: "claude", deliverySelection: current, review: true, resolvedMode: "junior", error: "Claude has no active turn for this message.",
+        ...(failure === "helper-cleanup" ? { helper: { conversationId: "retained-helper", scope: {} } } : {}) };
+      const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+        assistant_selection: JSON.stringify(current), assistant_routing_request: JSON.stringify(original) } };
+      const runtime = { stateRoot: "/unused-selection-fixture", async getSession() { return session; }, store: { ...lock.store,
+        async readMetadataValue(_id, name) { return session.metadata[name]; },
+        async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
+      const routing = createAssistantRouting({ agent: { async deleteEphemeralConversation() { return { ok: false }; } },
+        exclusive: async (_id, options, operation) => {
+          const result = await runtime.store.runSessionExclusive(session.sessionId, "routing", () => operation({ ...options, runtime, session }));
+          assert.equal(result.acquired, true, "routing cancellation cannot nest the selection lock");
+          return result.value;
+        }, publish: async () => {}, dispatch: () => assert.fail("selection cannot resend work") });
+      let accesses = 0;
+      let cancelled = false;
+      let prepared = false;
+      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+        async resolveAssistantSelection() { return next; },
+        async requireAssistantSelectionAccess() {
+          if (++accesses === 2 && failure === "access-changed") throw new Error("Destination access was revoked.");
+        },
+        async agentSessionState() { return { turn: { active: cancelled && failure === "native-started" } }; },
+        async cancelAssistantRoutingForSelection(id, messageId, options) {
+          if (failure === "request-changed") session.metadata.assistant_routing_request = JSON.stringify({ ...original, messageId: "newer-request" });
+          await routing.cancel(id, options, { waitForCleanup: true, expectedMessageId: messageId });
+          cancelled = true;
+        },
+        async prepareRoutingSelection() { prepared = true; }
+      } });
+      const result = await service.updateAssistantSelection(session.sessionId, { assistantSelection: next, vibe64User: { role: "owner", username: "owner" } });
+      const retained = JSON.parse(session.metadata.assistant_routing_request);
+      assert.equal(retained.attemptedMessageId, original.attemptedMessageId);
+      assert.equal(retained.threadId, original.threadId);
+      if (failure) {
+        assert.equal(result.ok, false, `${status}: ${failure}`);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+        assert.equal(prepared, false);
+        if (failure === "helper-cleanup") assert.equal(retained.helper.conversationId, "retained-helper");
+        if (failure === "request-changed") assert.equal(retained.messageId, "newer-request");
+      } else {
+        assert.notEqual(result.ok, false, `${status}: ${JSON.stringify(result)}`);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
+        assert.equal(retained.stopped, true);
+        assert.equal(retained.review, false);
+        assert.equal(prepared, true);
+        assert.equal(accesses, 2);
+        if (status.endsWith("uncertain")) assert.equal(retained.status, status);
+      }
+    }
+  }
+});
 
 async function learningSessionCreationFixture(root, { denied = false, publishFailure = false, inspectFailure = false } = {}) {
   const { createService: createProjectService } = await import("../../packages/vibe64-project/src/server/service.js");

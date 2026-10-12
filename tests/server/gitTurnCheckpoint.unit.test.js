@@ -75,6 +75,50 @@ test("turn checkpoint retries are object-identical and a later turn advances lat
   }
 });
 
+test("terminal outcome changes reuse the original checkpoint and retain its recorded outcome", async () => {
+  const root = await createRepository();
+  try {
+    const input = { sessionId: "session-1", outerTurnId: "failed-claude-turn", outcome: "failed",
+      timestamp: "2026-10-10T02:23:47.000Z", worktreePath: root };
+    await writeFile(path.join(root, "tracked.txt"), "work before credit exhaustion\n");
+    const first = await createGitTurnCheckpoint(input);
+    await writeFile(path.join(root, "tracked.txt"), "later work must not replace the snapshot\n");
+    const later = await createGitTurnCheckpoint({ ...input, outerTurnId: "later-turn", outcome: "completed" });
+    const status = await git(root, ["status", "--porcelain=v1"]);
+    const head = await git(root, ["rev-parse", "HEAD"]);
+    for (const outcome of ["interrupted", "cancelled", "completed", "failed"]) {
+      const retry = await createGitTurnCheckpoint({ ...input, outcome, timestamp: "2026-10-10T02:23:49.000Z" });
+      assert.equal(retry.commit, first.commit);
+      assert.equal(retry.tree, first.tree);
+      assert.equal(retry.created, false);
+      assert.equal(retry.outcome, "failed");
+      assert.equal(await git(root, ["rev-parse", retry.latestRef]), later.commit);
+      assert.equal(await git(root, ["status", "--porcelain=v1"]), status);
+      assert.equal(await git(root, ["rev-parse", "HEAD"]), head);
+      assert.equal(await git(root, ["show", `${retry.commit}:tracked.txt`]), "work before credit exhaustion");
+    }
+  } finally { await rm(root, { force: true, recursive: true }); }
+});
+
+test("checkpoint retries still reject a different session, turn or malformed recorded outcome", async () => {
+  const root = await createRepository();
+  try {
+    const input = { sessionId: "session-1", outerTurnId: "turn-1", outcome: "failed",
+      timestamp: "2026-10-10T02:23:47.000Z", worktreePath: root };
+    const first = await createGitTurnCheckpoint(input);
+    const message = await git(root, ["show", "-s", "--format=%B", first.commit]);
+    for (const corrupt of [message.replaceAll("session-1", "session-2"), message.replaceAll("turn-1", "turn-2"),
+      message.replace("Vibe64-Turn-Outcome: failed", "Vibe64-Turn-Outcome: unknown")]) {
+      const impostor = await git(root, ["commit-tree", first.tree, "-p", first.baseCommit, "-m", corrupt]);
+      await git(root, ["update-ref", first.turnRef, impostor]);
+      await assert.rejects(createGitTurnCheckpoint({ ...input, outcome: "interrupted" }),
+        { code: "vibe64_checkpoint_identity_mismatch" });
+      assert.equal(await git(root, ["rev-parse", first.turnRef]), impostor);
+      assert.equal(await git(root, ["rev-parse", first.latestRef]), first.commit);
+    }
+  } finally { await rm(root, { force: true, recursive: true }); }
+});
+
 test("checkpoint publication retries a competing latest ref without losing either turn or changing source", async () => {
   const root = await createRepository();
   try {

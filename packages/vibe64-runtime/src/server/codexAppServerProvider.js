@@ -20,7 +20,7 @@ import {
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import os from "node:os";
+import { codexAppServerRuntimeBaseDir } from "./agentProviderRuntimePaths.js";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -141,39 +141,6 @@ async function currentCodexAccountIdentitySignature(options = {}, { includeInter
     return codexAccountIdentitySignature("vibe64-login", loginId);
   }
   return (await readCodexSelectedAccountAuth(options)).identitySignature;
-}
-
-function hasOwn(object = {}, property = "") {
-  return Object.prototype.hasOwnProperty.call(object, property);
-}
-
-function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
-  const primaryEnv = isPlainObject(env) ? env : {};
-  const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
-  return normalizeAgentText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
-}
-
-function processUid() {
-  return typeof process.getuid === "function" ? process.getuid() : "user";
-}
-
-function codexAppServerRuntimeBaseDir({
-  env = process.env,
-  hostEnv = process.env
-} = {}) {
-  const explicitDir = runtimeEnvValue(env, hostEnv, "VIBE64_AGENT_RUNTIME_DIR");
-  if (explicitDir) {
-    return path.resolve(explicitDir);
-  }
-  const xdgRuntimeDir = runtimeEnvValue(env, hostEnv, "XDG_RUNTIME_DIR");
-  if (xdgRuntimeDir && path.isAbsolute(xdgRuntimeDir)) {
-    return path.join(xdgRuntimeDir, "vibe64", "agent-providers");
-  }
-  const homeDir = normalizeAgentText(os.homedir());
-  if (homeDir && path.isAbsolute(homeDir)) {
-    return path.join(homeDir, ".cache", "vibe64", "agent-providers");
-  }
-  return path.join(os.tmpdir(), `vibe64-${processUid()}`, "agent-providers");
 }
 
 function codexAppServerRuntimeScope({

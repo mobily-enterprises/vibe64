@@ -392,3 +392,19 @@ test("terminal legacy versioned requests retain evidence across original convers
     assert.equal(await f.store.readMetadataValue("terminal", "assistant_routing_request"), raw);
   }
 });
+
+
+test("historical routing keeps the original shared Codex/Claude readiness inventory before the independent reset", async t => {
+  const f = await fixture(t, { populated: false });
+  const root = path.join(f.systemRoot, "ai-connections", "codex", "deepseek");
+  await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "historical-fixture", claudeReady: true }));
+  await mkdir(path.dirname(f.routingPath), { recursive: true });
+  await writeFile(f.routingPath, JSON.stringify({ schemaVersion: 1, revision: 2,
+    orchestrators: { claude: { plan: selection("claude", "deepseek", "deepseek-flash"), code: selection("claude", "deepseek", "deepseek-flash") } } }));
+  await f.run(true);
+  const routing = JSON.parse(await readFile(f.routingPath));
+  assert.deepEqual(routing.orchestrators.claude.plan, selection("claude", "deepseek", "deepseek-flash"));
+  assert.equal(routing.orchestrators.claude.sharedBackup.modelProviderId, "deepseek");
+  assert.equal(await readFile(path.join(root, "connection.json"), "utf8"), JSON.stringify({ apiKey: "historical-fixture", claudeReady: true }));
+});

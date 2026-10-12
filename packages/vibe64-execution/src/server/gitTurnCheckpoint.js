@@ -327,7 +327,11 @@ async function validateExistingCheckpoint({
     "--format=%B",
     commit
   ], { project });
-  if (message !== checkpointMessage(identity).trim()) {
+  // Failure, Stop and restart observations can report different outcomes for
+  // one outer turn. The first snapshot owns its outcome; retries own no new tree.
+  const recordedOutcome = [...CHECKPOINT_OUTCOMES].find((outcome) =>
+    message === checkpointMessage({ ...identity, outcome }).trim());
+  if (!recordedOutcome) {
     throw checkpointError(
       "Existing Vibe64 turn checkpoint does not match its durable turn identity.",
       "vibe64_checkpoint_identity_mismatch"
@@ -361,7 +365,7 @@ async function validateExistingCheckpoint({
     latestRef: refs.latestRef,
     ok: true,
     outerTurnId: identity.outerTurnId,
-    outcome: identity.outcome,
+    outcome: recordedOutcome,
     sessionId: identity.sessionId,
     tree,
     turnRef: refs.turnRef

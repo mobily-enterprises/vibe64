@@ -6,10 +6,12 @@ import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
 import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions } from "@local/vibe64-colleague/server/conversationUpgrade";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
 import { upgradePlanProgress, upgradeAssistantWorkflow } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
+
+import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/server/providerCredentialsUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -32,13 +34,14 @@ try {
     upgradeSessionConversations,
     upgradeColleagueConversationRuntime,
     upgradeColleagueConversationHistory,
+    upgradeColleagueNativeContinuity,
     upgradeColleagueCodexCompletedPolicy,
     upgradeColleagueNativeInstructions,
-    upgradeColleagueNativeContinuity,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
     upgradePlanProgress,
     upgradeAssistantWorkflow,
+    upgradeIndependentProviderCredentials,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
       if (level === "warning") console.error(line);

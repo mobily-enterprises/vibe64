@@ -2518,10 +2518,9 @@ function createService({
         const failure = codexManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, input);
-        const connected = providers.find((provider) => provider.id === input.modelProviderId);
-        const engineIds = [...(connected?.connected ? ["codex"] : []), ...(connected?.claudeReady ? ["claude"] : [])];
+        const engineIds = [input.engineId];
         const routing = await initializeModelRouting({ engineIds, vibe64User: input.vibe64User });
-        await publishAccountChanged("codex", { reason: "provider-key-saved" });
+        await publishAccountChanged(input.engineId, { reason: "provider-key-saved" });
         return { ok: true, providers, routing };
       });
     },
@@ -2529,8 +2528,8 @@ function createService({
       return accountsResult(async () => {
         const failure = codexManagementError(input);
         if (failure) return failure;
-        const providers = await codexProviders.change(input.modelProviderId, { remove: true });
-        await publishAccountChanged("codex", { reason: "provider-key-removed" });
+        const providers = await codexProviders.change(input.modelProviderId, { remove: true, engineId: input.engineId });
+        await publishAccountChanged(input.engineId, { reason: "provider-key-removed" });
         return { ok: true, providers };
       });
     },

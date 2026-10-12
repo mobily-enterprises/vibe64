@@ -35,6 +35,37 @@ validation; subscription login can require an external browser, one-time code or
 authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
+DeepSeek, regular GLM API and GLM Coding Plan connections belong to the
+orchestrator shown in that row. Use **Add connection**, choose **Codex**,
+**Claude Code** or **OpenCode**, then its provider. Enter a key and complete
+that row's verification. Each orchestrator can save a different key, or you can
+enter the same key independently for several orchestrators. Connecting or
+checking one row does not connect, check or copy a key to another. Regular GLM
+API and GLM Coding Plan also remain separate connections within each orchestrator.
+
+When upgrading an older installation to these independent connections, the
+operator first checks the candidate's pending upgrades and applies the numbered
+credential reset with all writers stopped. The reset follows the existing
+assistant-workflow upgrade and preserves its recorded history; it clears saved provider keys locally without revoking them at
+the provider. Reconnect the exact orchestrator/provider rows afterward. Colleague
+can explain this prerequisite; it cannot run the host upgrade or copy your keys.
+
+Use **Manage** on the exact row to check its saved key, replace it, or remove
+that connection. Replacement is checked before the working key is changed.
+Replacement and removal affect only that orchestrator/provider. If Codex reports
+another native subscriber, close the native terminal using that provider and retry.
+Claude Code also requires closing a terminal using the selected provider. If a
+terminal's provider cannot be confirmed, close that Claude terminal and retry;
+known terminals using another provider keep running. Refusal preserves the saved
+key and connection status.
+OpenCode may require you to close its native terminals, other-provider chats and
+Colleague conversations before changing a key. If it refuses, the saved key stays
+unchanged and those conversations keep running; close the named users and retry. Saved routing can still name a disconnected
+provider; reconnect the exact row or deliberately choose a different route.
+The controls and results are the same on desktop and mobile. Colleague can
+inspect redacted readiness and explain these steps; secret entry and connection
+consent remain your interaction in **AI Accounts**.
+
 For Claude, a failed status check is distinct from being signed out. Retry the
 status check before starting another login; Colleague can recheck readiness,
 while provider consent remains your step.

@@ -1704,7 +1704,7 @@ function createService({
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
         const runtime = await project.createRuntime({ inspectSource: false });
-        const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+        const update = () => runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
           let preferences = null;
@@ -1766,9 +1766,9 @@ function createService({
             if (preferences?.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
           }
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
-          if (assistantRoutingStatusIsPending(routingRequest) ||
-              routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted") {
-            throw new Error("Finish or cancel the pending request and review before changing assistants.");
+          if (routingRequest?.helper || !routingRequest?.stopped && (assistantRoutingStatusIsPending(routingRequest) ||
+              routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted")) {
+            return { cancelRouting: routingRequest.messageId };
           }
           const nextPreferences = preferences || {
             mode: "custom", review: false, workflowEngineId: next.engineId, override: next
@@ -1789,6 +1789,16 @@ function createService({
             session: await runtime.getSession(sessionId, { inspectSource: false })
           };
         }, { operation: "update-assistant-selection" });
+        let exclusive = await update();
+        if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
+          // Router cleanup needs this lock for its final callbacks. Release it,
+          // cancel through its owner, then revalidate access and native state.
+          await terminals.cancelAssistantRoutingForSelection(sessionId, exclusive.value.cancelRouting, { runtime, vibe64User });
+          exclusive = await update();
+          if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
+            throw new Error("Another routing request started. Retry the assistant selection.");
+          }
+        }
         if (!exclusive.acquired) {
           return exclusive.value;
         }

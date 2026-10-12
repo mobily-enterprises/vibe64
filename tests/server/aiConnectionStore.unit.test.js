@@ -647,3 +647,32 @@ test("retired helper settings never select a runtime model or disappear through 
     assert.equal(await readFile(filePath, "utf8"), original);
   }
 });
+
+test("credential publication runs after selected validation and preserves prior saved keys when native retirement refuses", async t => {
+  const calls = [];
+  let refuse = false;
+  const { store, filePath } = await fixture(t, {
+    async verifyConnection(input) { calls.push(`verify:${input.modelProviderId}`); return { ok: true }; },
+    async withConnectionChange(change, publish) {
+      calls.push(`barrier:${change.modelProviderId}`);
+      if (refuse) throw new Error("Close other OpenCode chats, then retry.");
+      await publish();
+    },
+    onConnectionChanged(change) { calls.push(`changed:${change.modelProviderId}`); }
+  });
+  const save = (id, key) => store.upsertConnection({ modelProviderId: id, apiKey: key, providerRevision: revisionA }, { provider: provider(id) });
+  await save("deepseek", "fixture-old");
+  await save("zai", "fixture-peer");
+  const before = await readFile(filePath, "utf8");
+  calls.length = 0; refuse = true;
+  await assert.rejects(save("deepseek", "fixture-new"), /Close other/);
+  assert.deepEqual(calls, ["verify:deepseek", "barrier:deepseek"]);
+  assert.equal(await readFile(filePath, "utf8"), before);
+  await assert.rejects(store.removeConnection("deepseek"), /Close other/);
+  assert.equal(await readFile(filePath, "utf8"), before);
+  refuse = false; calls.length = 0;
+  await save("deepseek", "fixture-new");
+  assert.deepEqual(calls, ["verify:deepseek", "barrier:deepseek", "changed:deepseek"]);
+  assert.equal((await store.resolveConnection("deepseek")).apiKey, "fixture-new");
+  assert.equal((await store.resolveConnection("zai")).apiKey, "fixture-peer");
+});

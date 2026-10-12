@@ -731,7 +731,7 @@ async function confirmRemove() {
   let response = null;
   try {
     if (target?.kind === "codex-provider") {
-      response = await codexProviders.change({ modelProviderId: providerId, remove: true });
+      response = await codexProviders.change({ modelProviderId: providerId, engineId: target.engineId, remove: true });
     } else if (["codex", "claude"].includes(target?.kind)) {
       nativeRemoving.value = true;
       response = await nativeAccounts.logout(target.kind);
@@ -1587,7 +1587,7 @@ defineExpose({ openProvider });
             The saved Zen key will be removed and paid or key-only Zen models will stop. Included Big Pickle remains available.
           </template>
           <template v-else-if="removeTarget?.kind === 'codex-provider'">
-            Remove the shared {{ removeTarget.providerLabel }} key from Codex and Claude Code?
+            Remove the {{ removeTarget.providerLabel }} connection from {{ removeTarget.engineId === "claude" ? "Claude Code" : "Codex" }}?
             Turns using this key will stop. Conversations and files remain.
           </template>
           <template v-else>

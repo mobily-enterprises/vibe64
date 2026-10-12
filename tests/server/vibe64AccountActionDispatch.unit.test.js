@@ -34,8 +34,8 @@ test("all account operations use project-independent canonical contracts and aut
       ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, engineId: "codex", orchestrators: {}, reviewedHelperWorkflows: ["codex"] }],
       ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, orchestrators: {} }],
       ["GET", "/codex-providers", "codex-providers.read", "readCodexProviders", {}],
-      ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", apiKey: "fixture-only" }],
-      ["POST", "/codex-providers/remove", "codex-providers.remove", "removeCodexProvider", { modelProviderId: "deepseek" }],
+      ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
+      ["POST", "/codex-providers/remove", "codex-providers.remove", "removeCodexProvider", { modelProviderId: "deepseek", engineId: "claude" }],
       ["POST", "/auth", "auth.start", "startAuth", { accountId: "codex", mode: "device" }],
       ["POST", "/logout", "logout", "logout", { accountId: "codex" }],
       ["GET", "/auth/:sessionId", "auth-session.read", "readAuthSession", {}],
@@ -43,7 +43,7 @@ test("all account operations use project-independent canonical contracts and aut
       ["POST", "/git-identity", "git-identity.save", "saveGitIdentity", { gitUserName: "Owner", gitUserEmail: "owner@example.test" }],
       ["PATCH", "/personal-ai-profile", "personal-ai-profile.save", "savePersonalAiProfile", { preferredName: "Owner" }],
       ["GET", "/ai-connections", "ai-connections.list", "list", {}],
-      ["GET", "/ai-connections/catalog", "ai-connections.catalog", "catalog", { modelProviderId: "deepseek" }],
+      ["GET", "/ai-connections/catalog", "ai-connections.catalog", "catalog", { modelProviderId: "deepseek", engineId: "claude" }],
       ["PATCH", "/ai-connections/:providerId", "ai-connections.save", "save", { apiKey: "fixture-only", providerRevision: `sha256:${"a".repeat(64)}`, label: "Provider", modelProviderId: "forged-provider" }],
       ["POST", "/ai-connections/:providerId/remove", "ai-connections.remove", "remove", {}],
       ["PATCH", "/ai-connections/:providerId/model-access", "ai-connections.modelAccess", "modelAccess", { operation: "check-available" }]
@@ -119,7 +119,7 @@ test("all account operations use project-independent canonical contracts and aut
     for (const [operation, input] of [
       ["logout", {}], ["auth.start", {}], ["auth-session.read", {}], ["git-identity.save", { gitUserName: "Name" }],
       ["model-routing.save", { orchestrators: {} }], ["model-routing.preview", { revision: 1 }],
-      ["ai-connections.save", { modelProviderId: "deepseek", apiKey: "fixture-only" }],
+      ["ai-connections.save", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
       ["ai-connections.save", { modelProviderId: "deepseek", providerRevision: "revision" }],
       ["ai-connections.remove", { modelProviderId: "../other" }],
       ["ai-connections.modelAccess", { modelProviderId: "opencode", operation: "run-command" }]

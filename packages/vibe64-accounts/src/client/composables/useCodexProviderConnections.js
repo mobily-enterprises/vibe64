@@ -24,7 +24,8 @@ function useCodexProviderConnections({ enabled = true } = {}) {
     }),
     buildRawPayload: (_model, { context }) => ({
       modelProviderId: context.modelProviderId,
-      ...(!context.remove ? { apiKey: context.apiKey, engineId: context.engineId, useSavedKey: context.useSavedKey } : {})
+      engineId: context.engineId,
+      ...(!context.remove ? { apiKey: context.apiKey, useSavedKey: context.useSavedKey } : {})
     }),
     onRunSuccess(response) {
       if (response?.ok !== true) throw new Error(response?.error || "The connection could not be updated.");

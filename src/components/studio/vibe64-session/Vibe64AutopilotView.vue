@@ -397,6 +397,7 @@
           >
             <Vibe64RoutingNotice
               :request="routingRequest"
+              :selection="props.session?.assistantSelection"
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
               :retrying="routingReviewRetrying"

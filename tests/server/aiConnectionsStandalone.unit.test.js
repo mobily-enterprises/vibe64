@@ -44,7 +44,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   const events = [];
   const terminals = {
     configureAssistantRuntime(runtime) { configured = runtime; },
-    async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; },
+    async invalidateAgentRuntimes(input) { invalidations.push(input); await input.publish?.(); return { ok: true }; },
     async verifyAssistantConnection(input) {
       assert.equal(input.modelProviderId, "deepseek");
       assert.equal(input.modelId, "deepseek-flash");
@@ -148,4 +148,16 @@ test("project AI readiness accepts Claude or OpenCode without requiring Codex", 
     assert.equal(status.ready, true);
     assert.deepEqual(status.connections.map(({ id, connected }) => ({ id, connected })), [{ id: "ai", connected: true }]);
   }
+});
+
+
+test("private runtime publication cannot report connection success without the native owner's write barrier", async t => {
+  const systemRoot = await mkdtemp(path.join(os.tmpdir(), "v64-ai-barrier-"));
+  t.after(() => rm(systemRoot, { recursive: true, force: true }));
+  const runtime = createAiConnectionRuntime({ systemRoot, terminals: {
+    async verifyAssistantConnection() { return { ok: true }; },
+    async invalidateAgentRuntimes() { return { ok: true }; }
+  } });
+  await assert.rejects(runtime.upsertConnection({ modelProviderId: "deepseek", apiKey: "fixture-key", providerRevision: revision }, { provider }), /Close OpenCode/);
+  assert.equal(await runtime.resolveConnection("deepseek"), null);
 });

@@ -45,6 +45,31 @@ diagnostic in its private operational log before confirmed process cleanup. The
 request stays in chat for review; unconfirmed delivery requires **Check delivery**
 before Retry. Colleague cannot read that log.
 
+If an assistant stops because its credits or quota are exhausted, open **Chat
+mode** and choose another connected **Orchestrator**, or choose **Custom** and a
+permitted model. A pending automatic continuation or review does not prevent
+this change: Vibe64 cancels its old scheduling and waits for routing-helper
+cleanup before switching. An active coding turn still requires **Stop** first;
+an unfinished goal requires **Cancel goal**. A reported cleanup failure keeps
+the previous selection; retry after restoring the execution service.
+The session's files and saved conversation remain. Switching does not resend
+the old request or confirm uncertain delivery. Use **Check delivery** for that
+original request before deciding to repeat it; send a new instruction when you
+want the new assistant to continue the work. After the switch, **Send** becomes
+available automatically; reloading or **Check delivery** is not required to
+start a new request. **Previous assistant delivery unconfirmed** describes the
+old attempt and explains how to continue with your selected assistant. Its
+**Check delivery** control only checks that previous attempt.
+These steps apply on desktop and
+mobile. Colleague can explain the notice and change a supported selection when
+you ask it to; provider credit top-ups require your interaction.
+
+If failure, Stop or reconnection observes different outcomes for one assistant
+turn, Vibe64 reuses that turn's first recovery checkpoint and its recorded
+outcome. A failed turn can therefore have a valid checkpoint. A warning about
+a genuine identity or storage failure still needs operator investigation; your
+files remain in the session.
+
 1. Select the intended project and session, then Main or the intended temporary
    conversation. Type the request and select **Send**.
 2. While it works, add instructions through **Steer**. This targets the active

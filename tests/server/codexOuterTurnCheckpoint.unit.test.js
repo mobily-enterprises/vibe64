@@ -7,6 +7,22 @@ import {
   withCodexState
 } from "../../packages/vibe64-terminals/src/server/codexConversationStorage.js";
 
+test("checkpoint confirmation projects the original outcome after failure cleanup reports interruption", async () => {
+  let task;
+  const session = { sessionId: "session-1", sourcePath: "/retained/worktree", metadata: {} };
+  const runtime = { async getSession() { return session; }, store: {
+    async writeBackgroundTaskEvent(_id, _taskId, value) { task = value.patch; return task; }
+  } };
+  const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
+    outerTurnId: "failed-claude-turn", outcome: "interrupted", projectService: { selectedProject: {} },
+    createCheckpoint: async () => ({ ok: true, created: false, commit: "a".repeat(40), outcome: "failed" }) });
+  assert.equal(result.ok, true);
+  assert.equal(task.status, "ready");
+  assert.equal(task.error, "");
+  assert.equal(task.checkpointOutcome, "failed");
+  assert.equal(task.checkpointTurnId, "failed-claude-turn");
+});
+
 test("terminal state preserves the stable outer turn independently of provider successor turns", async () => {
   const state = withCodexState({}, {
     sessionId: "session-1",

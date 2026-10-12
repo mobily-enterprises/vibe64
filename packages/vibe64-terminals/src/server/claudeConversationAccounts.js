@@ -78,7 +78,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
       if (external) {
         const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
         return { available: connection?.claudeReady === true,
-          connectionIdentity: connection?.connectionIdentity || "", endpointCode: external.id,
+          connectionIdentity: connection?.claudeConnectionIdentity || "", endpointCode: external.id,
           ownerOnly: external.ownerOnly };
       }
       const available = await connectionStatus(context);

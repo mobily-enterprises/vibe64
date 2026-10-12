@@ -433,7 +433,8 @@ function useVibe64AutopilotView(props, emit, {
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
   });
-  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) && !assistantRoutingRequestCanBeReplaced(routingRequest.value));
+  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) &&
+    !assistantRoutingRequestCanBeReplaced(routingRequest.value, props.session?.assistantSelection));
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);

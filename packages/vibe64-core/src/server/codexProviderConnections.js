@@ -13,11 +13,11 @@ import { codexAuthMarkerPath, clearCodexAuthStatus, markCodexAuthReconnecting, r
 
 const changes = new Map();
 
-function codexProviderPaths(systemRoot, providerId) {
-  if (!path.isAbsolute(systemRoot || "") || !curatedCodexProvider(providerId)) {
-    throw new Error("Choose a supported Codex provider.");
+function codexProviderPaths(systemRoot, providerId, engineId = "codex") {
+  if (!path.isAbsolute(systemRoot || "") || !curatedCodexProvider(providerId) || !["codex", "claude"].includes(engineId)) {
+    throw new Error("Choose a supported Codex or Claude Code provider.");
   }
-  const root = path.join(systemRoot, "ai-connections", "codex", providerId);
+  const root = path.join(systemRoot, "ai-connections", engineId, providerId);
   const home = path.join(root, "home");
   return {
     systemRoot: root,
@@ -46,11 +46,15 @@ function codexProviderModelCatalog(provider) {
 
 function createCodexProviderConnectionStore({
   systemRoot,
-  invalidateRuntimes = async () => ({ ok: true }),
+  invalidateRuntimes = async input => {
+    await input.prepare?.();
+    await input.publish?.();
+    return { ok: true };
+  },
   fetchImpl = fetch
 } = {}) {
-  async function read(providerId) {
-    const paths = codexProviderPaths(systemRoot, providerId);
+  async function read(providerId, engineId = "codex") {
+    const paths = codexProviderPaths(systemRoot, providerId, engineId);
     try {
       const value = JSON.parse(await readFile(paths.connectionPath, "utf8"));
       return value && typeof value.apiKey === "string" && value.apiKey ? value : null;
@@ -61,32 +65,36 @@ function createCodexProviderConnectionStore({
   }
   async function list() {
     return Promise.all(CURATED_CODEX_PROVIDERS.map(async (provider) => {
-      const saved = await read(provider.id);
-      const paths = codexProviderPaths(systemRoot, provider.id);
-      const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
-      const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
-        .then(JSON.parse).catch((error) => { if (error.code === "ENOENT") return null; throw error; }) : null;
+      const states = {};
+      for (const engineId of ["codex", "claude"]) {
+        const saved = await read(provider.id, engineId);
+        const paths = codexProviderPaths(systemRoot, provider.id, engineId);
+        const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
+        const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
+          .then(JSON.parse).catch((error) => { if (error.code === "ENOENT") return null; throw error; }) : null;
+        states[engineId] = {
+          configured: Boolean(saved), connected: Boolean(saved && !status),
+          connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
+            ? `curated:${engineId}:${provider.id}:${marker.generation}` : "",
+          status: status?.status || (saved ? "connected" : "not_connected")
+        };
+      }
       return {
-        id: provider.id,
-        label: provider.label,
-        connected: Boolean(saved && !saved.codexDisabled && !status),
-        claudeReady: Boolean(saved?.claudeReady && !status),
-        configuredEngines: [
-          ...(saved && !saved.codexDisabled ? ["codex"] : []),
-          ...(saved?.claudeReady ? ["claude"] : [])
-        ],
-        connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
-          ? `curated:${provider.id}:${marker.generation}` : "",
-        status: status?.status || (saved ? "connected" : "not_connected")
+        id: provider.id, label: provider.label,
+        connected: states.codex.connected, claudeReady: states.claude.connected,
+        configuredEngines: ["codex", "claude"].filter((id) => states[id].configured),
+        connectionIdentity: states.codex.connectionIdentity,
+        claudeConnectionIdentity: states.claude.connectionIdentity,
+        status: states.codex.status,
+        engineStates: states
       };
     }));
   }
   async function runtimeOptions(providerId) {
     const provider = curatedCodexProvider(providerId);
-    const connection = await read(providerId);
+    const connection = await read(providerId, "codex");
     if (!connection) throw new Error(`Connect Codex - ${provider.label} in AI Accounts first.`);
-    if (connection.codexDisabled) throw new Error(`Check the saved ${provider.label} key for Codex in AI Accounts first.`);
-    const paths = codexProviderPaths(systemRoot, providerId);
+    const paths = codexProviderPaths(systemRoot, providerId, "codex");
     const status = await readCodexAuthStatus(paths.systemRoot);
     if (status) throw new Error(`Reconnect Codex - ${provider.label} in AI Accounts before continuing.`);
     return {
@@ -99,7 +107,7 @@ function createCodexProviderConnectionStore({
     const provider = curatedCodexProvider(providerId);
     if (!provider) return {};
     await runtimeOptions(providerId);
-    const connection = await read(providerId);
+    const connection = await read(providerId, "codex");
     if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
     // Private control-plane data. Never return this configuration through an
     // Accounts response or put it into the model's shell environment.
@@ -108,27 +116,25 @@ function createCodexProviderConnectionStore({
   async function claudeProviderSettings(providerId) {
     const provider = curatedCodexProvider(providerId);
     if (!provider) return null;
-    const connection = await read(providerId);
+    const connection = await read(providerId, "claude");
     if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
-    if (await readCodexAuthStatus(codexProviderPaths(systemRoot, providerId).systemRoot)) {
+    if (await readCodexAuthStatus(codexProviderPaths(systemRoot, providerId, "claude").systemRoot)) {
       throw new Error(`Reconnect ${provider.label} in AI Accounts before continuing.`);
     }
-    if (!connection.claudeReady) throw new Error(`Check and reconnect ${provider.label} in AI Accounts to verify its Claude Code connection.`);
     return { providerId, apiKey: connection.apiKey,
       baseUrl: provider.claudeBaseUrl };
   }
   async function change(providerId, input = {}) {
     const provider = curatedCodexProvider(providerId);
-    const paths = codexProviderPaths(systemRoot, providerId);
+    const engineId = input.engineId || "codex";
+    const paths = codexProviderPaths(systemRoot, providerId, engineId);
     const previous = changes.get(paths.connectionPath) || Promise.resolve();
     const operation = previous.catch(() => null).then(async () => {
-      const previousConnection = await read(providerId);
+      const previousConnection = await read(providerId, engineId);
       const removing = input.remove === true;
-      const engineId = input.engineId || "codex";
       if (!["codex", "claude"].includes(engineId)) throw new Error("Choose Codex or Claude Code.");
       const key = input.useSavedKey === true ? previousConnection?.apiKey || ""
         : typeof input.apiKey === "string" ? input.apiKey.trim() : "";
-      const ready = { codex: false, claude: false };
       if (!removing) {
         if (!key || key.length > 16384 || /\s/u.test(key) ||
             [...key].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
@@ -136,52 +142,45 @@ function createCodexProviderConnectionStore({
         }
         const checks = { codex: verifyCodexProviderKey, claude: verifyClaudeProviderKey };
         await checks[engineId](provider, key, fetchImpl);
-        ready[engineId] = true;
-        const other = engineId === "claude" ? "codex" : "claude";
-        try {
-          await checks[other](provider, key, fetchImpl);
-          ready[other] = true;
-        } catch {
-          // An optional check cannot block the verified orchestrator.
-        }
       }
-      await markCodexAuthReconnecting(paths.systemRoot, { reason: "provider-key-change" });
+      let published = false;
+      const prepare = () => markCodexAuthReconnecting(paths.systemRoot, { reason: "provider-key-change" });
+      const publish = async () => {
+        if (removing) {
+          await rm(paths.connectionPath, { force: true });
+          await rm(path.join(paths.codexHome, "config.toml"), { force: true });
+        } else {
+          if (engineId === "codex") {
+            const config = codexProviderFileConfiguration(provider, key, paths.codexHome);
+            await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
+            await privateFile(path.join(paths.codexHome, "config.toml"), config);
+          } else {
+            await rm(path.join(paths.codexHome, "config.toml"), { force: true });
+          }
+          await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key }));
+        }
+        await privateFile(codexAuthMarkerPath(paths.systemRoot), JSON.stringify({
+          connected: !removing,
+          generation: randomUUID(),
+          version: 1
+        }));
+        await clearCodexAuthStatus(paths.systemRoot);
+        published = true;
+        return list();
+      };
+      if (engineId === "codex") await prepare();
       const stopped = await invalidateRuntimes({
-        provider: "codex",
+        provider: engineId,
+        modelProviderId: providerId,
         includeOwned: true,
         reason: "provider-key-change",
         systemRoot: paths.systemRoot,
-        toolHomeSource: paths.toolHomeSource
+        toolHomeSource: paths.toolHomeSource,
+        ...(engineId === "claude" ? { prepare, publish } : {})
       });
-      if (stopped?.ok === false) throw new Error("The previous connection could not be stopped. Retry before changing its key.");
-      if (previousConnection) {
-        // Routed Codex threads share the native runtime. Stop that runtime on
-        // rotation/revocation so no loaded thread retains the superseded key.
-        const shared = await invalidateRuntimes({ provider: "codex", includeOwned: true,
-          reason: "provider-key-change", systemRoot });
-        const claude = await invalidateRuntimes({ provider: "claude", includeOwned: true,
-          reason: "provider-key-change", modelProviderId: providerId });
-        if (shared?.ok === false || claude?.ok === false) throw new Error("A routed conversation could not be stopped. Retry before changing its key.");
-      }
-      if (removing) {
-        await rm(paths.connectionPath, { force: true });
-        await rm(path.join(paths.codexHome, "config.toml"), { force: true });
-      } else {
-        if (ready.codex) {
-          const config = codexProviderFileConfiguration(provider, key, paths.codexHome);
-          await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
-          await privateFile(path.join(paths.codexHome, "config.toml"), config);
-        } else {
-          await rm(path.join(paths.codexHome, "config.toml"), { force: true });
-        }
-        await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key, codexDisabled: !ready.codex, claudeReady: ready.claude }));
-      }
-      await privateFile(codexAuthMarkerPath(paths.systemRoot), JSON.stringify({
-        connected: !removing,
-        generation: randomUUID(),
-        version: 1
-      }));
-      await clearCodexAuthStatus(paths.systemRoot);
+      if (stopped?.ok === false) throw new Error(stopped.failed?.[0]?.error || "The previous connection could not be stopped. Retry before changing its key.");
+      if (engineId === "codex") return publish();
+      if (!published) throw new Error("Claude Code did not complete the connection change. Retry before changing its key.");
       return list();
     });
     changes.set(paths.connectionPath, operation);

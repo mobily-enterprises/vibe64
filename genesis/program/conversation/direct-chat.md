@@ -1320,8 +1320,18 @@ Auto and its review preference, drops the previous workflow's model override,
 and resolves the destination's saved assignments through the actor-aware purpose
 resolver. Auto validates Router and the pair, then selects Senior for the idle
 conversation. The existing selection update checks destination connection
-identity, active work, unfinished goals and pending delivery/review before native
-changeover and persistence. A failed switch retains the prior selection; the
+identity, active work and unfinished goals before native changeover and
+persistence. Pending delivery/review invokes the existing routing cancellation
+owner outside the selection lock, waits for helper cleanup, then revalidates
+destination access and native activity under the lock. The captured request ID
+prevents cancelling newer work. The browser composer and server reuse the same
+replacement eligibility: after cleanup and an explicit assistant change, Send
+becomes available without a reload or another delivery check. The notice labels
+the old uncertain delivery as a previous attempt and explains how to continue.
+Stopped uncertain routing retains its receipt
+identity and status; a changed assistant may admit a new request without replaying
+it. The same assistant still requires resolving its uncertain receipt.
+A failed switch retains the prior selection; the
 next ordinary Send supplies the existing conversation catch-up. Custom retains
 its exact-model picker, and temporary chats retain their independent controls.
 Main passes its existing initializing/reconciling state into the mode menu.

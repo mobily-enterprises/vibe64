@@ -205,8 +205,7 @@ function normalizedState(value = null) {
     };
   }
   const requestedPreferredProviderId = text(source.preferredProviderId);
-  const preferredProviderId = requestedPreferredProviderId === BUILT_IN_OPENCODE_PROVIDER_ID ||
-    Object.hasOwn(connections, requestedPreferredProviderId)
+  const preferredProviderId = AI_CONNECTION_PROVIDER_PATTERN.test(requestedPreferredProviderId)
     ? requestedPreferredProviderId
     : Object.hasOwn(connections, ZAI_PROVIDER_ID)
       ? ZAI_PROVIDER_ID
@@ -405,6 +404,7 @@ async function verifyOpenCodeConnection({
 function createAiConnectionStore({
   filePath = "",
   onConnectionChanged = () => null,
+  withConnectionChange = async (_change, publish) => publish(),
   readModelIds = null,
   verifyConnection = null,
   zenModelCheckDelayMs = ZEN_MODEL_CHECK_DELAY_MS
@@ -652,12 +652,10 @@ function createAiConnectionStore({
           state.preferredProviderId = BUILT_IN_OPENCODE_PROVIDER_ID;
         }
         state.updatedAt = new Date().toISOString();
-        await writeState(state);
         const reverted = id === BUILT_IN_OPENCODE_PROVIDER_ID;
-        await onConnectionChanged({
-          modelProviderId: id,
-          reason: reverted ? "reverted" : "removed"
-        });
+        const change = { modelProviderId: id, reason: reverted ? "reverted" : "removed" };
+        await withConnectionChange(change, () => writeState(state));
+        await onConnectionChanged(change);
         return reverted
           ? { connected: true, id, ok: true, removed: true, reverted: true }
           : { id, ok: true, removed: true };
@@ -762,11 +760,9 @@ function createAiConnectionStore({
           state.preferredProviderId = ZAI_PROVIDER_ID;
         }
         state.updatedAt = now;
-        await writeState(state);
-        await onConnectionChanged({
-          modelProviderId: id,
-          reason: previous ? "replaced" : "created"
-        });
+        const change = { modelProviderId: id, reason: previous ? "replaced" : "created" };
+        await withConnectionChange(change, () => writeState(state));
+        await onConnectionChanged(change);
         return publicConnection({
           ...connection,
           preferred: state.preferredProviderId === id

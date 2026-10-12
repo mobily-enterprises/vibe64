@@ -747,6 +747,28 @@ describe("useVibe64AutopilotView direct chat", () => {
       expect(view.composerCanSubmit.value).toBe(false);
     }
   });
+  it("enables a new Send reactively after switching away from a stopped uncertain assistant", async () => {
+    const { props, view } = await createViewWithProps();
+    const claude = { engineId: "claude", modelProviderId: "anthropic", modelId: "opus", agentId: "claude", variantId: "medium" };
+    const codex = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", agentId: "codex", variantId: "high" };
+    props.session.assistantSelection = claude;
+    const request = { messageId: "previous-request", status: "waiting", delivery: "uncertain", stage: "implementation", stopped: true,
+      attemptedMessageId: "previous-delivery", observedSelection: claude, deliverySelection: claude,
+      error: "Claude has no active turn for this message.", helper: null };
+    props.session.metadata.assistant_routing_request = JSON.stringify(request);
+    view.composerDraft.value = "Continue the unfinished work and check the browser test result.";
+    expect(view.composerCanSubmit.value).toBe(false);
+    props.session.assistantSelection = codex;
+    await nextTick();
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(JSON.parse(props.session.metadata.assistant_routing_request)).toEqual(request);
+    expect(view.composerDraft.value).toBe("Continue the unfinished work and check the browser test result.");
+    for (const blocked of [{ stopped: false }, { helper: { executionId: "cleanup" } }, { observedSelection: null, deliverySelection: null }]) {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ ...request, ...blocked });
+      expect(view.composerCanSubmit.value).toBe(false);
+    }
+  });
   it("keeps chat available for steering while Codex is working", async () => {
     const view = await createView({
       session: {

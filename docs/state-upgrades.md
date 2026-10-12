@@ -814,6 +814,45 @@ of an existing installation. Before activation, run the candidate's read-only
 check, stop all writers, apply and verify the upgrade, and confirm the installed
 Plan/Progress and native review lifecycle.
 
+
+## Independent provider credentials (prepared)
+
+`20261009-independent-provider-credentials` is a new explicit reset boundary,
+prepared for review and later authorized execution. It has not been applied to
+existing installations. Run the candidate command's read-only check first;
+stop all editor services and native terminal/helper writers before apply.
+
+The new reset appends after the existing assistant-workflow boundary. An installation
+that has already recorded that workflow keeps its complete ledger prefix and
+runs only the new reset when all earlier entries are complete. Existing
+ledger entries retain their exact published order; the date in a new ID does not
+permit inserting it before an already published entry. The candidate command
+checks all pending upgrades before applying any, and never rewrites old ledger
+history to make a reordered registry fit.
+
+The script clears DeepSeek, regular GLM API (`zai`) and GLM Coding Plan
+(`zai-coding-plan`) from `ai-connections/codex/<provider>` and
+`ai-connections/claude/<provider>` connection/config/auth-state files, and from
+the existing OpenCode `ai-connections/connections.json`. It also clears target
+entries in managed OpenCode `private-*/data/opencode/auth.json` and
+`verify-<UUID>/data/opencode/auth.json` left by an interrupted key check, and target bearer
+assignments in managed Codex `codex-app-server[-scope]/codex-home/config.toml`.
+Trusted runtime roots come from the existing runtime owner, the daemon's standard
+cache and its runtime directory; preflight names external locations explicitly.
+The manifest accepts only those exact/structural owned targets, rejects links
+and unfamiliar formats, and never uses provider/caller metadata as path authority.
+
+This script creates its own private verified before/after backups under
+`upgrades/backups/20261009-independent-provider-credentials/` before publication.
+External paths are represented relative to the filesystem root in that private
+manifest. Keep the same backup directory for retry; modified originals/backups
+or unowned targets block progress. Backups contain secrets and must stay private.
+No provider calls, key copying or provider-side revocation occur. Conversations,
+history, subscription logins, unrelated providers and project files remain.
+Saved routing and OpenCode's preferred destination remain selected but unavailable
+until that exact orchestrator/provider is reconnected. Access controls are not
+broadened; regular GLM and Coding Plan billing remain separate.
+
 ## Retained original native continuity (prepared)
 
 `20261009-colleague-native-continuity` follows the earlier Colleague schema and

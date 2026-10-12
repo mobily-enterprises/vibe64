@@ -21,7 +21,7 @@ function mount(props) {
 }
 beforeEach(() => {
   mocks.busy = ref(false);
-  mocks.connections = ref([{ id: "deepseek", status: "connected", connected: false, claudeReady: true }]);
+  mocks.connections = ref([{ id: "deepseek", status: "not_connected", connected: false, claudeReady: true, engineStates: { codex: { status: "not_connected" }, claude: { status: "connected" } } }]);
   mocks.change.mockReset().mockResolvedValue({ ok: true, routing: { ok: true } });
 });
 afterEach(() => app?.unmount());
@@ -32,15 +32,16 @@ it("shows each orchestrator's actual verification with warm connection data", ()
     "Claude Code - Claude · Claude subscription", "Claude Code - DeepSeek · Connected", "Claude Code - GLM · Coding Plan", "Claude Code - GLM · Pay-as-you-go API"
   ]);
   expect(state.connected).toBe(true);
-  expect(state.connectedEngines).toEqual(["claude"]);
+  expect(state.connectionStatus).toBe("connected");
+  expect(state.engineLabel).toBe("Claude Code");
 });
 
-it("adds the missing orchestrator using its existing shared key without replacing it", async () => {
+it("requires independently entered credentials when adding another orchestrator", async () => {
   const state = mount({ engineId: "codex", modelValue: "deepseek", adding: true, selectProvider: false });
-  expect(state.useExistingKey).toBe(true);
+  expect(state.useExistingKey).toBe(false);
   expect(state.connected).toBe(false);
   await state.save();
-  expect(mocks.change).toHaveBeenCalledExactlyOnceWith({ modelProviderId: "deepseek", engineId: "codex", apiKey: "", remove: false, useSavedKey: true });
+  expect(mocks.change).toHaveBeenCalledExactlyOnceWith({ modelProviderId: "deepseek", engineId: "codex", apiKey: "", remove: false, useSavedKey: false });
 });
 
 it("keeps pay-as-you-go setup separate from a saved Coding Plan key", async () => {
@@ -67,7 +68,7 @@ it("renders Manage without a provider selector, and Add without replacement or d
   expect(manage).toContain("Disconnect");
   const add = await render({ engineId: "codex", modelValue: "deepseek", selectProvider: false, adding: true });
   expect(add).not.toContain("Use Codex with");
-  expect(add).not.toContain("<input");
+  expect(add).toContain("<input");
   expect(add).not.toContain("Check and replace key");
   expect(add).not.toContain("Disconnect");
   expect(add).toContain("Check and connect");
@@ -84,7 +85,8 @@ it("verifies the saved key for the selected orchestrator without copying it to t
   await state.save({ useSavedKey: true });
   expect(mocks.change).toHaveBeenCalledWith({ modelProviderId: "deepseek", engineId: "claude", apiKey: "", remove: false, useSavedKey: true });
   expect(state.routingProposal).toBe(true);
-  expect(state.connectedEngines).toEqual(["claude"]);
+  expect(state.connectionStatus).toBe("connected");
+  expect(state.engineLabel).toBe("Claude Code");
 });
 
 it("clears unsaved credentials and proposals when selecting another provider", async () => {
@@ -111,4 +113,16 @@ it("keeps failed input available for retry and clears it only after successful v
   await state.save();
   expect(state.apiKey).toBe("");
   expect(state.routingProposal).toBe(true);
+});
+
+
+it("disconnect confirmation and requests identify only the chosen orchestrator", async () => {
+  const state = mount({ engineId: "claude", modelValue: "deepseek" });
+  await state.save({ remove: true });
+  expect(mocks.change).toHaveBeenCalledWith({ modelProviderId: "deepseek", engineId: "claude", apiKey: "", remove: true, useSavedKey: false });
+  const view = createSSRApp(NativeProviderConnections, { engineId: "claude", modelValue: "deepseek" });
+  view.use(createVuetify({ ssr: true }));
+  const html = await renderToString(view);
+  expect(html).toContain("Checks Claude Code only");
+  expect(html).not.toContain("then the other orchestrator");
 });

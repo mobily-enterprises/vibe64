@@ -4,8 +4,8 @@ import path from "node:path";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
-import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
-import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
+import { codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
+import { codexAuthMarkerPath, readCodexAuthStatus } from "@local/vibe64-core/server/codexAuthState";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -174,7 +174,18 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
     nativeHelpers[engineId] = helper;
     retired.push({ filePath, original: source, contents: null });
   }
-  const curatedConnections = await createCodexProviderConnectionStore({ systemRoot }).list();
+  // Freeze the original shared-store inventory for this historical upgrade.
+  // Live connections now have independent orchestrator owners; older routing
+  // choices must still be interpreted from their original saved flags.
+  const curatedConnections = await Promise.all(CURATED_CODEX_PROVIDERS.map(async provider => {
+    const locations = codexProviderPaths(systemRoot, provider.id, "codex");
+    const source = await readOptional(locations.connectionPath);
+    const saved = source === null ? null : parse(source, "Historical curated provider connection");
+    const configured = saved && typeof saved.apiKey === "string" && saved.apiKey;
+    const status = configured ? await readCodexAuthStatus(locations.systemRoot) : null;
+    return { id: provider.id, connected: Boolean(configured && !saved.codexDisabled && !status),
+      claudeReady: Boolean(configured && saved.claudeReady && !status) };
+  }));
   const existing = original !== null || connectionState || projects.length || retired.length || curatedConnections.some((item) => item.connected) ||
     await readOptional(codexAuthMarkerPath(systemRoot)) !== null;
   if (!existing) return [];

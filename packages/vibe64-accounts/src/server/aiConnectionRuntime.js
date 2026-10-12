@@ -5,13 +5,22 @@ import { verifyZaiConnection, ZAI_FREE_MODEL_ID } from "./zaiConnectionVerifier.
 function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionChanged = async () => null } = {}) {
   return createAiConnectionStore({
     filePath: path.join(systemRoot, "ai-connections", "connections.json"),
+    async withConnectionChange(change, publish) {
+      let published = false;
+      const result = await terminals.invalidateAgentRuntimes({ ...change, provider: "opencode", async publish() {
+        await publish();
+        published = true;
+      } });
+      if (result?.ok === false || !published) {
+        throw new Error(result?.failed?.[0]?.error || "Close OpenCode chats and native terminals, then retry this connection change.");
+      }
+    },
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
       const [invalidation] = await Promise.all([
-        terminals.invalidateAgentRuntimes({
-          ...change,
-          provider: "opencode"
-        }),
+        ["created", "replaced", "removed", "reverted"].includes(change.reason)
+          ? Promise.resolve(null)
+          : terminals.invalidateAgentRuntimes({ ...change, provider: "opencode" }),
         publishConnectionChanged(change.modelProviderId, {
           connected: !removed,
           operation: removed

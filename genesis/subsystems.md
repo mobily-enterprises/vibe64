@@ -565,8 +565,9 @@ the sole PTY host. Terminal transport stays distinct from conversation send/open
 
 ## `accounts` Agent connections
 
-Owns AI account setup, provider-key storage and validation, connection selection,
-per-orchestrator model routing and recommendations,
+Owns AI account setup, independently saved per-orchestrator provider keys and
+selected connection validation, connection selection, per-orchestrator model
+routing and recommendations,
 and connection health. Workspace Studio health also resolves current actor access
 independently of any selected project. Standalone and hosted editors
 share these operations; hosts supply credential context and access policy.

@@ -1032,6 +1032,108 @@ test("Router gets only the last three visible messages, preserving their order a
   await f.service.send("session-1", request, f.context);
 });
 
+test("a cancelled uncertain request permits new work on a changed assistant without replaying the old request", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission response/);
+  const attempted = f.state().attemptedMessageId;
+  await f.service.cancel("session-1", f.context, { waitForCleanup: true, expectedMessageId: request.messageId });
+  assert.equal(f.state().delivery, "uncertain");
+  assert.equal(f.state().attemptedMessageId, attempted);
+  const nextRequest = { ...request, messageId: "new-request" };
+  await assert.rejects(f.service.send("session-1", nextRequest, f.context), /Resolve or cancel/,
+    "Stop alone does not clear uncertain delivery on the same assistant");
+  const next = { ...f.assignments.junior, modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" };
+  assert.notEqual(f.state().deliverySelection.modelProviderId, next.modelProviderId);
+  f.metadata.assistant_selection = JSON.stringify(next);
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, workflowEngineId: "codex", override: next });
+  f.failAdmission(false);
+  const result = await f.service.send("session-1", nextRequest, f.context);
+  assert.equal(result.delivered, true);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.sends.filter(({ input }) => input.messageId === attempted).length, 1);
+  assert.equal(f.sends[1].input.messageId, nextRequest.messageId);
+  assert.equal(f.sends[1].selection.modelProviderId, "openai");
+});
+
+test("selection cancellation waits for live routing and reports retained cleanup failures", async t => {
+  const f = await fixture(t);
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  f.router.respond = async () => { started.resolve(); await finish.promise; throw new Error("Routing stopped"); };
+  f.agent.stopEphemeralConversation = async () => { finish.resolve(); return { ok: true }; };
+  f.agent.deleteEphemeralConversation = async () => ({ ok: false });
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, /helper could not be closed/);
+  await started.promise;
+  await assert.rejects(f.service.cancel("session-1", f.context,
+    { waitForCleanup: true, expectedMessageId: request.messageId }), /helper could not be closed/);
+  await rejected;
+  assert.equal(f.state().helper.conversationId, "helper-1");
+  assert.equal(f.state().stopped, true);
+  assert.equal(f.sends.length, 0);
+});
+
+test("new requests cannot replace unconfirmed or still-owned handoffs", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  await f.service.send("session-1", request, f.context);
+  for (const blocked of [
+    { delivery: "uncertain" }, { delivery: "sending" },
+    { delivery: "pending", attemptedMessageId: "review-attempt" },
+    { delivery: "pending", helper: { conversationId: "owned-helper" } },
+    { delivery: "pending", error: "" }
+  ]) {
+    f.metadata.assistant_routing_request = JSON.stringify({ ...f.state(), helper: null, attemptedMessageId: undefined,
+      status: "working", error: "Not confirmed", ...blocked });
+    await assert.rejects(f.service.send("session-1", { ...request, messageId: "replacement" }, f.context), /pending request/);
+    assert.equal(f.sends.length, 1);
+  }
+});
+
+test("original routing retains admitted Learning data through uncertain receipt repair and leaves Working allowlist unchanged", async t => {
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const teaching = await trainingTeachingFixture(t, { ready: false, exercise: false });
+  const issued = await teaching.owner.prepareQuestion(teaching.input);
+  const saved = await teaching.learners.readLearningSessionScope({ actor: teaching.actor, attemptId: teaching.attemptId });
+  const originalData = { trainingQuestion: { ...issued.snapshot, delivery: {
+    conversationId: "lesson-session", turnId: "delivered-question", outputId: "question-output" } } };
+  const learningRuntime = new Vibe64SessionRuntime({ projectContextRoot: path.resolve(teaching.snapshotRoot, "../../../../.."),
+    projectRuntimeRoot: saved.projectRuntimeRoot, learningScope: saved.scope,
+    learningTeaching: createTrainingMainTeaching({ teaching: teaching.owner,
+      assessment: createTrainingAnswerAssessment({ learners: teaching.learners, content: teaching.content, teaching: teaching.owner }) }) });
+  for (const learning of [false, true]) {
+    const f = await fixture(t, { mode: "senior", review: false }, { readyPlan: false });
+    if (learning) Object.assign(f.context.runtime, {
+      learningScope: learningRuntime.learningScope, learningTeaching: learningRuntime.learningTeaching
+    });
+    const repaired = [];
+    const write = f.context.runtime.store.writeConversationUserMessage;
+    f.context.runtime.store.writeConversationUserMessage = async (...args) => {
+      repaired.push(structuredClone(args[1]));
+      return write(...args);
+    };
+    const input = { ...request, data: structuredClone(originalData) };
+    f.failAdmission();
+    await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/u);
+    assert.equal(f.state().delivery, "uncertain");
+    assert.deepEqual(f.state().input.data, learning ? originalData : undefined);
+    assert.deepEqual(f.sends[0].input.data, learning ? originalData : undefined);
+    input.data.trainingQuestion.question.text = "A later caller must not replace the saved association.";
+    f.agent.inspectMessageAdmission = async () => ({ admission: "accepted" });
+    const result = await f.restart().send("session-1", input, f.context);
+    assert.equal(result.delivered, true);
+    assert.equal(f.sends.length, 1, "the original uncertain repair does not resend");
+    assert.equal(repaired.length, 1);
+    assert.equal(repaired[0].messageId, request.messageId);
+    assert.equal(repaired[0].text, request.message);
+    assert.deepEqual(repaired[0].data, learning ? originalData : undefined);
+    assert.equal(Object.hasOwn(repaired[0], "data"), learning);
+    assert.equal(f.state().status, "working");
+  }
+});
 
 test("a paused goal is explicitly repinned to a direct mode without native goal or selection writes", async (t) => {
   const f = await fixture(t, { mode: "senior", review: false });

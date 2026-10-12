@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
-import { closeTerminalSessionsForNamespace, terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
+import { closeTerminalSessionsForNamespace, listTerminalSessions, terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
@@ -23,6 +23,12 @@ function createOpenCodeLifecyclePreparation({
   const { cleanupReasoningSummary, disposeReasoningSummary } = presentation;
 
   const processRelease = {
+    assertConnectionChange() {
+      if (listTerminalSessions({ namespacePrefix: "vibe64-opencode:" }).some(terminal => terminal.status !== "exited")) {
+        throw openCodeError("vibe64_opencode_connection_in_use",
+          "Close OpenCode native terminals, then retry this connection change. The saved connection has not changed.", {}, 409);
+      }
+    },
     async beforeRelease(target) {
       await closeTerminalSessionsForNamespace(
         opencodeTerminalNamespace(target.sessionId)

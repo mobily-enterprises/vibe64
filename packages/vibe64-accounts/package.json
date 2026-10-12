@@ -18,6 +18,7 @@
     "./server/assistantRoleUpgrade": "./src/server/assistantRoleUpgrade.js",
     "./server/assistantHelperUpgrade": "./src/server/assistantHelperUpgrade.js",
     "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js",
+    "./server/providerCredentialsUpgrade": "./src/server/providerCredentialsUpgrade.js",
     "./server/assistantPlanUpgrade": "./src/server/assistantPlanUpgrade.js"
   },
   "jskit": {
