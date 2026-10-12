@@ -84,7 +84,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const props = viewProps();
     props.conversationLog.initializing = true;
     props.conversationLog.loading = true;
-    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "unsent", mode: "auto", status: "failed",
+    props.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, messageId: "unsent", mode: "auto", status: "waiting", delivery: "failed",
       input: { message: "Keep my request" }, error: "Routing failed" });
     const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
     const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
@@ -224,17 +224,18 @@ describe("useVibe64AutopilotView route hydration", () => {
     const tag = autopilot.match(/<Vibe64OutputControls\b[\s\S]*?\/>/u)?.[0];
     const binding = tag?.match(new RegExp(`:${attribute}="([^"]+)"`, "u"))?.[1];
     expect(binding).toBeDefined();
-    const previewValue = new Function("props", "rightPaneTab", `return (${binding});`);
+    const previewValue = new Function("props", "rightPaneTab", "appVisible", `return (${binding});`);
     const props = { projectPane: "preview", previewToolbarTeleportTarget: "#preview-toolbar" };
     const visible = attribute === "preview-displayed" ? true : "#preview-toolbar";
     const hidden = attribute === "preview-displayed" ? false : "";
 
-    expect(previewValue(props, "preview")).toBe(visible);
+    expect(previewValue(props, "preview", true)).toBe(visible);
     props.projectPane = "dashboard";
-    expect(previewValue(props, "preview")).toBe(hidden);
+    expect(previewValue(props, "preview", true)).toBe(hidden);
     props.projectPane = "preview";
     for (const tool of ["editor", "database", "system"]) {
-      expect(previewValue(props, tool)).toBe(visible);
+      expect(previewValue(props, tool, true)).toBe(visible);
+      expect(previewValue(props, tool, false)).toBe(hidden);
     }
   });
 
@@ -288,7 +289,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     ), "utf8");
     const loadingTag = autopilot.match(/<Vibe64AsyncModuleState\b[\s\S]*?\/>/u)?.[0];
     expect(autopilot).toContain('import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue"');
-    expect(loadingTag).toContain('v-if="sourceToolLoading"');
+    expect(loadingTag).toContain('v-if="props.sourceWorkspaceAvailable && sourceToolLoading"');
     expect(loadingTag).toContain('class="studio-autopilot__right-pane-page"');
     expect(loadingTag).toMatch(/\sloading\s/u);
     const shellTag = autopilot.match(/<Vibe64DashboardShell\b[^>]*>/u)?.[0];

@@ -414,7 +414,7 @@ describe("temporary AI mounted lifetime", () => {
     const displayMessage = "Fix this Update problem without losing work.";
     const draft = draftKind === "empty" ? "" : draftKind === "instructions" ? message : draftKind === "label" ? displayMessage : "Please also check the tests.";
     const input = { message, displayMessage, presentation: { draft: "" } };
-    const request = { messageId: "repair-request", status: "failed", input };
+    const request = { schemaVersion: 5, messageId: "repair-request", status: "waiting", delivery: "failed", input };
     http.request.mockImplementation(async (url, options) => {
       if (options?.method === "POST") return { ok: true, status: "inProgress", runId: "repair-turn" };
       if (options?.method === "PATCH") return { ok: true };

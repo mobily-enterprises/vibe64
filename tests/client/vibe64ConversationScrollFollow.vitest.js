@@ -420,7 +420,7 @@ describe("Vibe64 conversation scroll following", () => {
     const delivery = createAssistantMessageDelivery();
     const response = Promise.withResolvers();
     const sending = delivery.send({ message: "Hello" }, { messageId: "message-1", deliver: () => response.promise });
-    const route = ref({ messageId: "message-1", status: "sending", attemptedMessageId: "message-1", input: { message: "Hello" }, assignments: {} });
+    const route = ref({ schemaVersion: 5, messageId: "message-1", status: "working", delivery: "sending", attemptedMessageId: "message-1", input: { message: "Hello" }, assignments: {} });
     const messages = ref([]);
     const checks = [];
     const app = testRenderer().createApp({ render: () => surface === "main"
@@ -445,7 +445,7 @@ describe("Vibe64 conversation scroll following", () => {
     expect(nodeText(container)).not.toContain("Failed:");
     expect(nodeText(container)).toContain("Pending");
     expect(delivery.find("message-1")).not.toBeNull();
-    route.value = { ...route.value, status: "uncertain", error: "Lost confirmation." };
+    route.value = { ...route.value, status: "waiting", delivery: "uncertain", error: "Lost confirmation." };
     response.resolve(false);
     await sending;
     await flushScrollWork();

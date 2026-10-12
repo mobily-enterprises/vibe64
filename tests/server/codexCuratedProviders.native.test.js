@@ -220,13 +220,42 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
     }
   }
   const gpt = runtimes.get("openai");
+  const selected = runtimes.get("deepseek");
+  await assert.rejects(connections.change("deepseek", { remove: true }), /Another subscriber retained the selected thread/,
+    "a raw native subscriber must retain the original selected-thread refusal");
+  assert.doesNotThrow(() => process.kill(gpt.pid, 0));
+  // These raw native threads belong to this fixture, outside Main's ordinary
+  // conversation lifetime. Stop only their selected provider through its verified owner.
+  const retired = await controller.invalidateAppServerRuntimes({
+    toolHomeSource: codexProviderPaths(systemRoot, "deepseek").toolHomeSource,
+    includeOwned: true, stopOwnedRuntimes: true, requireVerifiedExit: true
+  });
+  assert.equal(retired.ok, true, JSON.stringify(retired));
   await connections.change("deepseek", { remove: true });
-  assert.throws(() => process.kill(gpt.pid, 0), { code: "ESRCH" }, "revocation drains runtimes that could retain a routed key");
+  assert.throws(() => process.kill(selected.pid, 0), { code: "ESRCH" }, "revocation drains the selected credential runtime");
+  assert.doesNotThrow(() => process.kill(gpt.pid, 0), "targeted revocation preserves the unrelated GPT runtime");
   await controller.describeProvider(session.sessionId);
   const restoredGpt = providers.findLast((provider) => !provider.options.modelProviderId);
   await restoredGpt.resumeThread(threads.get("openai"), { cwd: source });
-  assert.notEqual(restoredGpt.runtime.pid, gpt.pid);
+  assert.equal(restoredGpt.runtime.pid, gpt.pid, "unrelated native process identity is retained");
   assert.equal(await readFile(path.join(codexHome, "auth.json"), "utf8"), originalAuth);
   assert.equal((await restoredGpt.listThreadTurns(threads.get("openai"), { limit: 10, itemsView: "full" })).data.length, 2);
-  t.diagnostic(`${version.stdout.trim()}: three isolated providers, command execution, GPT thread resumed, DeepSeek revoked, GPT credentials preserved and its thread resumed after runtime drainage.`);
+  const resumedThreadId = threads.get("openai");
+  const resumedCompletion = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { unsubscribe(); reject(new Error(`Unrelated GPT continuation timed out: ${stderr}`)); }, 12000);
+    const unsubscribe = restoredGpt.subscribe(event => {
+      if (event.method === "turn/completed" && event.params.threadId === resumedThreadId) {
+        clearTimeout(timer); unsubscribe(); resolve(event.params.turn);
+      }
+    });
+  });
+  await restoredGpt.sendTurn(resumedThreadId, ["Continue after the other provider was revoked."], { cwd: source,
+    model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "externalSandbox", networkAccess: "enabled" } });
+  assert.equal((await resumedCompletion).status, "completed");
+  assert.equal(requests.at(-1).key, "Bearer fixture-gpt");
+  assert.equal(requests.at(-1).body.model, "gpt-5.6-luna");
+  assert.equal((await restoredGpt.listThreadTurns(resumedThreadId, { limit: 10, itemsView: "full" })).data.length, 3);
+  assert.equal(await readFile(path.join(codexHome, "auth.json"), "utf8"), originalAuth);
+
+  t.diagnostic(`${version.stdout.trim()}: three isolated providers, command execution, DeepSeek revoked through its selected lifetime, GPT process/thread/credentials preserved and its native continuation completed.`);
 });
