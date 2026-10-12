@@ -724,22 +724,18 @@ Operation cards share a subtle background that separates them from the chat in
 light and dark themes. They keep their heading, status, progress text and colors when expanded;
 opening details adds output and controls within the same shared presentation.
 Copy and Collapse sit beside the progress description, beneath the heading.
-People can explore the application through a compact searchable subsystem list
-and a focused detail pane in Overview. Each authored subsystem explains a
-responsibility and brings together its Program operations and owned or shared
-data tables. Map opens the three-dimensional Machine City directly, showing
-files, functions, and optional subsystem and implementation layers. There is no
-separate Program presentation. A selected subsystem can be located in Machine
-when its generated subsystem is available. Operations link to explanations and
-source; tables with resolved database references link to the
-relationship diagram, with a way back to the selected subsystem. Missing or invalid maps
-offer a temporary AI task to generate or repair the subsystem map with the session's
-selected model and normal workspace tools. The main draft remains untouched;
-map edits stay in the session for review and Save. The subsystem view refreshes
-when the task finishes. The task checks the declared format before reporting success.
-An unreadable map can
-also be opened directly for correction. Unresolved table references remain visible. The database
-overview continues to explain the data itself.
+People explore subsystem responsibilities, Program capabilities and their cited
+source files through the Architecture canvas. Genesis's directory-bound map is
+the canonical owner list: each Program capability belongs to exactly one owner,
+while its Sources may include another owner's libraries.
+Each capability has a visibly distinct main source file where people begin
+reading its implementation. Other participating files link to the Program view instead
+of repeating its explanation. Each subsystem lists its associated Programs; a
+Program opens as a compact preview with a separate full-explanation dialog, the required main source and its
+supporting files. All source navigation stays inside Architecture. Responsibilities and
+Program contracts remain editable explanations, with source evidence for review.
+They are not proof of API intent or current behavior. There is no separate
+subsystem/Program list screen. The database overview continues to explain data.
 
 People can explore a project's database through a readable relationship diagram,
 including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
@@ -1699,3 +1695,70 @@ A pinned lesson without a declared practice exercise can teach its quiz answers
 without creating a project or session. It keeps the original reserved attempt
 and durable progress; exercise tasks and lesson graphics retain their preparation
 requirements. Teaching distinguishes this from pending Workspace setup.
+
+
+Architecture is one pannable, zoomable sheet: explicit UI pages, screens and
+scenes above, Engine directory-rooted subsystem circles below a horizontal
+divider. Registered web routes show host-relative paths; no filesystem routing
+is assumed. Every indexed owner remains visible without imposed layers or an
+import web. Declared entries say Start here; support resources are subdued.
+Source-size growth is bounded. Explicit shared libraries form a right-hand
+stack, followed by opaque external dependencies with public metadata only.
+
+The spatial journey is subsystem circle → interface square with directory-grouped
+file icons → that file's interface. A square and compact
+skeleton appear immediately; a faint circle behind it preserves context.
+Zoom in enlarges and centres the initial target together. That target owns the
+gesture even as neighbours move under the pointer. Zoom out returns through
+enclosing views without aggressive recentring. Breadcrumbs offer Engine,
+subsystem and file returns. Hidden map and file-browser elements retain their
+mounted state. Interrupted gestures and repeated entry/exit remain usable.
+An explicit Back control retraces file-to-file links, including cross-subsystem
+jumps, restoring the previous declaration. Close and Esc return one enclosing level.
+
+The square distinguishes observed cross-subsystem imports, declared API members,
+file-level review candidates and other available exports, preserving callables,
+components, values and types. Import paths are secondary. Current source
+identity/ranges resolve exact implementation links, including re-export aliases.
+Exports in externally used files outside the declared surface are review
+candidates; internal file exports are not automatically subsystem API. Missing
+analysis stays explicit. Selecting a signature reaches its file and declaration
+inside the square. File icons retain directory nesting/search and source-size
+comparisons within their subsystem. Tight signature rows and compact headers
+preserve reading space. The existing single-file viewer retains signatures,
+recorded returns, authored Genesis Program descriptions, on-demand file overviews
+in an Explanation field with Generate/Update controls, function purpose and
+pseudocode in an inline Pseudocode field without an embedded chat. Function explanations
+identify applicable caller inputs and practical outputs: what is supplied, what is returned,
+and how to read the returned data or invoke its operations, separately from effects.
+File overviews explain scope and behavior without function input/output sections.
+Subsystems display their Genesis-authored responsibility and associated capability
+explanations in dedicated Program views. No action links to the raw subsystem
+or Program Markdown files. Source-citation failures remain visible;
+text can be selected without activating a signature.
+The viewer also retains exact symbol Code. Whole-file Code uses the same viewer,
+editing, autosave, conflict and file controls as Files, with its browser hidden. Generated interpretations are
+informational only, cached privately against actual saved source and guidance,
+and regenerated on the next explicit explanation request after changes. Opening a file or
+selecting a declaration makes no Helper query. Files retains its full browser.
+
+Purple protocol-neutral page/controller bridges remain evidenced and hidden
+initially; page selection focuses its calls and the menu can show all.
+Each receiving file has a separate port on its owner. Available operation facts
+open the receiving file and an exact declaration when supplied; missing or
+ambiguous destinations never create guessed arrows. Technology/language owners
+discover facts; the viewer parses no source. Editable Blueprint, Program and
+subsystem explanations allow an AI to propose responsibilities/API boundaries
+with source evidence for review. Usage does not prove intended design.
+Genesis's subsystem map supplies names, responsibilities and the complete
+directory-owner list. Stack's Architecture layout supplies placement and explicit
+library/support roles without changing that ownership. Existing Program
+capabilities enrich subsystem and file views. Loading failures offer Retry loading;
+Reload architecture reads existing snapshots. Re-scan project is a separate
+Architecture toolbar option, absent from individual files. It rebuilds signatures
+and links from source and existing Genesis documents, without rewriting Program
+or asking the Helper for explanations. The running stage and elapsed seconds
+show progress; cancellation waits for cleanup. Inspector failures retain the
+previous index and show bounded command output inline.
+Unchanged source indexing retains valid UI observations; stale UI evidence shows
+a short refresh notice while Engine browsing remains available.

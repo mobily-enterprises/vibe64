@@ -1,3 +1,5 @@
+import { vibe64ArchitectureInspection, VIBE64_ARCHITECTURE_INSPECTION_SECTION } from "./architectureInspection.js";
+import { vibe64ArchitectureLayout, VIBE64_ARCHITECTURE_LAYOUT_SECTION } from "./architectureLayout.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -97,7 +99,13 @@ const {
   setEngineeringProfile,
   syncAgentIntegrations,
   syncSkills,
-  withTrustedGitRepository
+  withTrustedGitRepository,
+  SOURCE_EXPLANATION_PROMPT_VERSION,
+  sourceExplanationGuidance,
+  sourceExplanationReviewGuidance,
+  validateArchitectureFacts,
+  validateArchitectureObservations,
+  mergeArchitectureObservations
 } = genesisCompiler;
 
 const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
@@ -224,6 +232,14 @@ function inspectGenesisAgentIntegrations(options = {}) {
 
 function inspectGenesisSubsystems(options = {}) {
   return runGenesisOperation(inspectSubsystems, options);
+}
+
+async function inspectVibe64ArchitectureInspection(options = {}) {
+  return vibe64ArchitectureInspection(await inspectGenesisStackSection(VIBE64_ARCHITECTURE_INSPECTION_SECTION, options));
+}
+
+async function inspectVibe64ArchitectureLayout(options = {}) {
+  return vibe64ArchitectureLayout(await inspectGenesisStackSection(VIBE64_ARCHITECTURE_LAYOUT_SECTION, options));
 }
 
 function refreshGenesisCities(options = {}) {
@@ -518,6 +534,14 @@ export {
   parseVibe64DeploymentLines,
   parseVibe64WorkspaceSetupLines,
   refreshGenesisCities,
+  inspectVibe64ArchitectureInspection,
+  inspectVibe64ArchitectureLayout,
+  validateArchitectureFacts,
+  SOURCE_EXPLANATION_PROMPT_VERSION,
+  sourceExplanationGuidance,
+  sourceExplanationReviewGuidance,
+  validateArchitectureObservations,
+  mergeArchitectureObservations,
   inspectGenesisSubsystems,
   renderGenesisPrompt,
   setGenesisCollaboration,

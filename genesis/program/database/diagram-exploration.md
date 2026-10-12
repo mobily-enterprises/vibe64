@@ -9,7 +9,7 @@ requiring every table and field to be read at once.
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdNode.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseTableList.vue`
 - `packages/vibe64-database-tools/src/client/components/DatabaseErdEdge.vue`
-- `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
+- Main: `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-database-tools/src/shared/erdModel.js`

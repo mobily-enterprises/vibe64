@@ -26,6 +26,7 @@ import {
   inspectVibe64Outputs,
   inspectVibe64WorkspaceSetup,
   inspectVibe64Deployment,
+  inspectVibe64ArchitectureInspection,
   parseVibe64DeploymentLines,
   parseVibe64OutputsLines,
   parseVibe64WorkspaceSetupLines,
@@ -61,6 +62,21 @@ test("Genesis inspection never falls back to the server working directory", asyn
     () => inspectGenesisProjectFormat({}),
     /explicit absolute projectRoot/u
   );
+});
+
+test("Architecture inspection uses the actual Genesis Stack boundary and explicit project root", async () => {
+  await assert.rejects(() => inspectVibe64ArchitectureInspection({}), /explicit absolute projectRoot/u);
+  await withTemporaryRoot(async projectRoot => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    const stackPath = path.join(projectRoot, 'genesis/stack.md');
+    await writeFile(stackPath, `${await readFile(stackPath, 'utf8')}\n## Architecture inspection\n\n- Nothing.\n`);
+    const inspected = await inspectVibe64ArchitectureInspection({ projectRoot });
+    assert.equal(inspected.contract, 'vibe64.architecture-inspection.v1');
+    assert.equal(inspected.status, 'ready');
+    assert.deepEqual(inspected.inspectors, []);
+    assert.match(inspected.stackHash, /^sha256:[a-f0-9]{64}$/u);
+  });
 });
 
 test("Genesis project-format inspection identifies a migratable unversioned project", async () => {

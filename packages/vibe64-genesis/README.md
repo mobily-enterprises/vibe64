@@ -57,3 +57,18 @@ Invalid estimates never change Outputs availability or setup readiness. Changing
 only estimates does not change the preparation recipe identity. Mixed Stack
 identities throw `VIBE64_STACK_CHANGED` so callers re-inspect instead of using
 hints for a different source snapshot. Inspection never rewrites project source.
+
+## Architecture inspector prerequisites
+
+Vibe64 owns the `Architecture inspection` Stack grammar. An inspector can
+optionally declare `- Required files: ` followed by one or more backticked
+project-relative file paths, for example:
+
+```markdown
+- Required files: `tools/inspect.py` `config/routes.json`
+```
+
+Paths use the same canonical validation as Entry files. The System Graph consumer
+checks that each resolves to a regular file inside the admitted project before
+scanning source. This is an explicit prerequisite, not a guess based on a language
+or command name. Genesis composes the section as opaque consumer-owned text.

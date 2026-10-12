@@ -320,3 +320,49 @@ describe("source explanation Material interaction", () => {
     expect(panel).toContain(".vibe64-source-explanation__thread:focus-visible");
   });
 });
+
+
+describe("embedded explanation document", () => {
+  it("keeps the conversation dock out of the single-file reader's Code view", () => {
+    const editor = readFileSync(new URL(
+      "../../src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue",
+      import.meta.url
+    ), "utf8");
+    expect(editor).toContain('v-if="!singleFile && editor.activeExplanation.value && filePresentation === \'code\'"');
+    expect(editor).toContain("'vibe64-source-editor__workspace--with-explanation': !singleFile");
+    expect(editor).toContain("'vibe64-source-editor__workspace--explanation-collapsed': !singleFile");
+  });
+
+  it("renders the saved answer without user prompts, speaker labels or a chat composer", async () => {
+    const html = await renderExplanationPanel({ embedded: true, explanation: {
+      ...cachedExplanation,
+      messages: [
+        { id: 'user', role: 'user', status: 'complete', text: 'Explain the whole file src/app.js.' },
+        { id: 'assistant', role: 'assistant', status: 'complete', text: cachedExplanation.body }
+      ]
+    } });
+    expect(html).toContain(cachedExplanation.body);
+    expect(html).not.toContain('Explain the whole file');
+    expect(html).not.toContain('Explanation chat');
+    expect(html).not.toContain('Ask about this explanation');
+    expect(html).not.toContain('Close explanation');
+    expect(html).not.toContain('<form');
+    expect(html).not.toContain('>You<');
+  });
+
+  it("shows actual progress and Stop without obscuring a preceding answer", async () => {
+    const html = await renderExplanationPanel({ embedded: true, busy: true, savedBody: cachedExplanation.body, explanation: {
+      ...cachedExplanation, body: '', status: 'running', messages: [
+        { id: 'progress', role: 'assistant', status: 'thinking', text: 'Reading the supplied source.' }
+      ]
+    } });
+    expect(html).toContain(cachedExplanation.body);
+    expect(html).toContain('Reading the supplied source.');
+    expect(html).toContain('Generating explanation…');
+    expect(html).toMatch(/<button[^>]*>Stop<\/button>/u);
+    expect(html).not.toContain('<textarea');
+    const stopped = await renderExplanationPanel({ embedded: true, explanation: { ...cachedExplanation, status: 'stopped' } });
+    expect(stopped).toContain('Generation stopped.');
+    expect(stopped).toMatch(/<button[^>]*>Retry<\/button>/u);
+  });
+});

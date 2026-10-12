@@ -21,7 +21,7 @@ so the same command works without a source checkout in the relocated runtime.
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js`
 - `tests/server/stateUpgrades.unit.test.js`
 - `docs/state-upgrades.md`
-- `tooling/release/pack-release.mjs`
+- Main: `tooling/release/pack-release.mjs`
 - `tooling/release/verify-runtime.mjs`
 - `tooling/release/verify-client-startup.mjs`
 - `tooling/package-install-smoke.mjs`

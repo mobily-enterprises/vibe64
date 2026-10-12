@@ -46,6 +46,31 @@ function registerRoutes(http, options, authorizeProject = async () => {}) {
   return actions;
 }
 
+test("symbol explanation streams retain indexed identity and authenticated actor across the HTTP boundary", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = testRouteApp();
+    const server = Fastify();
+    const calls = [];
+    try {
+      registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
+        async readTree() { return { ok: true }; },
+        async streamExplanation(input, stream) { calls.push(input); stream.emit({ type: "source-explanation.finished", ok: true }); }
+      } });
+      const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-editor/explanations/stream` });
+      server.addHook("preHandler", async request => { request.vibe64User = localUser; });
+      server.post(route.path, route.handler);
+      const input = { path: "src/app.js", symbolId: "symbol:app:start", presentation: "description", expectedHash: "b".repeat(64), startLine: 1, endLine: 2, scope: "selection" };
+      const response = await server.inject({ method: "POST", url: "/api/app/unit_project/vibe64/sessions/session-1/source-editor/explanations/stream", payload: { ...input, vibe64User: { username: "other" } } });
+      assert.equal(response.statusCode, 200);
+      assert.equal(JSON.parse(response.body).type, "source-explanation.finished");
+      assert.equal(calls.length, 1);
+      for (const [name, value] of Object.entries(input)) assert.equal(calls[0][name], value);
+      assert.equal(calls[0].sessionId, "session-1");
+      assert.equal(calls[0].vibe64User, localUser);
+    } finally { await server.close(); }
+  }));
+});
+
 test("source downloads deliver original file bytes over a real HTTP connection", async () => {
   await withLocalRequestBypass(async () => withRouteProject(async ({ apiBase, apiRouteBase, projectContext }) => {
     const root = await mkdtemp(path.join(tmpdir(), "vibe64-download-http-"));
@@ -291,7 +316,7 @@ test("source operations share validated inputs and fresh project authority acros
       ["GET", "/source-editor/stars", "stars.read", "readStarredFiles", {}],
       ["POST", "/source-editor/stars", "star.set", "setStarredFile", { path: "src/app.js", starred: false }],
       ["POST", "/source-editor/resolve-path", "path.resolve", "resolvePath", { fromPath: "src/app.js", target: "./other.js" }],
-      ["POST", "/source-editor/explanations", "explanation.create", "explainSelection", { path: "src/app.js", startLine: 1, endLine: 2 }],
+      ["POST", "/source-editor/explanations", "explanation.create", "explainSelection", { path: "src/app.js", startLine: 1, endLine: 2, symbolId: "symbol:app:start", presentation: "steps", expectedHash: "a".repeat(64) }],
       ["POST", "/source-editor/explanations/cleanup", "explanations.cleanup", "cleanupExplanations", { activeExplanationIds: ["keep"] }],
       ["DELETE", "/source-editor/explanations/:explanationId", "explanation.delete", "deleteExplanation", {}],
       ["POST", "/source-editor/explanations/:explanationId/stop", "explanation.stop", "stopExplanation", {}],

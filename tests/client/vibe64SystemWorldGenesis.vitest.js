@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,77 +6,8 @@ import {
   genesisCityKind,
   genesisCityWorld
 } from "../../packages/vibe64-system-graph/src/client/world/genesisCityWorld.js";
-import {
-  layoutGenesisCity
-} from "../../packages/vibe64-system-graph/src/client/world/worldLayout.js";
 
 describe("Genesis City world projection", () => {
-  it("keeps City exploration local and introduces the real navigation controls once", () => {
-    const component = readFileSync(
-      "packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue",
-      "utf8"
-    );
-    const renderer = readFileSync(
-      "packages/vibe64-system-graph/src/client/world/createSystemWorld.js",
-      "utf8"
-    );
-    const host = readFileSync(
-      "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
-      "utf8"
-    );
-
-    expect(component).not.toContain("Explain in Chat");
-    expect(component).not.toContain("ask-in-chat");
-    expect(component).not.toContain("system-world__orientation");
-    expect(component).not.toContain("orientationText");
-    expect(host).not.toContain("@ask-in-chat=\"askCodexAboutSystemContext\"");
-    expect(host).not.toContain(":ask-chat-available=\"sourceEditorAskCodexAvailable\"");
-
-    expect(component).toContain("Moving around the City");
-    expect(component).toContain("Swipe horizontally with two fingers to rotate");
-    expect(component).toContain("vibe64:city-controls-introduction:v1");
-    expect(renderer).toContain("Math.abs(event.deltaX) > Math.abs(event.deltaY)");
-    expect(renderer).toContain("controls.mouseButtons.right = CameraControls.ACTION.ROTATE");
-    expect(renderer).toContain("controls.mouseButtons.left = CameraControls.ACTION.NONE");
-    expect(component).not.toContain(":loading=\"refreshing\"");
-    expect(component).not.toContain("system-world__state-orbit");
-  });
-
-  it("keeps the Machine City navigator at region scale", () => {
-    const source = readFileSync(
-      "packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue",
-      "utf8"
-    );
-
-    expect(source).toContain("v-for=\"district in machineNavigatorDistricts\"");
-    expect(source).toContain("@click=\"inspectDistrict(district)\"");
-    expect(source).not.toContain("@click=\"inspectDistrict(district, { focus: true })\"");
-    expect(source).not.toContain(":icon=\"cityKind === 'machine' ? mdiFileCodeOutline");
-  });
-
-  it("keeps the mature batched-label and idle-frame performance boundaries", () => {
-    const renderer = readFileSync(
-      "packages/vibe64-system-graph/src/client/world/createSystemWorld.js",
-      "utf8"
-    );
-    const presentation = readFileSync(
-      "packages/vibe64-system-graph/src/client/world/cityPresentationObjects.js",
-      "utf8"
-    );
-    const component = readFileSync(
-      "packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue",
-      "utf8"
-    );
-
-    expect(renderer).toContain("createDistrictSurfaceLabels(");
-    expect(renderer).not.toContain("addLabel(district.title");
-    expect(renderer).toContain('controls.addEventListener("wake", markDirty)');
-    expect(presentation).toContain("one atlas");
-    expect(component).toContain("const shouldContinue = world?.frame(time) === true");
-    expect(component).toContain("<span>Precincts</span>");
-    expect(component).toContain("<span>Sections</span>");
-  });
-
   it("passes native Machine City districts, buildings, and functions by reference", () => {
     const districts = [{
       id: "directory:src",
@@ -125,7 +55,7 @@ describe("Genesis City world projection", () => {
     expect(overview).not.toHaveProperty("findings");
   });
 
-  it("passes native Program links and lays out operations without invented architecture", () => {
+  it("passes native Program links without invented architecture", () => {
     const operation = {
       description: "Lists the catalogue.",
       districtId: "subsystem:catalog",
@@ -156,20 +86,11 @@ describe("Genesis City world projection", () => {
       links
     }, GENESIS_PROGRAM_CITY_KIND);
 
-    const layout = layoutGenesisCity(overview);
-
-    expect(layout.buildings).toHaveLength(1);
-    expect(layout.buildings[0]).toEqual(expect.objectContaining({
-      id: operation.id,
-      path: operation.path,
-      title: operation.title
-    }));
     expect(overview.buildings[0]).not.toHaveProperty("lines");
     expect(overview.buildings[0]).not.toHaveProperty("imports");
     expect(overview.buildings[0]).not.toHaveProperty("routes");
     expect(overview.buildings[0]).not.toHaveProperty("evidence");
     expect(overview.links).toBe(links);
-    expect(layout.districts[0].title).toBe("Catalog");
   });
 
   it("joins Program implemented-by links to exact Machine files without path inference", () => {

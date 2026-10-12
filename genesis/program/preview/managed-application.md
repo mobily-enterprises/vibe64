@@ -60,7 +60,7 @@ Close, Stop and collapsible task details retain their own existing behavior.
 - `tests/server/vibe64OutputActionTools.unit.test.js`
 - `tests/server/vibe64OutputTools.integration.test.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
-- `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
+- Main: `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/studio-terminal-core/src/server/launchTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`

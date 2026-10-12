@@ -896,13 +896,13 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });
 
-  it("keeps direct files, subsystems, preview, terminal, and close controls", () => {
+  it("keeps direct files, architecture, preview, terminal, and close controls", () => {
     const component = fs.readFileSync(componentPath, "utf8");
 
     expect(component).toContain("<Vibe64SessionToolbar");
     expect(component).toContain(":archive=\"props.sessionArchive\"");
     expect(component).toContain("<Vibe64SessionFiles");
-    expect(component).toContain("<Vibe64SubsystemsView");
+    expect(component).toContain("<Vibe64ArchitectureView");
     expect(component).toContain("<Vibe64OutputControls");
     expect(component).toContain("name=\"ai-terminal\"");
     expect(component).not.toContain("Session tools");

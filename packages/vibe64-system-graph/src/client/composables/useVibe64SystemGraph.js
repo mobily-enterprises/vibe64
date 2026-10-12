@@ -1,5 +1,6 @@
 import {
   computed,
+  ref,
   unref,
   watch
 } from "vue";
@@ -28,7 +29,8 @@ function cityAvailable(status = {}, kind = "") {
 function useVibe64SystemGraph({
   active = true,
   reloadVersion = 0,
-  sessionId = ""
+  sessionId = "",
+  projection = "native"
 } = {}) {
   const paths = usePaths();
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
@@ -38,57 +40,76 @@ function useVibe64SystemGraph({
   }));
   const sessionPath = computed(() => systemSessionPath(apiPath.value, normalizedSessionId.value));
 
+  // Retained readers share query keys. Their endpoints must stay identical;
+  // enabled suspends loading without replacing the shared fetcher's path.
   const statusResource = useEndpointResource({
     enabled,
-    fallbackLoadError: "Genesis City status could not be loaded.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/status` : ""),
+    fallbackLoadError: "Architecture index status could not be loaded.",
+    path: computed(() => `${sessionPath.value}/status`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "status")),
-    requestRecoveryLabel: "Genesis City status"
+    queryOptions: { refetchOnWindowFocus: false, retry: false },
+    requestRecoveryLabel: "Architecture index status"
   });
   const systemStatus = computed(() => statusResource.data.value || {});
-  const machineEnabled = computed(() => enabled.value && cityAvailable(systemStatus.value, "machine"));
-  const programEnabled = computed(() => enabled.value && cityAvailable(systemStatus.value, "program"));
+  const machineEnabled = computed(() => enabled.value && projection === "native" && cityAvailable(systemStatus.value, "machine"));
+  const programEnabled = computed(() => enabled.value && projection === "native" && cityAvailable(systemStatus.value, "program"));
 
   const machineResource = useEndpointResource({
     enabled: machineEnabled,
-    fallbackLoadError: "Machine City could not be loaded.",
-    path: computed(() => machineEnabled.value ? `${sessionPath.value}/cities/machine` : ""),
+    fallbackLoadError: "Source facts could not be loaded.",
+    path: computed(() => `${sessionPath.value}/cities/machine`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "machine-city")),
-    requestRecoveryLabel: "Machine City"
+    requestRecoveryLabel: "Source facts"
   });
+  const architectureEnabled = computed(() => enabled.value && projection === "architecture" && cityAvailable(systemStatus.value, "machine"));
+  const architectureResource = useEndpointResource({ enabled: architectureEnabled, path: computed(() => `${sessionPath.value}/architecture`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "architecture")), queryOptions: { refetchOnWindowFocus: false, retry: false }, fallbackLoadError: "Architecture could not be loaded.", requestRecoveryLabel: "Architecture" });
   const programResource = useEndpointResource({
     enabled: programEnabled,
-    fallbackLoadError: "Program City could not be loaded.",
-    path: computed(() => programEnabled.value ? `${sessionPath.value}/cities/program` : ""),
+    fallbackLoadError: "Program descriptions could not be loaded.",
+    path: computed(() => `${sessionPath.value}/cities/program`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "program-city")),
-    requestRecoveryLabel: "Program City"
+    requestRecoveryLabel: "Program descriptions"
   });
   const refreshResource = useEndpointResource({
     enabled: false,
-    fallbackSaveError: "Genesis Cities could not be refreshed.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/refresh` : ""),
+    fallbackSaveError: "Architecture analysis could not be refreshed.",
+    path: computed(() => `${sessionPath.value}/refresh`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "refresh")),
-    requestRecoveryLabel: "Refresh Genesis Cities",
+    requestRecoveryLabel: "Refresh architecture analysis",
     writeMethod: "POST"
   });
 
+  const cancelResource = useEndpointResource({ enabled: false, path: computed(() => `${sessionPath.value}/refresh/cancel`), queryKey: computed(() => systemQueryKey(normalizedSessionId.value, 'refresh-cancel')), writeMethod: 'POST', fallbackSaveError: 'Architecture cancellation could not be confirmed.' });
+
   const subsystemResource = useEndpointResource({
-    enabled,
+    enabled: computed(() => enabled.value && projection === "native"),
     fallbackLoadError: "Subsystems could not be loaded.",
-    path: computed(() => enabled.value ? `${sessionPath.value}/subsystems` : ""),
+    path: computed(() => `${sessionPath.value}/subsystems`),
     queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "subsystems")),
     requestRecoveryLabel: "Subsystems"
   });
 
+  const refreshStatusResource = useEndpointResource({
+    enabled: computed(() => enabled.value && refreshResource.isSaving.value),
+    path: computed(() => `${sessionPath.value}/refresh/status`),
+    queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "refresh-status")),
+    queryOptions: { refetchInterval: 1000, refetchOnWindowFocus: false, retry: false },
+    fallbackLoadError: "Analysis progress is unavailable."
+  });
+  const refreshOutput = ref("");
+
   const machineCity = computed(() => machineResource.data.value?.city || null);
   const programCity = computed(() => programResource.data.value?.city || null);
   const loading = computed(() => Boolean(
+    architectureResource.isLoading.value ||
     statusResource.isLoading.value ||
     machineResource.isLoading.value ||
     programResource.isLoading.value
   ));
   const error = computed(() => (
+    cancelResource.saveError.value ||
     refreshResource.saveError.value ||
+    architectureResource.loadError.value ||
     statusResource.loadError.value ||
     machineResource.loadError.value ||
     programResource.loadError.value ||
@@ -97,8 +118,9 @@ function useVibe64SystemGraph({
 
   async function reload() {
     if (!enabled.value) return;
-    await Promise.all([statusResource.reload(), subsystemResource.reload()]);
+    await Promise.all([statusResource.reload(), ...(projection === "native" ? [subsystemResource.reload()] : [])]);
     const cityLoads = [];
+    if (architectureEnabled.value) cityLoads.push(architectureResource.reload());
     if (machineEnabled.value) {
       cityLoads.push(machineResource.reload());
     }
@@ -117,18 +139,37 @@ function useVibe64SystemGraph({
   }, { immediate: true });
 
   async function refresh() {
-    const result = await refreshResource.save({}, { method: "POST" });
-    await reload();
-    return result;
+    refreshOutput.value = "";
+    try {
+      const result = await refreshResource.save({}, { method: "POST", options: { timeoutMs: 10 * 60 * 1000 } });
+      await reload();
+      return result;
+    } catch (error) {
+      refreshOutput.value = String(error?.details?.commandOutput || "");
+      // The retained view already presents this resource error. Do not also
+      // throw it into the shell's blocking application-error dialog.
+      if (!refreshResource.saveError.value) throw error;
+      return null;
+    }
   }
 
   return {
+    architecture: computed(() => architectureResource.data.value?.architecture || null),
+    cancelRefresh: () => cancelResource.save({}, { method: "POST" }),
     error,
     loading,
     machineCity,
     programCity,
     refresh,
     refreshing: refreshResource.isSaving,
+    refreshProgress: computed(() => {
+      if (!refreshResource.isSaving.value) return null;
+      const progress = refreshStatusResource.data.value?.refresh;
+      return refreshStatusResource.loadError.value
+        ? { message: "Analysis continues; progress unavailable.", elapsedSeconds: progress?.elapsedSeconds || 0 }
+        : progress || { message: "Starting project analysis…", elapsedSeconds: 0 };
+    }),
+    refreshOutput,
     reload,
     subsystemMap: computed(() => subsystemResource.data.value || null),
     subsystemError: subsystemResource.loadError,

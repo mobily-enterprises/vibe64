@@ -2,7 +2,7 @@
 
 Open a project and select **Dashboard** beside **Preview**. The Dashboard provides
 the available session and project tools, including Files, Changes, Database,
-Subsystems, AI Terminal, Project settings, Env, App access, Integrations, Issues
+Architecture, AI Terminal, Project settings, Env, App access, Integrations, Issues
 and Pull requests. Availability depends on the selected session, host and permissions.
 
 On mobile, **Show project** reveals the project from chat. Use **Dashboard section**
@@ -16,8 +16,9 @@ optional. The workspace owner also sees the read-only **Session** area.
 Access follows the signed-in account; changing a link cannot select another role.
 Changes shows the session's source changes. AI Terminal shows the coding agent's
 native terminal; an enlarged terminal has **Exit full screen**. This leaves it
-running, while **Close terminal** stops that terminal. Subsystems presents the
-project's declared structure; asking the coding agent to investigate or update it
+running, while **Close terminal** stops that terminal. Architecture presents the UI storyboard and Engine dependency layers on one
+pannable, zoomable sheet, with registered routes on web cards; asking the coding
+agent to investigate or update it
 is separate from opening the view. Do not mistake an unavailable/loading tool for
 an empty successful result.
 

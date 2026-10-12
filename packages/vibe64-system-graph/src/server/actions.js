@@ -7,12 +7,15 @@ function createSystemGraphActions({ systemGraph }) {
     ["status.read", "readStatus"],
     ["machine.read", "readMachineCity"],
     ["program.read", "readProgramCity"],
+    ["architecture.read", "readArchitecture"],
+    ["refresh.cancel", "cancelRefresh"],
+    ["refresh.status", "readRefreshStatus"],
     ["refresh", "refresh"]
   ].map(([operation, method]) => withVibe64ActionContext({
     id: `vibe64.system-graph.${operation}`, version: 1,
-    kind: method === "refresh" ? "command" : "query",
+    kind: ["refresh", "cancelRefresh"].includes(method) ? "command" : "query",
     input: { schema: createSchema({ sessionId: { type: "string", minLength: 1, maxLength: 256, required: true } }), mode: "create" },
-    output: null, idempotency: method === "refresh" ? "optional" : "none",
+    output: null, idempotency: ["refresh", "cancelRefresh"].includes(method) ? "optional" : "none",
     extensions: { assistant: { exclude: true } },
     execute: (input) => systemGraph[method](input)
   }));

@@ -5,7 +5,7 @@ host provide managed system values separately.
 
 ## Sources
 
-- `packages/vibe64-project/src/server/service.js`
+- Main: `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`

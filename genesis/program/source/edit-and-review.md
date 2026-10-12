@@ -41,6 +41,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64SourceEditorFileSync.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
+- `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue`
 - `src/composables/useVibe64RepositoryWorkspace.js`
 - `src/composables/useVibe64AutopilotView.js`
@@ -52,6 +53,8 @@ from saved project work, and inspect one exact file change at a time.
 - `src/lib/vibe64RepositoryRealtime.js`
 - `src/pages/app/project/[slug]/dashboard/changes/index.vue`
 - `src/pages/app/project/[slug]/dashboard/repository/index.vue`
+
+- `packages/vibe64-source-editor/src/server/sourceInterpretations.js`
 
 ## Public contract
 
@@ -1539,3 +1542,70 @@ an AI symbol. Unknown future providers remain available under Other services.
 Presentation sources: `src/lib/integrationCatalogue.js`,
 `src/components/studio/IntegrationServiceLogo.vue`, and
 `src/components/studio/IntegrationsPanel.vue`.
+
+
+Source files open on their indexed public interface in both Files and Architecture.
+That interface preserves available language visibility scopes, including Rust
+crate-restricted items. Symbol Code includes attached attributes/decorators and
+language declaration keywords; grouped values can share their exact declaration
+range. Public fields/properties/constants and types supplement callable symbols
+through the existing native index, while local declarations remain internal.
+A callable has a Pseudocode field (a short purpose statement followed by informational English
+steps), and exact Code. File membership links open the dedicated Program explanation inside Architecture,
+with its mandatory main source and supporting files; they never open the authored
+Markdown document. Gold main-file icons distinguish it in the browser.
+The Program explains a capability, not each declaration. The file opens as a
+document: an empty Explanation field offers Generate explanation, and saved text
+appears directly with Update explanation. Selecting a callable expands its
+Pseudocode field inline with Generate pseudocode or Update pseudocode. Generated
+function explanations describe applicable Inputs and Outputs and use:
+supplied parameters/configuration, useful returned data and operations, and how
+callers consume them. Source-evidenced defaults, live state, snapshots, awaitable
+results and observable effects remain distinct; missing real contracts are explicit.
+File overviews describe scope, responsibilities, parts and behavior without
+function input/output sections, including files containing callable exports.
+Changed explanation guidance marks saved interpretations out of date without
+starting a Helper request. No chat
+transcript or composer is embedded in these fields. Their progress, Stop and
+retry reuse the existing Helper lifecycle; an update retains preceding saved text.
+A file explanation reads the saved file without the project index or generating
+a subsystem responsibility. Entire files within the existing character budget
+are supplied, regardless of line count; validated indexed functions retain that
+character limit without the ordinary selection line cap. Architecture → ⋯ → Re-scan project updates the
+whole browsing index and shows its stage/elapsed time; it generates no
+explanation or Program text. The file view has no scan button. Program Sources identify
+participating files, not exact per-function intent. Whole-file Code preserves
+the mounted CodeMirror editor, draft, autosave, conflict and realtime owners.
+Function explanations reuse the original Helper service, verified profile, account
+isolation, cache, admission, stream, stop and cleanup. Their optional new-write
+`sourceRange.presentation` and prompt versions keep the caches distinct; existing
+records without the field keep their original interpretation and need no historical
+rewrite. Indexed range use requires the saved file hash to match and no local
+draft. The server rechecks expectedHash before generation, resolves an optional
+symbol ID against validated native Architecture facts in the admitted session's
+source root, and uses the declaration's server range rather than browser
+coordinates. A missing/stale identity, a mismatching file hash or an impossible
+range rejects generation with refresh guidance. Native artifact reads reuse the
+original no-symlink/file-identity download access and are bounded at 128 MiB;
+larger artifacts retain ordinary selection/whole-file explanations and Code.
+Symbol identity participates in cache keys and remains on the explanation range.
+Unsupported parsers and
+stale indexes retain whole-file explanation and Code controls without fabricating
+an empty complete public interface.
+
+On-demand file overviews and function-specific pseudocode are stored privately by
+the source-editor service, scoped to actor, project/session, actual saved source,
+verified Helper profile, presentation and Genesis prompt revision. Only completed
+initial answers are persisted atomically; follow-up conversations do not replace
+them. A forced refresh cannot be overwritten by an older completion. Reads can
+show current or explicitly stale saved text without starting a Helper. Opening
+files or selecting declarations does not query the Helper. The next explicit
+Generate/Update explanation or pseudocode request regenerates its stale answer; there is
+no background summary job. Only user-visible Helper progress classifications
+are forwarded during generation, followed by the validated final answer. These
+interpretations are not Program contracts or coding-agent context.
+
+Architecture and Files share this viewer/editor and its existing autosave,
+conflict, download and source-navigation coordination. Architecture hides the
+file browser while reading a selected file or Program; it does not make whole-file
+Code read-only or construct a second editing implementation.

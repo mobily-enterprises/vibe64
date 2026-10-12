@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
-import { lstat, mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -244,6 +244,278 @@ async function createSourceEditorFixture({
     sourceRoot
   };
 }
+
+test("interface explanations separate Description and Steps caches and reject changed symbol source", async t => {
+  const prompts = [];
+  const fixture = await createSourceEditorFixture({ terminalService: {
+    async runEphemeralAgentChatTurn(_sessionId, input) {
+      prompts.push(input.prompt);
+      return { ok: true, executionProfile: resolvedSourceExplanationProfile(), text: structuredExplanation(`Explanation ${prompts.length}.`), threadId: `interface-thread-${prompts.length}`, turnId: `interface-turn-${prompts.length}` };
+    }
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const expectedHash = crypto.createHash("sha256").update("console.log('one');\n").digest("hex");
+  async function run(presentation, id, hash = expectedHash) {
+    const events = [];
+    await fixture.service.streamExplanation({ path: "src/app.js", sessionId: "session-1", startLine: 1, startColumn: 1, endLine: 1, endColumn: 20, presentation, expectedHash: hash, explanationId: id }, { emit: event => events.push(event), isClosed: () => false });
+    return events;
+  }
+  const description = await run("description", "exp_interface_description");
+  const steps = await run("steps", "exp_interface_steps");
+  const cached = await run("description", "exp_interface_cached");
+  assert.equal(description.find(event => event.type === "source-explanation.finished").explanation.sourceRange.presentation, "description");
+  assert.equal(steps.find(event => event.type === "source-explanation.finished").explanation.sourceRange.presentation, "steps");
+  assert.equal(cached.find(event => event.type === "source-explanation.finished").explanation.engine, "agent-cache");
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[0], /Do not emit pseudocode or pseudo-variables/u);
+  assert.match(prompts[1], /numbered steps in English as pseudocode/u);
+  for (const prompt of prompts) assert.doesNotMatch(prompt, /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
+  assert.match(prompts[1], /\*\*Steps\*\* with at most 12 concise numbered steps/u);
+  await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
+  const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
+  assert.equal(stale.ok, false);
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.errors[0].code, "vibe64_source_explanation_source_changed");
+  assert.equal(prompts.length, 2);
+});
+
+test("symbol explanations use the server-indexed declaration, ignore forged browser ranges and retain identity through cache and restart", async t => {
+  const declarations = ["export const first = '😀';", "export function second() { return first; }"];
+  const text = declarations.join("\r\n") + "\r\n";
+  const hash = crypto.createHash("sha256").update(text).digest("hex");
+  const generated = [];
+  const fixture = await createSourceEditorFixture({
+    extraFiles: [{ path: "src/app.js", text }],
+    explanationGenerator(input) {
+      generated.push(input.selectedText);
+      return { body: "Returns the first value.", executionProfile: resolvedSourceExplanationProfile() };
+    }
+  });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const symbols = declarations.map((declaration, index) => ({ id: `symbol:${index}`, fileId: "file:src/app.js", path: "src/app.js", name: index ? "second" : "first", visibility: "public", parameters: index ? [] : undefined, rangeAvailable: true, start: { line: index + 1, column: 1 }, end: { line: index + 1, column: declaration.length + 1 } }));
+  const architecture = {
+    schema: "genesis.architecture.v1", snapshotId: "source-test",
+    subsystems: [{ id: "directory:src", root: "src", fileIds: ["file:src/app.js"], parentId: null }],
+    files: [{ id: "file:src/app.js", path: "src/app.js", hash: `sha256:${hash}`, subsystemId: "directory:src", lines: 3 }],
+    symbols, relations: [], capabilities: { symbols: "partial", dependencies: "partial", pages: "unconfigured", runtimeCalls: "unsupported" }, diagnostics: []
+  };
+  const artifact = path.join(fixture.sourceRoot, ".genesis/machine-city.json");
+  await mkdir(path.dirname(artifact));
+  await writeFile(artifact, JSON.stringify({ architecture }));
+  const input = { sessionId: "session-1", path: "src/app.js", symbolId: symbols[1].id, expectedHash: hash, presentation: "steps", scope: "file", startLine: 1, endLine: 1, startColumn: 2, endColumn: 3 };
+  const result = await fixture.service.explainSelection(input);
+  assert.equal(result.ok, true);
+  assert.deepEqual(generated, [declarations[1]]);
+  assert.equal(result.explanation.sourceRange.symbolId, symbols[1].id);
+  assert.equal(result.explanation.sourceRange.scope, "selection");
+  assert.equal(result.explanation.sourceRange.startLine, 2);
+  assert.equal(result.explanation.sourceRange.endColumn, declarations[1].length + 1);
+  const cached = await fixture.service.explainSelection(input);
+  assert.equal(cached.ok, true);
+  assert.equal(cached.explanation.engine, "agent-cache");
+  assert.equal(cached.explanation.sourceRange.symbolId, symbols[1].id);
+  assert.equal(generated.length, 1);
+  const restored = await fixture.restartService().explainSelection(input);
+  assert.equal(restored.ok, true);
+  assert.equal(restored.explanation.sourceRange.symbolId, symbols[1].id);
+  assert.deepEqual(generated, [declarations[1]], 'durable interpretations survive service restart');
+  const saved = await fixture.service.readFile({ sessionId: 'session-1', path: 'src/app.js' });
+  assert.equal(saved.interpretations.records[0].status, 'current');
+  assert.equal(saved.interpretations.records[0].symbolId, symbols[1].id);
+  const unknown = await fixture.service.explainSelection({ ...input, symbolId: "missing-symbol" });
+  assert.equal(unknown.statusCode, 409);
+  const otherFile = await fixture.service.explainSelection({ ...input, path: "src/index/pages.jsx", expectedHash: undefined });
+  assert.equal(otherFile.statusCode, 409);
+  await writeFile(path.join(fixture.sourceRoot, "src/app.js"), text.replace("return first", "return 'changed'"));
+  const stale = await fixture.service.explainSelection({ ...input, expectedHash: undefined });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.errors[0].code, "vibe64_source_explanation_symbol_changed");
+  assert.equal(generated.length, 1);
+});
+
+test("symbol explanations reject missing, malformed, impossible, symlinked and oversized analysis without running the generator", async t => {
+  let generated = 0;
+  const fixture = await createSourceEditorFixture({ explanationGenerator() { generated++; throw new Error("Rejected input must not generate."); } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const input = { sessionId: "session-1", path: "src/app.js", symbolId: "symbol:app", startLine: 1, endLine: 1 };
+  const artifact = path.join(fixture.sourceRoot, ".genesis/machine-city.json");
+  assert.equal((await fixture.service.explainSelection(input)).statusCode, 409);
+  await mkdir(path.dirname(artifact));
+  await writeFile(artifact, "not JSON");
+  assert.equal((await fixture.service.explainSelection(input)).statusCode, 409);
+  const hash = crypto.createHash("sha256").update("console.log('one');\n").digest("hex");
+  const architecture = { schema: "genesis.architecture.v1", snapshotId: "bad-range",
+    subsystems: [{ id: "directory:src", root: "src", parentId: null, fileIds: ["file:src/app.js"] }],
+    files: [{ id: "file:src/app.js", path: "src/app.js", hash: `sha256:${hash}`, subsystemId: "directory:src", lines: 2 }],
+    symbols: [{ id: "symbol:app", fileId: "file:src/app.js", path: "src/app.js", name: "app", visibility: "public", rangeAvailable: true, start: { line: 1, column: 1 }, end: { line: 1, column: 500 } }],
+    relations: [], capabilities: { symbols: "partial", dependencies: "partial", pages: "unconfigured", runtimeCalls: "unsupported" }, diagnostics: [] };
+  await writeFile(artifact, JSON.stringify({ architecture }));
+  assert.equal((await fixture.service.explainSelection(input)).errors[0].code, "vibe64_source_explanation_symbol_changed");
+  await rm(artifact);
+  await symlink(path.join(fixture.sourceRoot, "src/app.js"), artifact);
+  assert.equal((await fixture.service.explainSelection(input)).statusCode, 403);
+  await rm(artifact);
+  const handle = await open(artifact, "w");
+  try { await handle.truncate(128 * 1024 * 1024 + 1); } finally { await handle.close(); }
+  assert.equal((await fixture.service.explainSelection(input)).statusCode, 413);
+  assert.equal((await fixture.service.explainSelection({ ...input, symbolId: "" })).statusCode, 400);
+  assert.equal(generated, 0);
+});
+
+async function writeCallableAnalysis(fixture, text = 'export function app() { return 1; }\n') {
+  await writeFile(path.join(fixture.sourceRoot, 'src/app.js'), text);
+  const hash = crypto.createHash('sha256').update(text).digest('hex');
+  const architecture = { schema: 'genesis.architecture.v1', snapshotId: 'function-cache',
+    subsystems: [{ id: 'directory:src', root: 'src', parentId: null, fileIds: ['file:src/app.js'] }],
+    files: [{ id: 'file:src/app.js', path: 'src/app.js', hash: `sha256:${hash}`, subsystemId: 'directory:src', lines: 2 }],
+    symbols: [{ id: 'symbol:app', fileId: 'file:src/app.js', path: 'src/app.js', name: 'app', visibility: 'public', parameters: [], rangeAvailable: true, start: { line: 1, column: 1 }, end: { line: 1, column: text.trimEnd().length + 1 } }],
+    relations: [], capabilities: { symbols: 'partial', dependencies: 'partial', pages: 'unconfigured', runtimeCalls: 'unsupported' }, diagnostics: [] };
+  const artifact = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
+  await mkdir(path.dirname(artifact), { recursive: true });
+  await writeFile(artifact, JSON.stringify({ architecture }));
+}
+
+test('function pseudocode survive restart, expose staleness and isolate people and projects', async t => {
+  let generated = 0;
+  const fixture = await createSourceEditorFixture({ explanationGenerator() { generated++; return { body: `Describes revision ${generated}.`, executionProfile: resolvedSourceExplanationProfile() }; } });
+  const other = await createSourceEditorFixture();
+  t.after(() => Promise.all([fixture, other].map(({ root }) => rm(root, { recursive: true, force: true }))));
+  await writeCallableAnalysis(fixture);
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1, vibe64User: { uid: 1001, username: 'ada' } };
+  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  const restarted = fixture.restartService();
+  assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
+  assert.equal(generated, 1);
+  const current = await restarted.readFile(input);
+  assert.equal(current.interpretations.records[0].status, 'current');
+  assert.match(current.interpretations.records[0].body, /revision 1/);
+  assert.deepEqual((await restarted.readFile({ ...input, vibe64User: { uid: 1002, username: 'bob' } })).interpretations.records, []);
+  assert.deepEqual((await other.service.readFile(input)).interpretations.records, []);
+  await writeFile(path.join(fixture.sourceRoot, input.path), 'export function app() { return 2; }\n');
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
+  await writeCallableAnalysis(fixture, 'export function app() { return 2; }\n');
+  assert.equal((await restarted.explainSelection(input)).ok, true);
+  assert.equal(generated, 2);
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
+  await restarted.explainSelection({ ...input, force: true });
+  assert.equal(generated, 3);
+});
+
+test('file overviews use the whole saved file without an index, survive restart and regenerate after changes', async t => {
+  let generated = 0;
+  const text = "export function load() { return 1; }\nexport const name = 'app';\n";
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], explanationGenerator(input) {
+    generated++;
+    assert.equal(input.range.scope, 'file');
+    assert.equal(input.range.symbolId, undefined);
+    assert.equal(input.selectedText, generated < 2 ? text : text.replace('return 1', 'return 2'));
+    return { body: `File overview revision ${generated}.`, executionProfile: resolvedSourceExplanationProfile() };
+  } });
+  const other = await createSourceEditorFixture();
+  t.after(() => Promise.all([fixture, other].map(({ root }) => rm(root, { recursive: true, force: true }))));
+  const expectedHash = crypto.createHash('sha256').update(text).digest('hex');
+  // No .genesis index exists. Client range must not truncate a whole-file overview.
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description', startLine: 2, endLine: 2, startColumn: 2, endColumn: 4, expectedHash, vibe64User: { uid: 1001, username: 'ada' } };
+  const first = await fixture.service.explainSelection(input);
+  assert.equal(first.ok, true);
+  assert.equal(first.explanation.sourceRange.startLine, 1);
+  assert.equal(first.explanation.sourceRange.endLine, 3);
+  const restarted = fixture.restartService();
+  assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
+  assert.equal(generated, 1);
+  const current = await restarted.readFile(input);
+  assert.equal(current.interpretations.records[0].scope, 'file');
+  assert.equal(current.interpretations.records[0].presentation, 'description');
+  assert.equal(current.interpretations.records[0].status, 'current');
+  assert.deepEqual((await restarted.readFile({ ...input, vibe64User: { uid: 1002, username: 'bob' } })).interpretations.records, []);
+  assert.deepEqual((await other.service.readFile(input)).interpretations.records, []);
+  await writeFile(path.join(fixture.sourceRoot, input.path), text.replace('return 1', 'return 2'));
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
+  assert.equal((await restarted.explainSelection(input)).statusCode, 409);
+  assert.equal(generated, 1);
+  const changedHash = (await restarted.readFile(input)).file.hash;
+  assert.equal((await restarted.explainSelection({ ...input, expectedHash: changedHash })).ok, true);
+  assert.equal(generated, 2);
+  assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
+  await restarted.explainSelection({ ...input, expectedHash: changedHash, force: true });
+  assert.equal(generated, 3);
+});
+
+test('file overviews describe manifests without function input/output contracts', async t => {
+  const prompts = [];
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'package.json', text: '{"name":"example","exports":{".":"./src/app.js"}}' }], terminalService: {
+    async runEphemeralAgentChatTurn(_scope, input) {
+      prompts.push(input.prompt);
+      return { ok: true, text: structuredExplanation('Declares the package entry point.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-manifest', turnId: 'turn-manifest' };
+    }
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  assert.equal((await fixture.service.explainSelection({ sessionId: 'session-1', path: 'package.json', scope: 'file', presentation: 'description' })).ok, true);
+  assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
+  assert.match(prompts[0], /Do not add Inputs or Outputs and use sections/u);
+  assert.doesNotMatch(prompts[0], /state what is actually returned and how callers use it/u);
+});
+
+test('document explanations include every line within the byte budget and admit complete indexed long functions', async t => {
+  const text = ['export function app() {', ...Array.from({ length: 300 }, (_, index) => `  observe(${index});`), '  return "middle-behavior";', '}'].join('\n');
+  const prompts = [];
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], terminalService: {
+    async runEphemeralAgentChatTurn(_scope, input) {
+      prompts.push(input.prompt);
+      return { ok: true, text: structuredExplanation('Observes the input and returns a result.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-document', turnId: 'turn-document' };
+    },
+    async deleteEphemeralAgentConversation() { return { ok: true }; }
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description' };
+  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.ok(prompts[0].includes(text), 'file explanation receives the complete saved file, including its middle');
+  assert.doesNotMatch(prompts[0], /File excerpt|lines omitted from the middle/u);
+  assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
+  assert.match(prompts[0], /Do not add Inputs or Outputs and use sections, even when the file contains callable exports/u);
+  assert.doesNotMatch(prompts[0], /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
+  await writeCallableAnalysis(fixture, text);
+  const indexPath = path.join(fixture.sourceRoot, '.genesis/machine-city.json');
+  const index = JSON.parse(await readFile(indexPath, 'utf8'));
+  index.architecture.files[0].lines = text.split('\n').length;
+  index.architecture.symbols[0].end = { line: text.split('\n').length, column: 2 };
+  await writeFile(indexPath, JSON.stringify(index));
+  assert.equal((await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', symbolId: 'symbol:app' })).ok, true);
+  assert.ok(prompts[1].includes(text), 'indexed function receives its entire server-validated declaration');
+  assert.match(prompts[1], /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
+  assert.match(prompts[1], /absent sections must be omitted/u);
+  assert.match(prompts[1], /name the parameters or runtime configuration callers supply/u);
+  assert.match(prompts[1], /state what is actually returned and how callers use it/u);
+  assert.match(prompts[1], /Name the useful returned fields and operations/u);
+  assert.match(prompts[1], /Explain observable effects separately from returned data/u);
+  assert.match(prompts[1], /state that briefly rather than guessing/u);
+  const selection = await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', startLine: 1, endLine: 302 });
+  assert.equal(selection.statusCode, 413, 'ordinary unindexed selections retain their existing line limit');
+  assert.equal(prompts.length, 2);
+});
+
+test('forced interpretation refresh cannot be overwritten by an older completed generation', async t => {
+  let release;
+  let announce;
+  let generated = 0;
+  const started = new Promise(resolve => { announce = resolve; });
+  const fixture = await createSourceEditorFixture({ async explanationGenerator() {
+    generated++;
+    if (generated === 1) { announce(); await new Promise(resolve => { release = resolve; }); return { body: 'Old interpretation.', executionProfile: resolvedSourceExplanationProfile() }; }
+    return { body: 'New interpretation.', executionProfile: resolvedSourceExplanationProfile() };
+  } });
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  await writeCallableAnalysis(fixture);
+  const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1 };
+  const older = fixture.service.explainSelection(input);
+  await started;
+  const newer = await fixture.service.explainSelection({ ...input, force: true });
+  assert.equal(newer.explanation.body, 'New interpretation.');
+  release();
+  await older;
+  const saved = await fixture.restartService().readFile(input);
+  assert.equal(saved.interpretations.records[0].body, 'New interpretation.');
+});
 
 test("starred files are durable, personal, project-scoped and shared across sessions", async (t) => {
   const fixture = await createSourceEditorFixture();
@@ -1228,6 +1500,8 @@ test("source editor streams explanation chat events through the agent service", 
           turnId: "agent-turn-1",
           type: "notification"
         });
+        assert.equal(events.find(event => event.type === 'source-explanation.message')?.text, '## Role\nStreaming', 'progress must reach the reader before the turn finishes');
+        assert.equal(events.some(event => event.type === 'source-explanation.finished'), false);
         return {
           executionProfile: resolvedSourceExplanationProfile(),
           ok: true,
@@ -1264,19 +1538,21 @@ test("source editor streams explanation chat events through the agent service", 
       "source-explanation.started",
       "source-explanation.thread",
       "source-explanation.turn",
+      "source-explanation.message",
       "source-explanation.execution-profile",
       "source-explanation.message",
       "source-explanation.finished"
     ]);
     assert.equal(events[0].explanation.status, "running");
-    assert.deepEqual(events[3].executionProfile, resolvedSourceExplanationProfile());
-    assert.equal(events[4].text, "## Role\nStreaming complete");
-    assert.equal(events[5].explanation.agentThreadId, "agent-thread-1");
-    assert.equal(events[5].explanation.agentTurnId, "agent-turn-1");
-    assert.equal(events[5].explanation.model, "gpt-5.6-luna");
-    assert.equal(events[5].explanation.agentSettings, null);
-    assert.deepEqual(events[5].explanation.executionProfile, resolvedSourceExplanationProfile());
-    assert.equal(events[5].explanation.messages.at(-1).text, "## Role\nStreaming complete");
+    assert.equal(events[3].text, "## Role\nStreaming");
+    assert.deepEqual(events[4].executionProfile, resolvedSourceExplanationProfile());
+    assert.equal(events[5].text, "## Role\nStreaming complete");
+    assert.equal(events[6].explanation.agentThreadId, "agent-thread-1");
+    assert.equal(events[6].explanation.agentTurnId, "agent-turn-1");
+    assert.equal(events[6].explanation.model, "gpt-5.6-luna");
+    assert.equal(events[6].explanation.agentSettings, null);
+    assert.deepEqual(events[6].explanation.executionProfile, resolvedSourceExplanationProfile());
+    assert.equal(events[6].explanation.messages.at(-1).text, "## Role\nStreaming complete");
     assert.equal(streamCalls[0].agentSettings, undefined);
     assert.deepEqual(streamCalls[0].executionProfile, resolvedSourceExplanationProfile());
     assert.equal(

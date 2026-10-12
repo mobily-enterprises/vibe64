@@ -14,12 +14,19 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-terminals/src/server/service.js`
 - Main: `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
-- `packages/vibe64-system-graph/src/server/service.js`
+- Main: `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/server/actions.js`
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
-- `packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue`
-- `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64LayerDiagram.vue`
+- `packages/vibe64-system-graph/src/client/architectureModel.js`
+- `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemTreeBranch.vue`
+- `packages/vibe64-system-graph/src/client/layeredGraph.js`
+- `packages/vibe64-genesis/src/server/architectureInspection.js`
+- `packages/vibe64-genesis/src/server/architectureLayout.js`
 - `packages/vibe64-system-graph/src/client/subsystemsModel.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
@@ -27,7 +34,7 @@ Genesis without creating another interpretation of the application.
 
 ## Public contract
 
-The five System Graph operations (subsystems, status, Machine City, Program City
+The System Graph operations (subsystems, status, Machine City, Program City
 and refresh) run through named `vibe64.system-graph.*` actions. HTTP and direct
 callers share required session inputs and fresh actor/project authorization.
 The existing service remains responsible for resolving the selected source and
@@ -123,57 +130,28 @@ under its owning component headings. Exact Program modules, indexed source,
 operations, verification commands, and applicable skills are loaded only after
 the relevant path is known through `genesis context <path...>`.
 
-People can
-refresh and explore Machine City and the subsystem Overview,
-navigate subsystems and operations to their participating files, and open those
-files for editing or discussion. Task guidance names Genesis operations without
-assuming a machine-global executable. Automatic City reads follow the visible
-Cities pane; retaining another session keeps its view mounted without admitting
-those hidden reads. A requested refresh may finish while hidden, but does not
-start subsequent status or City reads until normal activation. Hiding during a
-status read also prevents its result from starting hidden City reads.
-Managed agent command environments expose
-Vibe64's bundled, pinned Genesis command and Stack catalog; projects that pin
-their own Genesis compiler continue to invoke that local version explicitly. A
-person's first City visit in a browser gives
-dismissible guidance for trackpad, mouse, and keyboard movement, rotation, and
-zoom. Exploring the City does not create or submit an assistant prompt. Routine
-automatic follow-ups that produce no result remain hidden, but an explicitly
-requested final user-facing summary is preserved even though it changes no
-files. Vibe64 displays only Genesis documents and does not infer a parallel
-architecture.
+People can refresh the project descriptions, explore subsystems and operations,
+and open their participating files. Automatic reads follow the visible tool;
+retained inactive sessions do not admit hidden reads. An explicit refresh can
+finish while hidden, while subsequent reads wait for activation. Managed commands
+retain the bundled, pinned Genesis invocation and selected Stack catalog.
+The three-dimensional City presentation and its camera controls are retired.
 
-The Subsystems destination reads the selected session's `genesis/subsystems.md`
-through Genesis's version-zero inspection API. The default overview uses a compact searchable list and one detail pane. The list
-shows names and counts; the selected responsibility, expandable Program operations,
-and owned/used data live in the detail pane. Operations and Data have separate tabs.
-Descriptions render paragraphs, wrapped list items, code and links with the
-existing safe Markdown renderer; long descriptions
-expand on request. Narrow panes show either the list or the detail with a Back
-action. Links on used tables navigate to their owning subsystem. It does not infer
-ownership from directories or create operation-to-table dependency edges.
-Program contracts and source links use the generated Program City when available;
-the authored Program files remain directly accessible before generation.
+Architecture is the sole subsystem and Program presentation. It reuses the
+canonical directory-bound owners and descriptions from `genesis/subsystems.md`.
+Each Program operation belongs to one owner. The subsystem lists its capabilities;
+selecting one opens its preview and cited files in a dedicated Program reader.
+Read full explanation opens the complete authored text in a separate scrollable
+dialog, full-screen on phones; closing it preserves the Program and source list. Each module explicitly
+names a reading anchor in its owning subsystem, exposed by Genesis as mainSource.
+File icons distinguish it with a gold border, star and Main label. Other files
+show only Part of links to the Program reader; cross-subsystem library citations remain
+visible without changing ownership. The former list-and-detail screen is retired.
+Program is fallible authored explanation, not proof of a function's behavior or
+of current source freshness. Missing Program facts remain explicit.
 
-Map opens Machine City directly; there is no separate Program view or nested
-Machine/Program switch. Files and functions retain the existing renderer,
-navigation, and closable inspectors. Generated Program operations still supply
-Machine's subsystem sky and exact implemented-by links, and Overview retains
-its operation explanations and data details. Overview's map action focuses the
-selected generated subsystem in Machine. Hiding the retained Machine view
-pauses rendering; reactivation explicitly resumes its render loop even when
-the world was already dirty. Projects without a subsystem declaration can still
-explore an indexed Machine City.
-The empty overview starts a temporary workspace-writing task to generate the
-map using the session's selected model and normal tools. It reuses the existing
-temporary task lifecycle and deduplication, leaves the main composer untouched,
-and keeps source edits for ordinary review and Save. Completion notifications
-carry the task's existing deduplication key so only the matching session reloads
-its subsystem data. A hidden retained subsystem view reloads when next active.
-Invalid declarations show the inspection error with Retry, Open declaration, and
-Repair map with AI through the same temporary task. Generation and repair require
-the installed Genesis Program skill's exact grammar and a successful
-`inspect subsystems --json` result.
+The useful native Machine and Program facts remain available for source
+navigation. No Map action or restored camera state opens a City renderer.
 
 Database inspection is admitted when declared data exists. Table links require
 an exact Stack resource, schema and table match; `default` resolves only against
@@ -182,3 +160,156 @@ working link. Schema tables without a resolved declared owner are listed separat
 A failed database inspection does not prevent reading the map. Opening a table
 selects the existing ERD without querying records. Source and ERD navigation carry
 the selected subsystem and presentation so Back returns to that context.
+
+
+Architecture opens the spatial UI/Engine sheet through the existing async
+loader. `pageStoryboard` uses explicit parents and registrations; parents centre
+over child subtrees, siblings never wrap into descendants and roots remain
+independent. `architectureOverview` places UI above Engine on the existing
+Vue Flow canvas. Fit/UI/Engine and a compact options menu share host navigation.
+
+`engineOverview` shows every native source owner as a circle. Genesis supplies readable names/descriptions. Architecture
+layout supplies only explicit library/support roles
+through the public Genesis boundary. Exact roots identify placements; missing
+roots produce a diagnostic, not invented owners. Authored member order and role
+guide arrangement; import rank does not define visible layers. Entry circles
+are larger and say Start here, support circles are subdued, and measured size
+growth is bounded. The grip/arrow keys change only local position. Libraries
+form a fixed right-hand stack; observed opaque packages form the farther-right
+alphabetical list without source trees, invented volume or arrows. Underlying
+`architectureGraph` retains import/cycle and boundary evidence.
+
+`subsystemOutline` consumes common owner/file/symbol/package/UI-operation facts.
+Declared symbols flatten into a signature-first interface. Original source
+path/hash/name/range joins resolve aliases to one native declaration. Stale,
+ambiguous and opaque targets have no guessed source link. Other public exports
+in externally used files remain review candidates; internal exports remain in
+the file viewer. Kinds/recorded returns require no language renderer branches.
+Import paths are secondary. Each signature can disclose its importing file paths
+and follow them inside Architecture. Local imports remain visible for other
+available exports; file-level evidence is labelled separately from specific
+declaration imports, and no recorded imports never proves an unused export.
+Generic group definitions belong on hover. Directory ownership supplies the file icon tree;
+bars/heights compare measured source within the owner.
+
+Semantic zoom changes a circle into one square on the same sheet, retaining a
+faint circular backdrop. The square/skeleton paint before its detail prepares.
+Explanation, Programs, Interface and Files shortcuts jump within the retained subsystem
+document; empty Program sections are omitted. Compact signatures precede
+grouped file icons with search, disclosures,
+name/type/size sorting, single-click/tap and keyboard access. Direct files
+precede folders at every level. Inspector and
+file browser stay mounted behind a file interface; the latest single-file
+viewer stays mounted but inactive on its enclosing views within that owner.
+Map node IDs/types stay
+mounted but hidden in detail. Camera frames do not recompute the overview or
+change label font sizes.
+Canvas resize adapts the open square's camera and retained file-history cameras
+without changing magnification or remounting the scrollable content.
+
+Wheel and two-touch pinch share one animation-frame camera path. The initial
+element owns a gesture; neighbours cannot take over. Scale and centre interpolate
+together on entry. Outward motion anchors the pointer/midpoint without aggressive
+recentering. The enclosing presentation first matches the outgoing square's
+screen position. Navigation cancels obsolete work instead of awaiting interrupted
+animated D3 promises. Hidden/session cleanup cancels pending frames. Breadcrumbs
+give explicit returns. Ordinary mouse/touchpad wheel scrolling and one-touch
+swipes belong to the open square, including scroll boundaries. Its bounded
+body scrolls long subsystem interfaces and file lists beneath a fixed breadcrumb.
+Ctrl-scroll, pinch or a wheel over uncovered canvas zooms back. A single click/tap
+or Enter opens a file icon. The fixed top-right close control and Esc return one
+level without disturbing the enclosing state. Opening a file requires a click
+or tap; outward movement cannot re-enter it. The enclosing reading camera is captured before a target grows, so return
+does not restore oversized icons that cover the surrounding canvas.
+
+The Back control retraces followed file links, retaining the previous exact
+declaration and its enclosing camera/owner. The single-file host reports its
+current selected declaration and presentation; this is navigation state, not
+source analysis. Close and Esc use that same history for one-level returns. Engine and subsystem
+breadcrumbs jump directly to their enclosing view and clear nested history.
+
+The host's `file-interface` slot embeds the existing
+`Vibe64SessionSourceEditor` in single-file mode with the requested path/native
+symbol ID/original name. The host supplies the already loaded common architecture
+facts, avoiding another whole-index read for
+each file; standalone Files retains its existing graph resource. Hash checks
+still compare those facts against the freshly read source. Public signatures reach implementation declarations
+rather than the Files workspace. Existing hash checks, Helper admission and
+explanation caches supply the document’s Explanation and Pseudocode fields,
+Generate/Update controls and exact Code. No chat transcript or composer appears
+in the file interface; discussion remains in the agent’s conversation. File
+overviews are on-demand, informational and hashed against the whole saved file;
+they do not require an index or replace authored Program text. Authored Program
+context appears in its dedicated Program reader; main and supporting source files
+link there without repeating it. Whole-file Code uses the shared editable Files
+implementation, including save/conflict coordination, Undo/Redo and download. Missing return/parser/Helper evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
+heading and detached detail card.
+The subsystem square shows its authored Genesis responsibility in an Explanation
+field, followed by links to associated capability readers. Invalid Program evidence
+keeps that responsibility visible and exposes the source-citation diagnostic in
+Analysis details, without raw-document navigation. Its text and signatures can be selected without activating
+the signature. The file view explains common definition kinds and distinguishes a file export
+from the subsystem's intended API. Missing-Helper status appears before selection,
+with disabled English modes and available whole-file Code stated directly.
+
+`pageConnections` preserves component-mediated uses, protocol/scope and exact
+controller joins. Separate receiving-file ports and purple labelled bridges
+remain hidden initially; page selection shows its calls, while the menu can show
+all. Unresolved counts never create guessed targets. Receives UI calls opens a
+controller file and selects a declaration only when supplied by the inspector.
+The browser owns presentation, not framework/transport discovery.
+
+The obsolete layer prototype and subsystem list screen are removed. Their
+reviewable implementations remain in the local checkpoint. Existing backend
+ownership, subsystem, package, symbol and controller facts remain available.
+The compact Architecture read joins existing hash-matched Machine source metrics
+without rereading project files. Optional Entry files in the existing Vibe64-owned
+Architecture inspection grammar supply stack-neutral application entry identities.
+Reading those declarations executes no inspector; canonical paths are matched
+to indexed file/directory owners. Missing or malformed entry declarations are
+visible and do not replace the dependency map. No persisted application state
+format or upgrade is introduced.
+`layeredGraph` and `architectureGraph` retain source dependency and cycle
+evidence; their ranks are not visible layers. The preview configuration deduplicates Vue
+across linked packages and includes Vue Flow in initial dependency optimization
+to prevent mixed Vue runtimes during lazy diagram loading.
+
+Page observations and registrations come from the compiler's neutral validated
+contract. The client performs no source extraction and requires neither URLs,
+JavaScript nor filesystem routing. Explicit Re-scan project uses the existing per-request HTTP timeout facility
+with a ten-minute budget, rather than the ordinary short mutation deadline.
+The existing separate cancellation operation remains available, and failure
+notices are small, dismissible overlays with bounded inspector command output.
+The same admitted refresh tracks its actual stage and elapsed time in memory;
+a lightweight authenticated status query polls only while this client is
+refreshing, without reading either native artifact. Re-scan project and its
+status belong to the Architecture toolbar, not the file viewer. File and
+function explanations reuse the existing Helper stream and show its user-visible
+progress messages; scanning never invokes that service.
+Declared Required files and runtime/workdir prerequisites fail before scanning.
+Re-scan reads existing Program text; it neither rewrites it nor calls a Helper. Refresh holds the original
+source-work admission and invokes Stack's Vibe64-owned Architecture inspection
+recipe through managed finite commands. Hashed inputs, UI discovery and package
+boundary identity are passed on stdin; stdout is bounded observation JSON.
+The inspector runs in Genesis's async observation callback after one source
+extraction. Genesis joins its output to that scan, then rechecks the original
+inputs before publication rather than extracting the whole project a second time.
+Invalid output, cancellation or changed source retains the previous native
+artifact. Opening is read-only. Original artifact paths and APIs remain
+available to other callers. The Files manager retains its public interface,
+English explanation, ordered steps and original source-editor presentation.
+
+Architecture status and view reads share at most two immutable validated city
+snapshots. Filesystem identity/revision changes invalidate reuse; failed or
+in-flight replacement reads cannot publish stale facts. Interface preparation
+uses loaded common facts and only the selected owner rather than rebuilding its
+layered file graph or the mounted overview.
+
+Subsystem descriptions are substantive authored responsibilities, rendered inline.
+Each subsystem lists its Programs; a selected Program has its own Architecture
+view with its explanation, required main source and supporting file icons.
+Source links use the existing Files viewer and editor inside Architecture.
+Back, Escape and close return through the retained view history. File membership
+links open the Program view, never its Markdown source or an inferred entry file.
+Regenerated canonical directory owners and Program assignments replace the shown
+facts; no consumer-owned subsystem catalogue or explanation store is introduced.
