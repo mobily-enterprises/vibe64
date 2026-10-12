@@ -37,6 +37,8 @@ folder, or choose **New folder**. Open a text file to edit it and choose **Save*
 use its menu for **Rename** or **Delete**, and **Download** to keep a permanent
 copy. The same controls are available in Session Dropzone. On phones, file
 browsing and editing share the pane and secondary actions are in the file menu.
+Confirm **Delete** to remove the selected item; **New folder** creates an empty
+folder in the currently displayed directory.
 Uploads accept individual files up to 100 MiB; use a zip to exchange a directory.
 
 Project Backups is an ordinary directory outside Git. The coding agent can put

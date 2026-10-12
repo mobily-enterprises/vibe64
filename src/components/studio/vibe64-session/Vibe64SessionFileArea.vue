@@ -305,7 +305,7 @@ function confirmDialog() {
       method: operation === "delete" ? "DELETE" : "POST",
       body: {
         path: operation === "mkdir" ? destination : dialogEntry.value.path,
-        destination
+        ...(operation === "rename" ? { destination } : {})
       }
     });
     dialogOpen.value = false;
