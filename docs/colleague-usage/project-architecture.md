@@ -44,8 +44,11 @@ For text ownership, generation triggers and freshness, see
    The shortcuts follow reading order: **Explanation**, **Programs** when present,
    **Interface**, then **Files**.
    **Programs** lists its associated capabilities. Select a Program to open its
-   own explanation view inside Architecture, with **Main source file** and
-   **Supporting files**. Click a source icon to open that file with the shared
+   own compact view inside Architecture, with an opening preview, **Main source file**
+   and **Supporting files**. **Read full explanation** opens the complete authored
+   text in a separate scrollable dialog, filling the screen on phones. Close it
+   with **×**, Esc or a click outside on desktop to return to the unchanged Program
+   view. The subsystem list limits each Program preview to two lines. Click a source icon to open that file with the shared
    Files viewer. A gold border, star and **Main · …** identify the mandatory main
    source; supporting icons say **Part of · …**. A library can participate in
    another subsystem’s Program without changing source ownership.

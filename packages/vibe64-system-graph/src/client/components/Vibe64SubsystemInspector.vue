@@ -206,5 +206,5 @@ watch(() => props.outline.owner.id, () => { query.value = ''; symbolQuery.value 
 @media (max-width: 600px) { .subsystem-inspector__signature { grid-template-columns: 64px minmax(0, 1fr); gap: 2px 6px; } .subsystem-inspector__signature .subsystem-inspector__source { grid-column: 2; grid-row: auto; max-width: 100%; } .subsystem-inspector__signature small { font-size: 9px; white-space: nowrap; } .subsystem-inspector:not(.subsystem-inspector--embedded) { top: 8px; right: 8px; bottom: 32px; width: calc(100% - 16px); } .subsystem-inspector__header { padding: 12px 16px; } .subsystem-inspector__body { padding: 10px 16px; } }
 @media (max-width: 600px) { .subsystem-inspector__consumers, .subsystem-inspector__no-imports { margin-left: 10px; } .subsystem-inspector__consumers summary, .subsystem-inspector__consumer { min-height: 44px; } }
 .subsystem-inspector__program { display: block; width: 100%; padding: 10px 0; text-align: left; border-bottom: 1px solid #e2eae7; cursor: pointer; color: inherit; }
-.subsystem-inspector__program span { display: block; font-size: 12px; line-height: 18px; color: #6b827a; margin-top: 2px; }
+.subsystem-inspector__program span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 12px; line-height: 18px; color: #6b827a; margin-top: 2px; }
 </style>

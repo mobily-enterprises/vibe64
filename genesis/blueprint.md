@@ -731,7 +731,7 @@ while its Sources may include another owner's libraries.
 Each capability has a visibly distinct main source file where people begin
 reading its implementation. Other participating files link to the Program view instead
 of repeating its explanation. Each subsystem lists its associated Programs; a
-Program opens as a dedicated explanation with the required main source and its
+Program opens as a compact preview with a separate full-explanation dialog, the required main source and its
 supporting files. All source navigation stays inside Architecture. Responsibilities and
 Program contracts remain editable explanations, with source evidence for review.
 They are not proof of API intent or current behavior. There is no separate

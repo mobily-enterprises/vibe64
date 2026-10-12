@@ -51,6 +51,9 @@ Program document folders and source-list order never decide ownership or the mai
 file. Sources are a useful implementation map rather than every incidental helper.
 
 Select a Program in the subsystem to read its dedicated Architecture view.
+Its opening preview stays short; **Read full explanation** opens the complete
+authored text in a separate scrollable dialog, full-screen on phones. **×** or Esc
+closes that dialog without going back or changing the source list.
 **Main source file** opens the anchor through the shared Files viewer/editor.
 **Supporting files** reaches the associated source icons. **← Back**, **×** and
 Esc return through Program and source navigation. File membership links return

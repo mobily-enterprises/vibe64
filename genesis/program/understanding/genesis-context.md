@@ -140,7 +140,9 @@ The three-dimensional City presentation and its camera controls are retired.
 Architecture is the sole subsystem and Program presentation. It reuses the
 canonical directory-bound owners and descriptions from `genesis/subsystems.md`.
 Each Program operation belongs to one owner. The subsystem lists its capabilities;
-selecting one opens its contract and cited files in a dedicated Program reader. Each module explicitly
+selecting one opens its preview and cited files in a dedicated Program reader.
+Read full explanation opens the complete authored text in a separate scrollable
+dialog, full-screen on phones; closing it preserves the Program and source list. Each module explicitly
 names a reading anchor in its owning subsystem, exposed by Genesis as mainSource.
 File icons distinguish it with a gold border, star and Main label. Other files
 show only Part of links to the Program reader; cross-subsystem library citations remain

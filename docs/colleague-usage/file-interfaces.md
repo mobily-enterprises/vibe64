@@ -24,7 +24,8 @@ configuration, macro expansion and conditional compilation remain outside static
 coverage; use the project's declared preparation/verification for runtime proof.
 
 **Part of …** and **Main Program file** open the capability’s Program view
-inside Architecture. That view contains its explanation, a clearly marked
+inside Architecture. That view contains a short opening preview, **Read full
+explanation** for the complete text in a separate scrollable dialog, a clearly marked
 **Main source file** and **Supporting files**. Select a source icon to open its
 file interface; **← Back**, **×** or Esc returns to the Program. The browser
 retains its directory navigation. Program membership never links to a raw Genesis

@@ -1,5 +1,6 @@
 import { renderToString } from '@vue/server-renderer';
 import * as Vue from 'vue';
+import { createVuetify } from 'vuetify';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('vuetify/components/VBtn', () => ({ VBtn: {
@@ -218,13 +219,18 @@ it('subsystem import evidence exposes importing file paths without claiming indi
 });
 
 
-it('a Program reader shows its complete explanation and actual main/supporting sources using shared file icons', async () => {
-  const program = { id: 'program:load', title: 'Load records', description: 'Restores saved records.', publicContract: 'Returns records while preserving failures.', mainSource: 'engine/storage.rs', sources: ['engine/storage.rs', 'shared/codec.py'] };
+it('a Program reader previews its opening without burying source files under the full contract', async () => {
+  const program = { id: 'program:load', title: 'Load records', description: 'Restores saved records.\n\nFurther implementation detail belongs in the full reader.', publicContract: 'Returns records while preserving failures.', mainSource: 'engine/storage.rs', sources: ['engine/storage.rs', 'shared/codec.py'] };
   const architecture = { files: [{ id: 'file:main', path: 'engine/storage.rs', sourceLines: 20 }, { id: 'file:codec', path: 'shared/codec.py', sourceLines: 10 }] };
-  const html = await renderToString(Vue.createSSRApp(ProgramInspector, { program, architecture, owner: { title: 'Storage' } }));
+  const app = Vue.createSSRApp(ProgramInspector, { program, architecture, owner: { title: 'Storage' } });
+  app.use(createVuetify());
+  const html = await renderToString(app);
   expect(html).toContain('aria-label="Program explanation"');
   expect(html).toContain('Restores saved records.');
-  expect(html).toContain('Returns records while preserving failures.');
+  expect(html).not.toContain('Further implementation detail');
+  expect(html).not.toContain('Returns records while preserving failures.');
+  expect(html).toContain('Read full explanation');
+  expect(html).toContain('aria-haspopup="dialog"');
   expect(html).toContain('Main source file');
   expect(html).toContain('data-file-path="engine/storage.rs"');
   expect(html).toContain('data-file-path="shared/codec.py"');
