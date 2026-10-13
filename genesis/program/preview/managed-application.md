@@ -386,6 +386,10 @@ Origin and forwarded protocol. Proxy-aware applications can therefore retain
 Secure cookies on HTTPS previews. Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
+The preview proxy's own bearer cookie uses `SameSite=None; Secure` on hosted
+HTTPS origins so a nested cross-site Preview iframe can complete token
+bootstrap. Local HTTP Preview keeps `SameSite=Lax`; both cookies remain
+HTTP-only and scoped to the proxy host.
 This lets a previewed editor authenticate realtime connections through the proxy.
 For a local proxy, the request's loopback Host on the proxy's own port is its
 browser-facing origin. Token bootstrap, application redirects and HTTP/WebSocket

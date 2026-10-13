@@ -4766,6 +4766,8 @@ test("paused goals change direct mode or model within their agent without cleari
 test("source pin action keeps the session identity and publishes a list refresh", async () => {
   const lock = agentWriteLockHarness(), calls = [], events = [];
   lock.store.readSessionRenewalStateRecord = async () => "";
+  lock.store.runSessionRenewalStateExclusive = async (_sessionId, operation) => operation();
+  lock.store.mutateSession = async (_sessionId, operation) => operation();
   lock.store.updatePinnedSession = async (sessionId, pinned) => {
     calls.push({ sessionId, pinned }); return { pinnedSessionId: pinned ? sessionId : "" };
   };
@@ -4776,4 +4778,44 @@ test("source pin action keeps the session identity and publishes a list refresh"
   assert.deepEqual(await service.pinSession("source", { pinned: true }), { ok: true, pinnedSessionId: "source" });
   assert.deepEqual(calls, [{ sessionId: "source", pinned: true }]);
   assert.equal(events[0][0], "source"); assert.equal(events[0][1].payload.clientRefresh.includeList, true);
+});
+
+
+test("source pin works during assistant preparation and retains closing and renewal guards", async () => {
+  const path = await import("node:path");
+  const { writeProjectRuntimeOpenState } = await import("../../packages/vibe64-core/src/server/projectRuntimeOpenState.js");
+  const { createSessionRenewalState, writeSessionRenewalState } = await import("../../packages/vibe64-sessions/src/server/sessionRenewalState.js");
+  await withTemporaryRoot(async root => {
+    const store = createVibe64SessionStore({
+      projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
+      projectSessionSourceRoot: path.join(root, "source")
+    });
+    await store.createSession({ sessionId: "source", runtimeKind: "genesis" });
+    await writeProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) });
+    const runtime = new Vibe64SessionRuntime({ store, inspectSourceByDefault: false });
+    const service = createService({ project: { createRuntime: async () => runtime }, terminals: {} });
+    const ready = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const preparing = runVibe64AgentWriteExclusive(runtime, "source", async () => {
+      ready.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await ready.promise;
+    try {
+      assert.deepEqual(await service.pinSession("source", { pinned: true }), { ok: true, pinnedSessionId: "source" });
+      await assert.rejects(runtime.markSessionClosing("source"), { code: "vibe64_session_pinned" });
+      assert.deepEqual(await service.pinSession("source", { pinned: false }), { ok: true, pinnedSessionId: "" });
+    } finally {
+      release.resolve();
+      await preparing;
+    }
+    await runtime.markSessionClosing("source");
+    assert.equal((await service.pinSession("source", { pinned: true })).code, "vibe64_session_pin_unavailable");
+    await runtime.clearSessionClosing("source");
+    await writeSessionRenewalState(runtime, "source", createSessionRenewalState({
+      sessionId: "source", operationKey: "renewal-pin-test", actor: { id: "owner", name: "Owner" }
+    }));
+    assert.equal((await service.pinSession("source", { pinned: true })).code, "vibe64_session_pin_unavailable");
+    assert.equal(await store.readPinnedSessionId(), "");
+  });
 });

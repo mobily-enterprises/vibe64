@@ -253,8 +253,9 @@ function previewTokenCookieName(proxyOrigin = "") {
 function previewTokenCookie(token = "", {
   proxyOrigin = ""
 } = {}) {
-  const secure = previewOriginUsesHttps(proxyOrigin) ? "; Secure" : "";
-  return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; SameSite=Lax; HttpOnly${secure}`;
+  const https = previewOriginUsesHttps(proxyOrigin);
+  const policy = https ? "SameSite=None; HttpOnly; Secure" : "SameSite=Lax; HttpOnly";
+  return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; ${policy}`;
 }
 
 function previewOriginUsesHttps(value = "") {

@@ -203,6 +203,8 @@ a working session with source.
 
 Select the source session, then choose **Pin session as project source** beside
 Save. Its pin icon becomes filled. One session per project can be pinned.
+Pinning and unpinning work while the assistant is busy or reconnecting; they do
+not require an AI connection. Archive or renewal already in progress still blocks pinning.
 You can still browse and work in other session tabs; the server-selected source
 link stays on the pinned session. Cross-project requests addressed to the
 server-selected session also keep that destination. Pinning does not Save,

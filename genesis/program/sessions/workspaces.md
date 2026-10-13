@@ -702,3 +702,6 @@ The Sessions action and route own authorized pin changes; the pin button beside
 Save uses the existing endpoint resource and error feedback, and refreshes the
 session after acknowledgement. Another session cannot replace the pin until the
 current one is unpinned. VPS update cleanliness/origin checks remain independent.
+Pin changes take the existing renewal-state and session-mutation boundaries, not
+the assistant write lock. Assistant preparation therefore cannot block a pin;
+closing rechecks the pin under the same session-mutation boundary before teardown.

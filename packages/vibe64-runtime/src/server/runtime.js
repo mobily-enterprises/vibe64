@@ -820,6 +820,7 @@ class Vibe64SessionRuntime {
     reason = "closing"
   } = {}) {
     return this.store.mutateSession(sessionId, async () => {
+      await this.store.assertSessionNotPinned(sessionId);
       assertSupportedSession(await this.store.readSession(sessionId));
       const metadata = sessionClosingMetadata(reason);
       await Promise.all(Object.entries(metadata).map(([name, value]) => (

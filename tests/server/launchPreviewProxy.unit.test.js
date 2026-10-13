@@ -91,18 +91,14 @@ test("launch preview target URLs are constrained to loopback HTTP origins", () =
 });
 
 test("launch preview bearer cookies are Secure on hosted HTTPS origins", () => {
-  assert.match(
-    previewTokenCookie("secret", {
-      proxyOrigin: "https://v64preview-abc123def456--workspace.vibe64.dev"
-    }),
-    /; Secure$/u
-  );
-  assert.doesNotMatch(
-    previewTokenCookie("secret", {
-      proxyOrigin: "http://127.0.0.1:49000"
-    }),
-    /; Secure/u
-  );
+  const hostedCookie = previewTokenCookie("secret", {
+    proxyOrigin: "https://v64preview-abc123def456--workspace.vibe64.dev"
+  });
+  assert.match(hostedCookie, /; SameSite=None; HttpOnly; Secure$/u);
+  const localCookie = previewTokenCookie("secret", {
+    proxyOrigin: "http://127.0.0.1:49000"
+  });
+  assert.match(localCookie, /; SameSite=Lax; HttpOnly$/u);
 });
 
 test("launch preview proxy injects HTML and proxies app-relative requests", async () => {

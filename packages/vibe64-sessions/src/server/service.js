@@ -785,20 +785,21 @@ function createService({
     async pinSession(sessionId, input = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
-        const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-          const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
-          if (renewal && ![SESSION_RENEWAL_STATUS.COMPLETED, SESSION_RENEWAL_STATUS.CANCELLED].includes(renewal.status)) {
-            throw Object.assign(new Error("Finish or cancel renewal before pinning this session."), { code: "vibe64_session_pin_unavailable" });
-          }
-          return runtime.store.updatePinnedSession(sessionId, input.pinned);
-        });
-        if (!exclusive.acquired) return exclusive.value;
+        const result = await runtime.store.runSessionRenewalStateExclusive(sessionId, () => (
+          runtime.store.mutateSession(sessionId, async () => {
+            const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
+            if (renewal && ![SESSION_RENEWAL_STATUS.COMPLETED, SESSION_RENEWAL_STATUS.CANCELLED].includes(renewal.status)) {
+              throw Object.assign(new Error("Finish or cancel renewal before pinning this session."), { code: "vibe64_session_pin_unavailable" });
+            }
+            return runtime.store.updatePinnedSession(sessionId, input.pinned);
+          })
+        ));
         await publishSessionChanged(sessionId, {
           originId: text(input.originId),
           reason: "session-pin-changed",
           payload: { clientRefresh: { includeList: true } }
         });
-        return { ok: true, ...exclusive.value };
+        return { ok: true, ...result };
       }, "The session pin could not be changed.");
     },
     async renameSession(sessionId, input = {}) {
