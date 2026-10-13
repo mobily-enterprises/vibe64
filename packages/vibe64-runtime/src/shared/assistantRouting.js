@@ -336,7 +336,7 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
       break;
     case "planning":
       instruction = "Discuss and manage the plan as requested through vibe64-helper plan. Do not change application files in a planning-only request. " +
-        "Clarify ambiguous references before changing a plan. Junior may update only the paired Progress document; agreed Plan scope and lifecycle changes require Senior.";
+        "Clarify ambiguous references before changing a plan. Junior may update paired Progress and existing checklist ticks as work is verified; agreed Plan scope and lifecycle changes require Senior.";
       break;
     case "implementation":
       instruction = direct + " Implement the requested work, including any explicitly requested planning changes within your role's authority. " +
@@ -350,7 +350,7 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
       break;
   }
   if (!planInstructions && intent !== "conversation") {
-    planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update only Progress after reading both documents, never change scope or mark the plan completed.";
+    planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }
   if (intent !== "conversation" && intent !== "planning" && intent !== "deslop" && intent !== "review" && mode !== "review" && mode !== "deslop") {
     instruction += " When the requested feature is implemented, its required runtime resources are prepared and Preview is responding, promptly tell the user: Ready to try—give it a spin. Verification is still running. Do not claim full completion before verification, and do not wait for the user to test before continuing your checks. If Preview is unavailable, report that instead of inviting the user to try it.";

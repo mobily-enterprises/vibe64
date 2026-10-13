@@ -51,6 +51,46 @@ test("stable scope and separate progress retain explicit Senior completion and r
   assert.equal((await readWorkPlanHistory(f.context)).length, 0, "reopening the current plan does not duplicate it in History");
 });
 
+test("Junior updates verified checklist ticks without changing scope or completing the plan", async t => {
+  const f = await fixture(t);
+  const text = openText + "  1. [ ] Nested proof\n+ [ ] Final proof\n\n## Technical details\nKeep account isolation.\n```markdown\n- [ ] Example only\n```\n";
+  const first = await f.change("new", "senior", { text });
+  const evidence = await f.change("progress-write", "junior", { text: "# Progress\nSupervisor check passed; access proof remains open.\n" });
+  const partial = text.replace("[ ] Save", "[x] Save");
+  await assert.rejects(manageWorkPlan(f.context, { operation: "write", text: partial,
+    expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }, "junior"), { code: "vibe64_work_plan_changed" });
+  const updated = await f.change("write", "junior", { text: partial });
+  assert.equal(updated.checked, 1);
+  assert.equal(updated.total, 4);
+  assert.equal(updated.progressText, evidence.progressText);
+  assert.equal(updated.progressRevision, evidence.progressRevision);
+  assert.equal(updated.status, "active");
+  await assert.rejects(manageWorkPlan(f.context, { operation: "write", text,
+    expectedRevision: first.revision, expectedProgressRevision: evidence.progressRevision }, "junior"), { code: "vibe64_work_plan_changed" });
+  for (const changed of [
+    partial.replace("Reporting tree", "Different scope"),
+    partial.replace("Save the supervisor", "Skip the supervisor"),
+    partial + "- [ ] Extra requirement\n",
+    partial.replace("- [ ] Prove access restrictions\n", ""),
+    partial.replace("- [x] Save the supervisor\n- [ ] Prove access restrictions", "- [ ] Prove access restrictions\n- [x] Save the supervisor"),
+    partial.replace("  1.", "1."),
+    partial.replace("Keep account isolation.", "Bypass account isolation."),
+    partial.replace("[ ] Example only", "[x] Example only")
+  ]) {
+    await assert.rejects(f.change("write", "junior", { text: changed }), /existing checklist ticks only/);
+    assert.equal((await readWorkPlan(f.context)).revision, updated.revision);
+  }
+  const allChecked = partial.replace("[ ] Prove", "[X] Prove").replace("[ ] Nested", "[x] Nested").replace("[ ] Final", "[x] Final");
+  const verified = await f.change("write", "junior", { text: allChecked });
+  assert.equal(verified.checked, 4);
+  assert.equal(verified.status, "active", "Ticks do not substitute for Senior completion");
+  const reopenedItem = await f.change("write", "junior", { text: allChecked.replace("[X] Prove", "[ ] Prove") });
+  assert.equal(reopenedItem.checked, 3);
+  await assert.rejects(f.change("archive", "junior"), /Only Senior/);
+  await f.change("complete", "review");
+  await assert.rejects(f.change("write", "junior", { text: allChecked }), /explicitly reopen/);
+});
+
 test("new plans require acknowledged replacement and reopening moves the selected archive back to current", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
@@ -305,6 +345,8 @@ test("full paired agent reads retain detailed implementation instructions beyond
   for (const role of ["senior", "junior", "review"]) {
     assert.match(workPlanInstructions(role), /MUST read and follow the complete technical section/);
     assert.match(workPlanInstructions(role), /Read every page of BOTH text and progressText/);
+    assert.match(workPlanInstructions(role), /Update checklist ticks with write as each item is implemented and verified/);
+    assert.doesNotMatch(workPlanInstructions(role), /Do not tick it/);
   }
 });
 

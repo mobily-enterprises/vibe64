@@ -22,7 +22,8 @@ Senior confirms creation or updates after the plan helper has saved the result.
 Both direct Senior and Junior receive the plan format and command instructions.
 Both roles must read the full Plan, including its technical details, and Progress
 before implementing or reviewing. Collapsing details in the viewer does not hide
-them from the agent. Junior can update Progress; Senior owns agreed Plan scope changes. Creating,
+them from the agent. Junior updates Progress and ticks existing checklist items
+as each is implemented and verified; Senior owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. An unsuccessful
 save must be reported, and a chat outline alone is not a saved plan.
 
@@ -50,10 +51,11 @@ The icon remains available after completion and when only archived plans remain.
 When there is no current plan, the icon opens **History** directly.
 There is no icon when the session has neither a current plan nor history.
 
-The scope checklist remains stable during execution; it is not a live progress gauge.
-Recorded marks in historical plans remain visible. Junior records implementation
-and verification in Progress. Senior reads both documents, verifies every agreed
-acceptance requirement against the work and evidence, and explicitly completes the artifact.
+Checklist wording stays stable while completion ticks update during development.
+Partial or unverified items stay unchecked; an item is unticked if review finds
+missing evidence or a regression. Junior records supporting evidence and blockers
+in Progress. Senior checks the ticks against that evidence and explicitly completes
+the artifact only after verifying every agreed acceptance requirement.
 A finished turn or a fully ticked checklist alone does not complete a plan.
 Updates appear while the viewer is open.
 

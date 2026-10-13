@@ -123,7 +123,7 @@ continuation or review. Junior cannot mark a plan completed.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
-Junior can update Progress; only Senior can manage its lifecycle and
+Junior updates Progress and existing checklist ticks as work is verified; only Senior can manage the plan’s lifecycle and
 explicitly mark it Completed after verifying the evidence.
 
 If an automatic handoff failed before its message was sent, you can type a new

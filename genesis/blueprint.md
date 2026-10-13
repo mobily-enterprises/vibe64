@@ -1740,7 +1740,7 @@ Senior can fix scoped defects or save substantial necessary rework for Junior,
 then review again. Deslop is optional within review; disabling cleanup cannot
 disable review. The person's pause or cancellation takes precedence. Ordinary
 discussion and Stop never reopen, archive or complete a plan. Direct Senior and
-Junior still work from the person's request; Junior can update Progress but cannot
+Junior still work from the person's request; Junior can update Progress and existing checklist ticks but cannot
 complete the plan.
 
 Deslop defaults to the configured Senior model for behavior-preserving cleanup.

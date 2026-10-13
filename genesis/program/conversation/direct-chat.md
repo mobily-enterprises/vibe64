@@ -1466,8 +1466,9 @@ The selected role's plan lifecycle permissions still apply.
 Explicitly removing or deferring remaining requirements to finish an already
 implemented active plan is `plan_implementation`, retaining the existing review
 gate rather than becoming planning-only. Without an explicit role request it
-defaults to Senior, which already owns scope edits; Junior's Progress-only
-permission is unchanged. Initial classification receives the bounded paired
+defaults to Senior, which already owns scope edits; Junior's permission to update
+Progress and checklist ticks does not allow scope changes. Initial classification
+receives the bounded paired
 Progress outline and revision alongside the Plan outline to distinguish delivered
 implementation from an ordinary draft-plan edit. Implementation instructions
 require recording the excluded requirement and agreed timing in Progress's
@@ -1518,7 +1519,10 @@ attach the current plan; Junior's lifecycle permissions remain unchanged.
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
 through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
-Junior can write only paired Progress; Senior owns agreed scope changes. Senior owns lifecycle
+Junior can write paired Progress and toggle existing checklist ticks. Junior Plan
+writes mask only checkbox state using the fence-aware parser and reject every other
+content change, including edits to fenced examples. Paired revision checks still
+apply. Senior owns agreed scope changes and lifecycle
 commands. Replacing the current plan requires an archive acknowledgement after
 the user authorizes replacement and is told which plan will be retained. An
 explicit archive-and-replace request supplies that authorization. Archive moves the exact current
@@ -1567,7 +1571,9 @@ checklist parser marks that boundary only on the viewer's opt-in read; storage
 and agent reads retain the exact full Plan. Unmarked legacy plans and Progress
 remain fully visible. Plan/document/archive/session changes reset expansion;
 updating only Progress retains expansion of the same Plan.
-Progress shows actual work, evidence and blockers. Legacy recorded marks remain visible without a checked-count progress gauge. work-plan-changed events refresh open viewers; stable content
+Progress shows actual work, evidence and blockers. Checklist ticks update as each
+item is verified; partial or unsupported claims remain unchecked. Historic marks
+remain visible. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions.
 Colleague's plan-viewer navigation invokes the same local opening owner. It

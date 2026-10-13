@@ -14,7 +14,7 @@ if (!operation || ["--help", "-h"].includes(operation)) {
     + 'Read/reopen may select an archiveId from history.\\n'
     + 'If a current plan exists, ask whether to update it or archive and replace it unless the user already chose. Explain that the archive remains accessible; pass archiveCurrent:true only after replacement is authorized.\\n'
     + 'Auto read also returns workflow identity. outcome takes {messageId,turnId,stage,decision,explanation,progress} and paired revisions when this plan is involved. Decisions: continue, handoff, wait, complete. Only Senior review can report complete.\\n'
-    + 'Only Senior can create, complete, reopen or archive. Junior updates only Progress with progress-write; Plan is stable agreed scope.');
+    + 'Only Senior can create, complete, reopen or archive. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.');
   process.exit(0);
 }
 try {
