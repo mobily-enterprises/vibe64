@@ -38,3 +38,7 @@ Colleague has no shell access and cannot claim it sent a message itself.
 Message commands are included in Main and temporary coding-agent instructions.
 Host-specific guidance shares the same bounded instruction budget; adding it must
 not prevent either conversation from starting.
+
+Installed host instructions reach coding assistants through the host environment
+filter. On a configured VPS they include the local update and SSH restore commands;
+hosts without that facility do not advertise it.

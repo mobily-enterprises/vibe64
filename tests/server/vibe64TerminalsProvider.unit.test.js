@@ -28,6 +28,7 @@ import {
   createVibe64TerminalsFeature,
   terminalsProviderEnv
 } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
+import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 
 async function withTemporaryRoot(callback) {
@@ -112,6 +113,16 @@ test("terminals provider overlays only live preview routing values", () => {
     KEEP_ME: "runtime",
     SECRET_VALUE: "runtime-secret"
   });
+});
+
+test("installed host guidance survives the runtime environment filter into agent context", () => {
+  const guidance = "Installed here: vibe64-local update; SSH recovery: sudo vibe64-local restore.";
+  const env = terminalsProviderEnv({ KEEP_ME: "runtime" }, { VIBE64_HOST_AGENT_GUIDANCE: guidance, UNRELATED_SECRET: "hidden" });
+  assert.equal(env.VIBE64_HOST_AGENT_GUIDANCE, guidance);
+  assert.equal(env.UNRELATED_SECRET, undefined);
+  const context = createCodexSessionEnvironment({ env }).vibe64SessionContextInput();
+  assert.equal(context.hostGuidance, guidance);
+  assert.equal(Object.hasOwn(createCodexSessionEnvironment({ env: terminalsProviderEnv({}, {}) }).vibe64SessionContextInput(), "hostGuidance"), false);
 });
 
 test("live editor namespaces reach Preview routing through the runtime environment filter", () => {

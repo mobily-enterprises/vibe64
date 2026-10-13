@@ -22,19 +22,20 @@ import {
   startProjectRuntimeDormancyCleanupSchedule
 } from "./service.js";
 
-const LIVE_PREVIEW_ROUTING_ENV_KEYS = Object.freeze([
+const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
   VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
   VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_USER_DOMAIN_ENV
+  VIBE64_PUBLIC_USER_DOMAIN_ENV,
+  "VIBE64_HOST_AGENT_GUIDANCE"
 ]);
 
 function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
   const env = {
     ...(runtimeEnv && typeof runtimeEnv === "object" && !Array.isArray(runtimeEnv) ? runtimeEnv : {})
   };
-  for (const key of LIVE_PREVIEW_ROUTING_ENV_KEYS) {
+  for (const key of LIVE_HOST_ENV_KEYS) {
     const value = String(liveEnv?.[key] || "").trim();
     if (value) {
       env[key] = value;
