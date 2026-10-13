@@ -22,8 +22,8 @@ function mount(request) {
 
 const request = (stage = "review", delivery = "pending", extra = {}) => ({ messageId: "workflow", status: "waiting",
   stage, workflow: true, delivery, resolvedMode: "junior", followup: { messageId: "followup" }, ...extra });
-async function render(value, selection) {
-  const instance = createSSRApp(RoutingNotice, { request: value, selection });
+async function render(value, selection, props = {}) {
+  const instance = createSSRApp(RoutingNotice, { request: value, selection, mode: "auto", ...props });
   instance.use(createVuetify());
   return renderToString(instance);
 }
@@ -37,11 +37,12 @@ it("keeps normal routing and active review in chat without a composer alert", as
   }
 });
 
-it("shows Resume workflow and Stop for every retained unsent stage on desktop and mobile", async () => {
-  for (const stage of ["planning", "implementation", "review"]) {
+it("names only the retained stage's continuation on desktop and mobile", async () => {
+  for (const [stage, label] of Object.entries({ planning: "Continue planning", implementation: "Continue implementation", review: "Continue review" })) {
     const value = request(stage, "pending", { error: "Scheduling disconnected before the handoff was sent." });
     const html = await render(value);
-    expect(html).toContain("Resume workflow"); expect(html).toMatch(/>\s*Stop\s*</u);
+    expect(html).toContain(label); expect(html).not.toContain("Resume workflow"); expect(html).toMatch(/>\s*Stop\s*</u);
+    expect(html).not.toContain("Implement plan");
     expect(html).toContain(value.error); expect(html).toContain("flex-wrap");
   }
 });
@@ -56,7 +57,22 @@ it("shows Check delivery without an unsent-handoff Stop for uncertain stage deli
 it("can resume a stopped first implementation without an existing follow-up", async () => {
   const value = request("implementation", "accepted", { stopped: true, followup: null, error: "Paused at your request." });
   expect(mount(value).state().followupNeedsAction).toBe(true);
-  const html = await render(value); expect(html).toContain("Resume workflow"); expect(html).toContain("Paused at your request.");
+  const html = await render(value); expect(html).toContain("Continue implementation"); expect(html).toContain("Paused at your request.");
+});
+
+it("offers explicit implementation and plan viewing only for a saved active plan at the waiting planning stage", async () => {
+  const value = request("planning", "pending", { workflow: false, workPlan: { status: "active", revision: "saved-plan" } });
+  const html = await render(value);
+  expect(html).toContain("Implement plan"); expect(html).toContain("View plan"); expect(html).toContain("Continue planning");
+  expect(html).not.toContain("Continue implementation"); expect(html).not.toContain("Continue review");
+  expect(html).toContain("starts coding the saved plan");
+  for (const changed of [
+    { delivery: "uncertain" }, { status: "working" }, { stage: "implementation" }, { stage: "review" },
+    { workPlan: null }, { workPlan: { status: "completed", revision: "done" } }, { helper: { executionId: "pending-cleanup" } }
+  ]) expect(await render({ ...value, ...changed })).not.toContain("Implement plan");
+  expect(await render(value, null, { mode: "senior" })).not.toContain("Implement plan");
+  const busy = await render(value, null, { busy: true });
+  expect(busy).toMatch(/disabled[^>]*>[\s\S]*?Implement plan/u);
 });
 
 it("keeps initial delivery failures in their message bubble", () => {

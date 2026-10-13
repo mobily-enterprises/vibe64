@@ -3,8 +3,13 @@
     {{ label }}
     <p v-if="previousAttempt" class="text-body-small mt-1">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
     <p v-if="request.error" class="text-body-small mt-1">{{ request.error }}</p>
+    <p v-if="canImplement" class="text-body-small mt-1">Implement plan starts coding the saved plan. Continue planning only asks for more planning.</p>
     <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
-      <v-btn variant="text" min-height="48" :disabled="retrying" @click="$emit('retry')">
+      <v-btn v-if="canImplement" variant="flat" color="primary" min-height="48" :disabled="retrying || busy" @click="$emit('implement')">
+        Implement plan
+      </v-btn>
+      <v-btn v-if="canImplement" variant="text" min-height="48" @click="$emit('view-plan')">View plan</v-btn>
+      <v-btn variant="text" min-height="48" :disabled="retrying || busy && request.delivery !== 'uncertain'" @click="$emit('retry')">
         {{ retryLabel }}
       </v-btn>
       <v-btn v-if="request.delivery === 'pending'" variant="text" min-height="48" @click="$emit('skip')">
@@ -20,7 +25,7 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, retrying: Boolean, busy: Boolean });
-defineEmits(["retry", "skip"]);
+defineEmits(["retry", "skip", "implement", "view-plan"]);
 const feedback = useShellWebErrorRuntime();
 const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&
   assistantRoutingRequestCanBeReplaced(props.request, props.selection));
@@ -28,7 +33,12 @@ const label = computed(() => previousAttempt.value ? "Previous assistant deliver
 const followupNeedsAction = computed(() => Boolean(props.request?.status === "waiting" &&
   (props.request?.followup || props.request?.delivery === "accepted" && (props.request?.workflow || props.request?.stage === "planning"))) ||
   Boolean(props.request?.delivery === "uncertain" && (props.request?.followup || previousAttempt.value)));
-const retryLabel = computed(() => props.request?.delivery === "uncertain" ? "Check delivery" : "Resume workflow");
+const canImplement = computed(() => props.mode === "auto" && props.request?.stage === "planning" &&
+  props.request.status === "waiting" && ["pending", "accepted"].includes(props.request.delivery) &&
+  !props.request.helper && props.request.workPlan?.status === "active" && Boolean(props.request.workPlan.revision));
+const retryLabel = computed(() => props.request?.delivery === "uncertain" ? "Check delivery" : ({
+  planning: "Continue planning", implementation: "Continue implementation", review: "Continue review"
+}[props.request?.stage] || "Continue request"));
 const actionable = computed(() => {
   const request = props.request;
   if (!request || request.stopped && !request.followup && !request.attemptedMessageId && !request.helper && !followupNeedsAction.value) return false;

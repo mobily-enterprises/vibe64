@@ -1679,8 +1679,7 @@ Junior. Junior then hands back to Senior. Required review and optional Deslop ar
 separate choices. Real blockers wait; accepted steering invalidates an older outcome
 and retains the running role. Stop prevents late work. Failed/interrupted turns,
 missing outcomes, changed plans and missing final-explanation proof remain waiting.
-Two no-progress turns or eight automatic steps wait for inspection. Explicit Resume
-workflow resets that allowance. Planning never admits implementation itself.
+Two no-progress turns or eight automatic steps wait for inspection. An explicit stage-specific Continue action resets that allowance. Planning never admits implementation itself.
 
 The same durable follow-up owner captures fresh message identity, full original
 request, accepted steering, involved plan and recent visible messages. Ordinary
@@ -1688,8 +1687,21 @@ account admission, native questions/goals, identity checks, delivery inspection 
 helper cleanup remain authoritative. Delivery has routing/pending/sending/uncertain/
 accepted/failed states; workflow stage is never encoded into delivery. Saved receipts
 win over interrupted transport errors. Retry only inspects the same receipt.
-Restart never auto-sends a recovered follow-up; Resume workflow is explicit. Controls
-use the existing retry/Stop actions and explanations remain persisted Status messages.
+Restart never auto-sends a recovered follow-up. Continue planning, Continue
+implementation and Continue review name the retained stage and use the existing
+retry/Stop actions; uncertain delivery keeps Check delivery. Explanations remain
+persisted Status messages.
+
+A waiting Auto Planning notice with an active saved plan also offers View plan
+and Implement plan. View plan opens the existing viewer. Implement plan sends a
+new ordinary human message through the retained conversation owner, without
+consuming the composer draft, and supplies the existing planRevision contract.
+That explicit input chooses implementation deterministically (Junior unless the
+message explicitly addresses another role), instead of invoking Router. The
+normal coordinator rechecks the active plan revision before dispatch and retains
+admission, deduplication and mandatory Senior review. It replaces an unsent
+planning continuation, never bypasses uncertain delivery, and changes no saved
+state format. Merely continuing planning cannot approve implementation.
 
 Only after the exact Senior review's successful native completion and final assistant
 explanation does the owner archive its explicitly completed Plan/Progress pair.

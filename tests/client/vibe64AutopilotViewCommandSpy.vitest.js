@@ -167,6 +167,31 @@ function mountMainConversationLog({ render = false } = {}) {
 }
 
 describe("Vibe64 direct session view", () => {
+  it("sends explicit plan implementation as new human work and retains the original identity only for stage continuation", async () => {
+    const component = fs.readFileSync(componentPath, "utf8");
+    const owner = component.match(/async function sendRoutingAction\(action\) \{[\s\S]*?\n\}/u)?.[0];
+    expect(owner).toBeTruthy();
+    const routingRequest = vue.ref({ messageId: "planning-request", input: { message: "Make a plan" }, workPlan: { revision: "current-plan" } });
+    const routingActionSending = vue.ref(false);
+    let finish;
+    const props = { sendAgentMessage: vi.fn(() => new Promise(resolve => { finish = resolve; })) };
+    const action = new Function("routingRequest", "routingActionSending", "props", `${owner}\nreturn sendRoutingAction;`)(routingRequest, routingActionSending, props);
+    const pending = action("implement");
+    await action("implement");
+    expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
+    expect(props.sendAgentMessage.mock.calls[0][0]).toEqual({
+      message: "Implement the saved plan. I authorize implementation within its agreed scope.", planRevision: "current-plan", submissionKind: "send"
+    });
+    finish({ ok: true }); await pending;
+    expect(routingActionSending.value).toBe(false);
+    props.sendAgentMessage.mockResolvedValue({ ok: true });
+    await action("continue");
+    expect(props.sendAgentMessage).toHaveBeenLastCalledWith({ messageId: "planning-request", message: "Make a plan", reviewAction: "retry" });
+    props.sendAgentMessage.mockRejectedValue(new Error("Plan changed"));
+    await expect(action("implement")).rejects.toThrow("Plan changed");
+    expect(routingActionSending.value).toBe(false);
+  });
+
   it("routes attached delivery checks through Main's existing recovery handler", () => {
     const main = mountMainConversationLog();
     try {

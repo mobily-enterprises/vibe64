@@ -113,7 +113,8 @@ in Main chat to reopen the desired archive, identifying its title and date.
 Creating a new plan starts fresh Progress; it does not inherit the previous artifact's evidence. Reopening an archive retains that archive's exact Progress, including when it replaces another current plan.
 If this replaces a current plan, Senior identifies which paired artifact will be archived
 and confirms your choice unless you already authorized replacement. To implement
-an active plan, explicitly request it in chat; the viewer has no Implement button.
+an active plan, explicitly request it in chat or select **Implement plan** in the
+waiting Auto Planning notice. The viewer itself has no Implement button.
 
 ## Loading, errors and Colleague assistance
 
@@ -146,7 +147,7 @@ sent through an already-authorized chat operation when available.
 ## Auto roles and workflow
 
 For Senior/Junior routing, implementation, review, Deslop, scope deferral and
-Stop or Resume workflow recovery, read [Choose Auto roles and follow the
+Stop or stage-specific Continue recovery, read [Choose Auto roles and follow the
 workflow](auto-workflow.md). Plan and Progress remain one paired artifact.
 
 

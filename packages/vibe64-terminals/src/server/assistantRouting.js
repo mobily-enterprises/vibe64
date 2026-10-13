@@ -328,9 +328,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.");
       }
     }
-    if (!followup && state.mode === "auto" && state.input.planRevision &&
-        (!state.workPlan || state.workPlan.status !== "active" || state.workPlan.revision !== state.input.planRevision)) {
-      throw failure("The active plan changed before execution started. Read it and send your execution request again.");
+    if (!followup && state.mode === "auto" && state.input.planRevision) {
+      const plan = await readWorkPlan(context);
+      if (!plan || plan.status !== "active" || plan.revision !== state.input.planRevision) {
+        throw failure("The active plan changed before execution started. Read it and send your execution request again.");
+      }
     }
     const includePlanInstructions = state.task !== "deslop" && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
     let message = assistantModePrompt(role, input.message, {
@@ -503,8 +505,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const hasPlanRevision = Boolean(input.planRevision);
         const plan = mode === "auto" ? await readWorkPlan(context) : null;
         if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.");
-        if (hasPlanRevision && (!plan || plan.revision !== input.planRevision)) {
-          throw failure("The plan changed. Read the current plan before sending your request.");
+        if (hasPlanRevision && (!plan || plan.status !== "active" || plan.revision !== input.planRevision)) {
+          throw failure("The active plan changed. Read the current plan before sending your request.");
         }
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = mode === "custom" ? "custom" : "senior";
@@ -586,7 +588,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (direct) return direct;
     try {
       if (!state.resolvedMode) {
-        const decision = await classify(sessionId, context, state, task, options);
+        // The explicit Implement plan action already supplies its intent and
+        // exact plan revision. Do not ask Router to reinterpret that approval.
+        const decision = state.input.planRevision ? { mode: "junior", reason: "implementation" }
+          : await classify(sessionId, context, state, task, options);
         // An addressed role is an instruction, not a classifier suggestion.
         const requestedRole = /^\s*(senior|junior)(?:\s+developer)?\s*[:,]\s*\S/iu.exec(state.input.message)?.[1]?.toLowerCase();
         state.resolvedMode = requestedRole || decision.mode;

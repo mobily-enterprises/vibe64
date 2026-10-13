@@ -37,8 +37,8 @@ The working agent reports one of four outcomes:
 The agent's concrete explanation appears as an ordinary **Status** message in
 chat. It is evidence of the reported work, not independent verification.
 Auto waits after two consecutive turns without reported progress or eight
-automatic steps. Inspect the reason and select **Resume workflow** to continue
-with a fresh allowance. This does not grant permission to change the product scope.
+automatic steps. Inspect the reason and select **Continue planning**, **Continue implementation**, or **Continue review**,
+matching the waiting stage, to continue with a fresh allowance. This does not grant permission to change the product scope.
 
 If implementation is blocked on a requirement you want to defer, say so explicitly
 in **Auto**: for example, “Exclude actual email delivery from this implementation.
@@ -65,15 +65,15 @@ the existing chat action; an explanation or offer alone does not authorise it.
 
 The composer's **Stop** pauses the current workflow and interrupts active work
 or request preparation. Auto retains the stage, plan and completed changes.
-A late successful result cannot undo Stop. Select **Resume workflow** when ready;
-this starts a fresh turn at the retained stage. A failed or interrupted turn, or
+A late successful result cannot undo Stop. Select the stage-specific **Continue** action when ready;
+this starts a fresh turn at that stage. A failed or interrupted turn, or
 one ending without a confirmed outcome, leaves **Waiting** with a concrete reason.
 
-After a server restart, unfinished scheduling requires explicit **Resume workflow**;
+After a server restart, unfinished scheduling requires an explicit stage-specific **Continue** action;
 opening a session never sends another turn. **Retry** checks the original
 receipt of an uncertain message without sending a second copy. If the plan or
 conversation changed before an unsent handoff, stop it and send a fresh request.
-An unsent handoff shows **Stop** beside **Resume workflow**. Stopping it preserves
+An unsent handoff shows **Stop** beside its stage-specific **Continue** action. Stopping it preserves
 history and file changes, and lets you send a new request. A delivery check remains
 necessary for an uncertain attempt; stopping does not prove it was never delivered.
 
@@ -89,6 +89,25 @@ behavior-preserving cleanup to Senior review; turning it off does not disable
 review. Unfinished checks continue in Senior review; substantial necessary rework
 returns to Junior and comes back for another review. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
+
+When Auto is waiting at Planning with an active saved plan, the notice offers
+**Implement plan**, **View plan**, **Continue planning** and **Stop**. These are
+specific alternatives, not a generic “resume” command. **View plan** opens the
+existing Current plan dialog without sending anything. **Continue planning**
+asks for further planning and does not authorize coding. **Implement plan** sends
+a new human request authorizing implementation within the saved plan's scope;
+it starts Junior implementation, followed by the normal Senior review. Your
+composer draft and attachments remain untouched. The button cannot reinterpret
+the original planning request or become another automatic planning continuation.
+
+Only the relevant stage's continuation appears: paused Implementation offers
+**Continue implementation** and paused Review offers **Continue review**. An
+uncertain delivery offers **Check delivery** instead; it does not offer implementation.
+If the selected plan changed or is no longer active, implementation is refused:
+open **View plan**, inspect the current document, and send your intended request
+in chat. No plan is silently reopened. These controls behave the same on desktop
+and mobile. Colleague can explain them or offer to send your explicit request
+through its existing chat action; an explanation alone starts no work.
 Direct Senior, Junior and Custom keep their direct behavior without automatic
 continuation or review. Junior cannot mark a plan completed.
 
@@ -100,8 +119,8 @@ explicitly mark it Completed after verifying the evidence.
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending
 replaces that failed, unsent handoff; it does not mark its review completed.
-The previous coding history, plan and file changes remain. **Resume workflow** still
-resumes the retained stage, and **Stop** cancels it without sending new work.
+The previous coding history, plan and file changes remain. The stage-specific **Continue** action still
+continues the retained stage, and **Stop** cancels it without sending new work.
 A handoff with unconfirmed delivery still requires **Retry** first.
 Colleague can explain these choices and offer to help you continue; sending new
 work requires your direct request or accepted offer.

@@ -407,9 +407,11 @@
               :selection="props.session?.assistantSelection"
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
-              :retrying="routingReviewRetrying"
-              :busy="agentActive"
-              @retry="retryAutomaticReview"
+              :retrying="routingActionSending"
+              :busy="agentActive || composerSending || composerBlocked"
+              @retry="sendRoutingAction('continue')"
+              @implement="sendRoutingAction('implement')"
+              @view-plan="workPlanViewer?.showPlan('current')"
               @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
             />
             <Vibe64AutopilotPromptTextarea
@@ -1281,12 +1283,18 @@ watch(agentActive, (active) => {
     openCodeProgressLabel.value = "";
   }
 }, { flush: "sync", immediate: true });
-const routingReviewRetrying = ref(false);
-async function retryAutomaticReview() {
-  if (routingReviewRetrying.value || !routingRequest.value) return;
-  routingReviewRetrying.value = true;
-  try { await props.sendAgentMessage({ messageId: routingRequest.value.messageId, message: routingRequest.value.input.message, reviewAction: "retry" }); }
-  finally { routingReviewRetrying.value = false; }
+const routingActionSending = ref(false);
+async function sendRoutingAction(action) {
+  const request = routingRequest.value;
+  if (routingActionSending.value || !request) return;
+  routingActionSending.value = true;
+  try {
+    await props.sendAgentMessage(action === "implement"
+      ? { message: "Implement the saved plan. I authorize implementation within its agreed scope.",
+        planRevision: request.workPlan.revision, submissionKind: "send" }
+      : { messageId: request.messageId, message: request.input.message, reviewAction: "retry" });
+  }
+  finally { routingActionSending.value = false; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
   ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");

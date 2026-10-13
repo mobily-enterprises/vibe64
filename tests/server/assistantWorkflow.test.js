@@ -146,6 +146,45 @@ test("planning cannot authorise execution or completion", async t => {
   await finish(f, "wait", { explanation: "The plan is ready; execution has not been authorised." }); assert.equal(f.sends.length, 1);
 });
 
+test("explicit Implement plan replaces repeated planning continuations with a new human implementation request", async t => {
+  const f = await fixture(t);
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+  await f.service.send("session-1", { ...request, message: "Make a plan" }, f.context);
+  await finish(f, "wait", { explanation: "The saved plan awaits implementation approval." });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context);
+    assert.equal(f.state().stage, "planning");
+    await finish(f, "wait", { explanation: "Planning is finished; implementation is not authorised." });
+  }
+  const plan = await readWorkPlan(f.context);
+  const implement = { messageId: "human-implementation", message: "Implement the saved plan. I authorize implementation within its agreed scope.",
+    planRevision: plan.revision, submissionKind: "send" };
+  await f.service.send("session-1", implement, f.context);
+  assert.equal(f.state().messageId, implement.messageId);
+  assert.equal(f.state().stage, "implementation");
+  assert.equal(f.state().workflow, true);
+  assert.equal(f.state().followup, undefined);
+  assert.equal(f.state().stopped, undefined);
+  assert.equal(f.sends.at(-1).selection.modelId, f.assignments.junior.modelId);
+  assert.equal(f.sends.at(-1).input.displayMessage, implement.message);
+  assert.equal(f.helperCalls(), 1, "Explicit plan approval cannot be reclassified as planning");
+  assert.equal((await readWorkPlan(f.context)).revision, plan.revision);
+  await f.service.send("session-1", implement, f.context);
+  assert.equal(f.sends.length, 4, "The same human request cannot dispatch twice");
+  await finish(f, "handoff");
+  assert.equal(f.state().stage, "review");
+  assert.equal(f.sends.at(-1).selection.modelId, f.assignments.senior.modelId);
+});
+
+for (const state of ["changed", "completed", "absent"]) test(`Implement plan refuses a ${state} plan without sending work`, async t => {
+  const f = await fixture(t, undefined, { readyPlan: state !== "absent" });
+  const revision = (await readWorkPlan(f.context))?.revision || "missing";
+  if (state === "changed") await publishPlanFixture(f.context, planDocument() + "\nChanged requirements.\n");
+  if (state === "completed") await publishPlanFixture(f.context, planDocument("completed"));
+  await assert.rejects(f.service.send("session-1", { ...request, planRevision: revision }, f.context), /active plan changed/);
+  assert.equal(f.sends.length, 0); assert.equal(f.helperCalls(), 0);
+});
+
 test("Router has exactly four purposes and the agent outcome contract has four decisions", () => {
   for (const reason of ["conversation", "planning", "implementation", "review"]) assert.equal(parseRoutingDecision(JSON.stringify({ mode: "junior", reason })).reason, reason);
   for (const reason of ["discussion", "explicit_implementation", "plan_implementation", "deslop"]) assert.throws(() => parseRoutingDecision(JSON.stringify({ mode: "junior", reason })));

@@ -1719,8 +1719,11 @@ With no current plan, the document icon opens History directly. An opened archiv
 then offers Make current, which moves it out of History and reopens it as active
 without starting AI. The server refuses to replace an existing current plan.
 Archive moves the exact current document to History without marking it completed;
-both controls wait for active work and review to finish. There are no Implement or Recover buttons: people ask
-in chat. The visible plan contains readable checklists and evidence. Junior
+both controls wait for active work and review to finish. The plan viewer does not execute work. People can ask in chat or select
+Implement plan in a waiting Auto Planning notice. That explicit action starts
+implementation of the exact active saved plan; continuing planning never grants
+implementation permission. Waiting controls name the actual stage: Continue
+planning, Continue implementation or Continue review. The visible plan contains readable checklists and evidence. Junior
 checks completed work as it proceeds; Senior can uncheck unsupported claims and
 add missing acceptance checks within the agreed scope. Saved edits appear live
 in open viewers without resetting their scroll position.
