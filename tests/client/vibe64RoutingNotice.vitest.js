@@ -47,6 +47,18 @@ it("names only the retained stage's continuation on desktop and mobile", async (
   }
 });
 
+it("collapses long explanations by default while keeping stage actions visible", async () => {
+  const value = request("planning", "pending", { error: "Planning finished; explicit implementation authorization is required.",
+    workPlan: { status: "active", revision: "saved-plan" } });
+  const html = await render(value);
+  const details = html.match(/<details\b[^>]*>[\s\S]*?<\/details>/u)?.[0];
+  expect(details).toContain("Details"); expect(details).toContain(value.error);
+  expect(details).not.toMatch(/<details[^>]*\bopen/u);
+  expect(details).not.toContain("Implement plan");
+  expect(html.slice(html.indexOf("</details>"))).toContain("Implement plan");
+  expect(html).not.toContain("v-alert__prepend");
+});
+
 it("shows Check delivery without an unsent-handoff Stop for uncertain stage delivery", async () => {
   for (const stage of ["planning", "implementation", "review"]) {
     const html = await render(request(stage, "uncertain"));
@@ -65,7 +77,7 @@ it("offers explicit implementation and plan viewing only for a saved active plan
   const html = await render(value);
   expect(html).toContain("Implement plan"); expect(html).toContain("View plan"); expect(html).toContain("Continue planning");
   expect(html).not.toContain("Continue implementation"); expect(html).not.toContain("Continue review");
-  expect(html).toContain("starts coding the saved plan");
+  expect(html).not.toContain("starts coding the saved plan");
   for (const changed of [
     { delivery: "uncertain" }, { status: "working" }, { stage: "implementation" }, { stage: "review" },
     { workPlan: null }, { workPlan: { status: "completed", revision: "done" } }, { helper: { executionId: "pending-cleanup" } }

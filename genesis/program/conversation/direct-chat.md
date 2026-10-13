@@ -1690,7 +1690,8 @@ win over interrupted transport errors. Retry only inspects the same receipt.
 Restart never auto-sends a recovered follow-up. Continue planning, Continue
 implementation and Continue review name the retained stage and use the existing
 retry/Stop actions; uncertain delivery keeps Check delivery. Explanations remain
-persisted Status messages.
+persisted Status messages. The composer notice keeps its status and actions visible;
+Details expands the retained error or previous-delivery guidance on demand.
 
 A waiting Auto Planning notice with an active saved plan also offers View plan
 and Implement plan. View plan opens the existing viewer. Implement plan sends a

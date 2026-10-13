@@ -1,9 +1,11 @@
 <template>
-  <v-alert v-if="actionable" variant="tonal" density="compact" :type="request.error ? 'warning' : 'info'" class="mb-2" role="status">
-    {{ label }}
-    <p v-if="previousAttempt" class="text-body-small mt-1">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
-    <p v-if="request.error" class="text-body-small mt-1">{{ request.error }}</p>
-    <p v-if="canImplement" class="text-body-small mt-1">Implement plan starts coding the saved plan. Continue planning only asks for more planning.</p>
+  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="mb-2" role="status">
+    <details v-if="request.error || previousAttempt" :key="request.messageId">
+      <summary class="text-body-small py-2">{{ label }} · <span class="text-decoration-underline">Details</span></summary>
+      <p v-if="previousAttempt" class="text-body-small mb-2">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
+      <p v-if="request.error" class="text-body-small mb-2">{{ request.error }}</p>
+    </details>
+    <div v-else class="text-body-small py-2">{{ label }}</div>
     <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
       <v-btn v-if="canImplement" variant="flat" color="primary" min-height="48" :disabled="retrying || busy" @click="$emit('implement')">
         Implement plan
@@ -52,3 +54,11 @@ watch(() => [props.request?.messageId, props.request?.status], ([id, status], [p
     severity: "info", channel: "snackbar", dedupeKey: `vibe64.chat.review:${id}` });
 });
 </script>
+
+<style scoped>
+summary {
+  min-height: 48px;
+  align-content: center;
+  cursor: pointer;
+}
+</style>
