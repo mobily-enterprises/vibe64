@@ -1348,9 +1348,16 @@ test("managed browser identity returns from the app port to the real Preview pro
         return {
           ok: true,
           identity: guest ? null : { displayName: "Ada", email: "ada@example.com" },
-          setCookie: [guest
-            ? "app_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
-            : "app_session=ada; Path=/; HttpOnly; SameSite=Lax"]
+          // App adapters clear both current and historical paths before login.
+          setCookie: [
+            ...["/", "/api"].flatMap((cookiePath) => ["app_session", "app_refresh"].map((name) =>
+              `${name}=; Path=${cookiePath}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax`
+            )),
+            ...(guest ? [] : [
+              "app_session=ada; Path=/; Max-Age=900; HttpOnly; SameSite=Lax",
+              "app_refresh=fresh; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax"
+            ])
+          ]
         };
       }
     });
@@ -1398,9 +1405,20 @@ await page.goto(${JSON.stringify(`${appOrigin}/auth/login`)});`
     assert.equal(new URL(identity.url).origin, new URL(preview.href).origin);
     const authenticated = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
       env,
-      input: 'return { text: await page.locator("body").innerText(), retained: await page.evaluate(() => sessionStorage.getItem("retained")) };'
+      input: `return {
+        text: await page.locator("body").innerText(),
+        retained: await page.evaluate(() => sessionStorage.getItem("retained")),
+        cookies: (await context.cookies()).filter(({ name }) => name.startsWith("app_"))
+          .map(({ name, value, path }) => ({ name, value, path }))
+      };`
     })).stdout);
-    assert.deepEqual(authenticated.result, { text: "Signed in as Ada", retained: "same browser" });
+    assert.deepEqual(authenticated.result, {
+      text: "Signed in as Ada", retained: "same browser",
+      cookies: [
+        { name: "app_session", value: "ada", path: "/" },
+        { name: "app_refresh", value: "fresh", path: "/" }
+      ]
+    });
     assert.deepEqual(directIdentityRequests, []);
 
     // Selecting on the managed origin must preserve the page's current route.
@@ -1413,9 +1431,12 @@ await page.goto(${JSON.stringify(`${appOrigin}/auth/login`)});`
     assert.equal(new URL(guest.url).pathname, "/bookings/162");
     assert.equal(new URL(guest.url).search, "?tab=details");
     const signedOut = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
-      env, input: 'return await page.locator("body").innerText();'
+      env, input: `return {
+        text: await page.locator("body").innerText(),
+        cookies: (await context.cookies()).filter(({ name }) => name.startsWith("app_"))
+      };`
     })).stdout);
-    assert.equal(signedOut.result, "Sign in");
+    assert.deepEqual(signedOut.result, { text: "Sign in", cookies: [] });
     assert.deepEqual(selections.map(({ operation }) => operation), ["login-as", "logout"]);
   } finally {
     await commandService?.closeAllForSession(sessionId);

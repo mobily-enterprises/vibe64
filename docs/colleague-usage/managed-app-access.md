@@ -14,6 +14,12 @@ Adding a name here does not create an application account.
 4. Use Preview's available identity controls for the browser exchange. Merely
    saving identity configuration does not sign that browser in.
 
+After switching identity, open the intended application page in Preview and check
+the rendered account and access. An application can leave its login page visible
+after the exchange succeeds; the selected identity name alone is not proof of
+access. If a protected page still returns to login, ask the coding agent to inspect
+the exchange and subsequent application requests without exposing cookie values.
+
 The configuration is part of the selected session's source. Use the ordinary
 Save workflow when it should become saved project work. Source Save, application
 account creation and browser sign-in have distinct effects. If the application
