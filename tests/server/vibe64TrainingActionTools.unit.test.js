@@ -19,6 +19,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
+import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 
 async function fixture(t, { presentation = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-actions-"));
@@ -126,6 +127,51 @@ async function inventory(root) {
 }
 
 const excluded = /PRIVATE_SOURCE|PRIVATE_SHELL|SVG_SOURCE_ONLY|CONTROLLER_SOURCE_MUST_NOT_RUN|sourceRoot|repository|controller\.js|diagram\.svg|lesson\.md#|learnerId/u;
+
+test("learning polling reads one exact active pinned task and sends bounded guidance through its Main owner", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  const sessionId = `learning-${attemptId}`;
+  const guidance = [];
+  const learningSessions = {
+    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
+    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
+  };
+  const c = f.register(null, { learningSessions });
+  const definition = c.definitions.find(value => value.id === "vibe64.training.polling.read");
+  assert.equal(definition.extensions.assistant.exclude, true);
+  assert.equal(c.toolSet.tools.some(value => value.actionId === definition.id), false);
+  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
+  const result = await c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
+    criterion: "Open the lesson and explain the saved request flow." });
+  assert.equal(result.task.attemptId, attemptId);
+  assert.equal(result.task.conversationId, conversationId);
+  assert.equal(result.task.criterion, "Open the lesson and explain the saved request flow.");
+  assert.equal(result.task.pin.topicHash, f.pin.topic.topicHash);
+  assert.equal(result.task.pin.lessonHash, f.pin.lesson.hash);
+  assert.equal(result.task.progress.revision, reserved.revision);
+  const guideDefinition = c.definitions.find(value => value.id === "vibe64.training.polling.guide");
+  assert.equal(guideDefinition.extensions.assistant.exclude, true);
+  assert.equal(c.toolSet.tools.some(value => value.actionId === guideDefinition.id), false);
+  const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
+    failure: "workspace-settle-failed", workspace: { projectSlug, sessionId, pane: "preview", ready: false, learningView: "learning" } };
+  const guided = await c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
+    criterion: "Open the lesson and explain the saved request flow.", guidanceId: "guide-one", evidence });
+  assert.deepEqual(guided, { ok: true, status: "accepted" });
+  assert.equal(guidance.length, 1);
+  assert.equal(guidance[0].actor, f.auth.user);
+  assert.equal(guidance[0].actorId, "42");
+  assert.equal(guidance[0].guidanceId, "guide-one");
+  assert.deepEqual(guidance[0].evidence, evidence);
+  assert.equal(guidance[0].task.conversationId, conversationId);
+  await assert.rejects(c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
+    conversationId, criterion: "Wrong target" }), /project or conversation changed/);
+  await assert.rejects(c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
+    conversationId, criterion: "Wrong target", guidanceId: "guide-wrong", evidence }), /project or conversation changed/);
+  assert.equal(guidance.length, 1, "a stale target cannot reach Main");
+});
 
 test("answer evaluation shares the native API/tool contract and projects only the saved result", async t => {
   const f = await fixture(t);
@@ -453,8 +499,11 @@ test("lesson presentation tools use exact pinned commands and native browser rec
   const colleague = { async navigate(input, context) {
     calls.push(structuredClone(input));
     assert.equal(context.vibe64Action.user.uid, 42);
-    assert.equal(context.vibe64Action.project.slug, saved.attempt.projectSlug);
     const command = input.presentation;
+    if (command) assert.equal(context.vibe64Action.project.slug, saved.attempt.projectSlug);
+    else assert.equal(context.vibe64Action.project, null, "bound Main view derives the project instead of accepting it from the model");
+    if (!command) return { ok: true, focus: { ...input, pane: input.learningView === "learning" ? "lessons" : input.pane,
+      databaseScreen: input.databaseView ? "workspace" : undefined } };
     return { ok: true, focus: { projectSlug: input.projectSlug, sessionId: input.sessionId, pane: "preview" },
       presentation: { attemptId, visualId: command.visualId, playerInstanceId: "player-1",
         ...(command.operation === "snapshot" ? { snapshot: { state: "overview", paused: true, labels: {} } }
@@ -482,8 +531,9 @@ test("lesson presentation tools use exact pinned commands and native browser rec
       async requirePresentationAttempt(requested) {
         const current = await f.learners.readState({ actor: f.auth.user, attemptId: requested, includeCompletion: true });
         const attempt = current.active;
+        const projectSlug = currentProjectRequestContext()?.slug;
         if (requested !== attemptId || attempt?.attemptId !== attemptId ||
-            currentProjectRequestContext()?.slug !== attempt.projectSlug || attempt.preparation.phase !== "ready") {
+            projectSlug && projectSlug !== attempt.projectSlug || attempt.preparation.phase !== "ready") {
           throw Object.assign(new Error("Use this exact prepared Main lesson."), {
             code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH", statusCode: 409
           });
@@ -494,6 +544,15 @@ test("lesson presentation tools use exact pinned commands and native browser rec
       navigatePresentation(presentation, context) {
         return colleague.navigate({ projectSlug: saved.attempt.projectSlug,
           sessionId: saved.attempt.preparation.initialSessionId, pane: "preview", presentation }, context);
+      },
+      navigateLearningView(target, context) {
+        const learning = target === "learning";
+        return colleague.navigate({ projectSlug: saved.attempt.projectSlug,
+          sessionId: saved.attempt.preparation.initialSessionId,
+          pane: learning || target === "workspace-preview" ? "preview" : "database",
+          ...(target === "workspace-erd" ? { databaseView: "erd" } : {}),
+          learningMode: true, learningView: learning ? "learning" : "workspace",
+          ...(learning ? { learningContent: "active" } : {}), learningAttemptId: attemptId }, context);
       },
       readPresentationCue(input) { return colleague.readCue(input); }
     } };
@@ -516,6 +575,14 @@ test("lesson presentation tools use exact pinned commands and native browser rec
     assert.doesNotMatch(JSON.stringify(result.result), excluded);
     assert.equal(calls.at(-1).sessionId, saved.attempt.preparation.initialSessionId);
     assert.equal(calls.at(-1).pane, "preview");
+  }
+  for (const [target, pane] of [["workspace-preview", "preview"], ["workspace-erd", "database"], ["learning", "lessons"]]) {
+    const result = await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target }, context });
+    assert.equal(result.ok, true);
+    assert.equal(result.focus.pane, pane);
+    assert.equal(result.focus.learningAttemptId, attemptId);
+    assert.equal(result.focus.learningView, target === "learning" ? "learning" : "workspace");
+    assert.equal(result.focus.databaseView, target === "workspace-erd" ? "erd" : undefined);
   }
   assert.deepEqual(await inventory(f.systemRoot), before);
   const called = calls.length;
@@ -967,7 +1034,8 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
     "vibe64.training.question.prepare", "vibe64.training.answer.evaluate"]);
-  assert.deepEqual(training.mainTeaching.actionIds.slice(4, 9), ["vibe64.training.visual.open", "vibe64.training.visual.command",
+  assert.equal(training.mainTeaching.actionIds[4], "vibe64.training.view.open");
+  assert.deepEqual(training.mainTeaching.actionIds.slice(5, 10), ["vibe64.training.visual.open", "vibe64.training.visual.command",
     "vibe64.training.visual.cue", "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot"]);
   assert.ok(registered.some(route => route.url.startsWith("/api/learning/:learningAttemptId/vibe64/")));
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);

@@ -66,6 +66,13 @@ Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.
 A completed reply returns the chat to ready and restores the model controls
 through its live connection, without reloading the page.
+If the first request finds no usable model, Colleague shows a warning that your
+draft is kept and no request was sent. Choose **Open AI Accounts**. Hosted Vibe64
+opens Management → AI Accounts; standalone Vibe64 opens its existing Account
+settings on **AI Accounts**. Connect an AI and configure an available Senior
+model, then return and press **Send**. Opening setup does not send the draft or
+promise a response from an unavailable model. Credential entry and provider
+consent remain your actions.
 Model changes keep saved messages and replies, including between native and API.
 A changed engine, provider, model, agent or effort prepares the next conversation;
 the same selection retains it. Applying starts no model work.
@@ -176,8 +183,40 @@ watch without stopping the agent. Close this view to return to the same chat and
 draft. On phone, use **Close watches and assignments** in its header. Ask
 Colleague to list, cancel or resume watches if you prefer.
 
+In an active Learning task, “Watch me while I do this” starts the same polling
+watch shown in that dialog; asking how it works does not start anything. You can
+ask Colleague to read, pause, resume or stop it. Learning status reports the exact
+goal/target, active/paused/unavailable state, latest valid observation and time,
+last delivered-help receipt, and any saved assessment outcome. Observation and
+help are not themselves proof of completion. A separate Learning watcher checks
+only those validated facts; Colleague manages its controls, while Main receives
+bounded updates and never checks your activity itself. Stop removes the watch
+without stopping Main, the lesson or the app, and polling grants no unrelated
+mutation permission.
+
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.
+A completed or attempted application action also appears under **Operations**
+beside Previous conversations. Open it to see Vibe64's recorded state—executing,
+completed, failed or unknown—and the saved project/session/conversation target.
+**Open target** uses the normal project and chat navigation without rerunning the
+action. **Prepare retry** writes a cautious follow-up into your draft after a
+verified failure; review it and press **Send** yourself. It does not replay the
+action when clicked. For an unknown outcome, use **Prepare inspection** instead:
+the draft asks Colleague to inspect the saved target and forbids repetition until
+the real outcome is known and you explicitly continue. Internal catalogue lookups
+are not shown as product operations. These controls work the same way in the
+desktop drawer and full-screen phone chat.
+Opening or restoring Colleague moves keyboard focus into the message box. From
+there, **Tab** reaches the model, history, Operations, watch, Send and Stop
+controls that are currently available. **Escape**, **Minimize conversation** and
+**Close Colleague** return focus to the Colleague launcher; the full-screen phone
+chat keeps keyboard focus within its dialog while it is open.
+The avatar and its voice controls keep their own space above the conversation;
+they do not cover the first message on narrow screens.
+An unfinished operation retained from before these product receipts existed is
+shown as **Unknown** after restart, without an invented target or retry. Inspect
+the affected area before deciding whether to make a new explicit request.
 A malformed lookup returns a validation error. An unavailable tool runs no action;
 Colleague receives its verified refusal and can give a final reply. A provider failure
 or uncertain operation stops the turn. Your request is retained. Read the reported error and

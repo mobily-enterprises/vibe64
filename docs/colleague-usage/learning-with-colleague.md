@@ -25,6 +25,34 @@ explain native observation facts/accepted steps from its context query; those fa
 are not a pass. Missing facts do not prove lost steps: ask Main to check the current
 question before repeating the practical.
 
+Colleague can start and control a watcher for the current learner task through its
+eye-button dialog while you continue using Main. Starting from a delivered question
+captures that exact question, attempt, content pin, project/session and initiating
+browser. For a task without a delivered question, name one bounded criterion. The
+separate Learning watcher is event-first and performs bounded code-only
+reconciliation; Colleague and Main do not check your activity, keep an AI turn
+open or repeatedly call a model. **Pause**, **Resume** and **Stop** remain explicit.
+Leaving the target or losing current authority pauses it, and Resume performs a
+fresh access check. Its allowlisted control/view/progress facts are status context
+only and cannot pass an assessment.
+
+A direct “Watch me while I do this” request lets Colleague start that same watch
+from the currently connected Learning task. A how-to question only explains the
+controls. Ask Colleague to read, pause, resume or stop it, or use the eye dialog;
+both paths update the same watch ID. Status includes the exact goal and target,
+latest observation time, last delivered-help receipt and any saved assessment
+outcome. Stop ends observation only, not Main, the lesson or the application.
+Polling grants no source, Git, publication, provider, account or other mutation
+permission. Unsupported in-app behavior must be reported as unobservable.
+
+After a confirmed relevant step or an explicit observed failure, polling can give
+the same saved Main teacher one bounded application update. Main waits if your
+current turn is still running, then may connect confirmed progress to the current
+criterion or offer one useful hint for the reported failure. The update is not
+shown as words authored by you, cannot answer a pending question, and cannot award
+a pass. Repeated identical evidence is coalesced, and merely being quiet or away
+does not trigger another teacher turn. Pause or Stop discards undelivered help.
+
 A no-exercise lesson stays reserved without a practice project or Workspace setup.
 Its Learning Main is a private teacher conversation; the fresh brief reports
 `lesson.exerciseRequired: false`. Supported Main quizzes assess accepted answers

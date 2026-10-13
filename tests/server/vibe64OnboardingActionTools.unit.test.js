@@ -42,12 +42,13 @@ test("onboarding tools share action authority and return bounded setup choices w
       assert.equal(JSON.stringify(response).includes("private"), false);
       return response.result;
     };
-    let response = await read({ purpose: "An invoice CLI for bookkeepers" });
+    let response = await read({ purpose: "An invoice CLI for bookkeepers", includeSetupRequests: true });
     assert.equal(response.templates.length, 10);
     assert.equal(response.templateTotal, 23);
     assert.equal(response.nextTemplateOffset, 10);
     assert.equal(response.templates[0].description.length, 1200);
     assert.equal(response.templates[0].descriptionTruncated, true);
+    assert.deepEqual(response.setupRequestKinds, ["create"]);
     assert.deepEqual(response.setupRequests, [{ kind: "create", ...projectOnboardingRequest("create", { purpose: "An invoice CLI for bookkeepers" }) }]);
     assert.equal(calls.at(-1).context.vibe64User, actor);
     result = { ...result, templates: templates.slice(10, 20), templateOffset: 10, templateTotal: 23 };
@@ -55,15 +56,18 @@ test("onboarding tools share action authority and return bounded setup choices w
     assert.equal(calls.at(-1).input.templateOffset, 10);
     assert.equal(response.templates[0].id, templates[10].id);
     assert.equal(response.nextTemplateOffset, 20);
+    assert.deepEqual(response.setupRequestKinds, ["create"]);
+    assert.equal(response.setupRequests, undefined, "read-only discovery omits the large delegated request");
     result = { ...result, templates: [templates[22]], templateOffset: 0, templateTotal: 1 };
     response = await read({ templateId: templates[22].id });
     assert.equal(calls.at(-1).input.templateId, templates[22].id);
     assert.equal(response.nextTemplateOffset, null);
     result = { ...result, templates: [], templateTotal: 0, inspection: { ...result.inspection, state: "adoption", nextAction: "adopt", templateEligible: false } };
     response = await read();
-    assert.deepEqual(response.setupRequests, [{ kind: "inspect", ...projectOnboardingRequest("inspect") }]);
+    assert.deepEqual(response.setupRequestKinds, ["inspect"]);
+    assert.equal(response.setupRequests, undefined);
     const purpose = "A Python CLI that checks invoices.\nRun it from a terminal.";
-    response = await read({ purpose });
+    response = await read({ purpose, includeSetupRequests: true });
     assert.deepEqual(response.setupRequests[1], { kind: "adopt", ...projectOnboardingRequest("adopt", { purpose }) });
     for (const request of response.setupRequests) {
       assert.match(request.message, /If this application has authenticated web pages/);
@@ -76,7 +80,7 @@ test("onboarding tools share action authority and return bounded setup choices w
     assert.equal(calls.every(({ input }) => !input.message), true, "inspection never sends an agent request");
     result.inspection = { state: "attention", nextAction: "update-genesis", templateEligible: false,
       diagnostics: Array.from({ length: 11 }, () => ({ code: "FORMAT_NEWER", message: "F".repeat(600), contents: "private-diagnostic" })) };
-    response = await read();
+    response = await read({ includeSetupRequests: true });
     assert.equal(response.diagnostics.length, 10);
     assert.equal(response.diagnostics[0].message.length, 512);
     assert.equal(response.diagnosticsTruncated, true);
@@ -85,7 +89,8 @@ test("onboarding tools share action authority and return bounded setup choices w
     result.inspection = { state: "ready", nextAction: "work", templateEligible: false, diagnostics: [] };
     result.environmentSetup = { missingKeys: Array.from({ length: 21 }, (_, index) => `KEY_${index}`), warning: "W".repeat(600), values: { SECRET: "private-value" } };
     response = await read();
-    assert.deepEqual(response.setupRequests, []);
+    assert.deepEqual(response.setupRequestKinds, []);
+    assert.equal(response.setupRequests, undefined);
     assert.equal(response.environmentSetup.missingKeys.length, 20);
     assert.equal(response.environmentSetup.missingKeyCount, 21);
     assert.equal(response.environmentSetup.truncated, true);
@@ -100,7 +105,7 @@ test("onboarding tools share action authority and return bounded setup choices w
         assert.equal((await execute(operation, { ...base, ...bad })).ok, false);
       }
     }
-    for (const input of [{ templateOffset: -1 }, { templateOffset: 1.5 }, { purpose: "x".repeat(24001) }, { templateId: "" }]) {
+    for (const input of [{ templateOffset: -1 }, { templateOffset: 1.5 }, { purpose: "x".repeat(24001) }, { templateId: "" }, { includeSetupRequests: "yes" }]) {
       assert.equal((await execute("onboarding.read", input)).ok, false);
     }
     assert.equal((await execute("templates.apply")).ok, false);

@@ -107,6 +107,11 @@ const vibe64AutopilotViewProps = {
   sourceWorkspaceAvailable: { default: true, type: Boolean },
   outputWorkspaceAvailable: { default: null, type: Boolean },
   lessonsAvailable: Boolean,
+  learningView: {
+    default: "workspace",
+    type: String,
+    validator: value => ["workspace", "learning"].includes(value)
+  },
   learningAttemptId: { default: "", type: String },
   agentConnectionError: {
     default: "",

@@ -67,8 +67,10 @@ use **Show project** to see setup and **Show chat** to follow the conversation.
 ## Colleague assistance
 
 Ask “What does this setup screen need?” for an explanation. Colleague can read
-onboarding state, discuss the product, create an authorized first session, and
-send an explicitly requested inspection or setup to that session's coding agent.
+onboarding state without preparing a large coding request, discuss the product,
+create an authorized first session, and send an explicitly requested inspection
+or setup to that session's coding agent. After you request the task or accept its
+offer, Colleague retrieves that exact setup request before sending it.
 It can follow the conversation and report the observed result. It does not inspect
 the repository itself. An explanation or offer starts no coding work; a direct
 request or accepted offer authorizes the specified task. Missing project access,

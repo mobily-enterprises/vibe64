@@ -208,7 +208,17 @@ state for Colleague's acknowledged navigation and captured request focus.
 The existing project layout owner supplies actual pane visibility and reveal
 operations; the integration owner refreshes status through its current command.
 Code subscribes to session events and reconciles watched conversations through
-their existing authorized actions.
+their existing authorized actions. Colleague owns that ordinary conversation and
+assignment watch scheduler. It also exposes the Learning watch controls and hosts
+their persisted records, but delegates Learning observation, lifecycle, cursor,
+deduplication and bounded delivery to Training's separate watcher. Shared Core
+predicates normalize watch observations and cursors without knowing either host.
+Training remains the fresh task/pin/progress and trusted-observation authority and
+delivers accepted evidence to the existing Learning Main teacher, which still owns
+guidance and assessment and never polls learner behavior. Browser and presentation
+IDs are transient and must be rebound through a fresh access check after restart;
+queued or running notifications are suppressed when the watch is paused, stopped
+or leaves its exact target.
 It consumes existing native conversation, the JSKIT instruction lifecycle runtime,
 transcript policy and action catalogues. Coding work and ordinary product operations retain their
 existing subsystem owners. State is private application filesystem data.
@@ -262,6 +272,20 @@ settler, moved once with immediate Colleague/Online consumer reuse. The selected
 Main supplies its exact delivered question and captured saved practice target;
 hosts supply real drawer/view and actual local or authenticated actor facts. Native question-to-
 gesture-to-answer, acoustic and whole-lesson acceptance remain open.
+For every selected Learning Main, including source-less lessons, Training also
+owns the exact polling-task descriptor and validation of its attempt, immutable
+pin, delivered question or bounded criterion, project/session and current progress.
+Its separate watcher owns the active/paused/unavailable lifecycle, timer, stable
+cursor, idempotent event identities and one pending guidance receipt. It emits only
+allowlisted settled control/view facts through the existing gesture owner, then
+revalidates and notifies the exact Main teacher. Colleague starts and controls the
+watch through its existing UI and stores the record, but neither its model nor Main
+polls learner behavior. Source-less attempts keep their actual saved session
+identity. Training defers delivery while Main is busy and sends application-origin
+context only; Colleague's model is not awakened.
+Duplicate evidence, inactivity, Pause, Stop, target departure and restart cannot
+create repeated guidance. Existing assessment/Helper/progress owners alone decide
+and persist a pass.
 Owns the original ephemeral browser presentation transaction and cue/receipt
 predicates, immediately consumed by Colleague using its unchanged connection
 objects. One original pending slot, deadlines, output binding and terminal ACK
@@ -269,7 +293,12 @@ rules are shared; consumers retain maps, fresh authority, native turn admission,
 general navigation grammar and Stop/focus/replacement call sites. The shared
 client dispatch returns the original player promise and projects its bounded
 receipt only after the host's existing fresh actor/view/handle fence. No new
-Main client identity, persisted format or player is introduced.
+Main client identity, persisted format or player is introduced. The same
+transaction now validates exact Learning mode/view/content/attempt receipts.
+Colleague extends its existing navigation action, while Training owns one
+Main-only bound view action for Workspace Preview, Workspace ERD and retained
+Learning content. Both consume the host's single browser navigator; these
+display receipts are demonstrations and cannot satisfy learner evidence.
 Owns bounded durable assessment receipts and lesson resume state, checked against
 the installed pin, plus a read-only teaching brief without executable assets or
 source paths. Owns internal pinned-rubric grading through the existing retained

@@ -814,6 +814,11 @@ it("actual retained Main snapshot/client feeds the same original three-control c
   f.snapshot(identity, { trainingQuestion: question });
   await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
   expect(channel.value.matchesLearning(identity)).toBe(true);
+  expect(channel.value.pollingTask()).toEqual({ attemptId: attempt, projectSlug: "practice", sessionId: "saved-initial",
+    conversationId: mainConversationId(identity), learningClientId: runtime.presentation.clientId,
+    topicHash: "a".repeat(64), lessonHash: "b".repeat(64), reference: question });
+  const polled = [];
+  channel.value.setPollingWatch({ watchId: "learning-watch", observe: async value => polled.push(structuredClone(value)) });
   expect(channel.value.begin({ type: "click", isTrusted: false }, "project-select")).toBeNull();
   for (const control of ["project-select", "chat-show", "preview-select"]) {
     const ticket = channel.value.begin({ type: "click", isTrusted: true }, control,
@@ -831,12 +836,39 @@ it("actual retained Main snapshot/client feeds the same original three-control c
       projectVisible: true, pane: "preview", ready: true, colleagueVisible: false });
   }
   expect(observations.map(([, options]) => options.body.control)).toEqual(["project-select", "chat-show", "preview-select"]);
+  expect(polled).toHaveLength(3);
+  expect(polled.map(value => value.control)).toEqual(["project-select", "chat-show", "preview-select"]);
+  expect(polled.every(value => value.watchId === "learning-watch" && value.learningClientId === runtime.presentation.clientId &&
+    value.outcome === "confirmed" && value.failure === undefined)).toBe(true);
   view.value.ready = false;
   const held = channel.value.begin({ type: "click", isTrusted: true }, "preview-select");
   const pending = channel.value.finish(held);
   f.viewer.value = { actorKey: "another" };
   expect(await pending).toBe(false);
   expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(3);
+});
+
+it("source-less Learning Main exposes its exact polling task without inventing a workspace collector", async () => {
+  const attempt = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const channel = ref(null), layout = ref(null), view = ref(null);
+  const body = ref({ actorKey: "owner", conversationId: "real-general", visible: false, compact: false });
+  const query = new QueryClient({ defaultOptions: { queries: { retry: false } } }); releases.push(() => query.clear());
+  const f = fixture({ learningAttemptId: attempt, learnerId: "own", projectSlug: "", sessionId: `learning-${attempt}`,
+    sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    beforeMount(app) { app.use(VueQueryPlugin, { queryClient: query });
+      for (const [key, value] of [[VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel], [VIBE64_COLLEAGUE_BODY_KEY, body],
+        [VIBE64_COLLEAGUE_VIEW_KEY, view], [VIBE64_COLLEAGUE_LAYOUT_KEY, layout]]) app.provide(key, value); } });
+  await vi.waitFor(() => expect(f.runtime.value).toBeTruthy());
+  const runtime = f.runtime.value, identity = runtime.identity;
+  view.value = { learningBinding: identity, learningView: "learning", sessionId: identity.sessionId,
+    ready: true, conversationId: "", temporarySelected: false, hostConversationSelected: false, pane: "lessons" };
+  layout.value = { projectSlug: "", learningAttemptId: attempt, learnerId: "own", ready: true,
+    chatVisible: true, projectVisible: true };
+  await nextTick();
+  expect(channel.value.pollingTask()).toEqual({ attemptId: attempt, projectSlug: "", sessionId: identity.sessionId,
+    conversationId: mainConversationId(identity), learningClientId: runtime.presentation.clientId });
+  expect(channel.value.begin({ type: "click", isTrusted: true }, "preview-select")).toBeNull();
+  f.app.unmount();
 });
 
 

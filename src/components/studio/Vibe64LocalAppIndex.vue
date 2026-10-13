@@ -37,10 +37,11 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
         :active="learningMode"
         :chat-collapsed="false"
         :learning-resource="learningResource"
+        learning-view="learning"
         :purpose-filter="purposeFilter"
         project-pane="dashboard"
       >
-        <template #dashboard><Vibe64LearningLessonLauncher :learning="learning" /></template>
+        <template #learning><Vibe64LearningLessonLauncher :learning="learning" /></template>
       </Vibe64SessionPanel>
     </section>
   </StudioAppShellLayout>

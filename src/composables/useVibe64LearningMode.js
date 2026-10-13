@@ -16,6 +16,7 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
   const learningMode = computed(() => route.query.mode === "learning");
+  const learningView = computed(() => route.query.learningView === "learning" ? "learning" : "workspace");
   const purposeFilter = computed(() => learningMode.value ? "learning" : "working");
   let generation = 0;
   let disposed = false;
@@ -80,8 +81,19 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   async function setLearningMode(value) {
     const query = { ...route.query };
     if (value) query.mode = "learning";
-    else delete query.mode;
+    else {
+      delete query.mode;
+      delete query.learningView;
+    }
     return router.replace({ path: route.path, hash: route.hash, query });
+  }
+
+  async function setLearningView(value) {
+    if (!learningMode.value || !["workspace", "learning"].includes(value)) {
+      throw new Error("Open Learning mode before changing its workspace view.");
+    }
+    return router.replace({ path: route.path, hash: route.hash,
+      query: { ...route.query, learningView: value } });
   }
 
   function capture() {
@@ -177,7 +189,7 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     } finally { busy.value = false; }
   }
 
-  return Object.freeze({ learningMode, purposeFilter, setLearningMode,
+  return Object.freeze({ learningMode, learningView, purposeFilter, setLearningMode, setLearningView,
     coursesResource, learningResource, learnerId, busy, startRetry,
     refresh, startLesson, retryStart, resumeLesson, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

@@ -181,9 +181,11 @@ inspection runs application verification or workspace preparation.
 All onboarding conversation actions use the session's existing Temporary AI
 workspace, opening a new task with the current diagnostics or entered purpose.
 Colleague reads the same `vibe64.project.onboarding.read` action for setup state,
-bounded diagnostics and configured starter identities. The action accepts a
-purpose for preparing the same setup request as the UI; reading never starts an
-agent. Colleague delegates an agreed request through the existing Junior
+bounded diagnostics, compact available request kinds and configured starter
+identities. An ordinary explanatory read omits the potentially large delegated
+request body. After direct authorization, `includeSetupRequests` returns the
+exact same request as the UI; the action also accepts a purpose for preparing an
+adopt/create request. Reading never starts an agent. Colleague delegates an agreed request through the existing Junior
 temporary-conversation actions, then rereads setup after completion. Starter
 selection uses the same `vibe64.project.templates.apply` action and source locks.
 The tool pages starters ten at a time and excludes repository locations and

@@ -73,6 +73,14 @@ remains an explicit facility error, not a legacy fallback.
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
+When initial Senior selection has no available route, the service records the
+existing setup failure without admitting a model request and projects a bounded
+`modelSetupRequired` presentation fact. The client keeps the original JSKIT draft
+and offers the existing account owner: Online navigates to Management → AI
+Accounts, while standalone dispatches its existing Account settings request. The
+control sends no message, changes no selection and performs no credential action.
+After setup, the person's next explicit Send retries through ordinary selection
+and admission; the UI does not promise an unavailable response.
 Its initial native history retains the original 24-row window with each
 text excerpt limited to 2,000 characters. Pending product rows occupy that window
 before the drained batch is excluded from its seed; autonomous input adds no row. The service
@@ -212,6 +220,11 @@ the existing atomic writer, together with watches and assignments. There is no
 reconstructed in-memory transcript. Turn metadata survives restart. The earlier schema-version-2 upgrade retains the old transcript and retires the previous native binding through the
 numbered stopped-service upgrade `20261002-colleague-conversation`; opening a
 legacy record refuses to mutate it or run inference.
+Opening a genuinely missing record creates only a new in-memory chat until a
+normal write is admitted. Invalid JSON or an unsupported record shape is never
+replaced with an empty chat: the read reports an actionable error, leaves exact
+bytes untouched and drops only the failed in-memory load promise. After the owner
+repairs or restores the file, the next read retries it without a service restart.
 
 Explicit **Start fresh** recovery retains the previous chat as read-only history
 and installs a genuinely new public and backend identity in the same private
@@ -321,6 +334,29 @@ one exact actor/conversation target. Live recording preview is applied after
 canonical delivery and cannot acknowledge an unaccepted message. Product reads
 refresh on invalidation, reconnect and opening; window focus performs no read
 and no browser polling runs.
+The same JSKIT application-tool records supply a bounded recent-operation
+projection. At the first durable reservation, Public adds only a human label and
+the admitted focus's exact project/session/conversation target; later result
+writes preserve that annotation on the same call. The browser maps running,
+completed, verified failure and unknown outcome separately, without exposing
+arguments or result payloads. Catalogue search/contract calls are omitted from
+product receipts. Opening a target uses the existing host navigation and never
+replays the call. Failure and uncertainty controls only prepare an explicit
+person-reviewed follow-up draft; uncertainty asks for inspection and forbids
+blind repetition. No operation registry, automatic retry or browser authority is
+introduced.
+Opening or restoring the Colleague surface transfers keyboard focus to the
+binding-owned composer after its presentation target is mounted. Minimize,
+Close and Escape return focus to the existing launcher; the phone presentation
+retains the dialog's focus containment. This keeps keyboard interaction within
+the visible conversation without adding another focus owner.
+The product composition gives the shared upper-right avatar and voice controls
+their own layout row, including the smaller hidden-avatar control, so scrolling
+conversation content can never move underneath them.
+An unfinished pre-receipt application-tool record remains visible after restart
+as an unknown legacy operation. It has no invented target, cannot be presented as
+executing and cannot prepare a retry. This read-time presentation does not rewrite
+the historical record or replay its effect.
 Application invalidation also reloads the existing shared conversation binding,
 so a worker's final ready state restores model and Stop controls after its
 earlier native-settled event. The canonical coalesced read retains the same
@@ -560,11 +596,50 @@ existing records without it remain coding-conversation watches without rewriting
 Unknown sources pause rather than falling back to a coding session. Reusing a
 watch ID for a different target, source, condition or question is refused.
 
-The existing session event bus schedules coalesced reads outside the publisher's
-write lock. A 30-second code-only reconciliation catches missing events while a
-watch is active. No watches, unrelated events, unchanged state and partial tokens
-start no model calls. Watches and pending observations persist, but credentials
-do not. Reads resume after authentication, recheck target access, and pause visibly
+Training registers `learning-task` as a bounded non-conversation source on the
+same host record. Start captures the exact learner attempt, initiating browser,
+Learning Main client/conversation, project/session, immutable content pin and
+either the delivered question or one bounded criterion. Colleague exposes the
+controls and persisted record; Training's separate watcher owns its lifecycle,
+timer, stable cursor, latest allowlisted control/view observation and guidance
+delivery. Shared Core predicates normalize observations and cursors. Start takes a
+silent baseline. Stable revisions and event identities suppress duplicate reports,
+and arbitrary DOM, typed text, screenshots, secrets and foreign projects never
+enter the observation. Active, paused and unavailable states are visible. Leaving
+the target pauses the watch, restart makes unfinished polling unavailable, and
+Resume binds fresh browser identities and rechecks authority. Training's watcher
+uses bounded 30-second code-only reconciliation; neither Colleague's model nor the
+Learning Main polls or runs a timer-driven model loop.
+
+The browser publishes its validated current polling binding alongside—not inside—
+assistant-visible focus. The hidden Learning client identity stays on that live
+connection. The existing `learning-watch.start` action is discoverable to
+Colleague and, for an interactive request, derives all target identity from that
+connection instead of accepting model-selected browser IDs. Human Start polling
+continues through the same action with its explicit binding. `watches.read`,
+`watch.pause`, `watch.resume` and `watch.cancel` therefore operate on one retained
+watch ID for both paths. Resume requires the exact current connection and reruns
+the source read; Stop suppresses pending guidance without stopping Main, the
+lesson or its application. Public status retains goal/target, timestamped latest
+observation, last accepted/duplicate guidance receipt and saved Training progress;
+none of those fields grants mutation authority or independently proves a pass.
+
+A meaningful confirmed learner event or explicit bounded failure is retained as
+one pending guidance receipt by Training's watcher. That watcher, not Colleague or
+Main, revalidates the exact task and delivers it to the existing Main teacher as
+application-origin context. Busy Main turns defer the unchanged receipt; accepted
+and duplicate receipts clear it. Identical evidence is
+coalesced, while quiet reconciliation creates no guidance. Pause, Stop,
+leave-target and restart remove undelivered guidance. Public watch state exposes
+only the latest delivered guidance summary; its internal receipt and suppression
+key remain private. Main's assessment owners remain unchanged.
+
+The existing session event bus asks the separate watcher to schedule coalesced
+reads outside the publisher's write lock. A 30-second code-only reconciliation
+catches missing events while a watch is active. No watches, unrelated events,
+unchanged state and partial tokens start no model calls. Watches and pending
+observations persist, but credentials do not. Reads resume after authentication,
+recheck target access, and pause visibly
 on a read failure. Resume reconciles from the retained cursor. Notifications also
 recheck target access before sending their bounded observation to the model,
 including the current host authority for a workspace conversation. Waiting for
@@ -589,7 +664,8 @@ the supplied message identities. Invalid answers, unavailable models and executi
 failures return explicitly labeled bounded excerpts instead. Helper identity,
 execution and cleanup state are retained before work starts; failed cleanup must
 finish before another Helper can start. Stop Colleague aborts and cleans up that
-Helper too. Non-conversation watches remain to be added.
+Helper too. Further non-conversation sources remain to be added through the same
+registered-source boundary.
 JSKIT owns capture, playback, local recognizer decisions and speech controls.
 Public Vibe64's Colleague binding uses ordinary message admission; there is no
 separate readiness/classification API or Helper inference. Spoken questions and
@@ -1064,7 +1140,18 @@ connection objects. General view grammar, map ownership, current native turn
 admission, event ordering and every Stop/fresh/focus/failure call site remain in
 this service. The coordinator is an ephemeral state facility and never enters
 the saved conversation record. Original browser/cue assertions remain unchanged;
-this move adds no Main piloting route, connection identity or persisted field.
+this move adds no connection identity or persisted field.
+
+The existing navigation action now carries optional Learning mode, right-view
+and lesson-selection fields. Colleague validates picker versus active-attempt
+grammar, keeps normal project/session/Database targeting, and delegates the
+pending command and exact settled acknowledgement to that same Training
+coordinator. The host publishes one browser navigator used by both Colleague and
+the selected Main teacher. Training's Main-only `vibe64.training.view.open`
+derives its project/session/attempt from the freshly admitted teacher scope and
+supports only Workspace Preview, Workspace ERD or the retained Learning pane.
+Start/resume/end remain their existing Training actions; view receipts remain
+demonstrations and never enter practical or assessment evidence.
 
 
 The separate `20261010-colleague-codex-completed-policy` numbered operation uses

@@ -260,6 +260,31 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
 
 const watchInput = { watchId: "watch-1", projectSlug: "alpha", sessionId: "session-1", conversationId: "temporary-1", condition: "reply", question: "Tell me when the agent answers." };
 
+test("missing Colleague state stays non-destructive and repaired invalid state can be retried without restart", async t => {
+  const missingRoot = await mkdtemp(path.join(os.tmpdir(), "colleague-missing-test-"));
+  const invalidRoot = await mkdtemp(path.join(os.tmpdir(), "colleague-invalid-test-"));
+  t.after(async () => Promise.all([missingRoot, invalidRoot].map(root => rm(root, { force: true, recursive: true }))));
+  const missing = await fixture(t, [], { systemRoot: missingRoot });
+  assert.equal((await missing.service.read({}, missing.context)).status, "ready");
+  await assert.rejects(readFile(path.join(missingRoot, "colleague", "NDI", "conversation.json"), "utf8"), { code: "ENOENT" });
+
+  const directory = path.join(invalidRoot, "colleague", "NDI");
+  const file = path.join(directory, "conversation.json");
+  const invalid = "{invalid saved history\n";
+  await mkdir(directory, { recursive: true });
+  await writeFile(file, invalid);
+  const repaired = await fixture(t, [], { systemRoot: invalidRoot });
+  await assert.rejects(repaired.service.read({}, repaired.context), { code: "colleague_history_invalid", statusCode: 503 });
+  assert.equal(await readFile(file, "utf8"), invalid, "opening never replaces the invalid saved file");
+  const valid = JSON.stringify({ schemaVersion: 3, runtimeId: "NDI", previousConversations: [],
+    scopeId: "colleague_repaired", assistantSelection: null, status: "ready", error: "", conversationLog: [] });
+  await writeFile(file, valid);
+  const result = await repaired.service.read({}, repaired.context);
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.messages, []);
+  assert.equal(await readFile(file, "utf8"), valid, "retry reads the repaired owner without rewriting it");
+});
+
 test("Colleague forwards shared text events before completion and retains one final reply", async t => {
   const stream = modelStream();
   const f = await fixture(t, [signal => stream.response(signal)]);
@@ -328,6 +353,56 @@ test("tool progress is shared commentary and the final answer does not repeat it
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
   // Frozen first-progress test261: the completed acknowledgement is never saved.
   assert.deepEqual(final.messages.filter(message => message.role === "commentary").map(message => message.text), []);
+});
+
+test("Colleague projects durable operation receipts with exact targets and safe recovery states", async t => {
+  const pending = Promise.withResolvers();
+  t.after(() => pending.resolve());
+  const f = await fixture(t, [call("targeted"), reply("Done.")]);
+  f.observations.onOperation = () => pending.promise;
+  await f.send("Do this in the selected conversation.", "receipt-request", { focus: {
+    projectSlug: "groceries", sessionId: "session-one", conversationId: "temporary-one"
+  } });
+  await until(() => f.observations.mutations.length === 1);
+  const running = await f.service.read({}, f.context);
+  assert.deepEqual(running.operation, {
+    id: running.operation.id, actionId: "vibe64.test.operate", label: "Test operate", status: "executing",
+    at: running.operation.at,
+    target: { projectSlug: "groceries", sessionId: "session-one", conversationId: "temporary-one" },
+    canPrepareRetry: false
+  });
+  assert.deepEqual(running.operations, [running.operation]);
+  const savedRunning = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  const savedRunningCall = savedRunning.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []).at(-1);
+  assert.match(savedRunningCall.productReceipt.runId, /^[0-9a-f-]{36}$/);
+  assert.equal(Object.hasOwn(running.operation, "runId"), false, "The private worker identity is not browser presentation");
+  pending.resolve();
+  const completed = await f.service.wait(f.context);
+  assert.equal(completed.operation.status, "completed");
+  assert.equal(completed.operation.canPrepareRetry, false);
+
+  const failed = await fixture(t, [call("failed"), reply("It still needs attention.")]);
+  failed.observations.failure = Object.assign(new Error("The current revision changed."), { statusCode: 409, code: "revision_changed" });
+  await failed.send("Try the requested change.", "failed-receipt", { focus: {
+    projectSlug: "groceries", sessionId: "session-two", conversationId: ""
+  } });
+  const failedResult = await failed.service.wait(failed.context);
+  assert.equal(failedResult.operation.status, "failed");
+  assert.equal(failedResult.operation.error, "The current revision changed.");
+  assert.equal(failedResult.operation.canPrepareRetry, true);
+  assert.deepEqual(failedResult.operation.target, { projectSlug: "groceries", sessionId: "session-two" });
+
+  const unknown = await fixture(t, [call("uncertain")]);
+  unknown.observations.failure = Object.assign(new Error("Acknowledgement lost."), { statusCode: 503 });
+  await unknown.send("Try this once.", "unknown-receipt", { focus: {
+    projectSlug: "groceries", sessionId: "session-three", conversationId: "main"
+  } });
+  const unknownResult = await unknown.service.wait(unknown.context);
+  assert.equal(unknownResult.operation.status, "unknown");
+  assert.equal(unknownResult.operation.canPrepareRetry, false);
+  assert.match(unknownResult.operation.error, /Inspect the target/);
+  assert.deepEqual(unknownResult.operation.target,
+    { projectSlug: "groceries", sessionId: "session-three", conversationId: "main" });
 });
 
 // Original first-progress assertions, driven through shared API tools instead
@@ -1106,6 +1181,156 @@ function registerWorkspaceConversation(f) {
 }
 const workspaceWatch = { ...watchInput, source: "workspace-repair", projectSlug: "", sessionId: "", conversationId: "repair-1" };
 
+test("learning-task polling guides Main once after meaningful evidence and retains explicit pause resume stop", async t => {
+  const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
+  const attemptId = "11111111-1111-4111-8111-111111111111";
+  let reads = 0, deferred = true;
+  const guidance = [];
+  f.service.registerConversationSource("learning-task", {
+    async read(watch) {
+      reads += 1;
+      watch.learningTask = { ...watch.learningTask, pin: { topicHash: "a".repeat(64), lessonHash: "b".repeat(64) },
+        criterion: watch.learningTask.criterion, progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: ["explain"] } };
+      const latest = watch.latestObservation || null;
+      const revision = `1:${latest?.eventId || ""}`;
+      return { status: "working", runId: attemptId, revision,
+        messages: [{ id: `learning:${revision}`, role: "assistant", text: latest ? "The learner changed view." : "Baseline." }],
+        details: { task: watch.learningTask, latestObservation: latest } };
+    },
+    async notify(_watch, pending) {
+      guidance.push(structuredClone(pending));
+      if (deferred) { deferred = false; return { ok: true, status: "deferred" }; }
+      return { ok: true, status: "accepted" };
+    }
+  });
+  const focus = { projectSlug: "alpha", sessionId: "learning-1", conversationId: "", pane: "lessons",
+    learningAttemptId: attemptId, learningView: "learning" };
+  await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+  const input = { watchId: "learning-watch-1", browserClientId: "browser-learning", learningClientId: "main-learning",
+    attemptId, targetProjectSlug: "alpha", sessionId: "learning-1", conversationId: "learning-main",
+    criterion: "Open Preview and explain the result." };
+  const started = await watchAction(f, "learning-watch.start", input);
+  assert.equal(started.watch.status, "active");
+  assert.equal(started.watch.learningTask.pin.topicHash, "a".repeat(64));
+  assert.equal(f.observations.starts.length, 0, "baseline state never wakes the model");
+  const event = { watchId: input.watchId, learningClientId: input.learningClientId, eventId: "gesture-1", outcome: "confirmed",
+    control: "preview-select", workspace: { projectSlug: "alpha", sessionId: "learning-1", pane: "preview",
+      ready: true, learningView: "learning" } };
+  await f.service.focus({ clientId: "browser-learning", focus: { ...focus, pane: "preview" } }, f.context);
+  const observed = await watchAction(f, "learning-watch.observe", event);
+  assert.equal(observed.duplicate, false);
+  await until(() => guidance.length === 2);
+  const settled = await f.service.read({}, f.context);
+  assert.equal(settled.watches[0].status, "active");
+  assert.equal(settled.watches[0].latestObservation.control, "preview-select");
+  assert.equal(settled.watches[0].latestObservation.origin, "learner");
+  assert.equal(settled.watches[0].lastGuidance.status, "accepted");
+  assert.equal(guidance[0].guidanceId, guidance[1].guidanceId, "a busy Main retry reuses the exact application receipt");
+  assert.equal(guidance[1].evidence.outcome, "confirmed");
+  assert.equal(f.observations.starts.length, 0, "Learning evidence notifies Main without waking Colleague's model");
+  const duplicate = await watchAction(f, "learning-watch.observe", event);
+  assert.equal(duplicate.duplicate, true);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(guidance.length, 2, "a duplicate event cannot notify Main again");
+  await watchAction(f, "watch.pause", { watchId: input.watchId });
+  await assert.rejects(watchAction(f, "learning-watch.observe", { ...event, eventId: "gesture-2" }), /not active/);
+  await watchAction(f, "watch.resume", { watchId: input.watchId,
+    browserClientId: "browser-learning", learningClientId: "main-learning-2" });
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "active");
+  await watchAction(f, "watch.cancel", { watchId: input.watchId });
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "cancelled");
+  assert.ok(reads >= 3, "start, observation and resume each reauthorize the source");
+});
+
+test("Colleague starts and controls the current browser Learning watch through the original watch actions", async t => {
+  const f = await fixture(t, [], { watching: true });
+  const attemptId = "33333333-3333-4333-8333-333333333333";
+  f.service.registerConversationSource("learning-task", async watch => {
+    watch.learningTask = { ...watch.learningTask, pin: { topicHash: "a".repeat(64), lessonHash: "b".repeat(64) },
+      progress: { revision: 4, passedAssessmentIds: ["explain"], remainingAssessmentIds: [],
+        latest: { assessmentId: "explain", outcome: "passed", recordedAt: "2026-10-12T22:00:00.000Z" } } };
+    return { status: "working", runId: attemptId, revision: "4",
+      messages: [{ id: "learning:4", role: "assistant", text: "Current task." }] };
+  });
+  const focus = { projectSlug: "alpha", sessionId: "learning-3", pane: "lessons",
+    learningAttemptId: attemptId, learningView: "learning" };
+  const learningTask = { attemptId, projectSlug: "alpha", sessionId: "learning-3",
+    conversationId: "learning-main", learningClientId: "learning-client" };
+  await f.service.focus({ clientId: "browser-learning", focus, learningTask }, f.context);
+  const assistantContext = { ...f.context, colleague: { clientId: "browser-learning" } };
+  const startDefinition = createColleagueActions(f.service)
+    .find(action => action.id === "vibe64.colleague.learning-watch.start");
+  assert.notEqual(startDefinition.extensions.assistant.exclude, true, "the existing start action is discoverable by Colleague");
+  const started = await f.actions.execute({ actionId: startDefinition.id,
+    input: { watchId: "agent-learning-watch", criterion: "Explain the visible result." }, context: assistantContext });
+  assert.equal(started.watch.status, "active");
+  assert.equal(started.watch.learningTask.attemptId, attemptId);
+  assert.equal(started.watch.projectSlug, "alpha");
+  assert.deepEqual(started.watch.assessmentEvidence, { available: true, supportsRequestedOutcome: true,
+    assessmentId: "explain", outcome: "passed", recordedAt: "2026-10-12T22:00:00.000Z" });
+  assert.equal(JSON.stringify(started).includes("learning-client"), false, "transient browser bindings stay private");
+  await f.actions.execute({ actionId: "vibe64.colleague.watch.pause",
+    input: { watchId: "agent-learning-watch" }, context: assistantContext });
+  await f.actions.execute({ actionId: "vibe64.colleague.watch.cancel",
+    input: { watchId: "stale-learning-watch" }, context: assistantContext });
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "paused", "a stale ID cannot affect the current watch");
+  await f.actions.execute({ actionId: "vibe64.colleague.watch.resume",
+    input: { watchId: "agent-learning-watch" }, context: assistantContext });
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "active");
+  await assert.rejects(f.actions.execute({ actionId: startDefinition.id,
+    input: { watchId: "missing-browser-watch", criterion: "Observe this." },
+    context: { ...f.context, colleague: { clientId: "missing-browser" } } }), /Open the exact Learning task/);
+  f.context.requestMeta.request.vibe64User.uid = 99;
+  await assert.rejects(f.actions.execute({ actionId: startDefinition.id,
+    input: { watchId: "other-account-watch", criterion: "Observe this." }, context: assistantContext }), /Open the exact Learning task/);
+  f.context.requestMeta.request.vibe64User.uid = 42;
+  await f.actions.execute({ actionId: "vibe64.colleague.watch.cancel",
+    input: { watchId: "agent-learning-watch" }, context: assistantContext });
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "cancelled");
+  assert.equal(f.observations.starts.length, 0, "watch controls never create mutation-capable model work");
+});
+
+test("learning-task watches pause when their browser leaves or the server restarts", async t => {
+  const f = await fixture(t, [], { watching: true });
+  const attemptId = "22222222-2222-4222-8222-222222222222";
+  f.service.registerConversationSource("learning-task", async watch => {
+    watch.learningTask = { ...watch.learningTask, pin: { topicHash: "a".repeat(64), lessonHash: "b".repeat(64) },
+      progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: [] } };
+    return { status: "working", runId: attemptId, revision: "1", messages: [{ id: "learning:1", role: "assistant", text: "Baseline." }] };
+  });
+  const focus = { projectSlug: "", sessionId: "learning-2", pane: "lessons",
+    learningAttemptId: attemptId, learningView: "learning" };
+  await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+  await f.service.startLearningWatch({ watchId: "learning-watch-2", browserClientId: "browser-learning",
+    learningClientId: "main-learning", attemptId, projectSlug: "", sessionId: "learning-2",
+    conversationId: "learning-main", criterion: "Explain the current lesson." }, f.context);
+  await f.service.focus({ clientId: "browser-learning", focus: { projectSlug: "other", sessionId: "session-3", pane: "preview" } }, f.context);
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "paused");
+  assert.match((await f.service.read({}, f.context)).watches[0].error, /left this Learning task/);
+  await f.service.focus({ clientId: "browser-learning-2", focus }, f.context);
+  await f.service.resumeWatch({ watchId: "learning-watch-2", browserClientId: "browser-learning-2",
+    learningClientId: "main-learning-2" }, f.context);
+  await f.service.close();
+  const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const saved = JSON.parse(await readFile(savedPath, "utf8"));
+  saved.watches[0].status = "pending";
+  saved.watches[0].availability = "active";
+  saved.watches[0].pendingGuidance = { guidanceId: "learning-guidance-retained", evidenceKey: "retained", evidence: {
+    outcome: "confirmed", control: "view-change", origin: "view",
+    workspace: { projectSlug: "", sessionId: "learning-2", pane: "lessons", ready: true, learningView: "learning" }
+  } };
+  saved.observations = [{ id: "pending-learning-observation", watchId: "learning-watch-2" }];
+  await writeFile(savedPath, JSON.stringify(saved));
+  const restored = await fixture(t, [], { systemRoot: f.root, watching: true });
+  const restarted = await restored.service.read({}, restored.context);
+  assert.equal(restarted.watches[0].status, "paused");
+  assert.equal(restarted.watches[0].availability, "unavailable");
+  assert.match(restarted.watches[0].error, /server restarted/);
+  assert.equal(restored.observations.starts.length, 0, "a retained pending observation cannot survive restart");
+  assert.equal(JSON.stringify(JSON.parse(await readFile(savedPath, "utf8"))).includes("learning-guidance-retained"), false,
+    "a retained pending Main notification cannot survive restart");
+});
+
 test("a registered workspace conversation reuses code polling while the user keeps talking without any project", async (t) => {
   const f = await fixture(t, [reply("We can keep discussing your idea."), reply("A repair proposal needs your confirmation.")], { watching: true, watchPollMs: 15 });
   registerWorkspaceConversation(f);
@@ -1534,6 +1759,9 @@ test("catalogue discovery retains its loaded contract across native model exchan
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["discovered"]);
   assert.equal(f.observations.starts[2].result.ok, true);
+  assert.equal(final.operation.actionId, "vibe64.test.operate");
+  assert.equal(final.operation.label, "Test operate");
+  assert.equal(final.operations.length, 1, "catalogue lookup mechanics are not presented as product operations");
 });
 
 for (const engine of ["codex", "claude"]) {
@@ -1700,7 +1928,11 @@ test("restart during tool execution retains uncertainty instead of resuming the 
   const restored = await fixture(t, [], { systemRoot: f.root });
   const result = await restored.service.read({}, restored.context);
   assert.equal(result.status, "interrupted");
+  assert.ok(result.operation, JSON.stringify({ status: result.status, error: result.error }));
   assert.equal(result.operation.status, "unknown");
+  assert.equal(result.operation.actionId, "vibe64_test_operate");
+  assert.equal(result.operation.label, "Unfinished application operation");
+  assert.equal(result.operation.canPrepareRetry, false);
   assert.match(result.error, /Inspect unfinished operations/);
   assert.equal(result.messages.at(-1).text, "Ready");
   assert.deepEqual(restored.observations.starts, []);
@@ -1764,6 +1996,76 @@ test("project navigation carries bounded panes and exact conversation targets, w
   assert.deepEqual(await pending, { ok: false, error: "The selected conversation changed before it opened." });
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
+});
+
+test("Learning navigation retains exact mode, pane and attempt until its initiating browser confirms them", async t => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  for (const input of [
+    { projectSlug: "practice", learningMode: true },
+    { learningMode: true, learningView: "workspace", projectSlug: "practice", sessionId: "lesson-session" },
+    { projectSlug: "practice", learningMode: true, learningView: "learning" },
+    { projectSlug: "practice", learningMode: true, learningView: "learning", learningContent: "picker", sessionId: "lesson-session" },
+    { projectSlug: "practice", learningMode: false, learningView: "learning", learningContent: "picker" }
+  ]) {
+    assert.equal((await execute(input)).ok, false);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  const input = { learningMode: true, learningView: "workspace", learningTargetAttemptId: attemptId,
+    projectSlug: "practice", sessionId: "lesson-session", pane: "database", databaseView: "erd" };
+  const pending = execute(input);
+  let state;
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation?.status === "pending") break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(state.navigation.learningAttemptId, attemptId);
+  for (const key of Object.keys(input).filter(key => key !== "learningTargetAttemptId")) assert.equal(state.navigation[key], input[key]);
+  for (const focus of [
+    { ...input, pane: "database", databaseScreen: "workspace", learningView: "learning" },
+    { ...input, pane: "database", databaseScreen: "workspace", learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+    { ...input, pane: "database", databaseScreen: "workspace", databaseView: "overview" }
+  ]) {
+    assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
+      ok: true, focus }, f.context)).ok, false);
+  }
+  const { learningTargetAttemptId: _learningTargetAttemptId, ...focusInput } = input;
+  const focus = { ...focusInput, learningAttemptId: attemptId, databaseScreen: "workspace" };
+  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
+    ok: true, focus }, f.context)).ok, true);
+  assert.deepEqual(await pending, { ok: true, focus });
+
+  const picker = execute({ projectSlug: "practice", learningMode: true, learningView: "learning", learningContent: "picker" });
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation?.status === "pending" && state.navigation.learningContent === "picker") break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  const pickerFocus = { projectSlug: "", sessionId: "", conversationId: "", pane: "lessons",
+    learningMode: true, learningView: "learning", learningContent: "picker" };
+  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
+    ok: true, focus: pickerFocus }, f.context);
+  assert.deepEqual(await picker, { ok: true, focus: pickerFocus });
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.mutations, []);
+
+  const leave = execute({ projectSlug: "practice", learningMode: false });
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation?.status === "pending" && state.navigation.learningMode === false) break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  const workingFocus = { projectSlug: "practice", sessionId: "lesson-session", conversationId: "",
+    pane: "preview", learningMode: false };
+  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
+    ok: true, focus: { ...workingFocus, learningView: "workspace" } }, f.context)).ok, false);
+  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
+    ok: true, focus: workingFocus }, f.context)).ok, true);
+  assert.deepEqual(await leave, { ok: true, focus: workingFocus });
 });
 
 test("lesson presentation navigation waits for the exact player completion in its initiating browser", async t => {
@@ -2186,6 +2488,7 @@ test("first Colleague setup rejects without admission and retries the same autho
     const failed = await f.service.wait(f.context);
     assert.equal(failed.status, "failed");
     assert.equal(failed.error, rejected.error);
+    assert.equal(failed.modelSetupRequired, true);
     assert.deepEqual(failed.messages, []);
     assert.equal(f.observations.creates, 0);
     assert.equal(f.observations.starts.length, 0);
@@ -2198,6 +2501,7 @@ test("first Colleague setup rejects without admission and retries the same autho
     } else assert.equal(accepted.ok, true);
     const finished = await f.service.wait(f.context);
     assert.equal(finished.status, "ready", finished.error);
+    assert.notEqual(finished.modelSetupRequired, true);
     assert.deepEqual(finished.messages.filter(message => message.role === "user").map(({ id, text }) => ({ id, text })),
       [{ id: messageId, text }]);
     assert.equal(f.observations.starts.length, 1);
@@ -4303,7 +4607,7 @@ test("Colleague native socket loss settles its accepted turn and a new request n
     assert.deepEqual(f.observations.mutations, []);
     const trace = await f.native.trace();
     const starts = trace.filter(row => row.method === "turn/start");
-    assert.equal(starts.length, 1);
+    assert.equal(starts.length, 1, failed.error);
     assert.deepEqual(completedColleagueNativeInputs(trace)[0].data.userMessages.map(message => message.messageId), ["user-1"]);
     const lost = trace.find(row => row.socketClosed).socketClosed;
     assert.equal(lost.threadId, starts[0].params.threadId);
@@ -4993,7 +5297,7 @@ test("R11 migrated current successor refuses a changed native account without an
 // Synthetic no-effect action bodies let the original policy's search/contract/
 // execution paths be exercised without inventing a second catalogue or teacher.
 for (const autonomous of [false, true]) {
-  test(`Colleague supervisor excludes all eight teacher actions from ${autonomous ? "autonomous" : "interactive"} discovery and execution`, async t => {
+  test(`Colleague supervisor excludes every teacher action from ${autonomous ? "autonomous" : "interactive"} discovery and execution`, async t => {
     const { TRAINING_TEACHER_ACTION_IDS } = await import("../../packages/vibe64-training/src/server/teachingRole.js");
     const tool = (toolName, input) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(input) });
     // Search plus two calls for each of four IDs stays within the original
@@ -6056,6 +6360,7 @@ test("native completed Colleague unknown effect retains the original receipt thr
   await f.send("Do it once");
   const failed = await f.service.wait(f.context);
   assert.equal(failed.status, "failed");
+  assert.ok(failed.operation, JSON.stringify({ status: failed.status, error: failed.error }));
   assert.equal(failed.operation.status, "unknown");
   assert.deepEqual(f.observations.mutations, ["once"]);
   const trace = await f.native.trace();

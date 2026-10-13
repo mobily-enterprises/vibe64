@@ -79,7 +79,46 @@ function createTrainingPresentationActions({ learners, content } = {}) {
       }
     }
   }, { learningAccess: ["snapshot", "cue-read"].includes(operation) ? "observe" : "write" });
+  const view = withVibe64ActionContext({
+    id: "vibe64.training.view.open", version: 1, kind: "command", idempotency: "none",
+    input: { mode: "create", schema: createSchema({ attemptId: fields.attemptId,
+      target: { type: "string", required: true, enum: ["workspace-preview", "workspace-erd", "learning"] } }) },
+    output: null,
+    extensions: { assistant: { output,
+      description: "As the bound Main teacher, reveal this learner's exact retained lesson workspace or Learning pane. workspace-preview shows the normal app Preview, workspace-erd shows Dashboard → Database → ERD, and learning returns to this active lesson's existing content/player. Supply only the bound attemptId; Vibe64 derives its project/session and initiating browser. This does not start, resume, end or grade a lesson, and its acknowledged navigation is demonstration rather than learner evidence. A source-less lesson can only show learning. Wait for the actual settled receipt before describing a view as visible." } },
+    async execute(input, context) {
+      const actor = authenticatedVibe64User(context);
+      if (!actor) throw Object.assign(new Error("Sign in before navigating a lesson workspace."), { statusCode: 401, code: "vibe64_auth_required" });
+      const coordinator = requireTrainingMainTeacher(context, ["requirePresentationAttempt", "navigateLearningView"]);
+      try {
+        const mainScope = await coordinator.requirePresentationAttempt(input.attemptId);
+        const saved = await learners.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
+        const attempt = saved.active;
+        if (attempt?.attemptId !== input.attemptId || !isDeepStrictEqual(mainScope.pin, attempt.pin) ||
+            (mainScope.noExercise !== true && (mainScope.noExercise !== false ||
+              attempt.preparation.phase !== "ready" || !attempt.preparation.initialSessionId ||
+              attempt.projectSlug !== mainScope.projectSlug || attempt.preparation.initialSessionId !== mainScope.sessionId))) {
+          throw Object.assign(new Error("Use the signed-in learner's current prepared exercise project and exact attempt."), {
+            code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH", statusCode: 409
+          });
+        }
+        if (mainScope.noExercise && input.target !== "learning") {
+          throw Object.assign(new Error("This source-less lesson has no project workspace to display."), {
+            code: "VIBE64_TRAINING_WORKSPACE_UNAVAILABLE", statusCode: 409
+          });
+        }
+        const result = await coordinator.navigateLearningView(input.target, context);
+        if (Buffer.byteLength(JSON.stringify(result)) > 16 * 1024) {
+          throw Object.assign(new Error("The navigation receipt exceeds its limit; no state was silently omitted."), {
+            code: "VIBE64_TRAINING_PRESENTATION_RESULT_TOO_LARGE"
+          });
+        }
+        return result;
+      } catch (cause) { throw operationError(cause); }
+    }
+  }, { projectScoped: false, learningAccess: "write" });
   return Object.freeze([
+    view,
     definition("open", {}, "As the Main teacher, show one declared visual in this learner's selected lesson Presentation, only after a teaching request or accepted offer. Supply exact attemptId and visualId from the saved lesson and teaching brief; Vibe64 derives the current Main conversation and browser. No-exercise lessons need no project. Unsupported practice presentation must be reported truthfully. Wait for the original player's ready receipt before describing it as visible. App preview stays mounted. This does not play narration, grade an answer or prove a transition completed."),
     definition("command", { commandId: identity, name: identity, parameters: { type: "object", required: false, additionalProperties: true } },
       "As the Main teacher, pilot a declared lesson diagram command with its exact visual/attempt and command ID; Vibe64 derives the current conversation and browser. Reuse that ID with identical parameters for an uncertain retry; never guess a different command or re-open to replay. The initiating browser must have this visual selected. Wait for completed, not accepted, before describing the visual result. This receipt does not prove narration finished or grant an assessment pass."),

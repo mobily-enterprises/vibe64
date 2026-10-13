@@ -112,8 +112,8 @@
           v-if="dashboardProjectActive"
           class="studio-ai-sessions__dashboard-empty-pane"
         >
-          <TrainingPreviewPresentation v-if="props.purposeFilter === 'learning'" :active="props.active" lessons-available :app-available="false" project-slug="" session-id="">
-            <template #lessons><slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" /></template>
+          <TrainingPreviewPresentation v-if="props.purposeFilter === 'learning'" :active="props.active" learning-pane-active :workspace-active="false" lessons-available :app-available="false" project-slug="" session-id="">
+            <template #lessons><slot name="learning" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" /></template>
           </TrainingPreviewPresentation>
           <slot v-else name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
         </div>
@@ -177,6 +177,7 @@
         :prompt-hint-policy="promptHintPolicy"
         :project-pane="projectPane"
         :lessons-available="props.purposeFilter === 'learning'"
+        :learning-view="props.learningView"
         :toolbar-sessions="toolbar.sessions"
         :refresh-repository-state="toolbar.refreshRepositoryState"
         @busy-change="setRuntimeBusy"
@@ -192,6 +193,12 @@
           <slot
             name="dashboard"
             :dashboard-context="{ ...(dashboardSlotProps?.dashboardContext || {}), sessionToolbar: toolbar }"
+          />
+        </template>
+        <template #learning="learningSlotProps">
+          <slot
+            name="learning"
+            :dashboard-context="{ ...(learningSlotProps?.dashboardContext || {}), sessionToolbar: toolbar }"
           />
         </template>
       </Vibe64SessionRuntimeHost>
@@ -274,12 +281,25 @@ function selectLearningConversation({ sessionId, attemptId, learnerId } = {}) {
   sessionData.selectSessionId(sessionId);
   return sessionData.selectedSessionId.value === sessionId;
 }
+function showLearningPicker() {
+  if (props.purposeFilter !== "learning") return false;
+  sessionData.selectSessionId("");
+  return sessionData.selectedSessionId.value === "";
+}
+const learningSelection = computed(() => {
+  const row = sessionData.selectedSession.value;
+  return props.purposeFilter === "learning" && row?.purpose === "learning" && row.learningAttemptId
+    ? Object.freeze({ sessionId: row.sessionId, attemptId: row.learningAttemptId,
+      learnerId: sessionData.learningLearnerId.value, projectSlug: row.projectSlug || "" }) : null;
+});
 const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 const learningPracticeChoices = computed(() => props.purposeFilter === "learning" && sessionData.learningLearnerId.value
   ? sessionData.availableSessions.value.filter(row => row.purpose === "learning" && row.noExercise === false &&
       row.projectSlug && row.learningAttemptId && row.archived !== true)
     .map(row => Object.freeze({ sessionId: row.sessionId, attemptId: row.learningAttemptId,
       learnerId: sessionData.learningLearnerId.value, projectSlug: row.projectSlug })) : []);
+const learningWorkspaceAvailable = computed(() => props.purposeFilter === "learning" &&
+  sessionData.selectedSession.value?.noExercise === false && Boolean(sessionData.selectedSession.value?.projectSlug));
 function selectLearningPracticeProject(choice, event) {
   const actual = learningPracticeChoices.value.find(row => ["sessionId", "attemptId", "learnerId", "projectSlug"]
     .every(key => row[key] === choice?.[key]));
@@ -293,8 +313,10 @@ function selectLearningPracticeProject(choice, event) {
   }
   return selected;
 }
-defineExpose({ selectLearningConversation, selectLearningPracticeProject,
-  get learningPracticeChoices() { return learningPracticeChoices.value; } });
+defineExpose({ selectLearningConversation, selectLearningPracticeProject, showLearningPicker,
+  get learningSelection() { return learningSelection.value; },
+  get learningPracticeChoices() { return learningPracticeChoices.value; },
+  get learningWorkspaceAvailable() { return learningWorkspaceAvailable.value; } });
 
 async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
   const response = await toolbar.createSession?.(assistantSelection, options);

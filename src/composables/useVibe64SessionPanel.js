@@ -43,6 +43,11 @@ const vibe64SessionPanelProps = {
     default: null,
     type: Object
   },
+  learningView: {
+    default: "workspace",
+    type: String,
+    validator: value => ["workspace", "learning"].includes(value)
+  },
   purposeFilter: {
     default: "",
     type: String,

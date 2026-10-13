@@ -1097,7 +1097,9 @@ it("projects actual source availability without suppressing suspended Working co
   expect(presentation).toContain(':app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"');
   expect(presentation).toContain(':learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"');
   expect(presentation).toContain(':attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"');
-  expect(presentation).toContain('<template #lessons>');
+  expect(presentation).toContain(':learning-pane-active="learningPaneActive"');
+  expect(presentation).toContain(':workspace-active="normalWorkspaceActive && props.projectPane === \'preview\'"');
+  expect(presentation).toContain('<template #lessons><slot name="learning"');
   expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Lessons"');
   expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
 });

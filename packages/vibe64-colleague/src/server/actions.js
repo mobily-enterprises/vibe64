@@ -10,6 +10,22 @@ const integrationEnvironment = { type: "string", required: false, enum: ["develo
 const databaseView = { type: "string", required: false, enum: ["overview", "erd", "data"] };
 const databaseTable = { ...text, noTrim: true, minLength: 1 };
 const planView = { type: "string", required: false, enum: ["default", "current", "history"] };
+const learningMode = { type: "boolean", required: false };
+const learningView = { type: "string", required: false, enum: ["workspace", "learning"] };
+const learningContent = { type: "string", required: false, enum: ["picker", "active"] };
+const learningAttemptId = { ...text, maxLength: 36,
+  pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
+const learningTargetAttemptId = { ...learningAttemptId };
+const learningPollingTask = { type: "object", required: false, schema: createSchema({
+  attemptId: { ...learningAttemptId, required: true },
+  projectSlug: { ...text, required: true, maxLength: 128 },
+  sessionId: { ...text, required: true, minLength: 1, maxLength: 128 },
+  conversationId: { ...text, required: true, minLength: 1, maxLength: 256 },
+  learningClientId: presentationClientId,
+  topicHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  lessonHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  reference: { ...trainingQuestionField, required: false }
+}) };
 const focusSchema = createSchema({
   ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
   integrationId,
@@ -23,7 +39,11 @@ const focusSchema = createSchema({
   lessonAttemptId: { ...text, maxLength: 36 }, lessonVisualId: { ...text, maxLength: 64 },
   lessonPlayerPhase: { type: "string", required: false, enum: ["loading", "ready", "accepted", "completed", "failed", "closed"] },
   lessonVisualState: { ...text, maxLength: 64 },
-  lessonCuePhase: { type: "string", required: false, enum: ["armed", "awaiting-audio", "awaiting-continue", "playing", "completed", "interrupted", "failed"] }
+  lessonCuePhase: { type: "string", required: false, enum: ["armed", "awaiting-audio", "awaiting-continue", "playing", "completed", "interrupted", "failed"] },
+  learningMode,
+  learningAttemptId,
+  learningView,
+  learningContent
 });
 const focusField = { type: "object", schema: focusSchema, required: false };
 const navigationOutput = {
@@ -44,7 +64,36 @@ const watchFields = {
   condition: { type: "string", enum: ["reply", "finished", "attention"], required: true },
   question: { ...text, maxLength: 1000, required: true }, once: { type: "boolean", required: false }
 };
-const watchSchema = createSchema({ ...watchFields, source: text, status: { ...text, required: true }, error: { ...text, maxLength: 512 } });
+const watchSchema = createSchema({ ...watchFields, source: text, status: { ...text, required: true }, error: { ...text, maxLength: 512 },
+  availability: { type: "string", required: false, enum: ["active", "paused", "unavailable"] },
+  learningTask: { type: "object", additionalProperties: true, required: false },
+  latestObservation: { type: "object", additionalProperties: true, required: false },
+  lastGuidance: { type: "object", additionalProperties: true, required: false },
+  assessmentEvidence: { type: "object", additionalProperties: true, required: false } });
+const learningWatchFields = {
+  watchId: clientId, browserClientId: { ...clientId, required: false }, learningClientId: { ...clientId, required: false },
+  attemptId: { ...text, required: false, maxLength: 36 },
+  targetProjectSlug: { ...text, required: false, maxLength: 128 },
+  sessionId: { ...text, required: false, minLength: 1, maxLength: 128 },
+  conversationId: { ...text, required: false, minLength: 1, maxLength: 256 },
+  topicHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  lessonHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  reference: trainingQuestionField,
+  criterion: { ...text, maxLength: 2000 }
+};
+const learningObservationFields = {
+  watchId: clientId, learningClientId: clientId, eventId: clientId,
+  outcome: { type: "string", required: false, enum: ["confirmed", "failed"] },
+  failure: { type: "string", required: false,
+    enum: ["workspace-settle-failed", "exercise-observation-failed"] },
+  control: { type: "string", required: true,
+    enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response", "view-change"] },
+  workspace: { type: "object", required: true, schema: createSchema({
+    projectSlug: { ...text, required: true, maxLength: 128 },
+    sessionId: { ...text, required: true, maxLength: 128 }, pane: { ...text, required: true, maxLength: 64 },
+    ready: { type: "boolean", required: true }, learningView: { type: "string", required: true, enum: ["workspace", "learning"] }
+  }) }
+};
 const watchOutput = { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
   watch: { type: "object", schema: watchSchema, required: false },
   watches: { type: "array", items: watchSchema, required: false } }) };
@@ -118,7 +167,8 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       conversationId: clientId, beforeTurnId: { ...clientId, required: false },
       limit: { type: "integer", min: 1, max: 100, required: false }
     }, (input, context) => colleague.readHistoryPage(input, context)),
-    definition("focus.update", { clientId, focus: { ...focusField, required: true } }, (input, context) => colleague.focus(input, context)),
+    definition("focus.update", { clientId, focus: { ...focusField, required: true }, learningTask: learningPollingTask },
+      (input, context) => colleague.focus(input, context)),
     definition("message.send", {
       clientId, focus: focusField, trainingQuestion: trainingQuestionField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,
@@ -128,7 +178,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     definition("turn.stop", { expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.stop(input, context)),
     definition("model.select", { ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.selectModel(input, context)),
     definition("watches.read", {}, (input, context) => colleague.listWatches(input, context), {
-      description: "List your conversation watches and their active, pending, delivered, paused or cancelled status. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
+      description: "List your conversation and Learning watches. For a Learning watch, report its exact goal and target, active/paused/unavailable state, latest valid observation with observedAt freshness, last delivered guidance, and saved assessment outcome when present. An observation or guidance receipt is not assessment evidence and does not prove the requested outcome. Paused reads need attention; silence does not prove an agent or learner is blocked.", output: watchOutput
     }),
     definition("assignments.read", { assignmentId: { ...clientId, required: false } }, (input, context) => colleague.assignment("read", input, context), {
       alwaysAvailable: true,
@@ -189,20 +239,31 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       description: "Watch a Main or temporary conversation using code, without repeated model calls. Supply exact project/session IDs and optional temporary conversationId, a unique watchId (reuse it on retry), and the user's question. reply reports the next completed visible response, including commentary while a goal continues; a response may be progress rather than the requested answer, so report its actual meaning and continuing work honestly. finished reports work ending; attention reports explicit failures, interruptions or structured input requests, not inferred inactivity. Partial tokens, thinking and tool output do not count as replies. All conditions also report failures. once defaults to true. If a response already exists, report it immediately. Watches only authorize reporting, never further coding or stopping agents. Assignment follow-through uses its own retained watches and completion guards.", output: watchOutput
     }, true),
     definition("watch.cancel", { watchId: clientId }, (input, context) => colleague.cancelWatch(input, context), {
-      description: "Cancel your watch by its watchId. Does not stop the watched coding agent.", output: watchOutput
+      description: "Stop the exact watch by its watchId. For Learning this is the same Stop operation as the visible watch controls. It stops observation and pending guidance only; it does not stop the application, Main teacher, lesson or coding agent.", output: watchOutput
     }),
-    definition("watch.resume", { watchId: clientId }, (input, context) => colleague.resumeWatch(input, context), {
-      description: "Resume a paused watch, checking current access and reconciling changes since its last observation.", output: watchOutput
+    definition("watch.pause", { watchId: clientId }, (input, context) => colleague.pauseWatch(input, context), {
+      description: "Pause the exact active watch without losing its last observation cursor. For Learning this is the same Pause operation as the visible watch controls.", output: watchOutput
     }),
+    definition("watch.resume", { watchId: clientId, browserClientId: { ...clientId, required: false },
+      learningClientId: { ...clientId, required: false } }, (input, context) => colleague.resumeWatch(input, context), {
+      description: "Resume the exact paused watch, checking current access and reconciling changes since its last observation. A Learning watch resumes only from its exact current task in this connected browser; omit browser-only IDs when acting for the person.", output: watchOutput
+    }),
+    definition("learning-watch.start", learningWatchFields, (input, context) => colleague.startLearningWatch({ ...input,
+      projectSlug: input.targetProjectSlug }, context), {
+      description: "Start watching the exact Learning task currently open in this connected browser, using the same watch record and controls as Start polling in the UI. Use a unique watchId and, when there is no delivered lesson question, one bounded criterion copied from the person's requested goal. Omit browser and target identity fields: the server derives them from the current trusted Learning binding and revalidates the saved attempt. Start only for a direct request such as ‘Watch me while I do this’ or an accepted offer; a how-to question only needs an explanation. This grants observation and bounded guidance only, never source/Git/publication, paid-provider, account or unrelated mutation authority. Use watches.read for truthful status and watch.pause/watch.resume/watch.cancel for the same visible lifecycle.",
+      output: watchOutput
+    }),
+    definition("learning-watch.observe", learningObservationFields, (input, context) => colleague.observeLearningTask(input, context), { exclude: true }),
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
       error: { ...text, maxLength: 2000 }, focus: focusField, presentation: presentationReceipt,
       cue: presentationCueReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
+      learningMode, learningView, learningContent, learningTargetAttemptId,
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }
     }, (input, context) => colleague.navigate(input, context), {
-      description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. Without pane or sessionId, opens Preview. With sessionId and no pane, reveals the selected coding chat; an explicit pane reveals that project view, including on compact screens. settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. To open the native Plan and history dialog, supply planView=default and exact projectSlug/sessionId, with no pane or conversationId. This reveals Main chat and uses the button default: Current plan when one exists, otherwise History. planView=current or history selects that tab explicitly. Wait for planView in the browser acknowledgement; missing plans/history or failed loading return an error. Opening never creates, approves, archives or executes a plan. For Database, supply databaseView=overview, erd or data with pane=database and sessionId to select its real view; acknowledgement waits for that workspace to load. Overview is the default when no view is specified. Data can perform its normal initial table read, and retains existing SQL drafts; this does not run authored SQL or expose schema/rows to you. To open one exact table in Data, also supply databaseTable with its fully qualified name and databaseView=data. The workspace performs its normal read only on a first visit, preserves mounted per-table drafts and results, and rejects missing tables or a busy query. The acknowledgement proves table selection, not successful query execution. Table selection lasts in the mounted workspace; reload uses the ordinary initial table. Delegate table identification or SQL/schema investigation to a coding agent when the exact name is unknown. A temporary conversation also requires sessionId. For Integrations, supply pane=integrations and integrationEnvironment=development or production; development requires sessionId, while production uses the published application without a development session. Add integrationId to select one exact slot. An integrationId without integrationEnvironment retains development selection. Wait for the actual loaded panel. Missing slots fail. Provider consent remains the person's action there; opening a slot does not complete consent or prove a connection. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened.",
+      description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. Without pane or sessionId, opens Preview. With sessionId and no pane, reveals the selected coding chat; an explicit pane reveals that project view, including on compact screens. settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. Learning mode is only a display/navigation request: learningMode=true requires learningView. learningView=workspace requires the exact active lesson project/session and learningTargetAttemptId, and opens the requested normal pane; use pane=preview for its app or pane=database plus databaseView=erd for its ERD. learningView=learning requires learningContent=picker or active. picker shows the existing lesson picker and accepts no attempt; active requires the exact saved learningTargetAttemptId and sessionId. learningMode=false leaves Learning without ending its attempt. These controls never start, resume, end, install or grade a lesson, and their acknowledgement is demonstration/navigation rather than learner evidence. To open the native Plan and history dialog, supply planView=default and exact projectSlug/sessionId, with no pane or conversationId. This reveals Main chat and uses the button default: Current plan when one exists, otherwise History. planView=current or history selects that tab explicitly. Wait for planView in the browser acknowledgement; missing plans/history or failed loading return an error. Opening never creates, approves, archives or executes a plan. For Database, supply databaseView=overview, erd or data with pane=database and sessionId to select its real view; acknowledgement waits for that workspace to load. Overview is the default when no view is specified. Data can perform its normal initial table read, and retains existing SQL drafts; this does not run authored SQL or expose schema/rows to you. To open one exact table in Data, also supply databaseTable with its fully qualified name and databaseView=data. The workspace performs its normal read only on a first visit, preserves mounted per-table drafts and results, and rejects missing tables or a busy query. The acknowledgement proves table selection, not successful query execution. Table selection lasts in the mounted workspace; reload uses the ordinary initial table. Delegate table identification or SQL/schema investigation to a coding agent when the exact name is unknown. A temporary conversation also requires sessionId. For Integrations, supply pane=integrations and integrationEnvironment=development or production; development requires sessionId, while production uses the published application without a development session. Add integrationId to select one exact slot. An integrationId without integrationEnvironment retains development selection. Wait for the actual loaded panel. Missing slots fail. Provider consent remains the person's action there; opening a slot does not complete consent or prove a connection. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened.",
       output: navigationOutput
     }, true),
     definition("navigation.open-management", {

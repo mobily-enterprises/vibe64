@@ -8,6 +8,7 @@
       :source-workspace-available="sourceWorkspaceAvailable"
       :output-workspace-available="outputWorkspaceAvailable"
       :lessons-available="props.lessonsAvailable"
+      :learning-view="props.learningView"
       :learning-attempt-id="learningAttemptId"
       :active="autopilotModeActive"
       :hidden-by-workspace-mode="Boolean(props.workspacePurpose && selection.selectedSession && !vibe64SessionMatchesPurpose(selection.selectedSession, props.workspacePurpose))"
@@ -80,6 +81,9 @@
           }"
         />
       </template>
+      <template #learning="learningSlotProps">
+        <slot name="learning" v-bind="learningSlotProps || {}" />
+      </template>
     </Vibe64AutopilotView>
 
     <Vibe64SessionRenewalDialog :renewal="dialogs.renewal" />
@@ -99,6 +103,10 @@ import {
 
 const props = defineProps({
   lessonsAvailable: Boolean,
+  learningView: {
+    default: "workspace",
+    type: String
+  },
   workspacePurpose: { default: "", type: String },
   refreshRepositoryState: {
     default: null,

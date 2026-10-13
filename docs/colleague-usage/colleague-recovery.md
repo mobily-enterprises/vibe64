@@ -55,6 +55,11 @@ operation ID and original annotation payload are retained; do not resend the
 uncertain AI message. Background refresh waits until this operation is resolved.
 A storage or retirement error leaves the current identity
 in place and reports the failure.
+If Vibe64 reports that saved Colleague history is invalid, it leaves the file
+unchanged instead of opening an empty replacement. The owner must restore or
+repair that saved file; then reopen or retry Colleague. A server restart is not
+required after the repair. A genuinely missing record opens as a new empty chat
+in memory and is not written merely by viewing it.
 An earlier history read cannot reopen the retained conversation after Start
 fresh succeeds. Return to the current chat; that read never resends its messages.
 Open **Previous conversations** to read the retained messages and pages. Scroll

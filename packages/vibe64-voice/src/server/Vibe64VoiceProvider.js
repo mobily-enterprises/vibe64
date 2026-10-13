@@ -4,19 +4,25 @@ import { ACTION_INSPECT_SESSION } from "@local/vibe64-sessions/server/actions";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./actions.js";
+
+function registerVoiceCatalogueRoute(fastify, actions) {
+  fastify.get("/api/vibe64/voice/voices", request => actions.execute({
+    actionId: ACTION_READ_VOICE_CATALOGUE,
+    input: {},
+    context: { channel: "api", surface: "app", requestMeta: { request } }
+  }));
+}
 
 const Vibe64VoiceProvider = defineFeature({
   id: "vibe64.voice",
+  actionDefaults: { channels: ["api", "internal"], surfaces: ["app"] },
   requires: { colleague: "vibe64.colleague", env: "runtime.env", fastify: "runtime.fastify", project: "vibe64.project", sessions: "vibe64.sessions" },
   provides: { voice: "vibe64.voice" },
   setup({ env, fastify, sessions }, { actionCatalogue }) {
     const config = { ...process.env, ...env };
     const proxyConfig = resolveVoiceProxyConfig({ endpoint: config.VIBE64_VOICE_ENDPOINT, accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE });
-    fastify.get("/api/vibe64/voice/voices", async request => {
-      await actionCatalogue.execute({ actionId: "vibe64.colleague.state.read", input: {},
-        context: { channel: "api", surface: "app", requestMeta: { request } } });
-      return readVoiceCatalogue(proxyConfig);
-    });
+    registerVoiceCatalogueRoute(fastify, actionCatalogue);
     function authorizeOrigin(request) {
       if (!isTrustedStudioWebSocketRequest(request)) throw Object.assign(new Error("Sign in to use voice."), { code: "voice_auth_required", statusCode: 403 });
     }
@@ -50,7 +56,13 @@ const Vibe64VoiceProvider = defineFeature({
           context: { channel: "api", surface: "app", requestMeta: { request } } });
       }
     });
-    return { voice: Object.freeze({ available: proxyConfig.available }) };
+    return { voice: Object.freeze({
+      available: proxyConfig.available,
+      readCatalogue: () => readVoiceCatalogue(proxyConfig)
+    }) };
+  },
+  actions({ voice }, { actionCatalogue }) {
+    return createVoiceActions({ actions: actionCatalogue, voice });
   }
 });
-export { Vibe64VoiceProvider };
+export { Vibe64VoiceProvider, registerVoiceCatalogueRoute };

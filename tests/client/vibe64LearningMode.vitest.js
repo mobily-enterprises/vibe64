@@ -45,15 +45,23 @@ afterEach(() => { app.unmount(); queryClient.clear(); configureHttpWebClient(ori
 
 it("uses original route flag and actor-scoped resources without requiring a project", async () => {
   expect(mode.learningMode.value).toBe(true);
+  expect(mode.learningView.value).toBe("workspace");
   expect(mode.purposeFilter.value).toBe("learning");
   expect(mode.learnerId.value).toBe("learner-owner");
   expect(read.mock.calls.map(([path]) => path)).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning"]);
+  await mode.setLearningView("learning");
+  expect(harness.replace).toHaveBeenLastCalledWith({ path: "/app", hash: "#preview",
+    query: { mode: "learning", session: "working-id", learningView: "learning" } });
+  expect(mode.learningView.value).toBe("learning");
   await mode.setLearningMode(false);
   expect(harness.replace).toHaveBeenCalledWith({ path: "/app", hash: "#preview", query: { session: "working-id" } });
+  expect(mode.learningView.value).toBe("workspace");
   expect(mode.purposeFilter.value).toBe("working");
   expect(mode.learningResource.data.value.learnerId).toBe("learner-owner");
   await mode.setLearningMode(true);
-  expect(harness.replace.mock.calls[1][0].query).toEqual({ session: "working-id", mode: "learning" });
+  expect(harness.replace).toHaveBeenLastCalledWith({ path: "/app", hash: "#preview",
+    query: { session: "working-id", mode: "learning" } });
+  await expect(mode.setLearningView("elsewhere")).rejects.toThrow("Open Learning mode");
 });
 
 it("hides old progress synchronously on account change and sign-out using real query observers", async () => {

@@ -238,9 +238,11 @@ VIBE64_VOICE_ACCESS_TOKEN_FILE; both stay server-side. A trusted browser origin
 and fresh target authorization are required before opening the upstream speech
 connection. Project routes resolve request context and require a successful exact
 session inspection; Colleague uses its ordinary authenticated state action without
-a project. The read-only `/api/vibe64/voice/voices` route uses that same state
-authorization and JSKIT's authenticated service catalogue reader without opening
-an audio connection. An unavailable service fails voice without adding inference privileges.
+a project. The read-only `/api/vibe64/voice/voices` route dispatches the
+canonical `vibe64.voice.catalogue.read` action. That owner preserves the same
+state authorization and calls JSKIT's authenticated service catalogue reader
+without opening an audio connection. An unavailable service fails voice without
+adding inference privileges.
 JSKIT bounds frames, queues and connection recovery. The host owns speech-service
 provisioning and credentials; Vibe64 does not download models on a browser request.
 

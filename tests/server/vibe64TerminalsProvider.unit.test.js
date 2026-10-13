@@ -520,3 +520,50 @@ test("original dormancy owner supplies internal close authority while an explici
     } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
   });
 });
+
+test("a partial project close restores Preview service admission after services drain", async () => {
+  await withTemporaryRoot(async (root) => {
+    const runtimeRoot = path.join(root, "runtime");
+    const targetRoot = path.join(root, "project");
+    await mkdir(targetRoot, { recursive: true });
+    const calls = [];
+    const projectServices = {
+      beginClose() { calls.push("begin-close"); },
+      async close() { calls.push("close"); },
+      async closeAll() {},
+      async ensure() {},
+      opened() { calls.push("opened"); }
+    };
+    const project = {
+      createSessionStore() { return {}; },
+      async createRuntime() {
+        return {
+          adapter: {},
+          projectConfig: {},
+          stateRoot: runtimeRoot,
+          async listSessions() { throw new Error("session inventory unavailable"); }
+        };
+      },
+      currentProjectRuntimeRoot() { return runtimeRoot; },
+      currentTargetRoot() { return targetRoot; },
+      async readCurrentProject() { return { slug: "project" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(_slug, operation) { return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    };
+    const dependencies = featureDependencies({
+      env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
+      project
+    });
+    const feature = createVibe64TerminalsFeature({ projectServices });
+    const outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      const result = await outputs.terminals.closeProjectRuntime({ reason: "test-partial-close" });
+      assert.equal(result.ok, false);
+      assert.match(result.failed[0].error, /session inventory unavailable/u);
+      assert.deepEqual(calls, ["begin-close", "close", "opened"]);
+    } finally {
+      await feature.shutdown(dependencies, { outputs, profile: "test" });
+    }
+  });
+});
