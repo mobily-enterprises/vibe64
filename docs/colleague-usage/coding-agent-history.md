@@ -40,6 +40,10 @@ unsent draft and selection remain intact. Updated or removed saved messages
 reflect the current conversation; live output does not replace its original
 question or progress.
 
+Older saved replies stay with their original question and timestamp when history
+is refreshed. They do not reappear as new replies below your latest request. Use
+**Load older messages** to read them in their original position.
+
 A reconnection starts with the latest page again. Use **Load older messages**
 to return farther back. A failed history refresh retains the visible messages;
 use the existing **Reload chat** recovery if shown. Access denial clears cached
