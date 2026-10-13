@@ -8,6 +8,7 @@ import {
 
 import {
   PROMPT_HINT_DEBOUNCE_MS,
+  PROMPT_HINT_MIN_INTERVAL_MS,
   PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT,
   normalizedPromptHintSuggestions,
   promptHintConversationFingerprint,
@@ -47,6 +48,7 @@ function createHints(overrides = {}, dependencies = {}) {
   };
   const scope = effectScope();
   const hints = scope.run(() => useVibe64PromptHints(state, {
+    minIntervalMs: 0,
     request: vi.fn(async () => ({
       status: "ready",
       suggestions: VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject
@@ -403,7 +405,7 @@ describe("useVibe64PromptHints", () => {
     }
   });
 
-  it("dismisses on Escape until a new focus cycle or completed turn", () => {
+  it("dismisses on Escape through focus changes until the draft or completed turn changes", () => {
     const { hints, scope } = createHints({ blankConversation: ref(true) });
 
     hints.focusComposer();
@@ -415,7 +417,7 @@ describe("useVibe64PromptHints", () => {
     expect(hints.visible.value).toBe(false);
     hints.blurComposer();
     hints.focusComposer();
-    expect(hints.visible.value).toBe(true);
+    expect(hints.visible.value).toBe(false);
 
     hints.dismissPromptHints();
     expect(hints.visible.value).toBe(false);
@@ -500,4 +502,35 @@ describe("useVibe64PromptHints", () => {
     expect(JSON.parse(fingerprint)).toHaveLength(PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT);
     expect(fingerprint).not.toContain("Old answer");
   });
+});
+
+
+it("uses a five-second pause and thirty-second generation interval without requests on refocus", async () => {
+  vi.useFakeTimers();
+  const request = vi.fn(async () => ({ status: "ready", suggestions: [promptHint("Next", "Next step")] }));
+  const { hints, scope, state } = createHints({}, { request, minIntervalMs: PROMPT_HINT_MIN_INTERVAL_MS });
+  try {
+    expect(PROMPT_HINT_DEBOUNCE_MS).toBe(5_000);
+    expect(PROMPT_HINT_MIN_INTERVAL_MS).toBe(30_000);
+    for (let i = 0; i < 10; i++) {
+      state.draft.value = `Draft ${i}`;
+      hints.focusComposer(); hints.blurComposer();
+      await vi.advanceTimersByTimeAsync(400);
+    }
+    expect(request).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    hints.dismissPromptHints();
+    hints.focusComposer(); hints.blurComposer(); hints.focusComposer();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    state.draft.value = "Newest draft";
+    await vi.advanceTimersByTimeAsync(24_599);
+    expect(request).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][1].body.draft).toBe("Newest draft");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(request).toHaveBeenCalledTimes(2);
+  } finally { scope.stop(); vi.useRealTimers(); }
 });

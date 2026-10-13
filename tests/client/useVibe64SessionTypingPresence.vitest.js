@@ -42,7 +42,6 @@ import {
 import {
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   VIBE64_SESSION_PRESENCE_DEBOUNCE_MS,
-  VIBE64_SESSION_PRESENCE_HEARTBEAT_MS,
   VIBE64_SESSION_PRESENCE_IDLE_MS
 } from "@local/vibe64-runtime/shared";
 
@@ -103,69 +102,59 @@ describe("useVibe64SessionTypingPresence", () => {
     scope.stop();
   });
 
-  it("debounces real input activity, heartbeats, and expires without sending draft text", async () => {
+  it("coalesces typing into five-second updates without idle heartbeats or draft text", async () => {
     const { presence, request, scope } = createPresence();
-    presence.noteInputActivity();
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS - 1);
-    expect(request).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
+    for (let second = 0; second < 5; second++) {
+      for (let key = 0; key < 20; key++) presence.noteInputActivity();
+      expect(request).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0]).toEqual([
-      "/api/vibe64/sessions/session-1/presence",
-      {
-        body: {
-          originId: expect.stringMatching(/^tab:/u),
-          sequence: expect.any(Number),
-          typing: true
-        },
-        method: "POST"
+      "/api/vibe64/sessions/session-1/presence", {
+        body: { originId: expect.stringMatching(/^tab:/u), sequence: expect.any(Number), typing: true },
+        method: "POST", timeoutMs: 5_000
       }
     ]);
-    const firstSequence = request.mock.calls[0][1].body.sequence;
-    expect(firstSequence).toBeGreaterThan(1_000_000_000_000);
     expect(JSON.stringify(request.mock.calls[0])).not.toContain("draft");
-
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_HEARTBEAT_MS);
-    expect(request.mock.calls[1][1].body).toMatchObject({
-      sequence: firstSequence + 1,
-      typing: true
-    });
-    await vi.advanceTimersByTimeAsync(
-      VIBE64_SESSION_PRESENCE_IDLE_MS -
-      VIBE64_SESSION_PRESENCE_DEBOUNCE_MS -
-      VIBE64_SESSION_PRESENCE_HEARTBEAT_MS
-    );
-    expect(request.mock.calls.at(-1)[1].body).toMatchObject({
-      sequence: firstSequence + 3,
-      typing: false
-    });
+    const sequence = request.mock.calls[0][1].body.sequence;
+    for (let second = 0; second < 5; second++) {
+      presence.noteInputActivity();
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][1].body.sequence).toBe(sequence + 1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(request).toHaveBeenCalledTimes(2);
     scope.stop();
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
-  it("blur, submit, session switch, inactivity and disposal clear the exact old origin", async () => {
+  it("blur, submit, session switch and disposal cancel pending updates without requests", async () => {
     const { presence, request, scope, state } = createPresence();
-    presence.noteInputActivity();
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
-    presence.blur();
-    expect(request.mock.calls.at(-1)[1].body.typing).toBe(false);
+    for (const stop of [presence.blur, presence.submit, () => { state.sessionId.value = "session-2"; }, () => scope.stop()]) {
+      presence.noteInputActivity();
+      await vi.advanceTimersByTimeAsync(4_999);
+      stop();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(request).not.toHaveBeenCalled();
+    }
+  });
 
+  it("does not overlap slow presence calls", async () => {
+    let resolve;
+    const request = vi.fn(() => new Promise(done => { resolve = done; }));
+    const { presence, scope } = createPresence({}, { request });
     presence.noteInputActivity();
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
-    presence.submit();
-    expect(request.mock.calls.at(-1)[1].body.typing).toBe(false);
-
-    presence.noteInputActivity();
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
-    state.sessionId.value = "session-2";
-    await nextTick();
-    expect(request.mock.calls.at(-1)[0]).toBe("/api/vibe64/sessions/session-1/presence");
-    expect(request.mock.calls.at(-1)[1].body.typing).toBe(false);
-
-    presence.noteInputActivity();
-    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(5_000);
+    for (let second = 0; second < 20; second++) {
+      presence.noteInputActivity();
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    expect(request).toHaveBeenCalledTimes(1);
+    resolve({ ok: true });
+    await vi.advanceTimersByTimeAsync(0);
     scope.stop();
-    expect(request.mock.calls.at(-1)[0]).toBe("/api/vibe64/sessions/session-2/presence");
-    expect(request.mock.calls.at(-1)[1].body.typing).toBe(false);
   });
 
   it("aggregates origins by actor, suppresses self, filters scope, and ignores stale expiry", async () => {
@@ -235,7 +224,7 @@ describe("useVibe64SessionTypingPresence", () => {
     await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
     expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-one", typing: true });
     conversationId.value = "temporary-two";
-    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-one", typing: false });
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-one", typing: true });
     expect(presence.typingLabel.value).toBe("");
     emitPresence(remotePayload({ conversationId: "temporary-one", sequence: 3 }));
     expect(presence.typingLabel.value).toBe("");
@@ -243,7 +232,7 @@ describe("useVibe64SessionTypingPresence", () => {
     await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
     expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-two", typing: true });
     scope.stop();
-    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-two", typing: false });
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-two", typing: true });
 
     const main = createPresence();
     emitPresence(remotePayload({ conversationId: "temporary-one" }));
@@ -253,7 +242,7 @@ describe("useVibe64SessionTypingPresence", () => {
     main.scope.stop();
   });
 
-  it("clears remote people on disconnect and renews local presence on reconnect", async () => {
+  it("clears remote people on disconnect without a request on reconnect", async () => {
     const { presence, request, scope } = createPresence();
     presence.noteInputActivity();
     await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
@@ -269,7 +258,7 @@ describe("useVibe64SessionTypingPresence", () => {
       handler();
     }
     expect(request.mock.calls.at(-1)[1].body).toMatchObject({
-      sequence: firstSequence + 1,
+      sequence: firstSequence,
       typing: true
     });
     scope.stop();

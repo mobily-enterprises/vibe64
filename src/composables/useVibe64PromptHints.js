@@ -17,7 +17,8 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-const PROMPT_HINT_DEBOUNCE_MS = 750;
+const PROMPT_HINT_DEBOUNCE_MS = 5_000;
+const PROMPT_HINT_MIN_INTERVAL_MS = 30_000;
 const PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT = 8;
 let promptHintOperationSequence = 0;
 
@@ -53,6 +54,7 @@ function useVibe64PromptHints({
   sessionsApiPath = ""
 } = {}, {
   debounceMs = PROMPT_HINT_DEBOUNCE_MS,
+  minIntervalMs = PROMPT_HINT_MIN_INTERVAL_MS,
   request = (path, options) => getHttpWebClient().request(path, options)
 } = {}) {
   const originId = vibe64BrowserTabOriginId();
@@ -73,6 +75,7 @@ function useVibe64PromptHints({
     ]),
     draft: computed(() => normalizedPromptHintDraft(readRefOrGetterValue(draft))),
     debounceMs,
+    minIntervalMs,
     onSelect,
     async generate({ draft: requestDraft, signal }) {
       const targetSession = currentSessionId.value;
@@ -119,6 +122,7 @@ function useVibe64PromptHints({
 
 export {
   PROMPT_HINT_DEBOUNCE_MS,
+  PROMPT_HINT_MIN_INTERVAL_MS,
   PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT,
   normalizedPromptHintSuggestions,
   promptHintConversationFingerprint,

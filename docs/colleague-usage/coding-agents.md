@@ -239,3 +239,29 @@ OpenCode keeps lesson progress and the final answer attached to the same accepte
 request after **Send** returns. A prepared lesson question is shown as delivered
 only when that request’s exact final answer is saved; a progress message alone
 does not confirm delivery.
+
+
+Typing and returning to the window do not refresh Colleague or goal status.
+Their existing live connection still delivers changes and reconciles after a
+reconnection. Typing indicators send one small update at most every five seconds
+while you type, containing no draft text. They expire within ten seconds of the
+last update; leaving the input sends no extra request.
+
+Prompt suggestions wait for five seconds without draft changes, and start no
+more than once every thirty seconds in the current view. Refocusing does not
+regenerate dismissed suggestions. Changing the draft can request new suggestions
+after those limits; unchanged input does not poll. You can keep writing and send
+without waiting for suggestions.
+
+An unconfirmed message has a warning outline and **Delivery unconfirmed** inside
+its own bubble, alongside the error and **Check delivery**. The notice belongs to
+those exact words; it does not describe the previous assistant reply. The layout
+is the same on desktop and phones.
+
+If **Check delivery** reports that delivery is still unknown, the old message
+remains visible. Once the conversation is ready, you can type and **Send** a
+different message. The uncertain message is not resent, and its same words remain
+blocked until its delivery is resolved. Active or unresolved server work still
+blocks continuation. Checking again reports the latest result rather than keeping
+an earlier connection error. Colleague can explain recovery; sending a new message
+or checking delivery remains your explicit action.

@@ -1282,6 +1282,7 @@ const updateHandledInRepair = computed(() => Boolean(
 const promptHintsBlankConversation = computed(() => chatTurns.value.length < 1);
 const promptHintsCanRequest = computed(() => Boolean(
   props.active &&
+  props.conversationRuntime?.canSubmit.value &&
   !props.conversationLog?.loading &&
   !props.conversationLog?.error &&
   !props.sessionSelectionArchived &&

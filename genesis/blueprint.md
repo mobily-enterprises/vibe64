@@ -943,6 +943,11 @@ Project settings keeps each form's controls, explanation and Save action togethe
 The layout adapts to the available pane width, with readable choices and a wide
 project-requirements editor that starts at six lines and grows with its content.
 Prompt suggestions have their own section, separate from collaboration guidance.
+They wait for a five-second typing pause and at least thirty seconds between
+new generations. Window focus alone does not refresh Colleague or goals. Typing
+indicators use small, coalesced five-second updates without sharing draft text.
+An unconfirmed message remains visible without trapping an otherwise ready chat:
+people can send different words while checking the earlier delivery separately.
 Collaborators use the same model routing as owners. When an assigned connection
 is owner-only, its compatible shared fallback supplies chat, Auto, review and
 helpers, including database and source explanations and prompt hints. Each

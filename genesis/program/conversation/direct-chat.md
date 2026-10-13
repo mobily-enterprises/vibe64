@@ -1869,7 +1869,7 @@ boundary; reads and pause/cancel remain available without inference admission.
 Native subscription allowance is owner-only. Passive goal and allowance lookup failures stay
 local to those controls and do not report an app-wide network outage.
 Both retain a 30-second read deadline. Goal status refreshes through the shared
-subscription, reconnect and focus; the separate plan allowance keeps its polling.
+subscription and reconnect; the separate plan allowance keeps its polling.
 Product account/routing and pinned-goal invalidations refresh that same goal owner.
 
 The shared command environment installs `vibe64-helper` beside the existing
@@ -2925,7 +2925,10 @@ Contextual prompt suggestions prioritize the current unsent draft, then recent
 visible user and assistant messages, grounded in the session's Blueprint. Newer
 user corrections supersede earlier plans. Suggestions should develop that
 intent without inventing requirements or repeating finished or declined work.
-The browser waits for a short typing pause, cancels superseded requests and
+The browser waits for a five-second typing pause and enforces a thirty-second
+minimum between generation starts. Unchanged drafts never poll, and focus does
+not regenerate dismissed hints. Unavailable submission suppresses suggestions.
+The browser cancels superseded requests and
 rejects late responses. Cancellation submits only its operation and browser
 origin, without resending the private draft. The HTTP route preserves omitted
 optional fields so action validation can admit that cancellation. Draft context
@@ -3849,3 +3852,19 @@ only the matching resource refetches through its original guarded endpoint
 observer. Working, other attempts, courses and absent queries are unchanged.
 Retired readers cannot invalidate a new actor’s progress. This adds no progress
 store, polling, admission or implicit lesson operation.
+
+
+### Idle continuation after an unknown browser receipt
+
+JSKIT retains the exact uncertain request and inspection-only recovery. Its shared
+transcript attaches the exact message-ID notice inside the user bubble, with
+Delivery unconfirmed, a warning outline and the error/inspection control. It
+suppresses only that matching standalone system status; unrelated system messages
+keep their established placement. A ready
+backend permits a different explicitly submitted message; the same uncertain ID
+or words cannot be submitted again. While the backend is active or unconfirmed,
+uncertainty still blocks followers. A queued follower whose predecessor becomes
+uncertain stays unsent. Unknown inspection replaces the stale transport error
+with the current recovery explanation. Drafts, attachments and old receipts stay
+separate. Goal refreshes follow initial state, native events and reconnects;
+window focus and visibility alone perform no goal read.

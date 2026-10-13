@@ -7,7 +7,6 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   VIBE64_SESSION_PRESENCE_DEBOUNCE_MS,
-  VIBE64_SESSION_PRESENCE_HEARTBEAT_MS,
   VIBE64_SESSION_PRESENCE_IDLE_MS
 } from "@local/vibe64-runtime/shared";
 import {
@@ -87,7 +86,6 @@ function useVibe64SessionTypingPresence({
 } = {}, {
   clearTimer = clearTimeout,
   debounceMs = VIBE64_SESSION_PRESENCE_DEBOUNCE_MS,
-  heartbeatMs = VIBE64_SESSION_PRESENCE_HEARTBEAT_MS,
   idleMs = VIBE64_SESSION_PRESENCE_IDLE_MS,
   now = () => Date.now(),
   request = (path, options) => getHttpWebClient().request(path, options),
@@ -97,13 +95,10 @@ function useVibe64SessionTypingPresence({
   const remoteEntries = shallowRef(new Map());
   const realtimeSocket = useRealtimeSocket({ required: false });
   let debounceTimer = null;
-  let heartbeatTimer = null;
-  let idleTimer = null;
+  let publishing = false;
   // The browser-tab origin survives reloads, so begin above any short-lived
   // server tombstone left by the previous page instance.
   let localSequence = Math.max(0, Math.floor(Number(now()) || 0));
-  let localTyping = false;
-  let typingContext = null;
 
   const currentContext = computed(() => Object.freeze({
     active: readRefOrGetterValue(active) !== false,
@@ -135,94 +130,35 @@ function useVibe64SessionTypingPresence({
   });
   const typingLabel = computed(() => typingPresenceLabel(typingPeople.value));
 
-  function clearScheduledTimer(name) {
-    const timer = name === "debounce"
-      ? debounceTimer
-      : name === "heartbeat"
-        ? heartbeatTimer
-        : idleTimer;
-    if (timer) {
-      clearTimer(timer);
-    }
-    if (name === "debounce") {
-      debounceTimer = null;
-    } else if (name === "heartbeat") {
-      heartbeatTimer = null;
-    } else {
-      idleTimer = null;
-    }
-  }
-
-  function requestPresence(typing, context = typingContext || currentContext.value) {
-    if (!context?.projectSlug || !context?.sessionId || !context?.sessionsApiPath) {
-      return;
-    }
+  function requestPresence() {
+    debounceTimer = null;
+    if (!eligible.value || publishing) return;
+    const context = currentContext.value;
     localSequence += 1;
+    publishing = true;
     void request(sessionPresencePath(context.sessionsApiPath, context.sessionId), {
       body: {
         ...(context.conversationId ? { conversationId: context.conversationId } : {}),
         originId,
         sequence: localSequence,
-        typing: typing === true
+        typing: true
       },
-      method: "POST"
-    }).catch(() => null);
+      method: "POST",
+      timeoutMs: 5_000
+    }).catch(() => null).finally(() => { publishing = false; });
   }
 
-  function scheduleHeartbeat() {
-    clearScheduledTimer("heartbeat");
-    if (!localTyping) {
-      return;
-    }
-    heartbeatTimer = setTimer(() => {
-      heartbeatTimer = null;
-      if (!localTyping || !eligible.value) {
-        stopTyping();
-        return;
-      }
-      requestPresence(true);
-      scheduleHeartbeat();
-    }, Math.max(1, Number(heartbeatMs) || VIBE64_SESSION_PRESENCE_HEARTBEAT_MS));
-  }
-
-  function startTyping() {
+  function stopTyping() {
+    clearTimer(debounceTimer);
     debounceTimer = null;
-    if (localTyping || !eligible.value) {
-      return;
-    }
-    typingContext = { ...currentContext.value };
-    localTyping = true;
-    requestPresence(true);
-    scheduleHeartbeat();
-  }
-
-  function stopTyping({ notify = true } = {}) {
-    clearScheduledTimer("debounce");
-    clearScheduledTimer("heartbeat");
-    clearScheduledTimer("idle");
-    if (localTyping && notify) {
-      requestPresence(false);
-    }
-    localTyping = false;
-    typingContext = null;
+    // Remote indicators expire locally; leaving the input sends no request.
   }
 
   function noteInputActivity() {
-    if (!eligible.value) {
-      return;
-    }
-    clearScheduledTimer("idle");
-    idleTimer = setTimer(() => {
-      idleTimer = null;
-      stopTyping();
-    }, Math.max(1, Number(idleMs) || VIBE64_SESSION_PRESENCE_IDLE_MS));
-    if (localTyping || debounceTimer) {
-      return;
-    }
-    debounceTimer = setTimer(
-      startTyping,
-      Math.max(0, Number(debounceMs) || 0)
-    );
+    if (!eligible.value || debounceTimer || publishing) return;
+    // Coalesce actual keystrokes into one update per five-second window.
+    // No heartbeat schedules another request when input has stopped.
+    debounceTimer = setTimer(requestPresence, Math.max(0, Number(debounceMs) || 0));
   }
 
   function clearRemotePresence() {
@@ -287,12 +223,6 @@ function useVibe64SessionTypingPresence({
     remoteEntries.value = next;
   }
 
-  function handleRealtimeConnect() {
-    if (localTyping && eligible.value) {
-      requestPresence(true);
-    }
-  }
-
   function handleRealtimeDisconnect() {
     clearRemotePresence();
   }
@@ -302,7 +232,6 @@ function useVibe64SessionTypingPresence({
     event: VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
     onEvent: ({ payload }) => applyRemotePresence(payload)
   });
-  realtimeSocket.on("connect", handleRealtimeConnect);
   realtimeSocket.on("disconnect", handleRealtimeDisconnect);
 
   watch(() => [
@@ -321,7 +250,6 @@ function useVibe64SessionTypingPresence({
   onScopeDispose(() => {
     stopTyping();
     clearRemotePresence();
-    realtimeSocket.off("connect", handleRealtimeConnect);
     realtimeSocket.off("disconnect", handleRealtimeDisconnect);
   });
 

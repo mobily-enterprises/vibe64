@@ -1832,8 +1832,8 @@ function createService({
           };
         }
         const runtime = await project.createRuntime({ inspectSource: false });
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
-        if (!vibe64SessionStatusIsOpen(session?.status)) {
+        const status = await runtime.store.readStatus(sessionId);
+        if (!vibe64SessionStatusIsOpen(status)) {
           return {
             ok: true,
             status: "unavailable"

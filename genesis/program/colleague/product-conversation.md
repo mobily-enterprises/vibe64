@@ -319,7 +319,8 @@ transcript, live updates and cancellation. Its model picker, watches, navigation
 receipts and custom toolbar remain product presentation. Text and voice retain
 one exact actor/conversation target. Live recording preview is applied after
 canonical delivery and cannot acknowledge an unaccepted message. Product reads
-refresh on invalidation, reconnect, opening and focus; no browser polling runs.
+refresh on invalidation, reconnect and opening; window focus performs no read
+and no browser polling runs.
 Application invalidation also reloads the existing shared conversation binding,
 so a worker's final ready state restores model and Stop controls after its
 earlier native-settled event. The canonical coalesced read retains the same
@@ -1141,3 +1142,9 @@ strict owner and do not produce a historical replacement or backup. Missing-mode
 inputs retain all qualified protocol and native proofs. Both old numbered script
 files remain unchanged; the shared owner fixes applicability without weakening
 continuity eligibility or modifying current chat/native state.
+
+
+Window focus does not refresh Colleague. Initial mounting, relevant realtime
+events, reconnects and explicit product operations retain their existing refresh
+paths. A ready conversation permits a different message after an unknown receipt;
+the unconfirmed message remains inspection-only and is never replayed implicitly.

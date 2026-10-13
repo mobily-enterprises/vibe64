@@ -28,7 +28,17 @@ If that save fails, retain the request and use **Check delivery** when offered;
 reply text alone is not confirmation. Ask the operator to restore storage if
 needed, or resolve the reported **Stop** failure before continuing. Recovery does
 not resend the uncertain message.
-If **Check delivery** still cannot confirm the message, **Start fresh** opens a
+The affected bubble shows **Delivery unconfirmed**, its error and **Check delivery**
+together inside a warning outline. It must not be read as a confirmed sent message
+or as an error belonging to the preceding reply.
+
+If **Check delivery** still cannot confirm the message but the conversation is
+ready, you can send a different message in the same chat. The unconfirmed message
+stays visible and is not resent. Its same words stay blocked until the outcome is
+known. Returning focus to the window makes no refresh request; the live connection
+still refreshes on relevant events and reconnects.
+
+Alternatively, **Start fresh** opens a
 confirmation. It retains the old conversation and unconfirmed words, starts a new
 chat without its old context, and resends nothing. Your model choice, watches and
 assignments stay in place; their coding agents keep running. Finish the current

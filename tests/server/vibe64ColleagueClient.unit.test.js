@@ -749,7 +749,12 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   }, module, module.exports);
   const previousWindow = globalThis.window;
   const previousConfig = globalThis.__JSKIT_CLIENT_APP_CONFIG__;
-  globalThis.window = { addEventListener() {}, removeEventListener() {}, sessionStorage };
+  const windowEvents = new EventTarget();
+  globalThis.window = {
+    addEventListener: windowEvents.addEventListener.bind(windowEvents),
+    removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+    dispatchEvent: windowEvents.dispatchEvent.bind(windowEvents), sessionStorage
+  };
   globalThis.__JSKIT_CLIENT_APP_CONFIG__ = {
     surfaceDefinitions: { app: { requiresWorkspace: false } },
     assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } }
@@ -1294,7 +1299,10 @@ test("Colleague reload restores the original uncertain tab record without resend
   assert.equal(restored.id, messageId);
   assert.equal(restored.status, "uncertain");
   assert.deepEqual(restored.payload, payload);
-  assert.equal(view.state.adapter.value.composer.canSend, false);
+  assert.equal(view.state.adapter.value.composer.canSend, true);
+  view.state.draft.value = payload.message;
+  assert.equal(view.state.adapter.value.composer.canSend, false, "The uncertain words cannot be resent");
+  view.state.draft.value = "Person A's typed draft";
   assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "restoration is not resend");
   viewer.value = { actorKey: "person-b" };
   await flush();
@@ -2350,4 +2358,23 @@ test("Colleague application completion refreshes its canonical ready state after
     url === "/api/assistant/app/conversations/conversation" && options.method === "GET").length, readsBefore + 1,
   "The existing application invalidation triggers one canonical read");
   assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "Completion never resends or starts work");
+});
+
+
+test("window focus and clicks never refresh Colleague while explicit refresh still works", async t => {
+  const requests = [];
+  const view = mount(t, async (url) => {
+    requests.push(url);
+    return { messages: [], status: "ready", error: "" };
+  });
+  await flush();
+  const before = requests.length;
+  for (let i = 0; i < 10; i++) {
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("click"));
+  }
+  await flush();
+  assert.equal(requests.length, before);
+  await view.state.refresh();
+  assert.ok(requests.length > before);
 });

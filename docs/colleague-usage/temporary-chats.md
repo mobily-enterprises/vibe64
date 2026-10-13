@@ -69,3 +69,10 @@ they do not add their exchanges to Main. A profile audit identifies the selected
 request, not independent proof of provider enforcement or successful completion.
 Wait for the task result before reporting success. No new user control or permission
 is introduced by restoring the server's original detached execution entry points.
+
+
+Typing indicators coalesce actual input into one small update at most every five
+seconds, without sending your draft. They expire within ten seconds of the last
+update. Blur, Send, switching chats and reconnecting send no additional typing
+request. Prompt suggestions wait for a five-second typing pause and at least
+thirty seconds between generations; refocusing does not generate new hints.

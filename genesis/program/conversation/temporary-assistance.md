@@ -374,13 +374,16 @@ failures retain the explicit retry action.
 Feature routes wait for response delivery, including asynchronous response hooks,
 so error codes and messages reach the client instead of an empty response.
 Typing presence reuses the session presence endpoint, realtime event, debounce,
-heartbeat and expiry with the saved conversation ID as an additional scope.
-The server takes the actor from authentication and checks that the chat belongs
-to this session. Main chat and other temporary chats ignore its typing events.
+and expiry with the saved conversation ID as an additional scope. Actual input
+is coalesced into at most one update per five seconds, with no autonomous heartbeat
+or overlapping requests. Requests have a five-second deadline.
+The server takes the actor from authentication, reads only session status and
+checks the saved chat record. It never loads agent runs, background tasks, chat
+history or a provider for presence. State remains bounded and in memory. Main chat and other temporary chats ignore its typing events.
 The shared composer status displays the person's name, or a count for several
 people, without receiving draft text through presence. Blur, Send, switching
-chats, hiding the workspace and disposal clear the old presence; reconnect
-refreshes it only while typing remains active. This indicator does not lock or
+chats, hiding the workspace and disposal cancel pending updates without requests.
+Remote indicators expire within ten seconds; reconnect sends no typing request. This indicator does not lock or
 merge simultaneous draft edits.
 Switching sessions preserves each session's selected temporary chat and draft.
 While mounted, each task tracks unread assistant text in browser-local state.

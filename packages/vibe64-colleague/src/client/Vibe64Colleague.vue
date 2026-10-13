@@ -625,7 +625,6 @@ onMounted(() => {
   if (colleagueBody) colleagueBody.value = bodyOwner;
   if (learnerGestures && !learnerGestures.value) learnerGestures.value = nativeGestureOwner;
   void refresh();
-  window.addEventListener("focus", refresh);
   window.addEventListener("blur", cancelAvatarPress);
   window.addEventListener("pagehide", cancelAvatarPress);
 });
@@ -640,7 +639,6 @@ onBeforeUnmount(() => {
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
   cancelAvatarPress();
   revision += 1;
-  window.removeEventListener("focus", refresh);
   window.removeEventListener("blur", cancelAvatarPress);
   window.removeEventListener("pagehide", cancelAvatarPress);
 });

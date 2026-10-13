@@ -292,9 +292,8 @@ test("typing presence trusts the authenticated request user and never accepts a 
     project: {
       async createRuntime() {
         return {
-          async getSession(sessionId) {
-            return { sessionId, status: "active" };
-          }
+          getSession() { throw new Error("Typing must not load full session or agent state"); },
+          store: { async readStatus() { return "active"; } }
         };
       }
     },
@@ -349,8 +348,9 @@ test("temporary typing presence requires a saved chat in the requested session",
     project: {
       async createRuntime() {
         return {
-          async getSession(sessionId) { return { sessionId, status: "active" }; },
+          getSession() { throw new Error("Typing must not load full session or agent state"); },
           store: {
+            async readStatus() { return "active"; },
             async readSessionConversation(sessionId, conversationId) {
               lookups.push([sessionId, conversationId]);
               return sessionId === "session-1" && conversationId === "saved-chat" ? { conversationId } : null;
