@@ -3,13 +3,25 @@ import { access, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import test from "node:test";
 
 import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
-import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import { vibe64Driver, vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 
 function context(conversationKind) {
   return { scope: "session", conversationKind, session: {
     managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true
   } };
 }
+
+test("installed host guidance reaches native instructions and stays absent on other hosts", async (t) => {
+  const registry = await createVibe64HostContextRegistry();
+  t.after(() => registry.close());
+  const guidance = "This VPS supports vibe64-local update; restore returns to Metal's deployed default.";
+  const hosted = { ...context("main"), hostGuidance: guidance };
+  await registry.register("hosted", hosted);
+  const resolved = await vibe64DriverInputFromRegistry({ data: { registryPath: registry.registryPath }, providerSessionId: "hosted", scope: "session" });
+  assert.equal(vibe64Driver(resolved).includes(guidance), true);
+  assert.equal(vibe64Driver(context("main")).includes("vibe64-local"), false);
+  assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(8193) }), /bounded text/);
+});
 
 test("Genesis hooks resolve concurrent native conversations without mixing their context", async (t) => {
   const registry = await createVibe64HostContextRegistry();

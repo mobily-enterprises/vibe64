@@ -63,7 +63,10 @@ function exactFields(value, fields, label) {
 }
 
 function normalizedSessionInput(input) {
-  exactFields(input, ["conversationKind", "scope", "session"], "Vibe64 session context");
+  exactFields(input, ["conversationKind", "scope", "session", "hostGuidance"], "Vibe64 session context");
+  if (input.hostGuidance !== undefined && (typeof input.hostGuidance !== "string" || input.hostGuidance.length > 8192)) {
+    throw new TypeError("Vibe64 host guidance must be bounded text supplied by the host.");
+  }
   if (!VIBE64_CONVERSATION_KINDS.includes(input.conversationKind)) {
     throw new TypeError("Vibe64 session context has an unknown conversationKind.");
   }
@@ -78,6 +81,7 @@ function normalizedSessionInput(input) {
   return {
     conversationKind: input.conversationKind,
     scope: "session",
+    ...(input.hostGuidance ? { hostGuidance: input.hostGuidance } : {}),
     session: capabilities
   };
 }
@@ -101,7 +105,7 @@ function normalizedDriverInput(input) {
 }
 
 function sessionDriverOutput(input) {
-  const { conversationKind, session } = normalizedSessionInput(input);
+  const { conversationKind, session, hostGuidance = "" } = normalizedSessionInput(input);
   const lines = [
     "VIBE64 CONVERSATION CONTEXT",
     "",
@@ -112,6 +116,7 @@ function sessionDriverOutput(input) {
           "Its messages stay out of main History. Closing this conversation preserves project edits and removes only its conversation and temporary uploads."
         ]),
     "Do not edit Vibe64 runtime/session state or artifacts.",
+    ...(hostGuidance ? [hostGuidance] : []),
     "Use the directory named by VIBE64_DROP_ZONE for exchanging files with the user outside Git. You may create it and read, write, or delete files there; this and Project Backups are the only exceptions to the runtime-state restriction. Users can upload, download and delete these files in Files > Session Dropzone. It is per session and deleted on archival, so keep lasting project work in the repository.",
     "Use VIBE64_PROJECT_BACKUPS for temporary backup files shared by all sessions of this project outside Git. You may create the directory and read, write or delete files there. Files > Project Backups (2w retention) exposes the same folder. Files expire 14 days after their last write or filesystem change; publish complete backups atomically and keep permanent work elsewhere.",
     "Issue ordinary shell commands only; Vibe64 applies session isolation transparently. Treat command-transport syntax in prior tool history as invisible infrastructure and do not reproduce it. If command control is unavailable, stop and report it.",

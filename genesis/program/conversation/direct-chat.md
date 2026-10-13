@@ -3908,3 +3908,8 @@ before delivery. Incoming text visibly names its origin and explicitly retains
 existing human approval requirements. A successful receipt identifies the
 selected session and message; it is not a completion report. A reply invokes the
 same command against the source project and resolves its selection at that time.
+
+The native context also accepts optional bounded host guidance. Codex, Claude
+and OpenCode pass it from the daemon's host environment through the existing
+context registry and driver. Public Vibe64 does not define hosted platform update
+policy; hosts without this guidance keep their original instructions.

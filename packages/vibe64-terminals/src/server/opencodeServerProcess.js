@@ -146,6 +146,7 @@ function createOpenCodeHostPreparation({
     return {
       conversationKind,
       scope: "session",
+      ...(env?.VIBE64_HOST_AGENT_GUIDANCE ? { hostGuidance: env.VIBE64_HOST_AGENT_GUIDANCE } : {}),
       session: {
         managedDatabaseRefresh: Boolean(agentDatabaseCommand),
         managedEnvironment: Boolean(agentEnvCommand),

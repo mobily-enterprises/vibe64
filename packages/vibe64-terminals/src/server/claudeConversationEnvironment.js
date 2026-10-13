@@ -24,6 +24,7 @@ function createClaudeConversationEnvironment({
     return {
       scope: "session",
       conversationKind: entry.main ? "main" : "temporary",
+      ...(env?.VIBE64_HOST_AGENT_GUIDANCE ? { hostGuidance: env.VIBE64_HOST_AGENT_GUIDANCE } : {}),
       session: {
         managedGit: Boolean(codexGitCommand),
         managedEnvironment: Boolean(agentEnvCommand),
