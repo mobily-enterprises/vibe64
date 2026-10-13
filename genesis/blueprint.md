@@ -1825,3 +1825,8 @@ and reconciles successful Retry receipts so stale error controls do not remain.
 
 Main and Temporary chat present timestamped messages in chronological order,
 including replies streamed while follow-up questions are sent.
+
+With the person’s authorization, an assistant can send another open project a
+message. Its selected session receives it in Main chat. Closed projects and
+missing selections produce errors. Assistants can reply with progress or a
+published version; these messages preserve existing permissions.

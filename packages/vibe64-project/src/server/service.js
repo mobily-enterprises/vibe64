@@ -1231,12 +1231,14 @@ function createService({
   }
 
   async function runInProjectContext(slug = "", operation, {
-    allowDeleting = false
+    allowDeleting = false,
+    vibe64User = null
   } = {}) {
     return runWithResolvedProjectRequestContext({
       projectContext: studioProjectContext,
       request: {
         allowDeleting,
+        vibe64User,
         params: {
           slug
         }

@@ -960,6 +960,8 @@ resource edits refreshes facts without restarting the native conversation.
 
 ## Sources
 
+- `packages/vibe64-terminals/src/server/projectMessage.js`
+
 - `tests/server/agentSessionCommand.unit.test.js`
 
 - `tests/client/useVibe64AssistantAccessCache.vitest.js`
@@ -3890,3 +3892,19 @@ The shared transcript interleaves timestamped messages across saved and native
 streaming turns, including steering messages sent during a native turn. Equal
 timestamps retain source order and undated notices keep their original slots.
 Reasoning groups form after ordering; canonical turn IDs and storage remain intact.
+
+## Messages between projects
+
+`vibe64-helper session message-project <project> <message> [message-id]` uses the
+existing bound session command socket. `agentSessionCommand.js` supplies the
+server-owned source project/session and admitted actor; `projectMessage.js`
+resolves the destination's current selected session and sends through ordinary
+Main admission/steering and receipts. There is no separate inbox or queue for
+closed projects. Learning sessions cannot use this command.
+
+Hosted admission re-reads the actor and checks destination project access. A
+closed/closing project, absent selected session or unavailable assistant fails
+before delivery. Incoming text visibly names its origin and explicitly retains
+existing human approval requirements. A successful receipt identifies the
+selected session and message; it is not a completion report. A reply invokes the
+same command against the source project and resolves its selection at that time.

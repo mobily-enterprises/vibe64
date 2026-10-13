@@ -1,4 +1,5 @@
 import http from "node:http";
+import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -70,7 +71,7 @@ const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
-// This capability permits session status, rename and role-checked plan commands. It
+// This capability permits session status, rename, project messages and role-checked plan commands. It
 // does not expose the shell-execution token stripped from managed child commands.
 const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
 
@@ -204,13 +205,14 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | rename "Name"';
+const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> <message> [message-id]';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
 }
 const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
-if (!status && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+const messageProject = args[0] === "message-project" && [3, 4].includes(args.length) && args[1].trim() && args[2].trim();
+if (!status && !messageProject && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
 }
@@ -219,10 +221,10 @@ try {
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
     throw new Error("Session control is unavailable. Reconnect the assistant.");
   }
-  const body = JSON.stringify({ name: args[1], token: control.token, sessionId: control.sessionId, generationId: control.generationId });
+  const body = JSON.stringify({ name: args[1], projectSlug: args[1], message: args[2], messageId: args[3], token: control.token, sessionId: control.sessionId, generationId: control.generationId });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
-      socketPath: control.socketPath, method: "POST", path: status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
+      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -236,7 +238,7 @@ try {
     request.end(body);
   });
   if (result.ok !== true) throw new Error(result.error || "The session command failed.");
-  console.log(JSON.stringify(status ? result : { sessionName: result.sessionName }));
+  console.log(JSON.stringify(status || messageProject ? result : { sessionName: result.sessionName }));
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
@@ -434,10 +436,11 @@ async function ensureAgentSessionCommandServer({
             message: "Vibe64 session command input is too large."
           }
         });
+        const isProjectMessage = request.url === "/agent-session-command/message-project";
         const isRename = request.url === "/agent-session-command/rename";
         const isPlan = request.url === "/agent-session-command/plan";
         const isStatus = request.url === "/agent-session-command/status";
-        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus ? renameToken : token) &&
+        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus || isProjectMessage ? renameToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -445,6 +448,11 @@ async function ensureAgentSessionCommandServer({
             reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
           }
           sendJsonCommandResponse(response, 403, responseError("Vibe64 session command identity is invalid.", "vibe64_agent_session_command_identity_invalid"));
+          return;
+        }
+        if (isProjectMessage) {
+          const result = await commandService.messageProject(sessionId, input);
+          sendJsonCommandResponse(response, vibe64StatusCode(result), result);
           return;
         }
         if (isRename) {
@@ -532,6 +540,7 @@ async function ensureAgentSessionCommandServer({
 }
 
 function createAgentSessionCommandService({
+  sendProjectMessage = null,
   reportWorkflowOutcome = null,
   logger = null,
   projectService,
@@ -570,6 +579,8 @@ function createAgentSessionCommandService({
       );
     }
     const binding = {
+      actor: currentProjectRequestContext()?.vibe64User || null,
+      learning: Boolean(currentProjectRequestContext()?.learningScope),
       projectContextRoot: normalizedProjectContextRoot(project),
       projectSlug,
       wrapperHostDir: path.resolve(normalizedWrapperHostDir)
@@ -628,6 +639,21 @@ function createAgentSessionCommandService({
         descriptor,
         project,
         sourceRoot: path.resolve(sourceRoot)
+      });
+    });
+  }
+
+  async function messageProject(sessionId, input) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      if (binding.learning || typeof sendProjectMessage !== "function") {
+        throw vibe64Error("Project messaging is unavailable in this session.", "vibe64_project_message_unavailable");
+      }
+      const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
+      return sendProjectMessage({
+        projectSlug: normalizeText(input.projectSlug), message: normalizeText(input.message),
+        messageId: normalizeText(input.messageId) || randomUUID(),
+        sourceProject: binding.projectSlug, sourceSession: sessionId,
+        actor: routing?.submittedBy || binding.actor
       });
     });
   }
@@ -907,6 +933,7 @@ function createAgentSessionCommandService({
     bindSession,
     closeAllForSession,
     renameSession,
+    messageProject,
     sessionStatus,
     managePlan,
     run

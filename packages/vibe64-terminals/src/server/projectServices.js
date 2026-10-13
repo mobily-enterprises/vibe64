@@ -157,7 +157,12 @@ function createProjectServices({
     const failures = results.filter(({ status }) => status === "rejected").map(({ reason }) => reason);
     if (failures.length) throw new AggregateError(failures, "Project service shutdown failed.");
   }
-  return { ensure, beginClose, opened, close, closeAll };
+  function assertOpen(context) {
+    if (projectState(context).status !== "open") {
+      throw new Error("The destination project is closing or closed. Reopen it before sending.");
+    }
+  }
+  return { ensure, beginClose, opened, close, closeAll, assertOpen };
 }
 
 export { createProjectServices };

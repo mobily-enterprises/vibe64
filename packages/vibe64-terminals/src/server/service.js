@@ -91,6 +91,8 @@ import {
 } from "./codexScopedConversationPreparation.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { vibe64Error } from "@local/vibe64-core/server/core";
+import { sendProjectMessage } from "./projectMessage.js";
 import { createProjectServices } from "./projectServices.js";
 import {
   actorHomeEnv,
@@ -1048,6 +1050,10 @@ function createService({
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
     resolveAssistantUser: async (user) => user || currentProjectRequestContext()?.vibe64User || null,
+    authorizeProjectMessage: async (actor) => {
+      if (env.VIBE64_INSTANCE) throw new Error("The hosted project message access check is unavailable.");
+      return actor;
+    },
     resolveConnection: async () => null,
     updateModelAccess: null
   };
@@ -1135,6 +1141,24 @@ function createService({
     projectService
   });
   const agentSessionCommand = createAgentSessionCommandService({
+    sendProjectMessage: input => sendProjectMessage(input, {
+      projectService,
+      authorize: (actor, slug) => assistantRuntime.authorizeProjectMessage(actor, slug),
+      assertOpen: () => projectServices.assertOpen(projectRuntimeContext()),
+      send: async (sessionId, message, options) => {
+        const access = await service.inspectAssistantAccess(sessionId, options);
+        if (access.available !== true || access.canUse !== true) {
+          throw vibe64Error(access.disabledReason || "The selected session has no available assistant.", "vibe64_project_message_assistant_unavailable");
+        }
+        const { runtime: openState } = await currentProjectRuntimeOpenState();
+        projectServices.assertOpen(projectRuntimeContext());
+        const selected = await options.runtime.store.readCurrentSession();
+        if (!openState.open || selected?.sessionId !== sessionId) {
+          throw vibe64Error("The destination closed or its selected session changed. Check it before sending again.", "vibe64_project_message_destination_changed");
+        }
+        return service.sendAgentMessage(sessionId, message, options);
+      }
+    }),
     reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
     logger,
     publishSessionChanged: publishAgentSessionChanged,
@@ -2522,6 +2546,7 @@ function createService({
         "listConnections",
         "readAssistantAccess",
         "resolveAssistantUser",
+        "authorizeProjectMessage",
         "resolveConnection",
         "updateModelAccess"
       ]) {
