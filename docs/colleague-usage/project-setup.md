@@ -20,6 +20,31 @@ The existing source and Git history are retained. If preparation fails, read the
 reported step and use the offered retry after addressing its cause. Do not apply
 a starter over an existing repository to repair it.
 
+### Preview accounts for an imported application
+
+If the application has login-protected pages, the coding agent should initiate
+preview-access setup during import. It asks which **existing development
+accounts** represent an administrator and other roles you need to inspect, and
+which should be the default. Supply an email, login or user ID, not a password.
+The agent should reuse answers you already gave and wait for your choices.
+Choosing a name such as “admin” does not grant that account administrator rights.
+
+The coding agent can implement the application's Preview identity adapter after
+you accept that work. To configure named accounts, open **Dashboard > App access**
+and use **Managed app access > Add identity**. Enter **Name**, **App identifier**
+and **Application value**, choose **Make default** if needed, then **Save**.
+On mobile, use **Show project** to reach Dashboard. Colleague can explain these
+fields and, when asked, save the supported identity settings; application code
+work belongs to the coding agent.
+
+Once the adapter is ready, choose the configured name from Preview's application
+identity menu and verify the expected access. Saving the list alone does not
+prove the account exists or authentication works. A missing or disabled account
+needs a corrected existing account selection; import does not create users,
+change roles or reset passwords. If you postpone this setup, the agent should
+leave authenticated preview access explicitly pending and continue other setup
+work. Public applications and non-web projects do not need preview accounts.
+
 ## New project
 
 1. Open the project and create or select its coding session. At **What would you

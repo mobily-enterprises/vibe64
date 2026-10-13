@@ -65,6 +65,14 @@ test("onboarding tools share action authority and return bounded setup choices w
     const purpose = "A Python CLI that checks invoices.\nRun it from a terminal.";
     response = await read({ purpose });
     assert.deepEqual(response.setupRequests[1], { kind: "adopt", ...projectOnboardingRequest("adopt", { purpose }) });
+    for (const request of response.setupRequests) {
+      assert.match(request.message, /If this application has authenticated web pages/);
+      assert.match(request.message, /Ask which existing development users/);
+      assert.match(request.message, /wait for the user's choices/);
+      assert.match(request.message, /do not ask for passwords/);
+      assert.match(request.message, /Do not create users, change roles/);
+      assert.match(request.message, /public or non-web projects do not need identity setup/);
+    }
     assert.equal(calls.every(({ input }) => !input.message), true, "inspection never sends an agent request");
     result.inspection = { state: "attention", nextAction: "update-genesis", templateEligible: false,
       diagnostics: Array.from({ length: 11 }, () => ({ code: "FORMAT_NEWER", message: "F".repeat(600), contents: "private-diagnostic" })) };

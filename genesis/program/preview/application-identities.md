@@ -17,8 +17,20 @@ users without turning that convenience into a production sign-in mechanism.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `src/components/studio/PreviewIdentitySettings.vue`
+- `packages/vibe64-project/src/shared/onboardingRequest.js`
+- `packages/vibe64-genesis/src/server/promptContext.js`
 
 ## Public contract
+
+Existing-project adoption and inspection requests initiate the identity
+conversation for authenticated web applications. Managed-preview session guidance
+also covers an existing project whose login blocks inspection. The agent reuses
+known answers, asks for existing development account selectors and their intended
+roles/default, and waits before configuring access. It offers the existing
+application-owned adapter and App access settings rather than demanding passwords.
+Public/non-web projects need no identity setup; deferral remains explicit while
+independent setup proceeds. Account names and the Vibe64 viewer grant no roles,
+and configured selectors still require rendered authentication/access evidence.
 
 Managed app access stores named selectors in `.vibe64/preview-identities.json`
 inside the exact selected source, so session changes follow ordinary Save.

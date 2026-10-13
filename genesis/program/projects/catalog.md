@@ -154,6 +154,11 @@ source without a completed Genesis description asks what the project does;
 current described projects show their outputs; outdated or incomplete Genesis
 configuration shows the specific repair needed. Missing Genesis files never
 authorize overwriting an existing application.
+Both existing-project setup requests ask the coding agent to initiate Preview
+identity setup when the application has authenticated web pages. Account and role
+choices come from the person before configuration, with prior answers reused;
+the request neither supplies credentials nor authorizes creating users or changing
+roles. Public/non-web projects skip this, and a deferred choice stays pending.
 Opening inspections and their refresh subscriptions run only for the visible
 Preview in an active session. Hiding Preview keeps already-rendered outputs
 mounted and running; returning refreshes inspection through the same resource.

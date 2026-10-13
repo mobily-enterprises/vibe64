@@ -220,6 +220,12 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /`\[1\] Question`/u);
   assert.match(session, /`Possible answers:`/u);
   assert.match(session, /vibe64-helper preview status/u);
+  assert.match(session, /when its login blocks Preview inspection/u);
+  assert.match(session, /vibe64-helper preview browser identity <configured-name>/u);
+  assert.match(session, /wait for their choices before configuring access/u);
+  assert.match(session, /Do not create users, change roles, reset passwords/u);
+  assert.match(session, /per-run enable flag and secret/u);
+  assert.match(session, /continue independent setup work/u);
   assert.match(session, /vibe64-helper --help/u);
   assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
   assert.match(session, /vibe64-helper env status/u);
@@ -231,7 +237,7 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.doesNotMatch(vibe64Driver({
     conversationKind: "main", scope: "session",
     session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false }
-  }), /vibe64-helper github/u);
+  }), /vibe64-helper github|preview-identity\.command\.v1/u);
   assert.match(session, /data-overview\.json/u);
   assert.match(session, /vibe64-helper database overview --json/u);
   assert.match(session, /Preserve authored groupings, classify new tables/u);
