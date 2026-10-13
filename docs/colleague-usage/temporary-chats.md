@@ -50,7 +50,7 @@ If a send fails before admission, **Retry** sends the original message with its
 original settings and files. Anything you typed or attached afterward stays in
 the composer. Accepted files leave the composer; later attachments remain.
 
-If a message shows **Check delivery**, use that control with the original message.
+If a message shows **Retry**, use that control with the original message.
 It checks whether that exact message reached the selected chat; it does not send
 the work again. A visible message can still be awaiting confirmation. If the
 connection cannot read the native receipt, keep the chat and retry the check

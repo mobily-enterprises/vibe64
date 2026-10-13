@@ -123,7 +123,7 @@ for that access read; this does not retain permission for a later request. A cha
 lesson pin or installed exercise remains an error, and historical reading does
 not permit new practice work. A confirmed preparation refusal before admission keeps the
 message failed; after preparation is ready, use its **Retry** once to send the same
-saved request. If delivery is unconfirmed, use **Check delivery**; an unknown result
+saved request. If delivery is unconfirmed, use **Retry**; an unknown result
 is not permission to resend. If setup has finished but the lesson still shows
 preparing, use **Resume** for that saved lesson to confirm its preparation; do not
 start a replacement or change its pin.

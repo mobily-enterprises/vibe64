@@ -16,7 +16,7 @@ After recovery is confirmed:
 1. Reload the page and reopen the same project, session and Main chat.
 2. Read the saved reply and status. Reopening does not send another request.
 3. Select **Send** with a new continuation when ready. If an earlier request has
-   unknown delivery, use its existing **Check delivery** before deciding to resend.
+   unknown delivery, use its existing **Retry** before deciding to resend.
 
 These steps are the same on desktop and phone. Changing accounts or models is
 not a substitute for checking an uncertain request. Keep the intended account and

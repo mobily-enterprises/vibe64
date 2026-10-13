@@ -589,7 +589,7 @@ Explanations appear as Status messages in chat. Real blockers and explicit pause
 leave Waiting at the retained stage; clarifications and status questions do not
 abandon ongoing review. Two turns without reported progress or eight automatic
 steps wait for inspection and Resume workflow. Stop suppresses late automatic
-work. Recovery never replays a sent message: Check delivery checks its original
+work. Recovery never replays a sent message: Retry checks its original
 receipt, and interrupted scheduling after restart requires Resume workflow.
 A failed unsent handoff can be replaced by a new request without claiming its work
 completed. Hosted continuation rechecks the original submitting user's access and
@@ -1565,9 +1565,11 @@ and reconnect, then retries any remaining assistant-operation contention
 automatically. This expected wait shows no error and needs no Try again.
 Genuine load failures remain visible and retryable.
 Main and temporary chats keep an ordinary send pending until delivery is confirmed.
-An interrupted attempt shows “Delivery unconfirmed” with Check delivery, which
-checks the original receipt without sending another copy. Only confirmed failures
-offer Retry, Edit and Cancel. Confirmed teaching preparation refusals before
+An interrupted attempt shows compact red error text and Retry inside its message.
+Retry keeps the original identity: Main resubmits through the existing coordinator
+when no matching route is recorded; an attempted native dispatch checks its receipt
+without sending another copy. Only confirmed failures offer Edit and Cancel.
+Confirmed teaching preparation refusals before
 admission keep the original request available for Retry after preparation is ready;
 unknown delivery checks do not authorize another send. A late receipt clears stale delivery warnings.
 

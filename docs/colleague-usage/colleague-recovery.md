@@ -15,8 +15,8 @@ follow-up does not stop the native conversation or put its internal tool respons
 into your message bubble. Microphone and spoken-reply settings stay independent.
 
 If the first message needs model setup, the draft stays in the message box.
-Complete that setup, then send it again. If delivery is uncertain, use **Check
-delivery** before retrying; reconnecting does not automatically send it twice.
+Complete that setup, then send it again. If delivery is uncertain, **Retry**
+checks its original receipt; reconnecting does not automatically send it twice.
 If inspection proves that the native request was never admitted, the bubble
 changes from unconfirmed to failed and sending becomes available again. Its words
 and your newer draft stay intact. Use **Edit** to move those words into the
@@ -24,15 +24,15 @@ composer, or **Cancel** to remove the failed bubble; nothing sends automatically
 After changing models, send those words as a new message rather than using the
 old bubble's **Retry**, which keeps its original native identity.
 With OpenCode, a reply can appear before Vibe64 saves delivery confirmation.
-If that save fails, retain the request and use **Check delivery** when offered;
+If that save fails, retain the request and use **Retry** when offered;
 reply text alone is not confirmation. Ask the operator to restore storage if
 needed, or resolve the reported **Stop** failure before continuing. Recovery does
 not resend the uncertain message.
-The affected bubble shows **Delivery unconfirmed**, its error and **Check delivery**
-together inside a warning outline. It must not be read as a confirmed sent message
-or as an error belonging to the preceding reply.
+The affected bubble shows its error in small red text with **Retry**. It must
+not be read as a confirmed sent message or as an error belonging to the preceding
+reply.
 
-If **Check delivery** still cannot confirm the message but the conversation is
+If **Retry** still cannot confirm the message but the conversation is
 ready, you can send a different message in the same chat. The unconfirmed message
 stays visible and is not resent. Its same words stay blocked until the outcome is
 known. Returning focus to the window makes no refresh request; the live connection

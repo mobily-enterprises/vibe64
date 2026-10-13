@@ -21,7 +21,7 @@ Auto shows Working, Waiting or Complete with a separate Planning, Implementation
 or Review stage. Senior continues unfinished review or saves necessary in-scope
 rework for Junior, then reviews again. Deslop controls cleanup, not whether review
 runs. Waiting retains the stage: use **Resume workflow** when the blocker is
-resolved, or **Check delivery** for an uncertain message. Stop remains respected.
+resolved, or **Retry** for an uncertain message. Stop remains respected.
 See [plans and workflow recovery](plans.md) for the full steps.
 
 Open **AI Accounts** in Management. No project or coding session is required.

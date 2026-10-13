@@ -167,6 +167,14 @@ function mountMainConversationLog({ render = false } = {}) {
 }
 
 describe("Vibe64 direct session view", () => {
+  it("routes attached delivery checks through Main's existing recovery handler", () => {
+    const main = mountMainConversationLog();
+    try {
+      main.state.adapter.value.actions.checkDelivery("uncertain-message");
+      expect(main.emit).toHaveBeenCalledExactlyOnceWith("resend-turn", "uncertain-message");
+    } finally { main.app.unmount(); }
+  });
+
   it("blocks keyboard and button delivery while Main owns unsent speech without consuming the typed draft", async () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const owner = component.match(/async function sendComposerMessage\(\) \{[\s\S]*?\n\}/u)?.[0];

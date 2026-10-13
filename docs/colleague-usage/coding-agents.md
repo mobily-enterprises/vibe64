@@ -42,8 +42,8 @@ If Claude cannot initialize, inspect the failed request before selecting **Retry
 An initialization failure occurs before that request reaches Claude; it does not
 complete the requested work. Vibe64 keeps a bounded, credential-redacted startup
 diagnostic in its private operational log before confirmed process cleanup. The
-request stays in chat for review; unconfirmed delivery requires **Check delivery**
-before Retry. Colleague cannot read that log.
+request stays in chat for review; use **Retry** to recover its delivery.
+Colleague cannot read that log.
 
 If an assistant stops because its credits or quota are exhausted, open **Chat
 mode** and choose another connected **Orchestrator**, or choose **Custom** and a
@@ -53,13 +53,13 @@ cleanup before switching. An active coding turn still requires **Stop** first;
 an unfinished goal requires **Cancel goal**. A reported cleanup failure keeps
 the previous selection; retry after restoring the execution service.
 The session's files and saved conversation remain. Switching does not resend
-the old request or confirm uncertain delivery. Use **Check delivery** for that
+the old request or confirm uncertain delivery. Use **Retry** for that
 original request before deciding to repeat it; send a new instruction when you
 want the new assistant to continue the work. After the switch, **Send** becomes
-available automatically; reloading or **Check delivery** is not required to
+available automatically; reloading or **Retry** is not required to
 start a new request. **Previous assistant delivery unconfirmed** describes the
 old attempt and explains how to continue with your selected assistant. Its
-**Check delivery** control only checks that previous attempt.
+**Retry** control only checks that previous attempt.
 These steps apply on desktop and
 mobile. Colleague can explain the notice and change a supported selection when
 you ask it to; provider credit top-ups require your interaction.
@@ -88,18 +88,17 @@ A visible authored message can confirm delivery before the original request retu
 wait for its answer instead of sending it again. This applies to Codex steering too.
 Your draft, uploaded file references and failed requests stay with the same
 signed-in person, project and session across a page reload. Restoring them does
-not send anything. Review an unconfirmed request before using **Retry**; when
-**Check delivery** is shown, it checks the existing request without resending it.
-An unconfirmed request keeps that control even if a saved routing error says it
-failed. Retry, Edit and Cancel become available only after its delivery is resolved.
+not send anything. **Retry** retains the original ID and payload. In Main, when
+no matching routing request is recorded, it submits that same request through the
+existing server coordinator, which checks for duplicates and earlier dispatch.
+If native delivery was already attempted, recovery checks its receipt instead
+of repeating the work. A conflicting saved failure is checked before retrying.
+Clicking twice during a pending retry does not submit again; your separate
+composer draft stays intact.
+**Edit** and **Cancel** remain unavailable while delivery is uncertain.
 A rejected **Steer** returns to the composer; **Retry** retains its request ID
-and any newer draft text. Steering arriving after a finished turn is failed,
-not **Check delivery**, and never becomes new work automatically. Use its
-**Cancel** or **Edit** recovery before deliberately sending new work. A genuinely
-lost receipt stays uncertain until the delivery check confirms it. If Vibe64 saved
-that this exact request failed before sending, or was definitely rejected, **Check
-delivery** confirms it was not sent and restores **Retry**, **Edit** and **Cancel**.
-Checking never sends it; **Retry** is a separate deliberate action.
+and any newer draft text. Steering arriving after a finished turn never becomes
+new work automatically. Use **Cancel** or **Edit** before sending new work.
 After changing the signed-in person or AI connection, resolve that change before
 checking the original request; a different account cannot confirm it was not sent.
 If OpenCode cannot confirm delivery, checking its status does not send the request
@@ -107,7 +106,7 @@ again. An unavailable receipt remains uncertain; inspect the conversation before
 deciding what to send next. This also applies to steering instructions.
 OpenCode can receive a message before Vibe64 finishes saving it. An early reply
 does not confirm that the message was saved. If saving fails, keep the same
-request and use **Check delivery** when shown before retrying. Ask the operator
+request and use **Retry** to check its receipt. Ask the operator
 to restore storage if needed, or resolve the reported **Stop** failure first;
 neither recovery repeats the prompt.
 After OpenCode restarts, opening a conversation can take longer while its working
@@ -158,7 +157,7 @@ history; its composer draft is not retained. Colleague can explain the notice,
 but repairing the installed runtime requires the installation owner.
 The same recovery applies on desktop and mobile.
 A temporary message may appear before the assistant confirms receiving it.
-If it still shows **Check delivery**, use that control and keep the same request;
+If it still shows **Retry**, use that control and keep the same request;
 its visible bubble alone is not confirmation. An unavailable receipt stays
 unconfirmed and keeps its files and any newer composer draft. Checking does not
 submit another native turn. Colleague can explain the reported state; a new
@@ -253,12 +252,12 @@ regenerate dismissed suggestions. Changing the draft can request new suggestions
 after those limits; unchanged input does not poll. You can keep writing and send
 without waiting for suggestions.
 
-An unconfirmed message has a warning outline and **Delivery unconfirmed** inside
-its own bubble, alongside the error and **Check delivery**. The notice belongs to
+An unconfirmed message shows small red error text and **Retry** inside
+its own bubble. The notice belongs to
 those exact words; it does not describe the previous assistant reply. The layout
 is the same on desktop and phones.
 
-If **Check delivery** reports that delivery is still unknown, the old message
+If **Retry** reports that delivery is still unknown, the old message
 remains visible. Once the conversation is ready, you can type and **Send** a
 different message. The uncertain message is not resent, and its same words remain
 blocked until its delivery is resolved. Active or unresolved server work still

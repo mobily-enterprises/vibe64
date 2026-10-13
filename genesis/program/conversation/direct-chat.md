@@ -672,7 +672,7 @@ including after reload. Pending helper cleanup and unconfirmed delivery retain
 their notices. The saved request remains available as operational evidence.
 A provider abort after successful helper cleanup is reported as cancellation,
 while failed cleanup retains its recovery controls and uncertain native delivery
-offers Check delivery.
+offers Retry.
 Existing assistant status and message-delivery diagnostics include the requesting
 user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
@@ -1630,9 +1630,9 @@ Live dispatch remains `sending` (or its review/planning equivalent) while its
 attempted message ID and native thread are persisted before submission. An
 interrupted attempt becomes `uncertain`; ordinary pending delivery never renders
 as failure. The shared Main/temporary adapter presents unconfirmed delivery with
-Check delivery and hides Edit/Cancel until the outcome is known. A same-message
+Retry and hides Edit/Cancel until the outcome is known. A same-message
 local uncertain receipt survives a conflicting saved failed routing projection;
-its existing Check delivery action inspects the common receipt before any Retry.
+its Retry action first inspects the common receipt before resubmission.
 Live server routing keeps its original pending ownership. Checking reuses
 the original message ID and the existing native receipt lookup, never a new send.
 A canonical user-message receipt or accepted routing state supersedes a stale
@@ -1677,7 +1677,7 @@ request, accepted steering, involved plan and recent visible messages. Ordinary
 account admission, native questions/goals, identity checks, delivery inspection and
 helper cleanup remain authoritative. Delivery has routing/pending/sending/uncertain/
 accepted/failed states; workflow stage is never encoded into delivery. Saved receipts
-win over interrupted transport errors. Check delivery only inspects the same receipt.
+win over interrupted transport errors. Retry only inspects the same receipt.
 Restart never auto-sends a recovered follow-up; Resume workflow is explicit. Controls
 use the existing retry/Stop actions and explanations remain persisted Status messages.
 
@@ -3858,11 +3858,13 @@ store, polling, admission or implicit lesson operation.
 
 JSKIT retains the exact uncertain request and inspection-only recovery. Its shared
 transcript attaches the exact message-ID notice inside the user bubble, with
-Delivery unconfirmed, a warning outline and the error/inspection control. It
+small red error text and a compact Retry action. It
 suppresses only that matching standalone system status; unrelated system messages
 keep their established placement. A ready
 backend permits a different explicitly submitted message; the same uncertain ID
-or words cannot be submitted again. While the backend is active or unconfirmed,
+or words cannot be submitted as a new composer request. Main’s explicit bubble
+Retry instead uses the original coordinator when no matching route is recorded.
+While the backend is active or unconfirmed,
 uncertainty still blocks followers. A queued follower whose predecessor becomes
 uncertain stays unsent. Unknown inspection replaces the stale transport error
 with the current recovery explanation. Drafts, attachments and old receipts stay

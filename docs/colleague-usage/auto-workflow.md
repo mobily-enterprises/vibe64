@@ -70,7 +70,7 @@ this starts a fresh turn at the retained stage. A failed or interrupted turn, or
 one ending without a confirmed outcome, leaves **Waiting** with a concrete reason.
 
 After a server restart, unfinished scheduling requires explicit **Resume workflow**;
-opening a session never sends another turn. **Check delivery** checks the original
+opening a session never sends another turn. **Retry** checks the original
 receipt of an uncertain message without sending a second copy. If the plan or
 conversation changed before an unsent handoff, stop it and send a fresh request.
 An unsent handoff shows **Stop** beside **Resume workflow**. Stopping it preserves
@@ -102,6 +102,6 @@ request and use the ordinary **Send** button (or speak a new request). Sending
 replaces that failed, unsent handoff; it does not mark its review completed.
 The previous coding history, plan and file changes remain. **Resume workflow** still
 resumes the retained stage, and **Stop** cancels it without sending new work.
-A handoff with unconfirmed delivery still requires **Check delivery** first.
+A handoff with unconfirmed delivery still requires **Retry** first.
 Colleague can explain these choices and offer to help you continue; sending new
 work requires your direct request or accepted offer.

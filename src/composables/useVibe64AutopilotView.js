@@ -1136,14 +1136,14 @@ function useVibe64AutopilotView(props, emit, {
 
   async function resendOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
-    if (!message || !["failed", "uncertain"].includes(message.status)) {
+    if (!message || message.checking || !["failed", "uncertain"].includes(message.status)) {
       return false;
     }
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    if (message.status === "uncertain" && (routingRequest.value?.messageId !== messageId ||
-        messageDelivery.value?.find(messageId)?.status === "uncertain" && routingRequest.value?.delivery === "failed")) {
+    if (message.status === "uncertain" && routingRequest.value?.messageId === messageId &&
+        messageDelivery.value?.find(messageId)?.status === "uncertain" && routingRequest.value?.delivery === "failed") {
       const receipt = await props.conversationRuntime.inspectDelivery(messageId);
       if (receipt?.status === "accepted") {
         settleComposerRetry(retry);
@@ -1151,6 +1151,9 @@ function useVibe64AutopilotView(props, emit, {
       }
       return false;
     }
+    // Retry through the original coordinator with the same identity and payload.
+    // A missing route is not a receipt: the coordinator owns duplicate detection
+    // and recovery of any native dispatch that was already attempted.
     messageDelivery.value?.remove(messageId);
     const accepted = await sendChatPayload(message.payload, {
       messageId,
@@ -1158,6 +1161,8 @@ function useVibe64AutopilotView(props, emit, {
     });
     if (accepted) {
       settleComposerRetry(retry);
+    } else if (!messageDelivery.value?.find(messageId)) {
+      messageDelivery.value?.state.messages.push(message);
     }
     return accepted;
   }

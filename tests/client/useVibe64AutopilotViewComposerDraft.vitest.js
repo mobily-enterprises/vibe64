@@ -159,6 +159,33 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect((await createView()).chatTurns.value).toEqual([]);
   });
 
+  it.each([false, true])("retries an unrecorded uncertain request with its original payload and ID (previous route: %s)", async (previousRoute) => {
+    const inspect = vi.fn().mockResolvedValue({ status: "unknown" });
+    const result = deferredResult();
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => result.promise) }, {
+      runtimeOptions: { inspectConversationDelivery: inspect }
+    });
+    const runtime = props.conversationRuntime;
+    await vi.waitFor(() => expect(runtime.canSubmit.value).toBe(true));
+    const messageId = "original-lost-request";
+    const payload = { message: "And tell me why you stopped.", originId: "original-tab" };
+    runtime.delivery.state.messages.push({ id: messageId, payload, text: payload.message,
+      status: "uncertain", error: "Request failed with status 503.", createdAt: new Date().toISOString(), createdAtMs: Date.now() });
+    if (previousRoute) props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId: "previous-request", status: "complete", delivery: "accepted", input: { message: "Earlier request" }
+    });
+    view.composerDraft.value = "A separate unsent draft.";
+    const retry = view.resendOptimisticMessage(messageId);
+    await vi.waitFor(() => expect(props.sendAgentMessage).toHaveBeenCalledTimes(1));
+    expect(props.sendAgentMessage.mock.calls[0][0]).toMatchObject({ ...payload, messageId });
+    expect(inspect).not.toHaveBeenCalled();
+    expect(await view.resendOptimisticMessage(messageId)).toBe(false);
+    result.resolve(true);
+    expect(await retry).toBe(true);
+    expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
+    expect(view.composerDraft.value).toBe("A separate unsent draft.");
+  });
+
   it("recovers an unconfirmed send without resending and lets the durable route own its state", async () => {
     vi.stubGlobal("window", { sessionStorage: memoryStorage() });
     const delivery = deferredResult();
@@ -3180,7 +3207,7 @@ it("checks a local uncertain receipt before retrying a conflicting failed route"
       messageId, status: "failed", delivery: "failed", input: payload, error: "Claude initialize timed out."
     });
     view.composerDraft.value = "A separate unsent draft.";
-    expect(runtime.canSubmit.value).toBe(false);
+    expect(runtime.canSubmit.value).toBe(true);
     expect(runtime.delivery.state.sending).toBe(false);
     const [turn] = view.chatTurns.value;
     expect(turn.optimistic).toMatchObject({ id: messageId, status: "uncertain" });

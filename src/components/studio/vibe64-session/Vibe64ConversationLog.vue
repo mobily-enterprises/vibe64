@@ -473,6 +473,7 @@ const adapter = computed(() => ({
     loadMore: (value) => emit("load-more", value),
     reload: () => emit("reload"),
     resend: (id) => emit("resend-turn", id),
+    checkDelivery: (id) => emit("resend-turn", id),
     cancel: (id) => emit("cancel-turn", id),
     edit: (id) => emit("edit-turn", id),
     openLink(payload) {

@@ -79,7 +79,7 @@ A failed response can leave native cleanup unfinished; selecting a model does
 not silently stop it or resend the request.
 For native reply failures and AI setup errors, see
 [Colleague delivery and recovery](colleague-recovery.md#failed-replies-and-setup).
-For **Check delivery**, **Start fresh**, **Previous conversations** and retained
+For **Retry**, **Start fresh**, **Previous conversations** and retained
 drafts, see [Colleague delivery and recovery](colleague-recovery.md). Recovery
 never automatically resends an unconfirmed message.
 

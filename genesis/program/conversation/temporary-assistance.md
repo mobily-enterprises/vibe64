@@ -153,7 +153,7 @@ replayed; an unreadable or absent receipt remains uncertain.
 ## Public contract
 
 Temporary chats share Main's delivery-state presentation. An ordinary send stays
-pending. Lost confirmation shows Check delivery against the original message ID,
+pending. Lost confirmation shows Retry against the original message ID,
 without Edit/Cancel or another native submission. Saved history and accepted
 routing state clear stale delivery errors, including a late HTTP failure after
 an exact receipt. Pending entries are reconciled only against actual history;
@@ -162,7 +162,7 @@ Direct temporary messages can be saved before native admission. Their read-only
 projection carries `receipt: false` until the exact requested native message is
 confirmed; routed rows written after admission retain the normal receipt contract.
 The shared delivery owner keeps that provisional row visible once, with its
-pending or uncertain status. Native read failures leave Check delivery available.
+pending or uncertain status. Native read failures leave Retry available.
 Its explicit check retains the captured request and cannot start it again while
 admission is unknown. Historical checks use the row's recorded selection and
 retained native binding, without consulting another conversation for acceptance.
