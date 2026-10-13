@@ -178,7 +178,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const retry = view.resendOptimisticMessage(messageId);
     await vi.waitFor(() => expect(props.sendAgentMessage).toHaveBeenCalledTimes(1));
     expect(props.sendAgentMessage.mock.calls[0][0]).toMatchObject({ ...payload, messageId });
-    expect(inspect).not.toHaveBeenCalled();
+    expect(inspect).toHaveBeenCalledWith(runtime.identity.conversationId, messageId);
     expect(await view.resendOptimisticMessage(messageId)).toBe(false);
     result.resolve(true);
     expect(await retry).toBe(true);
@@ -338,6 +338,47 @@ describe("useVibe64AutopilotView direct chat", () => {
     await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
     expect(view.composerDraft.value).toBe("");
     expect(view.chatTurns.value).toEqual([]);
+  });
+
+  it("hides Cancel immediately and restores the bubble when routing cancellation fails", async () => {
+    const cancellation = deferredResult();
+    const { view, props } = await createViewWithProps({ interruptAgentTurn: vi.fn(() => cancellation.promise) });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "cancel-now", status: "waiting", delivery: "failed", input: { message: "Cancel me." } });
+    expect(view.chatTurns.value).toHaveLength(1);
+    const cancelled = view.cancelOptimisticMessage("cancel-now");
+    expect(view.chatTurns.value).toEqual([]);
+    cancellation.resolve(false);
+    expect(await cancelled).toBe(false);
+    expect(view.chatTurns.value[0].user.text).toBe("Cancel me.");
+  });
+
+  it("dismisses an orphaned uncertain attempt without interrupting a newer goal or deleting its receipt", async () => {
+    const { view, props } = await createViewWithProps();
+    const delivery = props.conversationRuntime.delivery;
+    delivery.state.messages.push({ id: "old-attempt", text: "Hello?", payload: { message: "Hello?" }, status: "uncertain" });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "newer", status: "working", delivery: "accepted", input: { message: "Continue" } });
+    expect(view.chatTurns.value).toHaveLength(1);
+    const cancelled = view.cancelOptimisticMessage("old-attempt");
+    expect(view.chatTurns.value).toEqual([]);
+    expect(await cancelled).toBe(true);
+    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    props.conversationLog.turns = [{ turnId: "receipt", user: { messageId: "old-attempt", text: "Hello?" } }];
+    await nextTick();
+    expect(view.chatTurns.value[0].user.text).toBe("Hello?");
+    expect(view.chatTurns.value[0].optimistic).toBeUndefined();
+  });
+
+  it("checks the exact receipt on Retry and clears a successfully delivered orphan without resending", async () => {
+    const inspect = vi.fn().mockResolvedValue({ status: "accepted", messageId: "delivered" });
+    const { view, props } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
+    await vi.waitFor(() => expect(props.conversationRuntime.available.value).toBe(true));
+    props.conversationRuntime.delivery.state.messages.push({ id: "delivered", text: "Hello?", payload: { message: "Hello?" }, status: "uncertain" });
+    expect(view.chatTurns.value[0].system.delivery).toBeTruthy();
+    expect(await view.resendOptimisticMessage("delivered")).toBe(true);
+    expect(inspect).toHaveBeenCalledWith(props.conversationRuntime.identity.conversationId, "delivered");
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.chatTurns.value[0].system?.delivery).toBeUndefined();
+    expect(view.chatTurns.value[0].optimistic.status).toBe("accepted");
   });
 
   it("keeps delivery usable when browser session storage is blocked", async () => {
@@ -3218,6 +3259,7 @@ it("checks a local uncertain receipt before retrying a conflicting failed route"
     expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
     expect(view.composerDraft.value).toBe("A separate unsent draft.");
 
+    inspect.mockClear();
     inspect.mockResolvedValue({ status: "unknown", messageId });
     await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(false);
     expect(inspect).toHaveBeenCalledExactlyOnceWith(runtime.identity.conversationId, messageId);

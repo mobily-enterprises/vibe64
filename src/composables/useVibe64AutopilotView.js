@@ -1,6 +1,6 @@
 import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
-import { computed, inject, nextTick, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, reactive, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
@@ -426,7 +426,7 @@ function useVibe64AutopilotView(props, emit, {
   });
   const composerRetrySubmission = computed(() => props.conversationRuntime?.draftRetry.value || null);
   const messageDelivery = computed(() => props.conversationRuntime?.delivery || null);
-  const discardingMessageIds = new Set();
+  const discardingMessageIds = reactive(new Set());
   const composerSending = computed(() => messageDelivery.value?.state.sending === true);
   const composerQueueing = computed(() => props.conversationRuntime?.queueWhileSending.value === true);
   const composerSubmissionKind = ref("");
@@ -1100,26 +1100,29 @@ function useVibe64AutopilotView(props, emit, {
 
   async function cancelOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
-    if (!message || message.status === "uncertain") {
-      return false;
-    }
-    if (routingRequest.value?.messageId === messageId) {
-      if (routingRequest.value.delivery === "uncertain") return false;
-      discardingMessageIds.add(messageId);
-      try {
-        if (await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
-      } finally {
-        discardingMessageIds.delete(messageId);
+    if (!message || message.status === "accepted" || message.checking || discardingMessageIds.has(messageId)) return false;
+    const delivery = messageDelivery.value;
+    const runtime = props.conversationRuntime;
+    const routed = routingRequest.value?.messageId === messageId;
+    discardingMessageIds.add(messageId);
+    try {
+      // An orphaned local attempt can be dismissed without stopping a newer turn.
+      // Accepted history remains owned by the transcript and is never removed here.
+      if (routed && message.status === "uncertain") {
+        const receipt = await runtime.inspectDelivery(messageId);
+        if (receipt?.status === "accepted") return true;
+        if (receipt?.status !== "not-sent" || receipt.messageId !== messageId) return false;
       }
+      if (runtime !== props.conversationRuntime) return false;
+      if (routed && routingRequest.value?.messageId === messageId &&
+          await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
+      if (message.status === "pending" && await props.cancelAgentMessage(messageId) === false) return false;
+      if (composerRetrySubmission.value?.messageId === messageId) settleComposerRetry(composerRetrySubmission.value);
+      delivery?.remove(messageId);
+      return true;
+    } finally {
+      discardingMessageIds.delete(messageId);
     }
-    if (message.status === "pending" && await props.cancelAgentMessage(messageId) === false) {
-      return false;
-    }
-    if (composerRetrySubmission.value?.messageId === messageId) {
-      settleComposerRetry(composerRetrySubmission.value);
-    }
-    messageDelivery.value?.remove(messageId);
-    return true;
   }
 
   async function editOptimisticMessage(messageId = "") {
@@ -1142,14 +1145,13 @@ function useVibe64AutopilotView(props, emit, {
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    if (message.status === "uncertain" && routingRequest.value?.messageId === messageId &&
-        messageDelivery.value?.find(messageId)?.status === "uncertain" && routingRequest.value?.delivery === "failed") {
+    if (message.status === "uncertain") {
       const receipt = await props.conversationRuntime.inspectDelivery(messageId);
       if (receipt?.status === "accepted") {
         settleComposerRetry(retry);
         return true;
       }
-      return false;
+      if (routingRequest.value?.messageId === messageId && routingRequest.value?.delivery === "failed") return false;
     }
     // Retry through the original coordinator with the same identity and payload.
     // A missing route is not a receipt: the coordinator owns duplicate detection
@@ -1573,7 +1575,7 @@ function useVibe64AutopilotView(props, emit, {
       messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
       routingRequest.value,
       composerSending.value
-    );
+    ).filter(turn => !turn.optimistic || !discardingMessageIds.has(turn.optimistic.id));
   });
   const emptyConversationWelcome = computed(() => (
     sessionId.value &&

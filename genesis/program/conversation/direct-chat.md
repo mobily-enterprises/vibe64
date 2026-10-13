@@ -1376,6 +1376,14 @@ receipts and context handoff as the existing modes. Selecting a named role clear
 the custom override and returns to that workflow's role assignments. Old records
 remain valid without rewriting or classifying past requests.
 
+A goal pins its role and model across account reconnection. A new Send or Resume
+resolves current actor/account access and captures the current connection identity;
+an earlier goal pin's account identity does not reject that new admission.
+Pending and uncertain deliveries retain their original connection checks, and a
+changed effective model still requires an explicit paused-goal selection.
+Send does not rewrite the goal pin; Resume commits its new pin only after native
+acceptance. No goal, history or account metadata repair is performed on reads.
+
 An idle paused goal permits an explicit Custom model or Senior/Junior mode
 change within its current orchestrator. The selection writer retains its native
 turn/access checks and lock, prepares the replacement routing pin through
@@ -3870,3 +3878,15 @@ uncertain stays unsent. Unknown inspection replaces the stale transport error
 with the current recovery explanation. Drafts, attachments and old receipts stay
 separate. Goal refreshes follow initial state, native events and reconnects;
 window focus and visibility alone perform no goal read.
+
+Main-chat Retry inspects uncertain message IDs before replay and reconciles
+accepted receipts. Cancel immediately hides the local attempt while the existing
+routing cancellation completes, restoring it on failure. Orphaned local attempts
+can be dismissed without interrupting newer work or removing canonical history.
+The shared transcript exposes uncertain-message Cancel only for adapters with
+an explicit `cancellableDelivery` capability and application cancellation action.
+
+The shared transcript interleaves timestamped messages across saved and native
+streaming turns, including steering messages sent during a native turn. Equal
+timestamps retain source order and undated notices keep their original slots.
+Reasoning groups form after ordering; canonical turn IDs and storage remain intact.

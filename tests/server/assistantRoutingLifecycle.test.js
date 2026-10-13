@@ -541,6 +541,55 @@ test("goal preparation pins an explicit route only for the caller to commit afte
   assert.equal(f.metadata.assistant_routing_goal, undefined);
 });
 
+for (const status of ["active", "paused", "blocked", "budget_limited"]) {
+  test(`a ${status} goal admits a new message and Resume after its account changes`, async (t) => {
+    const f = await fixture(t, { mode: "senior", review: false });
+    const original = await f.service.prepareGoal("session-1", { action: "set", objective: "Finish validation" }, f.context);
+    const pinned = JSON.parse(JSON.stringify({ ...original.pinned, status }));
+    f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+    f.agent.readGoal = async () => ({ status: "available", goal: { status, objective: pinned.objective } });
+    f.connections.set("codex:openai", { connectionIdentity: "replacement-account" });
+
+    const restarted = f.restart();
+    assert.equal((await restarted.send("session-1", request, f.context)).delivered, true);
+    assert.equal(f.sends.length, 1);
+    assert.equal(f.sends[0].selection.modelId, pinned.selection.modelId);
+    assert.equal(f.state().decision.connectionIdentity, "replacement-account");
+    assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), pinned, "Send does not rewrite or clear the native goal's pin");
+    const resumed = await restarted.prepareGoal("session-1", { action: "resume" }, f.context);
+    assert.equal(resumed.context.expectedConnectionIdentity, "replacement-account");
+    assert.equal(resumed.pinned.connectionIdentity, "replacement-account");
+    assert.deepEqual(resumed.pinned.selection, pinned.selection);
+    assert.equal(resumed.pinned.objective, pinned.objective);
+    assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), pinned, "only native acceptance commits Resume");
+  });
+}
+
+test("an account change cannot bypass a goal's model pin or current account access", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const original = await f.service.prepareGoal("session-1", { action: "set", objective: "Finish validation" }, f.context);
+  const pinned = JSON.parse(JSON.stringify({ ...original.pinned, status: "blocked" }));
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  f.agent.readGoal = async () => ({ status: "available", goal: { status: "blocked" } });
+  f.connections.set("codex:openai", { connectionIdentity: "replacement-account" });
+  for (const operation of [
+    () => f.service.send("session-1", request, f.context),
+    () => f.service.prepareGoal("session-1", { action: "resume" }, f.context)
+  ]) {
+    f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, selection: f.assignments.junior });
+    await assert.rejects(operation(), /pinned AI/);
+    f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+    f.connections.set("codex:openai", { available: false, connectionIdentity: "replacement-account" });
+    await assert.rejects(operation());
+    f.connections.set("codex:openai", { connectionIdentity: "replacement-account" });
+    f.context.vibe64User = { role: "member", username: "member" };
+    await assert.rejects(operation());
+    f.context.vibe64User = { role: "owner", username: "owner" };
+  }
+  assert.equal(f.sends.length, 0);
+  assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), pinned);
+});
+
 test("Auto uses a foreign Router and does not require Helper", async (t) => {
   const f = await fixture(t);
   const router = sharedOpenCode(f, "deepseek", "deepseek-chat");

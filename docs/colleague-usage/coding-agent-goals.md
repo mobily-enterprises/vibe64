@@ -1,5 +1,14 @@
 # Goals and model changes
 
+After you change or reconnect an AI account in **AI Accounts**, an unfinished
+goal keeps its model, role and conversation. Once the connection is ready, send
+your next message or choose **Goal** → **Resume goal** using the current account.
+A failed message that was never delivered can use **Retry**. You do not need to
+cancel the goal. Access to its selected model is still required; an account change
+during a pending delivery may require cancelling that request and sending it again.
+These steps apply on desktop and mobile. Account sign-in and credential entry
+remain your actions; Colleague can explain the recovery and offer supported help.
+
 An unfinished goal stays with its current orchestrator. To change its model or
 direct mode without clearing it, choose **Pause goal** and wait until the current
 turn finishes. Open **Chat mode**, then choose **Senior**, **Junior**, or **Custom**
@@ -43,3 +52,12 @@ If its status is unavailable, wait for the assistant connection and refresh.
 An unavailable status does not mean the goal was cleared.
 Open **Goal** to find these controls. For a long objective, use **View full goal**
 to read it, then **Close** to return to the controls. This works on desktop and mobile.
+
+Failed Main-chat messages offer **Retry** and **Cancel** on desktop and mobile.
+**Retry** checks an uncertain attempt's original message ID first. If it was
+already delivered, the failure controls disappear without another send.
+**Cancel** removes an old local failed attempt immediately without stopping a
+newer goal or deleting delivered conversation history. For a request still
+owned by the current route, the bubble hides while cancellation is checked; it
+returns if delivery remains unknown or cancellation fails. Colleague can explain
+these controls; the person presses them in Main chat.

@@ -30,7 +30,8 @@ function chatTurnsWithDelivery(turns, request, checking) {
   if (!message) {
     if (request.delivery !== "accepted" && !request.followup) return turns;
     return turns.map((turn) => matches(turn) && turn.optimistic
-      ? { ...turn, optimistic: { ...turn.optimistic, status: "accepted", error: "" } } : turn);
+      ? { ...turn, ...(turn.system?.delivery?.messageId === request.messageId ? { system: undefined } : {}),
+        optimistic: { ...turn.optimistic, status: "accepted", error: "" } } : turn);
   }
   const result = turns.some(matches) ? turns : [...turns, {
     turnId: `routing:${message.id}`,

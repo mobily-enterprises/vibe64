@@ -1530,6 +1530,11 @@ Resume continues it, and Cancel clears it. Claude goals have no token-budget
 field. Tool-free helpers use the workflow's independent Helper role. New tasks
 capture that choice without changing main chat or tasks already running.
 
+Changing or reconnecting an AI account must not strand an unfinished goal.
+The next message or explicit Resume uses the currently authorized account while
+preserving the goal's model, role and conversation. Work already being delivered
+retains its account checks.
+
 Main conversation, temporary assistance, and database copilot share the same
 conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
@@ -1779,3 +1784,9 @@ show progress; cancellation waits for cleanup. Inspector failures retain the
 previous index and show bounded command output inline.
 Unchanged source indexing retains valid UI observations; stale UI evidence shows
 a short refresh notice while Engine browsing remains available.
+
+Main-chat delivery recovery offers immediate Cancel for failed local attempts
+and reconciles successful Retry receipts so stale error controls do not remain.
+
+Main and Temporary chat present timestamped messages in chronological order,
+including replies streamed while follow-up questions are sent.

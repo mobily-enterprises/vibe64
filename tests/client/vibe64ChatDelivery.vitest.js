@@ -23,18 +23,18 @@ describe("routed chat delivery presentation", () => {
     }
   });
 
-  it("shows one unconfirmed message with Check delivery and no failure/edit/cancel controls", async () => {
+  it("shows one unconfirmed message with Retry and no failure/edit/cancel controls", async () => {
     const [turn] = chatTurnsWithRouting([], { ...request, status: "waiting", delivery: "uncertain", error: "Connection closed." });
     expect(turn.optimistic.status).toBe("uncertain");
     expect(turn.system.text).toContain("Delivery unconfirmed");
     const html = await renderToString(createSSRApp(ConversationStatus, { message: turn.system }));
-    expect(html).toContain("Check delivery");
+    expect(html).toContain("Retry delivery check");
     expect(html).toContain("Connection closed.");
-    expect(html).not.toMatch(/Failed:|Retry|Cancel|Edit/);
+    expect(html).not.toMatch(/Failed:|Cancel|Edit/);
     const [checking] = chatTurnsWithRouting([], { ...request, status: "waiting", delivery: "uncertain" }, true);
     const pendingHtml = await renderToString(createSSRApp(ConversationStatus, { message: checking.system }));
     expect(pendingHtml).toContain("disabled");
-    expect(pendingHtml).toContain("Checking delivery…");
+    expect(pendingHtml).toContain("Checking…");
   });
 
   it("preserves an actual rejection and its reason", () => {
@@ -96,4 +96,12 @@ it("puts continuation and waiting explanations in chat, preserving the next step
     expect(turns[0].system.text).toContain("A required check remains.");
     expect(turns[0].system.text.includes("Next step: Run the focused check.")).toBe(decision === "continue");
   }
+});
+
+it("clears the delivery warning when the same routing request becomes accepted", () => {
+  const uncertain = chatTurnsWithRouting([], { ...request, delivery: "uncertain", error: "Old failure" });
+  const [accepted] = chatTurnsWithRouting(uncertain, { ...request, delivery: "accepted" });
+  expect(accepted.optimistic.status).toBe("accepted");
+  expect(accepted.system?.delivery).toBeUndefined();
+  expect(accepted.user.messageId).toBe(request.messageId);
 });

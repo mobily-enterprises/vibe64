@@ -552,8 +552,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (activeGoal(goal) && !pinnedGoal && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
           throw failure("Finish or cancel the current goal before changing its AI.");
         }
-        if (pinnedGoal?.selection && (!sameSelection(destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection) ||
-            pinnedGoal.connectionIdentity && pinnedGoal.connectionIdentity !== state.decision.connectionIdentity)) {
+        // A goal pins its model, not a login that may have been replaced. This
+        // new request captures current access; validateDecision still fences delivery.
+        if (pinnedGoal?.selection && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
           throw failure("The goal's pinned AI is no longer available. Choose its destination before resuming.");
         }
         state.assignments = Object.fromEntries(Object.entries(destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));
@@ -856,8 +857,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         : preferences.override ? { role: mode, selection: preferences.override } : undefined };
     const decision = await resolve(context, state);
     const selection = decision.effectiveSelection;
-    if (resume && (!sameSelection(previous.selection, selection) ||
-        previous.connectionIdentity && previous.connectionIdentity !== decision.connectionIdentity)) {
+    if (resume && !sameSelection(previous.selection, selection)) {
       throw failure("The goal's pinned AI changed. Send a message with the intended AI before starting a new goal.");
     }
     if (rebind) {

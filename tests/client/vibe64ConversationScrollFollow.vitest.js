@@ -416,6 +416,41 @@ describe("Vibe64 conversation scroll following", () => {
     }
   });
 
+  it.each(["main", "temporary"])("interleaves saved %s user messages and native replies by time, including steers inside one native turn", async (surface) => {
+    const at = minute => `2026-10-13T06:${minute}:00.000Z`;
+    const user = (id, minute) => ({ turnId: id, user: { messageId: id, role: "user", text: id, at: at(minute) } });
+    const reply = (id, minute) => ({ messageId: id, role: "assistant", text: id, at: at(minute) });
+    const turns = ref([user("first-question", "29"), user("steering-question", "33"), user("last-question", "39"),
+      { turnId: "native-turn", messages: [reply("first-reply", "32"), reply("second-reply", "38")] }]);
+    const app = testRenderer().createApp({ render: () => surface === "main"
+      ? h(Vibe64ConversationLog, { visible: true, turns: turns.value })
+      : h(Vibe64EphemeralConversationMessages, { adapter: { conversation: { turns: turns.value } } }) });
+    for (const name of ["VAlert", "VIcon", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) app.component(name, passthroughComponent());
+    app.component("VBtn", passthroughComponent("button"));
+    app.provide(ssrContextKey, { modules: new Set() });
+    const container = createHostElement("root");
+    app.mount(container);
+    const order = () => {
+      const rows = [];
+      function visit(node) {
+        if (node.type === "article") {
+          const user = findNode(node, item => nodeHasClass(item, "assistant-transcript__plain-user"));
+          rows.push(user ? nodeText(user) : JSON.stringify(findNode(node, item => Array.isArray(item.props?.blocks))?.props.blocks));
+        } else for (const child of node.children || []) visit(child);
+      }
+      visit(container);
+      return rows.map(row => ["first-question", "steering-question", "last-question", "first-reply", "second-reply", "last-reply"].find(id => row?.includes(id)));
+    };
+    try {
+      await flushScrollWork();
+      expect(order()).toEqual(["first-question", "first-reply", "steering-question", "second-reply", "last-question"]);
+      turns.value[3].messages.push(reply("last-reply", "40"));
+      await flushScrollWork();
+      expect(order()).toEqual(["first-question", "first-reply", "steering-question", "second-reply", "last-question", "last-reply"]);
+      expect(turns.value.map(turn => turn.turnId)).toEqual(["first-question", "steering-question", "last-question", "native-turn"]);
+    } finally { app.unmount(); }
+  });
+
   it.each(["main", "temporary"])("renders sending and unconfirmed delivery accurately in %s chat", async (surface) => {
     const delivery = createAssistantMessageDelivery();
     const response = Promise.withResolvers();
@@ -423,10 +458,11 @@ describe("Vibe64 conversation scroll following", () => {
     const route = ref({ schemaVersion: 5, messageId: "message-1", status: "working", delivery: "sending", attemptedMessageId: "message-1", input: { message: "Hello" }, assignments: {} });
     const messages = ref([]);
     const checks = [];
+    const cancellations = [];
     const app = testRenderer().createApp({ render: () => surface === "main"
       ? h(Vibe64ConversationLog, {
         visible: true, turns: chatTurnsWithRouting(delivery.turns(messages.value), route.value),
-        onResendTurn: (id) => checks.push(id)
+        onResendTurn: (id) => checks.push(id), onCancelTurn: id => cancellations.push(id)
       })
       : h(Vibe64EphemeralConversationMessages, {
         adapter: { delivery, conversation: { turns: conversationTurnsFromMessages(messages.value) } },
@@ -449,12 +485,16 @@ describe("Vibe64 conversation scroll following", () => {
     response.resolve(false);
     await sending;
     await flushScrollWork();
-    expect(nodeText(container)).toContain("Delivery unconfirmed");
+    expect(nodeText(container)).toContain("Lost confirmation.");
     expect(nodeText(container)).not.toContain("Failed:");
-    for (const label of ["Retry", "Edit", "Cancel"]) {
-      expect(findNode(container, (node) => node.type === "button" && nodeText(node).trim() === label)).toBeNull();
+    expect(findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Edit")).toBeNull();
+    const cancel = findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Cancel");
+    if (surface === "main") {
+      expect(cancel).not.toBeNull();
+      cancel.props.onClick();
+      expect(cancellations).toEqual(["message-1"]);
     }
-    const check = findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Check delivery");
+    const check = findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Retry");
     expect(check).not.toBeNull();
     check.props.onClick();
     expect(checks).toEqual(["message-1"]);

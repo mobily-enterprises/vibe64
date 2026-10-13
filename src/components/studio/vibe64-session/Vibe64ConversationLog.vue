@@ -435,6 +435,7 @@ watch(() => [props.hiddenByWorkspaceMode, props.visible, props.scrollKey],
 
 const adapter = computed(() => ({
   conversation: {
+    cancellableDelivery: true,
     working: props.working && !props.error,
     previewMessage: voicePreview.value, previewMessages: voicePreviews.value,
     assistantLabel: props.assistantLabel,

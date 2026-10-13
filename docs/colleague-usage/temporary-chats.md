@@ -76,3 +76,8 @@ seconds, without sending your draft. They expire within ten seconds of the last
 update. Blur, Send, switching chats and reconnecting send no additional typing
 request. Prompt suggestions wait for a five-second typing pause and at least
 thirty seconds between generations; refocusing does not generate new hints.
+
+Messages and replies appear together in time order, including follow-ups sent
+while the assistant is working. This works the same way in Main and Temporary
+chat, on desktop and phone. Reopening or reloading shows the same history without
+resending messages. Colleague can explain the order; no repair action is needed.

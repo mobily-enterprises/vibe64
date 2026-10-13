@@ -790,3 +790,8 @@ the conversation’s actual access when a tool is called; a classification task
 does not gain coding access merely because definitions are present. Without
 the plugin and its trusted session registry, the Helper remains denied. Routing
 therefore admits included Big Pickle for Router and Helper as well as chat.
+
+Temporary chat uses the same chronological transcript rendering as Main. Saved
+authored rows and native streamed replies interleave by their message times,
+including user steering inside one native turn. Rendering preserves the original
+turn identities, metadata and stored history.
