@@ -66,9 +66,23 @@ you ask it to; provider credit top-ups require your interaction.
 
 If failure, Stop or reconnection observes different outcomes for one assistant
 turn, Vibe64 reuses that turn's first recovery checkpoint and its recorded
-outcome. A failed turn can therefore have a valid checkpoint. A warning about
-a genuine identity or storage failure still needs operator investigation; your
-files remain in the session.
+outcome. A failed turn can therefore have a valid checkpoint.
+
+**Recovery snapshot not saved** means Vibe64 could not confirm the automatic
+recovery copy for an assistant turn. It does not mean your working files were
+deleted or prevent you from chatting. An interrupted snapshot command is named
+as such; expand **Technical details** for the original error and recovery steps.
+Vibe64 attempts another snapshot when the next assistant turn finishes, including
+failed or stopped turns—not immediately when you send a message. A successful
+snapshot clears the warning automatically.
+
+Select **Dismiss** to hide this particular failure. This takes effect immediately
+and is remembered for this project/session in the same browser across reloads.
+It does not delete diagnostic records or create a snapshot. A later failure shows
+a new warning, even if its error text is the same. The same controls work on desktop
+and mobile; no SSH or administrator access is required. Colleague can explain the
+notice and its recovery steps; use the visible Dismiss button yourself. Repeated
+identity, permission or storage failures still need operator investigation.
 
 1. Select the intended project and session, then Main or the intended temporary
    conversation. Type the request and select **Send**.

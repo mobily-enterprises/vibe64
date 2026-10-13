@@ -460,7 +460,8 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkSending = ref(false);
   const shortActionDismissals = ref({
     saveWork: "",
-    workspaceSetup: ""
+    workspaceSetup: "",
+    checkpoint: ""
   });
   const workspaceSetupRetryError = ref("");
   const workspaceSetupRetrying = ref(false);
@@ -491,7 +492,8 @@ function useVibe64AutopilotView(props, emit, {
     const stored = readLocalStorageJson(storageKey, {});
     shortActionDismissals.value = {
       saveWork: normalizedAgentTurnText(stored?.saveWork),
-      workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup)
+      workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup),
+      checkpoint: normalizedAgentTurnText(stored?.checkpoint)
     };
   }, { flush: "sync", immediate: true });
 
@@ -507,6 +509,22 @@ function useVibe64AutopilotView(props, emit, {
     };
     writeLocalStorageJson(storageKey, shortActionDismissals.value);
     return true;
+  }
+
+  const checkpointTask = computed(() => (props.session?.backgroundTasks || [])
+    .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed"));
+  const checkpointFailure = computed(() => checkpointTask.value?.error || "");
+  const checkpointFailureKey = computed(() => checkpointFailure.value ? JSON.stringify([
+    checkpointTask.value.checkpointTurnId, checkpointTask.value.updatedAt, checkpointFailure.value
+  ]) : "");
+  const checkpointFailureVisible = computed(() => Boolean(checkpointFailure.value &&
+    shortActionDismissals.value.checkpoint !== checkpointFailureKey.value));
+  const checkpointFailureReason = computed(() => /\bSIG(?:TERM|KILL|INT)\b/u.test(checkpointFailure.value)
+    ? "The snapshot command was interrupted."
+    : "Vibe64 could not create a recovery snapshot for an assistant turn.");
+
+  function dismissCheckpointFailure() {
+    return dismissShortAction("checkpoint", checkpointFailureKey.value);
   }
 
   const questionState = useAssistantQuestions({
@@ -2003,6 +2021,10 @@ function useVibe64AutopilotView(props, emit, {
     chatReloadAvailable,
     chatReloading,
     chatTurns,
+    checkpointFailure,
+    checkpointFailureReason,
+    checkpointFailureVisible,
+    dismissCheckpointFailure,
     composerKey,
     composerAttachments,
     composerAttachmentsEnabled,

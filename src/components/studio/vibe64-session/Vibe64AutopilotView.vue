@@ -228,10 +228,17 @@
             Your draft is kept.
           </span>
         </v-sheet>
-        <v-alert v-if="checkpointFailure" class="studio-autopilot__checkpoint-notice" type="warning" variant="tonal" density="compact">
+        <v-alert v-if="checkpointFailureVisible" class="studio-autopilot__checkpoint-notice" type="warning" variant="tonal" density="compact">
+          <div class="d-flex flex-wrap align-center ga-2">
+            <div class="flex-grow-1">
+              <strong class="text-body-medium">Recovery snapshot not saved</strong>
+              <p class="text-body-small mb-0">{{ checkpointFailureReason }} Your files remain in this session. You can keep chatting.</p>
+            </div>
+            <v-btn variant="text" min-height="48" aria-label="Dismiss recovery snapshot warning" @click="dismissCheckpointFailure">Dismiss</v-btn>
+          </div>
           <details :key="checkpointFailure">
-            <summary class="text-body-medium">Recovery checkpoint unavailable · Details</summary>
-            <p class="text-body-small mt-2 mb-2">Your files remain in this session. The last assistant turn has no confirmed recovery checkpoint.</p>
+            <summary class="text-body-small">Technical details</summary>
+            <p class="text-body-small mt-2 mb-2">Vibe64 tries again after the next assistant turn finishes. A successful snapshot clears this warning. Dismiss hides this failure only; a new failure will appear again.</p>
             <pre class="studio-autopilot__checkpoint-details text-body-small">{{ checkpointFailure }}</pre>
           </details>
         </v-alert>
@@ -1119,6 +1126,10 @@ const {
   chatReloading,
   reloadChatPane,
   chatTurns,
+  checkpointFailure,
+  checkpointFailureReason,
+  checkpointFailureVisible,
+  dismissCheckpointFailure,
   composerKey,
   composerAttachments,
   composerAttachmentsEnabled,
@@ -1350,8 +1361,6 @@ const composerSupportStatusVisible = computed(() => Boolean(
 ));
 
 const createPullRequestOpen = ref(false);
-const checkpointFailure = computed(() => (props.session?.backgroundTasks || [])
-  .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed")?.error || "");
 const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
 const sessionPullRequestTarget = computed(() => sessionPullRequest.value?.number ? {
   path: projectAppPath(projectSlug.value, '/dashboard/pull-requests'),

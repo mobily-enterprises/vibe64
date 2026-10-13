@@ -483,8 +483,10 @@ Long drafts scroll inside the input; repair details start collapsed, and a share
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.
 Generated repair instructions stay with the request, separate from the editable
-draft. Recovery checkpoint warnings stay compact, with technical details
-collapsed and scrollable when opened.
+draft. Recovery snapshot warnings explain that working files remain and chat can
+continue, with technical details collapsed and scrollable. Dismiss hides the exact
+failure across browser reloads; new failures appear again, and a successful
+checkpoint after an assistant turn clears the notice automatically.
 The main chat composer keeps Chat mode, Add, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.

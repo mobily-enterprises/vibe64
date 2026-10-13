@@ -3915,3 +3915,14 @@ session contribution limit and pass its instruction composer. Codex, Claude
 and OpenCode pass it from the daemon's host environment through the existing
 context registry and driver. Public Vibe64 does not define hosted platform update
 policy; hosts without this guidance keep their original instructions.
+
+
+## Recovery snapshot notice
+
+The existing `codex_turn_checkpoint` task reports whether the latest observed
+assistant-turn checkpoint succeeded. `useVibe64AutopilotView` reads that task and
+uses its existing per-project/session browser dismissal storage for the exact
+turn, update timestamp and error. `Vibe64AutopilotView` explains interrupted
+snapshot commands, retains Technical details, and provides Dismiss. Dismissal
+changes presentation only; new failures reappear and a successful checkpoint
+removes the notice. A new Send alone does not claim a checkpoint was created.

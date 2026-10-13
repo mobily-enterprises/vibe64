@@ -2949,6 +2949,39 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOutput.value).not.toContain("Newer completed Save");
   });
 
+  it("dismisses only the observed checkpoint failure across reloads and shows new failures", async () => {
+    vi.stubGlobal("window", { localStorage: memoryStorage() });
+    const failure = { id: "codex_turn_checkpoint", status: "failed", checkpointTurnId: "turn-1",
+      updatedAt: "2026-10-13T08:23:08.835Z", error: "Command was killed with SIGTERM (Termination): checkpoint" };
+    const overrides = { session: { ...viewProps().session, backgroundTasks: [failure] } };
+    const first = await createViewWithProps(overrides);
+    expect(first.view.checkpointFailureVisible.value).toBe(true);
+    expect(first.view.checkpointFailureReason.value).toBe("The snapshot command was interrupted.");
+    first.props.session.agentSession.turn = { status: "inProgress", turnId: "next-turn" };
+    await nextTick();
+    expect(first.view.checkpointFailureVisible.value).toBe(true); // Send/start is not a confirmed snapshot.
+    expect(first.view.dismissCheckpointFailure()).toBe(true);
+    expect(first.view.checkpointFailureVisible.value).toBe(false);
+    expect(first.props.session.backgroundTasks[0]).toEqual(failure); // Presentation does not rewrite diagnostics.
+    first.scope.stop();
+
+    const reloaded = await createViewWithProps(overrides);
+    expect(reloaded.view.checkpointFailureVisible.value).toBe(false);
+    reloaded.props.session = { ...reloaded.props.session, sessionId: "other-session" };
+    await nextTick();
+    expect(reloaded.view.checkpointFailureVisible.value).toBe(true);
+    reloaded.props.session = { ...reloaded.props.session, sessionId: "session-1" };
+    await nextTick();
+    expect(reloaded.view.checkpointFailureVisible.value).toBe(false);
+    reloaded.props.session.backgroundTasks = [{ ...failure, checkpointTurnId: "turn-2", updatedAt: "2026-10-13T08:40:00Z" }];
+    await nextTick();
+    expect(reloaded.view.checkpointFailureVisible.value).toBe(true); // Same error, a new failure.
+    reloaded.props.session.backgroundTasks = [{ ...failure, status: "ready", error: "" }];
+    await nextTick();
+    expect(reloaded.view.checkpointFailureVisible.value).toBe(false);
+    expect(reloaded.view.dismissCheckpointFailure()).toBe(false);
+  });
+
   it("remembers dismissed Save and workspace attempts across reloads without hiding new attempts", async () => {
     const storage = memoryStorage();
     vi.stubGlobal("window", { localStorage: storage });
