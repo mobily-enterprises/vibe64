@@ -280,6 +280,17 @@
               />
 
               <v-btn
+                v-if="terminalCanStop"
+                aria-label="Stop preview"
+                :disabled="operationBusy"
+                :icon="mdiStop"
+                size="small"
+                title="Stop preview"
+                variant="text"
+                @click="stopTerminal"
+              />
+
+              <v-btn
                 v-if="previewToolbarRecoveryVisible"
                 :disabled="operationBusy"
                 :icon="mdiRefresh"
@@ -636,7 +647,6 @@
         @update:open="setTerminalExpanded"
       >
         <template #actions-before>
-          <v-btn v-if="learningBinding && terminalIsRunning" :disabled="operationBusy" size="small" variant="text" @click="stopTerminal">Stop</v-btn>
           <v-btn
             v-if="previewTerminalRecoveryVisible"
             :disabled="operationBusy"
@@ -816,6 +826,7 @@ import {
   mdiPowerCycle,
   mdiRefresh,
   mdiRoutes,
+  mdiStop,
   mdiWebClock
 } from "@mdi/js";
 import Vibe64LongRunningTerminal from "@/components/studio/Vibe64LongRunningTerminal.vue";
@@ -1027,6 +1038,7 @@ const {
   stopTerminal,
   setTerminalExpanded,
   terminal,
+  terminalCanStop,
   terminalCanRestart,
   terminalCanRetry,
   terminalCommandPreview,

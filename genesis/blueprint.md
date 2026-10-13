@@ -259,6 +259,10 @@ creation remains diagnosable after its creating process has stopped.
 Assistants have one discoverable command entry point for the session's preview,
 browser tests, environment, database and GitHub tools. Existing individual
 commands remain available so earlier conversation instructions keep working.
+The top Preview toolbar can stop only the selected session's application and
+managed browser without closing its chat or source. That choice survives editor
+reopening and blocks incidental startup until the person or agent deliberately
+starts Preview again. Scoped browser tests restore the prior stopped choice.
 Opening a project shows loading while its sessions are being fetched, including
 when restoring the last selected session. It does not imply creation is blocked.
 Opening a project link reopens its runtime before chat and Preview load, including

@@ -629,6 +629,7 @@ function useVibe64OutputControlsSurface(props) {
     previewIdentity: previewIdentityCapability,
     previewMessage,
     previewState,
+    previewStoppedIntent,
     publishPreviewState,
     requestPreviewIdentityGrant,
     refresh: refreshOutputs,
@@ -641,6 +642,7 @@ function useVibe64OutputControlsSurface(props) {
     startNewlyConfiguredWorkspaceSetup,
     stopTerminal,
     terminal,
+    terminalCanStop,
     terminalCanRestart,
     terminalCanRetry,
     terminalCommandPreview,
@@ -917,7 +919,7 @@ function useVibe64OutputControlsSurface(props) {
     ? "Server will be restarted soon"
     : props.busy || props.sourceOperationsSuspended ? "Work in progress" : "");
   watch([() => props.session?.sessionId, () => props.busy, () => props.sourceOperationsSuspended,
-    previewState, operationBusy, terminalCanRestart, terminalCanRetry, previewCanRestart, previewTestNotice,
+    previewState, previewStoppedIntent, operationBusy, terminalCanRestart, terminalCanRetry, previewCanRestart, previewTestNotice,
     resourceAdmissionId, testApproval],
   async ([sessionId, busy, suspended, state], previous = []) => {
     if (sessionId !== previous[0] || state === "ready") {
@@ -925,7 +927,7 @@ function useVibe64OutputControlsSurface(props) {
       previewRestartPending.value = false;
     }
     if (busy && !previous[1]) previewRestartAttempted = false;
-    if (resourceAdmissionId.value || testApproval.value || previewTestNotice.value) {
+    if (previewStoppedIntent.value || resourceAdmissionId.value || testApproval.value || previewTestNotice.value) {
       previewRestartPending.value = false;
       return;
     }
@@ -940,7 +942,7 @@ function useVibe64OutputControlsSurface(props) {
       await nextTick();
       if (project !== projectSlug.value || sessionId !== props.session?.sessionId || loadError.value ||
           props.busy || props.sourceOperationsSuspended || operationBusy.value ||
-          resourceAdmissionId.value || testApproval.value || previewTestNotice.value ||
+          previewStoppedIntent.value || resourceAdmissionId.value || testApproval.value || previewTestNotice.value ||
           !["stale", "failed"].includes(previewState.value) ||
           !(terminalCanRestart.value || terminalCanRetry.value || previewCanRestart.value)) return;
       await recoverEmbeddedPreview();
@@ -2315,6 +2317,7 @@ function useVibe64OutputControlsSurface(props) {
     stopTerminal,
     setTerminalExpanded,
     terminal,
+    terminalCanStop,
     terminalCanRestart,
     terminalCanRetry,
     terminalCommandPreview,

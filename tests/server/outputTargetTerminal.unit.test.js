@@ -91,6 +91,35 @@ test("preview status, open, and identity selection reject frozen sessions before
   assert.equal(projectReads, 0);
 });
 
+test("explicit Preview Stop persists and refuses incidental startup before preparation", async (t) => {
+  const sessionId = `session-stop-${crypto.randomUUID()}`;
+  const metadata = {};
+  let prepared = 0;
+  let browsersClosed = 0;
+  const store = {
+    async mutateSession(_id, update) { return update(); },
+    async writeMetadataValue(_id, key, value) { metadata[key] = value; }
+  };
+  const controller = createOutputTargetTerminalController({
+    ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
+    projectService: { async createRuntime() { return {
+      store,
+      async getSession() { return { sessionId, metadata }; }
+    }; } },
+    stopPreviewBrowsers() { browsersClosed += 1; return { ok: true }; }
+  });
+  t.after(() => controller.close());
+
+  assert.equal((await controller.stopTerminal(sessionId, "")).ok, true);
+  assert.equal(metadata.output_target_preview_stopped, "true");
+  assert.equal(browsersClosed, 1);
+  const incidental = await controller.startTerminal(sessionId, { automatic: true, outputTargetId: "app" });
+  assert.equal(incidental.ok, false);
+  assert.equal(incidental.code, "vibe64_preview_stopped");
+  assert.equal(prepared, 0);
+  assert.equal((await controller.stopTerminal(sessionId, "")).ok, true);
+});
+
 test("output targets declare the managed workload kind independently of their PTY transport", () => {
   assert.deepEqual(outputTargetExecutionDescriptor({ label: "Build binary" }, {
     metadata: {

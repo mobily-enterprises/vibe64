@@ -12,7 +12,7 @@ import {
   listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
-  stopTerminalSession,
+  stopTerminalSessionAndWait,
   subscribeTerminalSession,
   updateTerminalSessionMetadata,
   writeTerminalSession
@@ -130,6 +130,8 @@ const OUTPUT_METADATA = Object.freeze({
   terminalId: "output_target_terminal_id"
 });
 const OUTPUT_METADATA_NAMES = Object.freeze(Object.values(OUTPUT_METADATA));
+const PREVIEW_STOPPED_METADATA = "output_target_preview_stopped";
+const PREVIEW_STOP_ERROR_METADATA = "output_target_preview_stop_error";
 const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
 const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
@@ -509,6 +511,20 @@ function outputTargetFromMetadata(metadata = {}) {
     openTarget: openTargetFromMetadata(metadata),
     startedAt: String(metadata[OUTPUT_METADATA.startedAt] || "").trim()
   };
+}
+
+function previewStopState(metadata = {}) {
+  return {
+    stopped: metadata[PREVIEW_STOPPED_METADATA] === "true",
+    error: String(metadata[PREVIEW_STOP_ERROR_METADATA] || "").trim()
+  };
+}
+
+async function writePreviewStopState(store, sessionId, { stopped, error = "" }) {
+  await store.mutateSession(sessionId, async () => {
+    await store.writeMetadataValue(sessionId, PREVIEW_STOPPED_METADATA, stopped ? "true" : "false");
+    await store.writeMetadataValue(sessionId, PREVIEW_STOP_ERROR_METADATA, String(error || ""));
+  });
 }
 
 function sessionWithoutLaunchMetadata(session = {}) {
@@ -2033,6 +2049,7 @@ function createOutputTargetTerminalController({
   runCommand = runVibe64Command,
   startWorkflow = startResourceWorkflow,
   stopExecution = stopVibe64Execution,
+  stopPreviewBrowsers = async () => ({ ok: true }),
   finishWorkflow = finishVibe64Workflow,
   setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure = () => null
@@ -2318,6 +2335,12 @@ function createOutputTargetTerminalController({
             previewStatus,
             previewApplicationIdentities: context.previewApplicationIdentities
           });
+          const stopState = previewStopState(context.session.metadata);
+          response.preview.stoppedIntent = stopState.stopped;
+          if (stopState.stopped && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
+            response.preview.state = stopState.error ? "failed" : "stopped";
+            response.preview.message = stopState.error || "Preview is stopped. Start it to run the application.";
+          }
           const testRun = previewTestRuns.get(sessionId);
           if (testRun) response.previewTestRun = { targetId: testRun.targetId, state: testRun.state };
           if (!["ready", "starting"].includes(response.preview.state) && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
@@ -2573,6 +2596,13 @@ function createOutputTargetTerminalController({
           if (frozen) {
             return frozen;
           }
+          if (input.automatic === true && !(testRun && input.previewTestRun === testRun)) {
+            const runtime = await projectService.createRuntime();
+            const session = await runtime.getSession(sessionId);
+            if (previewStopState(session.metadata).stopped) {
+              return { ok: false, code: "vibe64_preview_stopped", error: "Preview was stopped explicitly. Use Start preview to run it again." };
+            }
+          }
           const context = await createLaunchContext(projectService, sessionId, {
             awaitWorkspacePrepared: true,
             ensureWorkspacePrepared,
@@ -2581,6 +2611,15 @@ function createOutputTargetTerminalController({
           const unavailable = launchAdmissionFailure(sessionId, context.session);
           if (unavailable) {
             return unavailable;
+          }
+          const stopState = previewStopState(context.session.metadata);
+          if (stopState.stopped && !(testRun && input.previewTestRun === testRun)) {
+            if (input.automatic === true) {
+              return { ok: false, code: "vibe64_preview_stopped", error: "Preview was stopped explicitly. Use Start preview to run it again." };
+            }
+            if (stopState.error || launchTerminalIsRunning(latestLaunchTerminal(sessionId) || {})) {
+              return { ok: false, code: "vibe64_preview_stop_incomplete", error: stopState.error || "Preview cleanup is still running. Retry Stop before starting it." };
+            }
           }
           const cwd = sessionTerminalCwd(context.session, projectService);
           let forceRestart = input.forceRestart === true;
@@ -3041,6 +3080,9 @@ function createOutputTargetTerminalController({
               source: "start"
             });
           }
+          if (terminalSession?.ok !== false && stopState.stopped && !(testRun && input.previewTestRun === testRun)) {
+            await writePreviewStopState(context.store, sessionId, { stopped: false });
+          }
           return terminalSession;
         } finally {
           admission.release();
@@ -3049,26 +3091,39 @@ function createOutputTargetTerminalController({
     },
 
     async stopTerminal(sessionId, terminalSessionId) {
-      if (previewTestRuns.has(sessionId)) {
-        return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before stopping Preview." };
-      }
-      await launchPreviewProxies.close({
-        sessionId,
-        terminalSessionId
-      });
-      const result = stopTerminalSession(terminalSessionId, {
-        namespace: outputTargetTerminalNamespace(sessionId)
-      });
-      if (result?.ok === false && /terminal session not found/iu.test(String(result.error || ""))) {
-        return {
-          ok: true,
-          id: String(terminalSessionId || ""),
-          running: false,
-          stale: true,
-          status: "exited"
-        };
-      }
-      return result;
+      return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
+        if (previewTestRuns.has(sessionId)) {
+          return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before stopping Preview." };
+        }
+        const active = latestLaunchTerminal(sessionId);
+        const requestedId = String(terminalSessionId || "").trim();
+        if (requestedId && active?.id && active.id !== requestedId && launchTerminalIsRunning(active)) {
+          return { ok: false, code: "vibe64_preview_run_changed", error: "A newer Preview run is active. Refresh its status before stopping it." };
+        }
+        const runtime = await projectService.createRuntime();
+        await writePreviewStopState(runtime.store, sessionId, { stopped: true });
+        const activeId = active?.id && (!requestedId || active.id === requestedId) ? active.id : "";
+        let result = { ok: true, id: requestedId, running: false, status: "exited" };
+        try {
+          if (activeId && launchTerminalIsRunning(active)) {
+            result = await stopTerminalSessionAndWait(activeId, {
+              namespace: outputTargetTerminalNamespace(sessionId)
+            });
+            if (result?.ok === false) throw new Error(result.error || "Preview process did not stop.");
+          }
+          await launchPreviewProxies.close({ sessionId });
+          const browserCleanup = await stopPreviewBrowsers(sessionId);
+          if (browserCleanup?.ok === false) throw new Error(browserCleanup.error || "Managed Preview browser did not stop.");
+          await writePreviewStopState(runtime.store, sessionId, { stopped: true });
+          publishLaunchCleanup(sessionId, "preview-stopped");
+          return result;
+        } catch (error) {
+          const message = String(error?.message || error || "Preview cleanup failed.");
+          await writePreviewStopState(runtime.store, sessionId, { stopped: true, error: message });
+          publishLaunchCleanup(sessionId, "preview-stop-failed");
+          return { ok: false, code: "vibe64_preview_stop_incomplete", error: message };
+        }
+      }));
     },
 
     subscribeTerminal(sessionId, terminalSessionId, subscriber) {

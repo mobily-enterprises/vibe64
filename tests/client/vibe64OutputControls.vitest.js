@@ -298,6 +298,7 @@ describe("Vibe64 launch controls", () => {
       reason: "",
       recovery: null,
       state: "ready",
+      stoppedIntent: false,
       targetHref: "http://127.0.0.1:4100/app",
       terminalId: "terminal-1"
     });
@@ -332,6 +333,7 @@ describe("Vibe64 launch controls", () => {
       reason: "",
       recovery: null,
       state: "ready",
+      stoppedIntent: false,
       targetHref: "http://127.0.0.1:4100/home",
       terminalId: "terminal-1"
     });
@@ -541,6 +543,7 @@ describe("Vibe64 launch controls", () => {
       outputTargetsSettled: true
     })).toBe(true);
     expect(shouldScheduleLaunchAutoStart(readyState)).toBe(true);
+    expect(shouldScheduleLaunchAutoStart({ ...readyState, stoppedIntent: true })).toBe(false);
     expect(shouldScheduleLaunchAutoStart({
       ...readyState,
       loading: true

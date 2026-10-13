@@ -1127,6 +1127,18 @@ function stopTerminalSession(id, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
+async function stopTerminalSessionAndWait(id, { namespace = "default" } = {}) {
+  const session = sessionsForNamespace(namespace).get(id);
+  if (!session) return terminalSessionNotFound();
+  const stopped = await beginTerminalStop(session, "stop");
+  if (stopped.failures.length) {
+    throw terminalCloseAggregateFailure(session, stopped.failures);
+  }
+  await session.exitCompletion;
+  await session.scopeDrainCompletion;
+  return terminalSessionResponse(session);
+}
+
 async function closeTerminalSession(id, {
   namespace = "default"
 } = {}) {
@@ -1354,6 +1366,7 @@ export {
   resizeTerminalSession,
   startTerminalSession,
   stopTerminalSession,
+  stopTerminalSessionAndWait,
   subscribeTerminalSession,
   terminalKeyInput,
   terminalMovementState,

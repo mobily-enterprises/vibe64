@@ -1113,6 +1113,7 @@ function createService({
     logger,
     projectService
   });
+  let agentPreviewCommand;
   const outputTarget = createOutputTargetTerminalController({
     ensureProjectServices: projectServices.ensure,
     env,
@@ -1123,10 +1124,11 @@ function createService({
       return prepareWorkspaceSetup(sessionId, { publish: true, waitForCompletion: true });
     },
     projectService,
+    stopPreviewBrowsers: (sessionId) => agentPreviewCommand.stopBrowsersForSession(sessionId),
     publishSessionChanged: publishSessionChanged.outputTarget,
     sessionAdmissionFailure: (sessionId) => sessionTerminalAdmissionFailure(sessionId, "output")
   });
-  const agentPreviewCommand = createAgentPreviewCommandService({
+  agentPreviewCommand = createAgentPreviewCommandService({
     launchTarget: outputTarget,
     logger,
     projectService,
@@ -4248,7 +4250,7 @@ function createService({
 
     async stopOutputTargetTerminal(sessionId, terminalSessionId) {
       const result = await outputTarget.stopTerminal(sessionId, terminalSessionId);
-      await publishTerminalSessionChanged("outputTargetStopped", sessionId, "output-target-stopped");
+      await publishTerminalSessionChanged("outputTargetStopped", sessionId, result?.ok === false ? "output-target-stop-failed" : "output-target-stopped");
       return result;
     },
 

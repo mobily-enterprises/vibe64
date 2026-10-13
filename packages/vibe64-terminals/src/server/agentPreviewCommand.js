@@ -185,6 +185,7 @@ function usageText() {
     "  vibe64-helper preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
     "  vibe64-helper preview targets [--json]",
     "  vibe64-helper preview status [--json]",
+    "  vibe64-helper preview stop [--json]",
     "  vibe64-helper preview inspect-url",
     "  vibe64-helper preview screenshot [--output <path>]",
     "  vibe64-helper preview browser ensure",
@@ -256,7 +257,8 @@ function normalizeTimeoutMs(value = "") {
 }
 
 function previewReady(status = {}) {
-  return status?.previewTarget?.available !== false && Boolean(normalizeText(status?.previewTarget?.href));
+  return status?.preview?.stoppedIntent !== true && status?.previewTarget?.available !== false &&
+    Boolean(normalizeText(status?.previewTarget?.href));
 }
 
 function activeTerminalExited(status = {}, terminalSessionId = "") {
@@ -408,6 +410,7 @@ function previewStatusSummary(status = {}, {
     identities,
     identityTypes,
     outputTargetId: normalizeText(lastOutputTarget.id || activeMetadata.outputTargetId),
+    stoppedIntent: status.preview?.stoppedIntent === true,
     ready: previewReady(status),
     stale: previewTarget.stale === true || normalizeText(previewTarget.recovery?.reason) === "server_source_changed",
     terminal: previewTerminal(status)
@@ -418,6 +421,7 @@ function previewSummaryLines(summary = {}) {
   return [
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
     `Preview running: ${summary.terminal?.running ? "yes" : "no"}`,
+    `Preview explicitly stopped: ${summary.stoppedIntent ? "yes" : "no"}`,
     summary.outputTargetId ? `Output target: ${summary.outputTargetId}` : "",
     summary.endpoints?.browser?.url ? `Browser URL (Preview proxy): ${summary.endpoints.browser.url}` : "Browser URL: unavailable",
     summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : "Current page: not observed",
@@ -818,6 +822,24 @@ function createAgentPreviewCommandService({
     };
   }
 
+  async function stopBrowsersForSession(sessionId = "") {
+    const sessionWorkers = browserWorkers.get(normalizeText(sessionId));
+    if (!sessionWorkers) return { ok: true, closed: 0 };
+    let closed = 0;
+    for (const [socketPath, descriptor] of sessionWorkers) {
+      const result = await stopRegisteredBrowserWorker(descriptor, {
+        reason: "preview-stop",
+        stopExecution: stopManagedExecution,
+        stopOwnedExecutions
+      });
+      if (result?.ok === false) return result;
+      sessionWorkers.delete(socketPath);
+      closed += 1;
+    }
+    if (sessionWorkers.size === 0) browserWorkers.delete(normalizeText(sessionId));
+    return { ok: true, closed };
+  }
+
   async function releaseControlForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const pending = browserTestRuns.get(normalizedSessionId);
@@ -966,6 +988,21 @@ function createAgentPreviewCommandService({
           lines: parsed.lines
         })
       });
+    }
+    if (parsed.command === "stop") {
+      if (typeof launchTarget.stopTerminal !== "function") {
+        return finish(responseError("Vibe64 preview stop is unavailable.", "vibe64_agent_preview_command_stop_unavailable"));
+      }
+      const current = await launchTarget.launchStatus(sessionId);
+      if (current?.ok === false) return finish({ ...current, exitCode: 1, stderr: `${current.error}\n` });
+      const stopped = await launchTarget.stopTerminal(sessionId, current.activeTerminal?.id || "");
+      if (stopped?.ok === false) return finish({ ...stopped, exitCode: 1, stderr: `${stopped.error}\n` });
+      const status = await launchTarget.launchStatus(sessionId);
+      if (status?.ok === false) return finish({ ...status, exitCode: 1, stderr: `${status.error}\n` });
+      const summary = statusSummary(status, sessionId);
+      return finish({ ok: true, exitCode: 0, stdout: parsed.json
+        ? `${JSON.stringify(summary, null, 2)}\n`
+        : `${previewSummaryLines(summary).join("\n")}\n` });
     }
     if (!["ensure", "restart"].includes(parsed.command)) {
       return finish(responseError(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {
@@ -1121,6 +1158,7 @@ function createAgentPreviewCommandService({
       stopExecution: stopManagedExecution,
       stopOwnedExecutions
     }),
+    stopBrowsersForSession,
     closeAllForSession,
     playwrightStatus,
     cancelPlaywrightRun,

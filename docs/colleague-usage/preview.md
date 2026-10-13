@@ -61,6 +61,15 @@ retry after you inspect the failure.
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not
 stop the application.
+The top Preview toolbar shows **Stop preview** while the application is running.
+Stop waits for the application's owned work and managed browser to close; it
+does not close the coding session, chat, source checkout or shared services.
+It stays stopped after navigation, reload or reopening the session. Use the
+toolbar's **Start preview** or **Restart preview** deliberately to run it again.
+If Stop reports incomplete cleanup, retry Stop before starting. Browser tests
+may temporarily run an isolated target, then restore the prior stopped choice.
+Colleague can offer the existing authorized stop/start actions, but a how-to
+question alone does not authorize either action.
 Retrying the same output reuses its running application when its settings and
 environment still match. It does not start another process merely because a
 new Preview address could be allocated. Use **Restart preview** when you intend

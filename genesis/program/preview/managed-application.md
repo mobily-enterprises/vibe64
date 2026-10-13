@@ -89,6 +89,12 @@ Close, Stop and collapsible task details retain their own existing behavior.
 ## Public contract
 
 Embedded Preview remains interactive during edits, goals and interruptions.
+The existing toolbar Stop persists a per-session stopped intent through session
+metadata. The output owner serializes Stop and Start, waits for owned process,
+proxy and managed browser cleanup, and refuses incidental automatic startup while
+stopped. Explicit Start clears the choice after launch; a scoped browser test
+temporarily runs its target and restores the saved stopped state. Stopping does
+not close the coding session, agent, source or shared project services.
 A small **Work in progress** bar reports editing without hiding or replacing
 the frame. A recoverable failed or stale web output queues one existing output
 recovery attempt after editing/source operations settle, showing **Server will

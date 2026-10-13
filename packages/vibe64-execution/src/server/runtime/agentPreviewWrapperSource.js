@@ -250,6 +250,15 @@ function screenshotOutputPath(args = []) {
 }
 
 async function previewSession() {
+  const currentResponse = await remoteCommand(["status", "--json"]);
+  if (payloadExitCode(currentResponse) !== 0) {
+    writePayload(currentResponse);
+    process.exit(payloadExitCode(currentResponse));
+  }
+  const current = JSON.parse(String(currentResponse.stdout || "{}"));
+  if (current.stoppedIntent === true) {
+    throw new Error("Preview was stopped explicitly. Run vibe64-helper preview ensure --wait to start it before browser inspection.");
+  }
   const statusResponse = await remoteCommand(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN
     ? ["status", "--json"]
     : ["ensure", "--wait", "--json"]);

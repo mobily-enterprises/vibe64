@@ -288,6 +288,7 @@ function shouldScheduleLaunchAutoStart({
   operationBusy = false,
   sessionLaunchable = true,
   sessionId = "",
+  stoppedIntent = false,
   target = null,
   terminalDisplayed = true,
   terminalVisible = false
@@ -295,6 +296,7 @@ function shouldScheduleLaunchAutoStart({
   return Boolean(
     sessionId &&
     sessionLaunchable &&
+    !stoppedIntent &&
     target &&
     target.available !== false &&
     key &&
@@ -554,6 +556,7 @@ function normalizeLaunchPreview(preview = {}) {
     reason: String(source.reason || "").trim(),
     recovery,
     state,
+    stoppedIntent: source.stoppedIntent === true,
     targetHref: String(source.targetHref || "").trim(),
     terminalId: String(source.terminalId || "").trim()
   };
@@ -815,6 +818,7 @@ function useVibe64OutputControls({
     }),
     buildRawPayload: (_model, { context }) => ({
       ...vibe64RealtimeOriginPayload(),
+      ...(context.automatic === true ? { automatic: true } : {}),
       ...(context.forceRestart === true ? { forceRestart: true } : {}),
       ...(context.outputParameters === undefined ? {} : { outputParameters: context.outputParameters }),
       outputTargetId: String(context.outputTargetId || "")
@@ -918,6 +922,7 @@ function useVibe64OutputControls({
         };
   });
   const previewState = computed(() => preview.value.state);
+  const previewStoppedIntent = computed(() => preview.value.stoppedIntent);
   const testApproval = computed(() => ["waiting", "resuming"].includes(status.value.testApproval?.state)
     ? status.value.testApproval : null);
   const resourceAdmissionId = computed(() => ["ready", "starting"].includes(previewState.value) ? ""
@@ -1209,6 +1214,7 @@ function useVibe64OutputControls({
       const missing = outputTarget.parameters?.find((parameter) => parameter.required && !parameters[parameter.id]?.trim());
       if (missing) throw new Error(`${missing.label} is required. Open Preview options to set it.`);
       const terminalSession = await startTerminalCommand.run({
+        automatic: Boolean(normalizedAutoStartAttemptKey),
         forceRestart,
         ...(parameters ? { outputParameters: parameters } : {}),
         outputTargetId: outputTarget.id,
@@ -1560,9 +1566,10 @@ function useVibe64OutputControls({
       if (practiceBinding && (!practiceBindingCurrent.value || stoppedScopeKey !== launchScopeKey.value)) return false;
       applyLaunchTerminalSession(stopped);
       await refresh();
-      await waitForStoppedTerminal();
-      return true;
-    } catch {
+      return await waitForStoppedTerminal();
+    } catch (error) {
+      launchError.value = String(error?.message || "Preview could not be stopped.");
+      await refresh();
       return false;
     } finally {
       operationBusy.value = false;
@@ -1767,11 +1774,12 @@ function useVibe64OutputControls({
     projectSlug.value,
     sessionId.value,
     autoStartRequestKey.value,
+    previewStoppedIntent.value ? "stopped" : "startable",
     canLoadOutputs.value ? "loadable" : "blocked",
     outputTargetsResource.isLoading.value ? "loading" : "ready"
   ].join("|"), () => {
     const scopeKey = launchScopeKey.value;
-    if (!scopeKey || !autoStartRequestKey.value || !canLoadOutputs.value) {
+    if (!scopeKey || !autoStartRequestKey.value || !canLoadOutputs.value || previewStoppedIntent.value) {
       resetOutputsAutoStartSettlement();
       return;
     }
@@ -1789,6 +1797,7 @@ function useVibe64OutputControls({
     projectSlug.value,
     sessionId.value,
     autoStartRequestKey.value,
+    previewStoppedIntent.value ? "stopped" : "startable",
     outputTargetsLoadingForAutoStart.value ? "loading" : "ready",
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalDisplayed.value ? "displayed" : "hidden",
@@ -1805,6 +1814,10 @@ function useVibe64OutputControls({
       clearAutoStartTimer();
       return;
     }
+    if (previewStoppedIntent.value) {
+      clearAutoStartTimer();
+      return;
+    }
     const ready = shouldScheduleLaunchAutoStart({
       autoStartKey: autoStartKey.value,
       externalBusy: readRefOrGetterValue(busy),
@@ -1813,6 +1826,7 @@ function useVibe64OutputControls({
       operationBusy: operationBusy.value,
       sessionLaunchable: canLoadOutputs.value,
       sessionId: sessionId.value,
+      stoppedIntent: previewStoppedIntent.value,
       target,
       terminalDisplayed: terminalDisplayed.value,
       terminalVisible: terminalVisible.value
@@ -1834,6 +1848,7 @@ function useVibe64OutputControls({
       autoStartTimer = 0;
       scheduledAutoStartKey = "";
       const currentTarget = autoStartTarget.value;
+      if (previewStoppedIntent.value) return;
       const currentKey = `${launchScopeKey.value}:${currentTarget?.id || ""}`;
       if (!shouldScheduleLaunchAutoStart({
         autoStartKey: autoStartKey.value,
@@ -1843,6 +1858,7 @@ function useVibe64OutputControls({
         operationBusy: operationBusy.value,
         sessionLaunchable: canLoadOutputs.value,
         sessionId: sessionId.value,
+        stoppedIntent: previewStoppedIntent.value,
         target: currentTarget,
         terminalDisplayed: terminalDisplayed.value,
         terminalVisible: terminalVisible.value
@@ -1919,6 +1935,7 @@ function useVibe64OutputControls({
     previewIdentity,
     previewMessage,
     previewState,
+    previewStoppedIntent,
     previewTargetDisabledReason,
     previewTargetHref,
     previewTargetRecovery,

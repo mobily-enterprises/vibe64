@@ -410,6 +410,30 @@ test("agent preview help distinguishes duplicate previews from explicit referenc
   assert.doesNotMatch(result.stdout, /any other development server/u);
 });
 
+test("agent preview stop uses the session lifecycle and reports saved intent", async () => {
+  let stopped = false;
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus() { return {
+        ok: true,
+        activeTerminal: stopped ? null : { id: "current-run", running: true, status: "running" },
+        preview: { stoppedIntent: stopped, state: stopped ? "stopped" : "ready" },
+        previewTarget: stopped ? null : { available: true, href: "http://127.0.0.1:3000" }
+      }; },
+      async stopTerminal(sessionId, terminalId) {
+        assert.equal(sessionId, "selected-session");
+        assert.equal(terminalId, "current-run");
+        stopped = true;
+        return { ok: true };
+      }
+    }
+  });
+  const result = await command.run({ args: ["stop", "--json"], sessionId: "selected-session" });
+  assert.equal(result.ok, true);
+  assert.equal(JSON.parse(result.stdout).stoppedIntent, true);
+  assert.match(agentPreviewWrapperSource({}), /Preview was stopped explicitly/u);
+});
+
 test("managed preview browser eval validates stdin before starting browser control", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-eval-input-"));
   const runtimeRoot = path.join(root, "runtime-packs");

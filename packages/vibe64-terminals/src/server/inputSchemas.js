@@ -42,6 +42,7 @@ const agentAttachmentFields = {
 };
 
 const outputTargetFields = {
+  automatic: { type: "boolean", required: false },
   outputParameters: { type: "object", additionalProperties: true, required: false },
   forceRestart: {
     type: "boolean",

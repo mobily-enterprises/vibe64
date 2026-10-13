@@ -21,6 +21,7 @@ import {
   resizeTerminalSession,
   startTerminalSession,
   stopTerminalSession,
+  stopTerminalSessionAndWait,
   subscribeTerminalSession,
   terminalKeyInput,
   terminalMovementState,
@@ -1109,6 +1110,25 @@ test("terminal sessions can stop a process without deleting its log", async () =
     const closed = await closeTerminalSession(session.id, { namespace });
     assert.equal(closed.closed, true);
     assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("awaited terminal stop proves exit and keeps the run log", async () => {
+  const namespace = `terminal-awaited-stop-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: ["-e", "console.log('awaited stop log'); process.stdin.resume(); setInterval(() => {}, 1000);"],
+    command: process.execPath,
+    commandPreview: "node awaited stop",
+    namespace
+  });
+  try {
+    await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("awaited stop log"));
+    const stopped = await stopTerminalSessionAndWait(session.id, { namespace });
+    assert.equal(stopped.ok, true);
+    assert.equal(stopped.status, "exited");
+    assert.match(readTerminalSession(session.id, { namespace }).output, /awaited stop log/u);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
