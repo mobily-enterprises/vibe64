@@ -360,6 +360,23 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
   });
 });
 
+test("Genesis accepts fully enabled main and temporary instructions with maximum host guidance", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    const hostGuidance = "é".repeat(512);
+    for (const conversationKind of ["main", "temporary"]) {
+      const output = await vibe64ConversationInstructions({
+        workdir: projectRoot,
+        promptContext: { scope: "session", conversationKind, hostGuidance,
+          session: { managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true } }
+      });
+      assert.ok(output.includes(hostGuidance));
+      assert.match(output, /vibe64-helper session message-project/u);
+    }
+  });
+});
+
 test("Vibe64 uses configured beginner detail for main and temporary task progress", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await initializeGit(projectRoot);

@@ -34,3 +34,7 @@ sessions cannot send project messages.
 Colleague can explain how to select the destination and offer its existing
 project/session controls. This command is available to coding assistants;
 Colleague has no shell access and cannot claim it sent a message itself.
+
+Message commands are included in Main and temporary coding-agent instructions.
+Host-specific guidance shares the same bounded instruction budget; adding it must
+not prevent either conversation from starting.

@@ -3909,7 +3909,9 @@ existing human approval requirements. A successful receipt identifies the
 selected session and message; it is not a completion report. A reply invokes the
 same command against the source project and resolves its selection at that time.
 
-The native context also accepts optional bounded host guidance. Codex, Claude
+The native context also accepts optional host guidance bounded to 1024 UTF-8
+bytes. All capability combinations, including that maximum, fit Genesis’s 16384-byte
+session contribution limit and pass its instruction composer. Codex, Claude
 and OpenCode pass it from the daemon's host environment through the existing
 context registry and driver. Public Vibe64 does not define hosted platform update
 policy; hosts without this guidance keep their original instructions.

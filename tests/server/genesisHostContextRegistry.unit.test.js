@@ -20,7 +20,21 @@ test("installed host guidance reaches native instructions and stays absent on ot
   const resolved = await vibe64DriverInputFromRegistry({ data: { registryPath: registry.registryPath }, providerSessionId: "hosted", scope: "session" });
   assert.equal(vibe64Driver(resolved).includes(guidance), true);
   assert.equal(vibe64Driver(context("main")).includes("vibe64-local"), false);
-  assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(8193) }), /bounded text/);
+  assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(1025) }), /bounded text/);
+});
+
+test("every session capability combination fits Genesis's 16 KiB host contribution limit", () => {
+  const hostGuidance = "é".repeat(512); // 1024 UTF-8 bytes, not characters.
+  for (const conversationKind of ["main", "temporary"]) {
+    for (let mask = 0; mask < 16; mask++) {
+      const input = context(conversationKind);
+      Object.keys(input.session).forEach((key, bit) => { input.session[key] = Boolean(mask & (1 << bit)); });
+      const output = vibe64Driver({ ...input, hostGuidance });
+      assert.ok(Buffer.byteLength(output, "utf8") <= 16384, `${conversationKind} capabilities ${mask} exceeds Genesis's limit`);
+      assert.ok(output.includes(hostGuidance), "host guidance is retained in full");
+    }
+  }
+  assert.throws(() => vibe64Driver({ ...context("main"), hostGuidance: hostGuidance + "é" }), /bounded text/);
 });
 
 test("Genesis hooks resolve concurrent native conversations without mixing their context", async (t) => {
