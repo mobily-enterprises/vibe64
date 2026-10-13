@@ -31,6 +31,7 @@
     "./server/studioRoots": "./src/server/studioRoots.js",
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
     "./server/vibe64MembershipStore": "./src/server/vibe64MembershipStore.js",
+    "./server/watch-observations": "./src/server/watchObservations.js",
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectPromptHints": "./src/server/projectPromptHints.js",
     "./server/projectRecordMetadata": "./src/server/projectRecordMetadata.js",

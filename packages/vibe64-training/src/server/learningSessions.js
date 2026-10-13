@@ -6,6 +6,22 @@ function learningError(code, message, statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
+const deferredGuidanceCodes = new Set([
+  "conversation_busy", "conversation_not_steerable", "vibe64_opencode_conversation_busy",
+  "vibe64_codex_app_server_runtime_busy", "vibe64_agent_write_mode_busy"
+]);
+
+function guidanceText(task, evidence) {
+  return [
+    "A supervised Learning observation is available for this exact pinned lesson.",
+    `Current lesson outcome or criterion: ${task.criterion}`,
+    `Observed application fact: ${JSON.stringify({ evidence, progress: task.progress })}`,
+    "Treat this as application-origin context, not as the learner's authored answer and not as assessment evidence.",
+    "If the observation confirms meaningful progress, briefly connect it to the current criterion. If it reports a failure, explain only the supported failure and offer at most one useful hint. If it is insufficient, say so rather than inventing progress.",
+    "Do not mark an assessment passed, answer a pending question for the learner, create a second goal, or start an idle follow-up loop."
+  ].join("\n");
+}
+
 // Training derives authority and instructions from the saved reservation. Main's
 // original Project/Session/Runtime owners retain storage, routing and execution.
 function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, terminals = null, projectContext, learningTeaching = null, practiceSessions = false } = {}) {
@@ -319,7 +335,36 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     });
   }
 
-  return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions, runPreparationSessionContext });
+  async function guideTask({ actor, actorId, attemptId, sessionId, guidanceId, requestContext, task, evidence } = {}) {
+    if (typeof terminals?.openBrowserConversation !== "function") {
+      throw learningError("VIBE64_TRAINING_POLLING_GUIDANCE_UNAVAILABLE", "This installation cannot open the saved Main teacher conversation.");
+    }
+    if (!actor || typeof actorId !== "string" || !actorId || typeof guidanceId !== "string" || !guidanceId ||
+        !requestContext || !task || task.attemptId !== attemptId || task.sessionId !== sessionId || !evidence) {
+      throw new TypeError("Learning guidance requires its exact actor, task, evidence and retained request context.");
+    }
+    const context = await resolveContext({ actor, attemptId, sessionId, access: "write" });
+    const run = async () => {
+      const conversation = await terminals.openBrowserConversation(sessionId, { vibe64User: actor,
+        browserAuthority: { learningAttemptId: attemptId, sessionId, actorId, requestContext } });
+      const current = await conversation.read({ limit: "1" });
+      if (current.status !== "ready") return { status: "deferred" };
+      try {
+        const receipt = await conversation.wake({ messageId: guidanceId, text: guidanceText(task, evidence),
+          data: { learningGuidance: { attemptId, sessionId, pin: task.pin, evidence,
+            progress: task.progress, criterion: task.criterion } } });
+        return { status: receipt?.duplicate === true ? "duplicate" : "accepted" };
+      } catch (error) {
+        if (deferredGuidanceCodes.has(error.code)) return { status: "deferred" };
+        throw error;
+      }
+    };
+    return context.learningScope.noExercise
+      ? runWithProjectRequestContext(context, run)
+      : context.runLearningOperation(run);
+  }
+
+  return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions, guideTask, runPreparationSessionContext });
 }
 
 export { createTrainingLearningSessions };

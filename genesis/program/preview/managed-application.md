@@ -31,6 +31,12 @@ the model inspects the actual preview/terminal state. Stop retains the log;
 Close waits for cleanup and removes the terminal and its log. Coding agents and
 immutable download results remain separately owned.
 
+Project Close keeps shared-service admission blocked until those services drain.
+If they drain but a different project cleanup controller fails, the project stays
+open and restores shared-service admission so Preview is not stranded in a stale
+closing state. A shared-service cleanup failure remains blocked for an explicit
+Close retry because its owned executions may still be running.
+
 The shared terminal surface lets people exit and re-enter mobile full screen
 without stopping the output. This restores the underlying page navigation;
 Close, Stop and collapsible task details retain their own existing behavior.

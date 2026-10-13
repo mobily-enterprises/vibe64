@@ -61,7 +61,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     enabled: computed(() => available.value &&
       (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))
   }) : null;
-  if (identity.learningAttemptId !== undefined && identity.noExercise === false && presentation) {
+  if (identity.learningAttemptId !== undefined && presentation) {
     const { channel, body, layout, view, feedback } = shell;
     const rawActor = computed(() => toValue(viewer)?.actorKey || "");
     const selected = () => current.value && active.value && available.value && rawActor.value === identity.viewerActorKey;
@@ -70,10 +70,11 @@ function createConversationApplication(conversation, { identity, viewer, summary
       return binding && ["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sourceProjectSlug"]
         .every(key => binding[key] === identity[key]) ? view.value : null;
     });
-    const focus = computed(() => ({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
-      pane: matchingView.value?.pane || "" }));
-    const workspace = useTrainingWorkspaceObservation({ actor: rawActor, layout: layout || ref(null), view: matchingView, focus,
-      selection: { projectSlug: ref(""), restoring: ref(false), error: computed(() => mounted.detailState.value?.error || "") } });
+    const focus = computed(() => ({ projectSlug: identity.sourceProjectSlug || "", sessionId: identity.sessionId,
+      pane: matchingView.value?.pane || "", learningView: matchingView.value?.learningView || "learning" }));
+    const workspace = identity.noExercise === false ? useTrainingWorkspaceObservation({ actor: rawActor,
+      layout: layout || ref(null), view: matchingView, focus,
+      selection: { projectSlug: ref(""), restoring: ref(false), error: computed(() => mounted.detailState.value?.error || "") } }) : null;
     const product = computed(() => ({ conversationId: mainConversationId(identity), trainingQuestion: trainingQuestion.value }));
     const drawer = { owner: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value : null),
       conversationId: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value.conversationId : ""),

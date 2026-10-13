@@ -4,6 +4,20 @@ function publicCue(cue) {
   const { generation, name, parameters, operation, projectSlug, sessionId, ...value } = cue;
   return value;
 }
+function learningFocusMatches(command, focus) {
+  if (command.learningMode === undefined) return true;
+  if (focus?.learningMode !== command.learningMode) return false;
+  if (command.learningMode === false) return !focus.learningView && !focus.learningContent && !focus.learningAttemptId;
+  if (focus.learningView !== command.learningView ||
+      command.learningContent && focus.learningContent !== command.learningContent ||
+      command.learningAttemptId && focus.learningAttemptId !== command.learningAttemptId) return false;
+  if (command.projectSlug && command.learningContent !== "picker" && focus.projectSlug !== command.projectSlug ||
+      command.sessionId && focus.sessionId !== command.sessionId) return false;
+  const pane = command.presentation ? command.pane || "preview"
+    : command.learningView === "learning" ? "lessons" : command.pane || "preview";
+  if (focus.pane !== pane) return false;
+  return !command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView;
+}
 // Original ephemeral browser command/cue coordination. Consumers retain maps,
 // admission, native turn authority, focus grammar and every lifecycle call site.
 function createTrainingPresentationCoordination({ changed }) {
@@ -58,6 +72,9 @@ function createTrainingPresentationCoordination({ changed }) {
       return { ok: false, error: "This navigation command is no longer pending." };
     }
     const expected = connection.navigation.presentation;
+    if (input.ok && !learningFocusMatches(connection.navigation, input.focus)) {
+      return { ok: false, error: "The browser has not confirmed this exact Learning mode, view and lesson selection." };
+    }
     if (input.ok && expected) {
       const result = input.presentation;
       if (!result || result.attemptId !== expected.attemptId || result.visualId !== expected.visualId || !result.playerInstanceId ||
@@ -66,7 +83,8 @@ function createTrainingPresentationCoordination({ changed }) {
           (expected.operation === "cue" && (result.phase !== "armed" ||
             ["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId"].some(key => result[key] !== expected[key]))) ||
           (expected.operation === "snapshot" && !result.snapshot) || JSON.stringify(result).length > 8192 ||
-          input.focus?.projectSlug !== connection.navigation.projectSlug || input.focus?.sessionId !== connection.navigation.sessionId || input.focus?.pane !== "preview") {
+          input.focus?.projectSlug !== connection.navigation.projectSlug || input.focus?.sessionId !== connection.navigation.sessionId ||
+          input.focus?.pane !== (connection.navigation.pane || "preview")) {
         return { ok: false, error: "The browser has not confirmed this exact lesson presentation operation." };
       }
     }

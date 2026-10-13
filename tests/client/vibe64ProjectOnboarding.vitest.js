@@ -119,6 +119,12 @@ const previewSubtree = autopilot.slice(autopilot.indexOf("<TrainingPreviewPresen
 const ActualAutopilotPreview = Vue.defineComponent({
   props: { model: Object, requestTemporaryAi: Function },
   setup({ model, requestTemporaryAi }) {
+    const learningPaneActive = Vue.computed(() => model.splitPaneFixture
+      ? model.lessonsAvailable && (model.learningView === "learning" || !(model.sourceWorkspaceAvailable ?? model.appAvailable))
+      : null);
+    const normalWorkspaceActive = Vue.computed(() => model.splitPaneFixture
+      ? !model.lessonsAvailable || !learningPaneActive.value
+      : null);
     return {
       props: Vue.computed(() => ({ ...model, sourceWorkspaceAvailable: model.sourceWorkspaceAvailable ?? model.appAvailable,
         outputWorkspaceAvailable: model.appAvailable,
@@ -126,6 +132,8 @@ const ActualAutopilotPreview = Vue.defineComponent({
         previewToolbarTeleportTarget: "#actual-preview-toolbar" })),
       projectSlug: Vue.computed(() => model.projectSlug),
       selectedAssistantSessionId: Vue.computed(() => model.sessionId),
+      learningPaneActive,
+      normalWorkspaceActive,
       dashboardContext: {}, sourceOperationsSuspended: false, agentActive: false,
       assistantJuniorAllowed: true, startTemporaryAiTask: requestTemporaryAi,
       askCodexToFixPreviewIdentity() {}, attachPreviewFile() {}, attachPreviewFileProducer() {},
@@ -166,10 +174,11 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null, learningPaneActive = null, workspaceActive = null, learningView = null } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
-  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
+  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null,
+    learningPaneActive, workspaceActive, learningView: learningView ?? (lessonsAvailable ? "learning" : "workspace") });
   if (practiceApp) {
     props.sourceWorkspaceAvailable = false;
     props.sessionId = "saved-practice-initial";
@@ -320,10 +329,11 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
       }, { default: () => Vue.h(outputSlot) });
       return () => !props.mounted ? null : withAutopilotPreview ? Vue.h(ActualAutopilotPreview, {
         model: props, requestTemporaryAi
-      }, { dashboard: () => Vue.h("input", { "aria-label": "Actual Lessons slot" }) }) : withPresentation ? Vue.h(PreviewPresentation, {
+      }, { learning: () => Vue.h("input", { "aria-label": "Actual Lessons slot" }) }) : withPresentation ? Vue.h(PreviewPresentation, {
         ref: presentationHost, active: onboardingActive(props) && !props.archived,
         projectSlug: props.projectSlug, sessionId: props.sessionId,
-        lessonsAvailable: props.lessonsAvailable, appAvailable: props.appAvailable, attemptId: props.attemptId
+        lessonsAvailable: props.lessonsAvailable, appAvailable: props.appAvailable, attemptId: props.attemptId,
+        learningPaneActive: props.learningPaneActive, workspaceActive: props.workspaceActive
       }, { default: appBody, lessons: () => Vue.h("input", { "aria-label": "Lesson picker selection" }) }) : appBody();
     }
   });
@@ -1262,6 +1272,45 @@ it("offers opt-in App/Lessons/Presentation in one retained original host without
     fixture.props.attemptId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"; await Vue.nextTick();
     expect(handle.state.phase).toBe("closed"); expect(handle.state.attemptId).toBeUndefined();
     expect(fixture.visualReads).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+it("switches one retained Learning host between lesson content and the normal workspace", async () => {
+  const fixture = mountOnboarding({ withPresentation: true, lessonsAvailable: true,
+    attemptId: visualRequest.attemptId, learningPaneActive: true, workspaceActive: false });
+  try {
+    const picker = findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection");
+    picker.props.value = "retained learning choice";
+    expect(fixture.button("App")).toBeNull();
+    const handle = fixture.presentationHost.value.presentation;
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready(); await opening;
+    const playerId = handle.state.playerInstanceId;
+
+    fixture.props.learningPaneActive = false;
+    fixture.props.workspaceActive = true;
+    await Vue.nextTick();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    expect(mocks.visuals[0].operations[0].input.name).toBe("pause");
+    mocks.visuals[0].finish(0, { paused: true });
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    await fixture.settleRead(0);
+    const output = findNode(fixture.container, node => node.type === "output");
+    expect(output).toBeTruthy();
+    expect(mocks.visuals[0].disposed).toBe(false);
+
+    fixture.props.learningPaneActive = true;
+    fixture.props.workspaceActive = false;
+    await Vue.nextTick();
+    expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection")).toBe(picker);
+    expect(picker.props.value).toBe("retained learning choice");
+    expect(handle.state.playerInstanceId).toBe(playerId);
+    expect(findNode(fixture.container, node => node.type === "output")).toBe(output);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+    expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
   } finally { fixture.close(); }
 });
 

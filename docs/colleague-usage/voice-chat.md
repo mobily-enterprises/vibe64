@@ -39,9 +39,10 @@ transcript. The face starts visible at the top edge of the message area, below
 the header. After hiding it, the anonymous **Show avatar** icon reveals the
 larger face, smaller microphone/speaker buttons and its settings cog. The small
 round minus button at the end of that controls row tucks them away (accessible label
-**Minimise avatar**). There is no size menu. Messages scroll behind the face itself, with
-the space around it transparent. A short container temporarily compresses the
-artwork and restores it when space returns.
+**Minimise avatar**). There is no size menu. In Colleague's narrow drawer and
+full-screen phone view, this row stays above the scrolling transcript so it does
+not cover messages. A short container temporarily compresses the artwork and
+restores it when space returns.
 
 Main's microphone and speaker controls sit with the expanded face, outside the
 original message buttons. Before speech is connected, the speaker button opens
@@ -159,6 +160,11 @@ than replaying old activity. Turning off spoken replies silences all narration.
 Choices and defaults come from the installed model pack and may include male and
 female voices. If only one voice is installed it is shown but cannot be changed.
 Server model setup is an operator task.
+
+Loading **Speaking voice** performs a read-only, authorized catalogue check. It
+does not start the microphone, open an audio connection or send an assistant
+message. If the catalogue cannot be loaded, close and reopen **Voice settings**
+after the speech service or sign-in has recovered; typed chat remains available.
 
 Answers start speaking in short phrases before completion; code and dense tables
 remain in chat. Spoken answers use up to 4,000 characters after removing code and

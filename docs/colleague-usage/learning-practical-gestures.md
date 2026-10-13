@@ -22,6 +22,23 @@ Do not start a fresh Colleague conversation midway through this question. If Col
 
 A practical observation can fail while your workspace action remains applied. Repeat that step when the saved session and Preview are ready; do not assume the action was undone. If the learner, lesson target, frame or question changed, return to the intended saved lesson and follow Main's current question. A synthetic click, automatic navigation or an old reply is not practical evidence.
 
+If you started polling from Colleague's eye button, the same trusted named click
+can also update that watch after the workspace settles. The watch update and the
+native practical receipt are separate: a watch notification is never practical
+evidence, and a watch-delivery failure does not undo or invalidate a confirmed
+native practical receipt. Colleague-performed navigation is labelled as a
+demonstration. Pause or Stop polling independently of Main's current question.
+When a watched step is confirmed—or its settle/response fails explicitly—the
+watch may notify the same Main teacher after any current learner turn finishes.
+Main can acknowledge meaningful progress or offer one bounded hint, but that
+application update is not your answer or practical evidence. Repeating the same
+unchanged step does not create repeated hints, and inactivity creates none.
+The eye dialog and Colleague's start/read/pause/resume/stop requests control this
+same watch. Its timestamps describe freshness, and its saved assessment outcome
+is the only displayed result that can support lesson completion. Stop never stops
+the app or Main. Actions inside the app that do not cross a declared exercise
+response or named Vibe64 control cannot be observed by this polling mode.
+
 The teacher must genuinely finish delivering the question before practical observations can be accepted. A short preparation reply is not the question. Wait for Main’s full question even when it appears as a later reply in the same request. The original server checks the saved lesson pin, native delivery, declared check and your explanation; these controls do not mark a pass themselves. An unavailable exercise or teacher operation must be reported as unavailable instead of granting credit.
 
 Main grades your actual explanation alongside the server's description of your completed practical actions. The Helper checks both against the saved lesson rubric; it cannot perform missing steps for you. A saved **needs-review** result grants no pass. Ask Main about the missing evidence and use a fresh independent question when reassessment is appropriate; retrying a completed submission does not grade it again.

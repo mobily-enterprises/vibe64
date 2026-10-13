@@ -1027,6 +1027,7 @@ function createService({
   env = process.env,
   logger = null,
   opencodeTerminalController = {},
+  projectServices: suppliedProjectServices = null,
   projectService,
   publishProjectRuntimeChanged = async () => null,
   publishSessionChanged = {}
@@ -1035,7 +1036,7 @@ function createService({
     throw new TypeError("createService requires vibe64.project.");
   }
   const projectRuntimeOpenOperations = new Map();
-  const projectServices = createProjectServices();
+  const projectServices = suppliedProjectServices || createProjectServices();
   let assistantRouting;
   let sessionConversations;
   const turnCompletions = new Set();
@@ -3194,33 +3195,62 @@ function createService({
           }
         }
 
-        const agentResult = await sessionAgent.closeProject({
-          preserveProcessExitProof: true,
-          projectContextRoot,
-          reason
-        });
-        agentProviderRuntimesStopped = Number(agentResult?.stopped || 0);
-        for (const error of Array.isArray(agentResult?.failed) ? agentResult.failed : []) {
+        try {
+          const agentResult = await sessionAgent.closeProject({
+            preserveProcessExitProof: true,
+            projectContextRoot,
+            reason
+          });
+          agentProviderRuntimesStopped = Number(agentResult?.stopped || 0);
+          for (const error of Array.isArray(agentResult?.failed) ? agentResult.failed : []) {
+            failed.push({
+              ...error,
+              controller: "assistant-provider"
+            });
+          }
+        } catch (error) {
           failed.push({
-            ...error,
-            controller: "assistant-provider"
+            controller: "assistant-provider",
+            error: error instanceof Error ? error.message : String(error || "Assistant runtime cleanup failed.")
           });
         }
 
-        const namespaceResult = await closeProjectScopedTerminalNamespaces({
-          projectScope
-        });
-        projectNamespaceCount = Number(namespaceResult.namespaceCount || 0);
-        projectTerminalClosed = Number(namespaceResult.closed || 0);
-        const cwdResult = await closeTerminalSessionsForCwdRoot(
-          projectContextRoot
-        );
-        projectCwdTerminalClosed = Number(cwdResult.closed || 0);
-        projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
+        try {
+          const namespaceResult = await closeProjectScopedTerminalNamespaces({
+            projectScope
+          });
+          projectNamespaceCount = Number(namespaceResult.namespaceCount || 0);
+          projectTerminalClosed = Number(namespaceResult.closed || 0);
+        } catch (error) {
+          failed.push({
+            controller: "project-terminals",
+            error: error instanceof Error ? error.message : String(error || "Project terminal cleanup failed.")
+          });
+        }
+        try {
+          const cwdResult = await closeTerminalSessionsForCwdRoot(
+            projectContextRoot
+          );
+          projectCwdTerminalClosed = Number(cwdResult.closed || 0);
+          projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
+        } catch (error) {
+          failed.push({
+            controller: "project-directory-terminals",
+            error: error instanceof Error ? error.message : String(error || "Project directory terminal cleanup failed.")
+          });
+        }
+        let projectServicesClosed = false;
         try {
           await projectServices.close(context);
+          projectServicesClosed = true;
         } catch (error) {
           failed.push({ controller: "project-services", error: error.message });
+        }
+        if (projectServicesClosed && failed.length > 0) {
+          // The project remains open when another controller cannot finish.
+          // Restore service admission after its own cleanup completed so a
+          // failed Close cannot strand Preview in a permanent closing state.
+          projectServices.opened(context);
         }
         const result = {
           agentProviderRuntimesStopped,

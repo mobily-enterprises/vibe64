@@ -1,5 +1,9 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
+import { mainConversationRequestContext } from "@local/vibe64-sessions/server/main-conversation-authority";
+import { trainingQuestionField } from "../shared/practicalSchemas.js";
+import { isDeepStrictEqual } from "node:util";
 
 const MAX_RESULT_BYTES = 128 * 1024;
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
@@ -8,6 +12,15 @@ const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
 const requestId = { ...text, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" };
 const attemptId = { ...text, maxLength: 36, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
 const opaque = { type: "object", additionalProperties: true, required: true };
+const pollingFields = {
+  attemptId,
+  targetProjectSlug: { ...text, required: true, minLength: 0, maxLength: 128 },
+  sessionId: { ...text, maxLength: 128 }, conversationId: { ...text, maxLength: 256 },
+  topicHash: { ...text, required: false, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  lessonHash: { ...text, required: false, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  reference: trainingQuestionField,
+  criterion: { type: "string", required: false, noTrim: false, minLength: 1, maxLength: 2000 }
+};
 const learningSessionSummary = { type: "object", required: true, schema: createSchema({
   sessionId: id, sessionName: { ...text, minLength: 0, maxLength: 1024 },
   status: { ...text, maxLength: 64 }, revision,
@@ -129,6 +142,67 @@ function operationError(cause) {
   });
 }
 
+function pollingTaskSnapshot({ input, state, brief, sessions }) {
+  const attempt = state.progress.attempts.find(value => value.attemptId === input.attemptId);
+  if (!attempt || attempt.ended || state.progress.activeAttemptId !== attempt.attemptId || !state.activeSummaryCurrent) {
+    throw Object.assign(new Error("This learning task is no longer the learner's active saved attempt."), {
+      code: "VIBE64_TRAINING_POLLING_TASK_INACTIVE", statusCode: 409
+    });
+  }
+  const session = sessions.find(value => value.learningAttemptId === attempt.attemptId && value.archived !== true);
+  const projectSlug = attempt.projectSlug || "";
+  const sessionId = session?.sessionId || attempt.preparation?.initialSessionId || "";
+  const conversationId = sessionId ? mainConversationId({ learningAttemptId: attempt.attemptId, sessionId }) : "";
+  if (!sessionId || input.targetProjectSlug !== projectSlug || input.sessionId !== sessionId || input.conversationId !== conversationId) {
+    throw Object.assign(new Error("The watched learning project or conversation changed."), {
+      code: "VIBE64_TRAINING_POLLING_TARGET_CHANGED", statusCode: 409,
+      details: { projectSlug, sessionId, conversationId,
+        received: pick(input, ["targetProjectSlug", "sessionId", "conversationId"]) }
+    });
+  }
+  const pin = { topicHash: attempt.pin.topic.topicHash, lessonHash: attempt.pin.lesson.hash };
+  if ((input.topicHash && input.topicHash !== pin.topicHash) ||
+      (input.lessonHash && input.lessonHash !== pin.lessonHash)) {
+    throw Object.assign(new Error("The watched lesson content pin changed."), {
+      code: "VIBE64_TRAINING_POLLING_PIN_CHANGED", statusCode: 409
+    });
+  }
+  const pending = attempt.learning?.resume?.pendingQuestion;
+  let reference = null, criterion = String(input.criterion || "").trim();
+  if (input.reference) {
+    reference = {
+      attemptId: attempt.attemptId, questionId: pending?.id, assessmentId: pending?.assessmentId,
+      issuedRevision: pending?.issuedRevision, ...pin
+    };
+    if (!pending?.issuedRevision || !isDeepStrictEqual(reference, input.reference)) {
+      throw Object.assign(new Error("The watched lesson question changed."), {
+        code: "VIBE64_TRAINING_POLLING_QUESTION_CHANGED", statusCode: 409
+      });
+    }
+    const assessment = brief.lesson.assessments.find(value => value.id === reference.assessmentId);
+    if (!assessment?.rubric?.text) throw new Error("The watched question has no installed assessment criterion.");
+    criterion = assessment.rubric.text;
+  }
+  if (!reference && !criterion) {
+    throw Object.assign(new Error("Name the current learning task or start from its delivered lesson question."), {
+      code: "VIBE64_TRAINING_POLLING_CRITERION_REQUIRED", statusCode: 400
+    });
+  }
+  const submissions = attempt.learning?.submissions || [];
+  const latest = submissions.at(-1);
+  const relevant = reference ? submissions.findLast(value => value.assessmentId === reference.assessmentId) : latest;
+  return {
+    attemptId: attempt.attemptId, projectSlug, sessionId, conversationId, pin, criterion,
+    ...(reference ? { reference } : {}),
+    progress: {
+      revision: state.revision,
+      passedAssessmentIds: brief.learning.passedAssessmentIds,
+      remainingAssessmentIds: brief.learning.remainingAssessmentIds,
+      ...(relevant ? { latest: pick(relevant, ["submissionId", "assessmentId", "kind", "outcome", "assistance", "recordedAt"]) } : {})
+    }
+  };
+}
+
 const endedResult = result => ({ ok: true, available: true, revision: result.revision,
   attempt: active(result.attempt), active: active(result.active), replayed: result.replayed === true,
   previewReady: false });
@@ -182,6 +256,72 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       : operation === "continue" ? "Retained lesson continuation is unavailable in this installation. Keep the original progress and ask the owner to restore the exercise."
       : "Lesson exercise preparation is unavailable in this installation. Reading learning state and teaching content does not prepare an exercise." });
 
+  const pollingRead = withVibe64ActionContext({
+    id: "vibe64.training.polling.read", version: 1, kind: "query", idempotency: "none",
+    input: { mode: "create", schema: createSchema(pollingFields) }, output: null,
+    extensions: { assistant: { exclude: true } },
+    async execute(input, context) {
+      const actor = authenticatedVibe64User(context);
+      if (!actor) throw Object.assign(new Error("Log in before observing a learning task."), { code: "vibe64_auth_required", statusCode: 401 });
+      try {
+        const learning = context.vibe64Action?.learning;
+        const owner = learning?.trainingLearners || learners;
+        const state = await owner.readState({ actor, includeCompletion: true });
+        const brief = await teachingBrief.readBrief({ actor, attemptId: input.attemptId });
+        const sessions = learningSessions ? await learningSessions.readSessions({ actor }) : [];
+        return { ok: true, task: pollingTaskSnapshot({ input, state, brief, sessions }) };
+      } catch (cause) {
+        if (cause.code?.startsWith("VIBE64_TRAINING_POLLING_")) throw cause;
+        throw operationError(cause);
+      }
+    }
+  }, { projectScoped: false, learningAccess: "observe" });
+  const pollingGuide = withVibe64ActionContext({
+    id: "vibe64.training.polling.guide", version: 1, kind: "command", idempotency: "domain_native",
+    input: { mode: "create", schema: createSchema({
+      ...pollingFields,
+      guidanceId: requestId,
+      evidence: { type: "object", required: true, schema: createSchema({
+        outcome: { type: "string", required: true, enum: ["confirmed", "failed"] },
+        control: { ...text, maxLength: 64 },
+        origin: { type: "string", required: true, enum: ["learner", "view", "demonstration"] },
+        failure: { type: "string", required: false,
+          enum: ["workspace-settle-failed", "exercise-observation-failed"] },
+        workspace: { type: "object", required: true, schema: createSchema({
+          projectSlug: { ...text, required: true, maxLength: 128 },
+          sessionId: { ...text, required: true, maxLength: 128 },
+          pane: { ...text, required: true, maxLength: 64 },
+          ready: { type: "boolean", required: true },
+          learningView: { type: "string", required: true, enum: ["workspace", "learning"] }
+        }) }
+      }) }
+    }) }, output: null,
+    extensions: { assistant: { exclude: true } },
+    async execute(input, context) {
+      const actor = authenticatedVibe64User(context);
+      if (!actor) throw Object.assign(new Error("Log in before guiding a learning task."), { code: "vibe64_auth_required", statusCode: 401 });
+      if (typeof learningSessions?.guideTask !== "function") {
+        throw Object.assign(new Error("Learning guidance is unavailable in this installation."), {
+          code: "VIBE64_TRAINING_POLLING_GUIDANCE_UNAVAILABLE", statusCode: 409
+        });
+      }
+      try {
+        const learning = context.vibe64Action?.learning;
+        const owner = learning?.trainingLearners || learners;
+        const state = await owner.readState({ actor, includeCompletion: true });
+        const currentBrief = await teachingBrief.readBrief({ actor, attemptId: input.attemptId });
+        const sessions = await learningSessions.readSessions({ actor });
+        const task = pollingTaskSnapshot({ input, state, brief: currentBrief, sessions });
+        const result = await learningSessions.guideTask({ actor, actorId: context.actor.id,
+          attemptId: input.attemptId, sessionId: task.sessionId, guidanceId: input.guidanceId,
+          requestContext: mainConversationRequestContext(context), task, evidence: input.evidence });
+        return { ok: true, status: result.status };
+      } catch (cause) {
+        if (cause.code?.startsWith("VIBE64_TRAINING_POLLING_")) throw cause;
+        throw operationError(cause);
+      }
+    }
+  }, { projectScoped: false, learningAccess: "write" });
   return Object.freeze([
     definition("courses.list", {}, "Read installed course releases and their exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics.", async () => {
       const result = await catalogue.readCatalogue({ includeLessonTitles: true });
@@ -241,7 +381,9 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
         throw Object.assign(new Error("Lesson retirement did not return an ended saved attempt."), { code: "VIBE64_TRAINING_ATTEMPT_END_FAILED" });
       }
       return endedResult(result);
-    })
+    }),
+    pollingRead,
+    pollingGuide
   ]);
 }
 

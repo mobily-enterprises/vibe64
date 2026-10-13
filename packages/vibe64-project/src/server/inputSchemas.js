@@ -35,6 +35,7 @@ const projectRepositoryBranchesInputValidator = inputSchema({
 const projectOnboardingInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
   purpose: { type: "string", noTrim: false, maxLength: 24000 },
+  includeSetupRequests: { type: "boolean", strictBoolean: true },
   templateOffset: { type: "integer", min: 0 },
   templateId: { type: "string", noTrim: false, minLength: 1, maxLength: 4096 }
 });

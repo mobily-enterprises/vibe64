@@ -69,6 +69,10 @@ Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the
 identified active query when asked. It acknowledges actual view/table selection;
 that is not proof a query succeeded. It does not receive rows or write SQL itself.
+For an active supervised lesson, Colleague or its bound Main teacher can reveal
+the exact exercise session's **ERD** in **Workspace** while Learning stays on.
+The initiating browser must confirm the same project, session and attempt; this
+teacher demonstration never counts as the learner's own ERD task or a pass.
 Ask it to send database investigation or a requested change to a coding conversation
 and report the evidence. Data-changing work retains its existing confirmation
 requirements; a how-to question alone authorizes no query or mutation.

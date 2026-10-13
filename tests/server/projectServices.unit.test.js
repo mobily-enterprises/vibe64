@@ -79,6 +79,15 @@ test("project close drains a racing start and prevents new starts until reopen",
   await assert.rejects(manager.ensure(context()), /closing/);
 });
 
+test("a successfully drained project can reopen and start its service again", async () => {
+  const { manager, calls } = fixture();
+  await manager.ensure(context());
+  await manager.close(context());
+  manager.opened(context());
+  await manager.ensure(context());
+  assert.equal(calls.filter((call) => call.execution).length, 2);
+});
+
 test("removing a running declaration requires project close too", async () => {
   let services = [service];
   const { manager, calls } = fixture({ inspect: async () => ({ services }) });

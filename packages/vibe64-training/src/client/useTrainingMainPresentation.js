@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, ref, watch } from "vue";
+import { computed, inject, onScopeDispose, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -7,10 +7,12 @@ import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createTrainingNavigation } from "./createTrainingNavigation.js";
 import { useTrainingPresentationCue } from "./useTrainingPresentationCue.js";
 import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "./presentationOperation.js";
+import { VIBE64_BROWSER_NAVIGATION_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // A captured Main application owns only product read/commands and the original
 // shared browser transaction. It creates no subscriber, player or speech queue.
 export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready }) {
+  const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null);
   const clientId = globalThis.crypto.randomUUID();
   const conversationId = mainConversationId(identity);
   const base = `${identity.sessionsApiPath}/${encodeURIComponent(identity.sessionId)}/training/presentation`;
@@ -59,8 +61,12 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
   }
   const cue = useTrainingPresentationCue({ scope, presentation: () => selectedPreview()?.presentation,
     voiceSession, acknowledge, error, holdMainReplies: true });
-  const navigation = createTrainingNavigation({ scope, navigate: () => selectedPreview() ? async command => {
+  const navigation = createTrainingNavigation({ scope, navigate: () => browserNavigation?.value || selectedPreview() ? async command => {
+    const browserResult = browserNavigation?.value
+      ? await browserNavigation.value({ ...command, presentation: undefined }) : null;
+    if (browserResult && !command.presentation) return browserResult;
     const handle = selectedPreview();
+    if (!command.presentation) throw new Error("Lesson workspace navigation is unavailable in this installation.");
     if (!alive() || !handle || (command.projectSlug || "") !== (identity.sourceProjectSlug || "") || command.sessionId !== identity.sessionId || command.pane !== "preview") {
       throw new Error("Use this exact learner lesson’s existing presentation handle.");
     }
@@ -70,7 +76,7 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
     if (!alive() || generation !== expected || selectedPreview() !== handle) {
       throw new Error("The lesson presentation changed while its operation was running.");
     }
-    return { focus: { projectSlug: identity.sourceProjectSlug || "", sessionId: identity.sessionId, pane: "preview" },
+    return { focus: browserResult?.focus || { projectSlug: identity.sourceProjectSlug || "", sessionId: identity.sessionId, pane: "preview" },
       presentation: trainingPresentationReceipt(result) };
   } : null, beforeNavigate: () => undefined, acknowledge, error });
   async function refresh() {

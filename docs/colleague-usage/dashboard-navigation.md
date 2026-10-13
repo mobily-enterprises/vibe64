@@ -26,6 +26,18 @@ an empty successful result.
 Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”
 or “Open Project settings”. It can explain visible controls using its guides.
+During an active lesson, ask it to show that lesson project's normal **Preview**
+or **Database → ERD** without leaving Learning; **Workspace** becomes visible and
+Main remains the teacher. The bound Main teacher can reveal the same Preview or
+ERD for its exact attempt. A changed project, session, attempt or browser is
+refused instead of being silently retargeted. Agent navigation is a demonstration,
+not proof that the learner used the control.
+If you directly ask Colleague to “Watch me while I do this,” it starts the same
+Learning poller shown by the eye button. The poller can report only named Vibe64
+navigation controls, declared exercise responses and saved lesson state—not SQL
+contents, arbitrary app-internal activity, screenshots or typed text. Ask how it
+works for an explanation without starting it. Pause, Resume and Stop act on the
+same watch ID; Stop does not stop Preview, Main or the lesson.
 Code, file, terminal and visual investigation belongs to a coding conversation;
 Colleague can ask that agent and relay its result, but cannot itself read source,
 execute a shell command or inspect the screen. A navigation request does not

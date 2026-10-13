@@ -588,8 +588,8 @@
         loading
       />
       <Vibe64DashboardShell
-        v-if="props.sourceWorkspaceAvailable && !props.lessonsAvailable && props.projectPane === 'dashboard'"
-        v-show="dashboardShellVisible"
+        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard'"
+        v-show="dashboardShellVisible && normalWorkspaceActive"
         class="studio-autopilot__dashboard-shell"
         :dashboard-context="dashboardContext"
       >
@@ -620,6 +620,7 @@
 
       <section
         v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
+        v-show="normalWorkspaceActive"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -640,7 +641,7 @@
       </section>
 
       <section
-        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -670,7 +671,7 @@
           :key="assistantAccessScopeKey"
           :repo-available="Boolean(sessionSourceRoot)"
           v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('editor')"
-          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           :agent-active="agentActive"
           :file-bookmarks="fileBookmarks"
           :assistant-available="assistantCanUsePurpose('source_explanation')"
@@ -687,7 +688,7 @@
       </section>
 
       <section
-        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -706,7 +707,7 @@
           :key="assistantAccessScopeKey"
           :open-request="databaseOpenRequest"
           v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('database')"
-          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantCanUsePurpose('junior')"
           :assistant-unavailable-message="assistantJuniorRestrictionMessage"
           class="studio-autopilot__session-tool-content"
@@ -718,14 +719,14 @@
       </section>
 
       <section
-        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
         <Vibe64ArchitectureView
           :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('system')"
-          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
@@ -773,7 +774,7 @@
       </section>
 
       <div
-        v-show="!props.sourceWorkspaceAvailable || props.projectPane !== 'dashboard' || props.lessonsAvailable"
+        v-show="!props.sourceWorkspaceAvailable || learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
@@ -782,11 +783,13 @@
           :app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
           :attempt-id="props.learningAttemptId"
           :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
+          :learning-pane-active="learningPaneActive"
+          :workspace-active="normalWorkspaceActive && props.projectPane === 'preview'"
           :active="props.active && (props.lessonsAvailable || props.projectPane === 'preview') && !props.sessionSelectionArchived"
           :project-slug="props.conversationRuntime?.identity?.noExercise === false ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug"
           :session-id="selectedAssistantSessionId"
         >
-          <template #lessons><slot name="dashboard" :dashboard-context="dashboardContext" /></template>
+          <template #lessons><slot name="learning" :dashboard-context="dashboardContext" /></template>
           <template #default="{ appVisible, presentation }">
             <Vibe64ProjectOnboarding
               v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
@@ -936,6 +939,7 @@ import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { vibe64SessionToolRouteSegment } from "@/lib/vibe64SessionToolDefinitions.js";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -1616,6 +1620,10 @@ const learningViewRef = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 const learningLayoutRef = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
 const learningPreviewRef = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
 const learningIdentity = computed(() => props.conversationRuntime?.identity?.learningAttemptId ? props.conversationRuntime.identity : null);
+const learningWorkspaceAvailable = computed(() => props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable);
+const learningPaneActive = computed(() => props.lessonsAvailable &&
+  (props.learningView === "learning" || !learningWorkspaceAvailable.value));
+const normalWorkspaceActive = computed(() => !props.lessonsAvailable || !learningPaneActive.value);
 const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
   props.conversationRuntime?.available?.value));
 const learningLayout = Object.freeze({
@@ -1629,10 +1637,14 @@ const learningLayout = Object.freeze({
 const learningView = Object.freeze({
   get projectSlug() { return learningLayout.projectSlug; }, get sessionId() { return learningIdentity.value?.sessionId || ""; },
   get learningBinding() { return learningIdentity.value; }, get ready() { return learningLayout.ready; },
+  get learningView() { return props.learningView; },
   get hostConversationSelected() { return false; }, get temporarySelected() { return false; },
   get conversationId() { return ""; },
   get pane() {
     if (!learningLayout.projectVisible) return "chat";
+    if (props.learningView === "workspace") {
+      return props.projectPane === "dashboard" ? vibe64SessionToolRouteSegment(rightPaneTab.value) || "preview" : "preview";
+    }
     const preview = learningPreviewRef?.value;
     const binding = learningIdentity.value;
     return binding && preview?.sessionId === binding.sessionId && preview.learningAttemptId === binding.learningAttemptId &&

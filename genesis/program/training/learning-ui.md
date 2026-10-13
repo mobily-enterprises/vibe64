@@ -48,20 +48,24 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 ## Public contract
 
 `useVibe64LearningMode({onConversationOpened})` reads the original router's
-`mode=learning` flag; absence means Working. `setLearningMode` preserves the
-route's path, hash and other query fields. This flag is presentation, never
-Training or session authority. The root app and project page attach the existing L control and original picker
-to the same session panel. The adapter itself owns no mounting or session state.
+`mode=learning` flag; absence means Working. In Learning, its separate
+`learningView` query state selects `workspace` or `learning`, defaulting to the
+normal workspace. `setLearningMode` and `setLearningView` preserve the route's
+path, hash and unrelated query fields, while leaving Learning clears the view
+choice. These flags are presentation, never Training or session authority. The
+root app and project page attach the existing L control and original picker to
+the same session panel. The adapter itself owns no mounting or session state.
 
 The root, project and hosted project views keep Learning Main visible without
 changing the Working collapse preference. Learning ignores collapse/reveal
 requests and the shared shell does not start or finish a pane swipe in this mode.
-The existing Preview host retains Lessons/App/Presentation beside Main on desktop.
-At widths up to 980px, the shared shell stacks chat above that supporting pane
-with both visible and independently scrollable. The existing Learning layout
-projection reports the supporting pane visible at these widths as well; it is
-not inferred from Working's single-pane mobile collapse state. No alternate
-teacher, session panel, progress writer or presentation host is introduced.
+The project page switches one right-hand region between the complete retained
+Preview/Dashboard workspace and the existing Training lesson/player composition.
+The normal workspace remains the default only when the exact selected Learning
+session owns a supervised project. Source-less sessions force the Learning pane.
+At widths up to 980px, the shared shell retains the same controls in its stacked
+layout. No alternate teacher, session panel, Preview, progress writer or
+presentation host is introduced.
 
 `coursesResource` and `learningResource` use the original endpoint resource,
 Vue Query cache and HTTP cancellation, scoped by the injected actual viewer
@@ -90,11 +94,11 @@ journal or a promise of hard-unload recovery.
 
 ## Original panel attachment
 
-The project page keeps its existing Preview toolbar host mounted across mode
-changes, hiding it in Learning and supplying an empty target to OutputControls’
-existing local placement. Working restores the same target before its retained
-controls return, avoiding a deferred Teleport into an absent host. Original
-Preview visibility outside mode changes remains unchanged.
+The project page keeps its existing Preview toolbar host mounted across mode and
+right-view changes. It supplies the original target in Workspace and an empty
+target while Learning covers it, so OutputControls keep their existing local
+placement without a deferred Teleport into an absent host. Preview/Dashboard and
+each Dashboard tool stay mounted under their original owners while covered.
 
 The retained Main wrapper distinguishes hiding through the Working/Learning
 purpose filter from ordinary tab or chat visibility. The existing session-purpose
@@ -128,10 +132,14 @@ be displayed as current requests. Shared transport/native errors keep their
 existing owners.
 
 The original TrainingPreviewPresentation composes its existing App/player with
-an opt-in Lessons slot. Its default two-view names/policy stay intact; the actual
-Learning composition offers App/Lessons/Presentation, with one retained App,
-original picker slot and original sandboxed controller player across view
-switches. The captured Learning Host exports only its existing exact attempt ID;
+an opt-in Lessons slot. Its legacy direct composition keeps its original
+App/Lessons/Presentation behavior. The project composition supplies explicit
+Workspace/Learning visibility, retains one App, original picker slot and original
+sandboxed controller player across page-level switches, and pauses a covered
+visual without unmounting it. A practice workspace automatically reuses the
+existing exact-session opener before mounting outputs; failure exposes an
+explicit retry rather than an unrelated project. The captured Learning Host
+exports only its existing exact attempt ID;
 the wrapper refuses a different attempt and retires changed scope. Actor fences,
 resource pin verification, commands, cues and checkpoint receipts retain their
 original owners. No pin/progress reader or native receipt is invented.
@@ -290,6 +298,30 @@ gesture channel on disposal; replacement Main or Colleague ownership is preserve
 No collector, ticket grammar or admission guard is replaced. A page reload may
 register a fresh current browser connection for the same delivered question;
 its actual steps and accepted explanation must use that same current client.
+
+Every selected Learning Main, including a source-less lesson, publishes one
+current polling-task descriptor to the original Colleague client. It contains the
+exact attempt, project/session, Main conversation, immutable pin and either the
+current delivered question reference or a person-supplied bounded criterion.
+After trusted named controls settle, the same Training owner can submit one
+allowlisted view/control observation to its separate watcher independently of any
+practical receipt. Colleague starts and controls that watcher through its existing
+surface and hosts the persisted record; neither Colleague's model nor Main checks
+what the learner is doing. Practical evidence remains authoritative and a polling
+delivery failure does not invalidate it. The host focus publishes only the exact
+workspace and Learning view; source-less attempts retain their real session
+identity. Navigation performed for Colleague is labelled as a demonstration,
+while target or identity changes retire the current polling authority.
+
+Training's watcher owns the hidden guidance operation paired with that descriptor.
+It rechecks the active attempt, pin, exact Main session and current criterion before
+opening the original teacher conversation. A working Main defers delivery so a
+learner message keeps priority. An accepted application-origin wake carries only
+the allowlisted observation and current saved progress, explicitly excludes an
+authored answer or pass, and reuses its stable receipt on retry. Confirmed events
+may be related to the criterion; explicit settle/response failures may receive one
+hint. No inactivity event, second goal format or assessment write is added; the
+watcher's timer performs code-only reconciliation and never asks Main to observe.
 
 The shared root provides the original companion refs and one actual Colleague
 body handle. Online keeps its authenticated AuthGate viewer and original host;

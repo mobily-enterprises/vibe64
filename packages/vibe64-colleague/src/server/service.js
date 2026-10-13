@@ -12,11 +12,14 @@ import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantRes
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
   stageAdmittedTrainingQuestion, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
+import { createLearningWatchCoordinator } from "@local/vibe64-training/server/learning-watch";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, nativeInstructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
+
+const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -25,7 +28,9 @@ function requireResult(result) {
   if (result?.ok === false) throw failure(result.error || "The assistant operation failed.", result.code);
   return result;
 }
-function publicWatch({ cursor, ...watch }) { return watch; }
+function publicWatch({ cursor, ...watch }) {
+  return watch;
+}
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
   if (runtime?.origin === "application" && runtime.completedEnvelope === true) return [];
@@ -43,6 +48,45 @@ function colleagueHistoryMessages(turn) {
 function hasUserReceipt(chat, messageId) {
   return chat.conversationLog.some(turn => turn.messages.some(message =>
     message.role === "user" && message.messageId === messageId && message.receipt !== false));
+}
+function readToolArguments(value) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch { return {}; }
+}
+function receiptText(value, maximum = 256) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? text.slice(0, maximum) : "";
+}
+function operationLabel(actionId) {
+  const words = String(actionId || "").split(".").filter(Boolean).filter((word, index) => index || word !== "vibe64")
+    .slice(-3).join(" ").replaceAll("-", " ").trim();
+  return words ? `${words[0].toUpperCase()}${words.slice(1)}` : "Application operation";
+}
+function directToolName(actionId) {
+  return String(actionId || "").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
+}
+function publicOperation(call, activeRunId) {
+  const receipt = call?.productReceipt;
+  const legacyUnfinished = !receipt?.actionId && ["running", "unknown"].includes(call?.status) && receiptText(call?.name, 300);
+  if (!call || !receipt?.actionId && !legacyUnfinished) return null;
+  const actionId = receipt?.actionId || legacyUnfinished;
+  const failed = call.status === "not-executed" || call.status === "complete" && call.result?.ok === false;
+  const status = call.status === "running" ? receipt?.runId && receipt.runId === activeRunId ? "executing" : "unknown"
+    : call.status === "unknown" ? "unknown" : failed ? "failed"
+      : call.status === "complete" ? "completed" : "unknown";
+  const error = status === "unknown"
+    ? "The outcome could not be verified. Inspect the target before requesting another execution."
+    : failed ? receiptText(call.result?.error?.message, 512) || "The operation failed." : "";
+  const errorStatus = Number(call.result?.error?.status);
+  return {
+    id: call.id, actionId, label: receipt?.label || (legacyUnfinished ? "Unfinished application operation" : operationLabel(actionId)), status,
+    at: call.at || "", ...(receipt?.target ? { target: { ...receipt.target } } : {}),
+    ...(error ? { error } : {}),
+    canPrepareRetry: call.status === "not-executed" || call.status === "complete" && call.result?.ok === false &&
+      Number.isInteger(errorStatus) && errorStatus < 500
+  };
 }
 function colleagueBrowserState(current) {
   // Preserve Colleague's existing history visibility. Internal prompts and tool
@@ -89,6 +133,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = conversationOwners.get(key);
       if (!state || state.record.runtimeId !== key) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
+      decorateOperationReceipts(state, conversationLog);
       await promoteTrainingQuestionDeliveries(conversationLog, state.record.scopeId, transaction);
       const selected = state.selecting;
       const selectedConfiguration = selected?.configuration;
@@ -108,6 +153,36 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));
   const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });
+
+  function decorateOperationReceipts(state, conversationLog) {
+    const previous = new Map(state.record.conversationLog.flatMap(turn =>
+      (turn.metadata?.applicationTools || []).flatMap(call => call.productReceipt
+        ? [[`${turn.turnId}\u0000${call.id}`, call.productReceipt]] : [])));
+    for (const turn of conversationLog) {
+      for (const call of turn.metadata?.applicationTools || []) {
+        const retained = call.productReceipt || previous.get(`${turn.turnId}\u0000${call.id}`);
+        if (retained) { call.productReceipt = retained; continue; }
+        const context = state.operationContext;
+        if (!context) continue;
+        const payload = readToolArguments(call.arguments);
+        const discovered = call.name === "assistant_action_execute";
+        const descriptor = discovered ? null : catalog.resolveToolSet(context).byName.get(call.name);
+        const fallbackAction = discovered || descriptor ? null : actions.listDefinitions().find(action => directToolName(action.id) === call.name);
+        const actionId = receiptText(discovered ? payload.actionId : descriptor?.actionId || fallbackAction?.id, 300);
+        if (!actionId) continue;
+        const input = discovered && payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
+          ? payload.input : payload;
+        const focus = context.colleague?.focus || {};
+        const target = Object.fromEntries([
+          ["projectSlug", receiptText(input.projectSlug || context.projectSlug || focus.projectSlug, 200)],
+          ["sessionId", receiptText(input.sessionId || focus.sessionId, 200)],
+          ["conversationId", receiptText(input.conversationId || focus.conversationId, 200)]
+        ].filter(([, value]) => value));
+        call.productReceipt = { version: 1, runId: state.operationRunId, actionId, label: operationLabel(actionId),
+          ...(target.projectSlug ? { target } : {}) };
+      }
+    }
+  }
   const runtimeOptions = { storage, toolCatalog: catalog, persistCommentary: false,
     limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxFinalReplyCharacters: 16_000, maxApiToolProgressCharacters: 280,
@@ -141,6 +216,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const conversationSources = new Map();
   let closed = false;
   let resolveName = async () => "Colleague";
+  const learningWatches = createLearningWatchCoordinator({
+    host: { persist, actionContext, closed: () => closed }, pollMs: watchPollMs, debounceMs: watchDebounceMs
+  });
+  const presentWatch = watch => learningWatches.isWatch(watch) ? learningWatches.publicWatch(watch) : publicWatch(watch);
 
   function userKey(context) {
     const user = authenticatedVibe64User(context);
@@ -149,20 +228,32 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   async function stateFor(context) {
     const key = userKey(context);
     if (!users.has(key)) users.set(key, loadState(key));
-    return users.get(key);
+    const loading = users.get(key);
+    try { return await loading; }
+    catch (error) {
+      if (users.get(key) === loading) users.delete(key);
+      throw error;
+    }
   }
 
   async function loadState(key) {
     const root = path.join(systemRoot, "colleague", key);
     let saved;
     try { saved = JSON.parse(await readFile(path.join(root, "conversation.json"), "utf8")); }
-    catch (error) { if (error.code !== "ENOENT") throw error; }
+    catch (error) {
+      if (error.code === "ENOENT") saved = undefined;
+      else if (error instanceof SyntaxError) throw failure("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.", "colleague_history_invalid", 503);
+      else throw error;
+    }
     if (saved && saved.schemaVersion !== 3) throw failure("Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed.");
     const record = saved || {
       schemaVersion: 3, runtimeId: key, previousConversations: [], scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
       assistantSelection: null, status: "ready", error: "", conversationLog: []
     };
-    validateColleagueConversationRecord(record, key);
+    try { validateColleagueConversationRecord(record, key); }
+    catch {
+      throw failure("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.", "colleague_history_invalid", 503);
+    }
     record.watches ||= [];
     record.observations ||= [];
     const state = {
@@ -170,6 +261,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       saving: Promise.resolve(), admission: Promise.resolve(), running: null,
       streamEpoch: randomUUID(), streamRevision: 0,
       generation: 0, connections: new Map(), requestContext: null, streamingReply: null,
+      operationContext: null, operationRunId: "",
       interimReply: null, projectReply: null, replyTurnId: "",
       stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
       runtimeOwner: null, transfer: null, pendingMessages: [], nextConnection: null, workerAbort: null,
@@ -189,6 +281,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         for (const watch of record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
       }
     }
+    await learningWatches.restore(state);
     for (const chat of [record, ...record.previousConversations]) conversationOwners.set(chat.runtimeId, state);
     return state;
   }
@@ -347,20 +440,19 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   async function snapshot(state, clientId = "") {
     const page = await transcript.readConversationLogPage(state.record.runtimeId, { limit: 50, presentation: true });
     const record = state.record;
-    const operation = record.conversationLog.findLast(turn => turn.metadata?.applicationTools?.length)?.metadata.applicationTools.at(-1);
+    const operations = record.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
+      .map(call => publicOperation(call, state.running ? state.operationRunId : "")).filter(Boolean).slice(-8).reverse();
     return {
       ok: true, conversationId: record.scopeId, status: record.status, error: record.error,
-      assistantSelection: record.assistantSelection, operation: operation ? {
-        id: operation.id, status: operation.status === "running" ? state.running ? "executing" : "unknown"
-          : operation.status === "complete" ? "completed" : operation.status, toolName: operation.name
-      } : null,
+      ...(!record.assistantSelection && record.error === COLLEAGUE_MODEL_UNAVAILABLE ? { modelSetupRequired: true } : {}),
+      assistantSelection: record.assistantSelection, operation: operations[0] || null, operations,
       messages: page.conversationLog.flatMap((turn) => colleagueHistoryMessages(turn).map((message) => ({
         id: message.outputId || message.messageId || `${turn.turnId}:${message.role}`, role: message.role, text: message.text, at: message.at
       }))),
       streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
       streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
       pagination: page.pagination,
-      watches: record.watches.map(publicWatch),
+      watches: record.watches.map(presentWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
       navigation: state.connections.get(clientId)?.navigation || null,
       cue: state.connections.get(clientId)?.cue ? publicCue(state.connections.get(clientId).cue) : null
@@ -380,7 +472,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const decision = await terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: choice.engineId }, { vibe64User: user });
       if (decision.available) return decision.effectiveSelection;
     }
-    throw failure("Connect an AI and configure an available Senior model in AI Accounts before using Colleague.", "vibe64_colleague_model_unavailable");
+    throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
   }
 
   async function openConversation(state, context, settings = {}, transferring = false) {
@@ -483,6 +575,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     context = { ...context, colleague: { ...context.colleague, generation, autonomous, readOnly,
       userMessageIds, assignmentIds, observedAssignmentIds,
       observationIds: observations.map(observation => observation.id) } };
+    state.operationRunId = randomUUID();
+    state.operationContext = context;
     state.observationIds = autonomous ? context.colleague.observationIds : [];
     return { context, observations, readOnly, observedAssignmentIds };
   }
@@ -848,6 +942,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.running = null;
         if (state.workerAbort === controller) state.workerAbort = null;
         state.observationIds = [];
+        if (state.generation === generation) {
+          state.operationContext = null;
+          state.operationRunId = "";
+        }
         if (!closed && !state.stopping && state.record.status === "ready") {
           if ((native || state.runtimeOwner === nativeRuntime) && state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
           else wakeForObservations(state);
@@ -873,7 +971,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   function scheduleWatches(state, delay = watchPollMs) {
-    if (closed || state.rotating || !state.requestContext || !state.record.watches.some((watch) => watch.status === "active")) return;
+    if (closed || state.rotating || !state.requestContext ||
+        !state.record.watches.some((watch) => !learningWatches.isWatch(watch) && watch.status === "active")) return;
     if (state.watchTimer && delay === watchPollMs) return;
     clearTimeout(state.watchTimer);
     state.watchTimer = setTimeout(() => {
@@ -885,9 +984,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   async function readWatch(watch, context) {
     if (!watch.source) return readWatchedConversation(actions, watch, context);
-    const read = conversationSources.get(watch.source);
-    if (!read) throw failure("This watched conversation source is unavailable in this runtime.");
-    return conversationObservation({ ...requireResult(await read(watch, context)),
+    const source = conversationSources.get(watch.source);
+    if (!source) throw failure("This watched conversation source is unavailable in this runtime.");
+    return conversationObservation({ ...requireResult(await source.read(watch, context)),
       replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
   }
 
@@ -921,14 +1020,36 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   }
 
+  async function suppressWatchObservation(state, watchId) {
+    state.record.observations = state.record.observations.filter(item => item.watchId !== watchId);
+    await persist(state);
+    if (!state.observationIds.length || state.record.observations.some(item => state.observationIds.includes(item.id))) return;
+    // Only the notification belongs to this watch. The watched coding
+    // conversation keeps running, and the accepted wake remains in history.
+    state.generation += 1;
+    state.workerAbort?.abort();
+    await state.conversation?.cancel();
+    await state.running;
+    state.streamingReply = null;
+    state.interimReply = null;
+    state.record.status = "ready";
+    state.record.error = "";
+    await persist(state);
+    publishReply(state);
+    if (state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+    else wakeForObservations(state);
+  }
+
   async function pollWatches(state) {
     if (state.rotating) { state.watchDirty = true; return; }
     if (state.polling) { state.watchDirty = true; return state.polling; }
     state.polling = (async () => {
       for (const watch of state.record.watches) {
         if (closed || !state.requestContext) break;
-        if (watch.status !== "active") continue;
-        try { await observeWatch(state, watch); }
+        if (learningWatches.isWatch(watch) || watch.status !== "active") continue;
+        try {
+          await observeWatch(state, watch);
+        }
         catch (error) {
           if (watch.status !== "active") continue;
           watch.status = "paused";
@@ -958,8 +1079,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       // Publishers may still hold a session write lock. Never await a read here.
       for (const pending of users.values()) void pending.then((state) => {
         const payload = event.realtime?.payload || {};
-        if (state.record.watches.some((watch) => watch.status === "active" && watch.sessionId === event.entityId &&
-            (!payload.projectSlug || watch.projectSlug === payload.projectSlug))) scheduleWatches(state, watchDebounceMs);
+        const relevant = watch => watch.status === "active" && watch.sessionId === event.entityId &&
+          (!payload.projectSlug || watch.projectSlug === payload.projectSlug);
+        if (state.record.watches.some(watch => !learningWatches.isWatch(watch) && relevant(watch))) {
+          scheduleWatches(state, watchDebounceMs);
+        }
+        if (state.record.watches.some(watch => learningWatches.isWatch(watch) && relevant(watch))) {
+          learningWatches.schedule(state, watchDebounceMs);
+        }
       });
     }
   });
@@ -1122,11 +1249,15 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         };
       }
     },
-    registerConversationSource(name, read) {
-      if (!/^[a-z][a-z0-9-]{0,63}$/u.test(name) || typeof read !== "function" || conversationSources.has(name)) {
+    registerConversationSource(name, source) {
+      const normalized = typeof source === "function" ? { read: source } : source;
+      if (!/^[a-z][a-z0-9-]{0,63}$/u.test(name) || typeof normalized?.read !== "function" ||
+          normalized.notify !== undefined && typeof normalized.notify !== "function") {
         throw new TypeError("A conversation source needs a unique name and an authorized reader.");
       }
-      conversationSources.set(name, read);
+      if (name === "learning-task") return learningWatches.registerSource(normalized);
+      if (conversationSources.has(name)) throw new TypeError("A conversation source needs a unique name and an authorized reader.");
+      conversationSources.set(name, Object.freeze({ read: normalized.read, ...(normalized.notify ? { notify: normalized.notify } : {}) }));
     },
     setNameResolver(resolver) {
       if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
@@ -1136,6 +1267,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = await stateFor(context);
       state.requestContext = context;
       scheduleWatches(state);
+      learningWatches.schedule(state);
       wakeForObservations(state);
       const result = await snapshot(state, input.clientId);
       let trainingQuestion = null;
@@ -1264,6 +1396,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         } finally {
           state.rotating = false;
           scheduleWatches(state);
+          learningWatches.schedule(state);
           wakeForObservations(state);
         }
       }));
@@ -1340,10 +1473,22 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         return { ok: true, watch: publicWatch(watch) };
       });
     },
+    async startLearningWatch(input, context) {
+      const state = await stateFor(context);
+      return changeWatches(state, () => learningWatches.start(state, input, context));
+    },
+    async observeLearningTask(input, context) {
+      const state = await stateFor(context);
+      return changeWatches(state, async () => {
+        state.requestContext = context;
+        return learningWatches.observe(state, input);
+      });
+    },
     async cancelWatch(input, context) {
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
+        if (learningWatches.isWatch(watch)) return learningWatches.cancel(state, watch);
         if (watch) {
           watch.status = "cancelled";
           const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
@@ -1352,37 +1497,38 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             assignment.summary = "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment.";
           }
         }
-        state.record.observations = state.record.observations.filter((item) => item.watchId !== input.watchId);
-        await persist(state);
-        if (state.observationIds.length && !state.record.observations.some(item => state.observationIds.includes(item.id))) {
-          // Only the notification belongs to this watch. The watched coding
-          // conversation keeps running, and the accepted wake remains in history.
-          state.generation += 1;
-          state.workerAbort?.abort();
-          await state.conversation?.cancel();
-          await state.running;
-          state.streamingReply = null;
-          state.interimReply = null;
-          state.record.status = "ready";
-          state.record.error = "";
-          await persist(state);
-          publishReply(state);
-          if (state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
-          else wakeForObservations(state);
-        }
+        await suppressWatchObservation(state, input.watchId);
         return { ok: true };
+      });
+    },
+    async pauseWatch(input, context) {
+      const state = await stateFor(context);
+      return changeWatches(state, async () => {
+        const watch = state.record.watches.find(item => item.watchId === input.watchId);
+        if (learningWatches.isWatch(watch)) return learningWatches.pause(state, watch);
+        if (!watch || !["active", "pending"].includes(watch.status)) throw failure("Only an active watch can be paused.");
+        if (watch.assignmentId) throw failure("Pause the assignment through its retained assignment controls.");
+        watch.status = "paused";
+        watch.error = "Watching paused by the learner.";
+        await suppressWatchObservation(state, input.watchId);
+        return { ok: true, watch: presentWatch(watch) };
       });
     },
     async resumeWatch(input, context) {
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
+        if (learningWatches.isWatch(watch)) return learningWatches.resume(state, watch, input, context);
         if (!watch || watch.status !== "paused") throw failure("Only a paused watch can be resumed.");
         if (watch.assignmentId) throw failure("Resume the assignment through assignment.update after a new user instruction.");
         state.requestContext = context;
         watch.status = "active";
         try { await observeWatch(state, watch); }
-        catch (error) { watch.status = "paused"; watch.error = error.message; throw error; }
+        catch (error) {
+          watch.status = "paused";
+          watch.error = error.message;
+          throw error;
+        }
         await persist(state);
         scheduleWatches(state);
         wakeForObservations(state);
@@ -1481,13 +1627,40 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async focus(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
+      const previousFocus = connection.focus;
+      const demonstration = connection.navigation?.status === "pending";
       state.presentation.retireForFocus(connection, input.focus);
       connection.focus = input.focus;
+      connection.learningTask = input.learningTask ? structuredClone(input.learningTask) : null;
       state.connections.set(input.clientId, connection);
+      state.requestContext = context;
+      await learningWatches.focusChanged(state, connection, previousFocus, demonstration);
       return { ok: true, focus: connection.focus };
     },
     async navigate(input, context) {
       const state = await stateFor(context);
+      const learningFields = input.learningView || input.learningContent || input.learningTargetAttemptId;
+      if (learningFields && input.learningMode !== true) {
+        return { ok: false, error: "Choose Learning mode before selecting its view or lesson content." };
+      }
+      if (input.learningMode === true && !input.learningView) {
+        return { ok: false, error: "Choose the exact Learning workspace or Learning pane to display." };
+      }
+      if (input.learningMode === false && learningFields) {
+        return { ok: false, error: "Leaving Learning cannot also select Learning content." };
+      }
+      if (input.learningView === "workspace" && (!input.projectSlug || !input.sessionId || input.learningContent || !input.learningTargetAttemptId)) {
+        return { ok: false, error: "Choose the exact active lesson project/session and normal workspace pane." };
+      }
+      if (input.learningView === "learning" && !input.learningContent) {
+        return { ok: false, error: "Choose the lesson picker or this active lesson content." };
+      }
+      if (input.learningContent === "picker" && (!input.projectSlug || input.learningTargetAttemptId || input.sessionId || input.conversationId)) {
+        return { ok: false, error: "The lesson picker does not select or start an attempt." };
+      }
+      if (input.learningContent === "active" && (!input.learningTargetAttemptId || !input.sessionId || input.conversationId)) {
+        return { ok: false, error: "Choose the exact active lesson attempt and session without a temporary conversation." };
+      }
       if (input.presentation && (!input.sessionId || input.pane !== "preview" || input.conversationId || input.planView ||
           !["open", "command", "snapshot", "cue"].includes(input.presentation.operation))) {
         return { ok: false, error: "A lesson presentation requires its exact exercise session and Preview." };
@@ -1524,6 +1697,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
         ...(input.planView ? { planView: input.planView } : {}),
+        ...(input.learningMode !== undefined ? { learningMode: input.learningMode } : {}),
+        ...(input.learningView ? { learningView: input.learningView } : {}),
+        ...(input.learningContent ? { learningContent: input.learningContent } : {}),
+        ...(input.learningTargetAttemptId ? { learningAttemptId: input.learningTargetAttemptId } : {}),
         ...(input.presentation ? { presentation: structuredClone(input.presentation) } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       if (input.presentation?.operation === "cue") {
@@ -1656,6 +1833,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await state.running;
         await state.saving;
       }
+      await learningWatches.close();
       await Promise.all([runtime.close(), nativeRuntime.close()]);
     }
   };

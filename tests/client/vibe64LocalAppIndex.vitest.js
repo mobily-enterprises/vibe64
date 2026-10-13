@@ -91,12 +91,12 @@ async function mountLearningIndex({ gestures = null, practiceChoices = [], autho
     vue: Vue, "@jskit-ai/shell-web/client/components/ShellOutlet": { default: uiWidget },
     "./Vibe64ColleagueLauncherTarget.vue": { default: uiWidget }
   });
-  const panel = { props: ["learningResource", "purposeFilter", "chatCollapsed", "projectPane", "active"], setup(props, { slots, expose }) {
+  const panel = { props: ["learningResource", "learningView", "purposeFilter", "chatCollapsed", "projectPane", "active"], setup(props, { slots, expose }) {
     calls.panels++; calls.panelProps = props; Vue.onUnmounted(() => { calls.unmounts++; });
     expose({ selectLearningConversation(identity) { calls.select.push(identity); return true; },
       learningPracticeChoices: practiceChoices,
       selectLearningPracticeProject(choice, event) { calls.practice = { choice, event }; return true; } });
-    return () => Vue.h("article", { "data-test": "retained-panel" }, slots.dashboard?.());
+    return () => Vue.h("article", { "data-test": "retained-panel" }, slots.learning?.() || slots.dashboard?.());
   } };
   const gate = { props: { forcePicker: Boolean, navigateOnSelect: Boolean }, setup(props) { calls.gateProps = props; return () => Vue.h("aside"); } };
   const component = compiledUi(path.resolve("src/components/studio/Vibe64LocalAppIndex.vue"), {
@@ -153,6 +153,7 @@ it("routes a direct Lesson0 start through the supplied original owner and select
 it("delegates exposed Learning selection only for the actual loaded own-learner row and confirmed original selection", async () => {
   const source = readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
   const method = source.match(/function selectLearningConversation\([\s\S]*?\n\}/u)?.[0]; expect(method).toBeTruthy();
+  const pickerMethod = source.match(/function showLearningPicker\([\s\S]*?\n\}/u)?.[0]; expect(pickerMethod).toBeTruthy();
   const props = { purposeFilter: "learning" };
   const sessionData = { learningLearnerId: Vue.ref("learner"), selectedSessionId: Vue.ref(""), availableSessions: Vue.ref([
     { sessionId: "learning-session", purpose: "learning", learningAttemptId: "attempt" },
@@ -164,9 +165,14 @@ it("delegates exposed Learning selection only for the actual loaded own-learner 
     expect(select({ ...identity, ...patch })).toBe(false); expect(sessionData.selectedSessionId.value).toBe("");
   }
   expect(select(identity)).toBe(true); expect(sessionData.selectedSessionId.value).toBe("learning-session");
+  const showPicker = new Function("props", "sessionData", `${pickerMethod}\nreturn showLearningPicker;`)(props, sessionData);
+  expect(showPicker()).toBe(true); expect(sessionData.selectedSessionId.value).toBe("");
   sessionData.selectedSessionId.value = ""; sessionData.selectSessionId = () => {};
   expect(select(identity)).toBe(false);
+  sessionData.selectedSessionId.value = "learning-session";
+  expect(showPicker()).toBe(false);
   props.purposeFilter = "working"; expect(select(identity)).toBe(false);
+  expect(showPicker()).toBe(false);
 });
 
 
@@ -269,7 +275,7 @@ it("shared original shell refs are per mount and only local composition supplies
   try {
     expect(local.captured.VIBE64_ASSISTANT_VIEWER_KEY).toEqual({ actorKey: "local" });
     expect(hosted.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
-    for (const key of ["VIBE64_COLLEAGUE_BODY_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY"]) {
+    for (const key of ["VIBE64_COLLEAGUE_BODY_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY", "VIBE64_LEARNING_NAVIGATION_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY"]) {
       expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
       expect(local.captured[key]).not.toBe(hosted.captured[key]);
     }
@@ -278,7 +284,11 @@ it("shared original shell refs are per mount and only local composition supplies
     expect(appSource).toContain("<Vibe64LocalColleagueHost />");
     const localSource = readFileSync(path.resolve("src/components/Vibe64LocalColleagueHost.vue"), "utf8");
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
+    expect(localSource).toContain("if (browserNavigation) browserNavigation.value = navigate;");
+    expect(localSource).toContain(':navigate="browserNavigation?.value || null"');
     expect(localSource).not.toContain("createConversationRuntime");
+    const projectSource = readFileSync(path.resolve("src/pages/app/project/[slug].vue"), "utf8");
+    expect(projectSource).toContain("if (learningNavigation) learningNavigation.value = navigateLearning;");
   } finally { local.app.unmount(); hosted.app.unmount(); }
 });
 

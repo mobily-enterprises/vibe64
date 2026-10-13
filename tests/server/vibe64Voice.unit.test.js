@@ -8,7 +8,14 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { WebSocket, WebSocketServer } from "ws";
 import { createVoiceAccessToken } from "@jskit-ai/assistant-voice/server";
-import { Vibe64VoiceProvider } from "../../packages/vibe64-voice/src/server/Vibe64VoiceProvider.js";
+import {
+  Vibe64VoiceProvider,
+  registerVoiceCatalogueRoute
+} from "../../packages/vibe64-voice/src/server/Vibe64VoiceProvider.js";
+import {
+  ACTION_READ_VOICE_CATALOGUE,
+  createVoiceActions
+} from "../../packages/vibe64-voice/src/server/actions.js";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -49,6 +56,43 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
     }
   };
 }
+
+test("voice catalogue HTTP reads dispatch through the canonical voice action", { timeout: 5000 }, async () => {
+  let route = null;
+  const calls = [];
+  registerVoiceCatalogueRoute({
+    get(pathname, handler) { route = { pathname, handler }; }
+  }, {
+    async execute(call) {
+      calls.push(call);
+      return [{ id: "voice-one", name: "Voice One" }];
+    }
+  });
+  const request = { vibe64User: { uid: 42 } };
+  assert.equal(route.pathname, "/api/vibe64/voice/voices");
+  assert.deepEqual(await route.handler(request), [{ id: "voice-one", name: "Voice One" }]);
+  assert.equal(calls[0].actionId, ACTION_READ_VOICE_CATALOGUE);
+  assert.deepEqual(calls[0].input, {});
+  assert.equal(calls[0].context.channel, "api");
+  assert.equal(calls[0].context.surface, "app");
+  assert.equal(calls[0].context.requestMeta.request, request);
+});
+
+test("canonical voice catalogue action preserves Colleague authorization before reading voices", { timeout: 5000 }, async () => {
+  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } } };
+  const calls = [];
+  const [action] = createVoiceActions({
+    actions: { async execute(call) { calls.push(call); return { ok: true }; } },
+    voice: { async readCatalogue() { return [{ id: "voice-two" }]; } }
+  });
+  assert.equal(action.id, ACTION_READ_VOICE_CATALOGUE);
+  assert.deepEqual(await action.execute({}, context), [{ id: "voice-two" }]);
+  assert.deepEqual(calls, [{
+    actionId: "vibe64.colleague.state.read",
+    input: {},
+    context
+  }]);
+});
 
 test("public project voice checks exact session ownership and retains native proxy frame order", { timeout: 10000 }, async t => {
   const f = await fixture(t, { delayAccess: true });

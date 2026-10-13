@@ -41,6 +41,10 @@ const { createWebPlacementRuntime } = await import(new URL("./runtime.js",
 const { ASSISTANT_CONVERSATION_SUBSCRIBE, ASSISTANT_CONVERSATION_UNSUBSCRIBE, ASSISTANT_CONVERSATION_EVENT } =
   await import(new URL("../shared/conversationRealtime.js", import.meta.resolve("@jskit-ai/assistant-runtime/client")));
 
+function nonFocusPosts(requests) {
+  return requests.filter(({ url, options }) => options.method === "POST" && !url.endsWith("/focus"));
+}
+
 const filename = new URL("../../packages/vibe64-colleague/src/client/Vibe64Colleague.vue", import.meta.url);
 const { descriptor } = parse(await readFile(filename, "utf8"), { filename: String(filename) });
 const { code } = await transform(compileScript(descriptor, { id: "colleague-client" }).content, { format: "cjs" });
@@ -100,13 +104,40 @@ test("voice admission sends directly to Colleague and preserves its identity and
   await flush();
   const focus = { projectSlug: "tea" };
   await view.state.sendMessage("What about sugar?", { messageId: "voice-question", focus });
-  const commands = requests.filter(request => request.options.method === "POST");
+  const commands = nonFocusPosts(requests);
   assert.equal(commands.length, 1);
   assert.equal(commands[0].url, "/api/assistant/app/conversations/conversation/messages");
   assert.equal(commands[0].options.body.text, "What about sugar?");
   assert.equal(commands[0].options.body.messageId, "voice-question");
   assert.deepEqual(commands[0].options.body.data.focus, focus);
   assert.equal(requests.some(request => request.url.includes("/voice/")), false);
+});
+
+test("operation receipts open their exact target and prepare recovery without replaying an effect", async t => {
+  const receipt = { id: "operation-one", actionId: "vibe64.sessions.rename", label: "Sessions rename", status: "unknown",
+    error: "The outcome could not be verified. Inspect the target before requesting another execution.", canPrepareRetry: false,
+    target: { projectSlug: "groceries", sessionId: "session-one", conversationId: "temporary-one" } };
+  const view = mount(t, async () => ({ ok: true, conversationId: "colleague", messages: [], status: "failed",
+    operation: receipt, operations: [receipt] }));
+  await flush();
+  assert.deepEqual(view.state.operations.value, [receipt]);
+  const navigations = [];
+  view.state.props.navigate = async target => { navigations.push(target); return { focus: { ...target } }; };
+  const posts = view.requests.filter(({ options }) => options.method === "POST").length;
+  await view.state.openOperationTarget(receipt);
+  assert.deepEqual(navigations, [receipt.target]);
+  assert.equal(view.requests.filter(({ options }) => options.method === "POST").length, posts,
+    "opening the target does not repeat or acknowledge the application effect");
+  assert.equal(view.state.prepareOperationRecovery(receipt), true);
+  assert.match(view.state.draft.value, /Inspect the saved target/);
+  assert.match(view.state.draft.value, /Do not repeat the operation/);
+  assert.equal(view.requests.filter(({ options }) => options.method === "POST").length, posts,
+    "preparing inspection leaves explicit Send to the person");
+
+  const failed = { ...receipt, id: "operation-two", status: "failed", canPrepareRetry: true,
+    error: "The current revision changed." };
+  assert.equal(view.state.prepareOperationRecovery(failed), true);
+  assert.match(view.state.draft.value, /retry only if the operation is still needed and safe/i);
 });
 
 test("combined Colleague retains its adapter and typed draft while speech review gates only Send", async t => {
@@ -169,6 +200,11 @@ test("the right drawer and fullscreen phone keep one Colleague target through re
   view.state.voice.controller.end = async options => { ended++; await end(options); };
   let focused = 0;
   view.state.launcher.value = vue.markRaw({ $el: { focus() { focused++; } } });
+  let composerFocused = 0;
+  view.state.composerInput.value = vue.markRaw({ focus(options) {
+    composerFocused++;
+    assert.deepEqual(options, { preventScroll: true });
+  } });
 
   view.state.xs.value = true;
   await flush();
@@ -190,10 +226,11 @@ test("the right drawer and fullscreen phone keep one Colleague target through re
   assert.equal(view.state.conversation.runtime.value, runtime);
   assert.equal(view.state.adapter.value.actions.submit, submit);
   assert.equal(view.state.draft.value, "Keep this typed question");
+  assert.equal(composerFocused, 1, "restoring the conversation focuses its message box");
   assert.equal(session.sending.value, true);
   assert.equal(session.pendingTranscript.value.messageId, "drawer-speech");
   assert.equal(view.subscriptions.size, 1);
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 
   const switchDialog = vue.markRaw({ id: "original-target-switch-dialog" });
   binding.setConversationTarget(switchDialog);
@@ -375,7 +412,7 @@ test("the Colleague launcher opens its target while Main is inline and preserves
   assert.equal(view.state.shown.value, true, "the existing pending-switch dialog becomes reachable");
   assert.equal(view.state.bodyVisible.value, false, "Colleague does not cover the pending-switch dialog");
   assert.equal(view.state.draft.value, "Keep this Colleague draft");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "opening sends no agent request");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "opening sends no agent request");
 });
 
 test("the root voice host keeps live adapters and forwards explicit preferences and canonical playback", async t => {
@@ -494,7 +531,7 @@ test("Colleague model selection uses its canonical identity and the existing pro
   const result = await view.state.selectModel(assistantSelection);
   await flush();
   assert.equal(result.ok, true);
-  const changes = view.requests.filter(({ options }) => options.method === "POST");
+  const changes = nonFocusPosts(view.requests);
   assert.equal(changes.length, 1);
   assert.equal(changes[0].url, "/api/assistant/app/conversations/same-person/selection");
   assert.deepEqual(changes[0].options.body, { selection: { assistantSelection } });
@@ -502,6 +539,26 @@ test("Colleague model selection uses its canonical identity and the existing pro
   assert.deepEqual(view.state.product.value.assistantSelection, assistantSelection);
   assert.equal(view.state.draft.value, "Keep this draft");
   assert.equal(view.requests.some(({ url }) => url === "/api/vibe64/colleague/model"), false);
+});
+
+test("no usable Colleague model keeps the draft and opens the real account setup owner", async t => {
+  const props = vue.reactive({ name: "Colleague" });
+  const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], status: "failed",
+    error: "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.",
+    modelSetupRequired: true }), props);
+  await flush();
+  view.state.draft.value = "Keep this unsent request";
+  const targets = [];
+  props.navigate = async target => { targets.push(target); return {}; };
+  assert.equal(await view.state.openModelSetup(), true);
+  assert.deepEqual(targets, [{ managementView: "accounts" }]);
+  assert.equal(view.state.draft.value, "Keep this unsent request");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "opening setup neither sends nor promises an assistant response");
+
+  props.navigate = null;
+  assert.equal(await view.state.openModelSetup(), true);
+  assert.deepEqual(view.events.at(-1), ["account-setup", { section: "ai" }],
+    "standalone Vibe64 reuses its existing Account settings dialog owner");
 });
 
 test("Colleague signals a local message submission before its delayed admission", async (t) => {
@@ -741,7 +798,10 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
-    "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} }
+    "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} },
+    "/src/lib/vibe64AccountConnectionsDialog.js": {
+      requestVibe64AccountConnectionsDialog: options => { events.push(["account-setup", options]); return true; }
+    }
   };
   new Function("require", "module", "exports", code)(name => {
     assert.ok(Object.hasOwn(imports, name), name);
@@ -1108,7 +1168,7 @@ test("previous conversations use read-only original cursor pages and never open 
   assert.deepEqual([...view.subscriptions.keys()], subscriptionIds);
   assert.equal(view.state.voice.controller.state.session, null);
   assert.equal(view.state.draft.value, "Current draft");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
   const historyTemplate = descriptor.template.content.split('<ConversationDialog :model-value="historyOpen"')[1];
   assert.ok(historyTemplate.includes("<AssistantTranscript"));
   assert.equal(/AssistantPromptInput|VoiceConversation|@check-delivery|@retry|@send|modelMenu/.test(historyTemplate), false);
@@ -1246,7 +1306,7 @@ test("another tab's held product refresh retains old recognized words and requir
   assert.equal(view.state.draft.value, "Latest same-person draft while waiting");
   assert.equal(view.state.voice.controller.state.session, null);
   assert.equal(view.state.pointerNotice.value, "");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
 test("explicit external retarget retains the original uncertain UUID/payload in the original tab draft owner", async t => {
@@ -1280,7 +1340,7 @@ test("explicit external retarget retains the original uncertain UUID/payload in 
   assert.deepEqual(saved.messages[0].payload, payload);
   const currentKey = `vibe64:colleague-composer:v1:${JSON.stringify(["person-a", "latest"])}`;
   assert.deepEqual(JSON.parse(records.get(currentKey)).messages, [], "old uncertainty never moves into the new delivery owner");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
 test("Colleague reload restores the original uncertain tab record without resend and isolates it from another actor", async t => {
@@ -1303,7 +1363,7 @@ test("Colleague reload restores the original uncertain tab record without resend
   view.state.draft.value = payload.message;
   assert.equal(view.state.adapter.value.composer.canSend, false, "The uncertain words cannot be resent");
   view.state.draft.value = "Person A's typed draft";
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "restoration is not resend");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "restoration is not resend");
   viewer.value = { actorKey: "person-b" };
   await flush();
   assert.equal(view.state.draft.value, "");
@@ -1313,7 +1373,7 @@ test("Colleague reload restores the original uncertain tab record without resend
   await flush();
   assert.equal(view.state.draft.value, "Person A's typed draft");
   assert.equal(view.state.conversation.runtime.value.delivery.find(messageId).status, "uncertain");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
 
@@ -1531,7 +1591,7 @@ test("changing learner retires a queued question-bearing draft without dispatch 
   assert.notEqual(view.state.conversation.runtime.value, original);
   assert.equal(view.state.draft.value, "");
   assert.equal(view.state.conversation.runtime.value.delivery.state.messages.length, 0);
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
 
@@ -1841,18 +1901,18 @@ test("previous-conversation list offers explicit fresh recovery after a terminal
   assert.equal(view.state.historyOpen.value, false, "the existing close owner retires the history dialog before confirmation");
   assert.equal(view.state.freshConfirm.value, true);
   assert.equal(await view.state.startFresh(), false, "existing busy admission blocks even a direct confirmation attempt");
-  assert.equal(view.requests.some(request => request.options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
   runtime.snapshot.value = { ...runtime.snapshot.value, status: "ready" };
   view.state.closeFreshConfirmation();
   await view.state.loadHistory();
   view.state.showFreshConfirmation();
   assert.equal(view.state.historyOpen.value, false);
   assert.equal(view.state.freshConfirm.value, true);
-  assert.equal(view.requests.some(request => request.options.method === "POST"), false, "opening confirmation never executes fresh or resends messages");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "opening confirmation never executes fresh or resends messages");
   assert.equal(view.state.conversation.runtime.value, runtime);
   assert.equal(view.state.draft.value, "Keep my next request unsent.");
   assert.equal(await view.state.startFresh(), true);
-  const posts = view.requests.filter(request => request.options.method === "POST");
+  const posts = nonFocusPosts(view.requests);
   assert.equal(posts.length, 1);
   assert.equal(posts[0].url, "/api/vibe64/colleague/conversations/fresh");
   assert.equal(posts[0].options.body.expectedConversationId, "failed-conversation");
@@ -1926,7 +1986,7 @@ test("fresh recovery binds a new paused original voice session without transport
   assert.equal(paused.voice.selectedVoice.value, preferences.voiceId);
   assert.equal(view.state.draft.value, "Leave this next request unsent.");
   assert.deepEqual(effects, [], "actual original voice lifecycle invokes no connect/capture/playback on paused binding");
-  assert.equal(view.requests.filter(value => value.options.method === "POST").length, 1, "only the original fresh operation was submitted");
+  assert.equal(nonFocusPosts(view.requests).length, 1, "only the original fresh operation was submitted");
   assert.match(descriptor.template.content, /v-if="voiceSession"[^>]*:session="voiceSession"/);
   assert.ok(descriptor.template.content.includes('<VoiceConversationSettings :voice="voiceSession.voice"'));
 });
@@ -2071,7 +2131,7 @@ test("archived Colleague pagination completes each shared request before render 
   assert.deepEqual(completed, [{ changed: false }]);
   assert.equal(view.state.historyError.value, "History unavailable");
   assert.equal(view.state.historyPages.value.length, 3);
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+  assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
 
@@ -2102,7 +2162,7 @@ for (const invalidation of ["closed view", "changed actor"]) {
     await held;
     assert.deepEqual(completed, [{ changed: false }]);
     assert.deepEqual(view.state.historyPages.value, []);
-    assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
+    assert.equal(nonFocusPosts(view.requests).length, 0);
   });
 }
 
@@ -2129,7 +2189,8 @@ test("watch details preserve the conversation and use existing resume/cancel adm
   assert.equal(view.state.watchDetails.value, true);
   assert.equal(view.state.conversation.runtime.value, original);
   assert.equal(view.state.draft.value, "Keep this draft");
-  assert.deepEqual(view.requests.filter(({ options }) => options.method === "POST").map(({ url, options }) => [url, options.body]), [
+  assert.deepEqual(view.requests.filter(({ url, options }) => options.method === "POST" && url.includes("/watches/"))
+    .map(({ url, options }) => [url, options.body]), [
     ["/api/vibe64/colleague/watches/resume", { watchId: "paused-watch" }],
     ["/api/vibe64/colleague/watches/cancel", { watchId: "paused-watch" }]
   ]);
@@ -2139,6 +2200,34 @@ test("watch details preserve the conversation and use existing resume/cancel adm
   assert.equal(view.state.watchDetails.value, false);
   assert.equal(view.state.watches.value.length, 0);
   assert.equal(view.state.assignments.value.length, 0);
+});
+
+test("Learning polling publishes its exact private browser binding and uses the same visible start owner", async t => {
+  const attemptId = "33333333-3333-4333-8333-333333333333";
+  const task = { attemptId, projectSlug: "practice", sessionId: "practice-session",
+    conversationId: "learning-main", learningClientId: "learning-client" };
+  const gestureChannel = vue.shallowRef({ pollingTask: () => task, setPollingWatch() {}, clearPollingWatch() {} });
+  const props = vue.reactive({ name: "Colleague", focus: { projectSlug: "practice", sessionId: "practice-session",
+    pane: "lessons", learningAttemptId: attemptId, learningView: "learning" } });
+  const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], watches: [], status: "ready" }),
+    props, vue.ref({ actorKey: "person-a" }), null, null, gestureChannel);
+  await flush();
+  const focusRequest = view.requests.find(({ url }) => url.endsWith("/focus"));
+  assert.deepEqual(focusRequest.options.body.focus, props.focus);
+  assert.deepEqual(focusRequest.options.body.learningTask, task);
+  assert.equal(Object.hasOwn(focusRequest.options.body.focus, "learningClientId"), false,
+    "the assistant-visible focus does not receive the transient Learning client identity");
+  view.state.pollingCriterion.value = "Explain the visible result.";
+  assert.equal(await view.state.startLearningWatch(), true);
+  const startRequest = view.requests.find(({ url }) => url.endsWith("/learning-watches/start"));
+  assert.deepEqual(startRequest.options.body, { ...task, targetProjectSlug: "practice",
+    browserClientId: view.state.clientId, watchId: startRequest.options.body.watchId,
+    criterion: "Explain the visible result." });
+  gestureChannel.value = { pollingTask: () => null, setPollingWatch() {}, clearPollingWatch() {} };
+  await flush();
+  const latestFocus = view.requests.filter(({ url }) => url.endsWith("/focus")).at(-1);
+  assert.equal(Object.hasOwn(latestFocus.options.body, "learningTask"), false,
+    "leaving the task clears the private browser binding through the original focus owner");
 });
 
 
@@ -2357,7 +2446,7 @@ test("Colleague application completion refreshes its canonical ready state after
   assert.equal(view.requests.filter(({ url, options }) =>
     url === "/api/assistant/app/conversations/conversation" && options.method === "GET").length, readsBefore + 1,
   "The existing application invalidation triggers one canonical read");
-  assert.equal(view.requests.some(({ options }) => options.method === "POST"), false, "Completion never resends or starts work");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "Completion never resends or starts work");
 });
 
 

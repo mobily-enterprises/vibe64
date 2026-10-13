@@ -2,7 +2,7 @@
 // Colleague retains lesson lifecycle, progress reads and authoring coordination.
 const TRAINING_TEACHER_ACTION_IDS = Object.freeze([
   "vibe64.training.question.prepare", "vibe64.training.answer.evaluate",
-  "vibe64.training.practical.evaluate", "vibe64.training.visual.open",
+  "vibe64.training.practical.evaluate", "vibe64.training.view.open", "vibe64.training.visual.open",
   "vibe64.training.visual.command", "vibe64.training.visual.cue",
   "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot",
   "vibe64.training.practical.read"

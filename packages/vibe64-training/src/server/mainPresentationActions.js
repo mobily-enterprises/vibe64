@@ -11,7 +11,13 @@ const sessionId = { type: "string", required: true, noTrim: true, minLength: 1, 
 const focus = { type: "object", required: false, schema: createSchema({
   projectSlug: { type: "string", required: false, noTrim: true, maxLength: 128, pattern: "^[a-zA-Z0-9_-]*$" },
   sessionId: { ...sessionId, required: false },
-  pane: { type: "string", required: true, enum: ["session", "preview"] },
+  pane: { type: "string", required: true, enum: ["session", "preview", "database", "lessons"] },
+  learningMode: { type: "boolean", required: false },
+  learningView: { type: "string", required: false, enum: ["workspace", "learning"] },
+  learningContent: { type: "string", required: false, enum: ["picker", "active"] },
+  learningAttemptId: { type: "string", required: false, noTrim: true, maxLength: 36 },
+  databaseScreen: { type: "string", required: false, enum: ["workspace", "loading", "unavailable"] },
+  databaseView: { type: "string", required: false, enum: ["overview", "erd", "data"] },
   previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning", "lesson-presentation"] }
 }) };
 

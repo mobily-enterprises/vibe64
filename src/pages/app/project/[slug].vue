@@ -16,10 +16,11 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { computed, ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
 import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
+import { VIBE64_LEARNING_NAVIGATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
@@ -62,14 +63,73 @@ const panel = ref(null);
 const learning = useVibe64LearningMode({ onConversationOpened(identity) {
   panel.value?.selectLearningConversation(identity);
 } });
-const { learningMode, purposeFilter, learningResource } = learning;
+const { learningMode, learningView, purposeFilter, learningResource } = learning;
+const learningWorkspaceAvailable = computed(() => panel.value?.learningWorkspaceAvailable === true);
+const learningPaneActive = computed(() => learningMode.value &&
+  (learningView.value === "learning" || !learningWorkspaceAvailable.value));
 const chatCollapsed = computed(() => !learningMode.value && workingChatCollapsed.value);
 function setChatCollapsed(collapsed, event) {
   if (!learningMode.value) setWorkingChatCollapsed(collapsed, event);
 }
 function showProjectPane() {
-  if (!learningMode.value) showWorkingProjectPane();
+  if (learningMode.value) {
+    if (!learningWorkspaceAvailable.value) return;
+    void learning.setLearningView("workspace");
+  }
+  showWorkingProjectPane();
 }
+function setLearningView(view) {
+  if (view === "workspace" && !learningWorkspaceAvailable.value) return;
+  void learning.setLearningView(view);
+}
+
+const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
+function waitForLearningPanel(action, isCurrent, failure) {
+  return new Promise((resolve, reject) => {
+    let stop;
+    const timer = setTimeout(() => finish(new Error(failure)), 12000);
+    function finish(error) {
+      clearTimeout(timer);
+      if (stop) stop();
+      else queueMicrotask(() => stop?.());
+      if (error) reject(error);
+      else resolve();
+    }
+    stop = watchEffect(() => {
+      if (!isCurrent()) finish(new Error("The Learning navigation target changed before it opened."));
+      else if (action()) finish();
+    }, { flush: "post" });
+  });
+}
+async function navigateLearning(command, isCurrent = () => true) {
+  if (command.learningMode === false) {
+    if (learningMode.value) await learning.setLearningMode(false);
+    return;
+  }
+  if (command.learningMode !== true) return;
+  if (!learningMode.value) await learning.setLearningMode(true);
+  if (!isCurrent()) throw new Error("The Learning navigation target changed before it opened.");
+  await nextTick();
+  if (command.learningContent === "picker") {
+    await waitForLearningPanel(() => panel.value?.showLearningPicker() === true, isCurrent,
+      "The lesson picker did not become available.");
+  } else if (command.learningAttemptId || command.sessionId) {
+    const identity = { attemptId: command.learningAttemptId, sessionId: command.sessionId,
+      learnerId: learning.learnerId.value };
+    await waitForLearningPanel(() => panel.value?.selectLearningConversation(identity) === true, isCurrent,
+      "The requested Learning session did not become available.");
+  }
+  if (command.learningView && learningView.value !== command.learningView) {
+    if (command.learningView === "workspace" && panel.value?.learningWorkspaceAvailable !== true) {
+      throw new Error("This lesson has no project workspace.");
+    }
+    await learning.setLearningView(command.learningView);
+  }
+}
+if (learningNavigation) learningNavigation.value = navigateLearning;
+onBeforeUnmount(() => {
+  if (learningNavigation?.value === navigateLearning) learningNavigation.value = null;
+});
 
 </script>
 
@@ -158,7 +218,38 @@ function showProjectPane() {
           />
 
           <div
-            v-if="projectPaneNavigationVisible && !learningMode"
+            v-if="learningMode"
+            class="studio-home-shell-project-tabs studio-home-shell-project-tabs--learning"
+            role="tablist"
+            aria-label="Learning workspace view"
+          >
+            <button
+              class="studio-home-shell-project-tab"
+              :class="{ 'studio-home-shell-project-tab--active': !learningPaneActive }"
+              role="tab"
+              type="button"
+              :aria-disabled="!learningWorkspaceAvailable ? 'true' : undefined"
+              :aria-selected="!learningPaneActive ? 'true' : 'false'"
+              :disabled="!learningWorkspaceAvailable"
+              :title="learningWorkspaceAvailable ? 'Show the normal project workspace' : 'This lesson has no project workspace'"
+              @click="setLearningView('workspace')"
+            >
+              Workspace
+            </button>
+            <button
+              class="studio-home-shell-project-tab"
+              :class="{ 'studio-home-shell-project-tab--active': learningPaneActive }"
+              role="tab"
+              type="button"
+              :aria-selected="learningPaneActive ? 'true' : 'false'"
+              title="Show lesson content and presentation"
+              @click="setLearningView('learning')"
+            >
+              Learning
+            </button>
+          </div>
+          <div
+            v-if="projectPaneNavigationVisible && (!learningMode || !learningPaneActive)"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"
@@ -178,12 +269,12 @@ function showProjectPane() {
           </div>
           <div
             v-if="previewToolbarHostVisible"
-            v-show="!learningMode"
+            v-show="!learningPaneActive"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
           />
           <button
-            v-if="mobileProjectActionVisible && !learningMode"
+            v-if="mobileProjectActionVisible && (!learningMode || !learningPaneActive)"
             class="studio-home-shell-project-mobile-action"
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
@@ -200,7 +291,7 @@ function showProjectPane() {
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert
-        v-if="pageError && !learningMode"
+        v-if="pageError && (!learningMode || !learningPaneActive)"
         type="error"
         variant="tonal"
         border="start"
@@ -236,21 +327,24 @@ function showProjectPane() {
               ref="panel"
               :active="projectSelectionSlotProps.contentActive"
               :learning-resource="learningResource"
+              :learning-view="learningPaneActive ? 'learning' : 'workspace'"
               :purpose-filter="purposeFilter"
               :chat-collapsed="chatCollapsed"
               create-session-teleport-target="#studio-home-shell-create-session"
               :github-actor-teleport-target="githubActorTeleportTarget"
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
-              :preview-toolbar-teleport-target="learningMode ? '' : previewToolbarTeleportTarget"
-              :project-pane="learningMode ? 'dashboard' : projectPane"
+              :preview-toolbar-teleport-target="learningPaneActive ? '' : previewToolbarTeleportTarget"
+              :project-pane="learningPaneActive ? 'dashboard' : projectPane"
               @title-change="emitPageTitle"
               @chat-attention="setChatCollapsed(false)"
               @project-attention="showProjectPane"
             >
-              <template #dashboard="dashboardSlotProps">
+              <template #learning>
                 <Vibe64LearningLessonLauncher v-if="learningMode" :learning="learning" />
+              </template>
+              <template #dashboard="dashboardSlotProps">
                 <RouterView
-                  v-else-if="dashboardRouteActive"
+                  v-if="dashboardRouteActive"
                   :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
                 />
               </template>

@@ -15,8 +15,10 @@ const props = defineProps({
   appAvailable: { type: Boolean, default: true },
   attemptId: { type: String, default: "" },
   learningBinding: { type: Object, default: null },
+  learningPaneActive: { type: Boolean, default: null },
   projectSlug: { type: String, required: true },
-  sessionId: { type: String, required: true }
+  sessionId: { type: String, required: true },
+  workspaceActive: { type: Boolean, default: null }
 });
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
@@ -83,6 +85,7 @@ const appOpened = ref(false);
 const appOpening = ref(false);
 const appError = ref("");
 let appOpenGeneration = 0;
+let mounted = true;
 const openAppCommand = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: "app", access: "never",
   apiSuffix: "/vibe64/sessions", placementSource: "vibe64.sessions.create",
@@ -91,10 +94,13 @@ const openAppCommand = useCommand({
   buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context.path }),
   fallbackRunError: "The saved practice App could not open. Keep this lesson and choose App again."
 });
-const visible = computed(() => props.active && mode.value === "presentation" && !collapsed.value);
-const appVisible = computed(() => props.appAvailable &&
-  (props.learningBinding?.noExercise !== false || appOpened.value) && (mode.value === "app" || collapsed.value));
-const lessonsVisible = computed(() => props.lessonsAvailable && (mode.value === "lessons" || !props.appAvailable && collapsed.value));
+const splitPaneMode = computed(() => props.learningPaneActive !== null || props.workspaceActive !== null);
+const visible = computed(() => props.active && (!splitPaneMode.value || props.learningPaneActive) && mode.value === "presentation" && !collapsed.value);
+const appVisible = computed(() => props.active && props.appAvailable &&
+  (props.learningBinding?.noExercise !== false || appOpened.value) &&
+  (splitPaneMode.value ? props.workspaceActive : mode.value === "app" || collapsed.value));
+const lessonsVisible = computed(() => props.active && props.lessonsAvailable &&
+  (!splitPaneMode.value || props.learningPaneActive) && (mode.value === "lessons" || !props.appAvailable && collapsed.value));
 watch(() => [actorKey.value, props.projectSlug, props.attemptId, props.sessionId, ...["actorKey", "viewerActorKey", "learnerId", "projectSlug",
   "learningAttemptId", "sessionId", "sessionsApiPath", "noExercise", "sourceProjectSlug"]
   .map(key => props.learningBinding?.[key])], () => {
@@ -110,7 +116,11 @@ watch(() => props.active, () => {
 watch(() => props.lessonsAvailable, enabled => {
   if (!enabled && mode.value === "lessons" && props.appAvailable) mode.value = "app";
 });
-let mounted = true;
+watch(() => [splitPaneMode.value, props.workspaceActive, props.active, props.sessionId,
+  props.learningBinding?.sessionId], ([split, workspace, active]) => {
+  if (split && workspace && active && props.appAvailable && props.learningBinding?.noExercise === false &&
+      !appOpened.value && !appOpening.value) void showApp(null);
+}, { immediate: true });
 let pausing = null;
 let hiddenRevision = 0;
 watch(visible, (shown, wasShown) => { if (wasShown && !shown) hiddenRevision += 1; }, { flush: "sync" });
@@ -498,17 +508,23 @@ defineExpose({ presentation });
 
 <template>
   <section class="training-preview">
-    <div v-if="selection || lessonsAvailable" class="training-preview__choices" aria-label="Preview content">
-      <v-btn v-if="appAvailable" min-height="48" :disabled="appOpening" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
+    <div v-if="(selection || lessonsAvailable) && (!splitPaneMode || learningPaneActive)" class="training-preview__choices" aria-label="Learning content">
+      <v-btn v-if="appAvailable && !splitPaneMode" min-height="48" :disabled="appOpening" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
       <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Lessons</v-btn>
       <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
       <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
     </div>
-    <p v-if="appError" role="alert">{{ appError }}</p>
+    <div v-if="appError" role="alert">
+      <p>{{ appError }}</p>
+      <v-btn v-if="splitPaneMode && workspaceActive" min-height="48" variant="tonal" @click="showApp($event)">Retry workspace</v-btn>
+    </div>
     <p v-if="!appAvailable && learningBinding?.noExercise === false" role="status">
       The practice App controls are unavailable in this installation. Keep this lesson and its saved workspace; lesson diagrams use Presentation.
+    </p>
+    <p v-else-if="!appAvailable && lessonsAvailable" role="status">
+      This lesson has no project workspace. Use Learning for its lesson content and presentation.
     </p>
     <div v-if="cue && ['awaiting-audio', 'awaiting-continue'].includes(cue.phase)" class="training-preview__choices">
       <p role="status">{{ cue.error || 'The explanation is ready. Continue when you are ready to watch.' }}</p>

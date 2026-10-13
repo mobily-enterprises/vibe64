@@ -723,6 +723,46 @@ async function deliveredMainQuestion(f) {
   return prepared;
 }
 
+test("supervised learning guidance defers to an active learner turn and wakes the exact Main teacher once", async t => {
+  const f = await mainTeachingFixture(t);
+  const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+  const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+  const states = ["working", "ready", "ready"];
+  const wakes = [], openings = [];
+  const learningSessions = createTrainingLearningSessions({ learners: f.learners,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.learners, content: f.content }), learningTeaching: f.main,
+    project: { createRuntime: async () => f.runtime }, sessions: { createSession() {}, inspectSession() {} },
+    terminals: { async openBrowserConversation(sessionId, options) {
+      openings.push({ sessionId, options });
+      return { async read() { return { status: states.shift() }; }, async wake(input) {
+        wakes.push(structuredClone(input));
+        return { status: "accepted", duplicate: wakes.length > 1 };
+      } };
+    } } });
+  const task = { attemptId: f.attemptId, projectSlug: "", sessionId: f.sessionId,
+    conversationId: `learning-main:${f.sessionId}`, pin: { topicHash: f.pin.topic.topicHash, lessonHash: f.pin.lesson.hash },
+    criterion: "Explain the observed result in your own words.",
+    progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: ["explain"] } };
+  const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
+    failure: "workspace-settle-failed", workspace: { projectSlug: "", sessionId: f.sessionId,
+      pane: "preview", ready: false, learningView: "learning" } };
+  const input = { actor: f.actor, actorId: "42", attemptId: f.attemptId, sessionId: f.sessionId,
+    guidanceId: "learning-guidance-one", requestContext: f.current.browserAuthority.requestContext, task, evidence };
+  assert.deepEqual(await learningSessions.guideTask(input), { status: "deferred" });
+  assert.equal(wakes.length, 0, "an active learner turn has priority over application guidance");
+  assert.deepEqual(await learningSessions.guideTask(input), { status: "accepted" });
+  assert.deepEqual(await learningSessions.guideTask(input), { status: "duplicate" });
+  assert.equal(wakes.length, 2);
+  assert.equal(wakes[0].messageId, input.guidanceId);
+  assert.deepEqual(wakes[0], wakes[1], "a retry keeps one native application receipt");
+  assert.match(wakes[0].text, /not as the learner's authored answer/u);
+  assert.match(wakes[0].text, /Do not mark an assessment passed/u);
+  assert.deepEqual(wakes[0].data.learningGuidance.evidence, evidence);
+  assert.equal(openings.every(value => value.sessionId === f.sessionId &&
+    value.options.browserAuthority.learningAttemptId === f.attemptId &&
+    value.options.browserAuthority.actorId === "42"), true);
+});
+
 test("Main teaching composes the exact original four-action discovery and stages only its accepted native tuple", async t => {
   const f = await mainTeachingFixture(t);
   const mapped = await f.bound.applicationTools.prepareContext(f.current, f.admitted);
@@ -857,19 +897,20 @@ test("Main prospective client capture retains original UUID facts before later r
     context: f.current, actions: f.actions, input: { ...request, messageId: "new-empty-client", clientId: "" } }));
 });
 
-test("Main nine teaching definitions retain original scopes and cannot borrow a model-supplied browser or attempt", async t => {
+test("Main teaching definitions retain original scopes and cannot borrow a model-supplied browser or attempt", async t => {
   const f = await mainTeachingFixture(t);
   const mapped = await f.bound.applicationTools.prepareContext(f.current, f.admitted);
   assert.deepEqual(mapped.requestMeta.request.params, {}, "native learner-scoped tools do not inherit the browser Session route");
   assert.equal(f.current.browserAuthority.requestContext.requestMeta.request.params.learningAttemptId, f.attemptId,
     "the original exact browser route remains retained for every fresh authority check");
   assert.notEqual(mapped.requestMeta.request, f.current.browserAuthority.requestContext.requestMeta.request);
-  assert.equal(f.main.actionIds.slice(0, 9).length, 9);
-  assert.deepEqual(f.main.actionIds.slice(9), ["vibe64.training.practical.read", "vibe64.training.practical.evaluate"]);
+  assert.equal(f.main.actionIds.slice(0, 10).length, 10);
+  assert.deepEqual(f.main.actionIds.slice(10), ["vibe64.training.practical.read", "vibe64.training.practical.evaluate"]);
   const { createTrainingPresentationActions } = await import("../../packages/vibe64-training/src/server/presentationActions.js");
   const visual = createTrainingPresentationActions({ learners: f.learners, content: f.content, mainTeaching: f.main });
   for (const definition of visual) {
-    assert.equal(definition.extensions.vibe64.projectScoped, true, "default original prepared-project admission stays project scoped");
+    assert.equal(definition.extensions.vibe64.projectScoped, definition.id !== "vibe64.training.view.open",
+      "visuals retain prepared-project admission while the bound Main view derives its target");
     assert.equal(definition.extensions.vibe64.learningAccess,
       ["vibe64.training.visual.snapshot", "vibe64.training.visual.cue.read"].includes(definition.id) ? "observe" : "write");
     assert.equal(Object.hasOwn(definition.input.schema.getFieldDefinitions(), "clientId"), false);
@@ -878,6 +919,28 @@ test("Main nine teaching definitions retain original scopes and cannot borrow a 
   await assert.rejects(f.execute(f.admitted, "vibe64.training.visual.open", {
     attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", visualId: "request"
   }));
+});
+
+test("Main workspace navigation uses its bound browser command and rejects a changed Learning acknowledgement", async t => {
+  const f = await mainCueFinalFixture(t);
+  const clientId = "actual-browser";
+  const pending = f.mapped.trainingMain.navigateLearningView("learning", f.mapped);
+  let command;
+  for (let count = 0; count < 100; count += 1) {
+    command = (await f.main.readPresentation({ ...f.call, input: { clientId } })).navigation;
+    if (command?.status === "pending") break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(command.learningMode, true);
+  assert.equal(command.learningView, "learning");
+  assert.equal(command.learningContent, "active");
+  const exact = { projectSlug: "", sessionId: f.sessionId, pane: "lessons",
+    learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: f.attemptId };
+  assert.equal((await f.main.acknowledgePresentation({ ...f.call, input: { clientId, commandId: command.id,
+    ok: true, focus: { ...exact, learningContent: "picker" } } })).ok, false);
+  assert.equal((await f.main.acknowledgePresentation({ ...f.call, input: { clientId, commandId: command.id,
+    ok: true, focus: exact } })).ok, true);
+  assert.deepEqual(await pending, { ok: true, focus: exact });
 });
 
 // Append to the SAME existing Teaching file after root review. These use its
@@ -909,9 +972,11 @@ async function mainCueFinalFixture(t, { finalReader = true, mapAdmission = null 
     }
     assert.equal(report.navigation?.status, "pending");
     const command = report.navigation;
-    await f.main.acknowledgePresentation({ ...call, input: { clientId: "actual-browser", commandId: command.id, ok: true,
-      focus: { projectSlug: "", sessionId: f.sessionId, pane: "preview" },
+    const acknowledged = await f.main.acknowledgePresentation({ ...call, input: { clientId: "actual-browser", commandId: command.id, ok: true,
+      focus: { projectSlug: "", sessionId: f.sessionId, pane: "preview", learningMode: true,
+        learningView: "learning", learningContent: "active", learningAttemptId: f.attemptId },
       presentation: { ...command.presentation, playerInstanceId: "same-player", phase: "armed" } } });
+    assert.equal(acknowledged.ok, true, acknowledged.error);
     assert.equal((await pending).ok, true);
   }
   async function checkpoint(outcome = "completed") {

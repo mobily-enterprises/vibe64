@@ -18,11 +18,51 @@ trial or a released, enabled course; changing views does not bypass that rule.
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a
-lesson or reloading the page. On desktop, Lessons/App/Presentation appear beside
-it. On phones and tablets, chat occupies the upper part of the workspace and
-Lessons/App/Presentation the lower part; each keeps its own scrollable area.
-Use the existing **Lessons**, **App** or **Presentation** tabs in that supporting
-pane without hiding Main. Learning has no chat-collapse or pane-swipe control.
+lesson or reloading the page. The right side gains **Workspace** and **Learning**
+tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs and all
+applicable Dashboard tools; **Learning** reveals the existing **Lessons** and
+**Presentation** controls. A supervised project opens in Workspace by default.
+A source-less lesson disables Workspace and explains that it has no project,
+instead of showing a remembered Working project. On phones and tablets, the same
+two choices remain available around the stacked chat and right-hand content.
+Learning has no chat-collapse or pane-swipe control.
+
+You can ask Colleague to enter or leave Learning, show **Lessons**, show the
+active lesson, or reveal the exact lesson project's normal **Preview** or
+**Dashboard → Database → ERD**. Main can reveal those same workspace views only
+for its bound active lesson, and can return to that lesson's Learning pane or
+open a visual declared by its pinned content. Both use the same initiating
+browser and wait for its actual settled mode, pane, session and attempt before
+reporting success. On a phone, the request changes the same stacked panes; it
+does not open another app or conversation. Showing **Lessons** does not start a
+lesson, leaving Learning does not end one, and any agent-opened view is a
+demonstration rather than evidence that you performed an assessed step.
+
+Use Colleague's eye button to manage polling for the lesson task currently open
+in this browser. If Main has delivered a lesson question, **Start polling** uses
+that exact question and pinned lesson. Otherwise, enter one bounded task in
+**Task to watch**, then start it. The compact details dialog shows the task as
+**active**, **paused**, or **unavailable**, its exact target, and its latest
+structured observation and time, last delivered help, and any saved assessment
+outcome. You can instead tell Colleague “Watch me while I do this”; that direct
+request starts the same watch and the eye dialog shows the same state. Asking how
+polling works only gets an explanation. Ask Colleague to list, pause, resume or
+stop a watch when you do not want to use the buttons. **Pause** retains the cursor,
+**Resume** rechecks the current learner, lesson and browser before continuing,
+and **Stop** removes only the watch—it does not stop the app, Main or the lesson.
+Returning to another project, lesson or account pauses the old watch;
+after a server restart, return to the same Learning task and choose **Resume**.
+You do not need to keep the dialog open.
+
+Polling reports only named Vibe64 controls, settled Workspace/Learning view and
+saved lesson progress. It never sends typed text, arbitrary page content,
+screenshots, secrets or another project. Navigation performed by Colleague is
+reported as a demonstration, not as something you did and not as assessment
+evidence. Polling does not grade a question or mark a lesson complete.
+Only a saved assessment outcome supports completion; a recent observation or a
+delivered-help receipt does not. Colleague cannot observe arbitrary activity
+inside the supervised application unless that interaction is one of the named
+Vibe64 controls or the declared exercise-response bridge.
 Returning to Working restores its previous chat-collapse choice. Both modes use
 one retained session panel, so switching modes does not delete drafts or stop
 already admitted background work. A project that is still loading or failed
@@ -33,11 +73,12 @@ original project through the usual access checks before showing it as ready.
 This does not restart stopped Working agents or outputs. Explicit project Close
 or deletion still leaves the project view; a missing runtime or revoked access
 is not treated as ordinary inactivity.
-The original Preview host offers **Lessons**, **App** when this session actually
-has a source-backed application, and **Presentation** after a declared diagram
-has been opened. A declared diagram can open from Lessons; hidden App controls do not remain
-interactive. Switching these views retains the App and diagram instances
-and the lesson picker within that host. Hidden diagrams pause; returning does
+The original Preview host remains mounted beneath these choices. A saved practice
+workspace is reopened through its existing exact-session check before its outputs
+appear; a failure stays visible with **Retry workspace**. A declared diagram can
+open from Learning; covered workspace controls do not remain interactive.
+Switching views retains the App and diagram instances, the lesson picker, and
+Dashboard selections within that host. Hidden diagrams pause; returning does
 not replay their motion or count as a completed lesson. If sound is off, use the
 presentation's **Continue** only after its explanation is ready. A supported
 narrated diagram waits for its confirmed final explanation and actual sound and
@@ -61,7 +102,7 @@ Main readiness flow as Working. Preparation retains that saved conversation and
 checks your current access; it does not send your draft or begin teaching. An
 ended or inaccessible attempt cannot start agent preparation.
 
-Source-less Learning conversations show Lessons and omit App. A supported declared
+Source-less Learning conversations show Learning and disable Workspace. A supported declared
 diagram can use the same Presentation player only in your exact saved lesson
 conversation; an empty picker or unavailable diagram cannot open it. This does
 not give the lesson repository, Save or Temporary AI/workspace access. A saved

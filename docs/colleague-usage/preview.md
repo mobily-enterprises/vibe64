@@ -98,7 +98,10 @@ and reopen the project. Save work as needed before doing so; this stops the othe
 sessions’ running tools too. A failed Close reports cleanup failure. Do not claim
 resources were released until Close succeeds. Colleague can explain the result
 and use the existing authorized project-close action; it does not execute shell
-commands or invent application-specific teardown steps.
+commands or invent application-specific teardown steps. If shared services were
+cleaned up but another close controller failed, the project remains open and
+Preview can start those services again; retry Close after addressing the reported
+controller.
 
 ## Browser checks from chat
 

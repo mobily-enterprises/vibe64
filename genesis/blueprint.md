@@ -15,13 +15,18 @@ the teacher through the existing Chat mode controls, and Resume keeps their choi
 A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
-intact. Learning keeps the teacher chat visible throughout the lesson. Its supporting
-Lessons/App/Presentation pane sits beside chat on desktop and below it on phones;
-Working keeps its own collapse preference. Both use the same session/conversation
-implementation. The existing
-Preview area offers App, Lessons and Presentation, retaining application and
-interactive SVG/animation state. These mode and teacher changes are planned,
-not yet a completed learner-facing feature.
+intact. Learning keeps the teacher chat visible throughout the lesson. The right
+side switches between the complete normal Preview/Dashboard workspace and a
+Learning pane containing the existing lesson picker and Presentation player.
+A supervised project defaults to Workspace; a source-less lesson honestly stays
+in Learning. Both views retain their application, Dashboard and interactive
+visual state in the same session/conversation implementation, on desktop and
+phones. Hidden visuals pause without being treated as completed teaching.
+Colleague can open the picker, active lesson or exact supervised Workspace view,
+and the bound Main teacher can reveal that lesson's Preview, ERD, Learning pane
+or declared visual. Both wait for the same browser's settled selection. Showing
+a view is a teacher demonstration, not learner evidence, and leaving Learning
+does not end the saved attempt.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 Online or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,
@@ -74,10 +79,22 @@ as the first check or action starts. A voice host can speak it before the final
 answer, so the person hears useful feedback during the wait. It describes intent,
 not completion, and further tool steps do not repeat it. This temporary update
 is replaced by the answer and is not added to saved history.
+The chat's Operations view projects recent durable application receipts as
+executing, completed, failed or unknown and links a receipt to its exact saved
+project/session/conversation target. Opening that target never repeats the
+action. A verified failure can prepare a cautious retry request for the person to
+review and send; an unknown outcome can only prepare an inspection request until
+the real state is known. Internal catalogue lookup steps and private tool data
+stay out of this presentation.
 If its model addresses an application tool through the wrong native channel,
 Colleague requests a correction before accepting the answer. Repeated mistakes
 show a specific request error and keep the person's message for retry, rather than
 reporting that project lookup or other application tools are unavailable.
+If no usable Senior model is available for the first request, no model request is
+sent. Colleague keeps the draft, explains the missing AI connection/routing
+prerequisite and offers **Open AI Accounts** through the real hosted Management
+page or standalone Account settings. Setup and provider consent remain the
+person's actions; they return and explicitly send the retained draft afterward.
 Colleague can explain how to use the application from task guides shipped with
 that release. It finds and reads only relevant topics, adapts instructions to
 the person's actual view and permissions, and offers to perform supported tasks.
@@ -101,6 +118,24 @@ host's current permissions and the same code-driven notifications. Watching does
 not prevent the person from continuing their conversation with Colleague.
 A compact watch-count control opens watch and assignment details when needed;
 these lists never consume space below the chat.
+In Learning, that same control can poll the exact current learner task. It shows
+the captured project/session and active, paused or unavailable state, and offers
+Pause, Resume and Stop. Only structured task progress and allowlisted settled
+control/view facts are observed; typed content, page contents, screenshots,
+credentials and other projects are excluded. Leaving the target pauses polling,
+and Colleague-performed navigation is recorded as a demonstration rather than
+learner evidence. Polling status cannot pass an assessment.
+An explicit user request can make Colleague start that same current-browser watch
+through its ordinary action catalogue; how-to questions remain explanatory. Its
+read/pause/resume/stop tools and the human controls share one watch ID and owner.
+Status includes observation freshness, last delivered guidance and the saved
+assessment result when available. Stop does not stop the app, lesson or teacher,
+and observation grants no unrelated mutation authority.
+Confirmed meaningful steps and explicit observed failures can prompt one bounded
+application-origin response from the same Main teacher after the learner's current
+turn. Main may connect evidence to the current criterion or offer one useful hint;
+silence and repeated unchanged evidence produce no nudges. These updates are not
+learner-authored answers and cannot award progress or bypass existing assessment.
 People can also delegate bounded implementation assignments: Colleague retains
 the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their

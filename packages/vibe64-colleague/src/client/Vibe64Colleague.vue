@@ -6,7 +6,7 @@ import { createTrainingNavigation } from "@local/vibe64-training/client/navigati
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
-import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY } from "/src/lib/vibe64AssistantHost.js";
@@ -16,6 +16,7 @@ import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
+import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
@@ -47,6 +48,7 @@ const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAva
 async function toggleConversation(event) {
   const owner = learnerGestures?.value || nativeGestureOwner;
   const ticket = owner.begin(event, bodyVisible.value ? "colleague-minimize" : "colleague-restore");
+  const opening = !shown.value;
   if (shown.value) {
     voice?.controller.minimize();
     open.value = false;
@@ -56,6 +58,7 @@ async function toggleConversation(event) {
     open.value = true;
     await openVoice();
   } else open.value = true;
+  if (opening && bodyVisible.value) await focusConversationComposer();
   if (ticket) void owner.finish(ticket);
 }
 async function openVoice() {
@@ -113,6 +116,11 @@ async function closeText() {
 }
 const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY, null);
 const launcher = ref(null);
+const composerInput = ref(null);
+async function focusConversationComposer() {
+  await nextTick();
+  composerInput.value?.focus?.({ preventScroll: true });
+}
 const panelTarget = ref(null);
 const desktopPanelTarget = ref(null);
 const conversationTarget = computed(() => xs.value ? panelTarget.value : desktopPanelTarget.value);
@@ -126,13 +134,23 @@ const actorKey = computed(() => viewer?.value?.actorKey || viewer?.actorKey || "
 const feedback = useShellWebErrorRuntime();
 const watchDetails = ref(false);
 const watchButton = ref(null);
+const operationDetails = ref(false);
+const operationButton = ref(null);
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
 const clientId = crypto.randomUUID();
 const working = computed(() => conversation.runtime.value?.snapshot.value?.status === "working");
 const watches = computed(() => (product.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
+const operations = computed(() => product.value.operations || (product.value.operation ? [product.value.operation] : []));
+const conversationWatches = computed(() => watches.value.filter(item => item.source !== "learning-task"));
 const assignments = computed(() => (product.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
+const learningTask = computed(() => learnerGestures?.value?.pollingTask?.() || null);
+const learningWatch = computed(() => learningTask.value ? watches.value.find(item => item.source === "learning-task" &&
+  item.learningTask?.attemptId === learningTask.value.attemptId && item.sessionId === learningTask.value.sessionId) || null : null);
+const pollingCriterion = ref("");
+const pollingBusy = ref(false);
+const watchControlCount = computed(() => watches.value.length + assignments.value.length + (learningTask.value && !learningWatch.value ? 1 : 0));
 let mounted = true;
 let revision = 0;
 
@@ -162,8 +180,8 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   // before its binding changes; actor changes never enter this copy path.
   const savedDraft = changingConversation && runtime?.current.value && runtime.identity.actorKey === expectedActor
     ? runtime.draft.value : null;
-  const { conversationId, assistantSelection, watches, assignments, navigation, operation, error, cue, trainingQuestion } = result;
-  product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, error, cue, trainingQuestion };
+  const { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error, cue, trainingQuestion } = result;
+  product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error, cue, trainingQuestion };
   observePresentationCue(cue);
   if (savedDraft !== null && actorKey.value === expectedActor) conversation.adapter.value.actions.setDraft(savedDraft);
   pointerNotice.value = "";
@@ -586,12 +604,83 @@ async function selectModel(assistantSelection) {
     return result;
   } catch (error) { if (expectedActor === actorKey.value) reportFailure(error); return { ok: false }; }
 }
-async function changeWatch(watchId, operation) {
+async function openModelSetup() {
+  modelMenu.value = false;
+  if (props.navigate) {
+    try {
+      await props.navigate({ managementView: "accounts" });
+      return true;
+    } catch (error) { reportFailure(error); return false; }
+  }
+  if (requestVibe64AccountConnectionsDialog({ section: "ai" })) return true;
+  reportFailure("Open AI Accounts to connect an AI and configure an available Senior model.");
+  return false;
+}
+async function changeWatch(item, operation) {
   try {
-    await requestColleague(`/watches/${operation}`, { method: "POST", body: { watchId } });
+    const watch = typeof item === "string" ? watches.value.find(value => value.watchId === item) || { watchId: item } : item;
+    const body = { watchId: watch.watchId };
+    if (operation === "resume" && watch.source === "learning-task") {
+      const task = learningTask.value;
+      if (!task || task.attemptId !== watch.learningTask?.attemptId || task.sessionId !== watch.sessionId) {
+        throw new Error("Return to this exact Learning task before resuming its watch.");
+      }
+      Object.assign(body, { browserClientId: clientId, learningClientId: task.learningClientId });
+    }
+    await requestColleague(`/watches/${operation}`, { method: "POST", body });
     await refresh();
   } catch (error) { reportFailure(error); }
 }
+async function openOperationTarget(item) {
+  const target = item?.target;
+  if (!target?.projectSlug || !props.navigate) return reportFailure("This operation target cannot be opened from the current app.");
+  try {
+    const result = await props.navigate({ projectSlug: target.projectSlug,
+      ...(target.sessionId ? { sessionId: target.sessionId } : {}),
+      ...(target.conversationId ? { conversationId: target.conversationId } : {}) });
+    const opened = result?.focus || result;
+    if (opened?.projectSlug !== target.projectSlug || target.sessionId && opened.sessionId !== target.sessionId ||
+        target.conversationId && opened.conversationId !== target.conversationId) {
+      throw new Error("The operation target did not open.");
+    }
+    operationDetails.value = false;
+  } catch (error) { reportFailure(error); }
+}
+function prepareOperationRecovery(item) {
+  if (!item?.id || !["failed", "unknown"].includes(item.status)) return false;
+  const target = [item.target?.projectSlug, item.target?.sessionId, item.target?.conversationId].filter(Boolean).join(" / ") || "its saved target";
+  draft.value = item.status === "unknown"
+    ? `Inspect the saved target for the uncertain ${item.label} receipt (${item.id}) at ${target}. Tell me what actually happened. Do not repeat the operation unless inspection proves no effect and I explicitly ask you to continue.`
+    : `Recheck the saved target for the failed ${item.label} receipt (${item.id}) at ${target}, then retry only if the operation is still needed and safe. Do not repeat any confirmed side effect.`;
+  operationDetails.value = false;
+  return true;
+}
+async function startLearningWatch() {
+  const task = learningTask.value;
+  if (!task || pollingBusy.value) return false;
+  const criterion = pollingCriterion.value.trim();
+  if (!task.reference && !criterion) {
+    reportFailure("Name the current task to watch.");
+    return false;
+  }
+  pollingBusy.value = true;
+  try {
+    await requestColleague("/learning-watches/start", { method: "POST", body: {
+      ...task, targetProjectSlug: task.projectSlug, browserClientId: clientId, watchId: crypto.randomUUID(), ...(criterion ? { criterion } : {})
+    } });
+    pollingCriterion.value = "";
+    await refresh();
+    return true;
+  } catch (error) { reportFailure(error); return false; }
+  finally { pollingBusy.value = false; }
+}
+watch([() => learnerGestures?.value, learningWatch], ([owner, item], previous) => {
+  const oldOwner = previous?.[0], oldWatch = previous?.[1];
+  if (oldOwner && oldWatch && (oldOwner !== owner || oldWatch.watchId !== item?.watchId)) oldOwner.clearPollingWatch?.(oldWatch.watchId);
+  if (owner && item?.status === "active") owner.setPollingWatch?.({ watchId: item.watchId,
+    observe: body => requestColleague("/learning-watches/observations", { method: "POST", body }) });
+  else if (owner && item) owner.clearPollingWatch?.(item.watchId);
+}, { immediate: true });
 watch(open, value => { if (value) void refresh(); });
 watch(actorKey, () => {
   revision += 1;
@@ -611,12 +700,13 @@ watch(actorKey, () => {
   void refresh();
 }, { flush: "sync" });
 watch(() => product.value.error, (error) => { if (error) reportFailure(error); });
-watch(() => props.focus, (focus) => {
+watch([actorKey, () => props.focus, learningTask], ([, focus, task]) => {
   const expectedActor = actorKey.value;
-  void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch(error => {
+  void requestColleague("/focus", { method: "POST", body: { clientId, focus,
+    ...(task ? { learningTask: task } : {}) } }).catch(error => {
     if (mounted && expectedActor === actorKey.value) productError.value = error.message;
   });
-}, { deep: true });
+}, { deep: true, immediate: true });
 watch(() => learnerGestures?.value, owner => {
   if (mounted && learnerGestures && !owner) learnerGestures.value = nativeGestureOwner;
 });
@@ -635,6 +725,7 @@ onBeforeUnmount(() => {
   if (learnerGestures?.value === nativeGestureOwner) learnerGestures.value = null;
   if (colleagueBody?.value === bodyOwner) colleagueBody.value = null;
   nativeGestureOwner.clear();
+  learnerGestures?.value?.clearPollingWatch?.();
   mounted = false;
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
   cancelAvatarPress();
@@ -694,6 +785,10 @@ onBeforeUnmount(() => {
         <p>{{ pointerNotice }}</p>
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
+      <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
+        <p>Colleague has no usable AI model. Your draft is kept and no request was sent. Connect an AI and configure an available Senior model, then return and press Send.</p>
+        <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>
+      </v-alert>
       <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" v-model:avatar-size="avatarSize">
           <template v-if="$slots.avatar" #avatar="size">
@@ -718,7 +813,7 @@ onBeforeUnmount(() => {
             <div class="vibe64-colleague__composer-region">
               <!-- Keep the dialog from handling Tab again after the input focuses Send. -->
               <AssistantPromptInput
-                v-model="draft" class="vibe64-colleague__composer" :aria-label="composer.ariaLabel" :placeholder="composer.placeholder"
+                ref="composerInput" v-model="draft" class="vibe64-colleague__composer" :aria-label="composer.ariaLabel" :placeholder="composer.placeholder"
                 :disabled="composer.disabled" :submit-enabled="composer.canSend" :rows="composer.rows" :density="composer.density"
                 tab-to-submit @submit="submit" @tab-to-submit="sendButton?.$el?.focus()"
                 @keydown.tab="$event.defaultPrevented && $event.stopPropagation()"
@@ -736,11 +831,18 @@ onBeforeUnmount(() => {
                     />
                     <v-btn :icon="mdiHistory" size="small" variant="text" aria-label="Previous conversations" title="Previous conversations" @click="loadHistory()" />
                     <v-btn
-                      v-if="watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
-                      :aria-label="`Watches and assignments (${watches.length + assignments.length})`" title="Watches and assignments"
+                      v-if="operations.length" ref="operationButton" size="small" min-height="48" variant="text"
+                      :aria-label="`Recent operations (${operations.length})`" title="Recent operations"
+                      aria-haspopup="dialog" :aria-expanded="operationDetails" @click="operationDetails = true"
+                    >
+                      Operations {{ operations.length }}
+                    </v-btn>
+                    <v-btn
+                      v-if="learningTask || watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
+                      :aria-label="`Watches and assignments (${watchControlCount})`" title="Watches and assignments"
                       aria-haspopup="dialog" :aria-expanded="watchDetails" @click="watchDetails = true"
                     >
-                      <v-icon :icon="mdiEyeOutline" /><span class="ms-1">{{ watches.length + assignments.length }}</span>
+                      <v-icon :icon="mdiEyeOutline" /><span class="ms-1">{{ watchControlCount }}</span>
                     </v-btn>
                     <v-btn v-if="freshOperation" variant="text" :disabled="freshBusy" @click="showFreshConfirmation">Resume fresh operation</v-btn>
                     <div class="vibe64-colleague__delivery">
@@ -782,17 +884,67 @@ onBeforeUnmount(() => {
         <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__watch-details">
-        <section v-if="watches.length" aria-label="Conversation watches">
-          <p class="text-title-medium">Conversation watches ({{ watches.length }})</p>
+        <section v-if="learningTask" aria-label="Current learning task polling">
+          <p class="text-title-medium">Current learning task</p>
+          <template v-if="learningWatch">
+            <p><strong>{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.learningTask?.criterion }}</p>
+            <p>{{ learningWatch.projectSlug || 'Source-less lesson' }} · {{ learningWatch.sessionId }}</p>
+            <p v-if="learningWatch.latestObservation">
+              Latest: {{ learningWatch.latestObservation.control }} · {{ learningWatch.latestObservation.workspace?.learningView }}
+              · {{ learningWatch.latestObservation.workspace?.pane || 'no pane' }}
+              · {{ learningWatch.latestObservation.observedAt }}
+            </p>
+            <p v-if="learningWatch.lastGuidance">
+              Last help: {{ learningWatch.lastGuidance.status }} after {{ learningWatch.lastGuidance.control }}
+              · {{ learningWatch.lastGuidance.deliveredAt }}
+            </p>
+            <p v-if="learningWatch.assessmentEvidence?.available">
+              Saved assessment outcome: {{ learningWatch.assessmentEvidence.outcome }}
+              · {{ learningWatch.assessmentEvidence.supportsRequestedOutcome ? 'supports' : 'does not yet support' }} the requested outcome.
+            </p>
+            <p v-else>No saved assessment outcome yet; polling observations are not proof of completion.</p>
+            <p v-if="learningWatch.error" class="text-error">{{ learningWatch.error }}</p>
+            <div class="d-flex flex-wrap ga-1">
+              <v-btn
+                v-if="learningWatch.status === 'active' || learningWatch.status === 'pending'" variant="text" min-height="48"
+                @click="changeWatch(learningWatch, 'pause')"
+              >
+                Pause
+              </v-btn>
+              <v-btn
+                v-if="learningWatch.status === 'paused'" variant="text" min-height="48"
+                @click="changeWatch(learningWatch, 'resume')"
+              >
+                Resume
+              </v-btn>
+              <v-btn variant="text" min-height="48" @click="changeWatch(learningWatch, 'cancel')">Stop</v-btn>
+            </div>
+          </template>
+          <template v-else>
+            <p v-if="learningTask.reference">Watch the current delivered lesson question and report meaningful progress.</p>
+            <v-text-field
+              v-else v-model="pollingCriterion" label="Task to watch" maxlength="2000"
+              hint="Describe one bounded outcome for this current lesson." persistent-hint
+            />
+            <v-btn
+              color="primary" min-height="48" :disabled="pollingBusy || (!learningTask.reference && !pollingCriterion.trim())"
+              @click="startLearningWatch"
+            >
+              {{ pollingBusy ? 'Starting…' : 'Start polling' }}
+            </v-btn>
+          </template>
+        </section>
+        <section v-if="conversationWatches.length" aria-label="Conversation watches">
+          <p class="text-title-medium">Conversation watches ({{ conversationWatches.length }})</p>
           <ul>
-            <li v-for="item in watches" :key="item.watchId">
+            <li v-for="item in conversationWatches" :key="item.watchId">
               <div>
                 <strong>{{ item.projectSlug || 'Workspace' }}</strong> · {{ item.status }}
                 <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
               </div>
               <div class="d-flex flex-wrap ga-1">
-                <v-btn v-if="item.status === 'paused'" variant="text" min-height="48" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</v-btn>
-                <v-btn variant="text" min-height="48" :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</v-btn>
+                <v-btn v-if="item.status === 'paused'" variant="text" min-height="48" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item, 'resume')">Resume</v-btn>
+                <v-btn variant="text" min-height="48" :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item, 'cancel')">Cancel</v-btn>
               </div>
             </li>
           </ul>
@@ -806,7 +958,30 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </section>
-        <p v-if="!watches.length && !assignments.length" role="status">No ongoing watches or assignments.</p>
+        <p v-if="!learningTask && !watches.length && !assignments.length" role="status">No ongoing watches or assignments.</p>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+  <v-dialog v-model="operationDetails" :activator="operationButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Recent operations">
+    <v-card>
+      <v-card-title class="d-flex align-center text-title-large">
+        <span class="flex-grow-1">Recent operations</span>
+        <v-btn :icon="mdiClose" variant="text" aria-label="Close recent operations" title="Close recent operations" @click="operationDetails = false" />
+      </v-card-title>
+      <v-card-text class="vibe64-colleague__operation-details">
+        <p>These receipts report what Vibe64 actually recorded. An uncertain receipt is not safe to repeat until its target is inspected.</p>
+        <ol>
+          <li v-for="item in operations" :key="item.id">
+            <p><strong>{{ item.label }}</strong> · {{ item.status }}<span v-if="item.at"> · {{ item.at }}</span></p>
+            <p v-if="item.target">{{ [item.target.projectSlug, item.target.sessionId, item.target.conversationId].filter(Boolean).join(' · ') }}</p>
+            <p v-if="item.error" class="text-error">{{ item.error }}</p>
+            <div class="d-flex flex-wrap ga-1">
+              <v-btn v-if="item.target?.projectSlug && props.navigate" variant="text" min-height="48" @click="openOperationTarget(item)">Open target</v-btn>
+              <v-btn v-if="item.status === 'unknown'" variant="text" min-height="48" @click="prepareOperationRecovery(item)">Prepare inspection</v-btn>
+              <v-btn v-else-if="item.status === 'failed' && item.canPrepareRetry" variant="text" min-height="48" @click="prepareOperationRecovery(item)">Prepare retry</v-btn>
+            </div>
+          </li>
+        </ol>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -865,6 +1040,9 @@ onBeforeUnmount(() => {
 .vibe64-colleague { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
+.vibe64-colleague__conversation :deep(.assistant-conversation__avatar) { position: relative; align-self: flex-end; flex: 0 0 auto; }
+.vibe64-colleague__conversation :deep(.assistant-conversation__avatar--hidden) { min-height: 48px; }
+.vibe64-colleague__conversation :deep(.assistant-conversation__avatar--hidden .assistant-conversation__avatar-controls) { position: static; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__avatar--user) { display: none; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__assistant-header) { margin-bottom: 6px; }
 .vibe64-colleague__conversation :deep(.studio-long-text-review__blocks > * + *) { margin-top: 0.6rem; }
@@ -876,6 +1054,8 @@ onBeforeUnmount(() => {
 .vibe64-colleague__voice-tools { display: flex; min-width: 0; }
 @media (pointer: coarse), (max-width: 600px) {
   .vibe64-colleague__composer-actions :deep(.v-btn) { min-width: 48px; min-height: 48px; }
+  .vibe64-colleague__voice-tools :deep(.v-btn),
+  .vibe64-colleague :deep(.assistant-conversation__avatar-size) { min-width: 48px !important; min-height: 48px !important; }
 }
 .vibe64-colleague__watch-details { padding: 16px; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
 .vibe64-colleague__watch-details section + section { margin-top: 16px; }

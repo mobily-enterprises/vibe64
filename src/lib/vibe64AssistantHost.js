@@ -9,6 +9,11 @@ export const VIBE64_COLLEAGUE_DATABASE_KEY = Symbol("vibe64.colleague.database")
 export const VIBE64_COLLEAGUE_PLAN_KEY = Symbol("vibe64.colleague.plan");
 export const VIBE64_COLLEAGUE_LAYOUT_KEY = Symbol("vibe64.colleague.layout");
 
+// The routed host publishes one acknowledged browser navigator for Colleague
+// and the bound Main lesson teacher. Learning selection remains with the page.
+export const VIBE64_BROWSER_NAVIGATION_KEY = Symbol("vibe64.browser.navigation");
+export const VIBE64_LEARNING_NAVIGATION_KEY = Symbol("vibe64.learning.navigation");
+
 // The host keeps Colleague alive while routed headers supply its mobile launcher location.
 export const VIBE64_COLLEAGUE_LAUNCHER_KEY = Symbol("vibe64.colleague.launcher");
 

@@ -45,7 +45,8 @@ function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
 
 function createVibe64TerminalsFeature({
   codexTerminalController = {},
-  opencodeTerminalController = {}
+  opencodeTerminalController = {},
+  projectServices = null
 } = {}) {
   const cleanupSchedules = new WeakMap();
   return defineFeature({
@@ -75,6 +76,7 @@ function createVibe64TerminalsFeature({
         env: terminalsProviderEnv(env),
         logger,
         opencodeTerminalController,
+        projectServices,
         projectService: project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
         publishSessionChanged: {
