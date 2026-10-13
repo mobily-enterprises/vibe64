@@ -299,6 +299,9 @@ async function inspectSessionRenewalEligibility({
       "vibe64_session_renewal_source_not_active"
     );
   }
+  if (session.pinnedSessionId === session.sessionId) {
+    throw renewalError("Unpin this session before renewing it.", "vibe64_session_pinned");
+  }
   assertWorkspaceIdle(session, setupRunner);
   await assertNoRepositoryOperation(runtime, session.sessionId);
   const check = await terminals.checkSessionUpdates(session.sessionId, {

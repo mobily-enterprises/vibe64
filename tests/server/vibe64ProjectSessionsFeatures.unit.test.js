@@ -220,6 +220,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.integration-setup.resume",
     "vibe64.sessions.integration-setup.skip",
     "vibe64.sessions.list",
+    "vibe64.sessions.pin",
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",
     "vibe64.sessions.pull-request.create",

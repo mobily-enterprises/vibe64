@@ -23,6 +23,7 @@ import {
   normalizeText,
   pathExists
 } from "@local/vibe64-core/server/core";
+import { readProjectRuntimeOpenState } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { explicitPathIsManagedSessionSource, managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
@@ -2084,6 +2085,7 @@ function createVibe64SessionStore({
   }
 
   async function writeStatus(sessionId, status) {
+    if (!OPEN_VIBE64_SESSION_STATUSES.has(status)) await assertSessionNotPinned(sessionId);
     const normalizedStatus = assertVibe64SessionStatus(status);
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
       throw vibe64Error(
@@ -2977,6 +2979,7 @@ function createVibe64SessionStore({
       revision: revisionNumber(manifest.revision),
       sessionId: sessionPaths.sessionId,
       sessionName,
+      pinnedSessionId: await readPinnedSessionId(),
       sessionRoot: archived ? "" : sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
@@ -3039,6 +3042,7 @@ function createVibe64SessionStore({
       revision: revisionNumber(manifest.revision),
       sessionId: sessionPaths.sessionId,
       sessionName,
+      pinnedSessionId: await readPinnedSessionId(),
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
@@ -3084,6 +3088,7 @@ function createVibe64SessionStore({
       return moveSessionRoot();
     }
     return enqueueSessionMutation(activePaths.currentSessionAliasPath, async () => {
+      await assertSessionNotPinned(activePaths.sessionId);
       await moveSessionRoot();
       await clearVibe64CurrentSessionAliasIfMatches({
         aliasPath: activePaths.currentSessionAliasPath,
@@ -3204,6 +3209,7 @@ function createVibe64SessionStore({
   } = {}) {
     const normalizedRenewalId = assertRenewalId(renewalId);
     const normalizedSourceSessionId = assertValidVibe64SessionId(sourceSessionId);
+    await assertSessionNotPinned(normalizedSourceSessionId);
     const normalizedSuccessorSessionId = assertValidVibe64SessionId(successorSessionId);
     const rootPaths = paths();
     if (await sessionArchiveRecordExists(rootPaths, normalizedSourceSessionId)) {
@@ -3987,8 +3993,55 @@ function createVibe64SessionStore({
     }
   }
 
+  async function readPinnedSessionId() {
+    const alias = paths().currentSessionAliasPath;
+    return alias ? readVibe64CurrentSessionAlias({ aliasPath: path.join(path.dirname(alias), "pinned") }) : "";
+  }
+
+  async function assertSessionNotPinned(sessionId) {
+    if (await readPinnedSessionId() === sessionId) {
+      throw vibe64Error("Unpin this session before archiving or renewing it.", "vibe64_session_pinned");
+    }
+  }
+
+  async function withUnpinnedProject(operation) {
+    const rootPaths = paths();
+    return enqueueSessionMutation(rootPaths.currentSessionAliasPath || normalizedStateRoot, async () => {
+      const pinned = await readPinnedSessionId();
+      if (pinned) throw vibe64Error(`Unpin session ${pinned} before closing this project.`, "vibe64_project_pinned");
+      return operation();
+    });
+  }
+
+  async function updatePinnedSession(sessionId, pinned) {
+    const rootPaths = paths();
+    if (!rootPaths.currentSessionAliasPath || admittedLearningScope) {
+      throw vibe64Error("Only a project source session can be pinned.", "vibe64_session_pin_unavailable");
+    }
+    const id = assertValidVibe64SessionId(sessionId);
+    return enqueueSessionMutation(rootPaths.currentSessionAliasPath, async () => {
+      if (pinned && !(await readProjectRuntimeOpenState({ projectRuntimeRoot: normalizedStateRoot })).open) {
+        throw vibe64Error("Open the project before pinning its session.", "vibe64_project_closed");
+      }
+      const session = await readSession(id);
+      if (session.status !== VIBE64_SESSION_STATUS.ACTIVE || session.metadata.session_closing_reason) {
+        throw vibe64Error("Only an active session outside closing or renewal can be pinned.", "vibe64_session_pin_unavailable");
+      }
+      const existing = await readPinnedSessionId();
+      if (existing && existing !== id) {
+        throw vibe64Error("Unpin the project's pinned session first.", "vibe64_session_already_pinned");
+      }
+      const pinnedAlias = path.join(path.dirname(rootPaths.currentSessionAliasPath), "pinned");
+      if (pinned) {
+        await updateVibe64CurrentSessionAlias({ aliasPath: rootPaths.currentSessionAliasPath, sessionId: id });
+      }
+      await updateVibe64CurrentSessionAlias({ aliasPath: pinnedAlias, sessionId: pinned ? id : "" });
+      return { pinnedSessionId: pinned ? id : "" };
+    });
+  }
+
   async function updateCurrentSession(sessionId = "") {
-    const selectedSessionId = normalizeText(sessionId);
+    const requestedSessionId = normalizeText(sessionId);
     const rootPaths = paths();
     if (!rootPaths.currentSessionAliasPath) {
       throw vibe64Error(
@@ -3997,6 +4050,7 @@ function createVibe64SessionStore({
       );
     }
     return enqueueSessionMutation(rootPaths.currentSessionAliasPath, async () => {
+      const selectedSessionId = await readPinnedSessionId() || requestedSessionId;
       if (selectedSessionId) {
         const selectedSession = await readSessionForRenewal(selectedSessionId);
         if (!OPEN_VIBE64_SESSION_STATUSES.has(selectedSession.status)) {
@@ -5504,6 +5558,10 @@ function createVibe64SessionStore({
     readIntegrationSetupRequest,
     readConversationLogPage,
     readCurrentSession,
+    readPinnedSessionId,
+    withUnpinnedProject,
+    updatePinnedSession,
+    assertSessionNotPinned,
     readConversationTail,
     readManifest,
     readMetadata,

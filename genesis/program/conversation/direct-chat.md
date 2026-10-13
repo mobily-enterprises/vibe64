@@ -1693,7 +1693,10 @@ retry/Stop actions; uncertain delivery keeps Check delivery. Explanations remain
 persisted Status messages. Existing and projected outcome messages render collapsed under Workflow details,
 without rewriting saved history. When the current error is that saved outcome
 explanation, the composer shows only actions. Separate delivery or cleanup
-errors keep their own collapsed details and recovery controls.
+errors keep their own collapsed details and recovery controls. The submit owner
+retains the pending action name so its button immediately reports Starting,
+Continuing or Checking until delivery settles; duplicate submissions and Stop
+are disabled during that submission.
 
 A waiting Auto Planning notice with an active saved plan also offers View plan
 and Implement plan. View plan opens the existing viewer. Implement plan sends a

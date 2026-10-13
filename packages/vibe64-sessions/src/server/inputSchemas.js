@@ -394,6 +394,13 @@ const assistantSelectionUpdateActionInputValidator = patchSchema({
   }
 });
 
+const sessionPinFields = { ...optionalOrigin, pinned: { type: "boolean", required: true } };
+const sessionPinInputValidator = requiredInputSchema(sessionPinFields);
+const sessionPinActionInputValidator = requiredInputSchema({
+  ...sessionPinFields,
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
+});
+
 const currentSessionInputValidator = patchSchema({
   ...optionalUser,
   sessionId: {
@@ -632,6 +639,8 @@ export {
   agentTurnInterruptActionInputValidator,
   agentTurnInterruptInputValidator,
   currentSessionInputValidator,
+  sessionPinInputValidator,
+  sessionPinActionInputValidator,
   repositoryHistoryInputValidator,
   repositoryVersionFileDiffInputValidator,
   repositoryVersionFilesInputValidator,

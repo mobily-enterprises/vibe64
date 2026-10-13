@@ -73,6 +73,13 @@
           </template>
           <span role="status">Checking…</span>
         </v-tooltip>
+        <Vibe64SessionPin
+          v-if="props.session?.sourceReady && !props.sessionSelectionArchived && props.session.purpose !== 'learning'"
+          :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}`"
+          :session="props.session"
+          :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+          :refresh="props.refreshSessionData"
+        />
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
           <v-menu
             v-if="props.sourceWorkspaceAvailable || props.sessionRenewal?.visible"
@@ -407,7 +414,7 @@
               :selection="props.session?.assistantSelection"
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
-              :retrying="routingActionSending"
+              :pending-action="routingActionSending"
               :busy="agentActive || composerSending || composerBlocked"
               @retry="sendRoutingAction('continue')"
               @implement="sendRoutingAction('implement')"
@@ -924,6 +931,7 @@ import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.v
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import TrainingPreviewPresentation from "@local/vibe64-training/client/preview-presentation";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
+import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
@@ -1283,18 +1291,18 @@ watch(agentActive, (active) => {
     openCodeProgressLabel.value = "";
   }
 }, { flush: "sync", immediate: true });
-const routingActionSending = ref(false);
+const routingActionSending = ref("");
 async function sendRoutingAction(action) {
   const request = routingRequest.value;
   if (routingActionSending.value || !request) return;
-  routingActionSending.value = true;
+  routingActionSending.value = action;
   try {
     await props.sendAgentMessage(action === "implement"
       ? { message: "Implement the saved plan. I authorize implementation within its agreed scope.",
         planRevision: request.workPlan.revision, submissionKind: "send" }
       : { messageId: request.messageId, message: request.input.message, reviewAction: "retry" });
   }
-  finally { routingActionSending.value = false; }
+  finally { routingActionSending.value = ""; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
   ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");

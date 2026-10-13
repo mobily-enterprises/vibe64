@@ -7,14 +7,16 @@
     </details>
     <div v-else-if="!followupNeedsAction" class="text-body-small py-2">{{ label }}</div>
     <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
-      <v-btn v-if="canImplement" variant="flat" color="primary" min-height="48" :disabled="retrying || busy" @click="$emit('implement')">
-        Implement plan
+      <v-btn v-if="canImplement" :variant="pendingAction === 'implement' ? 'text' : 'flat'" color="primary" min-height="48" :disabled="Boolean(pendingAction) || busy" :aria-busy="pendingAction === 'implement'" @click="$emit('implement')">
+        <span :class="{ 'action-label-pending': pendingAction === 'implement' }">Implement plan</span>
+        <span v-if="pendingAction === 'implement'" class="position-absolute">Starting…</span>
       </v-btn>
-      <v-btn v-if="canImplement" variant="text" min-height="48" @click="$emit('view-plan')">View plan</v-btn>
-      <v-btn variant="text" min-height="48" :disabled="retrying || busy && request.delivery !== 'uncertain'" @click="$emit('retry')">
-        {{ retryLabel }}
+      <v-btn v-if="canImplement && !pendingAction" variant="text" min-height="48" @click="$emit('view-plan')">View plan</v-btn>
+      <v-btn v-if="!canImplement" variant="text" min-height="48" :disabled="Boolean(pendingAction) || busy && request.delivery !== 'uncertain'" :aria-busy="pendingAction === 'continue'" @click="$emit('retry')">
+        <span :class="{ 'action-label-pending': pendingAction === 'continue' }">{{ retryLabel }}</span>
+        <span v-if="pendingAction === 'continue'" class="position-absolute">{{ request.delivery === 'uncertain' ? 'Checking…' : 'Continuing…' }}</span>
       </v-btn>
-      <v-btn v-if="request.delivery === 'pending'" variant="text" min-height="48" @click="$emit('skip')">
+      <v-btn v-if="request.delivery === 'pending' && !pendingAction" variant="text" min-height="48" @click="$emit('skip')">
         Stop
       </v-btn>
     </div>
@@ -26,7 +28,7 @@ import { computed, watch } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 
-const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, retrying: Boolean, busy: Boolean });
+const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, busy: Boolean });
 defineEmits(["retry", "skip", "implement", "view-plan"]);
 const feedback = useShellWebErrorRuntime();
 const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&
@@ -56,6 +58,10 @@ watch(() => [props.request?.messageId, props.request?.status], ([id, status], [p
 </script>
 
 <style scoped>
+.action-label-pending {
+  visibility: hidden;
+}
+
 summary {
   min-height: 48px;
   align-content: center;

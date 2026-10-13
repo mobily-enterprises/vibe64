@@ -2407,6 +2407,17 @@ function createService({
       };
     }
     const sessions = await listOpenProjectRuntimeSessions();
+    if (sessions.some((session) => session.pinnedSessionId)) {
+      return {
+        dormant: false,
+        ok: true,
+        skipped: true,
+        reason: "pinned-session",
+        runtime,
+        projectSlug: context.projectSlug,
+        projectContextRoot: context.projectContextRoot
+      };
+    }
     const dormancy = projectRuntimeDormancyState({
       idleAfterMs: input.idleAfterMs,
       nowMs: input.nowMs,
@@ -3177,149 +3188,152 @@ function createService({
       const projectScope = context.projectSlug ? `project:${context.projectSlug}` : terminalProjectScopeKey();
       const projectContextRoot = context.projectContextRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
-      projectServices.beginClose(context);
-      const failed = [];
-      let agentProviderRuntimesStopped = 0;
-      let projectCwdTerminalClosed = 0;
-      let projectCwdNamespaceCount = 0;
-      let projectNamespaceCount = 0;
-      let projectTerminalClosed = 0;
-      let sessionCount = 0;
-      let sessionTerminalClosed = 0;
-      vibe64SessionDebugLog("server.terminals.closeProjectRuntime.start", {
-        projectScope,
-        reason
-      });
-      try {
-        let sessionIds = [];
+      const pinRuntime = await projectService.createRuntime({ inspectSource: false });
+      return pinRuntime.store.withUnpinnedProject(async () => {
+        projectServices.beginClose(context);
+        const failed = [];
+        let agentProviderRuntimesStopped = 0;
+        let projectCwdTerminalClosed = 0;
+        let projectCwdNamespaceCount = 0;
+        let projectNamespaceCount = 0;
+        let projectTerminalClosed = 0;
+        let sessionCount = 0;
+        let sessionTerminalClosed = 0;
+        vibe64SessionDebugLog("server.terminals.closeProjectRuntime.start", {
+          projectScope,
+          reason
+        });
         try {
-          const sessions = await listOpenProjectRuntimeSessions();
-          sessionIds = (Array.isArray(sessions) ? sessions : [])
-            .map((session) => String(session?.sessionId || session?.id || "").trim())
-            .filter(Boolean);
-          sessionCount = sessionIds.length;
-        } catch (error) {
-          failed.push({
-            controller: "sessions",
-            error: error instanceof Error ? error.message : String(error || "Project sessions could not be listed."),
-            operation: "list-project-sessions"
+          let sessionIds = [];
+          try {
+            const sessions = await listOpenProjectRuntimeSessions();
+            sessionIds = (Array.isArray(sessions) ? sessions : [])
+              .map((session) => String(session?.sessionId || session?.id || "").trim())
+              .filter(Boolean);
+            sessionCount = sessionIds.length;
+          } catch (error) {
+            failed.push({
+              controller: "sessions",
+              error: error instanceof Error ? error.message : String(error || "Project sessions could not be listed."),
+              operation: "list-project-sessions"
+            });
+            vibe64SessionDebugLog("server.terminals.closeProjectRuntime.sessions.error", {
+              error: vibe64SessionDebugError(error),
+              projectScope,
+              reason
+            });
+          }
+          for (const sessionId of sessionIds) {
+            try {
+              const result = await closeAllSessionTerminals(sessionId, {
+                preserveProcessExitProof: true
+              });
+              sessionTerminalClosed += Number(result?.closed || 0);
+            } catch (error) {
+              failed.push({
+                error: error instanceof Error ? error.message : String(error || "Session runtime close failed."),
+                sessionId
+              });
+            }
+          }
+
+          try {
+            const agentResult = await sessionAgent.closeProject({
+              preserveProcessExitProof: true,
+              projectContextRoot,
+              reason
+            });
+            agentProviderRuntimesStopped = Number(agentResult?.stopped || 0);
+            for (const error of Array.isArray(agentResult?.failed) ? agentResult.failed : []) {
+              failed.push({
+                ...error,
+                controller: "assistant-provider"
+              });
+            }
+          } catch (error) {
+            failed.push({
+              controller: "assistant-provider",
+              error: error instanceof Error ? error.message : String(error || "Assistant runtime cleanup failed.")
+            });
+          }
+
+          try {
+            const namespaceResult = await closeProjectScopedTerminalNamespaces({
+              projectScope
+            });
+            projectNamespaceCount = Number(namespaceResult.namespaceCount || 0);
+            projectTerminalClosed = Number(namespaceResult.closed || 0);
+          } catch (error) {
+            failed.push({
+              controller: "project-terminals",
+              error: error instanceof Error ? error.message : String(error || "Project terminal cleanup failed.")
+            });
+          }
+          try {
+            const cwdResult = await closeTerminalSessionsForCwdRoot(
+              projectContextRoot
+            );
+            projectCwdTerminalClosed = Number(cwdResult.closed || 0);
+            projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
+          } catch (error) {
+            failed.push({
+              controller: "project-directory-terminals",
+              error: error instanceof Error ? error.message : String(error || "Project directory terminal cleanup failed.")
+            });
+          }
+          let projectServicesClosed = false;
+          try {
+            await projectServices.close(context);
+            projectServicesClosed = true;
+          } catch (error) {
+            failed.push({ controller: "project-services", error: error.message });
+          }
+          if (projectServicesClosed && failed.length > 0) {
+            // The project remains open when another controller cannot finish.
+            // Restore service admission after its own cleanup completed so a
+            // failed Close cannot strand Preview in a permanent closing state.
+            projectServices.opened(context);
+          }
+          const result = {
+            agentProviderRuntimesStopped,
+            failed,
+            ok: failed.length === 0,
+            projectCwdNamespaceCount,
+            projectCwdTerminalClosed,
+            projectContextRoot,
+            projectNamespaceCount,
+            projectSlug: context.projectSlug,
+            projectScope,
+            projectTerminalClosed,
+            reason,
+            sessionCount,
+            sessionTerminalClosed
+          };
+          if (result.ok === true) {
+            const runtime = await clearProjectRuntimeOpenState({
+              projectRuntimeRoot: context.projectRuntimeRoot
+            });
+            result.runtime = runtime;
+          }
+          await publishProjectRuntimeChanged(result, {
+            action: "runtime-closed", dormant
           });
-          vibe64SessionDebugLog("server.terminals.closeProjectRuntime.sessions.error", {
+          vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
+            ...result,
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            failedCount: failed.length
+          });
+          return result;
+        } catch (error) {
+          vibe64SessionDebugLog("server.terminals.closeProjectRuntime.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
             projectScope,
             reason
           });
+          throw error;
         }
-        for (const sessionId of sessionIds) {
-          try {
-            const result = await closeAllSessionTerminals(sessionId, {
-              preserveProcessExitProof: true
-            });
-            sessionTerminalClosed += Number(result?.closed || 0);
-          } catch (error) {
-            failed.push({
-              error: error instanceof Error ? error.message : String(error || "Session runtime close failed."),
-              sessionId
-            });
-          }
-        }
-
-        try {
-          const agentResult = await sessionAgent.closeProject({
-            preserveProcessExitProof: true,
-            projectContextRoot,
-            reason
-          });
-          agentProviderRuntimesStopped = Number(agentResult?.stopped || 0);
-          for (const error of Array.isArray(agentResult?.failed) ? agentResult.failed : []) {
-            failed.push({
-              ...error,
-              controller: "assistant-provider"
-            });
-          }
-        } catch (error) {
-          failed.push({
-            controller: "assistant-provider",
-            error: error instanceof Error ? error.message : String(error || "Assistant runtime cleanup failed.")
-          });
-        }
-
-        try {
-          const namespaceResult = await closeProjectScopedTerminalNamespaces({
-            projectScope
-          });
-          projectNamespaceCount = Number(namespaceResult.namespaceCount || 0);
-          projectTerminalClosed = Number(namespaceResult.closed || 0);
-        } catch (error) {
-          failed.push({
-            controller: "project-terminals",
-            error: error instanceof Error ? error.message : String(error || "Project terminal cleanup failed.")
-          });
-        }
-        try {
-          const cwdResult = await closeTerminalSessionsForCwdRoot(
-            projectContextRoot
-          );
-          projectCwdTerminalClosed = Number(cwdResult.closed || 0);
-          projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
-        } catch (error) {
-          failed.push({
-            controller: "project-directory-terminals",
-            error: error instanceof Error ? error.message : String(error || "Project directory terminal cleanup failed.")
-          });
-        }
-        let projectServicesClosed = false;
-        try {
-          await projectServices.close(context);
-          projectServicesClosed = true;
-        } catch (error) {
-          failed.push({ controller: "project-services", error: error.message });
-        }
-        if (projectServicesClosed && failed.length > 0) {
-          // The project remains open when another controller cannot finish.
-          // Restore service admission after its own cleanup completed so a
-          // failed Close cannot strand Preview in a permanent closing state.
-          projectServices.opened(context);
-        }
-        const result = {
-          agentProviderRuntimesStopped,
-          failed,
-          ok: failed.length === 0,
-          projectCwdNamespaceCount,
-          projectCwdTerminalClosed,
-          projectContextRoot,
-          projectNamespaceCount,
-          projectSlug: context.projectSlug,
-          projectScope,
-          projectTerminalClosed,
-          reason,
-          sessionCount,
-          sessionTerminalClosed
-        };
-        if (result.ok === true) {
-          const runtime = await clearProjectRuntimeOpenState({
-            projectRuntimeRoot: context.projectRuntimeRoot
-          });
-          result.runtime = runtime;
-        }
-        await publishProjectRuntimeChanged(result, {
-          action: "runtime-closed", dormant
-        });
-        vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
-          ...result,
-          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          failedCount: failed.length
-        });
-        return result;
-      } catch (error) {
-        vibe64SessionDebugLog("server.terminals.closeProjectRuntime.error", {
-          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          error: vibe64SessionDebugError(error),
-          projectScope,
-          reason
-        });
-        throw error;
-      }
+      });
     },
 
     async closeAgentTerminal(sessionId, terminalSessionId, options = {}) {

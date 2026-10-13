@@ -11,6 +11,7 @@ import {
   assistantModelAccessUpdateActionInputValidator,
   assistantSelectionUpdateActionInputValidator,
   currentSessionInputValidator,
+  sessionPinActionInputValidator,
   repositoryHistoryInputValidator,
   repositoryVersionFileDiffInputValidator,
   repositoryVersionFilesInputValidator,
@@ -42,6 +43,7 @@ const ACTION_LIST_ASSISTANT_CAPABILITIES = "vibe64.assistants.capabilities.list"
 const ACTION_UPDATE_ASSISTANT_MODEL_ACCESS = "vibe64.assistants.model-access.update";
 const ACTION_CREATE_PULL_REQUEST = "vibe64.sessions.pull-request.create";
 const ACTION_CREATE_SESSION = "vibe64.sessions.create";
+const ACTION_PIN_SESSION = "vibe64.sessions.pin";
 const ACTION_RENAME_SESSION = "vibe64.sessions.rename";
 const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.update";
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
@@ -173,6 +175,13 @@ function createSessionActions({ sessions } = {}) {
       // no HTTP route or assistant tool projection.
       channels: ["internal"]
     },
+    action({
+      id: ACTION_PIN_SESSION,
+      kind: "command",
+      assistant: sessionTool("Pin or unpin the explicitly requested project session as its server-selected source. One pin per project; unpin the existing session before pinning another. Browsing other tabs does not move the pinned source. A pinned session cannot be archived or renewed and its project cannot close. This does not Save, publish or deploy."),
+      input: sessionPinActionInputValidator,
+      execute: (input) => sessions.pinSession(input.sessionId, withoutSessionId(input))
+    }),
     action({
       id: ACTION_RENAME_SESSION,
       kind: "command",
@@ -495,6 +504,7 @@ function createSessionActions({ sessions } = {}) {
 
 export {
   ACTION_RENAME_SESSION,
+  ACTION_PIN_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_LIST_ASSISTANT_CAPABILITIES,

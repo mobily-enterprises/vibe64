@@ -1,5 +1,6 @@
 import {
   ACTION_RENAME_SESSION,
+  ACTION_PIN_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_CANCEL_SESSION_RENEWAL,
@@ -38,6 +39,7 @@ import {
 } from "./actions.js";
 import {
   sessionRenameInputValidator,
+  sessionPinInputValidator,
   integrationSetupRequestInputValidator,
   agentMessageInputValidator,
   agentTurnInterruptInputValidator,
@@ -131,6 +133,13 @@ function registerRoutes(http, {
       });
     },
     summary: "Read one file diff from a project version."
+  });
+
+  routes.actionRoute("PATCH", "/sessions/:sessionId/pin", {
+    actionId: ACTION_PIN_SESSION,
+    body: sessionPinInputValidator,
+    buildInput: (request) => ({ ...withoutVibe64User(routes.requestBody(request)), sessionId: request.params.sessionId }),
+    summary: "Pin this session as the project's server-selected source."
   });
 
   routes.actionRoute("GET", "/sessions", {

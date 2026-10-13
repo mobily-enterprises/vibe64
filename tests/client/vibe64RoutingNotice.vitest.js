@@ -86,7 +86,7 @@ it("can resume a stopped first implementation without an existing follow-up", as
 it("offers explicit implementation and plan viewing only for a saved active plan at the waiting planning stage", async () => {
   const value = request("planning", "pending", { workflow: false, workPlan: { status: "active", revision: "saved-plan" } });
   const html = await render(value);
-  expect(html).toContain("Implement plan"); expect(html).toContain("View plan"); expect(html).toContain("Continue planning");
+  expect(html).toContain("Implement plan"); expect(html).toContain("View plan"); expect(html).not.toContain("Continue planning");
   expect(html).not.toContain("Continue implementation"); expect(html).not.toContain("Continue review");
   expect(html).not.toContain("starts coding the saved plan");
   for (const changed of [
@@ -132,4 +132,16 @@ it("explains an old uncertain attempt after changing assistants while preserving
   const html = await render(value, selection); expect(html).toContain("Previous assistant delivery unconfirmed");
   expect(html).toContain("Send a new message to continue with your selected assistant."); expect(html).toContain("Check delivery only checks the previous attempt.");
   expect(html).toContain("Check delivery"); expect(value.attemptedMessageId).toBe("original-delivery");
+});
+
+it("immediately labels the submitted action while preventing another submission", async () => {
+  const value = request("planning", "pending", { workPlan: { status: "active", revision: "saved-plan" } });
+  for (const [pendingAction, label] of [["continue", "Continuing…"], ["implement", "Starting…"]]) {
+    const html = await render({ ...value, ...(pendingAction === "continue" ? { workPlan: null } : {}) }, null, { pendingAction });
+    expect(html).toContain(label); expect(html).toContain('aria-busy="true"');
+    expect(html).toMatch(/disabled[^>]*>[\s\S]*(Implement plan|Continue planning)/u);
+    expect(html).not.toContain("View plan"); expect(html).not.toMatch(/>\s*Stop\s*</u);
+  }
+  expect(await render({ ...value, delivery: "uncertain" }, null, { pendingAction: "continue" })).toContain("Checking…");
+  expect(await render(value)).not.toContain("Continuing…");
 });

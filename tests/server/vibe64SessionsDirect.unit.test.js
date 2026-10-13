@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ACTION_READ_CONVERSATION_CONTEXT,
+  ACTION_PIN_SESSION,
   ACTION_RENAME_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
@@ -87,6 +88,7 @@ function agentWriteLockHarness() {
   return {
     attempts,
     store: {
+      async assertSessionNotPinned() {},
       async listSessionsForRenewal() { return []; },
       async listSessionConversations() { return []; },
       async writeMetadataValue() {},
@@ -235,7 +237,8 @@ function sessionCreationPolicyHarness({
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
     ACTION_READ_CONVERSATION_CONTEXT,
-    ACTION_RENAME_SESSION,
+    ACTION_PIN_SESSION,
+  ACTION_RENAME_SESSION,
     ACTION_RESUME_INTEGRATION_SETUP,
     ACTION_SKIP_INTEGRATION_SETUP,
     ACTION_INSPECT_REPOSITORY_HISTORY,
@@ -2604,7 +2607,7 @@ test("archiving a session releases its managed resources after terminals stop", 
     status: "active"
   };
   const runtime = {
-    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
+    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -2654,7 +2657,7 @@ test("archiving a source-creation failure does not release resources that were n
     status: "blocked"
   };
   const runtime = {
-    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
+    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -4758,4 +4761,19 @@ test("paused goals change direct mode or model within their agent without cleari
       assert.deepEqual(nativeGoal, { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000, tokensUsed: 5000 });
     }
   }
+});
+
+test("source pin action keeps the session identity and publishes a list refresh", async () => {
+  const lock = agentWriteLockHarness(), calls = [], events = [];
+  lock.store.readSessionRenewalStateRecord = async () => "";
+  lock.store.updatePinnedSession = async (sessionId, pinned) => {
+    calls.push({ sessionId, pinned }); return { pinnedSessionId: pinned ? sessionId : "" };
+  };
+  const service = createService({ project: { createRuntime: async () => ({ store: lock.store }) }, terminals: {},
+    publishSessionChanged: async (...event) => events.push(event) });
+  const pin = createSessionActions({ sessions: service }).find(action => action.id === ACTION_PIN_SESSION);
+  assert.ok(pin);
+  assert.deepEqual(await service.pinSession("source", { pinned: true }), { ok: true, pinnedSessionId: "source" });
+  assert.deepEqual(calls, [{ sessionId: "source", pinned: true }]);
+  assert.equal(events[0][0], "source"); assert.equal(events[0][1].payload.clientRefresh.includeList, true);
 });

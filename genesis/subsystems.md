@@ -535,6 +535,8 @@ protect host-owned values; stored-value inspection and secret reveal stay in Env
 
 Coordinates the selected project’s working conversations through the original session services and actions. It exposes creation, selection, renewal, archive discovery and the shared browser transport, preserving conversation identity and current actor/project authority.
 
+Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
+
 Runtime owns the stored session descriptors and source workspaces. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
 
 ### Source
@@ -702,6 +704,8 @@ Reading health does not create an account, repair a project, launch a native con
 ## `packages-vibe64-runtime` Session runtime
 
 Owns isolated working sessions, their lifecycle and recoverable workspace history.
+Owns the selected source alias and optional pinned source alias; pinning keeps that
+selection fixed and protects the session and project until explicitly unpinned.
 The same Runtime/Store accepts constructor-authorized learning scopes and
 atomically retains their immutable owner/attempt/pin/conversation binding.
 No-exercise scopes retain private native identity; explicit practice scopes reuse

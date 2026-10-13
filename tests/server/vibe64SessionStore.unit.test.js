@@ -1,3 +1,4 @@
+import { writeProjectRuntimeOpenState, clearProjectRuntimeOpenState } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import assert from "node:assert/strict";
 import fs, { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
@@ -2708,4 +2709,37 @@ test("offline practice binding refuses unfinished or malformed published archive
       assert.deepEqual(await Promise.all([readFile(archivePath), readFile(recordPath)]), before);
     });
   }
+});
+
+test("pinning retains the server-selected source across tab selections and protects its lifecycle", async () => {
+  await withTemporaryRoot(async root => {
+    const options = { projectSessionSourceRoot: path.join(root, "source") };
+    const store = createStore(root, options);
+    await store.createSession({ sessionId: "pinned-source", runtimeKind: "genesis" });
+    await store.createSession({ sessionId: "other-tab", runtimeKind: "genesis" });
+    await store.updateCurrentSession("pinned-source");
+    assert.equal(await store.readPinnedSessionId(), "");
+    await assert.rejects(store.updatePinnedSession("pinned-source", true), { code: "vibe64_project_closed" });
+    await writeProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) });
+    await store.writeMetadataValue("pinned-source", "renewal_id", "historical-completed-renewal");
+    await store.updatePinnedSession("pinned-source", true);
+    await assert.rejects(store.withUnpinnedProject(() => { throw new Error("must not close"); }), { code: "vibe64_project_pinned" });
+    await store.updateCurrentSession("other-tab");
+    await store.updateCurrentSession("");
+    assert.equal((await store.readCurrentSession()).sessionId, "pinned-source");
+    assert.equal(await fs.readlink(store.paths().currentSessionAliasPath), "active/pinned-source");
+    assert.equal((await store.readSessionSummary("other-tab")).pinnedSessionId, "pinned-source");
+    assert.equal(await createStore(root, options).readPinnedSessionId(), "pinned-source");
+    await assert.rejects(store.updatePinnedSession("other-tab", true), { code: "vibe64_session_already_pinned" });
+    await assert.rejects(store.writeStatus("pinned-source", "archived"), { code: "vibe64_session_pinned" });
+    await assert.rejects(store.assertSessionNotPinned("pinned-source"), { code: "vibe64_session_pinned" });
+    await store.updatePinnedSession("pinned-source", false);
+    await store.updateCurrentSession("other-tab");
+    assert.equal((await store.readCurrentSession()).sessionId, "other-tab");
+    await store.withUnpinnedProject(() => clearProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) }));
+    await assert.rejects(store.updatePinnedSession("other-tab", true), { code: "vibe64_project_closed" });
+    await writeProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) });
+    await store.writeStatus("pinned-source", "archived");
+    await assert.rejects(store.updatePinnedSession("pinned-source", true), { code: "vibe64_session_pin_unavailable" });
+  });
 });

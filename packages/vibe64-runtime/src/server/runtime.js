@@ -142,6 +142,7 @@ function plainSessionView(session = {}, {
     revision: Number(session.revision) || 1,
     sessionId: normalizeText(session.sessionId),
     sessionName: normalizeText(session.sessionName),
+    pinnedSessionId: normalizeText(session.pinnedSessionId),
     sessionRoot: normalizeText(session.sessionRoot),
     sourceInspection,
     sourcePath,

@@ -678,3 +678,27 @@ The session path contract also exposes `projectBackupsRoot` under the owning
 project's runtime directory. This folder is shared across sessions, is excluded
 from session archives by location, and is not removed by renewal or archival.
 The Files owner manages its operations; hosted maintenance schedules retention.
+
+## Pinned server-selected source
+
+The session store owns one optional `sessions/pinned` symlink per source project,
+using the existing relative active-session alias writer and conflict checks.
+An absent pin keeps the original selection behavior; no existing records need
+migration. Explicit pin writes update the existing `sessions/selected` source
+link. Later browser selection publications retain the pinned target without
+changing browser navigation. Session summaries project `pinnedSessionId` from
+that single project record. Learning cannot create a source pin.
+
+The existing alias mutation queue serializes pin changes, selection and project
+close. Pinning requires an open project and active nonclosing, nonrenewing
+session. Archive and renewal refuse the pinned source; moving a session to
+closing checks again under the alias queue. Explicit project close holds the
+same queue through shutdown and refuses any pin; idle cleanup skips pinned
+projects. Daemon shutdown retains its original teardown path. Unpinning is
+explicit and never saves or publishes work. Cross-project messages still target
+the server-selected session, which is the pinned source while pinned.
+
+The Sessions action and route own authorized pin changes; the pin button beside
+Save uses the existing endpoint resource and error feedback, and refreshes the
+session after acknowledgement. Another session cannot replace the pin until the
+current one is unpinned. VPS update cleanliness/origin checks remain independent.

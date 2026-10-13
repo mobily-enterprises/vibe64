@@ -49,3 +49,7 @@ not prevent either conversation from starting.
 Installed host instructions reach coding assistants through the host environment
 filter. On a configured VPS they include the local update and SSH restore commands;
 hosts without that facility do not advertise it.
+
+If the destination has a pinned source session, that is its server-selected
+session even while someone browses another tab. Unpinning restores ordinary
+selection. Pinning does not change message permissions or acknowledgement rules.

@@ -94,18 +94,22 @@ Waiting workflow controls show only the available actions above the composer.
 In chat history, select **Workflow details** to expand a saved outcome and its
 reason; select it again to collapse it. Restored outcomes are also collapsed.
 A separate delivery or cleanup error retains its own **Details** and recovery
-actions until resolved.
+actions until resolved. Clicking a workflow action immediately shows **Starting…**,
+**Continuing…**, or **Checking…** on that button while it is submitted. Other
+workflow submissions are disabled until it settles; a failed submission restores
+the actions and uses the ordinary error feedback.
 
 When Auto is waiting at Planning with an active saved plan, the notice offers
-**Implement plan**, **View plan**, **Continue planning** and **Stop**. These are
+**Implement plan**, **View plan** and **Stop**. These are
 specific alternatives, not a generic “resume” command. **View plan** opens the
-existing Current plan dialog without sending anything. **Continue planning**
-asks for further planning and does not authorize coding. **Implement plan** sends
+existing Current plan dialog without sending anything. To revise the saved plan,
+send the requested changes through the composer. **Implement plan** sends
 a new human request authorizing implementation within the saved plan's scope;
 it starts Junior implementation, followed by the normal Senior review. Your
 composer draft and attachments remain untouched. The button cannot reinterpret
 the original planning request or become another automatic planning continuation.
 
+Without an active saved plan, paused Planning offers **Continue planning**.
 Only the relevant stage's continuation appears: paused Implementation offers
 **Continue implementation** and paused Review offers **Continue review**. An
 uncertain delivery offers **Check delivery** instead; it does not offer implementation.

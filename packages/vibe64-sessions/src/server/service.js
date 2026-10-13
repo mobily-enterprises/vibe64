@@ -43,6 +43,7 @@ import {
   sessionContextUsageFromMetadata,
   sessionRenewalAdvisory
 } from "./sessionRenewalAdvisory.js";
+import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { createSessionRenewalController } from "./sessionRenewal.js";
 import { presenceActor } from "./sessionPresence.js";
 
@@ -613,6 +614,7 @@ function createService({
         const currentSession = await runtime.getSession(sessionId, {
           inspectSource: false
         });
+        await runtime.store.assertSessionNotPinned(sessionId);
         const conversations = await runtime.store.listSessionConversations(sessionId);
         const routingRequests = [currentSession.metadata, ...conversations.map((record) => record.routingMetadata || {})]
           .map((metadata) => JSON.parse(metadata?.assistant_routing_request || "null"));
@@ -780,6 +782,25 @@ function createService({
     },
 
     archiveSession,
+    async pinSession(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+          const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
+          if (renewal && ![SESSION_RENEWAL_STATUS.COMPLETED, SESSION_RENEWAL_STATUS.CANCELLED].includes(renewal.status)) {
+            throw Object.assign(new Error("Finish or cancel renewal before pinning this session."), { code: "vibe64_session_pin_unavailable" });
+          }
+          return runtime.store.updatePinnedSession(sessionId, input.pinned);
+        });
+        if (!exclusive.acquired) return exclusive.value;
+        await publishSessionChanged(sessionId, {
+          originId: text(input.originId),
+          reason: "session-pin-changed",
+          payload: { clientRefresh: { includeList: true } }
+        });
+        return { ok: true, ...exclusive.value };
+      }, "The session pin could not be changed.");
+    },
     async renameSession(sessionId, input = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });

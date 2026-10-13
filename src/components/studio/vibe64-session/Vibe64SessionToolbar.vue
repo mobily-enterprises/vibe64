@@ -56,10 +56,10 @@
           <v-btn
             class="studio-ai-sessions__tab-archive"
             density="comfortable"
-            :disabled="selectionArchived || archive.command.isRunning"
+            :disabled="selectionArchived || archive.command.isRunning || sessionItem.pinnedSessionId === sessionItem.sessionId"
             :icon="mdiArchiveOutline"
             size="small"
-            title="Archive session"
+            :title="sessionItem.pinnedSessionId === sessionItem.sessionId ? 'Unpin this session before archiving it' : 'Archive session'"
             variant="text"
             aria-label="Archive session"
             @click.stop="archive.request"

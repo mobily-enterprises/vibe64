@@ -1841,3 +1841,11 @@ Coding agents can send a request to another open project's selected Main session
 without waiting for its assistant to start or reply. Sending reports acceptance;
 the recipient can independently reply later. Closed projects, missing selections
 and unavailable assistants remain immediate errors.
+
+A pin beside Save keeps one project session as the server-selected source while
+people browse other tabs. It protects that session from archive/renewal and its
+project from explicit or idle close, until explicitly unpinned. Pins survive
+reloads and daemon restarts, do not publish source, and preserve source checks.
+Saved-plan approval shows Implement plan, View plan and Stop; plan revisions are
+ordinary composer messages. Submitted workflow actions immediately show their
+pending label and withhold other actions until submission settles.

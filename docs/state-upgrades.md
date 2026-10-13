@@ -1131,3 +1131,10 @@ ledgers, unknown or unfinished upgrades, symlinks and unverified ownership retai
 the copies and report a reason. The applied ledger and original numbered scripts
 are unchanged. These private workspace copies can contain credentials and several
 projects' data; they never appear in the user-facing Project Backups folder.
+
+### Optional source-session pin
+
+`sessions/pinned` is a new optional relative symlink created only by an explicit
+pin action. Absence means unpinned; existing session metadata and history are
+unchanged. No historical upgrade or startup backfill is needed. The ordinary
+alias owner validates and atomically replaces this new record.

@@ -4934,6 +4934,9 @@ test("eligibility rejects active work, dirty source, and stale canonical source"
     });
   }
 
+  await t.test("pinned session", async () => {
+    await assert.rejects(inspect({ session: { pinnedSessionId: OLD_SESSION_ID } }), { code: "vibe64_session_pinned" });
+  });
   await t.test("active assistant", async () => {
     await assert.rejects(
       inspect({ session: { agentRuns: [{ state: "active" }] } }),

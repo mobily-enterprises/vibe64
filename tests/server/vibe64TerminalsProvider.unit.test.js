@@ -506,7 +506,7 @@ test("original dormancy owner supplies internal close authority while an explici
     await mkdir(targetRoot, { recursive: true });
     const project = {
       createSessionStore() { return {}; },
-      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
+      async createRuntime() { return { store: { withUnpinnedProject: operation => operation() }, adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
       currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
       async readCurrentProject() { return { slug: "project" }; },
       async readEnv() { return { env: { records: [] }, ok: true }; },
@@ -552,6 +552,7 @@ test("a partial project close restores Preview service admission after services 
           adapter: {},
           projectConfig: {},
           stateRoot: runtimeRoot,
+          store: { withUnpinnedProject: operation => operation() },
           async listSessions() { throw new Error("session inventory unavailable"); }
         };
       },
@@ -576,5 +577,43 @@ test("a partial project close restores Preview service admission after services 
     } finally {
       await feature.shutdown(dependencies, { outputs, profile: "test" });
     }
+  });
+});
+
+test("a pinned project cannot close explicitly or through idle cleanup", async () => {
+  await withTemporaryRoot(async root => {
+    const runtimeRoot = path.join(root, "runtime"), targetRoot = path.join(root, "project");
+    await mkdir(targetRoot, { recursive: true });
+    let pinned = true, closed = 0;
+    const project = {
+      createSessionStore() { return {}; },
+      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot,
+        store: { async withUnpinnedProject(operation) {
+          if (pinned) throw Object.assign(new Error("Unpin first"), { code: "vibe64_project_pinned" });
+          return operation();
+        } },
+        async listSessions() { return pinned ? [{ sessionId: "main", pinnedSessionId: "main" }] : []; }
+      }; },
+      currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
+      async readCurrentProject() { return { slug: "project" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(_slug, operation) { return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    };
+    const feature = createVibe64TerminalsFeature({ projectServices: {
+      beginClose() { closed++; }, async close() {}, async closeAll() {}, opened() {}, async ensure() {}
+    } });
+    const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
+    const outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      await outputs.terminals.openProjectRuntime();
+      await assert.rejects(outputs.terminals.closeProjectRuntime(), { code: "vibe64_project_pinned" });
+      const idle = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
+      assert.equal(idle.skipped, true); assert.equal(idle.reason, "pinned-session");
+      assert.equal(closed, 0); assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
+      pinned = false;
+      assert.equal((await outputs.terminals.closeProjectRuntime()).ok, true);
+      assert.equal(closed, 1);
+    } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
   });
 });
