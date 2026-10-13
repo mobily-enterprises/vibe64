@@ -2336,7 +2336,7 @@ function createOutputTargetTerminalController({
             previewApplicationIdentities: context.previewApplicationIdentities
           });
           const stopState = previewStopState(context.session.metadata);
-          response.preview.stoppedIntent = stopState.stopped;
+          if (stopState.stopped) response.preview.stoppedIntent = true;
           if (stopState.stopped && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
             response.preview.state = stopState.error ? "failed" : "stopped";
             response.preview.message = stopState.error || "Preview is stopped. Start it to run the application.";
