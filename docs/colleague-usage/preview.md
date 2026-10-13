@@ -215,3 +215,22 @@ diagram and required audio completion receipt before another teaching cue or
 question. An unconfirmed receipt needs its current status checked, not an inferred
 pass or automatic replay. On phones, opening a teaching presentation minimises
 Colleague's frame while retaining the conversation, microphone and typed draft.
+
+## Choose a starting application
+
+In an empty project's **Preview**, choose **Use this starter** on the desired
+Basic, Database, or Accounts app. On mobile, open **Show project** first. Import
+adds source to this session; review it and use **Save** to keep it in the project.
+Setup and running the app are separate operations.
+
+A missing Stack contract reported during import can belong to the downloaded
+starter even when your project's Stack is empty. Validation rejects that starter
+before copying it. Migrating the empty destination does not fix the starter.
+After the starter or importer is repaired, retry **Use this starter**. If the
+result is uncertain, recheck the project before retrying; existing application
+source must not be overwritten.
+
+Colleague can inspect onboarding, explain the available choices and offer to
+apply one. After you choose a starter and accept its offer or directly request
+it, Colleague can use the existing onboarding action and recheck the result.
+A successful import does not mean dependencies are prepared or Preview is running.
