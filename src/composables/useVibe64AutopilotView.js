@@ -563,7 +563,7 @@ function useVibe64AutopilotView(props, emit, {
     !composerDisabled.value &&
     !composerSending.value &&
     !interrupting.value &&
-    !agentActive.value &&
+    (!agentActive.value || agentSteerable.value) &&
     !repositoryOperationActive.value
   ));
   const composerRetryMatchesDraft = computed(() => props.conversationRuntime?.draftRetryMatches.value === true);
@@ -636,7 +636,7 @@ function useVibe64AutopilotView(props, emit, {
       interrupting.value ||
       repositoryOperationActive.value ||
       (agentActive.value && (!agentNativeTurnReady.value ||
-        !agentSteerable.value && !composerQueueing.value || composerAttachments.value.length > 0))
+        !agentSteerable.value && (!composerQueueing.value || composerAttachments.value.length > 0)))
     ) {
       return false;
     }

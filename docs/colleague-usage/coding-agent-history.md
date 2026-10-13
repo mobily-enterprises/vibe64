@@ -5,7 +5,15 @@ attachments, retained history and required operator upgrades.
 
 ## Attachments and saved history
 
-Add files through the composer before selecting **Send** or **Steer**. Images
+Open **Add to message** (+) and choose **Attach files**, or paste or drop files
+into the composer. You can also attach files while the assistant is working when
+**Steer** is available. Wait for uploads to finish, then select **Steer** to send
+the files and guidance to the active turn. On desktop and mobile the same
+**Attach files** action is available. If the turn finishes before you send, use
+**Send** for the next request. Failed delivery keeps the message and attachments
+for **Retry**; retrying an ended turn cannot silently start a new request.
+
+Images
 use the selected agent's image input; other files remain available to its file
 tools. Changing a native binding does not grant access to another conversation's
 files. Keep the same request when checking uncertain delivery.

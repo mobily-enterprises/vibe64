@@ -1103,34 +1103,27 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerSubmitMode.value).toBe("steer");
   });
 
-  it("retains a rejected Steer draft and excludes queued attachments", async () => {
-    const sendAgentMessage = vi.fn(async () => false);
-    const view = await createView({
-      sendAgentMessage,
-      session: {
-        ...viewProps().session,
-        agentSession: {
-          turn: {
-            active: true,
-            id: "turn-1",
-            state: "active"
-          }
-        }
-      }
-    });
+  it("retains rejected steering attachments and retries the same request", async () => {
+    const sendAgentMessage = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const onAttachmentsAccepted = vi.fn();
+    const view = await createView({ sendAgentMessage,
+      session: { ...viewProps().session,
+        agentSession: { turn: { active: true, id: "turn-1", state: "active" } } }
+    }, { onAttachmentsAccepted });
+    const attachment = { attachmentId: "12345678-1234-4234-8234-123456789abc", fileName: "details.txt", size: 5 };
     view.composerDraft.value = "Do not lose this.";
-
+    view.updateComposerAttachments([attachment]);
     await expect(view.submitComposerMessage()).resolves.toBe(false);
     expect(view.composerDraft.value).toBe("Do not lose this.");
-
-    view.updateComposerAttachments([{
-      fileName: "later.txt",
-      path: "/tmp/later.txt",
-      size: 5
-    }]);
-    expect(view.composerAttachmentsEnabled.value).toBe(false);
-    expect(view.composerCanSubmit.value).toBe(false);
-    expect(sendAgentMessage).toHaveBeenCalledTimes(1);
+    expect(view.composerAttachments.value).toEqual([attachment]);
+    expect(view.composerAttachmentsEnabled.value).toBe(true);
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(onAttachmentsAccepted).not.toHaveBeenCalled();
+    const original = sendAgentMessage.mock.calls[0][0];
+    expect(original.attachmentIds).toEqual([attachment.attachmentId]);
+    await expect(view.submitComposerMessage()).resolves.toBe(true);
+    expect(sendAgentMessage.mock.calls[1][0]).toEqual(original);
+    expect(onAttachmentsAccepted).toHaveBeenCalledExactlyOnceWith([attachment.attachmentId]);
   });
 
   it("queues further steering immediately and advances on the exact receipt", async () => {
@@ -1400,6 +1393,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
     view.composerDraft.value = "This can be the next turn.";
+    view.updateComposerAttachments([{ attachmentId: "uploaded-image", fileName: "screen.png", size: 1024 }]);
 
     props.session.agentSession.turn = {
       active: false,
@@ -1411,7 +1405,9 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerSubmitMode.value).toBe("send");
     await expect(view.submitComposerMessage()).resolves.toBe(true);
     expect(sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
-      message: "This can be the next turn."
+      message: "This can be the next turn.",
+      submissionKind: "send",
+      attachmentIds: ["uploaded-image"]
     }));
   });
 
@@ -2047,11 +2043,16 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Make the smallest safe change.");
   });
 
-  it("sends shared attachment identities and acknowledges accepted uploads", async () => {
+  it.each([false, true])("sends shared attachment identities and acknowledges accepted uploads (steering: %s)", async steering => {
     const sendAgentMessage = vi.fn(async () => true);
     const onAttachmentsAccepted = vi.fn();
     const attachmentId = "12345678-1234-4234-8234-123456789abc";
-    const view = await createView({ sendAgentMessage }, { onAttachmentsAccepted });
+    const { view, props } = await createViewWithProps({ sendAgentMessage }, { onAttachmentsAccepted });
+    if (steering) {
+      props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+      await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
+    }
+    expect(view.composerAttachmentsEnabled.value).toBe(true);
     view.composerDraft.value = "Inspect [Image #1].";
     view.updateComposerAttachments([{
       attachmentId,
@@ -2061,8 +2062,11 @@ describe("useVibe64AutopilotView direct chat", () => {
       size: 1024
     }]);
 
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerSubmitMode.value).toBe(steering ? "steer" : "send");
     await view.submitComposerMessage();
 
+    expect(sendAgentMessage.mock.calls[0][0].submissionKind).toBe(steering ? "steer" : "send");
     expect(sendAgentMessage.mock.calls[0][0].message).toBe("Inspect [Image #1].");
     expect(sendAgentMessage.mock.calls[0][0].displayMessage).toBe("Inspect [Image #1].");
     expect(sendAgentMessage.mock.calls[0][0].attachmentIds).toEqual([attachmentId]);

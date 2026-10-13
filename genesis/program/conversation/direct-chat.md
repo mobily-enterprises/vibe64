@@ -1173,6 +1173,11 @@ owner, and with the same submitter, selected destination and fresh account
 admission. Canonical acceptance wins first. Missing routing or continuity fields
 alone remain unknown; follow-up aliases cannot turn an earlier input into not-sent.
 
+Main’s composer allows attachment uploads and submission during a steerable
+active turn, using the existing attachment identities and receipt handling.
+Nonsteerable active turns retain their attachment guard; upload readiness and
+connection/turn readiness still gate sending.
+
 Router's exact inactive-turn steering rejection uses the common
 `conversation_not_steerable` pre-admission code. The shared client retains a failed
 request with its original UUID, payload and steering intent, without automatic
