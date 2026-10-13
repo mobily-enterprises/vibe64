@@ -514,8 +514,14 @@ function outputTargetFromMetadata(metadata = {}) {
 }
 
 function previewStopState(metadata = {}) {
+  const value = metadata[PREVIEW_STOPPED_METADATA];
+  if (value !== undefined && value !== "" && value !== "true" && value !== "false") {
+    throw Object.assign(new Error("Saved Preview stop state is invalid. Stop Preview explicitly before retrying Start."), {
+      code: "vibe64_preview_stop_state_invalid"
+    });
+  }
   return {
-    stopped: metadata[PREVIEW_STOPPED_METADATA] === "true",
+    stopped: value === "true",
     error: String(metadata[PREVIEW_STOP_ERROR_METADATA] || "").trim()
   };
 }

@@ -391,6 +391,9 @@ HTTPS origins so a nested cross-site Preview iframe can complete token
 bootstrap. Local HTTP Preview keeps `SameSite=Lax`; both cookies remain
 HTTP-only and scoped to the proxy host.
 This lets a previewed editor authenticate realtime connections through the proxy.
+Each upstream HTTP request restores the configured Preview idle timeout on a
+pooled socket. A pool's short free-socket timer must not terminate a later active
+request; tracking and teardown listeners remain attached only once per socket.
 For a local proxy, the request's loopback Host on the proxy's own port is its
 browser-facing origin. Token bootstrap, application redirects and HTTP/WebSocket
 Origin translation retain that hostname when the local editor uses `localhost`

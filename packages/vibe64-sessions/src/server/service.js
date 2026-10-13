@@ -588,8 +588,11 @@ function createService({
       canUseAny: access.canUseAny === true,
       currentMode: text(access.currentMode),
       steering: access.steering === true,
+      // Chat needs each decision and effective selection, not duplicated server
+      // dispatch plans. Routing still resolves those afresh when work is sent.
       purposes: JSON.parse(JSON.stringify(access.purposes || {}, (key, value) =>
-        ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value)),
+        ["connectionIdentity", "routerConnectionIdentity", "configuredSelection",
+          "seniorJuniorPair", "executionProfileRequest", "router"].includes(key) ? undefined : value)),
       endpointCode: text(access.endpointCode),
       engineId: text(access.engineId),
       modelProviderId: text(access.modelProviderId),

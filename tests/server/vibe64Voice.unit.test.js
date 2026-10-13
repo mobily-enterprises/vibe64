@@ -79,7 +79,8 @@ test("voice catalogue HTTP reads dispatch through the canonical voice action", {
 });
 
 test("canonical voice catalogue action preserves Colleague authorization before reading voices", { timeout: 5000 }, async () => {
-  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } } };
+  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } },
+    vibe64Action: { user: { uid: 42 } } };
   const calls = [];
   const [action] = createVoiceActions({
     actions: { async execute(call) { calls.push(call); return { ok: true }; } },
@@ -90,8 +91,9 @@ test("canonical voice catalogue action preserves Colleague authorization before 
   assert.deepEqual(calls, [{
     actionId: "vibe64.colleague.state.read",
     input: {},
-    context
+    context: { channel: context.channel, surface: context.surface, requestMeta: context.requestMeta }
   }]);
+  assert.equal(context.vibe64Action.user.uid, 42, "The caller's resolved authority remains intact.");
 });
 
 test("public project voice checks exact session ownership and retains native proxy frame order", { timeout: 10000 }, async t => {

@@ -43,6 +43,12 @@ and page navigation, so opening the editor on `localhost` also works. If a tab
 shows an expired Preview access error after a restart, use **Reload preview**
 to obtain its current address.
 
+Longer application requests keep the same Preview idle allowance when an HTTP
+connection is reused. If a save or archive still reports a connection error,
+check its resulting state before retrying: losing the reply does not prove the
+operation failed. Colleague can help inspect the state through its supported
+actions; it must not repeat an uncertain write automatically.
+
 Preview lets the application request your microphone and play audio. Use its
 microphone control and allow access when your browser asks. Permission is still
 your choice; embedding an app does not grant it automatically. Use HTTPS for
@@ -68,6 +74,8 @@ It stays stopped after navigation, reload or reopening the session. Use the
 toolbar's **Start preview** or **Restart preview** deliberately to run it again.
 If Stop reports incomplete cleanup, retry Stop before starting. Browser tests
 may temporarily run an isolated target, then restore the prior stopped choice.
+If Preview reports an invalid saved stop state, use the explicit Stop action
+before retrying Start; automatic recovery does not overwrite that state.
 Colleague can offer the existing authorized stop/start actions, but a how-to
 question alone does not authorize either action.
 Retrying the same output reuses its running application when its settings and

@@ -120,6 +120,102 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
   assert.equal((await controller.stopTerminal(sessionId, "")).ok, true);
 });
 
+test("Preview Stop drains before queued recovery and isolates other session cleanup", async (t) => {
+  const stoppingId = `stop-drain-${crypto.randomUUID()}`;
+  const otherId = `stop-other-${crypto.randomUUID()}`;
+  const metadata = new Map([[stoppingId, {}], [otherId, {}]]);
+  const entered = Promise.withResolvers();
+  const drain = Promise.withResolvers();
+  const cleaned = [];
+  const controller = createOutputTargetTerminalController({
+    ensureWorkspacePrepared() { assert.fail("Queued automatic recovery must not prepare after Stop."); },
+    projectService: { async createRuntime() { return {
+      store: {
+        async mutateSession(_id, operation) { return operation(); },
+        async writeMetadataValue(id, key, value) { metadata.get(id)[key] = value; }
+      },
+      async getSession(id) { return { sessionId: id, metadata: metadata.get(id) }; }
+    }; } },
+    async stopPreviewBrowsers(id) {
+      cleaned.push(id);
+      if (id === stoppingId) { entered.resolve(); await drain.promise; }
+      return { ok: true };
+    }
+  });
+  t.after(() => controller.close());
+  let stopFinished = false;
+  const stop = controller.stopTerminal(stoppingId, "").then(result => { stopFinished = true; return result; });
+  await entered.promise;
+  const recovery = controller.startTerminal(stoppingId, { automatic: true });
+  try {
+    assert.equal(metadata.get(stoppingId).output_target_preview_stopped, "true");
+    assert.deepEqual(metadata.get(otherId), {}, "Stop only changes its own session");
+    assert.equal((await controller.stopTerminal(otherId, "")).ok, true);
+    assert.equal(stopFinished, false, "Stop waits for its owned browser drain");
+    assert.deepEqual(cleaned, [stoppingId, otherId], "another session is not held by this drain");
+  } finally {
+    drain.resolve();
+    assert.equal((await stop).ok, true);
+    assert.equal((await recovery).code, "vibe64_preview_stopped");
+  }
+});
+
+test("invalid saved Preview Stop state refuses startup without preparation or metadata repair", async (t) => {
+  for (const value of ["invalid", true, null]) {
+    let prepared = 0;
+    let writes = 0;
+    const metadata = { output_target_preview_stopped: value };
+    const controller = createOutputTargetTerminalController({
+      ensureWorkspacePrepared() { prepared += 1; },
+      projectService: { async createRuntime() { return {
+        store: { async mutateSession() { writes += 1; } },
+        async getSession() { return { metadata }; }
+      }; } }
+    });
+    t.after(() => controller.close());
+    const result = await controller.startTerminal(`invalid-stop-${crypto.randomUUID()}`, { automatic: true });
+    assert.equal(result.code, "vibe64_preview_stop_state_invalid");
+    assert.equal(prepared, 0);
+    assert.equal(writes, 0);
+    assert.equal(metadata.output_target_preview_stopped, value);
+  }
+});
+
+test("failed Preview browser cleanup retains Stop across controllers and retries through its owner", async (t) => {
+  const sessionId = `stop-recovery-${crypto.randomUUID()}`;
+  const metadata = {};
+  let failCleanup = true;
+  let attempts = 0;
+  const options = {
+    ensureWorkspacePrepared() { assert.fail("Stopped Preview must not prepare a workspace."); },
+    projectService: { async createRuntime() { return {
+      store: {
+        async mutateSession(_id, operation) { return operation(); },
+        async writeMetadataValue(_id, key, value) { metadata[key] = value; }
+      },
+      async getSession() { return { sessionId, metadata }; }
+    }; } },
+    async stopPreviewBrowsers() {
+      attempts += 1;
+      return failCleanup ? { ok: false, error: "browser drain failed" } : { ok: true };
+    }
+  };
+  const first = createOutputTargetTerminalController(options);
+  t.after(() => first.close());
+  const failed = await first.stopTerminal(sessionId, "");
+  assert.equal(failed.code, "vibe64_preview_stop_incomplete");
+  assert.match(failed.error, /browser drain failed/u);
+  assert.equal(metadata.output_target_preview_stopped, "true");
+  const reopened = createOutputTargetTerminalController(options);
+  t.after(() => reopened.close());
+  assert.equal((await reopened.startTerminal(sessionId, { automatic: true })).code, "vibe64_preview_stopped");
+  failCleanup = false;
+  assert.equal((await reopened.stopTerminal(sessionId, "")).ok, true);
+  assert.equal(attempts, 2);
+  assert.equal(metadata.output_target_preview_stopped, "true");
+  assert.equal((await reopened.startTerminal(sessionId, { automatic: true })).code, "vibe64_preview_stopped");
+});
+
 test("output targets declare the managed workload kind independently of their PTY transport", () => {
   assert.deepEqual(outputTargetExecutionDescriptor({ label: "Build binary" }, {
     metadata: {

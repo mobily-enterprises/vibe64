@@ -163,8 +163,10 @@ Server model setup is an operator task.
 
 Loading **Speaking voice** performs a read-only, authorized catalogue check. It
 does not start the microphone, open an audio connection or send an assistant
-message. If the catalogue cannot be loaded, close and reopen **Voice settings**
-after the speech service or sign-in has recovered; typed chat remains available.
+message. The app rechecks your current sign-in before showing installed choices.
+If the catalogue cannot be loaded, sign in again if prompted, then close and
+reopen **Voice settings** after the speech service has recovered; typed chat
+remains available.
 
 Answers start speaking in short phrases before completion; code and dense tables
 remain in chat. Spoken answers use up to 4,000 characters after removing code and

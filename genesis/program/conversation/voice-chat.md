@@ -240,9 +240,10 @@ connection. Project routes resolve request context and require a successful exac
 session inspection; Colleague uses its ordinary authenticated state action without
 a project. The read-only `/api/vibe64/voice/voices` route dispatches the
 canonical `vibe64.voice.catalogue.read` action. That owner preserves the same
-state authorization and calls JSKIT's authenticated service catalogue reader
-without opening an audio connection. An unavailable service fails voice without
-adding inference privileges.
+state authorization by rechecking the original request without carrying this
+action's resolved authority into the second action. It calls JSKIT's
+authenticated service catalogue reader without opening an audio connection.
+An unavailable service fails voice without adding inference privileges.
 JSKIT bounds frames, queues and connection recovery. The host owns speech-service
 provisioning and credentials; Vibe64 does not download models on a browser request.
 

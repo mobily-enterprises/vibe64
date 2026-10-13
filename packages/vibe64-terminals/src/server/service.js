@@ -2216,7 +2216,8 @@ function createService({
           label: "Source explanations" },
         { controller: outputTarget, label: "outputTarget" },
         ...(!controllerOptions.renewalCleanup && (controllerOptions.session?.sourceReady !== false || learningNativeAvailable) ? [{
-          controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
+          controller: { closeAllForSession: async (id, options) =>
+            sessionAgent.interruptTurn(id, {}, await assistantSessionOptions(id, options)) },
           label: "assistantTurn"
         }] : []),
         {

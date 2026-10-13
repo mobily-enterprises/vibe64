@@ -2284,6 +2284,23 @@ async function withAgentMessageController(operation, {
   }
 }
 
+test("cold terminal cleanup honors an idle session's saved OpenCode selection", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, terminalService, sessionId, store }) => {
+    const session = await store.readSession(sessionId);
+    const selection = JSON.parse(session.metadata.assistant_selection);
+    await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, JSON.stringify({
+      ...selection, engineId: "opencode", agentId: "build",
+      modelProviderId: "deepseek", modelId: "deepseek-v4-flash", variantId: ""
+    }));
+
+    // No chat has opened in this service: cleanup must use durable selection,
+    // not an in-memory binding or the default Codex provider.
+    const result = await terminalService.closeSessionTerminals(sessionId);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(captures.providerOptions.length, 0, "cleanup must not prepare Codex");
+  }, { throughTerminalService: true });
+});
+
 test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     const actor = { preferredName: "Ada", role: "owner", username: "ada-owner" };

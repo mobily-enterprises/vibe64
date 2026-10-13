@@ -1666,6 +1666,32 @@ test("launch preview proxy serves stable starting HTML while the target is unava
   }
 });
 
+test("launch preview proxy gives reused HTTP connections the configured request idle window", { timeout: 15000 }, async () => {
+  const sockets = [];
+  const server = createServer(async (request, response) => {
+    sockets.push(request.socket.remotePort);
+    if (request.method === "POST") await delay(6200);
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end('{"ok":true}');
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const registry = createLaunchPreviewProxyRegistry({ socketIdleTimeoutMs: 10000 });
+  try {
+    const preview = await registry.ensure("session-http-reuse", `http://127.0.0.1:${server.address().port}/api/save`);
+    const warmup = await fetch(preview.href);
+    assert.equal(warmup.status, 200);
+    await warmup.text();
+    const saved = await fetch(preview.href, { method: "POST", body: "{}" });
+    assert.equal(saved.status, 200, await saved.text());
+    assert.equal(sockets.length, 2);
+    assert.equal(sockets[1], sockets[0], "exercise the same pooled upstream connection");
+  } finally {
+    await registry.closeAll();
+    server.closeAllConnections();
+    await closeServer(server);
+  }
+});
+
 test("launch preview proxy handles aborted upstream response bodies", async () => {
   const server = createServer((_request, response) => {
     response.writeHead(200, {

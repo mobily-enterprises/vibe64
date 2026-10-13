@@ -321,8 +321,12 @@ not establish that session creation is unavailable.
 
 The server records `session_archive_operation` before cleanup and uses the
 closing marker to reject new work. Preview, active AI turns, and remaining tools
-stop before resources and source are removed. Durable stopping, resources, and
-source stages let startup resume interrupted archives. A failure retains its
+stop before resources and source are removed. Cleanup uses the saved session
+context when interrupting its assistant,
+including a cold manager after restart; cleanup must not default to another
+engine merely because the conversation has not been opened in this process.
+Durable stopping, resources, and source stages let startup resume interrupted
+archives. A failure retains its
 stage and error for explicit retry; source recovery evidence keeps its protection
 marker. Startup also finalizes interrupted archive publication from the immutable
 closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to

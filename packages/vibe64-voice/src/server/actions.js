@@ -24,10 +24,14 @@ function createVoiceActions({ actions, voice } = {}) {
     audit: { actionName: ACTION_READ_VOICE_CATALOGUE },
     observability: {},
     async execute(_input, context) {
+      // The Colleague read must authorize the original request afresh. Its
+      // contributor rejects a resolved grant carried over from this action.
+      const recheckContext = { ...context };
+      delete recheckContext.vibe64Action;
       await actions.execute({
         actionId: "vibe64.colleague.state.read",
         input: {},
-        context
+        context: recheckContext
       });
       return voice.readCatalogue();
     }

@@ -92,10 +92,23 @@ fresh session does not authorize further coding work.
 Select the session, choose **Archive session**, and confirm **Archive session**
 in the dialog. This stops its assistant and terminals, preserves the session and
 removes its active workspace. Desktop and mobile use the same confirmation.
+An OpenCode session can be archived before its main chat has started; an idle
+assistant with no native conversation does not need a main-turn Stop request.
+Its helper conversations and terminals still go through normal cleanup.
+Archiving uses the session's saved assistant even after a server restart; it
+does not require connecting a different assistant just to stop that session.
 If history preservation fails, the operation reports the error and keeps the
 workspace for retry. Resolve the reported problem, then retry **Archive session**.
 Colleague can explain these steps and the reported error; the existing session
 permissions and confirmation still apply.
+
+## Chat availability
+
+The chat checks which modes you can use and shows the effective assistant,
+shared-backup label or an actionable connection message. These lightweight
+checks do not start a model or download its repeated execution plan. Opening
+**Chat mode** still shows the available choices; access is checked again when
+work is sent. Colleague can explain an unavailable mode, but cannot grant access.
 
 ## Open the coding agent's terminal
 
@@ -169,6 +182,11 @@ explicit Refresh and checks for changes made outside Vibe64 remain available.
 Opening a session also checks your AI access. Sending waits for that result;
 the pending check does not itself mean the connection is unavailable. A confirmed
 unavailable connection or access error is shown after the check returns.
+If chat stays on gray loading rows while the application Preview still works,
+use **Reconnect** or **Retry connection** when shown, then reload the browser tab
+if it remains stuck. Report the selected session and any failed chat/access
+request status when asking for help; do not share cookies or tokens. Colleague can identify the
+selected session and explain recovery, but cannot read the browser console.
 
 **Assistant is working…** means the turn is active. Its animated dots require
 the provider to report a live reasoning phase. Tool use and waiting between

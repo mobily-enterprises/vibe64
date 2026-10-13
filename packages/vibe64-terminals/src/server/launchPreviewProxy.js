@@ -372,7 +372,15 @@ function createPreviewProxyConnectionTracker({
   const requests = new Set();
 
   function trackSocket(socket, label = "") {
-    if (!socket || sockets.has(socket)) {
+    if (!socket) {
+      return socket;
+    }
+    // The HTTP pool replaces the idle timeout when a socket becomes free.
+    // Restore our request window on reuse without adding another listener.
+    if (sockets.has(socket)) {
+      if (Number.isSafeInteger(socketIdleTimeoutMs) && socketIdleTimeoutMs > 0) {
+        socket.setTimeout?.(socketIdleTimeoutMs);
+      }
       return socket;
     }
     sockets.add(socket);

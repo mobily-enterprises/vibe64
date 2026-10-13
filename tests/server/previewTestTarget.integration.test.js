@@ -306,6 +306,39 @@ test("failed restoration remains visible until managed recovery succeeds", async
   assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
 });
 
+test("explicitly stopped Preview stays stopped after test success, failure and cancellation", async t => {
+  const f = await fixture(t, "stopped");
+  const parameters = { label: "saved stopped target" };
+  const normal = await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters });
+  await f.waitReady(normal);
+  const originalData = await readFile(path.join(f.sourceRoot, "working.json"), "utf8");
+  assert.equal((await f.controller.stopTerminal(f.sessionId, normal.id)).ok, true);
+  for (const outcome of [
+    { ok: true, exitCode: 0 },
+    { ok: false, exitCode: 17, error: "assertion failed" },
+    { ok: false, exitCode: 1, signal: "SIGTERM", error: "cancelled" }
+  ]) {
+    const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
+      const status = await f.controller.launchStatus(f.sessionId);
+      assert.equal(status.preview.state, "ready");
+      assert.equal(status.preview.stoppedIntent, true, "temporary tests retain the user's saved intent");
+      return outcome;
+    }, { waitUntilReady: f.waitReady });
+    assert.deepEqual(result, outcome);
+    const restored = await f.controller.launchStatus(f.sessionId);
+    assert.equal(restored.activeTerminal, null);
+    assert.equal(restored.preview.state, "stopped");
+    assert.equal(restored.preview.stoppedIntent, true);
+    assert.equal(restored.lastOutputTarget.id, "app");
+    assert.deepEqual(restored.lastOutputTarget.outputParameters, parameters);
+    assert.equal((await f.controller.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
+    assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), originalData);
+  }
+  const restarted = await f.controller.ensurePreview(f.sessionId);
+  await f.waitReady(restarted);
+  assert.notEqual((await f.controller.launchStatus(f.sessionId)).preview.stoppedIntent, true);
+});
+
 test("workflow metadata separates real test target runs from development restoration without resource declarations", async t => {
   const starts = [];
   const phases = [];
