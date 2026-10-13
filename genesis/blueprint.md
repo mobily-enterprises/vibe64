@@ -1832,3 +1832,8 @@ With the person’s authorization, an assistant can send another open project a
 message. Its selected session receives it in Main chat. Closed projects and
 missing selections produce errors. Assistants can reply with progress or a
 published version; these messages preserve existing permissions.
+
+Coding agents can send a request to another open project's selected Main session
+without waiting for its assistant to start or reply. Sending reports acceptance;
+the recipient can independently reply later. Closed projects, missing selections
+and unavailable assistants remain immediate errors.

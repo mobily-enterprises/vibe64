@@ -1145,7 +1145,7 @@ function createService({
       projectService,
       authorize: (actor, slug) => assistantRuntime.authorizeProjectMessage(actor, slug),
       assertOpen: () => projectServices.assertOpen(projectRuntimeContext()),
-      send: async (sessionId, message, options) => {
+      prepare: async (sessionId, options) => {
         const access = await service.inspectAssistantAccess(sessionId, options);
         if (access.available !== true || access.canUse !== true) {
           throw vibe64Error(access.disabledReason || "The selected session has no available assistant.", "vibe64_project_message_assistant_unavailable");
@@ -1156,8 +1156,12 @@ function createService({
         if (!openState.open || selected?.sessionId !== sessionId) {
           throw vibe64Error("The destination closed or its selected session changed. Check it before sending again.", "vibe64_project_message_destination_changed");
         }
-        return service.sendAgentMessage(sessionId, message, options);
-      }
+      },
+      send: (sessionId, message, options) => service.sendAgentMessage(sessionId, message, options),
+      reportFailure: (error, receipt) => logger?.warn({
+        event: "vibe64.project_message.delivery_failed", error: error.message, code: error.code,
+        sourceProject: input.sourceProject, sourceSession: input.sourceSession, ...receipt
+      }, "Accepted project message failed during asynchronous delivery.")
     }),
     reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
     logger,

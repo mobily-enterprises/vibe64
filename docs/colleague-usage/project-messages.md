@@ -13,8 +13,15 @@ vibe64-helper session message-project jskit-ai "Review the changes, then ping vi
 ```
 
 The destination's **currently selected session** receives the message in Main.
-The visible text starts with its source project and session. A delivery receipt
-identifies the destination session and message; it does not mean the task finished.
+The visible text starts with its source project and session. Sending is
+**fire-and-forget**: after checking access, the open project and its selected
+assistant, the command returns an acceptance receipt identifying that session
+and message. It does not wait for native delivery, an acknowledgement or task
+completion. Ask the recipient to ping back later if you need a result.
+Acceptance is not proof of delivery. A later delivery failure is logged by the
+workspace daemon with the source, destination and message ID; do not resend solely
+because no immediate reply appeared. Pending dispatch is not a durable inbox and
+is not promised to survive a daemon shutdown.
 The recipient can use the same command to reply to the source project. Replies
 use whichever session is selected there when sent.
 

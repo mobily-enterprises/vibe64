@@ -9,11 +9,13 @@ import { sendProjectMessage } from "../../packages/vibe64-terminals/src/server/p
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 
-test("project messages use only the current selected Main session with fresh access and normal delivery", async () => {
+test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", async () => {
   const actor = { username: "owner" };
   const input = { sourceProject: "online", sourceSession: "source", projectSlug: "jskit-ai", message: "Review and ping me.", messageId: "receipt", actor };
   let open = true, selection = "selected-1", closing = false, denied = false;
   const sent = [];
+  const delivery = Promise.withResolvers();
+  const failures = [];
   const dependencies = {
     authorize: async (identity, slug) => {
       assert.equal(identity, actor); assert.equal(slug, "jskit-ai");
@@ -28,9 +30,17 @@ test("project messages use only the current selected Main session with fresh acc
       createRuntime: async () => ({ store: { readCurrentSession: async () => selection ? { sessionId: selection } : null } })
     },
     assertOpen: () => { if (closing) throw new Error("Project is closing"); },
-    send: async (...args) => { sent.push(args); return { ok: true, delivered: true }; }
+    prepare: async () => {},
+    send: async (...args) => { sent.push(args); return delivery.promise; },
+    reportFailure: (error, receipt) => failures.push({ error, receipt })
   };
-  const result = await sendProjectMessage(input, dependencies);
+  let timer;
+  const result = await Promise.race([
+    sendProjectMessage(input, dependencies),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Sender waited for native delivery")), 500); })
+  ]).finally(() => clearTimeout(timer));
+  assert.equal(result.accepted, true);
+  assert.equal(result.delivered, undefined);
   assert.equal(result.sessionId, "selected-1");
   assert.equal(result.messageId, "receipt");
   assert.match(sent[0][1].message, /^From project online \(session source\)/);
@@ -49,8 +59,22 @@ test("project messages use only the current selected Main session with fresh acc
   await assert.rejects(sendProjectMessage(input, dependencies), /Access revoked/);
   assert.equal(sent.length, 2);
   denied = false;
-  dependencies.send = async () => { throw new Error("Assistant unavailable"); };
+  dependencies.prepare = async () => { throw new Error("Assistant unavailable"); };
   await assert.rejects(sendProjectMessage(input, dependencies), /Assistant unavailable/);
+  assert.equal(sent.length, 2);
+  delivery.resolve({ ok: true, delivered: true });
+  await new Promise(setImmediate);
+  assert.equal(failures.length, 0);
+  dependencies.prepare = async () => {};
+  const failed = Promise.withResolvers();
+  dependencies.reportFailure = (error, receipt) => failed.resolve({ error, receipt });
+  dependencies.send = async () => { throw new Error("Native start failed later"); };
+  const accepted = await sendProjectMessage(input, dependencies);
+  assert.equal(accepted.accepted, true);
+  const reported = await failed.promise;
+  assert.equal(reported.error.message, "Native start failed later");
+  assert.equal(reported.receipt.sessionId, "selected-3");
+  assert.equal(reported.receipt.messageId, input.messageId);
 });
 
 test("the installed helper sends through its bound socket and supplies server-owned origin", async (t) => {

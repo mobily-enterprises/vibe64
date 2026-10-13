@@ -3899,14 +3899,17 @@ Reasoning groups form after ordering; canonical turn IDs and storage remain inta
 existing bound session command socket. `agentSessionCommand.js` supplies the
 server-owned source project/session and admitted actor; `projectMessage.js`
 resolves the destination's current selected session and sends through ordinary
-Main admission/steering and receipts. There is no separate inbox or queue for
+Main admission/steering in the background. There is no separate inbox or queue for
 closed projects. Learning sessions cannot use this command.
 
 Hosted admission re-reads the actor and checks destination project access. A
 closed/closing project, absent selected session or unavailable assistant fails
 before delivery. Incoming text visibly names its origin and explicitly retains
-existing human approval requirements. A successful receipt identifies the
-selected session and message; it is not a completion report. A reply invokes the
+existing human approval requirements. A successful receipt immediately identifies the
+accepted session and message; it proves neither native delivery nor completion.
+The sender does not wait for native start or a reply. Later failures use the
+workspace operational log with correlated source/destination/message identities.
+The in-process dispatch does not add durable restart recovery. A reply invokes the
 same command against the source project and resolves its selection at that time.
 
 The native context also accepts optional host guidance bounded to 1024 UTF-8
