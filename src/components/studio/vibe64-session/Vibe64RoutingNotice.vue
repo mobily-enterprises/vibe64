@@ -1,11 +1,11 @@
 <template>
-  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="mb-2" role="status">
-    <details v-if="request.error || previousAttempt" :key="request.messageId">
+  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="mb-2 pa-1" role="status">
+    <details v-if="previousAttempt || request.error && request.error !== request.outcome?.explanation" :key="request.messageId">
       <summary class="text-body-small py-2">{{ label }} · <span class="text-decoration-underline">Details</span></summary>
       <p v-if="previousAttempt" class="text-body-small mb-2">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
       <p v-if="request.error" class="text-body-small mb-2">{{ request.error }}</p>
     </details>
-    <div v-else class="text-body-small py-2">{{ label }}</div>
+    <div v-else-if="!followupNeedsAction" class="text-body-small py-2">{{ label }}</div>
     <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
       <v-btn v-if="canImplement" variant="flat" color="primary" min-height="48" :disabled="retrying || busy" @click="$emit('implement')">
         Implement plan

@@ -105,3 +105,16 @@ it("clears the delivery warning when the same routing request becomes accepted",
   expect(accepted.system?.delivery).toBeUndefined();
   expect(accepted.user.messageId).toBe(request.messageId);
 });
+
+it("collapses saved and projected workflow explanations without changing history", async () => {
+  for (const decision of ["wait", "continue", "handoff", "complete"]) {
+    const message = { messageId: `assistant-routing-outcome:request:turn:${decision}`, blocks: [{ type: "paragraph", text: "The exact reason remains available." }] };
+    const original = structuredClone(message);
+    const html = await renderToString(createSSRApp(ConversationStatus, { message }));
+    expect(html).toContain("Workflow details"); expect(html).toContain("The exact reason remains available.");
+    expect(html).toMatch(/<details[^>]*>[\s\S]*The exact reason remains available.[\s\S]*<\/details>/u);
+    expect(html).not.toMatch(/<details[^>]*\bopen/u); expect(message).toEqual(original);
+  }
+  const html = await renderToString(createSSRApp(ConversationStatus, { message: { messageId: "recovery-error", blocks: [{ type: "paragraph", text: "Recovery failed." }] } }));
+  expect(html).toContain("Recovery failed."); expect(html).not.toContain("<details");
+});

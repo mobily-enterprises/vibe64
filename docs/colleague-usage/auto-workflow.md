@@ -90,9 +90,11 @@ review. Unfinished checks continue in Senior review; substantial necessary rewor
 returns to Junior and comes back for another review. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
 
-Waiting notices keep a compact status and actions above the composer. Select
-**Details** to expand the reason or recovery instructions; select it again to
-collapse them. The actions remain available while details are collapsed.
+Waiting workflow controls show only the available actions above the composer.
+In chat history, select **Workflow details** to expand a saved outcome and its
+reason; select it again to collapse it. Restored outcomes are also collapsed.
+A separate delivery or cleanup error retains its own **Details** and recovery
+actions until resolved.
 
 When Auto is waiting at Planning with an active saved plan, the notice offers
 **Implement plan**, **View plan**, **Continue planning** and **Stop**. These are

@@ -59,6 +59,17 @@ it("collapses long explanations by default while keeping stage actions visible",
   expect(html).not.toContain("v-alert__prepend");
 });
 
+it("keeps a waiting outcome in history with only actions above the composer", async () => {
+  const explanation = "The saved plan needs implementation approval.";
+  const html = await render(request("planning", "pending", { error: explanation,
+    outcome: { decision: "wait", explanation }, workPlan: { status: "active", revision: "saved-plan" } }));
+  expect(html).toContain("Implement plan"); expect(html).toContain("View plan");
+  expect(html).not.toContain(explanation); expect(html).not.toContain("Details");
+  expect(html).not.toContain("Planning waiting");
+  const recovery = await render(request("planning", "uncertain", { error: "Delivery receipt lost.", outcome: { explanation } }));
+  expect(recovery).toContain("Delivery receipt lost."); expect(recovery).toContain("Check delivery");
+});
+
 it("shows Check delivery without an unsent-handoff Stop for uncertain stage delivery", async () => {
   for (const stage of ["planning", "implementation", "review"]) {
     const html = await render(request(stage, "uncertain"));

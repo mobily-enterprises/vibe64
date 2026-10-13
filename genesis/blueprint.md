@@ -1722,8 +1722,8 @@ Archive moves the exact current document to History without marking it completed
 both controls wait for active work and review to finish. The plan viewer does not execute work. People can ask in chat or select
 Implement plan in a waiting Auto Planning notice. That explicit action starts
 implementation of the exact active saved plan; continuing planning never grants
-implementation permission. Waiting notices keep explanations collapsed under
-Details while their actions remain visible. Waiting controls name the actual stage: Continue
+implementation permission. Waiting outcomes keep one explanation under Workflow details in chat history;
+the composer shows only actions. Separate delivery and cleanup errors retain recovery details. Waiting controls name the actual stage: Continue
 planning, Continue implementation or Continue review. The visible plan contains readable checklists and evidence. Junior
 checks completed work as it proceeds; Senior can uncheck unsupported claims and
 add missing acceptance checks within the agreed scope. Saved edits appear live
