@@ -102,13 +102,14 @@ addPlacement({
 });
 
 for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
+  const projectTool = tool.navigationScope === "project";
   addPlacement({
-    id: `vibe64.active-session.${tool.id}`,
-    target: VIBE64_ACTIVE_SESSION_NAV_TARGET,
-    owner: VIBE64_ACTIVE_SESSION_NAV_OWNER,
+    id: `vibe64.${projectTool ? "project" : "active-session"}.${tool.id}`,
+    target: projectTool ? "page.section-nav" : VIBE64_ACTIVE_SESSION_NAV_TARGET,
+    owner: projectTool ? "app-dashboard" : VIBE64_ACTIVE_SESSION_NAV_OWNER,
     kind: "link",
     surfaces: ["app"],
-    order: 100 + tool.order,
+    order: projectTool ? tool.order : 100 + tool.order,
     props: {
       icon: tool.icon,
       label: tool.label,
@@ -117,7 +118,7 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
       toolId: tool.id,
       unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
     },
-    when: activeSessionNavPlacementVisible
+    when: projectTool ? undefined : activeSessionNavPlacementVisible
   });
 }
 

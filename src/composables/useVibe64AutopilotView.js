@@ -1719,7 +1719,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   const sessionToolControls = computed(() => VIBE64_SESSION_TOOL_DEFINITIONS
-    .filter((definition) => DIRECT_SESSION_TOOL_IDS.has(definition.id))
+    .filter((definition) => definition.navigationScope !== "project" && DIRECT_SESSION_TOOL_IDS.has(definition.id))
     .map((definition) => ({
       ...definition,
       ...sessionToolRuntimeState(definition.id)

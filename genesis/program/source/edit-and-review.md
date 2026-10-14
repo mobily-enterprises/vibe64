@@ -710,7 +710,10 @@ or overwrite a newer request, including a follow-up in the same conversation.
 Hiding a retained editor does not cancel an explanation the person started;
 its answer remains available when they return.
 
-The Repository presents the session's complete current changes against saved project
+Git log appears in project-level Dashboard navigation rather than the active
+session rail or its direct tool controls. Its existing repository route and
+history reader retain selected-session context for review and update actions.
+The Current changes view presents the session's complete current changes against saved project
 work, even when those changes are already committed inside the session. It can
 open an exact changed file without exposing staging mechanics to the user.
 Current changes opens outside the dashboard navigation shell, using the full

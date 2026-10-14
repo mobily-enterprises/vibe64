@@ -381,6 +381,9 @@ progress. Update session then loads changes from the session's own bound branch;
 its label names that branch rather than calling this a feature-branch rebase.
 Merging publishes the commits already on GitHub. Session work remains separate,
 and people archive their sessions using the existing unsaved-work checks.
+Git log belongs to the project-level Dashboard navigation, above the active
+session's tools. Current changes remains a session tool. Reviewing saved history
+keeps the selected session context for any update or reconciliation action.
 Current changes uses the full project pane, with the dashboard menu hidden and
 a Back to dashboard action, so file differences have room to read.
 People can drag the divider between changed files and their difference, or resize

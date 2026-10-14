@@ -32,10 +32,11 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiSourceRepository,
     id: "repository",
-    label: "Repository",
-    order: 175,
+    label: "Git log",
+    navigationScope: "project",
+    order: 290,
     routeSegment: "repository",
-    title: "Review saved versions and update this session"
+    title: "Review the project's saved Git history"
   },
   {
     icon: mdiFileCodeOutline,

@@ -597,7 +597,7 @@ describe("Vibe64 Repository workspace", () => {
     expect(rendered).toContain("&lt;script&gt;");
   });
 
-  it("owns separate session routes for Current changes and Repository history", async () => {
+  it("owns separate routes for Current changes and Git log", async () => {
     const [placement, changesPage, repositoryPage, toolDefinitions, autopilotView] = await Promise.all([
       source("src/placement.js"),
       source("src/pages/app/project/[slug]/dashboard/changes/index.vue"),
@@ -607,7 +607,7 @@ describe("Vibe64 Repository workspace", () => {
     ]);
     const production = [placement, changesPage, repositoryPage, toolDefinitions, autopilotView].join("\n");
 
-    expect(production.match(/label:\s*"Repository"/gu)).toHaveLength(1);
+    expect(production.match(/label:\s*"Git log"/gu)).toHaveLength(1);
     expect(production.match(/label:\s*"Current changes"/gu)).toHaveLength(1);
     expect(changesPage).toContain('view="changes"');
     expect(repositoryPage).toContain("Vibe64RepositoryWorkspace");

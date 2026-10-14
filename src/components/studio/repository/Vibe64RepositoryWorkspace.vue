@@ -458,7 +458,7 @@ const versionFileCountLabel = computed(() => {
   return `${count} changed ${count === 1 ? "file" : "files"}`;
 });
 
-const pageTitle = computed(() => view.value === "history" ? "Repository" : "Current changes");
+const pageTitle = computed(() => view.value === "history" ? "Git log" : "Current changes");
 const repositoryStatus = computed(() => updates.payload || changes.payload || null);
 const sessionUpdateLabel = computed(() => {
   const branch = repositoryStatus.value?.branch;

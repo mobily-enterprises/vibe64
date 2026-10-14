@@ -2,13 +2,19 @@
 
 Open a project and select **Dashboard** beside **Preview**. The Dashboard provides
 the available session and project tools, including Files, Changes, Database,
-Architecture, AI Terminal, Project settings, Env, App access, Integrations, Issues
+Architecture, AI Terminal, Project settings, Git log, Env, App access, Integrations, Issues
 and Pull requests. Availability depends on the selected session, host and permissions.
 
 On mobile, **Show project** reveals the project from chat. Use **Dashboard section**
 to choose a tool and **Back to dashboard** to return from its detail. **Show chat**
 returns to the coding conversation. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
+
+**Git log** is in the project section above the active session's tools. Open it
+to review saved commits and their file differences. **Current changes** remains
+with the selected session. If Git log offers a session update or reconciliation,
+that action applies to the selected session; opening the log does not change files.
+The same **Git log** label appears in the mobile **Dashboard section** chooser.
 
 Files provides **Repo** for source and **Session Dropzone** for exchanging files with the
 selected session, plus **Project Backups (2w retention)** shared by all sessions

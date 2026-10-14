@@ -29,7 +29,7 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(7);
+    expect(labels).toHaveLength(8);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
@@ -37,6 +37,7 @@ describe("Vibe64 dashboard placements", () => {
       "Integrations",
       "Issues/PR",
       "Project settings",
+      "Git log",
       "Session History"
     ]));
     expect(labels).not.toContain("Configure");
@@ -113,22 +114,23 @@ describe("Vibe64 dashboard placements", () => {
 
     expect(sessionPlacements.map((placement) => placement.id)).toEqual([
       "vibe64.active-session.heading",
-      ...VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => `vibe64.active-session.${tool.id}`)
+      ...VIBE64_SESSION_TOOL_DEFINITIONS.filter(tool => tool.navigationScope !== "project")
+        .map((tool) => `vibe64.active-session.${tool.id}`)
     ]);
     expect(sessionPlacements.every((placement) => placement.kind === "link")).toBe(true);
     expect(sessionPlacements.every((placement) => typeof placement.when === "function")).toBe(true);
     expect(sessionPlacements[0].props.role).toBe("heading");
     expect(sessionPlacements.slice(1).map((placement) => placement.props.toolId)).toEqual(
-      VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => tool.id)
+      VIBE64_SESSION_TOOL_DEFINITIONS.filter(tool => tool.navigationScope !== "project").map((tool) => tool.id)
     );
     expect(sessionPlacements.slice(1).map((placement) => placement.props.label)).toContain("Session info");
-    expect(sessionPlacements.slice(1).map((placement) => placement.props.label)).toContain("Repository");
+    expect(sessionPlacements.slice(1).map((placement) => placement.props.label)).not.toContain("Git log");
     expect(sessionPlacements.slice(1).map((placement) => [
       placement.props.toolId,
       placement.props.label,
       placement.props.scopedSuffix,
       placement.props.unscopedSuffix
-    ])).toEqual(VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => [
+    ])).toEqual(VIBE64_SESSION_TOOL_DEFINITIONS.filter(tool => tool.navigationScope !== "project").map((tool) => [
       tool.id,
       tool.label,
       `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
