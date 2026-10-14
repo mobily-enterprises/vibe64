@@ -81,13 +81,24 @@ test("hosted source development follows the pin on each composition and fails cl
   const env = { VIBE64_JSKIT_SOURCE_ROOT: path.join(pin, "source") };
   for (const [number, value] of [[1, "first"], [2, "second"]]) {
     const appRoot = path.join(f.root, `app-${number}`);
-    await composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env });
+    // Hosted source composition must work without invoking Git in another session.
+    const composer = new URL("../../tooling/development/compose.mjs", import.meta.url).href;
+    await exec(process.execPath, ["--input-type=module", "-e", `
+import { composePublicDevelopment } from ${JSON.stringify(composer)};
+await composePublicDevelopment(${JSON.stringify({ publicRoot: f.publicRoot, appRoot, env })});
+`], { env: { ...process.env, PATH: "" } });
     const result = await exec(process.execPath, ["server.js"], { cwd: appRoot });
     assert.equal(JSON.parse(result.stdout).value, value);
     await rm(pin);
     if (number === 1) await symlink(path.dirname(second), pin);
   }
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "missing"), env }), /Pin a valid jskit-monorepo session/u);
+  await symlink(path.dirname(first), pin);
+  await manifest(first, { name: "wrong-project" });
+  await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "wrong"), env }), /Expected repository jskit-monorepo/u);
+  await manifest(first, { name: "jskit-monorepo" });
+  await rm(path.join(first, ".git"), { recursive: true });
+  await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "no-git"), env }), /Pin a valid jskit-monorepo session/u);
 });
 
 test("source watching ignores dependency writes and drains the old app before restarting with changed source", { timeout: 30_000 }, async (t) => {

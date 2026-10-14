@@ -111,6 +111,9 @@ Development may select JSKIT and Genesis source through `VIBE64_JSKIT_SOURCE_ROO
 and `VIBE64_GENESIS_SOURCE_ROOT`. The shared development tools resolve ordinary
 checkouts or current hosted pins, select the dependency closure, and materialize
 one disposable dependency graph. Hosted consumers reuse those same operations.
+Hosted pins validate the active-session path, package identity and Git metadata
+through file reads; selection runs no commands in another project's session.
+Ordinary laptop roots retain their Git repository-root check.
 The normal installation and release lockfile stay unchanged. Source-aware Preview
 and focused test commands use that graph; missing configured sources fail clearly.
 Preview recomposes after source edits only after its previous process exits. A

@@ -14,6 +14,8 @@ In the Vibe64 project's **Env → Development**, set either or both entries:
 
 For hosted development, use each dependency project's absolute
 `sessions/pinned/source` path. Pin the intended source session in that project.
+Source selection reads the pin and repository identity without running commands
+in the dependency's session. Its own agent still owns dependency tests and setup.
 For laptop development, export these variables with ordinary local checkout
 paths before running the development command. Do not set them in Production.
 Keep each selected checkout prepared with its own normal dependency setup.

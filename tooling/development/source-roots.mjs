@@ -34,7 +34,11 @@ export async function resolvePinnedDevelopmentSource(source, expectedPackage) {
 
 export async function resolveDevelopmentDependencySource(source, expectedPackage) {
   if (!source) return null;
-  const sourceRoot = await resolvePinnedDevelopmentSource(source, expectedPackage) || await realpath(path.resolve(source));
+  const pinnedRoot = await resolvePinnedDevelopmentSource(source, expectedPackage);
+  // Pins are validated by the session path, package identity and Git metadata.
+  // A consumer's managed commands must not execute in the dependency's session.
+  if (pinnedRoot) return { sourceRoot: pinnedRoot, sourceParent: developmentProjectRoot(pinnedRoot) };
+  const sourceRoot = await realpath(path.resolve(source));
   const manifest = JSON.parse(await readFile(path.join(sourceRoot, "package.json"), "utf8"));
   const { stdout } = await exec("git", ["-c", `safe.directory=${sourceRoot}`, "-C", sourceRoot, "rev-parse", "--show-toplevel"]);
   if (manifest.name !== expectedPackage || await realpath(stdout.trim()) !== sourceRoot) {
