@@ -31,6 +31,9 @@ no preparation. Repeat it after changing resource declarations. A
 credentials. In the session chat, wait for the assistant to finish, then choose
 **Prepare workspace**, or **Retry** on a failed preparation. Adding a resource
 requires preparation even if the dependency-install command has not changed.
+An earlier successful preparation does not cover a changed setup recipe or newly
+unprepared resources. Preparation retry checks the current requirements before
+starting; the session's other work must finish first.
 Colleague can inspect preparation and retry it through its existing session
 actions when asked; it does not run these shell helpers itself.
 

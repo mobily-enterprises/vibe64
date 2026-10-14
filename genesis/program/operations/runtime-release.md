@@ -122,7 +122,9 @@ The repository's default Outputs target runs this complete development preview.
 Its declared Project directory parameter defaults to the persistent example;
 people can change it in Preview options without command-line access.
 Workspace setup and deployment installation declare Node and C++ runtimes because
-`node-pty` may need to build from source. Example startup also declares Git.
+`node-pty` may need to build from source. Workspace setup explicitly rebuilds that
+native dependency, including when npm considers its existing installation current
+but its binary is missing. Example startup also declares Git.
 
 The initial HTML contains a lightweight, responsive loading shell with inline
 styles and a reload link. Vue replaces it when bootstrap and initial routing

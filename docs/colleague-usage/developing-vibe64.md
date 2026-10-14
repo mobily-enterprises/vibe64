@@ -17,6 +17,11 @@ For hosted development, use each dependency project's absolute
 For laptop development, export these variables with ordinary local checkout
 paths before running the development command. Do not set them in Production.
 Keep each selected checkout prepared with its own normal dependency setup.
+Public's **Workspace setup** installs dependencies and rebuilds its native terminal
+dependency with the declared Node and C++ runtimes. If Preview reports a missing
+`node-pty` binary, let the assistant finish and use **Prepare workspace** or
+**Retry** to run that setup. An ordinary managed command may lack the C++ tools
+that the setup operation declares.
 
 Vibe64 owns its own source, so it does not need `VIBE64_PUBLIC_SOURCE_ROOT`.
 The selected Genesis repository supplies both compiler and Stack packages.

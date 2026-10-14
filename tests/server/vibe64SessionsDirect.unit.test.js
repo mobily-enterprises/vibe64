@@ -3532,6 +3532,7 @@ test("new sessions publish running workspace preparation and its eventual result
 
 test("workspace preparation starts required or newly configured recipes and retries failed attempts", async () => {
   let admissionBlocked = false;
+  let prepared = true;
   let status = "succeeded";
   let startCount = 0;
   const retryValues = [];
@@ -3554,6 +3555,10 @@ test("workspace preparation starts required or newly configured recipes and retr
     terminals: {},
     workspaceSetupRunner: {
       isRunning: () => false,
+      async isPrepared(sessionId) {
+        assert.equal(sessionId, "session-1");
+        return prepared;
+      },
       async start(input) {
         startCount += 1;
         retryValues.push(input.retry);
@@ -3608,6 +3613,42 @@ test("workspace preparation starts required or newly configured recipes and retr
   assert.equal(blocked.retryable, true);
   assert.equal(status, "failed");
   assert.equal(startCount, 4);
+
+  status = "succeeded";
+  prepared = false;
+  const changedButBusy = await service.retryWorkspaceSetup("session-1");
+  assert.equal(changedButBusy.code, "vibe64_agent_write_mode_busy");
+  assert.equal(status, "succeeded", "current preparation still uses the original admission guard");
+  assert.equal(startCount, 5);
+
+  admissionBlocked = false;
+  const changed = await service.retryWorkspaceSetup("session-1");
+  assert.equal(changed.ok, true);
+  assert.equal(changed.workspaceSetup.status, "running");
+  assert.equal(startCount, 6);
+  assert.equal(retryValues.at(-1), true);
+
+  status = "succeeded";
+  prepared = undefined;
+  const unconfirmed = await service.retryWorkspaceSetup("session-1");
+  assert.equal(unconfirmed.code, "vibe64_workspace_setup_retry_not_available");
+  assert.equal(startCount, 6, "unknown preparation state does not authorize another run");
+
+  const terminalCalls = [];
+  const terminalOwned = createService({
+    project: { async createRuntime() { return runtime; } },
+    terminals: {
+      async workspaceSetupIsPrepared(id) { terminalCalls.push(["inspect", id]); return false; },
+      async prepareWorkspaceSetup(id, options) {
+        terminalCalls.push(["prepare", id, options.retry]);
+        assert.equal(options.runtime, runtime);
+        status = "running";
+        return { completion: null, state: { status } };
+      }
+    }
+  });
+  assert.equal((await terminalOwned.retryWorkspaceSetup("session-1")).ok, true);
+  assert.deepEqual(terminalCalls, [["inspect", "session-1"], ["prepare", "session-1", true]]);
 });
 
 

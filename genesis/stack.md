@@ -51,6 +51,7 @@
 ## Workspace setup
 
 - Prepare `Install dependencies` with `nodejs` `cpp` when `package.json` exists: `npm` `install`
+- Prepare `Build terminal native dependency` with `nodejs` `cpp` when `package.json` exists: `npm` `rebuild` `node-pty`
 
 ## Resource estimates
 

@@ -240,6 +240,9 @@ function createService({
   const setupRunner = workspaceSetupRunner || Object.freeze({
     isRunning: (sessionId) => typeof terminals.workspaceSetupIsRunning === "function" &&
       terminals.workspaceSetupIsRunning(sessionId),
+    isPrepared: (sessionId) => typeof terminals.workspaceSetupIsPrepared === "function"
+      ? terminals.workspaceSetupIsPrepared(sessionId)
+      : undefined,
     start: ({ retry = false, runtime, session }) => terminals.prepareWorkspaceSetup(
       session.sessionId,
       { retry, runtime, session }
@@ -1632,7 +1635,10 @@ function createService({
         const session = await runtime.getSession(sessionId, {
           inspectSource: false
         });
-        if (!["ambiguous", "failed", "required", "unconfigured"].includes(text(session.workspaceSetup?.status))) {
+        const status = text(session.workspaceSetup?.status);
+        const preparationChanged = status === "succeeded" && typeof setupRunner.isPrepared === "function" &&
+          await setupRunner.isPrepared(sessionId) === false;
+        if (!["ambiguous", "failed", "required", "unconfigured"].includes(status) && !preparationChanged) {
           const error = new Error(
             "Workspace preparation can only be started when it is required, newly configured, failed, or needs a recipe choice."
           );

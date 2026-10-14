@@ -223,6 +223,9 @@ Colleague can also rename, archive and retry preparation through those same
 session actions and their current access checks. Its result projection contains
 bounded session identity, lifecycle and preparation status rather than private
 paths, metadata or logs. An accepted preparation retry does not mean it finished.
+Retry consults the existing preparation owner's current readiness when the stored
+attempt succeeded, allowing changed recipes or resources through the same admission
+guard. A still-current or unconfirmed success cannot be rerun through that path.
 The workflow picker previews the submitting user's Senior and Junior destinations;
 it reads saved assignments and connection access without live model discovery.
 Uninitialized workflows use connected defaults to establish availability and say

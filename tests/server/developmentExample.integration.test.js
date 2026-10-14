@@ -50,6 +50,8 @@ test("Vibe64 declares native installation tools and its complete example preview
   const setup = await inspectVibe64WorkspaceSetup({ projectRoot });
   assert.deepEqual(setup.diagnostics, []);
   assert.deepEqual(setup.steps[0].runtimeRequirements, ["nodejs", "cpp"]);
+  assert.deepEqual(setup.steps[1].argv, ["npm", "rebuild", "node-pty"]);
+  assert.deepEqual(setup.steps[1].runtimeRequirements, ["nodejs", "cpp"]);
   const output = await inspectVibe64Outputs({ projectRoot });
   assert.equal(output.status, "ready");
   assert.deepEqual(output.diagnostics, []);
