@@ -408,6 +408,12 @@ the standard proxy still owns tokens and sockets.
 The terminal provider forwards this value with the other live routing settings,
 so the runtime environment filter cannot drop the editor identity.
 
+The reusable managed browser belongs to the session’s registered control generation,
+not to the tool command that first opened it. Subsequent commands reuse its page
+and identity. Session/Preview close and control-generation replacement retain
+exact-owner cleanup; the worker still exits on idle expiry or loss of control health.
+Finite browser-test executions retain their calling execution as parent.
+
 ## Project services
 
 The optional `Project services` section is interpreted only by public Vibe64’s

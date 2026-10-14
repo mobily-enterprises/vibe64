@@ -323,7 +323,6 @@ async function startWorker() {
     browserSocketPath,
     cwd: process.cwd(),
     managedNodePath,
-    parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
     workerScriptPath
   });
   if (started.ok === false) {

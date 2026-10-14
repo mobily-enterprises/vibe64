@@ -4,6 +4,8 @@ Applications in Preview can request the person's microphone and play audio
 through the browser's ordinary permission controls, on HTTPS or localhost.
 Local Preview preserves the editor's loopback hostname through application login
 and live connections.
+The coding agent’s managed browser retains its page and login between tool
+commands, until its session, Preview or browser lifecycle ends.
 
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.

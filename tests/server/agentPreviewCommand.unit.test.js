@@ -1092,6 +1092,7 @@ test("managed preview browser surfaces capacity refusal without creating a worke
         VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
       },
       sessionId,
+      project: { slug: "browser-project" },
       worktreePath: root,
       wrapperHostDir: root
     });
@@ -1100,7 +1101,8 @@ test("managed preview browser surfaces capacity refusal without creating a worke
         cwd: root,
         env: {
           ...process.env,
-          ...prepared.env
+          ...prepared.env,
+          VIBE64_EXECUTION_ID: "short-lived-tool-command"
         }
       }),
       (error) => {
@@ -1111,6 +1113,11 @@ test("managed preview browser surfaces capacity refusal without creating a worke
     assert.equal(requests.length, 1);
     assert.equal(requests[0].execution.kind, "browser");
     assert.equal(requests[0].execution.lifecycle, "service");
+    assert.equal(requests[0].execution.parentExecutionId, undefined);
+    assert.equal(requests[0].execution.ownerId, sessionId);
+    assert.equal(requests[0].execution.sessionId, sessionId);
+    assert.equal(requests[0].execution.projectSlug, "browser-project");
+    assert.equal(requests[0].execution.controlGenerationId, prepared.controlGenerationId);
     await assert.rejects(stat(prepared.hostBrowserSocketPath), { code: "ENOENT" });
     await assert.rejects(stat(prepared.hostBrowserMetadataPath), { code: "ENOENT" });
   } finally {

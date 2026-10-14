@@ -1751,7 +1751,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
         label: "Managed browser",
         lifecycle: "service",
         ownerId: descriptor.sessionId,
-        parentExecutionId: normalizeText(input.parentExecutionId),
+        // The session control owns this reusable browser, not its first tool call.
         projectSlug: descriptor.project?.slug,
         sessionId: descriptor.sessionId
       },

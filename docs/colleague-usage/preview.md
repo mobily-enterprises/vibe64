@@ -132,6 +132,11 @@ Ask the coding agent in chat to test the running application in a browser and
 specify the flow to check. The agent uses the session's managed browser tools;
 you do not need to provide an execution ID or change application code to enable
 them. Application login may still require your credentials or interaction.
+The managed browser keeps its page and login between the coding agent’s tool
+commands. Stopping Preview, closing the session, resetting the managed browser
+or losing its editor connection can require login again. If it repeatedly loses
+login during ordinary checks, ask the coding agent to inspect browser lifecycle
+errors; shortening waits is not a recovery for a stopped browser.
 
 The coding agent runs managed test suites and live Preview browser checks one
 after the other. A suite owns Preview until its cleanup and restoration finish;
