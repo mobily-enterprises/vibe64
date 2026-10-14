@@ -187,6 +187,11 @@ in the same conversation and select **Send**. The failed message remains in its
 history; its composer draft is not retained. Colleague can explain the notice,
 but repairing the installed runtime requires the installation owner.
 The same recovery applies on desktop and mobile.
+If the underlying error is `HOST_CONTEXT_INVALID` and names an oversized host
+session contribution, give the installation owner the error and byte limit.
+Genesis compiler 1.8.5 accepts up to 24 KiB of that contribution without
+truncation. The owner can align the installed compiler or shorten the host
+guidance before you retry; Colleague can explain the recovery.
 A temporary message may appear before the assistant confirms receiving it.
 If it still shows **Retry**, use that control and keep the same request;
 its visible bubble alone is not confirmation. An unavailable receipt stays
