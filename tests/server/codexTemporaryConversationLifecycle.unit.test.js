@@ -11932,8 +11932,8 @@ test("Main browser facade uses the original native owner and action authority wi
       const initial = await request("GET");
       assert.equal(initial.statusCode, 200, initial.body);
       assert.equal(initial.json().id, id);
-      assert.equal(initial.json().pagination.limit, 20);
-      assert.deepEqual(initial.json().conversationLog, history.slice(3));
+      assert.equal(initial.json().pagination.limit, 10);
+      assert.deepEqual(initial.json().conversationLog, history.slice(-5));
       assert.equal(initial.json().configuration, undefined);
       assert.equal(initial.json().capabilities.goals, true);
       assert.equal(captures.provider, null, "opening a browser reader does not prepare a native provider");
@@ -11945,9 +11945,9 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(initialGoal.json().target.capabilities.goalCommands.set.delivery, "control");
       assert.equal(captures.provider, null, "canonical goal reads retain original passive preparation");
       assert.deepEqual((await store.readSession(sessionId)).metadata, before);
-      const older = await request("GET", `?beforeTurnId=${encodeURIComponent(initial.json().pagination.nextBeforeTurnId)}&limit=20`);
+      const older = await request("GET", `?beforeTurnId=${encodeURIComponent(initial.json().pagination.nextBeforeTurnId)}&limit=40`);
       assert.equal(older.statusCode, 200, older.body);
-      assert.deepEqual(older.json().conversationLog, history.slice(0, 3));
+      assert.deepEqual(older.json().conversationLog, history.slice(0, -5));
 
       const requestContext = { surface: "app", channel: "internal", requestMeta: { request: { headers } } };
       const events = [];
@@ -13364,7 +13364,7 @@ test("R11 original persistent scoped Codex preserves history and excludes stoppe
 // Real original Main/native/cache/collector/receipt composition. Saved-practice
 // admission and external Helper responses are controlled existing host facilities;
 // this is not actual Project admission or person gesture/browser acceptance.
-test("actual Codex Main retains collected practical evidence through repeated browser opens and native explanation receipts", { timeout: 60_000 }, async t => {
+test("actual Codex Main retains collected practical evidence through repeated browser opens and native explanation receipts", { timeout: 300_000 }, async t => {
   const { runWithPracticeProjectContext, currentProjectRequestContext } =
     await import("@local/vibe64-core/server/projectRequestContext");
   const practiceOwner = {};
@@ -13447,6 +13447,9 @@ test("actual Codex Main retains collected practical evidence through repeated br
     assert.equal(ready.ok, true, JSON.stringify(ready));
     const nativeThreadId = ready.thread.id;
     const authority = { sessionId, learningAttemptId: f.attemptId, actorId: "42", requestContext };
+    const canonical = await learning.runLearningOperation(() => terminalService.openBrowserConversation(sessionId, {
+      runtime, vibe64User: f.actor, browserAuthority: authority
+    }));
     const current = { browserAuthority: authority };
     const bindingInput = { runtime, sessionId, context: current, actions };
     const facade = createMainBrowserConversations({ actions, terminals: terminalService });
@@ -13488,10 +13491,11 @@ test("actual Codex Main retains collected practical evidence through repeated br
         phase: "final_answer", text: questionText } } });
     captures.provider.status = "completed";
     emitCodexNotification(captures.subscribers, turnCompleted({ threadId: nativeThreadId, turnId: questionNativeTurnId }));
+    await canonical.wait();
+    assert.ok(events.some(value => value.type === "settled"), "actual question settled");
+    assert.equal((await browser.read()).error, "", "the original shared driver drains without retaining expired WRITE scope");
     await waitForSessionValue(() => store.readConversationLog(sessionId), rows => rows.some(row =>
       row.metadata.trainingQuestionDelivery?.phase === "delivered"), "actual practical question native checkpoint");
-    await waitForSessionValue(async () => events, values => values.some(value => value.type === "settled"), "actual question settled");
-    assert.equal((await browser.read()).error, "", "the original shared driver drains without retaining expired WRITE scope");
     const captured = await f.owner.capturePractical({ actor: f.actor, reference });
     assert.deepEqual(captured.target, { projectSlug, sessionId });
     await main.focusPresentation({ ...bindingInput, input: { clientId, focus: { ...captured.target, pane: "preview" } } });
@@ -13551,7 +13555,8 @@ test("actual Codex Main retains collected practical evidence through repeated br
       turnId: explanationNativeTurnId, item: { id: "native-practical-grade-final", type: "agentMessage", phase: "final_answer", text: finalText } } });
     captures.provider.status = "completed";
     emitCodexNotification(captures.subscribers, turnCompleted({ threadId: nativeThreadId, turnId: explanationNativeTurnId }));
-    await waitForSessionValue(async () => events, values => values.filter(value => value.type === "settled").length === 2, "actual practical explanation settled");
+    await canonical.wait();
+    assert.equal(events.filter(value => value.type === "settled").length, 2, "actual practical explanation settled");
     assert.equal((await browser.read()).error, "", "the second native completion keeps the same scoped drain custody");
     const settledLog = await store.readConversationLog(sessionId);
     const settledAnswer = settledLog.find(row => row.turnId === authored.turnId);

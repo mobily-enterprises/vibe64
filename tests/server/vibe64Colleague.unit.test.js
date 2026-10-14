@@ -5661,18 +5661,20 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
 // The completed-envelope owner retains its exact private native carrier, while
 // the product's progress and visible history retain the original separation.
 // This native companion does not replace the unchanged original API case.
-test("native Colleague progress remains transient at the pending application effect", async t => {
-  const operation = Promise.withResolvers();
+test("native Colleague progress remains transient at the pending application effect", { timeout: 30_000 }, async t => {
+  const operation = Promise.withResolvers(), entered = Promise.withResolvers();
   t.after(() => operation.resolve());
   const progress = "Let me check your projects.";
   const envelope = JSON.stringify({ kind: "tool", text: progress, toolName: "vibe64_test_operate",
     arguments: JSON.stringify({ value: "native-progress" }) });
   const f = await fixture(t, [{ text: envelope }, { text: reply("One project is open.") }], { native: true });
-  f.observations.onOperation = () => operation.promise;
+  f.observations.onOperation = () => { entered.resolve(); return operation.promise; };
   const initial = await f.service.read({}, f.context);
   const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
   await f.send("Which projects are open?");
-  await until(() => f.observations.mutations.length === 1);
+  const running = f.service.wait(f.context);
+  await Promise.race([entered.promise, running.then(value => assert.fail(
+    `The original operation must be entered before settlement: ${value.status}: ${value.error}`))]);
   const checking = await f.service.read({}, f.context);
   assert.equal(checking.status, "working");
   assert.equal(checking.operation.status, "executing");
@@ -5703,7 +5705,7 @@ test("native Colleague progress remains transient at the pending application eff
   }
   assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
   operation.resolve();
-  const final = await f.service.wait(f.context);
+  const final = await running;
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["native-progress"]);
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);

@@ -6,7 +6,6 @@ import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/s
 import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { saveEnvUserValues as saveStoredEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
@@ -230,17 +229,13 @@ test("resource configuration follows resolved application settings without secre
     defaults[1].value = "4";
     const moreWorkers = await loadProjectExecutionEnvRecords(input);
     assert.notEqual(moreWorkers.resourceConfigurationFingerprint, first.resourceConfigurationFingerprint);
-    const blocked = await service.saveEnvUserValues({ environment: "dev", values: {
+    const saved = await service.saveEnvUserValues({ environment: "dev", values: {
       WORKERS: { value: "6", secret: false }
     } });
-    assert.equal(blocked.ok, false);
-    assert.equal(blocked.code, "vibe64_env_value_not_editable");
-    // An existing persisted override still contributes to execution configuration;
-    // the Env editor cannot change a system-owned Stack default.
-    await saveStoredEnvUserValues({
-      projectRuntimeRoot: service.currentProjectRuntimeRoot(), environment: "dev",
-      values: { WORKERS: { value: "6", secret: false } }
-    });
+    assert.equal(saved.ok, true);
+    const savedOverride = await loadProjectExecutionEnvRecords(input);
+    assert.equal(savedOverride.runtimeConfigEnv.WORKERS, "6");
+    assert.notEqual(savedOverride.resourceConfigurationFingerprint, moreWorkers.resourceConfigurationFingerprint);
     assert.equal((await service.saveEnvUserValues({ environment: "dev", values: {
       PRIVATE_SETTING: { value: "private-one", secret: true }
     } })).ok, true);

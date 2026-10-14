@@ -13,6 +13,7 @@ function fixture(operation = null) {
   let busy = false;
   const runtime = {
     store: {
+      async assertSessionNotPinned(sessionId) { assert.equal(sessionId, session.sessionId); },
       async listSessionsForRenewal() { return [structuredClone(session)]; },
       async listSessionConversations() { return []; },
       async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },

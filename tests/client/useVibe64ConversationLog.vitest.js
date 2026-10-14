@@ -412,13 +412,13 @@ describe("useVibe64ConversationLog", () => {
   });
   it("builds conversation-log page queries from the shared page limit", () => {
     expect(conversationLogReadQuery()).toEqual({
-      limit: "20"
+      limit: "10"
     });
     expect(conversationLogReadQuery({
       beforeTurnId: "000005"
     })).toEqual({
       beforeTurnId: "000005",
-      limit: "20"
+      limit: "10"
     });
     expect(conversationLogReadQuery({
       beforeTurnId: "000005",

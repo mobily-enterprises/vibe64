@@ -228,7 +228,7 @@ describe("source explanation Material interaction", () => {
       import.meta.url
     ), "utf8");
     const explainButton = editor.match(
-      /<v-btn\s+class="vibe64-source-editor__explain-button"[\s\S]*?<\/v-btn>/u
+      /<v-btn\b[^>]*class="vibe64-source-editor__explain-button"[\s\S]*?<\/v-btn>/u
     )?.[0] || "";
 
     expect(explainButton).toContain(":aria-busy=");

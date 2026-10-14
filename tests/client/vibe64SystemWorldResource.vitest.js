@@ -112,21 +112,30 @@ describe("Genesis City client resources", () => {
     const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];
     expect(binding).toBeDefined();
-    const childActive = new Function("props", "rightPaneTab", `return (${binding});`);
+    const childActive = new Function("props", "rightPaneTab", "normalWorkspaceActive", `return (${binding});`);
     const props = reactive({ active: true, projectPane: "dashboard" });
     const rightPaneTab = ref(pane);
+    const normalWorkspaceActive = ref(true);
     const sessionId = ref("session/a");
     const scope = effectScope();
     try {
       scope.run(() => useTool({
-        active: computed(() => childActive(props, rightPaneTab.value)),
+        active: computed(() => childActive(props, rightPaneTab.value, normalWorkspaceActive.value)),
         sessionId
       }));
       expect(endpointMocks.calls).toHaveLength(resources);
       expect(endpointMocks.calls[0].enabled.value).toBe(true);
       const paths = endpointMocks.calls.map((call) => call.path.value);
       const keys = endpointMocks.calls.map((call) => call.queryKey.value);
+      const enabled = endpointMocks.calls.map((call) => unref(call.enabled));
       expect(paths[0]).toContain("/sessions/session%2Fa");
+
+      normalWorkspaceActive.value = false;
+      await nextTick();
+      expect(endpointMocks.calls.every((call) => unref(call.enabled) === false)).toBe(true);
+      normalWorkspaceActive.value = true;
+      await nextTick();
+      expect(endpointMocks.calls.map((call) => unref(call.enabled))).toEqual(enabled);
 
       props.active = false;
       await nextTick();

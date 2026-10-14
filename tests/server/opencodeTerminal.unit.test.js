@@ -3083,7 +3083,7 @@ test("Main OpenCode browser facade keeps original action authority and live nati
   const initial = await facade.read();
   assert.equal(initial.id, id);
   assert.equal(initial.engine, "opencode");
-  assert.equal(initial.pagination.limit, 20);
+  assert.equal(initial.pagination.limit, 10);
   assert.deepEqual(initial.conversationLog, await f.store.readConversationLog("session-1"));
   assert.equal(initial.configuration, undefined);
   assert.equal(initial.capabilities.goals, false);

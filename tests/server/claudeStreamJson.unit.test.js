@@ -111,6 +111,7 @@ function createClaudeSessionAgentProvider(options) {
 
 
   const facade = { ...provider,
+    open: context => conversations.open({ id: context.sessionId, context }),
     hasActiveTemporaryConversation: context => provider.projectConversationResult("hasActiveTemporaryConversation", () =>
       conversations.inspectNativeTemporaryActivity({ id: context.sessionId, context })),
     generateSessionRenewalHandover: (context, input) => conversations.generateNativeRenewalHandover({ id: context.sessionId, context, input }),
@@ -247,7 +248,8 @@ async function fixture(t, { scopedConversations = false } = {}) {
     }
   };
   const provider = scopedConversations ? scopedProvider(providerOptions) : createClaudeSessionAgentProvider(providerOptions);
-  return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git };
+  return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git,
+    open: () => provider.open(context) };
 }
 
 test("Claude main and temporary chats receive project values with their managed commands", async (t) => {
@@ -321,6 +323,7 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
     { type: "thinking", thinking: "Exposed thinking summary." }, { type: "text", text: "Done." }
   ] } });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done.", uuid: "result" });
+  await (await f.open()).wait();
   assert.deepEqual(f.written.map((message) => message.role), ["user", "user", "thinking", "assistant"]);
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
   assert.equal(f.checkpoints.at(-1).status, "ready");
@@ -354,6 +357,7 @@ test("Claude compaction status is scoped to the active conversation and clears a
   const nextEvent = f.processes[1].options.onEvent;
   await nextEvent({ type: "system", subtype: "status", status: "compacting" });
   await nextEvent({ type: "result", subtype: "error_during_execution", is_error: true, errors: ["Provider unavailable"] });
+  await (await f.open()).wait();
   assert.equal((await state()).turn.phase, "");
 });
 
@@ -621,6 +625,7 @@ test("Claude command admission is distinct from user tool-result frames and wait
   await event({ type: "result", subtype: "success", result: "Done", uuid: "done" });
   assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
   await event({ type: "system", subtype: "task_notification", task_id: "task", status: "completed" });
+  await (await f.open()).wait();
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
 });
 
@@ -832,6 +837,7 @@ test("Claude changes model and effort through native controls without restarting
   const f = await fixture(t);
   const first = await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
+  await (await f.open()).wait();
   const native = f.processes[0];
   const requests = [];
   native.client.request = async (request) => { requests.push(request); return {}; };
@@ -857,6 +863,7 @@ test("Claude retires a process when its settings change is only partially accept
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
+  await (await f.open()).wait();
   const native = f.processes[0];
   native.client.request = async (request) => {
     if (request.subtype === "apply_flag_settings") throw new Error("Settings rejected");
@@ -874,6 +881,7 @@ test("Claude reads account capabilities and allowance through an already owned p
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
+  await (await f.open()).wait();
   const native = f.processes[0];
   native.client.request = async (request) => {
     assert.equal(request.subtype, "get_usage");
@@ -1575,6 +1583,7 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
   canonical.subscribe(event => events.push(event));
   const sent = [];
   let timestamp = Date.now();
+  let goalWritten = Promise.withResolvers();
   f.behavior.afterSend = async (native, message) => {
     sent.push(message);
     if (message.startsWith("/goal ")) {
@@ -1582,6 +1591,7 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
       await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date(timestamp++).toISOString(),
         attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
           sentinel: true, met: condition === "clear" } }]);
+      goalWritten.resolve();
       if (condition !== "clear") return;
     }
     await native.options.onEvent({ type: "result", subtype: "success", result: "" });
@@ -1600,13 +1610,16 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
   assert.equal(firstRow.user.text, "/goal Tests pass");
   assert.equal(firstRow.metadata.runtime, undefined);
   assert.equal(firstRow.user.goal, undefined, "the original authored row has no fabricated goal descriptor");
+  await goalWritten.promise;
   let goal = await canonical.readGoal();
   assert.equal(goal.status, "active");
   await assert.rejects(canonical.updateGoal({ action: "pause", expectedSegmentId: segmentId, expectedGoalId: "stale" }), /goal changed/u);
   assert.equal((await canonical.updateGoal({ action: "pause", expectedSegmentId: segmentId, expectedGoalId: goal.id })).status, "paused");
+  goalWritten = Promise.withResolvers();
   const resumed = await canonical.updateGoal({ action: "resume", expectedSegmentId: segmentId,
     expectedGoalId: goal.id, messageId: "resume-goal" });
   assert.equal(resumed.status, "accepted");
+  await goalWritten.promise;
   goal = await canonical.readGoal();
   const cleared = await canonical.updateGoal({ action: "cancel", expectedSegmentId: segmentId,
     expectedGoalId: goal.id, messageId: "clear-goal" });
@@ -1620,9 +1633,11 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
   await f.store.writeConversationAssistantMessage("test", { messageId: "late-context", text: "A later result for the chat cursor." });
   const cursor = (await f.store.readSession("test")).metadata.assistant_changeover;
   assert.ok(cursor);
+  goalWritten = Promise.withResolvers();
   const next = await canonical.updateGoal({ action: "set", expectedSegmentId: segmentId,
     objective: "Follow up", messageId: "after-chat-goal" });
   assert.equal(next.status, "accepted");
+  await goalWritten.promise;
   assert.equal(sent.at(-1), "/goal Follow up", "prior chat history is never rendered into a native goal command");
   assert.equal((await f.store.readSession("test")).metadata.assistant_changeover, cursor);
   const beforeDuplicate = sent.length;
@@ -2184,6 +2199,7 @@ test("Claude Main preserves split native output identity through canonical stora
     await event({ type: "stream_event", event: { type: "content_block_stop", index } });
   }
   await event({ type: "result", subtype: "success", result: "The answer.", uuid: "output-owner-result" });
+  await (await f.open()).wait();
   const rows = await store.readConversationLog("test");
   assert.deepEqual(rows.flatMap(turn => turn.messages).filter(message => message.role !== "user")
     .map(({ messageId, outputId, role, text }) => ({ messageId, outputId, role, text })), [
@@ -2260,6 +2276,7 @@ test("Claude original Main writer returns exact canonical final proof without en
   assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
   await f.processes[0].options.onEvent({ type: "result", session_id: entry.id,
     subtype: "success", result: "Canonical answer", uuid: "receipt-native-result" });
+  await (await f.open()).wait();
   const receipt = owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id);
   const rows = await f.context.runtime.store.readConversationLog(f.context.sessionId);
   const canonical = rows.find(turn => turn.messages.some(message => message.messageId === "claude_receipt-native-result_result"));
@@ -2517,6 +2534,7 @@ test("Claude delayed practice events retain only original control after admissio
   let delayed;
   let expired;
   let admitted;
+  let canonical;
   const observed = [];
   const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
     async publishSessionChanged() {
@@ -2537,11 +2555,13 @@ test("Claude delayed practice events retain only original control after admissio
   };
   await runWithPracticeProjectContext(owner, practice, async () => {
     expired = currentProjectRequestContext();
+    canonical = await provider.open(f.context);
     admitted = await provider.sendMessage(f.context, { message: "Go", messageId: "practice-late-final" });
   });
   await assert.rejects(() => runWithProjectRequestContext(expired, async () => currentProjectRequestContext()), { code: "vibe64_practice_scope_expired" });
   release.resolve();
   await delayed;
+  await canonical.wait();
   const state = await provider.sessionState(f.context);
   assert.equal(state.thread.id, admitted.thread.id);
   assert.equal(state.turn.active, false);
@@ -2561,6 +2581,7 @@ test("Claude delayed practice failure proves native stop then publishes original
   const release = Promise.withResolvers();
   let delayed;
   let admitted;
+  let canonical;
   let observedIdle = false;
   const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
     async publishSessionChanged(_id, event) {
@@ -2580,10 +2601,12 @@ test("Claude delayed practice failure proves native stop then publishes original
     delayed.catch(() => {});
   };
   await runWithPracticeProjectContext(owner, practice, async () => {
+    canonical = await provider.open(f.context);
     admitted = await provider.sendMessage(f.context, { message: "Go", messageId: "practice-late-failure" });
   });
   release.resolve();
   await delayed;
+  await canonical.wait();
   const state = await provider.sessionState(f.context);
   assert.equal(state.thread.id, admitted.thread.id);
   assert.equal(f.processes[0].stopped, true);

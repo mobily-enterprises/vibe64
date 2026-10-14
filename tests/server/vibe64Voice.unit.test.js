@@ -8,6 +8,8 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { WebSocket, WebSocketServer } from "ws";
 import { createVoiceAccessToken } from "@jskit-ai/assistant-voice/server";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   Vibe64VoiceProvider,
   registerVoiceCatalogueRoute
@@ -32,7 +34,19 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
     upstreams.push(socket); upstreamRequests.push(request); socket.send(JSON.stringify({ type: "voice.ready" }));
   });
   const fastify = Fastify(); await fastify.register(websocket);
+  const sockets = [];
   let realtime;
+  t.after(async () => { for (const socket of [...sockets, ...upstreams]) socket.terminate(); for (const socket of fastify.websocketServer.clients) socket.terminate(); await fastify.close(); realtime?.close(); await new Promise(resolve => upstream.close(resolve)); await rm(root, { recursive: true, force: true }); });
+  const actionCatalogue = createActionCatalogue();
+  actionCatalogue.register({ contributorId: "fixture-colleague", domain: "vibe64-colleague", actions: [{
+    id: "vibe64.colleague.state.read", kind: "query", input: { schema: createSchema({}) },
+    channels: ["api"], surfaces: ["app"],
+    async execute(input, context) {
+      actions.push({ actionId: "vibe64.colleague.state.read", input, context });
+      if (colleagueDenied) throw Object.assign(new Error("Denied"), { statusCode: 403, code: "voice_auth_required" });
+      return { ok: true };
+    }
+  }] });
   if (delayAccess) {
     const { createSocketIoServer } = await import("@jskit-ai/realtime/server/runtime");
     realtime = createSocketIoServer({ fastify });
@@ -40,11 +54,9 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
   }
   await Vibe64VoiceProvider.setup({ env: { VIBE64_VOICE_ENDPOINT: `ws://127.0.0.1:${upstream.address().port}/v1/voice`, VIBE64_VOICE_ACCESS_TOKEN_FILE: tokenFile }, fastify,
     sessions: { async inspectSession(id) { inspections.push({ id, scope: currentProjectScopeKey() }); return inspection; } },
-    actionCatalogue: { async execute(input) { actions.push(input); if (colleagueDenied) throw Object.assign(new Error("Denied"), { statusCode: 403, code: "voice_auth_required" }); } }
+    actionCatalogue
   }, {});
   await fastify.listen({ host: "127.0.0.1", port: 0 });
-  const sockets = [];
-  t.after(async () => { for (const socket of [...sockets, ...upstreams]) socket.terminate(); for (const socket of fastify.websocketServer.clients) socket.terminate(); await fastify.close(); realtime?.close(); await new Promise(resolve => upstream.close(resolve)); await rm(root, { recursive: true, force: true }); });
   return { upstreams, upstreamRequests, inspections, actions,
     async open({ colleague = false, origin = `http://127.0.0.1:${fastify.server.address().port}`, slug = "one", sessionId = "session-one" } = {}) {
       const route = colleague ? "/api/vibe64/colleague/voice/ws" : `/api/app/${slug}/vibe64/sessions/${encodeURIComponent(sessionId)}/voice/ws`;
@@ -185,7 +197,6 @@ test("revoked Colleague permission never opens a speech connection", { timeout: 
 const learningVoiceAttempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const otherLearningVoiceAttempt = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 async function learningVoiceFixture(t, { inspection = { ok: true, sessionId: "learning-session" }, user = { uid: 42, username: "learner", role: "owner" }, ownerId = "42", denied = false } = {}) {
-  const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
   const { createSessionActions, ACTION_INSPECT_SESSION } = await import("../../packages/vibe64-sessions/src/server/actions.js");
   const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
   const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");

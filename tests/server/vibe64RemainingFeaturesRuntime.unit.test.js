@@ -104,7 +104,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
       "explanation.create", "explanations.cleanup", "explanation.delete", "explanation.stop", "explanation.followup",
       "file.read", "file.create", "file.save"
     ].map((name) => `vibe64.source-editor.${name}`),
-    ...["subsystems.read", "status.read", "machine.read", "program.read", "refresh"].map((name) => `vibe64.system-graph.${name}`)
+    ...["subsystems.read", "status.read", "machine.read", "program.read", "architecture.read", "refresh", "refresh.cancel", "refresh.status"].map((name) => `vibe64.system-graph.${name}`)
   ].sort());
   for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
     assert.equal(action.input.mode, "create");
@@ -112,7 +112,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
       !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  assert.equal(routes.length, 41);
+  assert.equal(routes.length, 44);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],
     ["GET", "/source-editor/stars"],
@@ -120,7 +120,10 @@ test("remaining Vibe64 features use named capabilities and register direct route
     ["GET", "/sessions/:sessionId/files/:area/archive"],
     ["POST", "/sessions/:sessionId/integrations/:integrationId/setup"],
     ["GET", "/sessions/:sessionId/integrations/providers"],
-    ["GET", "/system-graph/sessions/:sessionId/subsystems"]
+    ["GET", "/system-graph/sessions/:sessionId/subsystems"],
+    ["GET", "/system-graph/sessions/:sessionId/architecture"],
+    ["POST", "/system-graph/sessions/:sessionId/refresh/cancel"],
+    ["GET", "/system-graph/sessions/:sessionId/refresh/status"]
   ]) {
     assert.equal(
       routes.filter((route) => route.method === method && route.path.endsWith(suffix)).length,

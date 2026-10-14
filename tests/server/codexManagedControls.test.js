@@ -405,11 +405,15 @@ test("native Codex paginated reload applies changed controls and preserves histo
   assert.match(await shellMarker(), /GENERATION=C/);
   completeResponses = true;
   let compactListener;
+  let compactionTurnId;
   const compacted = new Promise((resolve) => {
     compactListener = (event) => {
       if (event.params?.threadId !== threadId) return;
-      if (event.method === "thread/compacted" ||
-          event.method === "item/completed" && event.params.item?.type === "contextCompaction") resolve();
+      if (event.method === "item/completed" && event.params.item?.type === "contextCompaction") {
+        compactionTurnId = event.params.turnId;
+      }
+      // The compaction item can finish before its native turn releases admission.
+      if (event.method === "turn/completed" && compactionTurnId && event.params.turn?.id === compactionTurnId) resolve();
     };
     events.add(compactListener);
   });

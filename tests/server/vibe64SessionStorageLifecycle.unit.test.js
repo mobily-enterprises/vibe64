@@ -19,6 +19,7 @@ function archiveFixture(phase = "") {
   let busy = false;
   const runtime = {
     store: {
+      async assertSessionNotPinned(sessionId) { assert.equal(sessionId, session.sessionId); },
       async listSessionConversations() { return []; },
       async listSessionsForRenewal() { return []; },
       async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
@@ -111,7 +112,7 @@ for (const phase of ["resources", "source"]) {
   });
 }
 
-test("preparation stays inside the session agent-write lock", async () => {
+test("preparation stays inside the session agent-write lock", { timeout: 10_000 }, async () => {
   const f = archiveFixture();
   const entered = Promise.withResolvers();
   const release = Promise.withResolvers();
@@ -121,7 +122,8 @@ test("preparation stays inside the session agent-write lock", async () => {
     await release.promise;
   });
   const archiving = f.service.archiveSession("session-a");
-  await entered.promise;
+  await Promise.race([entered.promise, archiving.then(result => assert.fail(
+    `Archiving returned before preparation entered: ${JSON.stringify(result)}`))]);
   try {
     const competing = await f.runtime.store.runSessionExclusive("session-a", "agent-write", () => {
       throw new Error("A competing writer entered preparation");

@@ -654,9 +654,13 @@ test("Colleague updates one reply bubble while keeping unfinished text out of vo
   assert.equal(view.state.voice.controller.state.binding.state.messages.length, 2);
 });
 
-test("an older failed refresh cannot restore a recovered connection error", async (t) => {
+test("an older failed refresh cannot restore a recovered connection error", { timeout: 10_000 }, async (t) => {
   const pending = [];
-  const view = mount(t, () => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+  const view = mount(t, (url, options) => {
+    if (options.method === "POST" && url.endsWith("/focus")) return { ok: true };
+    assert.equal(options.method, "GET");
+    return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  });
   const newer = view.state.refresh();
   pending[1].resolve({ messages: [], status: "ready", error: "" });
   await newer;

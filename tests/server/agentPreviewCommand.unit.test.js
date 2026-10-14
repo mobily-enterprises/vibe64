@@ -666,6 +666,7 @@ test("agent preview command ensures the managed preview and waits for readiness"
     outputTargetId: "dev",
     ready: true,
     stale: false,
+    stoppedIntent: false,
     terminal: {
       command: "",
       createdAt: "",
@@ -786,6 +787,7 @@ test("agent preview command delegates restart to the managed launch controller",
     ready: true,
     restarted: true,
     stale: false,
+    stoppedIntent: false,
     terminal: {
       command: "",
       createdAt: "",

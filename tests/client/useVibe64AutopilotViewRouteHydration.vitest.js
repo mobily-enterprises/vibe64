@@ -161,10 +161,11 @@ describe("useVibe64AutopilotView route hydration", () => {
     const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?/>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];
     expect(binding).toBeDefined();
-    const toolActive = new Function("props", "rightPaneTab", `return (${binding});`);
+    const toolActive = new Function("props", "rightPaneTab", "normalWorkspaceActive = true", `return (${binding});`);
 
     expect(view.rightPaneTabMounted(tool)).toBe(true);
     expect(toolActive(props, view.rightPaneTab.value)).toBe(true);
+    expect(toolActive(props, view.rightPaneTab.value, false)).toBe(false);
     props.projectPane = "preview";
     route.path = "/app/project/chat-test";
     await nextTick();
@@ -240,7 +241,7 @@ describe("useVibe64AutopilotView route hydration", () => {
   });
 
   it("projects retained session activity without hiding the shared dashboard route", async () => {
-    route.path = "/app/project/chat-test/dashboard/repository";
+    route.path = "/app/project/chat-test/dashboard/env";
     const props = viewProps();
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
@@ -293,7 +294,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(loadingTag).toContain('class="studio-autopilot__right-pane-page"');
     expect(loadingTag).toMatch(/\sloading\s/u);
     const shellTag = autopilot.match(/<Vibe64DashboardShell\b[^>]*>/u)?.[0];
-    expect(shellTag).toContain('v-show="dashboardShellVisible"');
+    expect(shellTag).toContain('v-show="dashboardShellVisible && normalWorkspaceActive"');
 
     props.session = {
       ...selectedSession,

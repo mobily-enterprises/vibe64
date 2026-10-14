@@ -334,10 +334,10 @@ it("original parent mount cannot overwrite an already selected Learning child an
 it("keeps mounted preview controls valid while Learning hides the Working toolbar target", async () => {
   const source = readFileSync(new URL("../../src/pages/app/project/[slug].vue", import.meta.url), "utf8");
   const expression = source.match(/:preview-toolbar-teleport-target="([^"]+)"/u)[1];
-  const targetForMode = new Function("learningMode", "previewToolbarTeleportTarget", `return (${expression});`);
+  const targetForMode = new Function("learningPaneActive", "previewToolbarTeleportTarget", `return (${expression});`);
   const host = source.match(/<div\s+v-if="([^"]+)"\s+v-show="([^"]+)"\s+:id="previewToolbarHostId"/u);
-  const hostPresent = new Function("previewToolbarHostVisible", "learningMode", `return (${host[1]});`);
-  const hostShown = new Function("learningMode", `return (${host[2]});`);
+  const hostPresent = new Function("previewToolbarHostVisible", "learningPaneActive", `return (${host[1]});`);
+  const hostShown = new Function("learningPaneActive", `return (${host[2]});`);
   const node = (tag, text = "") => ({ tag, text, props: {}, style: {}, children: [], parent: null });
   const root = node("root");
   const findTarget = parent => parent.props.id === "studio-home-shell-preview-toolbar"

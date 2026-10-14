@@ -2295,13 +2295,12 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value.at(-1).optimistic.status).toBe("failed");
   });
 
-  it("exposes only the direct session tools, including changes and history", async () => {
+  it("exposes session tools while Git log remains in project navigation", async () => {
     const view = await createView();
 
     expect(view.sessionToolControls.value.map((tool) => tool.id)).toEqual([
       "info",
       "changes",
-      "repository",
       "editor",
       "database",
       "system",
