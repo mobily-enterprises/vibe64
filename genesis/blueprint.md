@@ -10,6 +10,9 @@ commands, until its session, Preview or browser lifecycle ends.
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+Main and temporary chat history load ten real messages at a time. A request and its answer count
+separately; reasoning and progress stay visible without consuming that allowance.
+
 Sending to Codex reuses the project's environment when current resources and
 Env files are ready. Missing or changed preparation is completed before delivery;
 current account, workspace and delivery checks remain required.

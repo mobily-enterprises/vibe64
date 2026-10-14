@@ -224,7 +224,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       projectSlug: { ...text, required: true }, sessionId: { ...text, required: true }, conversationId: text,
       beforeTurnId: text, beforeMessageId: text, question: { ...text, maxLength: 2000, required: true }
     }, (input, context) => colleague.summarize(input, context), {
-      description: "Answer a specific question from a larger authorized conversation range. Reads up to 20 Main turns or 12 temporary messages; nextBefore is the corresponding beforeTurnId or beforeMessageId for the next older page. Small ranges return text directly. Large ranges use the configured inexpensive, tool-free Helper and return a summary with real message citations. Failures fall back to bounded excerpts, explicitly marked. Never infer an answer from text outside the returned range.",
+      description: "Answer a specific question from a larger authorized conversation range. Reads up to 20 Main messages (requests and answers counted separately, excluding reasoning) or 12 temporary messages; nextBefore is the corresponding beforeTurnId or beforeMessageId for the next older page. Small ranges return text directly. Large ranges use the configured inexpensive, tool-free Helper and return a summary with real message citations. Failures fall back to bounded excerpts, explicitly marked. Never infer an answer from text outside the returned range.",
       output: { mode: "replace", schema: createSchema({
         ok: { type: "boolean", required: true }, mode: { type: "string", enum: ["summary", "excerpts"], required: true },
         summary: { ...text, maxLength: 1600 }, error: { ...text, maxLength: 512 }, nextBefore: text,

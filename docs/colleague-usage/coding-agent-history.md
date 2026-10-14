@@ -42,7 +42,10 @@ and undone-turn receipts are retained; the upgrade does not resend messages.
 Message timestamps show both the calendar date and time in your browser's local
 timezone on desktop and phone. Use them to distinguish replies from different days.
 
-Scroll up and use **Load older messages** when it is shown. Incoming replies
+Scroll up and use **Load older messages** when it is shown. Each load adds ten
+real messages, or the remaining messages at the beginning of the chat. Your
+request and the assistant's answer count as two messages. Reasoning and progress
+stay visible with the messages but do not count toward the ten. Incoming replies
 retain the history you loaded and your place in it, including on phone. Your
 unsent draft and selection remain intact. Updated or removed saved messages
 reflect the current conversation; live output does not replace its original
@@ -58,3 +61,6 @@ use the existing **Reload chat** recovery if shown. Access denial clears cached
 private messages instead: sign in with the authorized account and reopen chat.
 Colleague can explain these steps; scrolling and loading this browser's history
 require your interaction. These operations do not resend any request.
+When you ask Colleague a question about a larger Main conversation range, its
+history reader can read up to twenty real messages per page and continue through
+older pages. That is separate from the browser's ten-message loading control.

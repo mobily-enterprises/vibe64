@@ -121,8 +121,9 @@ function requiredRepositorySessionId(value = "") {
 function conversationPageOptions(options = {}) {
   const limit = Number.parseInt(String(options.limit || ""), 10);
   return {
+    pageUnit: "messages",
     beforeTurnId: text(options.beforeTurnId),
-    limit: Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 200) : 50
+    limit: Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 200) : 10
   };
 }
 

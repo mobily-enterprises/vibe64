@@ -636,7 +636,8 @@ function useVibe64ConversationLog({
         complete(result);
       }
     };
-    const beforeTurnId = normalizeConversationLogPagination(oldestLoadedPage.value?.pagination).oldestTurnId ||
+    const pagination = normalizeConversationLogPagination(oldestLoadedPage.value?.pagination);
+    const beforeTurnId = pagination.nextBeforeTurnId || pagination.oldestTurnId ||
       String(turns.value[0]?.turnId || "").trim();
     if (!enabled.value || !conversationLogPath.value || !hasMoreBefore.value || loadingMore.value || !beforeTurnId) {
       finish({ changed: false, loaded: false });
@@ -657,14 +658,16 @@ function useVibe64ConversationLog({
         })
       });
       const previousOldestTurnId = String(turns.value[0]?.turnId || "").trim();
+      const previousMessageCount = turns.value.reduce((count, turn) => count + (turn.messages?.length || 0), 0);
       olderPages.value = [
         normalizeConversationLogPage(page),
         ...olderPages.value
       ];
       const nextOldestTurnId = String(turns.value[0]?.turnId || "").trim();
+      const nextMessageCount = turns.value.reduce((count, turn) => count + (turn.messages?.length || 0), 0);
       const changed = Boolean(
         nextOldestTurnId &&
-        nextOldestTurnId !== previousOldestTurnId
+        (nextOldestTurnId !== previousOldestTurnId || nextMessageCount !== previousMessageCount)
       );
       vibe64SessionDebugLog("client.conversationLog.loadMore.done", {
         beforeTurnId,

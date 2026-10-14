@@ -88,7 +88,7 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
 
       return Object.freeze({
         async read(query = {}) {
-          const options = { limit: temporary ? "12" : "20" };
+          const options = { limit: "10", pageUnit: "messages" };
           for (const key of ["beforeTurnId", "limit"]) if (Object.hasOwn(query, key)) options[key] = query[key];
           const { configuration: _configuration, ...state } = await withConversation(conversation => conversation.read(options));
           return { ...state, id };

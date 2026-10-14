@@ -475,8 +475,9 @@ test("conversation history includes the current live snapshot for reconnecting c
   const conversationStream = { revision: 3, messages: [{ messageId: "answer", role: "assistant", text: "Partial", status: "inProgress" }] };
   const service = createService({ terminals: {}, project: { async createRuntime() {
     return {
-      async readConversationLogPage(sessionId) {
+      async readConversationLogPage(sessionId, options) {
         assert.equal(sessionId, "session-1");
+        assert.deepEqual(options, { pageUnit: "messages", limit: 10, beforeTurnId: "" });
         return { turns: [], pagination: { totalTurnCount: 0 } };
       },
       store: { readConversationStream(sessionId) {

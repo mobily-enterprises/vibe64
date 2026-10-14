@@ -204,3 +204,23 @@ test("query cancellation reaches the history transport and rejects its late resp
   await rejected;
   assert.equal(f.model.turns.value.length, 0);
 });
+
+test("Load older requests ten messages and merges both halves of a split turn", async t => {
+  const f = fixture(t);
+  const cursor = 'message:["000001","assistant"]';
+  f.seed({ ...page([{ turnId: "000001", user: null, assistant: {
+    role: "assistant", messageId: "answer-1", text: "Saved answer"
+  }, paginationPartial: true }]), pagination: {
+    count: 1, limit: 10, pageUnit: "messages", hasMoreBefore: true, oldestTurnId: "000001", nextBeforeTurnId: cursor
+  } });
+  let completion;
+  const loading = f.model.loadMore({ complete: value => { completion = value; } });
+  assert.deepEqual(f.requests[0].query, { beforeTurnId: cursor, limit: "10" });
+  f.requests[0].resolve(page([{ ...turn("000001", "Saved question"), assistant: null, paginationPartial: true }]));
+  assert.equal(await loading, true);
+  assert.deepEqual(completion, { changed: true, loaded: true });
+  assert.equal(f.model.turns.value.length, 1);
+  assert.equal(f.model.turns.value[0].user.text, "Saved question");
+  assert.equal(f.model.turns.value[0].assistant.text, "Saved answer");
+  assert.equal(f.model.hasMoreBefore.value, false);
+});

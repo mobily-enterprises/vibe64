@@ -3,6 +3,12 @@
 Each coding task can use a recoverable source workspace that is isolated from
 the canonical project and from other sessions.
 
+Main and temporary browser conversations request pages of ten real messages.
+JSKIT's transcript reader counts a user request and an assistant answer separately;
+reasoning and commentary remain visible without consuming this allowance. Its
+opaque next-page cursor can split a stored turn, and browser page merging restores
+that turn without dropping either half. No saved history is rewritten.
+
 ## Sources
 
 - `packages/vibe64-sessions/src/server/actions.js`

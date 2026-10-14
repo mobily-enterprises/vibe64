@@ -14,7 +14,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
-import { temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -33,6 +33,24 @@ function actionById(actions, id) {
   assert.ok(action, `Missing action ${id}`);
   return action;
 }
+
+test("Main and temporary browser history default to ten messages and forward opaque cursors", async () => {
+  const calls = [];
+  const conversation = { async read(query) { calls.push(query); return { conversationLog: [] }; } };
+  const facade = createMainBrowserConversations({
+    actions: { async execute() { return { actor: { id: "owner" }, user: { username: "owner" }, project: { slug: "unit_project" } }; } },
+    terminals: { openBrowserConversation: async () => conversation, openTemporaryBrowserConversation: async () => conversation }
+  });
+  const target = { projectSlug: "unit_project", sessionId: "one" };
+  const cursor = 'message:["000001","assistant"]';
+  for (const id of [mainConversationId(target), temporaryConversationId({ ...target, conversationId: "chat" })]) {
+    const browser = await facade.open({ id, context: { requestMeta: { request: {} } } });
+    await browser.read();
+    await browser.read({ beforeTurnId: cursor });
+  }
+  assert.deepEqual(calls, [{ limit: "10", pageUnit: "messages" }, { limit: "10", pageUnit: "messages", beforeTurnId: cursor },
+    { limit: "10", pageUnit: "messages" }, { limit: "10", pageUnit: "messages", beforeTurnId: cursor }]);
+});
 
 test("temporary conversation actions use durable conversation ownership", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
