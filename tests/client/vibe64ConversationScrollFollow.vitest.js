@@ -516,7 +516,7 @@ describe("Vibe64 conversation scroll following", () => {
     const mounted = mountConversation({ turns: [incoming] });
     await nextTick();
     expect(nodeText(mounted.container)).toContain("vibe64 assistant");
-    expect(nodeText(mounted.container)).toContain(details.body);
+    expect(findNode(mounted.container, node => node.props?.blocks?.some(block => block.text === details.body))).not.toBeNull();
     expect(nodeText(mounted.container)).not.toContain(internalInstructions);
     expect(nodeText(mounted.container)).not.toContain("vibe64-helper");
     expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Received agent message")).not.toBeNull();
@@ -530,6 +530,31 @@ describe("Vibe64 conversation scroll following", () => {
       expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Sent agent message")).not.toBeNull();
       expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/online?session=destination&chat=main")).not.toBeNull();
     }
+    mounted.app.unmount();
+  });
+
+  it("expands agent Markdown without resetting on receipt updates", async () => {
+    const body = "**Checks passed.**\n\n- Preview stopped automatically.\n- Registration remains usable.\n\n" + "Retained evidence. ".repeat(25) + "\n\n`final-proof.log`";
+    const details = { sourceProject: "vibe64", sourceSession: "source", projectSlug: "online", sessionId: "destination", body, direction: "sent", status: "accepted" };
+    const turn = { turnId: "outgoing", system: { role: "system", text: body }, metadata: { projectMessage: details } };
+    const mounted = mountConversation({ turns: [turn] });
+    await nextTick();
+    const toggle = () => findNode(mounted.container, node => node.type === "button" && /Read more|Show less/.test(nodeText(node)));
+    const blocks = () => findNode(mounted.container, node => Array.isArray(node.props?.blocks))?.props.blocks;
+    expect(toggle().props["aria-expanded"]).toBe(false);
+    expect(JSON.stringify(blocks())).not.toContain("final-proof.log");
+    toggle().props.onClick();
+    await nextTick();
+    expect(toggle().props["aria-expanded"]).toBe(true);
+    expect(blocks().some(block => block.type === "ul")).toBe(true);
+    expect(JSON.stringify(blocks())).toContain("final-proof.log");
+    mounted.state.turns.value = [{ ...turn, metadata: { projectMessage: { ...details, status: "delivered" } } }];
+    await nextTick();
+    expect(toggle().props["aria-expanded"]).toBe(true);
+    expect(nodeText(mounted.container)).toContain("Delivered to assistant");
+    toggle().props.onClick();
+    await nextTick();
+    expect(JSON.stringify(blocks())).not.toContain("final-proof.log");
     mounted.app.unmount();
   });
 

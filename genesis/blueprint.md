@@ -10,7 +10,9 @@ Managed browser navigation uses the current launch access without exposing its
 token, and managed browser-test setup includes Git for repository fixtures.
 Managed test suites restore Preview's prior running or stopped state.
 Cross-project agent coordination appears in chat with visible sent receipts and
-distinct incoming/outgoing cards. Agents coordinate within existing authorization
+distinct incoming/outgoing bubbles with outside robot avatars, readable Markdown
+and expandable long messages. Requested answers are sent back to the originating
+project rather than only reported to the person. Agents coordinate within existing authorization
 and bring new permission decisions to the person without circular requests.
 
 Vibe64 is the visual, managed shell around Genesis for people building software

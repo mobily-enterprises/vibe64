@@ -499,6 +499,15 @@ const adapter = computed(() => ({
 </script>
 
 <style scoped>
+:deep(.assistant-transcript__message-row--assistant) { max-width: min(28rem, 88%); }
+:deep(.assistant-transcript__message--assistant) {
+  margin-left: 2.15rem;
+  max-width: calc(100% - 2.15rem);
+  padding: .75rem 1rem;
+  border-radius: 16px;
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
+}
 :deep(.assistant-transcript__system:has(.vibe64-project-message) > .assistant-transcript__system-icon),
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-meta) { display: none; }
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-body) { width: 100%; }

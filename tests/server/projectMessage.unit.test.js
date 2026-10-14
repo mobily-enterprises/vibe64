@@ -57,6 +57,9 @@ test("project messages use only the current selected Main session with fresh acc
   assert.equal(sent[0][1].displayMessage, input.message);
   assert.equal(sent[0][1].turnMetadata.projectMessage.direction, "received");
   assert.match(sent[0][1].message, /ask the person once/);
+  assert.match(sent[0][1].message, /ordinary chat answer reaches only the person, not the sender/);
+  assert.match(sent[0][1].message, /Write naturally in Markdown/);
+  assert.match(sent[0][1].message, /not as visible prefixes/);
   assert.equal((await store.readConversationLog("source"))[0].metadata.projectMessage.status, "accepted");
   assert.equal(published[0].payload.conversationLogPatch.type, "upsert-turn");
   selection = "selected-2";

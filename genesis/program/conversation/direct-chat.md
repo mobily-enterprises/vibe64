@@ -3954,6 +3954,11 @@ Reasoning groups form after ordering; canonical turn IDs and storage remain inta
 
 ## Messages between projects
 
+Normal assistant replies and commentary keep the shared transcript renderer;
+the editor's scoped styles indent their shaded bubbles beneath the name and
+cap the row at the same width as human messages. Project messages have separate
+neutral outlined bubbles and explicit To/From links.
+
 `vibe64-helper session message-project <project> <message> [message-id]` uses the
 existing bound session command socket. `agentSessionCommand.js` supplies the
 server-owned source project/session and admitted actor; `projectMessage.js`
@@ -3973,13 +3978,20 @@ these writes; a stable destination/session/message identity avoids duplicate
 receipts. Receipt text cannot change when an ID is reused. New turn metadata carries
 project-message presentation on both sides through ordinary routing and delivery.
 The shared editor's system-message slot renders received cards on the left and
-sent cards on the right, with project/session links, a distinct theme surface,
-timestamps and delivery state. Native input roles and authorization stay with
+sent cards on the right, with project/session links, an outside robot avatar,
+the human bubble width limit, a neutral theme surface, timestamps and delivery state.
+The existing shared Markdown parser/renderer displays their bodies; long bodies
+offer Read more/Show less with the human transcript's character and line limits.
+Native input roles and authorization stay with
 the existing delivery owner. No historical rewrite or separate inbox is added.
 Later failures also use the workspace operational log with correlated identities.
 Agent guidance permits development/release coordination inside existing permission,
 asks the person once for a new permission, reports the blocker once and ends that
 exchange until a decision. It discourages polling and acknowledgement-only replies.
+Requested results, questions and blockers must be sent back using the command;
+ordinary chat answers reach only the person. Completed reports need no acknowledgement
+unless requested. Guidance asks for natural Markdown and essential evidence, with
+tracking IDs in command metadata rather than visible prefixes.
 The in-process dispatch does not add durable restart recovery. A reply invokes the
 same command against the source project and resolves its selection at that time.
 
