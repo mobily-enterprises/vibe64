@@ -10,7 +10,43 @@ import { prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/
 import { prepareAgentEnvCommand } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 import { prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
-import { requestUnixJsonCommand, unixCommandSocketPath } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
+import { requestUnixJsonCommand, unixCommandSocketPath, unixJsonCommandServerIsHealthy } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
+
+test("a timed-out control health probe retains the listener and its credentials for retry", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "v64-health-"));
+  const socketPath = path.join(root, "control.sock");
+  const requests = [];
+  let respond = false;
+  const server = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const input = JSON.parse(Buffer.concat(chunks).toString());
+    requests.push(input);
+    if (respond) response.end(JSON.stringify({ ok: true, sessionId: input.sessionId, generationId: input.generationId }));
+  });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.listen(socketPath, resolve));
+  const entry = { server, token: "fixture-token", sessionId: "fixture-session", generationId: "fixture-generation" };
+  const probe = { socketPath, sessionId: entry.sessionId, healthPath: "/health", timeoutMs: 50 };
+  await assert.rejects(unixJsonCommandServerIsHealthy(entry, probe), error => {
+    assert.equal(error.code, "vibe64_agent_control_unavailable");
+    assert.equal(error.cause.code, "ETIMEDOUT");
+    assert.equal(error.retryable, true);
+    return true;
+  });
+  assert.equal(server.listening, true);
+  respond = true;
+  assert.equal(await unixJsonCommandServerIsHealthy(entry, { ...probe, timeoutMs: 2000 }), true);
+  assert.deepEqual(requests.at(-1), {
+    sessionId: entry.sessionId, generationId: entry.generationId, token: entry.token
+  });
+  await new Promise(resolve => server.close(resolve));
+  assert.equal(await unixJsonCommandServerIsHealthy(entry, probe), false, "a missing socket still permits recovery");
+});
 
 test("all assistant controls connect with long workspace paths and stay isolated", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-control-paths-"));

@@ -2107,6 +2107,13 @@ Late replies recheck the same connection before recovery and before publication;
 the existing close operation retains ownership of Stop. A failed control check
 on a current connection still follows ordinary observation-loss recovery.
 
+A timed-out or otherwise uncertain Unix control health probe fails retryably
+without replacing the existing listener or rotating its credentials. Proven dead
+socket errors still permit replacement. The shared control owner logs the failed
+probe without tokens, and a later healthy probe uses the same identity. This
+prevents a slow health check from invalidating inherited child-agent controls;
+it does not itself refresh native descendants after a genuine replacement.
+
 The provider records the environment bound to each thread. Listener replacement
 or a valid stale-generation request
 triggers one serialized check through that owner; account credentials and Env values

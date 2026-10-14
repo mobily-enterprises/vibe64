@@ -96,8 +96,17 @@ async function unixJsonCommandServerIsHealthy(entry = {}, {
       reportUnixCommandControlChange(entry, "ready");
     }
     return healthy;
-  } catch {
-    return false;
+  } catch (cause) {
+    if (DEAD_UNIX_COMMAND_SOCKET_CODES.has(String(cause?.code || ""))) return false;
+    // An uncertain probe must not retire a live listener and invalidate every
+    // assistant that inherited its controls. Only a proven dead socket is replaceable.
+    logOperationalEvent(entry.commandService?.logger, "warn", {
+      component: "vibe64.agent_controls", event: "vibe64.agent_controls.health_unavailable",
+      sessionId, socketPath, generationId: entry.generationId, code: cause?.code || ""
+    }, "Managed assistant control health could not be verified; existing listener retained.");
+    throw Object.assign(new Error("Managed assistant control health could not be verified. Retry the connection; existing command credentials and work have been retained.", { cause }), {
+      code: "vibe64_agent_control_unavailable", retryable: true
+    });
   }
 }
 

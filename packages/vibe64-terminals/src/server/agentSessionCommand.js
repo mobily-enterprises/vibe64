@@ -447,7 +447,7 @@ async function ensureAgentSessionCommandServer({
           if (normalizeText(input.token) === token && normalizeText(input.sessionId) === normalizeText(sessionId)) {
             reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
           }
-          sendJsonCommandResponse(response, 403, responseError("Vibe64 session command identity is invalid.", "vibe64_agent_session_command_identity_invalid"));
+          sendJsonCommandResponse(response, 403, responseError("Vibe64 session command identity is invalid. Reconnect the affected assistant before retrying. If only a child agent is affected, ask its parent to replace that child and preserve its work.", "vibe64_agent_session_command_identity_invalid"));
           return;
         }
         if (isProjectMessage) {
