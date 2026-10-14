@@ -37,11 +37,14 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
 });
 
 async function fixture(t, name, workflowHooks = {}) {
+  // Hosted Git needs a permitted checkout path; control sockets still use the
+  // ordinary short OS temp directory, independently of this fixture location.
   const root = await mkdtemp(path.join(process.env.VIBE64_TEST_FIXTURE_ROOT || os.tmpdir(), `vibe64-test-target-${name}-`));
   const sessionId = `target-${name}`;
   const sourceRoot = path.join(root, "sessions", "active", sessionId, "source");
   await mkdir(sourceRoot, { recursive: true });
   const initializeGit = execFileAsync("git", ["init", "--initial-branch=main"], { cwd: sourceRoot });
+  // Managed Git reads stdin before submitting a command; this fixture has no input.
   initializeGit.child.stdin.end();
   await initializeGit;
   await initializeGenesisProject({ projectRoot: sourceRoot });
@@ -195,7 +198,10 @@ process.stdout.write(JSON.stringify({
     }
   };
   const controller = createOutputTargetTerminalController({
-    env: { TMPDIR: socketRoot }, projectService, runCommand,
+    env: { TMPDIR: socketRoot },
+    projectService,
+    runCommand,
+    // This standalone fixture runs inside the test execution, not a hosted project.
     startWorkflow: async () => ({ ok: true, workflow: null }),
     ...workflowHooks
   });
@@ -217,15 +223,17 @@ process.stdout.write(JSON.stringify({
   });
   const command = args => commandService.run({ sessionId, args });
   const waitReady = async (terminal) => {
+    assert.notEqual(terminal?.ok, false, JSON.stringify(terminal));
     for (let count = 0; count < 100; count++) {
       const status = await controller.launchStatus(sessionId);
       if (status.preview?.state === "ready") return status;
+      if (status.preview?.state === "failed") throw new Error(status.preview.message);
       if (status.ok === false || status.activeTerminal?.status === "exited") throw new Error(status.error || status.activeTerminal?.output || "Preview exited");
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     throw new Error(`Preview ${terminal.id} did not become ready`);
   };
-  return { root, socketRoot, sourceRoot, sessionId, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
+  return { root, socketRoot, sourceRoot, sessionId, projectService, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
 }
 
 async function browserCommands(f) {
@@ -339,6 +347,11 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
   await f.waitReady(normal);
   const originalData = await readFile(path.join(f.sourceRoot, "working.json"), "utf8");
   assert.equal((await f.controller.stopTerminal(f.sessionId, normal.id)).ok, true);
+  const saved = await (await f.projectService.createRuntime()).getSession(f.sessionId);
+  assert.equal(saved.metadata.output_target_id, "app");
+  assert.deepEqual(JSON.parse(saved.metadata.output_target_parameters), parameters);
+  assert.equal(saved.metadata.output_target_terminal_id, undefined);
+  assert.equal(saved.metadata.output_target_preview_auth, undefined);
   for (const outcome of [
     { ok: true, exitCode: 0 },
     { ok: false, exitCode: 17, error: "assertion failed" },
@@ -360,9 +373,19 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
     assert.equal((await f.controller.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
     assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), originalData);
   }
+  const reopened = createOutputTargetTerminalController({ env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
+  t.after(() => reopened.close());
+  const afterReopen = await reopened.launchStatus(f.sessionId);
+  assert.equal(afterReopen.preview.state, "stopped");
+  assert.equal(afterReopen.activeTerminal, null);
+  assert.equal(afterReopen.lastOutputTarget.id, "app");
+  assert.deepEqual(afterReopen.lastOutputTarget.outputParameters, parameters);
+  assert.equal((await reopened.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
   const restarted = await f.controller.ensurePreview(f.sessionId);
   await f.waitReady(restarted);
-  assert.notEqual((await f.controller.launchStatus(f.sessionId)).preview.stoppedIntent, true);
+  const running = await f.controller.launchStatus(f.sessionId);
+  assert.notEqual(running.preview.stoppedIntent, true);
+  assert.deepEqual(running.lastOutputTarget.outputParameters, parameters);
 });
 
 test("workflow metadata separates real test target runs from development restoration without resource declarations", async t => {

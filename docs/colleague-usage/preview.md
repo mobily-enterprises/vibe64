@@ -74,6 +74,8 @@ It stays stopped after navigation, reload or reopening the session. Use the
 toolbar's **Start preview** or **Restart preview** deliberately to run it again.
 If Stop reports incomplete cleanup, retry Stop before starting. Browser tests
 may temporarily run an isolated target, then restore the prior stopped choice.
+The selected target and its parameter values remain saved while stopped, including
+after browser tests or an editor restart, for the next explicit Start.
 If Preview reports an invalid saved stop state, use the explicit Stop action
 before retrying Start; automatic recovery does not overwrite that state.
 Colleague can offer the existing authorized stop/start actions, but a how-to

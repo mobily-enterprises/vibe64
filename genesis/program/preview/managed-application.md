@@ -95,6 +95,8 @@ proxy and managed browser cleanup, and refuses incidental automatic startup whil
 stopped. Explicit Start clears the choice after launch; a scoped browser test
 temporarily runs its target and restores the saved stopped state. Stopping does
 not close the coding session, agent, source or shared project services.
+When a stopped session has no retained terminal, status inspection preserves its
+saved target and parameters rather than treating the missing process as a crash.
 A small **Work in progress** bar reports editing without hiding or replacing
 the frame. A recoverable failed or stale web output queues one existing output
 recovery attempt after editing/source operations settle, showing **Server will

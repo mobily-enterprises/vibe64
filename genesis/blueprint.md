@@ -275,6 +275,8 @@ The top Preview toolbar can stop only the selected session's application and
 managed browser without closing its chat or source. That choice survives editor
 reopening and blocks incidental startup until the person or agent deliberately
 starts Preview again. Scoped browser tests restore the prior stopped choice.
+The chosen output and its parameter values remain saved for the next Start,
+including after an editor restart or a temporary browser test.
 Opening a project shows loading while its sessions are being fetched, including
 when restoring the last selected session. It does not imply creation is blocked.
 Opening a project link reopens its runtime before chat and Preview load, including

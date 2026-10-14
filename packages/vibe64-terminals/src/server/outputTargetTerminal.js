@@ -543,19 +543,22 @@ function sessionWithoutLaunchMetadata(session = {}) {
   };
 }
 
-async function clearLaunchMetadata(store, sessionId = "") {
+async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = false } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
     return false;
   }
+  const names = preserveSelection
+    ? OUTPUT_METADATA_NAMES.filter((name) => ![OUTPUT_METADATA.id, OUTPUT_METADATA.label, OUTPUT_METADATA.parameters].includes(name))
+    : OUTPUT_METADATA_NAMES;
   if (typeof store.mutateSession === "function" && typeof store.deleteMetadataValue === "function") {
     await store.mutateSession(normalizedSessionId, async () => {
-      await Promise.all(OUTPUT_METADATA_NAMES.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
+      await Promise.all(names.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
     });
     return true;
   }
   if (typeof store.deleteMetadataValues === "function") {
-    await store.deleteMetadataValues(normalizedSessionId, OUTPUT_METADATA_NAMES);
+    await store.deleteMetadataValues(normalizedSessionId, names);
     return true;
   }
   return false;
@@ -576,7 +579,8 @@ async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSes
   if (currentTerminalId !== normalizedTerminalSessionId) {
     return false;
   }
-  return clearLaunchMetadata(store, sessionId);
+  const preserveSelection = await store.readMetadataValue(sessionId, PREVIEW_STOPPED_METADATA) === "true";
+  return clearLaunchMetadata(store, sessionId, { preserveSelection });
 }
 
 async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
@@ -2022,7 +2026,9 @@ async function resolveLaunchPreviewStatus({
     });
   }
 
-  if (initialLastOutputTarget?.id) {
+  // A saved Stop intentionally has no live process, including after scoped
+  // tests or an editor restart. Keep its target and parameters for explicit Start.
+  if (initialLastOutputTarget?.id && !previewStopState(context.session?.metadata).stopped) {
     return missingLaunchPreviewStatus({
       context,
       outputTargets,
@@ -2034,10 +2040,10 @@ async function resolveLaunchPreviewStatus({
 
   return {
     activeTerminal: null,
-    lastOutputTarget: null,
-    openTarget: null,
+    lastOutputTarget: initialLastOutputTarget,
+    openTarget: initialOpenTarget,
     preview: normalizeLaunchPreview({
-      canRestart: false,
+      canRestart: Boolean(initialLastOutputTarget?.id),
       canShowLog: false,
       canStart: outputTargetCanStart(outputTargets),
       message: "Run an output target first.",
