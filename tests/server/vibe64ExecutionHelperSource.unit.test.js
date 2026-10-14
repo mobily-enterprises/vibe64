@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
+import { managedExecutionState, managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
   managedExecutionTaskLimitJournal } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
@@ -14,6 +14,25 @@ const oomSession = `${oomProject}/vibe64-test-work-p${"a".repeat(64)}-s${"b".rep
 const oomWorkflow = `${oomSession}/vibe64-test-work-p${"a".repeat(64)}-s${"b".repeat(64)}-w${"d".repeat(32)}.slice`;
 const oomExecution = `${oomWorkflow}/${oomUnit}`;
 const oomQuery = { unitName: oomUnit, workspace: "test", startedAt: 1000, until: 3000 };
+
+test("a collected unit cannot overwrite the runner's exit and task-denial receipt with systemd defaults", () => {
+  const startedAt = "2026-10-14T00:05:31.000Z";
+  const exitObservedAt = "2026-10-14T00:06:05.000Z";
+  const taskLimit = { source: "cgroup-pids-events", scope: "execution", count: 1 };
+  const state = managedExecutionState(oomUnit, "execution", {}, {
+    query: () => ({ stdout: "LoadState=not-found\nActiveState=inactive\nResult=success\nExecMainCode=0\nExecMainStatus=0\nTasksMax=9999\n" }),
+    readResult: () => ({ executionId: "execution", startedAt, exitObservedAt,
+      result: "exit-code", execMainCode: "exited", execMainStatus: "23", taskLimit, tasksPeak: "128" })
+  });
+  assert.equal(state.loadState, "recorded");
+  assert.equal(state.result, "exit-code");
+  assert.equal(state.execMainStatus, "23");
+  assert.equal(state.startedAt, startedAt);
+  assert.equal(state.exitObservedAt, exitObservedAt);
+  assert.equal(state.tasksPeak, "128");
+  assert.equal(state.tasksMax, "0", "a disappeared unit has no observed current limit");
+  assert.deepEqual(state.taskLimit, taskLimit);
+});
 
 test("task denial counters prove only the boundary their mount semantics identify", () => {
   const mount = "37 28 0:31 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw,nsdelegate";

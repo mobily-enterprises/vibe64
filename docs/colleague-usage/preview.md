@@ -152,6 +152,12 @@ reading unchanged logs between short waits.
 Where its command tool supports `yield_time_ms`, an empty progress wait uses
 `30000`; shorter waits are for interactive input or a specific immediate check.
 
+Ask the coding agent to run browser-owning Node integration tests through
+`vibe64-helper playwright npm-run` as well. The project can declare these as
+`test:playwright:<name>` npm scripts. They use the host's browser task budget,
+which counts all Node and Chromium threads. Colleague can explain this route
+and offer coding-agent assistance; it cannot change host resource limits.
+
 The coding agent can read `vibe64-helper playwright --help` before a project has
 browser tests or a matching test runtime. Help starts neither Preview nor a browser.
 An actual suite still requires the project's installed Playwright version and a

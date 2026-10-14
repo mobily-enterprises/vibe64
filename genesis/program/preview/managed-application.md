@@ -198,6 +198,12 @@ Agents discover declared targets through `vibe64-helper preview targets --json`.
 or managed runtimes, without starting Preview or a browser. Actual suite execution
 still requires an installed project Playwright and its matching managed runtime;
 help availability is not runtime readiness.
+
+Browser-owning Node suites can declare `test:playwright:<name>` npm scripts and
+use the same admitted browser execution. Preview command preparation resolves
+both sockets from its supplied environment, retaining those exact paths across
+the listener, browser worker and command wrappers. Fixture source paths can
+therefore remain separate from the short private socket directory.
 `vibe64-helper playwright --target <id> test ...` and `npm-run <script>` temporarily
 select an available web target through the same output controller. The server
 holds the session's target selection while the existing managed runner obtains

@@ -178,6 +178,10 @@ enforcement under normal cgroup-v2 mount semantics proves the execution boundary
 `pids_localevents`, aggregate-only counters or unknown mount semantics cannot
 identify that boundary. Counters cover the group's lifetime, not an exact
 denial time. Missing counters are not fabricated zeroes.
+Runner receipts also retain their start time. When systemd has collected the
+transient unit, its default `success`, exit status and task maximum do not replace
+the saved runner measurements. Start and observed exit times still bound a
+failure-only journal lookup after collection.
 For an unsuccessful execution without counter evidence, inspection checks a
 current-boot, exact-owned-unit, start/exit-bounded kernel journal query with the
 same two-second/128-KiB/64-record limits. A complete fork-denial record proves

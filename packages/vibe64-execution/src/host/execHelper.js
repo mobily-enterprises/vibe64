@@ -443,6 +443,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
     }
   };
   controllerLease?.once("close", stopForControllerLoss);
+  const startedAt = new Date().toISOString();
   try {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
@@ -471,6 +472,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
     writeManagedExecutionResult(path.dirname(resolved), {
       ...managedRunnerCgroupMeasurements(),
       executionId: managedExecutionId(payload.executionId),
+      startedAt,
       exitObservedAt: outcome.exitObservedAt,
       execMainCode: outcome.signal ? "killed" : "exited",
       execMainStatus: outcome.signal || String(status),
@@ -1134,20 +1136,28 @@ function cgroupIoTotals(filePath = "") {
   return { readBytes, writeBytes };
 }
 
-function managedExecutionState(unitName = "", executionId = "", owner = {}) {
-  const stateResult = runRootCommandAllowFailure("systemctl", [
+function managedExecutionState(unitName = "", executionId = "", owner = {}, {
+  query = runRootCommandAllowFailure,
+  readResult = readManagedExecutionResult
+} = {}) {
+  const stateResult = query("systemctl", [
     "show",
     unitName,
     "--no-pager",
     "--timestamp=us+utc",
     "--property=LoadState,ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,MainPID,ControlGroup,MemoryCurrent,MemoryPeak,MemorySwapCurrent,TasksCurrent,TasksMax,CPUUsageNSec,IOReadBytes,IOWriteBytes"
   ]);
-  const values = {};
+  let values = {};
   for (const line of String(stateResult.stdout || "").split(/\r?\n/u)) {
     const separator = line.indexOf("=");
     if (separator > 0) {
       values[line.slice(0, separator)] = line.slice(separator + 1);
     }
+  }
+  // systemctl supplies defaults even for a collected transient unit. They
+  // describe no execution and must not replace the runner's saved receipt.
+  if (values.LoadState === "not-found") {
+    values = { LoadState: "not-found" };
   }
   const controlGroup = String(values.ControlGroup || "").trim();
   const cgroupPath = controlGroup
@@ -1157,7 +1167,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
   // Delegated services can put every process in child groups. Only the
   // hierarchical populated counter proves the whole execution empty.
   const scopeEmpty = cgroupPath && existsSync(cgroupPath) ? counters.scopeEmpty : true;
-  const recorded = executionId ? readManagedExecutionResult(owner, executionId) : {};
+  const recorded = executionId ? readResult(owner, executionId) : {};
   // Prefer the runner's child-exit observation to the later wrapper exit.
   // systemd still supplies evidence if OOM killed the runner before its receipt.
   const runnerExit = Date.parse(recorded.exitObservedAt || "");
@@ -1192,7 +1202,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
     result: String(values.Result || recorded.result || ""),
     signal: String(recorded.signal || ""),
     scopeEmpty,
-    startedAt: values.ExecMainStartTimestamp || "",
+    startedAt: values.ExecMainStartTimestamp || recorded.startedAt || "",
     subState: String(values.SubState || "unknown"),
     tasksCurrent: maximumCounter(values.TasksCurrent, recorded.tasksCurrent),
     tasksPeak: maximumCounter(recorded.tasksPeak),
@@ -2274,7 +2284,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
-  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  managedExecutionState, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
   resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };

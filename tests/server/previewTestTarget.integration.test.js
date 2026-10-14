@@ -37,11 +37,13 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
 });
 
 async function fixture(t, name, workflowHooks = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), `vibe64-test-target-${name}-`));
+  const root = await mkdtemp(path.join(process.env.VIBE64_TEST_FIXTURE_ROOT || os.tmpdir(), `vibe64-test-target-${name}-`));
   const sessionId = `target-${name}`;
   const sourceRoot = path.join(root, "sessions", "active", sessionId, "source");
   await mkdir(sourceRoot, { recursive: true });
-  await execFileAsync("git", ["init", "--initial-branch=main"], { cwd: sourceRoot });
+  const initializeGit = execFileAsync("git", ["init", "--initial-branch=main"], { cwd: sourceRoot });
+  initializeGit.child.stdin.end();
+  await initializeGit;
   await initializeGenesisProject({ projectRoot: sourceRoot });
   const target = (id, mode = id) => `### Target \`${id}\`: ${id}
 ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
@@ -81,7 +83,13 @@ ${target("broken", "broken")}
 - Kind: \`terminal\`
 `);
   await writeFile(path.join(sourceRoot, "package.json"), JSON.stringify({
-    type: "module", scripts: { e2e: "playwright test" }, devDependencies: { "@playwright/test": "1.61.1" }
+    type: "module",
+    scripts: {
+      e2e: "playwright test",
+      "test:playwright:fixture": "node browser-check.mjs",
+      unrelated: "node browser-check.mjs"
+    },
+    devDependencies: { "@playwright/test": "1.61.1" }
   }));
   await writeFile(path.join(sourceRoot, "working.json"), '{"count":42}\n');
   await writeFile(path.join(sourceRoot, "server.mjs"), `
@@ -152,8 +160,10 @@ process.stdout.write(JSON.stringify({
   const captureExecutionIds = new Set();
   const previewStarts = [];
   const detached = new Set();
+  const socketRoot = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-test-sockets-"));
   const commandEnv = {
     ...process.env,
+    TMPDIR: socketRoot,
     NPM_CONFIG_PREFIX: path.join(root, "tools"),
     VIBE64_SHARED_CACHE_ROOT: path.join(root, "cache"),
     PLAYWRIGHT_BROWSERS_PATH: browsersPath
@@ -184,7 +194,11 @@ process.stdout.write(JSON.stringify({
       captureExecutionIds.delete(id);
     }
   };
-  const controller = createOutputTargetTerminalController({ projectService, runCommand, ...workflowHooks });
+  const controller = createOutputTargetTerminalController({
+    env: { TMPDIR: socketRoot }, projectService, runCommand,
+    startWorkflow: async () => ({ ok: true, workflow: null }),
+    ...workflowHooks
+  });
   const commandService = createAgentPreviewCommandService({
     projectService,
     launchTarget: controller, runManagedCommand: runCommand,
@@ -199,6 +213,7 @@ process.stdout.write(JSON.stringify({
     await commandService.closeAllForSession(sessionId);
     for (const id of detached) await stopDetachedExecution(id);
     await rm(root, { recursive: true, force: true });
+    await rm(socketRoot, { recursive: true, force: true });
   });
   const command = args => commandService.run({ sessionId, args });
   const waitReady = async (terminal) => {
@@ -210,7 +225,7 @@ process.stdout.write(JSON.stringify({
     }
     throw new Error(`Preview ${terminal.id} did not become ready`);
   };
-  return { root, sourceRoot, sessionId, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
+  return { root, socketRoot, sourceRoot, sessionId, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
 }
 
 async function browserCommands(f) {
@@ -263,8 +278,19 @@ test('cancelled test', async ({page}) => {
   await new Promise(resolve => setTimeout(resolve, 25000));
 });
 `);
+  await writeFile(path.join(f.sourceRoot, "browser-check.mjs"), `
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage();
+  await page.goto(process.env.PLAYWRIGHT_BASE_URL);
+  assert.equal(await page.locator('h1').textContent(), 'test-app');
+  console.log('Node browser assertions passed');
+} finally { await browser.close(); }
+`);
   const prepared = await prepareAgentPreviewCommand({
-    commandService: f.commandService, env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+    commandService: f.commandService, env: { TMPDIR: f.socketRoot, VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
     project: { slug: "test-target" }, sessionId: f.sessionId,
     worktreePath: f.sourceRoot, wrapperHostDir: path.join(f.root, "commands")
   });
@@ -541,6 +567,13 @@ test("declared test Preview runs real servers, isolates session state, and resto
       assert.match(result.stdout, /2 passed/u);
       assert.deepEqual(f.previewStarts.slice(startsBeforeSuite), ["test-app", "app"], "the whole suite switches once and restores once");
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
+      const nodeSuite = await commands.execute(["--target", "test-app", "npm-run", "test:playwright:fixture"]);
+      assert.match(nodeSuite.stdout, /Node browser assertions passed/u);
+      assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
+      await assert.rejects(commands.execute(["--target", "test-app", "npm-run", "unrelated"]), error => {
+        assert.match(error.stdout + error.stderr, /not a declared Playwright test script/u);
+        return true;
+      });
       await assert.rejects(commands.execute(["--target=test-app", "npm-run", "e2e", "--", "--grep", "intentional failure"]), error => {
         assert.match(error.stdout + error.stderr, /1 failed/u);
         return true;

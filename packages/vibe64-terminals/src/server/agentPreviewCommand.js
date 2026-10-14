@@ -114,16 +114,8 @@ function browserWorkerHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_WORKER_NAME);
 }
 
-function browserSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME));
-}
-
 function browserMetadataHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_METADATA_NAME);
-}
-
-function commandSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME));
 }
 
 async function readRequestJson(request) {
@@ -1544,10 +1536,13 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     } catch {
       packageRecord = null;
     }
+    const declaredScript = normalizeText(packageRecord?.scripts?.[scriptName]);
     if (
       args[0] !== "run" ||
       !scriptName ||
-      !normalizeText(packageRecord?.scripts?.[scriptName]).includes("playwright")
+      !declaredScript ||
+      (!scriptName.startsWith("test:playwright:") &&
+        !declaredScript.includes("playwright"))
     ) {
       return responseError(
         "The requested package script is not a declared Playwright test script.",
@@ -1842,21 +1837,23 @@ async function closeAgentPreviewCommandServersForSession(sessionId = "") {
 async function ensureAgentPreviewCommandServer({
   commandService,
   sessionId = "",
+  socketPath,
   wrapperHostDir = ""
 } = {}) {
-  const socketPath = commandSocketHostPath(wrapperHostDir);
   const pending = commandServerPrepares.get(socketPath);
   if (pending) {
     await pending.catch(() => null);
     return ensureAgentPreviewCommandServer({
       commandService,
       sessionId,
+      socketPath,
       wrapperHostDir
     });
   }
   const preparation = ensureAgentPreviewCommandServerUnlocked({
     commandService,
     sessionId,
+    socketPath,
     wrapperHostDir
   });
   commandServerPrepares.set(socketPath, preparation);
@@ -1872,9 +1869,9 @@ async function ensureAgentPreviewCommandServer({
 async function ensureAgentPreviewCommandServerUnlocked({
   commandService,
   sessionId = "",
+  socketPath,
   wrapperHostDir = ""
 } = {}) {
-  const socketPath = commandSocketHostPath(wrapperHostDir);
   let existing = commandServers.get(socketPath);
   if (existing?.promise) {
     await existing.promise.catch(() => null);
@@ -2089,7 +2086,12 @@ async function prepareAgentPreviewCommand({
     "node_modules",
     "playwright"
   );
-  const browserSocketPath = browserSocketHostPath(normalizedWrapperHostDir);
+  const browserSocketPath = unixCommandSocketPath(
+    path.join(normalizedWrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME), { env }
+  );
+  const controlSocketPath = unixCommandSocketPath(
+    path.join(normalizedWrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME), { env }
+  );
   await writeWrapper({
     agentPlaywrightSource: agentPlaywrightCommandSource({
       managedNodePath,
@@ -2115,6 +2117,7 @@ async function prepareAgentPreviewCommand({
   const server = await ensureAgentPreviewCommandServer({
     commandService,
     sessionId: normalizedSessionId,
+    socketPath: controlSocketPath,
     wrapperHostDir: normalizedWrapperHostDir
   });
   const token = browserWorkerToken({
@@ -2125,12 +2128,12 @@ async function prepareAgentPreviewCommand({
   const workerDescriptor = {
     contractVersion: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
     controlGenerationId: server.generationId,
-    controlSocketPath: commandSocketHostPath(normalizedWrapperHostDir),
+    controlSocketPath,
     env: {
       [VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV]: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
       [VIBE64_AGENT_PREVIEW_COMMAND_GENERATION_ENV]: server.generationId,
-      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
+      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: controlSocketPath,
       [VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV]: server.token,
       [VIBE64_PREVIEW_BROWSER_WORKER_TOKEN_ENV]: token
     },
@@ -2152,14 +2155,14 @@ async function prepareAgentPreviewCommand({
       [VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV]: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
       [VIBE64_AGENT_PREVIEW_COMMAND_GENERATION_ENV]: server.generationId,
-      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
+      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: controlSocketPath,
       [VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV]: server.token
     },
     hostBrowserMetadataPath: workerDescriptor.metadataPath,
     hostBrowserSocketPath: workerDescriptor.socketPath,
     hostBrowserWorkerPath: workerScriptPath,
     hostPlaywrightWrapperPath: agentPlaywrightHostPath(normalizedWrapperHostDir),
-    hostSocketPath: commandSocketHostPath(normalizedWrapperHostDir),
+    hostSocketPath: controlSocketPath,
     hostWrapperPath: wrapperHostPath(normalizedWrapperHostDir),
     ok: true
   };
