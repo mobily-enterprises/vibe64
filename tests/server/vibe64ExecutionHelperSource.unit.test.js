@@ -165,6 +165,15 @@ test("execution helper preserves operation and command allowlists", async () => 
   assert.match(source, /Vibe64 exec helper rejected an unknown command/u);
 });
 
+test("execution Stop lets systemd run service cleanup before signalling the cgroup", async () => {
+  const source = await helperSource();
+  const stop = source.slice(source.indexOf('function stopManagedExecution('), source.indexOf('function assertNormalizedPayload('));
+  const firstStop = stop.indexOf('["stop", unitName]');
+  assert.ok(firstStop > 0);
+  assert.doesNotMatch(stop.slice(0, firstStop), /SIGTERM|SIGKILL|kill-who/u);
+  assert.match(stop.slice(firstStop), /SIGKILL/u, "unresponsive descendants still have bounded forced cleanup");
+});
+
 test("execution helper default PATH includes every first-class runtime pack", async () => {
   const source = await helperSource();
 

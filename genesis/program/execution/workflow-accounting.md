@@ -28,6 +28,11 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 
 ## Public contract
 
+Managed execution Stop asks systemd to stop the exact unit before attempting
+forced cgroup cleanup. This lets host-owned ExecStop hooks drain delegated
+resources before their processes receive termination signals. Completion still
+requires the entire execution scope to be empty.
+
 `createVibe64ConversationExecution()` adapts native conversation execution to the
 existing command policy gateway. It exposes process start, running/exit
 observations and owned stop, with optional duplex bytes carried by a private

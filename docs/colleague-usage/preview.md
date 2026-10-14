@@ -70,6 +70,8 @@ stop the application.
 The top Preview toolbar shows **Stop preview** while the application is running.
 Stop waits for the application's owned work and managed browser to close; it
 does not close the coding session, chat, source checkout or shared services.
+On managed hosts, service cleanup runs before remaining processes are terminated.
+Wait for Stop to finish; a cleanup failure is not a successful stop.
 It stays stopped after navigation, reload or reopening the session. Use the
 toolbar's **Start preview** or **Restart preview** deliberately to run it again.
 If Stop reports incomplete cleanup, retry Stop before starting. Browser tests

@@ -1349,12 +1349,8 @@ function managedExecutionOomBoundary(text, { unitName, workspace, startedAt, unt
 function stopManagedExecution(unitName = "", executionId = "", owner = {}) {
   const initial = managedExecutionState(unitName, executionId, owner);
   if (!initial.scopeEmpty) {
-    runRootCommandAllowFailure("systemctl", [
-      "kill",
-      "--kill-who=all",
-      "--signal=SIGTERM",
-      unitName
-    ]);
+    // Let the unit's ExecStop finish owned cleanup before systemd signals its
+    // cgroup. Killing first can interrupt delegated container shutdown hooks.
     runRootCommandAllowFailure("systemctl", ["stop", unitName]);
   }
   const deadline = Date.now() + MANAGED_EXECUTION_STOP_TIMEOUT_MS;
