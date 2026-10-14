@@ -89,6 +89,7 @@ const {
   inspectEngineering,
   inspectEnvironment,
   inspectProject,
+  inspectProjectFormat,
   inspectAgentIntegrations,
   inspectSkills,
   inspectStackSection,
@@ -355,11 +356,11 @@ function inspectGenesisCollaboration(options = {}) {
 }
 
 async function inspectGenesisProjectFormat(options = {}) {
-  const result = await runGenesisOperation(inspectProject, options);
-  if (!normalizeText(result?.projectFormat?.status)) {
+  const result = await runGenesisOperation(inspectProjectFormat, options);
+  if (!normalizeText(result?.status)) {
     throw new Error("Genesis did not return a project-format status.");
   }
-  return { ...result.projectFormat };
+  return { ...result };
 }
 
 function setGenesisEngineeringProfile(options = {}) {

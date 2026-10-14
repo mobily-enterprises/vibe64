@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
+import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { saveEnvUserValues as saveStoredEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
@@ -66,6 +68,98 @@ test("execution startup explicitly prepares the project environment", async () =
     session: { sessionId: "session-1" }
   });
   assert.deepEqual(env, { READY: "yes" });
+});
+
+test("Codex message preparation reuses only current resources and Env files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let ready = false;
+    let provisions = 0;
+    let password = "first-secret";
+    let failure;
+    const service = createService({
+      env: {},
+      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
+        resources: [{ component: "jskit-mysql", resource: { id: "database", kind: "mysql",
+          environmentAlternatives: [{ preferred: true, bindings: { host: "DB_HOST", port: "DB_PORT",
+            database: "DB_DATABASE", username: "DB_USER", password: "DB_PASSWORD" } }] } }] })
+    });
+    const resourceEnvironment = () => {
+      const writer = { host: "127.0.0.1", port: 3306, database: "chat", username: "writer", password };
+      return { contract: "vibe64.resource-environment.v2", ok: true, prepared: ready,
+        databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "mysql",
+          write: writer, read: { ...writer, username: "reader", password: "reader-secret" } },
+        resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values: writer }] };
+    };
+    service.setResourceEnvironmentProvider({
+      environmentForProvisionedResources: resourceEnvironment,
+      environmentForResources() {
+        provisions += 1;
+        if (failure) throw failure;
+        ready = true;
+        return resourceEnvironment();
+      }
+    });
+    const runtime = await service.createRuntime({ inspectSource: true });
+    const sessionId = "codex-environment";
+    await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
+    await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
+    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    runtime.inspectSourceForSession = async () => assert.fail("Send does not need a Git conflict scan.");
+    const environment = createCodexSessionEnvironment({ env: {}, projectService: service });
+    const sendEnvironment = () => environment.codexProjectTerminalEnv({ runtime, session, sessionId });
+    const envPath = path.join(session.sourcePath, ".env");
+
+    assert.equal((await sendEnvironment()).DB_PASSWORD, password);
+    assert.equal(provisions, 1, "A missing environment is still prepared.");
+    assert.equal((await sendEnvironment()).DB_PASSWORD, password);
+    assert.equal(provisions, 1, "A second send does not provision the same resources again.");
+    await rm(envPath);
+    await sendEnvironment();
+    assert.equal(provisions, 2, "A missing Env file falls back to preparation.");
+    password = "rotated-secret";
+    assert.equal((await sendEnvironment()).DB_PASSWORD, password);
+    assert.equal(provisions, 3, "Changed values refresh the Env file.");
+    assert.match(await readFile(envPath, "utf8"), /DB_PASSWORD=rotated-secret/u);
+    ready = false;
+    failure = new Error("Resource preparation unavailable");
+    await assert.rejects(sendEnvironment(), /Resource preparation unavailable/u);
+    assert.equal(provisions, 4, "A failed readiness check cannot reuse stale resources.");
+
+    await runtime.store.writeMetadataValue(sessionId, "source_removed", "yes");
+    await assert.rejects(sendEnvironment(), { code: "vibe64_session_worktree_unavailable" });
+    assert.equal(provisions, 4, "The startup gate reads current metadata even with an old supplied session.");
+  });
+});
+
+test("Codex context avoids source inspection while retaining workspace and account checks", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({ env: {},
+      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
+    const runtime = await service.createRuntime({ inspectSource: true });
+    const sessionId = "codex-context";
+    const workdir = sourcePath(targetRoot, sessionId);
+    await mkdir(workdir, { recursive: true });
+    await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
+    let inspections = 0;
+    runtime.inspectSourceForSession = async () => { inspections += 1; return null; };
+    let accounts = 0;
+    const host = { toolHome: async () => { accounts += 1; return { ok: true, toolHomeSource: "/authorized/account" }; },
+      unavailableWorktree: async (_runtime, _id, failure) => failure };
+    const context = () => readSessionConversationContext("codex", service, sessionId, { runtime }, host);
+    assert.equal((await context()).workdir, workdir);
+    assert.equal(inspections, 0, "Context does not consume source inspection.");
+    assert.equal(accounts, 1);
+    await rm(workdir, { recursive: true });
+    assert.equal((await context()).code, "vibe64_session_worktree_unavailable");
+    assert.equal(accounts, 1, "A missing workspace is refused before account acquisition.");
+    await mkdir(workdir, { recursive: true });
+    await runtime.markSessionClosing(sessionId, { reason: "archived" });
+    inspections = 0;
+    assert.equal((await context()).code, "vibe64_session_closing");
+    assert.equal(inspections, 0);
+    assert.equal(accounts, 1);
+  });
 });
 
 test("project execution environment is empty when the project declares none", async () => {

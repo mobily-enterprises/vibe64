@@ -123,7 +123,7 @@ function createCodexSessionEnvironment({
     }
 
     return runtime.store.mutateSession(normalizedSessionId, async () => {
-      const currentSession = await runtime.getSession(normalizedSessionId);
+      const currentSession = await runtime.getSession(normalizedSessionId, { inspectSource: false });
       return runOperation(currentSession);
     });
   }
@@ -139,6 +139,7 @@ function createCodexSessionEnvironment({
       const projectEnvStartedAt = Date.now();
       const projectEnvPromise = loadProjectExecutionEnv({
         prepare: true,
+        reusePrepared: true,
         projectService,
         runCommand,
         runtime,

@@ -3,6 +3,22 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+Before dispatching an idle turn, Codex, Claude and OpenCode share the same
+application-owned skill and integration preparation. The format gate uses
+Genesis's narrow `inspectProjectFormat` operation through `inspectGenesisProjectFormat`,
+retaining explicit-root and Git trust handling without inventorying source or
+loading project guidance just to classify the format. The separate skill and
+integration checks still run and refresh managed files when necessary.
+
+Codex's `codexProjectTerminalEnv` requests the existing `reusePrepared` environment
+path: resource readiness and generated Env files are read afresh, and missing or
+changed preparation falls back to the normal source-locked preparation owner.
+No environment values are cached across requests. Its startup gate and Main
+context read current session metadata without the unused Git conflict projection;
+workspace existence, removal/closing, account and native-delivery checks remain.
+Claude and OpenCode already use environment inspection rather than resource
+provisioning for their command environments.
+
 The shared assistant transcript displays each available message timestamp with
 its calendar date and time in the browser's locale and local timezone.
 

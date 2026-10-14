@@ -38,6 +38,16 @@ the browser requires your interaction.
 
 ## Send, steer and stop
 
+While **Send** is pending, Vibe64 prepares the selected assistant and waits for
+delivery acknowledgement. Codex reuses an already-ready project environment;
+missing resources or changed Env files still require preparation. Wait for
+delivery or a reported failure before retrying the request. The same behaviour
+applies on desktop and mobile; Colleague can explain a delay but cannot skip
+the connection or preparation checks.
+Codex, Claude and OpenCode share the project-format check before refreshing
+skills and agent guidance. This check reads the format marker without scanning
+application files; it does not replace the separate guidance checks.
+
 If Claude cannot initialize, inspect the failed request before selecting **Retry**.
 An initialization failure occurs before that request reaches Claude; it does not
 complete the requested work. Vibe64 keeps a bounded, credential-redacted startup

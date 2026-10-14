@@ -94,6 +94,21 @@ test("Genesis project-format inspection identifies a migratable unversioned proj
   });
 });
 
+test("Genesis format gate does not inventory source or interpret Stack guidance", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await mkdir(path.join(projectRoot, "genesis"));
+    await writeFile(path.join(projectRoot, "genesis/version"), "3\n");
+    await writeFile(path.join(projectRoot, "genesis/stack.md"), "invalid Stack guidance");
+    await writeFile(path.join(projectRoot, ".git/index"), "unreadable index");
+    assert.equal((await inspectGenesisProjectFormat({ projectRoot })).status, "current");
+    await writeFile(path.join(projectRoot, "genesis/version"), "999\n");
+    const newer = await inspectGenesisProjectFormat({ projectRoot });
+    assert.equal(newer.status, "newer");
+    assert.equal(newer.action, "update-genesis");
+  });
+});
+
 test("the Genesis boundary reads a shared session checkout without granting unrelated compiler calls trust", {
   skip: process.platform === "win32"
 }, async () => {

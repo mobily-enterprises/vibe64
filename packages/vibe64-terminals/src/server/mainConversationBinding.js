@@ -77,9 +77,9 @@ export async function learningSessionExecutionRoot(runtime, sessionId, { allowCl
   return runtime.learningScope.noExercise === true ? executionRoot : "";
 }
 
-// These are the original application snapshot contracts, not native acquisition.
-// Codex takes a full matching snapshot, OpenCode a bounded matching snapshot, and
-// Claude retains its captured/pinned snapshot. Native reads never move here.
+// Read application context without inspecting source or acquiring a native
+// conversation. Codex/OpenCode require matching snapshots; Claude retains its
+// captured/pinned snapshot.
 export async function readSessionConversationContext(engine, projectService, sessionId, options = {}, codexHost) {
   const id = engine === "codex" ? sessionId : engine === "opencode"
     ? openCodeSessionId(sessionId) : String(sessionId ?? "").trim();
@@ -104,8 +104,7 @@ export async function readSessionConversationContext(engine, projectService, ses
     : await projectService.createRuntime({ inspectSource: false }));
   let session;
   if (codex) {
-    // Full matching snapshot: keep captured inputs before namespace admission.
-    session = codex.session?.sessionId === id ? codex.session : await runtime.getSession(id);
+    session = codex.session?.sessionId === id ? codex.session : await runtime.getSession(id, { inspectSource: false });
   } else if (engine === "opencode") {
     // Bounded matching snapshot: preserve both original options.session reads.
     session = options.session?.sessionId === id ? options.session : await runtime.getSession(id, { inspectSource: false });
