@@ -1,6 +1,8 @@
 import { statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import path from "node:path";
+import { runSourceDevelopment, sourceDevelopmentSelected } from "./development/run.mjs";
 
 const TEST_FILE_PATTERN = /\.test\.(?:c|m)?js$/u;
 
@@ -35,12 +37,20 @@ export function targetedTestArguments(cliArguments) {
   return ["--test-concurrency=1", ...runnerOptions, target];
 }
 
-function run() {
+async function run() {
   const testArguments = targetedTestArguments(process.argv.slice(2));
   const target = testArguments.at(-1);
 
   if (!statSync(target).isFile()) {
     throw new Error(`Targeted test path is not a file: ${target}`);
+  }
+
+  if (sourceDevelopmentSelected()) {
+    process.exitCode = await runSourceDevelopment({
+      publicRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+      command: process.execPath, args: ["--test", ...testArguments]
+    });
+    return;
   }
 
   const result = spawnSync(process.execPath, ["--test", ...testArguments], {
@@ -56,7 +66,7 @@ function run() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    run();
+    await run();
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

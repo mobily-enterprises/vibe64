@@ -748,7 +748,8 @@ Provides browser-side support for editor presentation and exact source navigatio
 
 Owns the shared compact runtime builder, npm artifact preparation, isolated
 installation proof, and the complete development preview with its bundled
-example project. Core owns the numbered persisted-state upgrade runner and its completion ledger. Hosted consumers supply their private runtime requirements and coordinate stopped-service upgrades before activation.
+example project. It also owns development source selection and disposable dependency
+composition shared with hosted consumers; production package pins stay separate. Core owns the numbered persisted-state upgrade runner and its completion ledger. Hosted consumers supply their private runtime requirements and coordinate stopped-service upgrades before activation.
 
 ### Source
 - Directory `tooling`

@@ -11,6 +11,7 @@ function toPositiveInt(value, fallback) {
 }
 
 const devPort = toPositiveInt(process.env.VITE_DEV_PORT, 5173);
+const developmentPackages = JSON.parse(process.env.VIBE64_DEVELOPMENT_LOCAL_PACKAGES || "[]");
 const apiProxyTarget = String(process.env.VITE_API_PROXY_TARGET || "").trim() || "http://localhost:3000";
 const clientEntry = (() => {
   const normalized = String(process.env.VITE_CLIENT_ENTRY || "").trim();
@@ -29,7 +30,7 @@ const clientEntry = (() => {
 export default defineConfig({
   resolve: {
     preserveSymlinks: true,
-    dedupe: ["vue"],
+    dedupe: ["vue", ...(developmentPackages.length ? ["pinia"] : [])],
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url))
     }
@@ -66,9 +67,11 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ["vue", "@vue-flow/core"],
+    exclude: developmentPackages.flatMap((name) => [name, `${name}/client`]),
     entries: [
       "index.html",
-      "src/**/*.{js,ts,vue}"
+      "src/**/*.{js,ts,vue}",
+      ...developmentPackages.map((name) => `node_modules/${name}/{src/client,src/shared,client,shared}/**/*.{js,ts,vue}`)
     ]
   },
   build: {

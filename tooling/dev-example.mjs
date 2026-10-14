@@ -4,6 +4,7 @@ import { cp, lstat, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
+import { runSourceDevelopment, sourceDevelopmentSelected } from "./development/run.mjs";
 
 const appRoot = fileURLToPath(new URL("../", import.meta.url));
 const run = promisify(execFile);
@@ -50,12 +51,20 @@ async function main() {
   const developmentRoot = path.resolve(values["state-dir"] || path.join(appRoot, ".vibe64-local", "development"));
   const projectRoot = path.resolve(values.project || path.join(developmentRoot, "hello-node"));
 
+  if (sourceDevelopmentSelected()) {
+    process.exitCode = await runSourceDevelopment({ publicRoot: appRoot, command: process.execPath,
+      args: ["tooling/dev-example.mjs", "--project", projectRoot, "--state-dir", developmentRoot,
+        "--host", values.host, "--port", values.port], watch: true });
+    return;
+  }
+
   // Load the normal env files once, then give this editor its own runtime.
   // It is a standalone application inside the parent's managed preview process.
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
-  const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT"]);
+  const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
+    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES"]);
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("VIBE64_") && !sharedTools.has(key)) delete process.env[key];
   }

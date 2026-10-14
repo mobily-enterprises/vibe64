@@ -1,5 +1,29 @@
 # Vibe64 Agent Notes
 
+## Standing permission for JSKIT development
+
+The person authorizes coding agents working on Vibe64 to make the JSKIT source,
+documentation and focused test changes necessary to complete an already-authorized
+development task. Do not ask again merely because the fix belongs in JSKIT. This
+supersedes a project-only editing restriction for that dependency work; a later
+explicit human restriction still takes precedence.
+
+Resolve the JSKIT project's current pinned source before editing; do not assume
+the active tab or a remembered session path is the pin. Preserve existing work
+and coordinate overlapping files with the JSKIT owner. Coordination establishes
+who edits and tests; it is not another permission request. Tests run in the owning
+project's session. Send the exact focused command, checkout and changed files
+through the supported project-message mechanism; the owner checks for an existing
+run, runs or queues the check, and replies with its result and log location.
+Do not bypass the execution boundary or describe its refusal as missing human
+consent. These relevant checks do not need another human approval.
+
+Use supported development source composition without changing release pins just
+to consume source edits. Report missing source-composition support as an
+implementation gap. This permission alone does not authorize npm publication,
+deployment, destructive Git operations or unrelated framework work. Existing
+architectural boundaries and test-scope requirements still apply.
+
 ## Ownership Extractions
 
 NO REIMPLEMENTATION FROM SCRATCH. An ownership move starts from the existing

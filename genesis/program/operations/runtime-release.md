@@ -28,6 +28,11 @@ so the same command works without a source checkout in the relocated runtime.
 - `tooling/verify-package-boundaries.mjs`
 - `scripts/npm-release.js`
 - `tests/server/runtimePackage.unit.test.js`
+- `tooling/development/source-roots.mjs`
+- `tooling/development/source-packages.mjs`
+- `tooling/development/compose.mjs`
+- `tooling/development/run.mjs`
+- `tests/server/developmentSourceComposition.unit.test.js`
 - `tooling/dev-example.mjs`
 - `examples/hello-node/server.js`
 - `examples/hello-node/index.html`
@@ -101,6 +106,16 @@ working copy is never overwritten. The child editor uses standalone execution
 inside the enclosing preview process, with its own state, source roots, attachments
 and runtime namespace. It does not inherit the hosting editor's private control
 configuration. Frontend edits use Vite updates; backend edits require a restart.
+
+Development may select JSKIT and Genesis source through `VIBE64_JSKIT_SOURCE_ROOT`
+and `VIBE64_GENESIS_SOURCE_ROOT`. The shared development tools resolve ordinary
+checkouts or current hosted pins, select the dependency closure, and materialize
+one disposable dependency graph. Hosted consumers reuse those same operations.
+The normal installation and release lockfile stay unchanged. Source-aware Preview
+and focused test commands use that graph; missing configured sources fail clearly.
+Preview recomposes after source edits only after its previous process exits. A
+changed pin is resolved on the next launch. Example source and state remain outside
+the disposable app. See `docs/colleague-usage/developing-vibe64.md`.
 
 The repository's default Outputs target runs this complete development preview.
 Its declared Project directory parameter defaults to the persistent example;
