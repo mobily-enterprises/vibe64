@@ -354,23 +354,50 @@ test("failed restoration remains visible until managed recovery succeeds", async
 test("ordinary managed suites restore a stopped Preview and retain an already running Preview", async t => {
   const f = await fixture(t, "ordinary");
   const commands = await browserCommands(f);
-  const normal = await f.controller.ensurePreview(f.sessionId);
+  const parameters = { label: "saved ordinary target" };
+  const normal = await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters });
   await f.waitReady(normal);
-  await commands.execute(["test", "--grep", "ordinary Preview is readable"]);
-  assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.id, normal.id);
-  await f.controller.stopTerminal(f.sessionId, normal.id);
-  for (const name of ["ordinary Preview is readable", "intentional failure"]) {
-    const completion = commands.execute(["test", "--grep", name]);
-    if (name === "intentional failure") await assert.rejects(completion, error => {
-      assert.equal(error.code, 1);
-      assert.match(error.stdout + error.stderr, /1 failed/u);
-      return true;
-    });
-    else await completion;
-    const restored = await f.controller.launchStatus(f.sessionId);
-    assert.equal(restored.activeTerminal, null);
-    assert.equal(restored.preview.state, "stopped");
-    assert.equal(restored.preview.stoppedIntent, true);
+  for (const running of [true, false]) {
+    if (!running) assert.equal((await f.controller.stopTerminal(f.sessionId, normal.id)).ok, true);
+    for (const name of ["ordinary Preview is readable", "intentional failure", "cancelled test"]) {
+      await t.test(`${running ? "running" : "stopped"}: ${name}`, async () => {
+        const marker = path.join(f.sourceRoot, "test-started");
+        await rm(marker, { force: true });
+        const completion = commands.execute(["test", "--grep", name]);
+        if (name === "cancelled test") {
+          const cancellation = completion.then(value => ({ value }), error => ({ error }));
+          for (let attempt = 0; attempt < 160; attempt++) {
+            if (await readFile(marker, "utf8").catch(() => "")) break;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          assert.equal(await readFile(marker, "utf8"), "ready");
+          assert.equal(f.commandService.playwrightStatus(f.sessionId).run.state, "running");
+          process.kill(-completion.child.pid, "SIGINT");
+          assert.ok((await cancellation).error, "interrupted launcher must fail");
+          for (let attempt = 0; attempt < 100 && f.commandService.playwrightStatus(f.sessionId).run; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        } else if (name === "intentional failure") await assert.rejects(completion, error => {
+          assert.equal(error.code, 1);
+          assert.match(error.stdout + error.stderr, /1 failed/u);
+          return true;
+        });
+        else assert.match((await completion).stdout, /1 passed/u);
+        assert.equal(f.commandService.playwrightStatus(f.sessionId).run, null);
+        assert.equal(f.captureExecutionIds.size, 0, "nested managed test commands have drained");
+        const restored = await f.controller.launchStatus(f.sessionId);
+        assert.equal(restored.lastOutputTarget.id, "app");
+        assert.deepEqual(restored.lastOutputTarget.outputParameters, parameters);
+        if (running) {
+          assert.equal(restored.activeTerminal.id, normal.id);
+          assert.deepEqual(restored.activeTerminal.metadata.outputParameters, parameters);
+        } else {
+          assert.equal(restored.activeTerminal, null);
+          assert.equal(restored.preview.state, "stopped");
+          assert.equal(restored.preview.stoppedIntent, true);
+        }
+      });
+    }
   }
   assert.equal(JSON.parse(await readFile(path.join(f.sourceRoot, "working.json"), "utf8")).count, 42);
 });
