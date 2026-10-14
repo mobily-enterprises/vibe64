@@ -166,6 +166,7 @@ process.stdout.write(JSON.stringify({
   const socketRoot = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-test-sockets-"));
   const commandEnv = {
     ...process.env,
+    PLAYWRIGHT_BASE_URL: "", VIBE64_PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: "",
     TMPDIR: socketRoot,
     NPM_CONFIG_PREFIX: path.join(root, "tools"),
     VIBE64_SHARED_CACHE_ROOT: path.join(root, "cache"),
@@ -242,7 +243,8 @@ async function browserCommands(f) {
   const playwrightRoot = path.join(runtimeRoot, "playwright");
   await mkdir(nodeBin, { recursive: true });
   await symlink(process.execPath, path.join(nodeBin, "node"));
-  await symlink(path.join(path.dirname(process.execPath), "npm"), path.join(nodeBin, "npm"));
+  assert.ok(process.env.npm_execpath, "Run this fixture through npm test so its npm entry point is supplied.");
+  await symlink(process.env.npm_execpath, path.join(nodeBin, "npm"));
   await mkdir(path.join(playwrightRoot, "bin"), { recursive: true });
   await mkdir(path.join(playwrightRoot, "runtime/lib/node_modules"), { recursive: true });
   await symlink(path.dirname(require.resolve("playwright/package.json")), path.join(playwrightRoot, "runtime/lib/node_modules/playwright"));
@@ -271,6 +273,11 @@ test('same suite keeps its fixture', async ({request}) => {
   expect(await (await request.get('/test-state')).json()).toEqual({mode:'test-app',count:1,effects:'disabled'});
 });
 test('intentional failure', async () => { expect(1).toBe(2); });
+test('ordinary Preview is readable', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('h1')).toHaveText('app');
+  await expect(page.locator('p')).toHaveText('Count: 42');
+});
 test('test target login', async ({page}) => {
   await page.goto('/test-login');
   await expect(page.locator('body')).toContainText('test_login=test-app-0');
@@ -306,7 +313,11 @@ try {
     execute(args) {
       const child = spawn(prepared.hostPlaywrightWrapperPath, args, {
         cwd: f.sourceRoot, detached: true,
-        env: { ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent" },
+        env: {
+          ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent",
+          // This fixture owns a different Preview and identity from its outer suite.
+          PLAYWRIGHT_BASE_URL: "", VIBE64_PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: ""
+        },
         stdio: ["ignore", "pipe", "pipe"]
       });
       const completion = new Promise((resolve, reject) => {
@@ -338,6 +349,30 @@ test("failed restoration remains visible until managed recovery succeeds", async
   await rm(path.join(f.sourceRoot, "fail-normal-start"));
   assert.equal((await f.controller.retryPreviewTestCleanup(f.sessionId)).ok, true);
   assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
+});
+
+test("ordinary managed suites restore a stopped Preview and retain an already running Preview", async t => {
+  const f = await fixture(t, "ordinary");
+  const commands = await browserCommands(f);
+  const normal = await f.controller.ensurePreview(f.sessionId);
+  await f.waitReady(normal);
+  await commands.execute(["test", "--grep", "ordinary Preview is readable"]);
+  assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.id, normal.id);
+  await f.controller.stopTerminal(f.sessionId, normal.id);
+  for (const name of ["ordinary Preview is readable", "intentional failure"]) {
+    const completion = commands.execute(["test", "--grep", name]);
+    if (name === "intentional failure") await assert.rejects(completion, error => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout + error.stderr, /1 failed/u);
+      return true;
+    });
+    else await completion;
+    const restored = await f.controller.launchStatus(f.sessionId);
+    assert.equal(restored.activeTerminal, null);
+    assert.equal(restored.preview.state, "stopped");
+    assert.equal(restored.preview.stoppedIntent, true);
+  }
+  assert.equal(JSON.parse(await readFile(path.join(f.sourceRoot, "working.json"), "utf8")).count, 42);
 });
 
 test("explicitly stopped Preview stays stopped after test success, failure and cancellation", async t => {

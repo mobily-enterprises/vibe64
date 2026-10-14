@@ -289,7 +289,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         attachments: followup ? [] : state.input.displayAttachments,
         ...(!followup && context.runtime.learningScope && context.runtime.learningTeaching && state.input.data !== undefined
           ? { data: structuredClone(state.input.data) } : {}),
-        turnMetadata: { assistantSelection: selection, assistantRouting: attribution(state, followup),
+        turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantSelection: selection, assistantRouting: attribution(state, followup),
           ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
       });
       state.status = "working"; state.delivery = "accepted";
@@ -352,7 +352,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const result = await dispatch(sessionId, {
       ...(followup ? {} : state.input), messageId, message, displayMessage,
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
-      turnMetadata: { assistantRouting: attribution(state, followup), ...(followup ? { actor: "app", actorLabel: followupLabel } : {}) },
+      turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantRouting: attribution(state, followup), ...(followup ? { actor: "app", actorLabel: followupLabel } : {}) },
       onPromptSending: async ({ threadId }) => {
         if (!followup) await context.onPromptSending?.({ threadId, assistantSelection: selection });
         state.threadId = threadId; state.attemptedMessageId = messageId;
@@ -516,10 +516,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const workflowEngineId = pinnedGoal?.workflowEngineId || preferences.workflowEngineId || selection.engineId;
         state = {
           messageId: input.messageId,
-          input: Object.fromEntries(Object.entries(input).filter(([name]) => [
+          input: { ...Object.fromEntries(Object.entries(input).filter(([name]) => [
             "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
             "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
           ].includes(name) || name === "data" && context.runtime.learningScope && context.runtime.learningTeaching)),
+            ...(input.turnMetadata?.projectMessage ? { turnMetadata: { projectMessage: input.turnMetadata.projectMessage } } : {}) },
           mode,
           resolvedMode,
           ...(explicitDeslop ? { task: "deslop" } : {}),

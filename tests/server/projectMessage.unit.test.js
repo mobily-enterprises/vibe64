@@ -5,11 +5,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { sendProjectMessage } from "../../packages/vibe64-terminals/src/server/projectMessage.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 
-test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", async () => {
+test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "project-message-history-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  await store.createSession({ runtimeKind: "genesis", sessionId: "source" });
+  const published = [];
   const actor = { username: "owner" };
   const input = { sourceProject: "online", sourceSession: "source", projectSlug: "jskit-ai", message: "Review and ping me.", messageId: "receipt", actor };
   let open = true, selection = "selected-1", closing = false, denied = false;
@@ -24,14 +30,16 @@ test("project messages use only the current selected Main session with fresh acc
     },
     projectService: {
       runInProjectContext: async (slug, operation, options) => {
-        assert.equal(slug, "jskit-ai"); assert.equal(options.vibe64User, actor); return operation();
+        assert.ok(["jskit-ai", "online"].includes(slug)); assert.equal(options.vibe64User, actor); return operation();
       },
       readCurrentProject: async () => ({ runtime: { open } }),
-      createRuntime: async () => ({ store: { readCurrentSession: async () => selection ? { sessionId: selection } : null } })
+      createRuntime: async () => ({ store: { readCurrentSession: async () => selection ? { sessionId: selection } : null } }),
+      createSessionStore: async () => store
     },
     assertOpen: () => { if (closing) throw new Error("Project is closing"); },
     prepare: async () => {},
     send: async (...args) => { sent.push(args); return delivery.promise; },
+    publish: async (sessionId, patch) => { assert.equal(sessionId, "source"); published.push(patch); },
     reportFailure: (error, receipt) => failures.push({ error, receipt })
   };
   let timer;
@@ -46,6 +54,11 @@ test("project messages use only the current selected Main session with fresh acc
   assert.match(sent[0][1].message, /^From project online \(session source\)/);
   assert.match(sent[0][1].message, /not new human authorization/);
   assert.equal(sent[0][1].submissionKind, undefined); // Existing owner chooses send or steering.
+  assert.equal(sent[0][1].displayMessage, input.message);
+  assert.equal(sent[0][1].turnMetadata.projectMessage.direction, "received");
+  assert.match(sent[0][1].message, /ask the person once/);
+  assert.equal((await store.readConversationLog("source"))[0].metadata.projectMessage.status, "accepted");
+  assert.equal(published[0].payload.conversationLogPatch.type, "upsert-turn");
   selection = "selected-2";
   await sendProjectMessage({ ...input, messageId: "new-receipt" }, dependencies);
   assert.equal(sent[1][0], "selected-2");
@@ -63,7 +76,15 @@ test("project messages use only the current selected Main session with fresh acc
   await assert.rejects(sendProjectMessage(input, dependencies), /Assistant unavailable/);
   assert.equal(sent.length, 2);
   delivery.resolve({ ok: true, delivered: true });
-  await new Promise(setImmediate);
+  async function waitForStatus(status, count) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const turns = await store.readConversationLog("source");
+      if (turns.filter(turn => turn.metadata?.projectMessage?.status === status).length === count) return turns;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.fail(`Sender history did not reach ${status}`);
+  }
+  await waitForStatus("delivered", 2);
   assert.equal(failures.length, 0);
   dependencies.prepare = async () => {};
   const failed = Promise.withResolvers();
@@ -75,6 +96,16 @@ test("project messages use only the current selected Main session with fresh acc
   assert.equal(reported.error.message, "Native start failed later");
   assert.equal(reported.receipt.sessionId, "selected-3");
   assert.equal(reported.receipt.messageId, input.messageId);
+  await waitForStatus("failed", 1);
+  dependencies.send = async () => ({ ok: true });
+  await sendProjectMessage({ ...input, messageId: "queued" }, dependencies);
+  const turns = await waitForStatus("accepted", 1);
+  assert.equal(turns.length, 4, "Receipt updates reuse their original turn");
+  selection = "selected-1";
+  dependencies.send = async () => ({ ok: true, delivered: true, duplicate: true });
+  await sendProjectMessage(input, dependencies);
+  assert.equal((await store.readConversationLog("source")).length, 4, "Retries do not duplicate sender history");
+  await assert.rejects(sendProjectMessage({ ...input, message: "Changed text" }, dependencies), /different text/);
 });
 
 test("the installed helper sends through its bound socket and supplies server-owned origin", async (t) => {

@@ -41,6 +41,20 @@ The shared terminal surface lets people exit and re-enter mobile full screen
 without stopping the output. This restores the underlying page navigation;
 Close, Stop and collapsible task details retain their own existing behavior.
 
+Managed test setup and suite executions declare Node, Playwright and Git so
+repository fixtures use the managed Git pack. Browser workers establish the
+current proxy cookie before exposing a token-free `preview.url` for navigation;
+diagnostic redaction placeholders never become navigation credentials. A saved
+page route cannot override the current launch's token during URL composition.
+Preview Stop drains browser processes while retaining the live assistant's
+command registration; session closure retires that registration. A subsequent
+managed test can therefore run from the same assistant after Stop.
+Ordinary managed suites enter the existing `withPreviewTarget` transaction before
+startup and identity preparation. With no explicit target, that owner selects
+the current or saved/default Preview using its ordinary launch plan. It restores
+the prior state through the same drain, cancellation and recovery path as explicit
+test targets. External URLs do not acquire this managed Preview transaction.
+
 ## Sources
 
 - `src/lib/studioUrls.js`

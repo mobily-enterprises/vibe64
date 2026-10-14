@@ -226,6 +226,7 @@ function childEnv(runtime = {}, preview = {}, authentication = null) {
     PATH: [path.dirname(runtime.cliPath), process.env.PATH || ""].filter(Boolean).join(":"),
     PLAYWRIGHT_BASE_URL: preview.baseUrl || "",
     VIBE64_PLAYWRIGHT_OUTPUT_TARGET: "",
+    VIBE64_PLAYWRIGHT_RESTORE_PREVIEW: "",
     VIBE64_PLAYWRIGHT_TARGET_IDENTITY: "",
     PLAYWRIGHT_BROWSERS_PATH: runtime.browsersPath,
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
@@ -278,11 +279,15 @@ function managedExecution(runtime = {}, applicationRoot = "", {
   identityExplicit = false,
   targetId = ""
 } = {}) {
-  if (targetId) {
+  // The daemon must capture the prior Preview state before startup or login.
+  // The inner scoped wrapper only reads the Preview already owned by that run.
+  if (targetId || (!String(process.env.PLAYWRIGHT_BASE_URL || "").trim() && !process.env.VIBE64_PLAYWRIGHT_TARGET_RUN)) {
     return {
       env: {
         ...childEnv(runtime),
         VIBE64_PLAYWRIGHT_OUTPUT_TARGET: targetId,
+        VIBE64_PLAYWRIGHT_RESTORE_PREVIEW: "1",
+        VIBE64_PLAYWRIGHT_STORAGE_STATE: "",
         VIBE64_PLAYWRIGHT_TARGET_IDENTITY: identityExplicit ? identity : ""
       }
     };

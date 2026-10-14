@@ -1145,6 +1145,7 @@ function createService({
   const agentSessionCommand = createAgentSessionCommandService({
     sendProjectMessage: input => sendProjectMessage(input, {
       projectService,
+      publish: publishAgentSessionChanged,
       authorize: (actor, slug) => assistantRuntime.authorizeProjectMessage(actor, slug),
       assertOpen: () => projectServices.assertOpen(projectRuntimeContext()),
       prepare: async (sessionId, options) => {

@@ -879,6 +879,9 @@ test("agent preview status exposes the managed endpoint, current page, and serve
     inspectionResult.stdout,
     "https://v64preview-example.test/orders/42?tab=history&vibe64_preview_token=preview-secret\n"
   );
+  observedRoute = "/orders/42?tab=history&vibe64_preview_token=expired-token";
+  const refreshedInspection = await command.run({ args: ["inspect-url"], sessionId });
+  assert.equal(refreshedInspection.stdout, inspectionResult.stdout);
 
   const logsResult = await command.run({
     args: ["logs", "--lines", "2", "--json"],
@@ -1397,6 +1400,13 @@ exports.request = playwright.request;
       wrapperHostDir: path.join(root, "commands")
     });
     const env = { ...process.env, ...prepared.env };
+    const navigationBack = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env,
+      input: `await page.goto(preview.url);
+return { text: await page.locator("body").innerText(), url: preview.url };`
+    })).stdout);
+    assert.equal(navigationBack.result.text, "Sign in");
+    assert.equal(new URL(navigationBack.result.url).searchParams.has("vibe64_preview_token"), false);
     await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
       env,
       input: `await page.evaluate(() => sessionStorage.setItem("retained", "same browser"));

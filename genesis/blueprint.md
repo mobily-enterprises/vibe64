@@ -6,6 +6,12 @@ Local Preview preserves the editor's loopback hostname through application login
 and live connections.
 The coding agent’s managed browser retains its page and login between tool
 commands, until its session, Preview or browser lifecycle ends.
+Managed browser navigation uses the current launch access without exposing its
+token, and managed browser-test setup includes Git for repository fixtures.
+Managed test suites restore Preview's prior running or stopped state.
+Cross-project agent coordination appears in chat with visible sent receipts and
+distinct incoming/outgoing cards. Agents coordinate within existing authorization
+and bring new permission decisions to the person without circular requests.
 
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.

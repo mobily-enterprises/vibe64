@@ -39,7 +39,8 @@
       </span>
     </template>
     <template #system-message="{ message }">
-      <Vibe64ConversationStatus :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
+      <Vibe64ProjectMessage v-if="message.projectMessage" :details="message.projectMessage" :at="message.displayAt" />
+      <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
     </template>
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
@@ -143,6 +144,7 @@ import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceCon
 import { createProjectVoiceBinding, useVibe64Voice } from "@local/vibe64-voice/client";
 import { mdiMicrophone, mdiMicrophoneOff, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
+import Vibe64ProjectMessage from "./Vibe64ProjectMessage.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
@@ -460,6 +462,10 @@ const adapter = computed(() => ({
         ...turn,
         assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}`,
         ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${vibe64AssistantSelectionLabel(selection)}` } } : {}),
+        ...(turn.metadata?.projectMessage ? {
+          user: null,
+          system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
+        } : {}),
         assistantDetails: selection
           ? `${vibe64AssistantSelectionLabel(selection)}\nProvider: ${selection.modelProviderId}`
           : undefined,
@@ -493,6 +499,10 @@ const adapter = computed(() => ({
 </script>
 
 <style scoped>
+:deep(.assistant-transcript__system:has(.vibe64-project-message) > .assistant-transcript__system-icon),
+:deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-meta) { display: none; }
+:deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-body) { width: 100%; }
+:deep(.assistant-transcript__system:has(.vibe64-project-message)) { display: block; width: 100%; max-width: none; padding: 0; }
 .vibe64-main-conversation__voice-tools { display: flex; align-items: center; gap: 0; }
 .vibe64-main-conversation__voice-disc { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(var(--v-theme-primary), .12); }
 .vibe64-main-conversation__voice-tools--opening :deep(.assistant-voice-controls__tools) { display: none; }

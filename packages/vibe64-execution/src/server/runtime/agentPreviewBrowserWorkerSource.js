@@ -679,12 +679,16 @@ async function evaluateCode(input = {}) {
     "console",
     '"use strict";\\n' + code
   );
+  // ensureBrowser established the proxy cookie. A redaction placeholder is not
+  // a credential: putting it in a navigation URL overrides that valid cookie.
+  const navigationUrl = new URL(input.previewUrl);
+  navigationUrl.searchParams.delete("vibe64_preview_token");
   const result = await execute(
     browser,
     context,
     page,
     state,
-    Object.freeze({ url: safeUrl(input.previewUrl) }),
+    Object.freeze({ url: navigationUrl.href }),
     outputPathFromInput(input),
     consoleProxy
   );

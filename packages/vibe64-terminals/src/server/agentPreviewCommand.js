@@ -249,7 +249,8 @@ function normalizeTimeoutMs(value = "") {
 }
 
 function previewReady(status = {}) {
-  return status?.preview?.stoppedIntent !== true && status?.previewTarget?.available !== false &&
+  const testOwnsPreview = ["starting", "running", "restoring"].includes(status?.previewTestRun?.state);
+  return (status?.preview?.stoppedIntent !== true || testOwnsPreview) && status?.previewTarget?.available !== false &&
     Boolean(normalizeText(status?.previewTarget?.href));
 }
 
@@ -298,7 +299,9 @@ function previewPageUrl(baseUrl = "", route = "", {
     }
     if (inheritBaseSearch) {
       for (const [name, value] of base.searchParams) {
-        if (!page.searchParams.has(name)) {
+        if (name === "vibe64_preview_token") {
+          page.searchParams.set(name, value);
+        } else if (!page.searchParams.has(name)) {
           page.searchParams.append(name, value);
         }
       }
@@ -818,17 +821,17 @@ function createAgentPreviewCommandService({
     const sessionWorkers = browserWorkers.get(normalizeText(sessionId));
     if (!sessionWorkers) return { ok: true, closed: 0 };
     let closed = 0;
-    for (const [socketPath, descriptor] of sessionWorkers) {
+    for (const descriptor of sessionWorkers.values()) {
       const result = await stopRegisteredBrowserWorker(descriptor, {
         reason: "preview-stop",
         stopExecution: stopManagedExecution,
         stopOwnedExecutions
       });
       if (result?.ok === false) return result;
-      sessionWorkers.delete(socketPath);
       closed += 1;
     }
-    if (sessionWorkers.size === 0) browserWorkers.delete(normalizeText(sessionId));
+    // Preview owns browser processes, not the assistant's command registration.
+    // Keep it usable for the next launch; session closure retires it separately.
     return { ok: true, closed };
   }
 
@@ -1560,12 +1563,13 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
 
   const requestedEnv = isRecord(input.playwrightEnv) ? input.playwrightEnv : {};
   const targetId = normalizeText(input.targetId);
+  const scopedPreview = Boolean(targetId || input.restorePreview === true);
   if (targetId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId)) {
     return responseError("Choose an exact declared Preview target id.", "vibe64_preview_target_invalid");
   }
   let baseUrl = "";
   try {
-    if (!targetId) {
+    if (!scopedPreview) {
       const parsed = new URL(normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL));
       if (!["http:", "https:"].includes(parsed.protocol)) {
         throw new Error("Unsupported preview protocol.");
@@ -1632,13 +1636,13 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     signal,
     project: descriptor.project,
     purpose: "preview",
-    runtimes: ["node26", "playwright"],
+    runtimes: ["node26", "playwright", "git"],
     session: {
       sessionId: descriptor.sessionId
     },
     timeout: DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS
   };
-  if (!targetId) return runCommand(request);
+  if (!scopedPreview) return runCommand(request);
   if (requestedEnv.PLAYWRIGHT_BASE_URL || storageStatePath) {
     return responseError("--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.", "vibe64_preview_target_conflict");
   }

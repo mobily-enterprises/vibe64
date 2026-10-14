@@ -18,6 +18,14 @@ const request = { messageId: "request-1", message: "Yes, implement it.", submiss
 
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
 
+test("project message attribution survives routing into native delivery", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  const projectMessage = { sourceProject: "online", sourceSession: "source", direction: "received", body: "Check the fixture." };
+  await f.service.send("session-1", { ...request, turnMetadata: { projectMessage } }, f.context);
+  assert.deepEqual(f.state().input.turnMetadata.projectMessage, projectMessage);
+  assert.deepEqual(f.sends[0].input.turnMetadata.projectMessage, projectMessage);
+});
+
 function sharedOpenCode(f, modelProviderId = "opencode", modelId = "big-pickle") {
   const catalog = { ...structuredClone(f.catalog), engineId: "opencode", transportId: "opencode_server", label: "OpenCode",
     agents: [{ id: "build", mode: "primary" }], defaults: { agentId: "build", modelProviderId, modelId, variantId: "" },

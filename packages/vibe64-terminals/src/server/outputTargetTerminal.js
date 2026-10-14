@@ -2437,14 +2437,19 @@ function createOutputTargetTerminalController({
         const unavailable = launchAdmissionFailure(sessionId, context.session);
         if (unavailable) throw Object.assign(new Error(unavailable.error), unavailable);
         const targets = await listOutputTargets(context);
-        const targetError = previewTargetError(findOutputTarget(targets, outputTargetId), outputTargetId);
-        if (targetError) {
-          throw targetError;
-        }
         const status = await resolveLaunchPreviewStatus({
           context, launchPreviewProxies, outputTargets: targets, markReady: markLaunchReady,
           options: { env, projectService, runCommand }, publishSessionChanged, sessionId
         });
+        if (!outputTargetId) {
+          const plan = managedPreviewLaunchPlan({ outputTargets: targets, previewStatus: status,
+            savedOutputTarget: outputTargetFromMetadata(context.session.metadata) });
+          if (plan.error) throw Object.assign(new Error(plan.error), { code: plan.code });
+          outputTargetId = plan.outputTargetId || plan.terminal?.metadata?.outputTargetId;
+          testRun.targetId = outputTargetId;
+        }
+        const targetError = previewTargetError(findOutputTarget(targets, outputTargetId), outputTargetId);
+        if (targetError) throw targetError;
         previewTestRuns.set(sessionId, testRun);
         return {
           running: launchTerminalIsRunning(status.activeTerminal || {}),

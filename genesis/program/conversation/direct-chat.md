@@ -3966,8 +3966,20 @@ closed/closing project, absent selected session or unavailable assistant fails
 before delivery. Incoming text visibly names its origin and explicitly retains
 existing human approval requirements. A successful receipt immediately identifies the
 accepted session and message; it proves neither native delivery nor completion.
-The sender does not wait for native start or a reply. Later failures use the
-workspace operational log with correlated source/destination/message identities.
+The sender does not wait for native start or a reply. Its Main transcript records
+an accepted system receipt before dispatch, updating that same message on confirmed
+delivery or failure. Existing conversation storage, locks and realtime patches own
+these writes; a stable destination/session/message identity avoids duplicate
+receipts. Receipt text cannot change when an ID is reused. New turn metadata carries
+project-message presentation on both sides through ordinary routing and delivery.
+The shared editor's system-message slot renders received cards on the left and
+sent cards on the right, with project/session links, a distinct theme surface,
+timestamps and delivery state. Native input roles and authorization stay with
+the existing delivery owner. No historical rewrite or separate inbox is added.
+Later failures also use the workspace operational log with correlated identities.
+Agent guidance permits development/release coordination inside existing permission,
+asks the person once for a new permission, reports the blocker once and ends that
+exchange until a decision. It discourages polling and acknowledgement-only replies.
 The in-process dispatch does not add durable restart recovery. A reply invokes the
 same command against the source project and resolves its selection at that time.
 

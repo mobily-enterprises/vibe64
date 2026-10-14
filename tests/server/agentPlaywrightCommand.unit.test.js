@@ -100,7 +100,7 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
     "  const result = spawnSync(command, args.slice(2), { cwd: process.cwd(), env: process.env, stdio: \"inherit\" });",
     "  process.exit(Number.isInteger(result.status) ? result.status : 1);",
     "}",
-    "if (args[0] === \"ensure\") {",
+    "if ([\"ensure\", \"status\"].includes(args[0])) {",
     "  process.stdout.write(JSON.stringify({",
     "    diagnostics: { directApplicationEndpoint: { url: previewUrl } },",
     "    identityTypes: [\"email\"],",
@@ -171,7 +171,12 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     resourceProvider,
     publishSessionChanged,
     launchTarget: {
-      withPreviewTarget,
+      withPreviewTarget: withPreviewTarget || async function (_sessionId, _targetId, operation, { waitUntilReady }) {
+        const started = await this.ensurePreview();
+        if (started.ok === false) throw new Error(started.error);
+        await waitUntilReady(started);
+        return operation("fixture-target-run");
+      },
       previewTestRunAdmission() { return null; },
       async ensurePreview() {
         onEnsurePreview?.();
@@ -294,7 +299,21 @@ test("browser task-denial diagnostics survive the real wrappers and target resto
       return true;
     });
   }
-  assert.equal(restored, 1, "Resource failure still restores the original Preview.");
+  assert.equal(restored, 2, "Both default and explicit targets restore the original Preview after resource failure.");
+});
+
+test("Preview Stop preserves the assistant registration for the next managed test", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-stop-registration-"));
+  const fixture = await prepareFixture(root, "1.61.1");
+  t.after(async () => {
+    await fixture.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, { recursive: true, force: true });
+  });
+  const options = { cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env } };
+  await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], options);
+  assert.equal((await fixture.commandService.stopBrowsersForSession("playwright-1.61.1")).ok, true);
+  const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], options);
+  assert.equal(JSON.parse(result.stdout).managed, "1");
 });
 
 test("managed Playwright target selection crosses the real wrapper/socket boundary before test preparation", async (t) => {
@@ -334,6 +353,10 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
   assert.equal(fixture.managedCommands[0].command, fixture.managedCommands[1].command);
   assert.equal(fixture.managedCommands[0].args[0], fixture.prepared.hostPlaywrightWrapperPath);
   assert.equal(fixture.managedCommands[1].env.PLAYWRIGHT_BASE_URL, "http://127.0.0.1:4104");
+  for (const request of fixture.managedCommands) {
+    assert.deepEqual(request.runtimes, ["node26", "playwright", "git"],
+      "Both test setup and the suite need Git for repository fixtures");
+  }
 
   for (const args of [
     ["--target", "test-app", "--target", "app", "test"],
@@ -589,12 +612,14 @@ test("managed Playwright test command uses the exact versioned browser runtime w
     assert.deepEqual(npmRun.args, ["run", "e2e", "--", "--grep", "settings"]);
     assert.equal(npmRun.baseUrl, "http://127.0.0.1:4104");
 
-    assert.equal(fixture.managedCommands.length, 2);
-    for (const request of fixture.managedCommands) {
+    assert.equal(fixture.managedCommands.filter(request => request.execution.kind === "control").length, 2);
+    const browserRequests = fixture.managedCommands.filter(request => request.execution.kind === "browser");
+    assert.equal(browserRequests.length, 2);
+    for (const request of browserRequests) {
       assert.equal(request.execution.kind, "browser");
       assert.equal(request.execution.label, "Browser testing");
       assert.equal(request.execution.lifecycle, "finite");
-      assert.equal(request.execution.parentExecutionId, "assistant-execution");
+      assert.equal(request.execution.parentExecutionId, "fixture-child-execution");
       assert.equal(request.execution.projectSlug, "example");
       assert.equal(request.execution.sessionId, "playwright-1.61.1");
       assert.equal(request.timeout, 30 * 60 * 1000);
@@ -657,7 +682,8 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
-          ...fixture.prepared.env
+          ...fixture.prepared.env,
+          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
         }
       }
     )).stdout);
@@ -675,7 +701,8 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
-          ...fixture.prepared.env
+          ...fixture.prepared.env,
+          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
         }
       }
     )).stdout);
@@ -692,7 +719,8 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
-          ...fixture.prepared.env
+          ...fixture.prepared.env,
+          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
         }
       }
     )).stdout);
@@ -726,8 +754,9 @@ test("managed Playwright test command reports a managed-preview blocker before s
           ...fixture.prepared.env
         }
       }),
-      /could not prepare the managed preview.+Project tests were not started.+managed preview did not become ready/isu
+      /managed preview did not become ready/isu
     );
+    assert.equal(fixture.managedCommands.length, 0, "Unready Preview never runs a test");
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {
@@ -743,7 +772,7 @@ test("managed Playwright preserves browser startup diagnostics without claiming 
   try {
     fixture = await prepareFixture(root, "1.61.1");
     await writeExecutable(fixture.prepared.hostWrapperPath, `#!/usr/bin/env node
-if (process.argv[2] === "ensure") {
+if (["ensure", "status"].includes(process.argv[2])) {
   console.log(JSON.stringify({
     ready: true,
     diagnostics: { directApplicationEndpoint: { url: "http://127.0.0.1:4104/home" } },
@@ -756,7 +785,7 @@ if (process.argv[2] === "ensure") {
 `);
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: { ...process.env, ...fixture.prepared.env }
+      env: { ...process.env, ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" }
     }), (error) => {
       assert.match(error.stderr, /could not prepare the managed browser and application identity/iu);
       assert.match(error.stderr, /unverified listener/iu);

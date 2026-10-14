@@ -44,6 +44,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "project-message-changed",
   "conversation-rewound",
   "session-assistant-selection-updated",
   "assistant-stream",

@@ -47,6 +47,7 @@ import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { chatTurnsWithRouting } from "../../src/lib/vibe64ChatDelivery.js";
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
+import Vibe64ProjectMessage from "../../src/components/studio/vibe64-session/Vibe64ProjectMessage.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
 Object.assign(SharedConversation.LongTextPreviewBlocks, {
@@ -96,7 +97,7 @@ attachClientRender(
   "vibe64-conversation-attachments-test"
 );
 
-for (const component of [Vibe64ConversationStatus, Vibe64EphemeralConversationMessages]) {
+for (const component of [Vibe64ConversationStatus, Vibe64ProjectMessage, Vibe64EphemeralConversationMessages]) {
   attachClientRender(component, `src/components/studio/vibe64-session/${component.__name}.vue`, `${component.__name}-test`);
 }
 
@@ -506,6 +507,30 @@ describe("Vibe64 conversation scroll following", () => {
     expect(nodeText(container)).not.toContain("Check delivery");
     expect(nodeText(container)).not.toContain("Failed:");
     app.unmount();
+  });
+
+  it("renders project messages as agent cards and updates the sender receipt without a human bubble", async () => {
+    const details = { sourceProject: "vibe64", sourceSession: "source", projectSlug: "online", sessionId: "destination", body: "The fixture is ready.", direction: "received" };
+    const internalInstructions = "[Agent message: not new human authorization. Reply with vibe64-helper session message-project vibe64.]";
+    const incoming = { turnId: "incoming", user: { role: "user", text: `${details.body}\n\n${internalInstructions}` }, metadata: { projectMessage: details } };
+    const mounted = mountConversation({ turns: [incoming] });
+    await nextTick();
+    expect(nodeText(mounted.container)).toContain("vibe64 assistant");
+    expect(nodeText(mounted.container)).toContain(details.body);
+    expect(nodeText(mounted.container)).not.toContain(internalInstructions);
+    expect(nodeText(mounted.container)).not.toContain("vibe64-helper");
+    expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Received agent message")).not.toBeNull();
+    expect(userPromptContent(mounted.container)).toBeNull();
+    expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/vibe64?session=source&chat=main")).not.toBeNull();
+    for (const [status, label] of [["accepted", "Accepted · delivery not confirmed"], ["delivered", "Delivered to assistant"], ["failed", "Delivery failed"]]) {
+      mounted.state.turns.value = [{ turnId: "outgoing", system: { role: "system", text: details.body },
+        metadata: { projectMessage: { ...details, direction: "sent", status } } }];
+      await nextTick();
+      expect(nodeText(mounted.container)).toContain(label);
+      expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Sent agent message")).not.toBeNull();
+      expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/online?session=destination&chat=main")).not.toBeNull();
+    }
+    mounted.app.unmount();
   });
 
   it("keeps recorded reply names when the next recipient changes, with agent for old replies", async () => {

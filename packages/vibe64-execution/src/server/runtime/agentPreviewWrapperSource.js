@@ -425,6 +425,7 @@ try {
       managedNodePath,
       parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
       targetId: String(process.env.VIBE64_PLAYWRIGHT_OUTPUT_TARGET || "").trim(),
+      restorePreview: process.env.VIBE64_PLAYWRIGHT_RESTORE_PREVIEW === "1",
       testRunToken: String(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN || "").trim(),
       identity: String(process.env.VIBE64_PLAYWRIGHT_TARGET_IDENTITY || "").trim(),
       playwrightEnv: Object.fromEntries([
