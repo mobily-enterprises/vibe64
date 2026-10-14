@@ -3,6 +3,14 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+All three native engines use JSKIT's common delivery timing observer, separating
+preparation, provider readiness, dispatch, native acknowledgement, saved receipt,
+accepted delivery and first response. The application additionally records write
+lock wait and complete Send duration. Records contain identities and timings,
+not prompts, output or credentials. Slow accepted sends and first responses are
+visible at the normal warning log level; faster milestones use information level.
+Observer results are not awaited and errors cannot fail native delivery.
+
 Before dispatching an idle turn, Codex, Claude and OpenCode share the same
 application-owned skill and integration preparation. The format gate uses
 Genesis's narrow `inspectProjectFormat` operation through `inspectGenesisProjectFormat`,

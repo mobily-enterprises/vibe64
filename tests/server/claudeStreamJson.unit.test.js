@@ -1850,7 +1850,14 @@ createInterface({ input: process.stdin }).on('line', async line => {
 `, { mode: 0o700 });
   const publications = [];
   const streamed = Promise.withResolvers();
+  const deliveryDiagnostics = [];
+  const firstResponseTiming = Promise.withResolvers();
+  const recordDeliveryDiagnostic = record => {
+    deliveryDiagnostics.push(record);
+    if (record.event === "vibe64.agent_message.delivery_timing" && record.stage === "first-response") firstResponseTiming.resolve();
+  };
   service = createTerminalService({ projectService,
+    logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
     env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command,
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
     codexTerminalController: { codexToolHomeRequired: false,
@@ -1898,6 +1905,15 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(sent.delivered, true);
     assert.equal(sent.thread.id, state.thread.id);
     await streamed.promise;
+    await firstResponseTiming.promise;
+    const timingStages = deliveryDiagnostics.filter(event => event.event === "vibe64.agent_message.delivery_timing" &&
+      event.messageId === request.messageId).map(event => event.stage);
+    assert.deepEqual(timingStages.slice(0, 8), ["received", "preparation-started", "provider-started", "runtime-ready",
+      "dispatch-started", "native-acknowledged", "receipt-persisted", "accepted"]);
+    assert.equal(timingStages.filter(stage => stage === "first-response").length, 1);
+    assert.ok(deliveryDiagnostics.some(event => event.event === "vibe64.agent_message.lock_acquired" && event.messageId === request.messageId));
+    assert.ok(deliveryDiagnostics.some(event => event.event === "vibe64.agent_message.delivery_finished" && event.delivered));
+    assert.equal(JSON.stringify(deliveryDiagnostics.filter(event => event.event?.startsWith("vibe64.agent_message."))).includes('"Work"'), false);
     assert.ok(publications.some(event => event.reason === "claude-stream-message-delivered"));
     assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, true);
     assert.equal((await service.sendAgentMessage("test", request, options)).duplicate, true);

@@ -1210,6 +1210,15 @@ function createService({
   }
   const mainConversations = createConversationRuntime({
     engine: "codex",
+    onDeliveryTiming(event) {
+      const slow = event.elapsedMs >= 1000 && ["accepted", "first-response"].includes(event.stage);
+      logOperationalEvent(logger, slow || event.stage === "failed" ? "warn" : "info", {
+        event: "vibe64.agent_message.delivery_timing", component: "vibe64.agent_message",
+        sessionId: event.conversationId, engineId: event.engine, messageId: event.messageId,
+        stage: event.stage, previousStage: event.previousStage,
+        durationMs: event.durationMs, elapsedMs: event.elapsedMs, timings: event.timings
+      }, "Assistant delivery timing.");
+    },
     ...(mainToolCatalog ? { toolCatalog: mainToolCatalog } : {}),
     async authorize({ context, conversationId }) {
       if (context?.sessionId !== conversationId) return false;
@@ -1451,10 +1460,18 @@ function createService({
     const runtime = options.runtime || await projectService.createRuntime({
       inspectSource: false
     });
+    const lockStartedAt = performance.now();
     const exclusive = await runVibe64AgentWriteExclusive(
       runtime,
       sessionId,
       async () => {
+        if (options.deliveryMessageId) {
+          const durationMs = performance.now() - lockStartedAt;
+          logOperationalEvent(logger, durationMs >= 1000 ? "warn" : "info", {
+            event: "vibe64.agent_message.lock_acquired", component: "vibe64.agent_message",
+            sessionId, messageId: options.deliveryMessageId, operation: lockOptions.operation, durationMs
+          }, "Assistant message acquired its application write lock.");
+        }
         const session = typeof runtime.getSession === "function"
           ? await runtime.getSession(sessionId, {
               inspectSource: false
@@ -3814,7 +3831,12 @@ function createService({
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       assertProjectEffectAdmission();
       const startedAt = Date.now();
+      const deliveryStartedAt = performance.now();
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
+      logOperationalEvent(logger, "info", {
+        event: "vibe64.agent_message.received", component: "vibe64.agent_message",
+        sessionId, messageId: input.messageId
+      }, "Assistant message received.");
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
         logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
           "Prompt suggestion cleanup will be retried on session close.");
@@ -3837,7 +3859,13 @@ function createService({
             throw error;
           }
         }
-        const result = await assistantRouting.send(sessionId, request, options);
+        const result = await assistantRouting.send(sessionId, request, { ...options, deliveryMessageId: input.messageId });
+        const deliveryDurationMs = performance.now() - deliveryStartedAt;
+        logOperationalEvent(logger, deliveryDurationMs >= 1000 ? "warn" : "info", {
+          event: "vibe64.agent_message.delivery_finished", component: "vibe64.agent_message",
+          sessionId, messageId: input.messageId, durationMs: deliveryDurationMs,
+          delivered: result?.delivered === true, duplicate: result?.duplicate === true
+        }, "Assistant message delivery finished.");
         if (result?.ok === true && !result.duplicate && !options.purpose && !input.reviewAction && !closing) {
           try {
             sessionNaming.start(await assistantSessionOptions(sessionId, options), input.messageId);

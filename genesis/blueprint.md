@@ -16,6 +16,9 @@ current account, workspace and delivery checks remain required.
 Codex, Claude and OpenCode share a lightweight project-format check before
 refreshing their project guidance, avoiding a full application inventory merely
 to determine compatibility.
+Operators can investigate slow assistant delivery through content-free timings
+shared across these engines, distinguishing preparation, native acknowledgement,
+receipt storage and the first response.
 
 The approved learning direction gives the existing left-hand session agent the
 teacher role. Colleague remains the general supervisor for application assistance
