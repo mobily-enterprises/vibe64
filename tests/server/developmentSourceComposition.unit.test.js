@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { composePublicDevelopment } from "../../tooling/development/compose.mjs";
 
@@ -87,4 +88,43 @@ test("hosted source development follows the pin on each composition and fails cl
     if (number === 1) await symlink(path.dirname(second), pin);
   }
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "missing"), env }), /Pin a valid jskit-monorepo session/u);
+});
+
+test("source watching ignores dependency writes and drains the old app before restarting with changed source", { timeout: 30_000 }, async (t) => {
+  const f = await fixture(t);
+  const source = await f.source("one", "first");
+  const events = path.join(f.root, "events");
+  await writeFile(events, "");
+  await file(f.publicRoot, "server.js", `
+import { appendFileSync } from 'node:fs';
+import { value } from '@jskit-ai/kernel';
+const record = (event) => appendFileSync(${JSON.stringify(events)}, event + '\\n');
+record('start:' + value);
+process.on('SIGTERM', () => setTimeout(() => { record('stopped:' + value); process.exit(0); }, 200));
+if (value === 'second') setTimeout(() => process.exit(0), 100);
+else setInterval(() => {}, 1000);
+`);
+  const runner = new URL("../../tooling/development/run.mjs", import.meta.url).href;
+  const running = exec(process.execPath, ["--input-type=module", "-e", `
+import { runSourceDevelopment } from ${JSON.stringify(runner)};
+process.exitCode = await runSourceDevelopment({
+  publicRoot: ${JSON.stringify(f.publicRoot)}, command: process.execPath,
+  args: ['server.js'], watch: true,
+  env: { ...process.env, VIBE64_JSKIT_SOURCE_ROOT: ${JSON.stringify(source)}, VIBE64_GENESIS_SOURCE_ROOT: '' }
+});
+`], { timeout: 20_000 });
+  running.catch(() => {});
+  t.after(async () => { running.child.kill("SIGTERM"); await running.catch(() => {}); });
+  const deadline = Date.now() + 10_000;
+  while (!(await readFile(events, "utf8")).includes("start:first")) {
+    assert.ok(Date.now() < deadline, "development app did not start");
+    await delay(50);
+  }
+  await file(f.publicRoot, "node_modules/shared-state/index.js", "export const state = {}; // dependency write\n");
+  await delay(800);
+  assert.equal(await readFile(events, "utf8"), "start:first\n");
+  const kernel = path.join(source, "packages/kernel/index.js");
+  await writeFile(kernel, (await readFile(kernel, "utf8")).replace('"first"', '"second"'));
+  await running;
+  assert.equal(await readFile(events, "utf8"), "start:first\nstopped:first\nstart:second\n");
 });

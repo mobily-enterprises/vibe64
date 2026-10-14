@@ -115,7 +115,8 @@ The normal installation and release lockfile stay unchanged. Source-aware Previe
 and focused test commands use that graph; missing configured sources fail clearly.
 Preview recomposes after source edits only after its previous process exits. A
 changed pin is resolved on the next launch. Example source and state remain outside
-the disposable app. See `docs/colleague-usage/developing-vibe64.md`.
+the disposable app. Watch subscriptions exclude dependency directories and generated
+state, and close before recomposition. See `docs/colleague-usage/developing-vibe64.md`.
 
 The repository's default Outputs target runs this complete development preview.
 Its declared Project directory parameter defaults to the persistent example;

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { watch as watchFiles } from "node:fs";
+import { watch as watchFiles } from "chokidar";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { composePublicDevelopment } from "./compose.mjs";
@@ -19,14 +19,14 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
   let restart = false;
   let debounce;
   let stopTimer;
-  const watchers = [];
+  let watcher;
+  let watcherError;
   const stop = () => {
     stopping = true;
     child?.kill("SIGTERM");
   };
-  const changed = (_event, file) => {
-    if (stopping || !file || String(file).split(path.sep).some((part) =>
-      ["node_modules", ".git", ".genesis", ".vibe64-local", "coverage", "test-results"].includes(part))) return;
+  const changed = () => {
+    if (stopping) return;
     clearTimeout(debounce);
     debounce = setTimeout(() => {
       restart = true;
@@ -44,12 +44,25 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
   process.once("SIGTERM", stop);
   try {
     do {
+      clearTimeout(debounce);
+      await watcher?.close();
       restart = false;
       await rm(appRoot, { recursive: true, force: true });
       const composition = await composePublicDevelopment({ publicRoot, appRoot, env, includeTests: !watch });
-      for (const watcher of watchers.splice(0)) watcher.close();
       if (watch) {
-        for (const root of composition.sourceRoots) watchers.push(watchFiles(root, { recursive: true }, changed));
+        watcher = watchFiles(composition.sourceRoots, {
+          ignoreInitial: true,
+          followSymlinks: false,
+          ignored: (file) => file.split(path.sep).some((part) =>
+            ["node_modules", ".git", ".genesis", ".vibe64-local", ".cache", "coverage", "test-results"].includes(part))
+        }).on("all", changed).on("error", (error) => {
+          watcherError = error;
+          stop();
+        });
+        await new Promise((resolve, reject) => {
+          watcher.once("error", reject);
+          watcher.once("ready", () => { watcher.off("error", reject); resolve(); });
+        });
       }
       for (const root of composition.sourceRoots) console.log(`[vibe64] Development source: ${root}`);
       console.log(`[vibe64] Source packages: ${composition.localPackages.map((entry) => entry.packageId).join(", ")}`);
@@ -64,12 +77,13 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
       });
       child = null;
       clearTimeout(stopTimer);
+      if (watcherError) throw watcherError;
     } while (watch && restart && !stopping);
     return stopping ? 130 : (finished?.code ?? 1);
   } finally {
     clearTimeout(debounce);
     clearTimeout(stopTimer);
-    for (const watcher of watchers) watcher.close();
+    await watcher?.close();
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
     await rm(appRoot, { recursive: true, force: true });

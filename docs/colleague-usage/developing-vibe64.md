@@ -33,7 +33,8 @@ and release lockfile remain unchanged. The example project's source and state
 remain in the original development location, outside that disposable app.
 
 Source changes restart the composed development app after its previous process
-exits. After changing a project's pin, use **Restart preview** so the next launch
+exits. Dependency directories and generated state are excluded from watching.
+After changing a project's pin, use **Restart preview** so the next launch
 resolves the new selection. The log reports the resolved source roots and selected
 local packages. No npm publication is needed for these edits.
 
