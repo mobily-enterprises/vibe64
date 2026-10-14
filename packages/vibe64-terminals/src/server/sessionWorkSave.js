@@ -1165,7 +1165,7 @@ function conflictMessage(conflictPaths = []) {
   const count = conflictPaths.length;
   const files = conflictPaths.slice(0, 3).join(", ");
   const suffix = count > 3 ? ` and ${count - 3} more` : "";
-  return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Use Fix it with AI to resolve ${count === 1 ? "it" : "them"}, then Check Update in the repair tab.`;
+  return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Resolve ${count === 1 ? "it" : "them"} manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.`;
 }
 
 function conflictRecoveryError(recovery) {

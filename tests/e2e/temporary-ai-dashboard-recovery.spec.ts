@@ -47,6 +47,65 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     viewport: { height: 844, width: 390 }
   });
 
+  for (const width of [320, 1280]) {
+    test(`a person applies resolved conflicts without an AI chat at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      const inputs: Record<string, unknown>[] = [];
+      const pending = Promise.withResolvers<Record<string, unknown>>();
+      const captured = await mockRepositoryRecovery(page, server, {
+        code: "vibe64_session_update_conflict", diagnostic: "One file needs review.",
+        conflictRecovery: { reviewId: "human-reviewed", conflictPaths: ["tests/server/previewTestTarget.integration.test.js"] },
+        async applyUpdate(input) { inputs.push(input); return pending.promise; }
+      });
+      await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+      const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+      if (await showChat.isVisible()) await showChat.click();
+      await page.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
+      const review = page.getByRole("dialog", { name: "Apply resolved Update", exact: true });
+      await expect(review).toContainText("tests/server/previewTestTarget.integration.test.js");
+      await expect(review).toContainText("Nothing is published.");
+      await review.getByRole("button", { name: "Cancel", exact: true }).click();
+      expect(inputs).toEqual([]);
+      await page.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
+      const apply = review.getByRole("button", { name: "I've resolved these conflicts — apply Update", exact: true });
+      await expect(apply).toBeInViewport({ ratio: 1 });
+      expect(await review.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await apply.locator(".text-wrap").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath("resolved-update-review.png"), animations: "disabled" });
+      await apply.click();
+      await expect.poll(() => inputs.length).toBe(1);
+      expect(inputs[0].reviewedConflictId).toBe("human-reviewed");
+      await expect(review).toBeHidden();
+      pending.resolve({ ok: true, status: "updated" });
+      await expect(page.getByRole("button", { name: "Review resolved conflicts", exact: true })).toHaveCount(0);
+      expect(captured.temporaryCreates).toHaveLength(0);
+      expect(captured.temporaryTurns).toHaveLength(0);
+      expect(captured.mainChatMessages).toHaveLength(0);
+    });
+  }
+
+  test("a person acknowledges a repair chat's incomplete result without another AI turn", async ({ page }) => {
+    const inputs: Record<string, unknown>[] = [];
+    const captured = await mockRepositoryRecovery(page, server, {
+      code: "vibe64_session_update_conflict", diagnostic: "One file needs review.",
+      conflictRecovery: { reviewId: "current-review", conflictPaths: ["app.js"] },
+      async applyUpdate(input) { inputs.push(input); return { ok: true, status: "updated" }; }
+    });
+    await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+    // Use the dashboard launcher, even while the Main error also offers it.
+    await page.getByRole("button", { name: "Fix it with AI", exact: true }).first().click();
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+    await expect(workspace.getByText("Update not yet verified", { exact: true })).toBeVisible();
+    await workspace.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
+    await page.getByRole("dialog", { name: "Apply resolved Update", exact: true })
+      .getByRole("button", { name: "I've resolved these conflicts — apply Update", exact: true }).click();
+    await expect(workspace.locator(".assistant-transcript__system")).toContainText("Session updated.");
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0].reviewedConflictId).toBe("current-review");
+    expect(captured.temporaryTurns).toHaveLength(1);
+    expect(captured.temporaryCreates).toHaveLength(1);
+  });
+
   for (const code of RECOVERY_CODES) {
     test(`${code} reveals chat and sends exactly one Temporary AI turn`, async ({ page }) => {
       const diagnostic = `Repository update failed with ${code}.`;
@@ -577,11 +636,13 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
   code,
   diagnostic,
   outcome = () => "continue",
+  conflictRecovery,
   workspaceSetup = () => ({ status: "unconfigured" }),
   applyUpdate = async () => ({ ok: true, status: "updated" })
 }: {
   code: typeof RECOVERY_CODES[number];
   diagnostic: string;
+  conflictRecovery?: { reviewId: string; conflictPaths: string[] };
   outcome?: (turn: number) => string;
   workspaceSetup?: () => Record<string, unknown>;
   applyUpdate?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
@@ -657,7 +718,10 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
         operation: null,
         unsaved: true,
         updateAvailable: !updated,
-        updateOperation: null
+        updateOperation: !updated && conflictRecovery ? {
+          operationId: "failed-update", kind: "update", status: "failed", code,
+          error: diagnostic, conflictRecovery
+        } : null
       });
       return;
     }

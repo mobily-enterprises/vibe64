@@ -116,6 +116,16 @@
         >
           Check Update
         </v-btn>
+        <v-btn
+          v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified && props.canReviewUpdate"
+          class="vibe64-temporary-ai__check-update"
+          data-temporary-ai-review-update
+          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy"
+          size="small" variant="tonal"
+          @click="emit('review-update')"
+        >
+          Review resolved conflicts
+        </v-btn>
       </div>
     </div>
     <template v-if="activeTask">
@@ -333,7 +343,7 @@ import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTy
 
 import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
-const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
+const emit = defineEmits(["select-main-chat", "task-finished", "check-update", "review-update"]);
 const props = defineProps({
   active: Boolean,
   sessionSelected: Boolean,
@@ -344,6 +354,7 @@ const props = defineProps({
   previewAttachmentState: { type: Object, default: () => ({}) },
   repositoryBusy: Boolean,
   updateDisabled: Boolean,
+  canReviewUpdate: Boolean,
   updateDisabledReason: { type: String, default: "" },
   workspaceSetupStatus: { type: String, default: "" },
   assistantSelection: {
@@ -929,6 +940,7 @@ defineExpose({
 .vibe64-temporary-ai__recovery {
   align-items: start;
   display: flex;
+  flex-wrap: wrap;
   font-size: 0.85rem;
   gap: 0.5rem;
   overflow-wrap: anywhere;

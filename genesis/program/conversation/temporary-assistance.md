@@ -516,7 +516,13 @@ Update.
 The compact repair status and Check Update action remain outside the scrolling
 transcript. Check Update deliberately verifies an idle repair, including one
 whose AI returned a continue result. The header's Update action uses that same
-check when an unresolved repair exists. Repair launchers reuse the session's
+check when an unresolved repair exists. Explicit checks pass no conflict review
+ID, even after an AI-complete result. Review resolved conflicts opens the same
+file-list acknowledgement available on the session's Update error. The person
+may confirm after any idle repair outcome or work done elsewhere; the current
+saved conflict ID is used, not an older AI run's ID. The existing result reporter
+updates that chat after a manual acknowledgement without requesting more AI work.
+Repair launchers reuse the session's
 existing unresolved Update task even when diagnostics change, preserving unsent
 replies and attachments. Verification diagnostics remain available to subsequent
 turns instead of being cleared by a follow-up question. Save repairs do not

@@ -758,9 +758,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.open.value = true;
     temporaryProvider.value = temporary;
     const checkUpdate = vi.fn();
+    const reviewUpdate = vi.fn();
     const container = { children: [], parent: null, type: "root" };
     const { app } = mountWorkspace(container, {
-      onCheckUpdate: checkUpdate, sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
+      onCheckUpdate: checkUpdate, onReviewUpdate: reviewUpdate, canReviewUpdate: true,
+      sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
     });
     try {
       await flushWorkspaceReveal();
@@ -772,9 +774,15 @@ describe("Temporary AI recovery workspace accessibility", () => {
       expect(nodeText(container)).toContain("Update not yet verified");
       button.props.onClick();
       expect(checkUpdate).toHaveBeenCalledWith(temporary.tasks.value[0]);
+      const review = findNode(container, node => node.props?.["data-temporary-ai-review-update"] === "");
+      expect(review).toBeTruthy();
+      expect(findNode(messages, node => node === review)).toBeNull();
+      review.props.onClick();
+      expect(reviewUpdate).toHaveBeenCalledOnce();
       temporary.tasks.value[0].busy = true;
       await nextTick();
       expect(button.props.disabled).toBe(true);
+      expect(review.props.disabled).toBe(true);
       temporary.tasks.value[0].busy = false;
       temporary.tasks.value[0].recoveryOutcome = "checking";
       await nextTick();

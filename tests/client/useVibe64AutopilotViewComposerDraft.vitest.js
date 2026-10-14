@@ -1814,6 +1814,90 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
   });
 
+  it("keeps explicit Check Update a plain retry even after a completed AI repair", async () => {
+    const updateSessionWork = vi.fn().mockResolvedValue({ ok: true });
+    const view = await createView({ updateSessionWork });
+    await view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete", runConflictId: "previous-review"
+    }, vi.fn(), { force: true });
+    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "" });
+  });
+
+  it("applies a human-reviewed conflict without an AI chat and ignores duplicate confirmation", async () => {
+    const pending = deferredResult();
+    const updateSessionWork = vi.fn(() => pending.promise);
+    const requestTemporaryAi = vi.fn();
+    const view = await createView({ updateSessionWork }, { requestTemporaryAi });
+    view.saveWorkFailure.value = {
+      code: "vibe64_session_update_conflict",
+      details: { conflictRecovery: { reviewId: "review-1", conflictPaths: ["src/app.js", "tests/app.js"] } }
+    };
+    expect(view.applyResolvedUpdate()).toBe(false);
+    expect(view.reviewResolvedUpdate()).toBe(true);
+    expect(view.resolvedUpdateReview.value.conflictPaths).toEqual(["src/app.js", "tests/app.js"]);
+    expect(updateSessionWork).not.toHaveBeenCalled();
+    const applying = view.applyResolvedUpdate();
+    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "review-1" });
+    expect(view.applyResolvedUpdate()).toBe(false);
+    pending.resolve({ ok: true, status: "updated" });
+    await applying;
+    expect(view.resolvedUpdateReview.value).toBeNull();
+    expect(view.saveWorkFailure.value).toBeNull();
+    expect(requestTemporaryAi).not.toHaveBeenCalled();
+  });
+
+  it("discards a conflict acknowledgement when the conflict or selected session changes", async () => {
+    const { view, props } = await createViewWithProps();
+    const failure = reviewId => ({ code: "vibe64_session_update_conflict",
+      details: { conflictRecovery: { reviewId, conflictPaths: ["app.js"] } } });
+    view.saveWorkFailure.value = failure("first");
+    view.reviewResolvedUpdate();
+    view.saveWorkFailure.value = failure("second");
+    expect(view.resolvedUpdateReview.value).toBeNull();
+    expect(view.applyResolvedUpdate()).toBe(false);
+    view.reviewResolvedUpdate();
+    props.session = { ...props.session, sessionId: "another-session" };
+    await nextTick();
+    expect(view.applyResolvedUpdate()).toBe(false);
+    expect(props.updateSessionWork).not.toHaveBeenCalled();
+  });
+
+  it("retains a failed manual acknowledgement for review without scheduling AI work", async () => {
+    const updateSessionWork = vi.fn().mockRejectedValue(Object.assign(new Error("Repository changed; review again."), {
+      code: "vibe64_session_update_conflict",
+      details: { conflictRecovery: { reviewId: "new-review", conflictPaths: ["app.js", "new.js"] } }
+    }));
+    const view = await createView({ updateSessionWork });
+    view.saveWorkFailure.value = { code: "vibe64_session_update_conflict",
+      details: { conflictRecovery: { reviewId: "old-review", conflictPaths: ["app.js"] } } };
+    view.reviewResolvedUpdate();
+    const report = vi.fn();
+    await view.applyResolvedUpdate({ id: "repair", sessionId: "session-1",
+      recoveryOperation: "update", status: "interrupted", outcomeKind: "", runConflictId: "older-review" }, report);
+    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "old-review" });
+    expect(report).toHaveBeenLastCalledWith("repair", {
+      status: "failed", message: "Update still needs attention: Repository changed; review again.",
+      recoveryConflictId: "new-review"
+    });
+    expect(view.resolvedUpdateReview.value).toBeNull();
+    expect(view.reviewResolvedUpdate()).toBe(true);
+    expect(view.resolvedUpdateReview.value.conflictPaths).toEqual(["app.js", "new.js"]);
+  });
+
+  it("blocks a reviewed Update while the coding agent or repair is busy", async () => {
+    const { view, props } = await createViewWithProps();
+    view.saveWorkFailure.value = { code: "vibe64_session_update_conflict",
+      details: { conflictRecovery: { reviewId: "review", conflictPaths: ["app.js"] } } };
+    view.reviewResolvedUpdate();
+    props.agentConnectionStatus = "reconciling";
+    expect(view.applyResolvedUpdate()).toBe(false);
+    props.agentConnectionStatus = "connected";
+    expect(view.applyResolvedUpdate({ id: "repair", sessionId: "session-1", recoveryOperation: "update", busy: true })).toBe(false);
+    expect(props.updateSessionWork).not.toHaveBeenCalled();
+    expect(view.resolvedUpdateReview.value.reviewId).toBe("review");
+  });
+
   it("allows an explicit Update check even when the current session has no work to save", async () => {
     const updateSessionWork = vi.fn().mockResolvedValue({ ok: true, status: "already_current" });
     const view = await createView({ updateSessionWork, workState: { unsaved: false, updateAvailable: false } });

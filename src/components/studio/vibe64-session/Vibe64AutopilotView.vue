@@ -280,6 +280,13 @@
           @retry="retrySaveWork"
         >
           <template v-if="saveWorkError && (saveWorkCanResolveWithTemporaryAi || saveWorkCanCreatePullRequest)" #error-actions>
+            <v-btn
+              v-if="updateConflictRecovery" variant="tonal" height="48"
+              :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
+              @click="reviewResolvedUpdate"
+            >
+              Review resolved conflicts
+            </v-btn>
             <Vibe64TemporaryAiFixAction
               v-if="saveWorkCanResolveWithTemporaryAi"
               :disabled="repositoryRecoverySending || !(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed)"
@@ -589,8 +596,10 @@
         :repository-busy="saveWorkOperationActive || saveWorkSending"
         :update-disabled="updateWorkDisabled"
         :update-disabled-reason="saveWorkTitle"
+        :can-review-update="Boolean(updateConflictRecovery)"
         :workspace-setup-status="workspaceSetupStatus"
         @check-update="checkTemporaryAiUpdate"
+        @review-update="reviewResolvedUpdate"
         @select-main-chat="showMainChat"
         @task-finished="finishTemporaryAiTask"
       />
@@ -845,6 +854,33 @@
         </TrainingPreviewPresentation>
       </div>
     </section>
+
+    <v-dialog
+      :model-value="Boolean(resolvedUpdateReview)" max-width="36rem"
+      aria-label="Apply resolved Update" scrollable
+      @update:model-value="!$event && (resolvedUpdateReview = null)"
+    >
+      <v-card v-if="resolvedUpdateReview">
+        <v-card-title class="text-wrap">Apply resolved Update</v-card-title>
+        <v-card-text>
+          <p>Confirm that these files preserve the intended changes from both this session and the latest saved version.</p>
+          <ul class="my-3 pl-5" style="overflow-wrap: anywhere">
+            <li v-for="file in resolvedUpdateReview.conflictPaths" :key="file">{{ file }}</li>
+          </ul>
+          <p>Repairs may be made manually or in any coding chat. Vibe64 will check the repository state and apply Update. Nothing is published.</p>
+        </v-card-text>
+        <v-card-actions class="flex-wrap">
+          <v-btn @click="resolvedUpdateReview = null">Cancel</v-btn>
+          <v-btn
+            color="primary" variant="flat" height="auto" min-height="48" style="max-width: 100%"
+            :disabled="updateWorkDisabled || sourceOperationsSuspended || temporaryAiWorkspace?.updateRepairTask?.busy"
+            @click="applyResolvedUpdate(temporaryAiWorkspace?.updateRepairTask, reportTemporaryRecovery)"
+          >
+            <span class="text-wrap">I've resolved these conflicts — apply Update</span>
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" aria-label="Save changes" scrollable>
       <v-card rounded="xl">
@@ -1170,6 +1206,10 @@ const {
   fixRepositoryActionError,
   fixRepositoryError,
   handleTemporaryAiTaskFinished,
+  updateConflictRecovery,
+  resolvedUpdateReview,
+  reviewResolvedUpdate,
+  applyResolvedUpdate,
   interrupting,
   loadMoreChatTurns,
   numberedQuestionSelectItems,
@@ -1542,10 +1582,12 @@ function reportVerifiedWorkspaceRecovery() {
   return Boolean(reported);
 }
 
+function reportTemporaryRecovery(taskId, outcome) {
+  return temporaryAiWorkspace.value?.reportTaskRecovery?.(taskId, outcome);
+}
+
 async function finishTemporaryAiTask(task = {}) {
-  const recovery = await handleTemporaryAiTaskFinished(task, (taskId, outcome) => (
-    temporaryAiWorkspace.value?.reportTaskRecovery?.(taskId, outcome)
-  ));
+  const recovery = await handleTemporaryAiTaskFinished(task, reportTemporaryRecovery);
   if (!recovery) {
     return false;
   }
@@ -1558,9 +1600,7 @@ async function finishTemporaryAiTask(task = {}) {
 
 function checkTemporaryAiUpdate(task) {
   if (updateWorkDisabled.value) return false;
-  return handleTemporaryAiTaskFinished(task, (taskId, outcome) => (
-    temporaryAiWorkspace.value?.reportTaskRecovery?.(taskId, outcome)
-  ), { force: true });
+  return handleTemporaryAiTaskFinished(task, reportTemporaryRecovery, { force: true });
 }
 
 const saveWorkChecking = ref(false);

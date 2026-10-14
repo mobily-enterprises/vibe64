@@ -212,6 +212,15 @@ failure does not mix the earlier attempt's errors into the new operation.
 That shared activity remains visible while a Temporary AI repair is selected.
 Checking the existing Update repair does not create a second temporary chat.
 
+Review resolved conflicts is available on the Update error and in an open Update
+repair tab. It snapshots the current conflict review ID and affected paths for
+the person's explicit acknowledgement. A changed review or session invalidates
+the open confirmation. Confirmation uses the existing Update operation and locks,
+independently of any AI outcome; it may also report the result into the existing
+repair chat without sending an automatic follow-up. It never publishes. Check
+Update remains an unacknowledged retry; automatic AI completion submits its own
+recorded runConflictId through the same check/result owner.
+
 Conflict recovery accepts a shrinking subset of the original conflict list only
 while the base, canonical commit, HEAD and index identities remain unchanged.
 Every still-conflicting authored file must have changed since the failed

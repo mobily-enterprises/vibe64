@@ -1369,8 +1369,12 @@ verified by Vibe64 running Update, with the actual result shown in that chat.
 A request for a decision waits for the person's reply before verification.
 Remaining conflicts return to the same repair conversation instead of opening
 another task. Automatic repair is bounded and pauses on repeated failure. A
-persistent Check Update action lets the person verify prepared edits themselves;
-the header's Update action checks the existing repair too. Update progress stays
+persistent Check Update action retries without acknowledging conflicts;
+the header's Update action checks the existing repair too. People can review the
+affected files and explicitly apply a resolved Update whether the repair was made
+manually, in Main chat, or in a temporary chat. No new AI conversation or successful
+AI turn is required. Changed conflicts require a fresh review, and a failed manual
+acknowledgement does not start AI work. Update progress stays
 visible above both main and temporary chats. Conversation tab buttons align above
 their scrollbar, and Main chat remains visible while the other tabs scroll.
 Only a successful Update is presented as finished; it does not publish work.

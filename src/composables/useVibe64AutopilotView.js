@@ -845,38 +845,8 @@ function useVibe64AutopilotView(props, emit, {
         return false;
       }
       checkedUpdateRepairRuns.set(taskId, runId);
-      reportRecovery(taskId, { status: "checking", message: "Checking Update…" });
-      const result = await updateBeforeSave({
-        reviewedConflictId: status === "completed" && task.outcomeKind === "complete"
-          ? normalizedAgentTurnText(task.runConflictId)
-          : ""
-      });
-      await nextTick();
-      if (task.sessionId !== sessionId.value) {
-        return false;
-      }
-      const succeeded = result?.ok === true;
-      reportRecovery(taskId, {
-        status: succeeded ? "succeeded" : "failed",
-        message: succeeded
-          ? "Session updated. Your changes were preserved. Nothing was published."
-          : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`,
-        ...(!succeeded && saveWorkCanResolveWithTemporaryAi.value ? {
-          recoveryConflictId: saveWorkFailure.value?.details?.conflictRecovery?.reviewId || "",
-          retryKey: JSON.stringify([
-            saveWorkFailure.value?.code,
-            saveWorkFailure.value?.details?.conflictRecovery?.reviewId ||
-              saveWorkFailure.value?.details?.conflictRecovery?.canonicalCommit || "",
-            saveWorkFailure.value?.details?.conflictPaths || saveWorkError.value
-          ]),
-          retryMessage: [
-            "Vibe64 ran Update after the prepared repair, but it did not succeed. The working-tree edits remain. Inspect the current state and repair only the remaining conflicts; do not start over or repeat completed work.",
-            `Latest Update diagnostic:\n${saveWorkError.value}`,
-            UPDATE_REPAIR_MESSAGES.handoff
-          ].join("\n\n")
-        } : {})
-      });
-      return "repository-update";
+      return verifySessionUpdate(task, reportRecovery, !force
+        ? normalizedAgentTurnText(task.runConflictId) : "");
     }
     if (
       taskId !== workspaceSetupFixTaskId.value ||
@@ -889,6 +859,45 @@ function useVibe64AutopilotView(props, emit, {
       await retryWorkspaceSetup();
     }
     return "workspace-setup";
+  }
+
+  async function verifySessionUpdate(task, reportRecovery, reviewedConflictId, { retryAi = true } = {}) {
+    const taskId = task?.id;
+    const checkingSessionId = sessionId.value;
+    const checkingProjectSlug = projectSlug.value;
+    if (taskId) reportRecovery(taskId, { status: "checking", message: "Checking Update…" });
+    const result = await updateBeforeSave({ reviewedConflictId });
+    await nextTick();
+    if (checkingSessionId !== sessionId.value || checkingProjectSlug !== projectSlug.value) {
+      return false;
+    }
+    if (!taskId) return "repository-update";
+    const succeeded = result?.ok === true;
+    const outcome = {
+      status: succeeded ? "succeeded" : "failed",
+      message: succeeded
+        ? "Session updated. Your changes were preserved. Nothing was published."
+        : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`
+    };
+    if (!succeeded && saveWorkCanResolveWithTemporaryAi.value) {
+      const failure = saveWorkFailure.value;
+      const recovery = failure?.details?.conflictRecovery;
+      outcome.recoveryConflictId = recovery?.reviewId || "";
+      if (retryAi) {
+        outcome.retryKey = JSON.stringify([
+          failure?.code,
+          recovery?.reviewId || recovery?.canonicalCommit || "",
+          failure?.details?.conflictPaths || saveWorkError.value
+        ]);
+        outcome.retryMessage = [
+          "Vibe64 ran Update after the prepared repair, but it did not succeed. The working-tree edits remain. Inspect the current state and repair only the remaining conflicts; do not start over or repeat completed work.",
+          `Latest Update diagnostic:\n${saveWorkError.value}`,
+          UPDATE_REPAIR_MESSAGES.handoff
+        ].join("\n\n");
+      }
+    }
+    reportRecovery(taskId, outcome);
+    return "repository-update";
   }
 
   async function askCodexToFixPreviewIdentity(input = {}) {
@@ -1426,6 +1435,34 @@ function useVibe64AutopilotView(props, emit, {
     "vibe64_session_update_conflict",
     "vibe64_session_update_history_diverged"
   ].includes(String(saveWorkFailure.value?.code || "")));
+  const updateConflictRecovery = computed(() => {
+    const recovery = saveWorkFailure.value?.details?.conflictRecovery;
+    return saveWorkFailure.value?.code === "vibe64_session_update_conflict" &&
+      recovery?.reviewId && recovery.conflictPaths?.length ? recovery : null;
+  });
+  const resolvedUpdateReview = ref(null);
+  watch(() => updateConflictRecovery.value?.reviewId, () => {
+    resolvedUpdateReview.value = null;
+  }, { flush: "sync" });
+
+  function reviewResolvedUpdate() {
+    if (updateWorkDisabled.value || repositoryOperationActive.value ||
+        props.sessionRenewal?.sourceOperationsSuspended || !updateConflictRecovery.value) return false;
+    const { reviewId, conflictPaths } = updateConflictRecovery.value;
+    resolvedUpdateReview.value = { reviewId, conflictPaths: [...conflictPaths] };
+    return true;
+  }
+
+  function applyResolvedUpdate(task = null, reportRecovery = () => {}) {
+    const review = resolvedUpdateReview.value;
+    if (updateWorkDisabled.value || repositoryOperationActive.value || props.sessionRenewal?.sourceOperationsSuspended ||
+        !review || review.reviewId !== updateConflictRecovery.value?.reviewId ||
+        task && (task.sessionId !== sessionId.value || task.recoveryOperation !== "update" ||
+          task.busy || ["starting", "inProgress"].includes(task.status))) return false;
+    resolvedUpdateReview.value = null;
+    return verifySessionUpdate(task, reportRecovery, review.reviewId, { retryAi: false });
+  }
+
   const saveWorkRetryable = computed(() => Boolean(
     saveWorkError.value &&
     !saveWorkDisabled.value &&
@@ -1961,6 +1998,7 @@ function useVibe64AutopilotView(props, emit, {
   watch([sessionId, projectSlug, actorKey], () => {
     repositoryRequestSequence += 1;
     saveWorkConfirmOpen.value = false;
+    resolvedUpdateReview.value = null;
     saveWorkSending.value = false;
     saveWorkAttempt.value = null;
     saveWorkError.value = "";
@@ -2059,6 +2097,10 @@ function useVibe64AutopilotView(props, emit, {
     fixRepositoryActionError,
     fixRepositoryError,
     handleTemporaryAiTaskFinished,
+    updateConflictRecovery,
+    resolvedUpdateReview,
+    reviewResolvedUpdate,
+    applyResolvedUpdate,
     interrupting,
     loadMoreChatTurns,
     numberedQuestionSelectItems,

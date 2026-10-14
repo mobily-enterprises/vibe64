@@ -23,7 +23,12 @@ Merge repair always retains the Senior role. To hand it to Codex:
 
 The repair instructions, messages and work already in the session remain. A
 model change does not undo edits or prove the merge correct. **Check Update**
-verifies the repaired session through Vibe64's existing repository operation.
+retries Vibe64's repository operation without acknowledging unresolved conflicts.
+If the repair is already complete, choose **Review resolved conflicts**, inspect
+the file list, then **I've resolved these conflicts — apply Update**. This also
+works after a stopped or failed repair, or after edits made in Main chat. No
+additional AI turn is required. The same review is available on the Update error
+without opening a repair chat. See [Update conflict recovery](github-work.md#apply-an-update-after-resolving-conflicts).
 Only available models can be selected; an active goal must finish before a
 model change. An old request admitted to another role must be cancelled and
 resent to Senior; an already running turn must first be stopped.

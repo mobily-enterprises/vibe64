@@ -11,6 +11,40 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
 
+## Apply an Update after resolving conflicts
+
+If Update reports conflicting files, repair them manually, in Main chat, or with
+**Fix it with AI**. Preserve the intended changes from both versions. Wait for
+coding work to finish, then:
+
+1. Select **Review resolved conflicts** on the Update error. If an Update repair
+   chat is open, the same control appears beside **Check Update** in its repair
+   status area.
+2. Review every file listed in **Apply resolved Update**. Select **Cancel** if
+   further repair is needed; cancelling leaves the files unchanged.
+3. Select **I've resolved these conflicts — apply Update** to acknowledge the
+   repair and run Update. This works even when no repair chat exists or its AI
+   was stopped or failed. It does not Save, push or publish the work.
+
+On phones, reveal chat to reach the Update error or repair tab; the file review
+and confirmation are the same as on desktop. The controls wait while an assistant
+or repository operation is busy. A changed conflict invalidates an open review.
+If Update refuses a stale review or finds remaining conflicts, inspect the new
+diagnostic, finish the repair and review again. This manual action does not send
+another AI request. Successful Update may still require workspace preparation;
+its result does not establish that application tests passed.
+
+**Check Update** is a plain retry, not an acknowledgement that conflicting files
+are resolved. A completed **Fix it with AI** repair still submits its recorded
+review automatically, subject to the same repository checks.
+
+Colleague can explain these steps and offer a supported Update after a coding
+agent verifies the repair. A how-to question does not authorize it. Main coding
+chat can repair files but has no Vibe64 Update command; the person can use the
+review control without starting another AI conversation.
+
+## Issues and pull requests
+
 Use **Issues** or **Pull requests** in the project Dashboard for the repository's
 records. Search or select the exact issue/PR before changing it or adding a comment.
 External writes use the connected person's GitHub identity; missing sign-in or
