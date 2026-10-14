@@ -16,4 +16,13 @@ function parseWorkPlanLines(text, { markTechnicalDetails = false } = {}) {
   });
 }
 
-export { parseWorkPlanLines };
+// Compare the agreed content while allowing checklist progress and completion.
+function workPlanScope(text) {
+  const lines = text.replace(/^Status: completed\r?$/mu, "Status: active").split("\n");
+  return parseWorkPlanLines(lines.join("\n")).map((item, index) => item.checked === undefined
+    ? lines[index]
+    : lines[index].replace(/^(\s*(?:[-*+]|\d+[.)]) \[)[ xX]/u, "$1 ")
+  ).join("\n");
+}
+
+export { parseWorkPlanLines, workPlanScope };

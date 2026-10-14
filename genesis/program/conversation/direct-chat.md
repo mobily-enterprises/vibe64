@@ -3814,6 +3814,12 @@ review obtains the actual full pair through the same paged plan helper and repor
 both revisions with its outcome. Current actor, Stop and native receipt checks
 remain authoritative. A successful review turn alone never completes the artifact.
 
+Review completion compares the retained plan scope using the same checklist
+recognition as Junior edits: real checkbox ticks and completion status may change,
+while wording, technical instructions and fenced examples remain exact. Current
+Plan and Progress revisions, explicit Senior completion and the final reply are
+still required before the existing automatic archive transition.
+
 #### Retained Main teaching cleanup after application session close
 
 `packages/vibe64-terminals/src/server/service.js` uses its same private

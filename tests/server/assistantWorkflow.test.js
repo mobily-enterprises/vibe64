@@ -33,6 +33,42 @@ for (const deslop of [true, false]) test(`implementation, review and explicit co
   assert.equal((await readWorkPlanHistory(f.context)).length, 1); assert.equal(f.sends.length, 2);
 });
 
+test("Senior can reconcile checklist ticks during review and archive the completed pair", async t => {
+  const f = await fixture(t, { mode: "auto", review: true }, { readyPlan: false });
+  await manageWorkPlan(f.context, { operation: "new", text: "# FDA controls\n\n- [ ] Block invoice\n- [ ] Block transaction\n- [ ] Block shortcut\n- [ ] Allow no FDA\n- [ ] Cancel\n- [ ] Transfers unchanged\n- [ ] Browser verification\n" }, "senior");
+  await review(f);
+  let plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "progress-write", text: "# Progress\n\nVerified blocked and allowed controls in Preview.\n",
+    expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "write", text: plan.text.replaceAll("- [ ]", "- [x]"),
+    expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  const completed = await readWorkPlan(f.context);
+  await assert.rejects(report(f, "complete", { expectedRevision: plan.revision }), /Read the complete current/);
+  await finish(f, "complete");
+  assert.equal(f.state().status, "complete");
+  assert.equal(await readWorkPlan(f.context), null);
+  const history = await readWorkPlanHistory(f.context);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].revision, completed.revision);
+  assert.equal(history[0].progressRevision, completed.progressRevision);
+});
+
+for (const change of ["wording", "fenced example"]) test(`completion still rejects changed ${change} during review`, async t => {
+  const f = await fixture(t, { mode: "auto", review: true }, { readyPlan: false });
+  await manageWorkPlan(f.context, { operation: "new", text: "# FDA controls\n\n- [ ] Block invoice\n\n```md\n- [ ] literal example\n```\n" }, "senior");
+  await review(f);
+  let plan = await readWorkPlan(f.context);
+  const text = change === "wording" ? plan.text.replace("Block invoice", "Allow invoice") : plan.text.replace("- [ ] literal", "- [x] literal");
+  await manageWorkPlan(f.context, { operation: "write", text, expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  await assert.rejects(report(f, "complete"), /explicitly complete/);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+});
+
 test("Senior saves necessary rework, Junior implements it, then Senior reviews again", async t => {
   const f = await fixture(t); await review(f);
   const plan = await readWorkPlan(f.context);

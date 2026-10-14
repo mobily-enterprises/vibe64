@@ -1855,3 +1855,7 @@ reloads and daemon restarts, do not publish source, and preserve source checks.
 Saved-plan approval shows Implement plan, View plan and Stop; plan revisions are
 ordinary composer messages. Submitted workflow actions immediately show their
 pending label and withhold other actions until submission settles.
+
+Senior can reconcile checklist ticks and record evidence during Auto review,
+then complete and archive the same agreed plan without those progress updates
+being mistaken for a change of scope.

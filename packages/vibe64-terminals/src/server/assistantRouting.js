@@ -1,4 +1,5 @@
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { workPlanScope } from "../shared/assistantWorkPlan.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -713,7 +714,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
           (input.expectedProgressRevision || null) !== plan.progressRevision)) throw failure("Read the complete current Plan and Progress before reporting this outcome.");
       if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
-          plan.text.replace(/^Status: completed\r?$/mu, "Status: active") !== state.workPlan.text.replace(/^Status: completed\r?$/mu, "Status: active"))) {
+          workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
         throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.");
       }
       if (involvesPlan && input.decision !== "complete" && plan.status !== "active") throw failure("The involved plan is no longer active.");

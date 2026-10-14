@@ -68,6 +68,10 @@ that exact Plan and Progress pair into History. Chat shows **Completed plan
 archived** with **View plan history**, which opens this session's existing viewer.
 The plan icon remains available and opens History when there is no current plan.
 
+Senior can update checklist ticks and Progress during review without preventing
+completion. The agreed plan wording must still match the reviewed scope, and
+completion uses the latest saved Plan and Progress together.
+
 A finished implementation or an agent's handoff explanation is not completion.
 Interrupted reviews, unfinished plans and unrelated requests do not archive a
 plan. A different plan created while reviewing is not archived by the old review.

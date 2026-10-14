@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parseWorkPlanLines } from "../shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
 
 const PLAN_LIMIT = 256 * 1024;
 const mutations = new Map();
@@ -265,13 +265,7 @@ async function manageWorkPlan(context, input, role) {
         next = "Status: active\n" + body + "\n";
         if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.");
         if (role === "junior") {
-          const scopes = [current.text, next].map((text) => {
-            const lines = text.split("\n");
-            return parseWorkPlanLines(text).map((item, index) => item.checked === undefined
-              ? lines[index]
-              : lines[index].replace(/^(\s*(?:[-*+]|\d+[.)]) \[)[ xX]/u, "$1 ")
-            ).join("\n");
-          });
+          const scopes = [current.text, next].map(workPlanScope);
           if (scopes[0] !== scopes[1]) throw planError("Only Senior can change Plan content. Junior may change existing checklist ticks only; record evidence in Progress.");
         }
         break;
