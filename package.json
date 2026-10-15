@@ -1,0 +1,10 @@
+{
+  "name": "connected-consumer-proof",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@connected-proof/library": "file:./release/connected-proof-library-1.0.0.tgz",
+    "@connected-proof/extra": "file:./release/connected-proof-extra-1.0.0.tgz"
+  }
+}
