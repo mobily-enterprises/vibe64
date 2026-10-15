@@ -1531,6 +1531,32 @@ for (const personalMember of [false, true]) {
       repository: { mode: "local_source", defaultBranch: "main" }
     });
     projectService.runProjectSourceExclusive = async (operation) => operation();
+    if (!personalMember) {
+      const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        repository: "example/accepted-library", integrationBranch: "main", baseCommit };
+      const receiver = path.join(root, "accepted-library");
+      await git(root, ["clone", baseline, receiver]);
+      await git(source, ["config", `url.${baseline}.insteadOf`, "https://github.com/example/accepted-library.git"]);
+      session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1,
+        submissions: [{ contribution, submittedCommit: baseCommit }] });
+      const snapshots = [{ contribution, sessionId: contribution.id, worktreePath: receiver,
+        baseCommit, canonicalCommit: baseCommit, sessionHead: baseCommit,
+        worktreeTree: await git(receiver, ["rev-parse", "HEAD^{tree}"]) }];
+      const destinationReview = { sessionId: session.sessionId, mode: "local_source", repository: baseline, branch: "main" };
+      let admitted = 0;
+      await assert.rejects(service.saveSessionWork(session.sessionId, {
+        destinationReview, operationId: "clean-accepted-connected-work",
+        assertConnectedWorkSaved: async () => { admitted += 1; return snapshots; }
+      }), { code: "vibe64_session_save_no_changes" });
+      assert.equal(admitted, 1, "Save preparation uses the already-authorized source snapshots");
+      await assert.rejects(service.saveSessionWork(session.sessionId, {
+        destinationReview, operationId: "clean-missing-connected-snapshot",
+        assertConnectedWorkSaved: async () => []
+      }), { code: "vibe64_connected_integration_source_update_required" });
+      assert.equal(await git(baseline, ["rev-parse", "HEAD"]), baseCommit);
+      assert.equal(await git(source, ["status", "--porcelain"]), "");
+      delete session.metadata.connected_submissions;
+    }
     await writeFile(path.join(source, "app.txt"), "important work\n");
     const saved = await service.saveSessionWork(session.sessionId, {
       destinationReview: { sessionId: session.sessionId, mode: "local_source", repository: baseline, branch: "main" },

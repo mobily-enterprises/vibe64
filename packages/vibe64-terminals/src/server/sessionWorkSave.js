@@ -517,7 +517,8 @@ async function inspectIncomingContributions({ project = {}, session = {}, offset
 }
 
 async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null,
-  identity = {}, commandOptions = {}, operationId = crypto.randomUUID(), runCommand = runVibe64Command } = {}) {
+  identity = {}, derivedArtifactPaths = [], refreshDerivedArtifacts, commandOptions = {},
+  operationId = crypto.randomUUID(), runCommand = runVibe64Command } = {}) {
   if (!["merge", "discard", "review-repair"].includes(action) || !id) {
     throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_input_invalid");
   }
@@ -547,8 +548,17 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
       throw saveError("These heads do not need conflict repair. Refresh and review the contribution normally.", "vibe64_incoming_review_changed");
     }
     if (targetAhead !== "0") {
+      // Generated artifacts belong to their recreator, not conflict repair.
+      // Normalize them to the reviewed target before merging authored source.
+      const contributionTree = await gitOutput(runCommand, context, ["rev-parse", `${entry.head}^{tree}`], options);
+      const sourceTree = await treeWithDerivedArtifactsFromCommit(runCommand, context, {
+        commandOptions, derivedArtifactPaths, project, sourceCommit: current.targetHead, tree: contributionTree
+      });
+      const mergeInput = sourceTree === contributionTree ? entry.head : await createVirtualCommit(runCommand, context, {
+        baseCommit: entry.head, commandOptions, identity, message: "Vibe64 incoming authored source", project, tree: sourceTree
+      });
       const merged = await mergeTrees(runCommand, context, { canonicalCommit: current.targetHead,
-        virtualCommit: entry.head, commandOptions, project });
+        virtualCommit: mergeInput, commandOptions, project });
       if (merged.conflictPaths.length) {
         // Preserve the receiving source before offering Temporary AI. This is
         // the same private checkpoint owner as Update; files/index/HEAD stay put.
@@ -562,6 +572,10 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
         }
         repairedTree = await conflictWorktreeTree(runCommand, context, { conflictTree: merged.conflictTree,
           conflictPaths: merged.conflictPaths, project });
+        repairedTree = await regenerateDerivedArtifactTree(runCommand, context, {
+          baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, identity, project,
+          refreshDerivedArtifacts, tree: repairedTree
+        });
         const currentRepair = { tree: repairedTree, worktreeTree: checkpoint.checkpointTree,
           head: checkpoint.oldHead, indexTree: checkpoint.oldIndexTree };
         if (action === "review-repair") {
@@ -578,8 +592,12 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
       } else if (repairReview || action === "review-repair") {
         throw saveError("These heads no longer need conflict repair. Refresh and review the contribution normally.", "vibe64_incoming_review_changed");
       }
+      const mergedTree = repairedTree || await regenerateDerivedArtifactTree(runCommand, context, {
+        baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, identity, project,
+        refreshDerivedArtifacts, tree: merged.mergedTree
+      });
       mergedCommit = await gitOutput(runCommand, context, ["-c", `user.name=${text(identity.name) || "Vibe64 Merge"}`,
-        "-c", `user.email=${text(identity.email) || "vibe64@localhost"}`, "commit-tree", repairedTree || merged.mergedTree,
+        "-c", `user.email=${text(identity.email) || "vibe64@localhost"}`, "commit-tree", mergedTree,
         "-p", current.targetHead, "-p", entry.head], { ...options, input: `Merge contribution ${id}\n` });
     }
     // Recheck the contribution as well as using an exact target lease. Its ref
@@ -639,10 +657,10 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
 }
 
 async function changeIncomingContribution({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null, identity = {},
-  commandOptions = {}, runCommand = runVibe64Command, runProjectSourceExclusive = async operation => operation() } = {}) {
+  derivedArtifactPaths = [], commandOptions = {}, runCommand = runVibe64Command, runProjectSourceExclusive = async operation => operation() } = {}) {
   const context = incomingRepositoryContext(project, session);
   return runProjectSourceExclusive(() => runSessionWorkOperation({ context, project, commandOptions, runCommand,
-    input: { action, id, review, repairReview, identity }, label: "Updating incoming contribution", operation: "incoming-change" }),
+    input: { action, id, review, repairReview, identity, derivedArtifactPaths }, label: "Updating incoming contribution", operation: "incoming-change" }),
   { operation: `incoming-${action}:${id}` });
 }
 
@@ -2737,6 +2755,7 @@ async function captureSessionWorkSaveCheckpoint(runCommand, context, {
 
 async function prepareSessionWorkSaveMessageDirect({
   commandOptions = {},
+  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   derivedArtifactPaths = [],
   limit = 40,
   operationId = crypto.randomUUID(),
@@ -2765,6 +2784,9 @@ async function prepareSessionWorkSaveMessageDirect({
     worktreeTree: checkpoint.checkpointTree
   });
   if (!changes.totalCount) {
+    await assertConnectedSubmissionsIntegrated(runCommand, context, {
+      commandOptions, connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots), project
+    });
     throw saveError(
       "This session has no work to save.",
       "vibe64_session_save_no_changes"
@@ -2825,6 +2847,7 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
 async function prepareSessionWorkSave(runCommand, context, {
   checkpoint = {},
   commandOptions = {},
+  connectedWorkSnapshots = [],
   derivedArtifactPaths = [],
   identity = {},
   message = "",
@@ -2883,6 +2906,7 @@ async function prepareSessionWorkSave(runCommand, context, {
   const derivedPathSet = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   if (!changedPaths.length) {
+    await assertConnectedSubmissionsIntegrated(runCommand, context, { commandOptions, connectedWorkSnapshots, project });
     throw saveError(
       "This session has no work to save.",
       "vibe64_session_save_no_changes"
@@ -3099,6 +3123,7 @@ async function saveSessionWorkDirect({
     const prepared = await prepareSessionWorkSave(runCommand, context, {
       checkpoint,
       commandOptions,
+      connectedWorkSnapshots: snapshots,
       derivedArtifactPaths,
       identity,
       message,
@@ -3195,6 +3220,7 @@ async function saveSessionWorkDirect({
 
 async function prepareSessionWorkSaveMessage({
   commandOptions = {},
+  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   derivedArtifactPaths = [],
   limit = 40,
   operationId = crypto.randomUUID(),
@@ -3206,7 +3232,7 @@ async function prepareSessionWorkSaveMessage({
   return runSessionWorkOperation({
     commandOptions,
     context,
-    input: { derivedArtifactPaths, limit },
+    input: { connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots), derivedArtifactPaths, limit },
     label: "Capturing work for Save",
     operation: "save-message",
     operationId,

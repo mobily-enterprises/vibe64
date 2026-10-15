@@ -36,7 +36,9 @@ require pull requests refuses direct Incoming merges; GitHub's own protections
 also apply. Colleague must report the constraint, not change that policy merely
 to make Merge succeed.
 
-If a branch or target changed since Review, refresh and review again. Conflicts
+If a branch or target changed since Review, refresh and review again. Vibe64
+rebuilds generated Genesis maps from the proposed merged source; generated-only
+conflicts do not need AI or manual edits. Authored conflicts
 leave the remote target and receiving session files unchanged. Vibe64 retains a
 private checkpoint of that session's complete work before offering **Fix it with
 AI**. The existing Temporary AI chat starts with Senior in this receiving session;
@@ -48,7 +50,10 @@ them manually. Preserve unrelated work and inspect both sides' intended behavior
 
 When repair finishes, return to **Incoming changes → Review resolved conflicts**.
 This displays the proposed merge using the repaired conflicting files and the
-ordinary merge result for every other file. Unrelated local changes are excluded.
+ordinary merge result for every other authored file, with regenerated Genesis
+maps included in the diff. Do not hand-edit generated maps. If regeneration
+fails, the merge stops without publishing or changing your session files.
+Unrelated local changes are excluded.
 Review that diff, then explicitly choose **Merge into <target> → Merge contribution**.
 Vibe64 rechecks the candidate, receiving worktree/index/HEAD and both remote heads.
 Changed inputs require another review. AI completion alone never publishes or

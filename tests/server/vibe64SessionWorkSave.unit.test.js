@@ -3634,7 +3634,6 @@ test("connected integration gate retains exact revisions through the managed Sav
     ...await inspectSessionWorkDirect({ project: receiverProject, session: receiver, runCommand: commandRunner }) }];
   const binding = { schemaVersion: 1, submissions: [{ contribution, submittedCommit }] };
   session.metadata.connected_submissions = JSON.stringify(binding);
-  await writeFile(path.join(session.sourcePath, "consumer.txt"), "depends on library change\n");
   const requests = [];
   const runCommand = request => {
     requests.push(request);
@@ -3643,6 +3642,22 @@ test("connected integration gate retains exact revisions through the managed Sav
       GIT_CONFIG_VALUE_0: "https://github.com/example/library.git" } });
   };
   const operationId = "connected-gate-save";
+  const prepareClean = async () => prepareSessionWorkSaveMessage({ project, session, runCommand,
+    connectedWorkSnapshots: await snapshots() });
+  const saveClean = async () => saveSessionWork({ project, session, runCommand,
+    connectedWorkSnapshots: await snapshots() });
+  for (const inspect of [prepareClean, saveClean]) {
+    await assert.rejects(inspect(), error => {
+      assert.equal(error.code, "vibe64_connected_integration_pending");
+      assert.equal(error.details.submittedCommit, submittedCommit);
+      assert.equal(error.details.repository, contribution.repository);
+      return true;
+    });
+    assert.equal(await git(main.remote, ["rev-parse", "main"]), main.baseCommit);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), main.baseCommit);
+    assert.equal(await git(session.sourcePath, ["status", "--porcelain"]), "");
+  }
+  await writeFile(path.join(session.sourcePath, "consumer.txt"), "depends on library change\n");
   const { checkpoint } = await prepareSessionWorkSaveMessage({ project, session, runCommand, operationId });
   const save = () => saveManagedSessionWorkImplementation({ project, session, runCommand, operationId,
     checkpoint, readConnectedWorkSnapshots: snapshots, message: "Use the library change" });
@@ -3694,7 +3709,17 @@ test("connected integration gate retains exact revisions through the managed Sav
   receiver.metadata.base_commit = laterCommit;
   receiver.metadata.canonical_commit = laterCommit;
   const afterDeletion = await saveSessionWork({ project, session, runCommand, connectedWorkSnapshots: await snapshots() });
+  assert.equal(afterDeletion.reconciled, true);
+  assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), afterDeletion.saveCommit);
+  assert.equal(await git(session.sourcePath, ["status", "--porcelain"]), "");
   assert.equal(await git(main.remote, ["rev-parse", "main"]), afterDeletion.saveCommit);
+  session.metadata.base_commit = afterDeletion.saveCommit;
+  session.metadata.canonical_commit = afterDeletion.saveCommit;
+  for (const inspect of [prepareClean, saveClean]) {
+    await assert.rejects(inspect(), { code: "vibe64_session_save_no_changes" });
+    assert.equal(await git(main.remote, ["rev-parse", "main"]), afterDeletion.saveCommit);
+    assert.equal(await git(session.sourcePath, ["status", "--porcelain"]), "");
+  }
   assert.equal((await git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]))
     .split("\n").some(ref => ref.endsWith("/connected-integration")), false);
 });
@@ -3820,4 +3845,117 @@ test("replacement contribution preserves discarded ancestry and gates Main Save 
   const saved = await saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: await snapshots() });
   assert.equal(await git(main.remote, ["rev-parse", "main"]), saved.saveCommit);
   assert.equal(await git(receiver.remote, ["rev-parse", `${receiver.ref}_discarded`]), original.saveCommit);
+});
+
+async function incomingDerivedFixture(t, { authoredConflict = false } = {}) {
+  const f = await contributionFixture(t);
+  const mapPath = ".genesis/machine-city.json";
+  for (const source of [f.session.sourcePath, f.seed]) {
+    await mkdir(path.join(source, ".genesis"), { recursive: true });
+    await mkdir(path.join(source, "genesis"), { recursive: true });
+    await writeFile(path.join(source, "genesis/stack.md"), "# Stack\n\n## Components\n");
+  }
+  await writeFile(path.join(f.session.sourcePath, mapPath), '{"side":"contribution"}\n');
+  await writeFile(path.join(f.session.sourcePath, "contribution.txt"), "retain contribution\n");
+  if (authoredConflict) await writeFile(path.join(f.session.sourcePath, "shared.txt"), "contribution change\n");
+  f.saved = await saveSessionWork({ ...f, runCommand: commandRunner });
+  await writeFile(path.join(f.seed, mapPath), '{"side":"target"}\n');
+  await writeFile(path.join(f.seed, "upstream.txt"), "retain upstream\n");
+  if (authoredConflict) await writeFile(path.join(f.seed, "shared.txt"), "upstream change\n");
+  await git(f.seed, ["add", "."]);
+  await git(f.seed, ["commit", "-m", "Advance target and generated map"]);
+  await git(f.seed, ["push", "origin", "main"]);
+  f.review = await incomingReview(f);
+  return { ...f, id: f.contribution.id, derivedArtifactPaths: [mapPath, ".genesis/program-city.json"],
+    runCommand: commandRunner };
+}
+
+test("Incoming Merge regenerates derived-only conflicts through the managed boundary without AI", async t => {
+  const f = await incomingDerivedFixture(t);
+  const localMap = await readFile(path.join(f.session.sourcePath, ".genesis/machine-city.json"), "utf8");
+  const head = await git(f.session.sourcePath, ["rev-parse", "HEAD"]);
+  const index = await git(f.session.sourcePath, ["write-tree"]);
+  const result = await changeIncomingContribution({ ...f, action: "merge" });
+  assert.equal(result.status, "merged");
+  assert.deepEqual((await git(f.remote, ["show", "-s", "--format=%P", "main"])).split(" "),
+    [f.review.targetHead, f.saved.saveCommit]);
+  assert.equal(await git(f.remote, ["show", "main:contribution.txt"]), "retain contribution");
+  assert.equal(await git(f.remote, ["show", "main:upstream.txt"]), "retain upstream");
+  const machine = JSON.parse(await git(f.remote, ["show", "main:.genesis/machine-city.json"]));
+  const program = JSON.parse(await git(f.remote, ["show", "main:.genesis/program-city.json"]));
+  assert.equal(machine.schema, "genesis.machine-city.v1");
+  assert.equal(program.schema, "genesis.program-city.v1");
+  assert.equal(machine.side, undefined, "the real Genesis owner replaces the conflicting stale map");
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
+  assert.equal(await git(f.session.sourcePath, ["rev-parse", "HEAD"]), head);
+  assert.equal(await git(f.session.sourcePath, ["write-tree"]), index);
+  assert.equal(await readFile(path.join(f.session.sourcePath, ".genesis/machine-city.json"), "utf8"), localMap);
+});
+
+test("Incoming repair reviews regenerated artifacts from only repaired authored conflict paths", async t => {
+  const f = await incomingDerivedFixture(t, { authoredConflict: true });
+  await writeFile(path.join(f.session.sourcePath, "unrelated.txt"), "staged local\n");
+  await git(f.session.sourcePath, ["add", "unrelated.txt"]);
+  await writeFile(path.join(f.session.sourcePath, "unrelated.txt"), "unstaged local\n");
+  const head = await git(f.session.sourcePath, ["rev-parse", "HEAD"]);
+  const index = await git(f.session.sourcePath, ["write-tree"]);
+  const localMap = await readFile(path.join(f.session.sourcePath, ".genesis/machine-city.json"), "utf8");
+  let regenerated = 0;
+  const input = { ...f, refreshDerivedArtifacts: async ({ projectRoot }) => {
+    regenerated++;
+    assert.notEqual(projectRoot, f.session.sourcePath);
+    assert.equal(await readFile(path.join(projectRoot, "shared.txt"), "utf8"), "resolved both changes\n");
+    assert.equal(await readFile(path.join(projectRoot, "contribution.txt"), "utf8"), "retain contribution\n");
+    assert.equal(await readFile(path.join(projectRoot, "upstream.txt"), "utf8"), "retain upstream\n");
+    await assert.rejects(readFile(path.join(projectRoot, "unrelated.txt")), { code: "ENOENT" });
+    await writeFile(path.join(projectRoot, ".genesis/machine-city.json"), '{"generated":"resolved both changes"}\n');
+  } };
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge" }), error => {
+    assert.equal(error.code, "vibe64_incoming_merge_conflict");
+    assert.deepEqual(error.details.conflictPaths, ["shared.txt"]);
+    return true;
+  });
+  assert.equal(regenerated, 0, "unresolved authored conflicts are not indexed");
+  await writeFile(path.join(f.session.sourcePath, "shared.txt"), "resolved both changes\n");
+  const status = await git(f.session.sourcePath, ["status", "--porcelain"]);
+  const repaired = await changeIncomingContributionDirect({ ...input, action: "review-repair" });
+  assert.deepEqual(repaired.conflictPaths, ["shared.txt"]);
+  assert.match(repaired.diff.content, /generated.*resolved both changes/);
+  assert.doesNotMatch(repaired.diff.content, /unrelated/);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.review.targetHead);
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge", repairReview: repaired.repairReview,
+    refreshDerivedArtifacts: async ({ projectRoot }) => {
+      await writeFile(path.join(projectRoot, ".genesis/machine-city.json"), '{"generated":"different candidate"}\n');
+    } }), { code: "vibe64_incoming_repair_changed" });
+  const result = await changeIncomingContributionDirect({ ...input, action: "merge", repairReview: repaired.repairReview });
+  assert.equal(result.status, "merged");
+  assert.equal(regenerated, 2, "Merge recomputes the reviewed generated candidate");
+  assert.equal(await git(f.remote, ["rev-parse", "main^{tree}"]), repaired.repairReview.tree);
+  assert.deepEqual((await git(f.remote, ["show", "-s", "--format=%P", "main"])).split(" "),
+    [f.review.targetHead, f.saved.saveCommit]);
+  assert.equal(await git(f.remote, ["show", "main:.genesis/machine-city.json"]), '{"generated":"resolved both changes"}');
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
+  assert.equal(await git(f.session.sourcePath, ["rev-parse", "HEAD"]), head);
+  assert.equal(await git(f.session.sourcePath, ["write-tree"]), index);
+  assert.equal(await git(f.session.sourcePath, ["status", "--porcelain"]), status);
+  assert.equal(await readFile(path.join(f.session.sourcePath, ".genesis/machine-city.json"), "utf8"), localMap);
+  assert.equal(await readFile(path.join(f.session.sourcePath, "unrelated.txt"), "utf8"), "unstaged local\n");
+});
+
+test("Incoming derived regeneration failure preserves remote heads and receiving source", async t => {
+  const f = await incomingDerivedFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "unrelated.txt"), "retain local\n");
+  const before = await git(f.session.sourcePath, ["status", "--porcelain"]);
+  const head = await git(f.session.sourcePath, ["rev-parse", "HEAD"]);
+  const index = await git(f.session.sourcePath, ["write-tree"]);
+  const worktrees = await git(f.session.sourcePath, ["worktree", "list", "--porcelain"]);
+  await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", refreshDerivedArtifacts: async () => {
+    throw new Error("Genesis regeneration failed");
+  } }), /Genesis regeneration failed/u);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.review.targetHead);
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
+  assert.equal(await git(f.session.sourcePath, ["status", "--porcelain"]), before);
+  assert.equal(await git(f.session.sourcePath, ["rev-parse", "HEAD"]), head);
+  assert.equal(await git(f.session.sourcePath, ["write-tree"]), index);
+  assert.equal(await git(f.session.sourcePath, ["worktree", "list", "--porcelain"]), worktrees);
 });

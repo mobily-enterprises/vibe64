@@ -7,6 +7,12 @@ temporary action terminal retains viewed completed details only when status,
 stage or output remains; a connected Save with no origin operation therefore
 cannot leave an empty "Working…" card after success.
 
+A clean Main Save checks retained submitted revisions before reporting that there
+is no work to save. Its existing preparation job receives the freshly authorized
+connected snapshots and reuses the native integration gate on the no-change path;
+no naming or publication follows a pending requirement. Dirty Save retains its
+final publication-time gate and fresh snapshot recheck.
+
 Receiving-status failures preserve the originating repository's work inspection
 and ordinary Main Save presentation. The Save operation rechecks connected
 authority and work before publication, so an unknown or inaccessible receiver
@@ -285,12 +291,20 @@ remote refs, and do not replace FETCH_HEAD. There is no queue record.
 Receiving mutations use the same managed boundary and project source lock. They
 require the exact reviewed repository, target and contribution heads. Merge
 fast-forwards when possible or uses the existing tree-merge owner to create an
-ordinary two-parent commit; conflicts leave source and remote heads untouched.
-Conflicts retain a private checkpoint through the original Update checkpoint
+ordinary two-parent commit. Before a divergent merge, the existing derived-path
+tree owner replaces contribution artifacts with the reviewed target's artifacts;
+only authored paths can require repair. The existing Save/Update regeneration
+owner rebuilds artifacts in a temporary worktree from the complete proposed
+merged source. Generated-only conflicts therefore need no AI. Regeneration
+failure leaves receiving source and remote heads untouched. Final merge parents
+remain the original target and contribution, not the temporary normalized input.
+Authored conflicts retain a private checkpoint through the original Update checkpoint
 owner before offering the existing Temporary AI workspace in the receiving
 session. Incoming's explicit repair review reuses Update's conflict-path tree
 overlay; it changes neither the real index nor worktree. The candidate combines
-only conflicting local paths with the native merge result for other files.
+only conflicting local paths with the native merge result for other files, then
+regenerates artifacts. Both review and final Merge recompute that generated tree;
+the reviewed identity covers the complete candidate, including its artifacts.
 The shared overlay treats selected paths literally, including filenames with
 Git pathspec syntax, so a conflict filename cannot select unrelated work.
 The transient review carries exact candidate, source tree, HEAD and index

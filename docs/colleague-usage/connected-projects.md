@@ -159,8 +159,10 @@ create a replacement through the same actions after an explicit request; it
 cannot silently discard or move unsaved edits.
 
 When a session has recorded submitted contributions, its normal Save checks those
-exact revisions before publishing. If one is still pending, the error names the
-receiving repository, contribution, revision and integration branch. Open that
+exact revisions before publishing, including when the main repository has no new
+file changes. If one is still pending, the error names the receiving repository,
+contribution, revision and integration branch. Once all are accepted and the
+selected sources are reconciled, a clean main repository reports no work to save. Open that
 receiving project's **Incoming changes**, review and merge the contribution, then
 open its connected contribution session and use **Update this session (rebase)**
 to incorporate the accepted receiving source before retrying Main Save. This

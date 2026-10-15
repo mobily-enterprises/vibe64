@@ -18,7 +18,10 @@ import {
 const MAX_INPUT_BYTES = 1024 * 1024;
 const OPERATION_IMPLEMENTATIONS = {
   "incoming": inspectIncomingContributionsDirect,
-  "incoming-change": changeIncomingContributionDirect,
+  "incoming-change": async (input) => {
+    const { refreshGenesisCities } = await import("@local/vibe64-genesis/server");
+    return changeIncomingContributionDirect({ ...input, refreshDerivedArtifacts: refreshGenesisCities });
+  },
   "change-diff": inspectSessionChangeDiffDirect,
   "changes": inspectSessionChangesDirect,
   "check-updates": checkSessionUpdatesDirect,

@@ -1746,9 +1746,10 @@ function createService({
       }
     };
     await assertWorkflow();
-    await input.assertConnectedWorkSaved?.();
+    const connectedWorkSnapshots = await input.assertConnectedWorkSaved?.();
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
+      connectedWorkSnapshots,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       limit: 40,
       operationId: input.operationId,
@@ -3205,6 +3206,7 @@ function createService({
           const session = await context.runtime.getSession(sessionId, { inspectSource: false });
           const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution");
           return changeManagedIncomingContribution({ project, session, action: input.action,
+            derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
             id: input.id, review: input.review, repairReview: input.repairReview, identity: execution.identity,
             commandOptions: execution.commandOptions, runCommand: execution.runCommand });
         }, { operation: `incoming-${input.action}` }));
