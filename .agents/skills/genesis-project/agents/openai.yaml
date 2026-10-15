@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis Project"
+  short_description: "Work safely in a Genesis project"
+  default_prompt: "Use $genesis-project to make this change with the project Blueprint, Program, Stack, and verification context."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis Program"
+  short_description: "Explain product intent and public operations"
+  default_prompt: "Use $genesis-program to reconcile the Blueprint and subsystem Program with this codebase."

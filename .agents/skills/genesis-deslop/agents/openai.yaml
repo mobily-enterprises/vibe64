@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis Deslop"
+  short_description: "Clean up your task changes or specified commits"
+  default_prompt: "Use $genesis-deslop to Deslop your own changes for the current task."
