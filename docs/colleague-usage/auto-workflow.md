@@ -109,6 +109,10 @@ it starts Junior implementation, followed by the normal Senior review. Your
 composer draft and attachments remain untouched. The button cannot reinterpret
 the original planning request or become another automatic planning continuation.
 
+Planning, implementation, review and delivery-recovery notices use a compact
+layout. The summary and actions share a row when space permits and wrap on narrow
+screens. **Details** expands the full explanation; touch controls remain easy to tap.
+
 Without an active saved plan, paused Planning offers **Continue planning**.
 Only the relevant stage's continuation appears: paused Implementation offers
 **Continue implementation** and paused Review offers **Continue review**. An

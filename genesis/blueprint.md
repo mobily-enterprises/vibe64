@@ -717,6 +717,8 @@ Messages between coding sessions identify the other session by its current name
 when available, with its exact session ID retained in parentheses.
 Preview waits while workspace preparation is running, then checks the app again
 automatically. Preparation failures remain visible with their recovery controls.
+Workflow recovery notices keep their summary and actions compact, wrapping on
+narrow screens while retaining expandable details and usable touch targets.
 An explanation after a question does not suppress its answer field.
 The hints row always reserves its height immediately above the message input,
 following the input as it grows without shifting the chat when hints change.

@@ -1453,7 +1453,9 @@ Other users have no configuration action. The mode icon remains reachable when
 the current mode is unavailable. Its menu shows the actor's effective destination,
 Shared backup and pair-preservation reasons, and explains unavailable choices.
 Routing progress stays on the message bubble, without a duplicate composer banner.
-Main chat uses the routing notice component: errors and review
+Main chat uses the routing notice component: planning, implementation, review and
+delivery-recovery notices share a compact wrapping row, with expandable details,
+32px desktop controls and 44px coarse-pointer targets. Errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
 Discussion and planning complete without reporting a skipped implementation review.

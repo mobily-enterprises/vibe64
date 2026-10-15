@@ -1,22 +1,22 @@
 <template>
-  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="mb-2 pa-1" role="status">
+  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="vibe64-routing-notice mb-2 px-2 py-1" role="status">
     <details v-if="previousAttempt || request.error && request.error !== request.outcome?.explanation" :key="request.messageId">
-      <summary class="text-body-small py-2">{{ label }} · <span class="text-decoration-underline">Details</span></summary>
+      <summary class="text-body-small">{{ label }} · <span class="text-decoration-underline">Details</span></summary>
       <p v-if="previousAttempt" class="text-body-small mb-2">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
       <p v-if="request.error" class="text-body-small mb-2">{{ request.error }}</p>
     </details>
-    <div v-else-if="!followupNeedsAction" class="text-body-small py-2">{{ label }}</div>
-    <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
-      <v-btn v-if="canImplement" :variant="pendingAction === 'implement' ? 'text' : 'flat'" color="primary" min-height="48" :disabled="Boolean(pendingAction) || busy" :aria-busy="pendingAction === 'implement'" @click="$emit('implement')">
+    <div v-else-if="!followupNeedsAction" class="text-body-small">{{ label }}</div>
+    <div v-if="followupNeedsAction" class="vibe64-routing-notice__actions d-flex flex-wrap ga-1">
+      <v-btn v-if="canImplement" :variant="pendingAction === 'implement' ? 'text' : 'flat'" color="primary" size="small" density="compact" :disabled="Boolean(pendingAction) || busy" :aria-busy="pendingAction === 'implement'" @click="$emit('implement')">
         <span :class="{ 'action-label-pending': pendingAction === 'implement' }">Implement plan</span>
         <span v-if="pendingAction === 'implement'" class="position-absolute">Starting…</span>
       </v-btn>
-      <v-btn v-if="canImplement && !pendingAction" variant="text" min-height="48" @click="$emit('view-plan')">View plan</v-btn>
-      <v-btn v-if="!canImplement" variant="text" min-height="48" :disabled="Boolean(pendingAction) || busy && request.delivery !== 'uncertain'" :aria-busy="pendingAction === 'continue'" @click="$emit('retry')">
+      <v-btn v-if="canImplement && !pendingAction" variant="text" size="small" density="compact" @click="$emit('view-plan')">View plan</v-btn>
+      <v-btn v-if="!canImplement" variant="text" size="small" density="compact" :disabled="Boolean(pendingAction) || busy && request.delivery !== 'uncertain'" :aria-busy="pendingAction === 'continue'" @click="$emit('retry')">
         <span :class="{ 'action-label-pending': pendingAction === 'continue' }">{{ retryLabel }}</span>
         <span v-if="pendingAction === 'continue'" class="position-absolute">{{ request.delivery === 'uncertain' ? 'Checking…' : 'Continuing…' }}</span>
       </v-btn>
-      <v-btn v-if="request.delivery === 'pending' && !pendingAction" variant="text" min-height="48" @click="$emit('skip')">
+      <v-btn v-if="request.delivery === 'pending' && !pendingAction" variant="text" size="small" density="compact" @click="$emit('skip')">
         Stop
       </v-btn>
     </div>
@@ -62,9 +62,42 @@ watch(() => [props.request?.messageId, props.request?.status], ([id, status], [p
   visibility: hidden;
 }
 
+.vibe64-routing-notice :deep(.v-alert__content) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+details {
+  flex: 1 1 13rem;
+  min-width: 0;
+}
+
+details[open] {
+  flex-basis: 100%;
+}
+
+.vibe64-routing-notice__actions {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.vibe64-routing-notice__actions :deep(.v-btn) {
+  min-height: 32px;
+  padding-inline: 8px;
+}
+
 summary {
-  min-height: 48px;
+  min-height: 32px;
   align-content: center;
   cursor: pointer;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  summary,
+  .vibe64-routing-notice__actions :deep(.v-btn) {
+    min-height: 44px;
+  }
 }
 </style>
