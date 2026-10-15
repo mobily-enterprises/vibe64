@@ -168,6 +168,37 @@ function mountMainConversationLog({ render = false } = {}) {
 }
 
 describe("Vibe64 direct session view", () => {
+  it("admits Incoming repair by its requested Senior role without requiring Junior", async () => {
+    const component = fs.readFileSync(componentPath, "utf8");
+    const owner = component.match(/async function startTemporaryAiTask\(options = \{\}\) \{[\s\S]*?\n\}/u)?.[0];
+    expect(owner).toBeTruthy();
+    const allowed = new Set(["senior"]);
+    const assistantCanUsePurpose = vi.fn(purpose => allowed.has(purpose));
+    const props = { sessionSelectionArchived: false };
+    const emit = vi.fn();
+    const startTask = vi.fn(async () => ({ ok: true }));
+    const temporaryAiWorkspace = vue.ref({ startTask });
+    const start = new Function("assistantCanUsePurpose", "props", "emit", "temporaryAiWorkspace",
+      `${owner}\nreturn startTemporaryAiTask;`)(assistantCanUsePurpose, props, emit, temporaryAiWorkspace);
+    const incoming = { title: "Resolve Incoming merge", initialRouting: { mode: "senior", review: false } };
+    expect(await start(incoming)).toEqual({ ok: true });
+    expect(startTask).toHaveBeenCalledExactlyOnceWith(incoming);
+    expect(assistantCanUsePurpose).toHaveBeenLastCalledWith("senior");
+    expect(emit).toHaveBeenCalledExactlyOnceWith("chat-attention");
+    expect(await start({ recoveryOperation: "update" })).toEqual({ ok: true });
+    expect(await start({ title: "Ordinary Junior task" })).toBe(false);
+    expect(startTask).toHaveBeenCalledTimes(2);
+    allowed.delete("senior");
+    allowed.add("junior");
+    expect(await start(incoming)).toBe(false);
+    expect(await start({ recoveryOperation: "update" })).toBe(false);
+    expect(startTask).toHaveBeenCalledTimes(2);
+    expect(await start({ title: "Ordinary Junior task" })).toEqual({ ok: true });
+    props.sessionSelectionArchived = true;
+    expect(await start({ title: "Ordinary Junior task" })).toBe(false);
+    expect(startTask).toHaveBeenCalledTimes(3);
+  });
+
   it("sends implementation as new human work and uses the workflow action for stage continuation", async () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const owner = component.match(/async function sendRoutingAction\(action\) \{[\s\S]*?\n\}/u)?.[0];

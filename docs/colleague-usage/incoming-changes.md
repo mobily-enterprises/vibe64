@@ -40,7 +40,9 @@ If a branch or target changed since Review, refresh and review again. Conflicts
 leave the remote target and receiving session files unchanged. Vibe64 retains a
 private checkpoint of that session's complete work before offering **Fix it with
 AI**. The existing Temporary AI chat starts with Senior in this receiving session;
-it receives the exact reviewed commits and conflicting paths. It repairs those
+its Senior model and account must be available. It uses the working session
+currently selected in the receiving project and receives the exact reviewed
+commits and conflicting paths. It repairs those
 working files without committing, rebasing or publishing. You can also repair
 them manually. Preserve unrelated work and inspect both sides' intended behavior.
 

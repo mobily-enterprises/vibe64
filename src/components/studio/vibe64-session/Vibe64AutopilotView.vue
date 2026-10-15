@@ -1618,7 +1618,7 @@ function openTemporaryAi() {
 }
 
 async function startTemporaryAiTask(options = {}) {
-  if (!assistantCanUsePurpose(options.recoveryOperation === "update" ? "senior" : "junior") || props.sessionSelectionArchived) {
+  if (!assistantCanUsePurpose(options.recoveryOperation === "update" || options.initialRouting?.mode === "senior" ? "senior" : "junior") || props.sessionSelectionArchived) {
     return false;
   }
   emit("chat-attention");
