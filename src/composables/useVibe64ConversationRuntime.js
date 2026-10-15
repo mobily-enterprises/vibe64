@@ -141,7 +141,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     } finally { void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {}); }
   }
   async function continueWorkflow(request) {
-    if (!current.value || !available.value) throw new Error("This conversation is no longer available.");
+    if (!available.value) throw new Error("This conversation is no longer available.");
     const messageId = String(request?.messageId || "").trim();
     const message = String(request?.input?.message || "");
     if (!messageId || !message.trim()) throw new Error("Refresh the session before continuing this workflow.");
