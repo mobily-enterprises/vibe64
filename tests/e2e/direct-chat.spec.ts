@@ -2336,6 +2336,47 @@ for (const width of [320, 390, 820]) {
   });
 }
 
+for (const width of [390, 1280]) {
+  test(`@workflow-continue Continue review reaches the session action and shows rejection at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const messageId = "original-review-request";
+    const message = "Finish the agreed review.";
+    const requests: Record<string, unknown>[] = [];
+    await mockDirectChat(page, { conversationLog: [{
+      turnId: "000001", user: { role: "user", messageId, text: message },
+      assistant: { role: "assistant", text: "The review is waiting for your choice." }
+    }] });
+    const session = { ...directSession(), metadata: {
+      assistant_routing: JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" }),
+      assistant_routing_request: JSON.stringify({ schemaVersion: 5, messageId, input: { message },
+        mode: "auto", resolvedMode: "senior", status: "waiting", delivery: "accepted", stage: "review",
+        workflow: true, followup: { messageId: "review-followup", message: "Continue review." } })
+    } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-message`, async route => {
+      requests.push(requestBodyWithoutOrigin(route.request()));
+      if (requests.length === 1) {
+        await route.fulfill({ status: 409, contentType: "application/json",
+          body: JSON.stringify({ ok: false, error: "Review could not continue. Try again." }) });
+      } else await fulfillJson(route, { ok: true, delivered: true, messageId, sessionId: SESSION_ID });
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const continueReview = page.getByRole("button", { name: "Continue review", exact: true });
+    await expect(continueReview).toBeVisible();
+    await continueReview.click();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0]).toMatchObject({ messageId, message, reviewAction: "retry" });
+    await expect(page.getByRole("alert").filter({ hasText: "Review could not continue. Try again." })).toBeVisible();
+    await expect(continueReview).toBeEnabled();
+    await page.screenshot({ path: testInfo.outputPath(`continue-review-error-${width}.png`), animations: "disabled" });
+    await continueReview.click();
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[1]).toMatchObject({ messageId, message, reviewAction: "retry" });
+    await expect(page.getByRole("alert").filter({ hasText: "Review could not continue. Try again." })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
 for (const width of [390, 820, 1280]) {
   hintTest(`@working-plan plain-language overview and collapsed details preserve drafts and fits at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });

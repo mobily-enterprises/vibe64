@@ -77,7 +77,7 @@ describe("retained project conversation ownership", () => {
   it("continues accepted and uncertain workflows through the authorized session action", async () => {
     const f = fixture(); const runtime = f.runtime.value;
     const request = { messageId: "original-request", input: { message: "Review this work" } };
-    const endpoint = "/api/vibe64/sessions/s1/agent-message";
+    const endpoint = "/api/app/one/vibe64/sessions/s1/agent-message";
     for (const status of ["accepted", "uncertain"]) {
       runtime.delivery.state.messages = [{ id: request.messageId, status, payload: { message: request.input.message } }];
       mocks.request.mockResolvedValueOnce({ ok: true, delivered: true });
