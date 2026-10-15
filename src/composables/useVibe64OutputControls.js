@@ -740,8 +740,9 @@ function useVibe64OutputControls({
   ));
   const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
   const previewPaneDisplayed = computed(() => readRefOrGetterValue(previewDisplayed) !== false);
+  const workspacePreparing = computed(() => selectedSession.value?.workspaceSetup?.status === "running");
   const launchSourceOperationsSuspended = computed(() => (
-    !practiceBindingCurrent.value || readRefOrGetterValue(sourceOperationsSuspended) === true
+    !practiceBindingCurrent.value || readRefOrGetterValue(sourceOperationsSuspended) === true || workspacePreparing.value
   ));
   const canLoadOutputs = computed(() => launchControlsCanLoadTargets({
     displayed: terminalDisplayed.value,
@@ -902,6 +903,12 @@ function useVibe64OutputControls({
   const status = computed(() => outputTargetsResource.data.value || {});
   const outputTargetsLoaded = computed(() => status.value.ok !== false && Array.isArray(status.value.outputTargets));
   const launchStatusLoadError = computed(() => {
+    if (workspacePreparing.value) return "";
+    const setup = selectedSession.value?.workspaceSetup;
+    if (["failed", "ambiguous"].includes(setup?.status)) {
+      return setup.diagnostic || "Workspace preparation failed. Expand Preparing workspace to inspect the failure and retry setup.";
+    }
+    if (outputTargetsResource.isLoading.value) return "";
     const error = outputTargetsResource.query?.error?.value || null;
     return launchStatusErrorText({
       error,
@@ -1074,6 +1081,7 @@ function useVibe64OutputControls({
     return presentationKind === "web" ? "Server is stopped" : "Program is stopped";
   });
   const launchButtonsDisabled = computed(() => Boolean(
+    workspacePreparing.value ||
     readRefOrGetterValue(busy) ||
     operationBusy.value ||
     terminalIsRunning.value
@@ -1917,7 +1925,8 @@ function useVibe64OutputControls({
     launchStatusAttempt,
     launchStatusIdleRecoveryExhausted,
     launchStarting,
-    launchWaiting,
+    launchWaiting: computed(() => workspacePreparing.value || launchWaiting.value),
+    workspacePreparing,
     outputTargets,
     outputTargetsLoaded,
     outputExecution,

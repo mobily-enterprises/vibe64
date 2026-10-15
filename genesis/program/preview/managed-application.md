@@ -310,6 +310,13 @@ Host resource diagnostics also reach the browser command caller after a failed
 test. Shared guidance retains task-denial evidence and its incident ID, and asks
 for an operator capacity review before retrying or changing test timeouts.
 
+While the session reports workspace setup running, browser output reads and
+starts wait on that existing state rather than inspecting partially installed
+dependencies. The Preview pane points to preparation progress; setup completion
+refreshes outputs through the existing source-operation resume path. Setup
+failures remain visible, and errors from the fresh output read are not treated
+as successful preparation or hidden by package-specific exception rules.
+
 Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the
 preview resource profile, finite targets use the bounded job profile, and

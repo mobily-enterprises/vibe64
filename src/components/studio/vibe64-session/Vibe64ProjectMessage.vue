@@ -10,7 +10,7 @@
           <div class="text-body-small">
             {{ sent ? 'To' : 'From' }}
             <a :href="projectLink">{{ sent ? details.projectSlug : details.sourceProject }}</a>
-            · {{ sent ? details.sessionId : details.sourceSession }}
+            · {{ sessionLabel }}
           </div>
         </div>
       </header>
@@ -32,9 +32,33 @@ import { computed, ref, watch } from "vue";
 import { mdiRobotOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
+import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionsQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({ details: { type: Object, required: true }, at: { type: String, default: "" } });
 const sent = computed(() => props.details.direction === "sent");
+const project = computed(() => sent.value ? props.details.projectSlug : props.details.sourceProject);
+const sessionId = computed(() => sent.value ? props.details.sessionId : props.details.sourceSession);
+const paths = usePaths();
+const sessions = useEndpointResource({
+  enabled: computed(() => Boolean(project.value && sessionId.value)),
+  path: computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID, params: { slug: project.value } })),
+  queryKey: computed(() => vibe64SessionsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, project.value)),
+  readQuery: { limit: 20 },
+  queryOptions: { refetchOnMount: false, refetchOnWindowFocus: false },
+  realtime: {
+    events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
+    matches: ({ payload = {} } = {}) => !payload.learningAttemptId &&
+      (!payload.projectSlug || payload.projectSlug === project.value) && (!payload.reason || payload.reason === "session-renamed")
+  }
+});
+const sessionLabel = computed(() => {
+  const session = sessions.data.value?.sessions?.find(item => item.sessionId === sessionId.value);
+  const name = String(session?.sessionName || session?.metadata?.issue_word || "").trim();
+  return name && name !== sessionId.value ? `${name} (${sessionId.value})` : sessionId.value;
+});
 const expanded = ref(false);
 watch(() => props.details.body, () => { expanded.value = false; });
 const preview = computed(() => {
@@ -47,7 +71,7 @@ const blocks = computed(() => parseLongTextReviewBlocks(
   !expanded.value && preview.value ? preview.value : props.details.body,
   { preserveParagraphLineBreaks: true }
 ));
-const projectLink = computed(() => `/app/project/${encodeURIComponent(sent.value ? props.details.projectSlug : props.details.sourceProject)}?session=${encodeURIComponent(sent.value ? props.details.sessionId : props.details.sourceSession)}&chat=main`);
+const projectLink = computed(() => `/app/project/${encodeURIComponent(project.value)}?session=${encodeURIComponent(sessionId.value)}&chat=main`);
 </script>
 
 <style scoped>

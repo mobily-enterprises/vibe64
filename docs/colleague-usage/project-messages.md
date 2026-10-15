@@ -33,6 +33,10 @@ lists, links and code are rendered; long messages have **Read more** and **Show 
 Received messages appear on
 the left; sent messages appear on the right, with their timestamp and delivery
 status inside the bubble. They are not human messages.
+The **From** and **To** lines show the current session name when it is available,
+for example **FileTransfer (2026-10-11_14-18-36)**. Unnamed sessions, or sessions
+whose name cannot be loaded, show only their ID. The link still opens that exact
+session; renaming it does not change message routing.
 Bubbles show the actual message, without the internal permission and reply-command
 instructions supplied to the receiving assistant.
 Ordinary replies and progress updates to you use indented, shaded chat bubbles

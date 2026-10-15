@@ -56,6 +56,12 @@ remote previews or localhost on your own machine. If you denied access, change
 the site's microphone permission in the browser and retry. Colleague can explain
 these steps but cannot grant browser permission or record on your behalf.
 
+While **Preparing workspace** is running, Preview waits before reading or starting
+the app. Use **Expand** on the preparation card to inspect progress and logs.
+Preview checks the app automatically when setup finishes. If setup fails, its
+failure stays visible; fix the cause and use the preparation card's **Retry**.
+Errors that remain after setup finishes are still reported as Preview errors.
+
 If automatic Preview opening meets a busy exercise preparation or assistant write
 operation, it waits and retries the same Preview through the existing cooldown.
 The message says **Waiting for the current workspace operation to finish. Preview

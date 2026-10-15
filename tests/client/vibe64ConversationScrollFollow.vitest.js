@@ -14,6 +14,14 @@ import {
 } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const messageSessionLists = VueRuntime.ref({});
+vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
+  usePaths: () => ({ api: (suffix, { params }) => `/api/app/${params.slug}${suffix}` })
+}));
+vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
+  useEndpointResource: ({ path }) => ({ data: VueRuntime.computed(() => messageSessionLists.value[path.value]) })
+}));
+
 vi.mock("vuetify/components/VAlert", () => ({
   VAlert: passthroughComponent()
 }));
@@ -314,6 +322,7 @@ describe("Vibe64 conversation scroll following", () => {
   let originalWindowDescriptor;
 
   beforeEach(() => {
+    messageSessionLists.value = {};
     vi.useFakeTimers();
     animationFrames = new Map();
     nextAnimationFrameId = 1;
@@ -522,14 +531,26 @@ describe("Vibe64 conversation scroll following", () => {
     expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Received agent message")).not.toBeNull();
     expect(userPromptContent(mounted.container)).toBeNull();
     expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/vibe64?session=source&chat=main")).not.toBeNull();
+    expect(nodeText(mounted.container)).toContain("· source");
+    messageSessionLists.value = {
+      "/api/app/vibe64/vibe64/sessions": { sessions: [{ sessionId: "source", sessionName: "FileTransfer" }] },
+      "/api/app/online/vibe64/sessions": { sessions: [{ sessionId: "destination", sessionName: "Learning" }] }
+    };
+    await nextTick();
+    expect(nodeText(mounted.container)).toContain("FileTransfer (source)");
     for (const [status, label] of [["accepted", "Accepted · delivery not confirmed"], ["delivered", "Delivered to assistant"], ["failed", "Delivery failed"]]) {
       mounted.state.turns.value = [{ turnId: "outgoing", system: { role: "system", text: details.body },
         metadata: { projectMessage: { ...details, direction: "sent", status } } }];
       await nextTick();
       expect(nodeText(mounted.container)).toContain(label);
+      expect(nodeText(mounted.container)).toContain("Learning (destination)");
       expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Sent agent message")).not.toBeNull();
       expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/online?session=destination&chat=main")).not.toBeNull();
     }
+    messageSessionLists.value = {};
+    await nextTick();
+    expect(nodeText(mounted.container)).toContain("· destination");
+    expect(nodeText(mounted.container)).not.toContain("Learning (destination)");
     mounted.app.unmount();
   });
 

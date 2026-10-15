@@ -3965,6 +3965,11 @@ Normal assistant replies and commentary keep the shared transcript renderer;
 the editor's scoped styles indent their shaded bubbles beneath the name and
 cap the row at the same width as human messages. Project messages have separate
 neutral outlined bubbles and explicit To/From links.
+The message component reads the existing, project-scoped session-list resource
+to display the current session name beside its ID in either direction. It shares
+the session-list query cache and refreshes names on rename/reconnect events.
+Missing or unavailable names fall back to the ID; stored messages and routing
+identities do not change.
 
 `vibe64-helper session message-project <project> [--session <id>] <message> [message-id]` uses the
 existing bound session command socket. `agentSessionCommand.js` supplies the

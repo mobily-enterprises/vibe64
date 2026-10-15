@@ -613,6 +613,7 @@ function useVibe64OutputControlsSurface(props) {
     launchStatusAttempt,
     launchStarting,
     launchWaiting,
+    workspacePreparing,
     outputExecution,
     outputResults,
     outputRuns,
@@ -1014,6 +1015,7 @@ function useVibe64OutputControlsSurface(props) {
         : `Opening preview as ${requested?.name || requested?.identityName || "the selected app identity"}…`;
     }
     return launchPreviewInFlightText({
+      workspacePreparing: workspacePreparing?.value === true,
       activeOutputTarget: activeOutputTarget.value,
       embeddedStartTarget: embeddedStartTarget.value,
       launchStarting: launchStarting.value,
@@ -2394,6 +2396,7 @@ function outputTargetLabel(outputTarget = null) {
 }
 
 function launchPreviewInFlightText({
+  workspacePreparing = false,
   activeOutputTarget = null,
   embeddedStartTarget = null,
   launchStarting = false,
@@ -2409,6 +2412,9 @@ function launchPreviewInFlightText({
   terminalCanRetry = false,
   terminalIsRunning = false
 } = {}) {
+  if (workspacePreparing) {
+    return "Preparing workspace before Preview can start. Expand Preparing workspace to see progress. Preview will retry automatically when setup finishes.";
+  }
   const embedUnavailableReason = String(previewEmbedUnavailableReason || "").trim();
   if (embedUnavailableReason) {
     return embedUnavailableReason;

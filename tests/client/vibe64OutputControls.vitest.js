@@ -974,3 +974,58 @@ it.each([
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); vi.useRealTimers();
   }
 });
+
+it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup and exposes the %s outcome", async outcome => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const api = `/api/learning/${attemptId}/vibe64/sessions`;
+  const session = Vue.ref({ sessionId: "preparing", workspaceSetup: { status: "running" }, metadata: {
+    source_kind: "session_clone", source_path: "/controlled/sessions/active/preparing/source", source_path_authority: "managed_session_source"
+  } });
+  const binding = Vue.ref({ actorKey: "learning-member-42", learnerId: "42", viewerActorKey: "member-42", learningAttemptId: attemptId,
+    sessionId: "preparing", noExercise: false, sourceProjectSlug: "exact-practice", sessionsApiPath: api });
+  const requests = [];
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configureHttpWebClient({ request(url, options) {
+    requests.push({ url, options });
+    if (outcome === "invalid-contract") return Promise.reject(Object.assign(new Error("Unknown Stack component."), { status: 400, code: "STACK_PIECE_UNKNOWN" }));
+    return Promise.resolve({ ok: true, outputTargets: [], preview: { state: "idle" } });
+  } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session, learningBinding: binding }); return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "member-42");
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: "member-42" }));
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await Vue.nextTick();
+    expect(requests).toHaveLength(0);
+    expect(controls.launchWaiting.value).toBe(true);
+    expect(controls.loadError.value).toBe("");
+    expect(launchPreviewInFlightText({ workspacePreparing: controls.workspacePreparing.value, launchStarting: true }))
+      .toContain("Preparing workspace before Preview can start");
+    expect(await controls.run({ id: "app", available: true })).toBe(false);
+    expect(requests).toHaveLength(0);
+    session.value.workspaceSetup = { status: outcome === "failed" ? "failed" : "succeeded", diagnostic: outcome === "failed" ? "Dependency installation failed." : "" };
+    await vi.waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    expect(controls.launchWaiting.value).toBe(false);
+    expect(controls.loadError.value).toContain(outcome === "failed" ? "Dependency installation failed."
+      : outcome === "invalid-contract" ? "Unknown Stack component." : "");
+    expect(requests.every(request => request.options.method === "GET")).toBe(true);
+    expect(requests.every(request => request.url === `${api}/preparing/outputs`)).toBe(true);
+  } finally {
+    app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
+  }
+});
