@@ -1,0 +1,9 @@
+{
+  "projects": [
+    {
+      "name": "Proof library",
+      "repository": "https://github.com/mobily-enterprises/jskit-ai",
+      "relationship": "dependency"
+    }
+  ]
+}
