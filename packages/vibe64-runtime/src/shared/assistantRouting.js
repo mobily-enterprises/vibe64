@@ -361,6 +361,12 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
   return `[Vibe64 role: ${assistantModeLabel(mode)}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instruction}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;
 }
 
+function assistantGoalObjective(objective, pinned) {
+  if (pinned?.objective && ["custom", "senior", "junior"].some(mode =>
+    objective === assistantModePrompt(mode, pinned.objective))) return pinned.objective;
+  return objective;
+}
+
 function assistantWorkflowInstructions(state) {
   return [
     `Auto workflow stage: ${state.stage}. The workflow remains Working until an explicit outcome is processed; a native turn ending does not finish the task.`,
@@ -439,5 +445,5 @@ export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, A
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
-  assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
+  assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges };

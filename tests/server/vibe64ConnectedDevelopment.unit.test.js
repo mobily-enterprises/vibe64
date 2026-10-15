@@ -38,6 +38,40 @@ test("connected development retains Stack-owned placement and commands without a
   }
 });
 
+test("Stack declares a package default independently of command runtimes", () => {
+  const inspect = value => vibe64ConnectedDevelopmentInspection({ status: "ready",
+    lines: [`- Default package type: \`${value}\``, ...lines] });
+  const npm = inspect("npm");
+  const custom = inspect("custom");
+  assert.equal(npm.defaultPackageType, "npm");
+  assert.equal(custom.defaultPackageType, "custom");
+  assert.deepEqual(npm.runtimeRequirements, ["shell"]);
+  assert.notEqual(npm.recipeHash, custom.recipeHash);
+  assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready", lines }).defaultPackageType, "");
+  const defaultOnly = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Default package type: `npm`"] });
+  assert.equal(defaultOnly.defaultPackageType, "npm");
+  assert.equal(defaultOnly.status, "unconfigured");
+  assert.equal(defaultOnly.recipeHash, "");
+  assert.throws(() => inspect("nodejs"), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+  assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready",
+    lines: ["- Default package type: `npm`", "- Default package type: `custom`", ...lines] }),
+  { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+});
+
+test("custom scripts use one Stack-declared runner and cannot skip their checks", () => {
+  const custom = "- Custom runner with `nodejs` `cpp`: `node`";
+  const inspected = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [lines[0], custom] });
+  assert.equal(inspected.status, "ready");
+  assert.deepEqual(inspected.customRunner.argv, ["node"]);
+  assert.deepEqual(inspected.customRunner.runtimeRequirements, ["nodejs", "cpp"]);
+  assert.deepEqual(inspected.steps, []);
+  for (const candidate of [[custom], [lines[0], custom, custom],
+    [lines[0], custom.replace(": `node`", " when `tooling/custom.mjs` exists: `node`")]]) {
+    assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }),
+      { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+  }
+});
+
 test("connected development rejects missing proof, conditional success, unsafe paths and ambiguous recipes", () => {
   const invalid = candidate => assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }),
     { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });

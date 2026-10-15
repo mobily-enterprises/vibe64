@@ -12,6 +12,7 @@ import {
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
 const practiceScopeKey = Symbol("Vibe64 server practice scope");
+const actionRequestMetaKey = Symbol("Vibe64 original action request metadata");
 
 function projectSlugFromRequest(request = {}) {
   return normalizeProjectSlug(request.params?.slug);
@@ -145,6 +146,14 @@ function currentProjectRequestContext() {
   return context;
 }
 
+// Retained only for fresh action dispatch. This is the original request, not
+// the prior action's authorization result, and must never become saved state.
+function currentProjectActionRequestMeta() {
+  const context = currentProjectRequestContext();
+  if (context?.learningScope || context?.[practiceScopeKey]) return null;
+  return context?.[actionRequestMetaKey] || null;
+}
+
 function currentPracticeProjectScope(owner) {
   const grant = currentProjectRequestContext()?.[practiceScopeKey];
   if (!grant) return null;
@@ -238,11 +247,18 @@ function currentProjectScopeKey({
   return String(fallback || "global").trim() || "global";
 }
 
-async function runWithProjectRequestContext(context = {}, operation) {
+async function runWithProjectRequestContext(context = {}, operation, options = {}) {
   if (typeof operation !== "function") {
     throw new TypeError("runWithProjectRequestContext requires operation().");
   }
-  return projectContextStorage.run(Object.freeze({ ...context }), operation);
+  const scopedContext = { ...context };
+  if (scopedContext.learningScope || scopedContext[practiceScopeKey]) {
+    delete scopedContext[actionRequestMetaKey];
+  } else if (Object.hasOwn(options, "requestMeta")) {
+    if (options.requestMeta?.request) scopedContext[actionRequestMetaKey] = options.requestMeta;
+    else delete scopedContext[actionRequestMetaKey];
+  }
+  return projectContextStorage.run(Object.freeze(scopedContext), operation);
 }
 
 async function runWithResolvedProjectRequestContext(options = {}, operation) {
@@ -276,6 +292,7 @@ export {
   captureProjectRequestContext,
   assertProjectEffectAdmission,
   currentProjectRecordPath,
+  currentProjectActionRequestMeta,
   currentProjectRequestContext,
   currentProjectRuntimeRoot,
   currentProjectSessionSourceRoot,

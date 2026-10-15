@@ -21,10 +21,19 @@ import {
 
 const OUTPUT_RESULTS_READY_MARKER_PREFIX = "VIBE64_OUTPUT_RESULTS_READY_V1";
 const VIBE64_RUNTIME_PACKS = Object.freeze({
+  awsebcli: ["awsebcli"],
   bubblewrap: ["bubblewrap"],
   bun: ["bun"],
   composer: ["composer"],
   cpp: ["cpp"],
+  csharp: ["csharp"],
+  go: ["go"],
+  java: ["java"],
+  kotlin: ["java", "kotlin"],
+  python: ["python"],
+  ruby: ["ruby"],
+  rust: ["rust", "cpp"],
+  sqlite: ["sqlite"],
   git: ["git"],
   mariadb: ["mariadb"],
   mysql: ["mysql"],
@@ -98,6 +107,7 @@ async function inspectVibe64ForContext(context = {}, inspect, unconfigured) {
   }
   try {
     return await inspect({
+      session: context.session,
       environment: {
         ...(await context.runtime?.resolvePromptEnvironment() || process.env),
         ...(context.projectEnvironment || {})
@@ -128,7 +138,7 @@ async function inspectVibe64OutputsForContext(context = {}, {
 }
 
 async function inspectVibe64WorkspaceSetupForContext(context = {}, {
-  inspect = inspectVibe64WorkspaceSetup
+  inspect = context.projectService?.inspectWorkspaceSetup?.bind(context.projectService) || inspectVibe64WorkspaceSetup
 } = {}) {
   return inspectVibe64ForContext(context, inspect, {
     recipeHash: "",

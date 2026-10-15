@@ -500,13 +500,20 @@ Conversation identity, message admission and native inference stay with the conv
 
 Owns project discovery, the portable collaboration, engineering and deployment
 settings, and the project-wide GitHub issue and pull request workflows.
-Owns the portable connected-project list and its Settings editor, explicit
-one-time Stack import, repository-access checks and source-write coordination.
+Owns the portable connected-project list and its Settings editor,
+repository-access checks and source-write coordination. Stack supplies generic
+source treatment and never initializes the connection list.
 Checks fresh receiving-repository write access and publication policy for Incoming
 integration. Terminals retains the Git operation and source admission owners.
 Resolves portable connection repositories to registered project identities and
 supplies the receiving contribution's exact integration source after checking
 repository write access. This lookup grants no cross-project access itself.
+Projects projects authorized task source bindings into the Stack-declared,
+locally ignored source-map file using its existing file projection and source
+lock owners. The map does not grant access or certify command execution.
+Its read-only input inspection compares the same projection without repairing it.
+Its workspace inspection combines ordinary and connected recipe identities
+with the exact task source selection.
 Its ordinary HTTP operations dispatch canonical project actions with fresh actor
 and project authority. Existing services retain source/repository review checks,
 GitHub credentials and locks; secret reveal and owner settings enforce the same
@@ -546,10 +553,22 @@ Coordinates the selected project’s working conversations through the original 
 Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
 
 Runtime owns the stored session descriptors and source workspaces. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
-Sessions coordinates explicit connected-source preparation through receiving
+Sessions coordinates explicit and workspace-driven connected-source preparation through receiving
 project actions and the existing session creation owner. It retains reserved
 source bindings in the originating session before creating receiving source,
 so retries reuse the same identity. Terminals owns origin write admission.
+After all receiving sources are ready, Sessions asks Projects to materialize
+their exact source-map inputs; failed projection retains the receiving work.
+Internal input inspection reauthorizes receiving project access and exact source
+bindings before Project compares the generated map, without allocating sources.
+The existing workspace runner invokes this inspection before commands and cached
+readiness. Allocated contribution sessions do not automatically prepare their
+own connections; the originating Stack treats its finite direct source list.
+Sessions also coordinates connected-first Save through native receiving Save
+actions. Each confirmed commit becomes an exact integration requirement in the
+origin session before continuing; Git and the receiving Save owner determine
+publication and recovery, without a separate completion ledger. Main Save
+rechecks connected work through those same authorized receiving actions.
 
 ### Source
 - Directory `packages/vibe64-sessions`
@@ -659,10 +678,13 @@ inspecting the selected project or session declaration.
 
 Owns assistant messages to exact or selected sessions in open projects through Main admission, with source attribution, self-delivery rejection and existing access checks.
 
-Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. Explicit working-session preparation delegates initial connected-project import to Projects under the existing source admission. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
+Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. Working-session preparation consumes the project-owned connection file under existing source admission; Stack supplies generic development treatment. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
 Owns Git-derived Incoming inspection and ancestry-preserving Merge/Discard under
 the existing managed Git boundary. Sessions exposes the authorized actions;
 Projects retains receiving access and publication-policy decisions.
+Incoming conflict repair reuses the existing checkpoint, Temporary AI and
+conflict-path tree owners. Its transient review binds both remote heads and
+receiving source state; only a separately reviewed native Merge publishes.
 The same Save owner verifies exact retained connected submissions against fresh
 receiving Git ancestry before publication; Core validates their metadata shape,
 and Runtime preserves the bindings across renewal.
@@ -917,6 +939,9 @@ Owns the bounded workspace cache-maintenance command purpose and its daemon-only
 Owns managed command execution and its native stdio
 transport, PTY admission/I/O/subscription/cleanup and workflow accounting. Conversation
 engines consume this host facility; JSKIT owns their command/protocol setup.
+The existing runtime registry owns language-toolchain paths, managed command
+guards and dependency fingerprints. Hosts install the packs; project operations
+declare their commands and required tools.
 
 Terminal orchestration supplies workspace preparation policy; Genesis supplies declared operation recipes. This subsystem runs admitted finite or managed commands and owns their process, PTY and resource lifetime. It reports execution evidence without interpreting Program descriptions or admitting application work.
 

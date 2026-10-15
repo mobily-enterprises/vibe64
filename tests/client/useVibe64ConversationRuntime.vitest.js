@@ -302,6 +302,30 @@ describe("retained project conversation ownership", () => {
     expect(mocks.request).not.toHaveBeenCalled();
     expect(runtime.delivery.state.messages).toEqual([]);
   });
+  it("retains startup follow-ups as Pending until the exact preceding admission arrives", async () => {
+    const f = fixture({ status: "working" });
+    const runtime = f.runtime.value;
+    const firstReply = Promise.withResolvers();
+    mocks.request.mockImplementationOnce(() => firstReply.promise).mockResolvedValue({ ok: true });
+    const first = runtime.send({ message: "Start Claude" }, { messageId: "first-startup" });
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
+    f.owners[0].session.value.agentSession.turn = { active: true, state: "starting", id: "" };
+    f.snapshot(runtime.identity, { status: "working" });
+    await nextTick();
+    const second = runtime.send({ message: "Keep this follow-up" }, { messageId: "queued-startup" });
+    expect(runtime.delivery.state.messages.map(({ id, status }) => ({ id, status }))).toEqual([
+      { id: "first-startup", status: "pending" }, { id: "queued-startup", status: "pending" }
+    ]);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    f.owners[0].session.value.agentSession.turn = { active: true, state: "active", id: "native" };
+    f.receipt(runtime.identity, { user: { messageId: "first-startup", text: "Start Claude" } });
+    await first;
+    await second;
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request.mock.calls[1][1].body).toMatchObject({ messageId: "queued-startup", text: "Keep this follow-up" });
+    firstReply.resolve({ ok: true });
+  });
+
   it("cancels only the exact deferred speech and retires an undispatched follower on actor change", async () => {
     const f = fixture({ status: "working", steering: false });
     const runtime = f.runtime.value;

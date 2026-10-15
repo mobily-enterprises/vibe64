@@ -167,8 +167,9 @@ function workspaceSetupRunKey(sessionId = "") {
 
 function createWorkspaceSetupRunner({
   clock = () => new Date(),
-  inspect = inspectVibe64WorkspaceSetup,
+  inspect: suppliedInspect = null,
   inspectProjectFormat = inspectGenesisProjectFormat,
+  connectedPreparation = null,
   projectService,
   startWorkflow = startResourceWorkflow,
   finishWorkflow = finishVibe64Workflow,
@@ -177,7 +178,19 @@ function createWorkspaceSetupRunner({
   if (!projectService) {
     throw new TypeError("createWorkspaceSetupRunner requires the Vibe64 project service.");
   }
+  const inspect = suppliedInspect || projectService.inspectWorkspaceSetup?.bind(projectService) || inspectVibe64WorkspaceSetup;
   const activeRuns = new Map();
+
+  async function connectedSourceRoots(setup, runtime, session) {
+    if (!setup.connectedDevelopment) return [];
+    if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
+    const inputs = await connectedPreparation({ mode: "inspect", runtime, session });
+    if (inputs?.ok === false) throw Object.assign(new Error(inputs.error), { code: inputs.code });
+    if (inputs?.inputsHash !== setup.connectedDevelopment.inputsHash || !Array.isArray(inputs.sourceRoots)) {
+      throw new Error("Connected source selection changed. Prepare the workspace again before running commands.");
+    }
+    return inputs.sourceRoots;
+  }
 
   async function persist(runtime, sessionId, value, renewal = false) {
     return writeWorkspaceSetupState(runtime.store, sessionId, {
@@ -255,7 +268,7 @@ function createWorkspaceSetupRunner({
       redactionSecrets
     ));
     const environment = await runtime.resolvePromptEnvironment();
-    const currentSetup = await inspect({ environment, projectRoot: sourcePath });
+    const currentSetup = await inspect({ environment, projectRoot: sourcePath, session });
     if (currentSetup?.status !== "ready" || currentSetup.recipeHash !== recipe.recipeHash) {
       throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
     }
@@ -272,12 +285,13 @@ function createWorkspaceSetupRunner({
     });
     let outcome = "failed";
     try {
-      const admittedSetup = await inspect({ environment, projectRoot: sourcePath });
+      const admittedSetup = await inspect({ environment, projectRoot: sourcePath, session });
       if (admittedSetup?.status !== "ready" || admittedSetup.recipeHash !== recipe.recipeHash ||
           admittedSetup.stackHash !== currentSetup.stackHash) {
         throw new Error("Workspace setup changed while waiting for resources. Retry preparation to run the current steps.");
       }
       for (const [index, step] of recipe.steps.entries()) {
+        const connectedRoots = await connectedSourceRoots(admittedSetup, runtime, session);
         const currentLabel = safeSetupLabel(step.label, redactionSecrets);
         context.currentLabel = currentLabel;
         if (index > 0) {
@@ -297,7 +311,7 @@ function createWorkspaceSetupRunner({
         }, context.renewal);
         const result = await runCommand({
           actor: "app",
-          allowedRoots: [sourcePath],
+          allowedRoots: [sourcePath, ...connectedRoots],
           args: step.argv.slice(1),
           baseEnv: await runtime.resolvePromptEnvironment(),
           command: step.argv[0],
@@ -426,6 +440,7 @@ function createWorkspaceSetupRunner({
     let setup;
     try {
       setup = await inspect({
+        session,
         environment: await runtime.resolvePromptEnvironment(),
         projectRoot: sourcePath
       });
@@ -554,6 +569,7 @@ function createWorkspaceSetupRunner({
 
       try {
         setup = await inspect({
+          session,
           environment: await runtime.resolvePromptEnvironment(),
           projectRoot: sourcePath
         });
@@ -583,16 +599,17 @@ function createWorkspaceSetupRunner({
       });
     }
 
-    // Creation and explicit Prepare/Retry may import the initial source list.
-    // Passive recipe checks and after-turn inspection must never recreate it.
-    if (retry && !runtime.learningScope && ["ready", "unconfigured"].includes(setup?.status) &&
-        typeof projectService.initializeSessionConnections === "function") {
+    if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
-        await projectService.initializeSessionConnections({ sessionId, session,
-          vibe64User: projectContext?.vibe64User || null });
+        if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
+        const prepared = await connectedPreparation({ mode: "prepare", runtime, session });
+        if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
+        session = await runtime.getSession(sessionId, { inspectSource: false });
+        setup = await inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
+        await connectedSourceRoots(setup, runtime, session);
       } catch (error) {
         const state = await failed(runtime, sessionId, {
-          currentLabel: "Initialize connected projects", diagnostic: normalizeText(error?.message), renewal
+          currentLabel: "Prepare connected sources", diagnostic: normalizeText(error?.message), renewal
         });
         return { completion: null, state };
       }
@@ -738,6 +755,7 @@ function createWorkspaceSetupRunner({
       let setup;
       try {
         setup = await inspect({
+          session,
           environment: await runtime.resolvePromptEnvironment(),
           projectRoot: sourcePath
         });
@@ -747,6 +765,11 @@ function createWorkspaceSetupRunner({
       }
       if (setup.status === "unconfigured") {
         return previous.status === "unconfigured";
+      }
+      try {
+        await connectedSourceRoots(setup, runtime, session);
+      } catch {
+        return false;
       }
       return setup.status === "ready" &&
         previous.status === "succeeded" &&

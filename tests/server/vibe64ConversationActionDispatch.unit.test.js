@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
+import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
@@ -8,11 +9,72 @@ import { mainConversationId, temporaryConversationId } from "../../packages/vibe
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+
+test("standalone Main and temporary conversations use the selected local project without hosted authority", async () => {
+  await withRouteProject(async ({ projectContext, slug }) => {
+    const targetRoot = path.join(projectContext.projectsRoot, slug);
+    const configure = projectCatalogEnabled => configureStudioProjectContext({
+      explicitTargetRoot: targetRoot, explicitSystemRoot: path.join(projectContext.projectsRoot, "state"),
+      explicitManagedSourceRoot: path.join(projectContext.projectsRoot, "sessions"),
+      runtimeProfile: { local: !projectCatalogEnabled, projectCatalogEnabled, singleTargetRoot: targetRoot }, env: {}
+    });
+    configure(false);
+    const app = Fastify();
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
+      createSessionActions({ sessions: {} }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)
+        .map(definition => ({ surfaces: ["app"], ...definition })) });
+    let reads = 0;
+    let subscriptions = 0;
+    const open = () => ({
+      read() {
+        assert.equal(currentProjectRequestContext().targetRoot, targetRoot);
+        assert.equal(currentProjectRequestContext().vibe64User, null);
+        reads += 1;
+        return { conversationLog: [] };
+      },
+      subscribe() { subscriptions += 1; return () => {}; }
+    });
+    const conversations = createMainBrowserConversations({ actions, terminals: {
+      openBrowserConversation: open, openTemporaryBrowserConversation: open
+    } });
+    const retained = [];
+    app.get("/:kind", async request => {
+      const target = { projectSlug: request.query.project || slug, sessionId: "session-1", conversationId: "temporary-1" };
+      const id = request.params.kind === "main" ? mainConversationId(target) : temporaryConversationId(target);
+      const conversation = await conversations.open({ id, context: { requestMeta: { request } } });
+      retained.push(conversation);
+      const release = await conversation.subscribe(() => {});
+      release();
+      return conversation.read();
+    });
+    const headers = { host: "localhost", origin: "http://localhost" };
+    try {
+      for (const kind of ["main", "temporary"]) {
+        const response = await app.inject({ url: `/${kind}`, headers });
+        assert.equal(response.statusCode, 200, response.body);
+        assert.deepEqual(response.json().conversationLog, []);
+      }
+      assert.equal(reads, 2);
+      assert.equal(subscriptions, 2);
+      assert.equal((await app.inject({ url: "/main", headers: { ...headers, origin: "https://foreign.example" } })).statusCode, 403);
+      assert.equal((await app.inject({ url: "/main", headers, remoteAddress: "198.51.100.9" })).statusCode, 403);
+      assert.notEqual((await app.inject({ url: "/main?project=another-project", headers })).statusCode, 200);
+      configure(true);
+      for (const conversation of retained) await assert.rejects(conversation.read(), { statusCode: 403 });
+      assert.equal(reads, 2, "A hosted context without an authority contributor cannot inherit local access");
+    } finally {
+      await app.close();
+      configureStudioProjectContext();
+    }
+  });
+});
 
 test("the existing assistant catalogue is actor-authorized without a project or session", async () => {
   const actions = createActionCatalogue();

@@ -496,6 +496,11 @@ function createSessionAgentManager({
         ? conversationRuntime.listNativeConversationStorage({ id: context.sessionId, context, binding })
         : conversationRuntime.retireNativeConversationHistory({ id: context.sessionId, context, binding });
     };
+    if (method === "updateSessionSettings") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native settings require the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.updateNativeConversationSettings({ id: context.sessionId, context, input }));
+    };
     if (method === "ensureSession") return context => {
       if (!conversationRuntime) throw new TypeError("Native conversation readiness requires the shared runtime.");
       return provider.projectConversationResult(method, () =>
@@ -1371,6 +1376,7 @@ function createSessionAgentManager({
         coalesceIdentity: "session"
       });
     },
+    updateSessionSettings: sessionMethod("updateSessionSettings"),
     generateSessionRenewalHandover: sessionMethod("generateSessionRenewalHandover"),
     hasActiveTemporaryConversation: sessionMethod("hasActiveTemporaryConversation"),
     interruptDetachedChatTurn: sessionMethod("interruptDetachedChatTurn"),

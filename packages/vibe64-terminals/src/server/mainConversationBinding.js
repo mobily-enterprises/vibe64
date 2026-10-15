@@ -293,6 +293,11 @@ export async function prepareSessionConversationReadiness(provider, sessionId, c
   return { sessionId, engine: provider.id, native: host.native, context: request.context };
 }
 
+export async function prepareSessionConversationSettings(provider, sessionId, context) {
+  const host = await provider.prepareConversationHost(sessionId, context, "settings");
+  return { sessionId, engine: provider.id, native: host.native, context };
+}
+
 // Creation has no retained native identity. The same admitted application owner
 // prepares its input and native facilities without constructing a Main binding.
 export async function prepareSessionConversationCreation(provider, sessionId, context, input) {

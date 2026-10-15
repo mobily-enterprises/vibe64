@@ -680,7 +680,10 @@ function createAgentSessionCommandService({
       const environment = await projectService.projectEnvironmentStatus({
         sessionId, session: { ...descriptor, sessionId }
       });
-      const setup = await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+      const setup = typeof projectService.inspectWorkspaceSetup === "function"
+        ? await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
+          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) })
+        : await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
       const state = workspaceSetupStateFromMetadata({
         [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
       });

@@ -37,7 +37,6 @@ const workflowChoices = computed(() => connectedWorkflows.value.map((choice) => 
 })));
 const decisions = computed(() => props.purposes || {});
 const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].includes(props.goal.status)));
-const goalLocksSelection = computed(() => hasGoal.value && props.goal.status !== "paused");
 const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),
@@ -67,7 +66,7 @@ const description = computed(() => {
 });
 const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}`);
 const reviewDescription = computed(() => {
-  if (hasGoal.value) return "The mode is fixed during a goal. Auto and automatic review are unavailable.";
+  if (hasGoal.value) return "Auto and automatic review apply after the current goal finishes.";
   if (!reviewAvailable.value) return "Automatic review is available in Auto only.";
   if (decisions.value.review?.available === false) return decisions.value.review.message;
   return "";
@@ -81,13 +80,13 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 function openCustom() {
-  if (props.disabled || saving.value || props.connecting || props.active || goalLocksSelection.value) return;
+  if (props.disabled || saving.value) return;
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
 async function save(nextMode = mode.value, nextReview = review.value, nextWorkflow = workflowEngineId.value) {
-  if (saving.value || props.disabled || props.connecting || goalLocksSelection.value || hasGoal.value && props.active || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
-  if (nextWorkflow !== workflowEngineId.value && (props.temporary || props.active || hasGoal.value || nextMode === "custom" ||
+  if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && props.temporary) return;
+  if (nextWorkflow !== workflowEngineId.value && (props.temporary || nextMode === "custom" ||
       !workflowChoices.value.some((choice) => choice.engineId === nextWorkflow && choice.available))) return;
   const previous = { mode: mode.value, review: review.value, workflowEngineId: workflowEngineId.value, override: modelOverride.value };
   if (nextMode !== mode.value || nextWorkflow !== workflowEngineId.value) modelOverride.value = null;
@@ -137,13 +136,13 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
-        <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">{{ goalLocksSelection ? 'Pause the goal and wait for the turn to finish before changing its model or mode.' : 'Goal paused. You can change its model, Senior or Junior within this agent. The goal stays paused; Auto and switching agents are unavailable.' }}</p>
+        <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">Model and Senior/Junior changes apply to the next goal turn. Another orchestrator or Auto applies after this goal finishes.</p>
         <div v-if="!temporary && mode !== 'custom'" class="px-4 pt-2 pb-2">
           <v-select
             :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
             label="Orchestrator" variant="outlined" density="compact" hide-details
             no-data-text="No orchestrators have connected models."
-            :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || connecting || active || hasGoal || !mode"
+            :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || !mode"
             @update:model-value="save(mode, review, $event)"
           >
             <template v-if="canConfigure" #append>
@@ -159,7 +158,7 @@ function configure() {
         <v-list :lines="false" class="py-0">
           <v-list-item
             :title="requiredMode ? 'Choose model' : 'Custom'" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
-            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || connecting || goalLocksSelection || active" color="primary" min-height="60"
+            :aria-pressed="mode === 'custom'" :disabled="disabled || saving" color="primary" min-height="60"
             @click="openCustom"
           >
             <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
@@ -174,8 +173,8 @@ function configure() {
               v-for="choice in modes.filter(({ id }) => id !== 'custom')" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
-              :disabled="disabled || saving || connecting || goalLocksSelection || hasGoal && (active || choice.id === 'auto') || decisions[choice.id]?.available !== true" color="primary" min-height="60"
-              :aria-disabled="disabled || saving || connecting || goalLocksSelection || hasGoal && (active || choice.id === 'auto') || decisions[choice.id]?.available !== true ? 'true' : undefined"
+              :disabled="disabled || saving || decisions[choice.id]?.available !== true" color="primary" min-height="60"
+              :aria-disabled="disabled || saving || decisions[choice.id]?.available !== true ? 'true' : undefined"
               @click="save(choice.id)"
             >
               <template #subtitle>
@@ -187,7 +186,7 @@ function configure() {
             </v-list-item>
           </v-list>
           <div class="px-4 pb-3">
-            <p v-if="requiredMode" class="text-body-small">Merge repairs always use Senior. Stop the current turn before choosing another model.</p>
+            <p v-if="requiredMode" class="text-body-small">Merge repairs always use Senior. Model changes apply to the next turn.</p>
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
             <template v-if="!temporary && mode === 'auto'">
               <p class="text-body-small">Senior always reviews Junior's completed work. Deslop is optional.</p>

@@ -14,6 +14,8 @@ const OPERATION_PATH = "genesis/stack.md#Connected development";
 
 function vibe64ConnectedDevelopmentInspection(section = {}) {
   let sourcesFile = "";
+  let defaultPackageType = "";
+  let customRunner = null;
   const steps = [];
   const diagnostics = [...(section.diagnostics || [])];
   const declared = section.status === "ready";
@@ -23,6 +25,13 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
       const source = text.trim();
       if (!source) continue;
       const line = index + 1;
+      const packageType = source.match(/^- Default package type: `(npm|custom)`$/u);
+      if (packageType) {
+        if (defaultPackageType) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
+          "Declare exactly one default package type.", line);
+        defaultPackageType = packageType[1];
+        continue;
+      }
       const file = source.match(/^- Sources file: `([^`\r\n]+)`$/u);
       if (file) {
         if (sourcesFile) invalidStackOperation(ERROR_CODE, OPERATION_PATH, "Declare exactly one Sources file.", line);
@@ -32,42 +41,51 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
         }
         continue;
       }
+      const custom = source.startsWith("- Custom runner ");
       const entry = source.match(/^- (Prepare|Verify) /u);
-      if (!entry) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
+      if (!custom && !entry) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
         "Declare a Sources file and Prepare/Verify entries using the Workspace setup command grammar.", line);
-      const phase = entry[1] === "Verify" ? "verify" : "prepare";
-      if (verifying && phase === "prepare") invalidStackOperation(ERROR_CODE, OPERATION_PATH,
+      const phase = entry?.[1] === "Verify" ? "verify" : "prepare";
+      if (!custom && verifying && phase === "prepare") invalidStackOperation(ERROR_CODE, OPERATION_PATH,
         "All Prepare entries must precede Verify entries.", line);
-      verifying ||= phase === "verify";
+      verifying ||= !custom && phase === "verify";
       let step;
       try {
-        [step] = parseVibe64WorkspaceSetupLines([source.replace(/^- Verify /u, "- Prepare ")], { path: OPERATION_PATH });
+        const command = custom ? source.replace("- Custom runner ", "- Prepare `Custom connected source` ")
+          : source.replace(/^- Verify /u, "- Prepare ");
+        [step] = parseVibe64WorkspaceSetupLines([command], { path: OPERATION_PATH });
       } catch (error) {
         if (error.code !== "VIBE64_WORKSPACE_SETUP_INVALID") throw error;
         invalidStackOperation(ERROR_CODE, OPERATION_PATH, error.message, line);
       }
       if (step.condition) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
         "Connected development steps must run unconditionally; a skipped step cannot prove source consumption.", line);
-      steps.push({ ...step, phase });
+      if (custom) {
+        if (customRunner) invalidStackOperation(ERROR_CODE, OPERATION_PATH, "Declare exactly one Custom runner.", line);
+        customRunner = step;
+      } else steps.push({ ...step, phase });
     }
-    if (!sourcesFile || !steps.some(step => step.phase === "verify")) {
+    const defaultOnly = defaultPackageType && !sourcesFile && !steps.length && !customRunner;
+    if (!defaultOnly && (!sourcesFile || (!steps.some(step => step.phase === "verify") && !customRunner))) {
       invalidStackOperation(ERROR_CODE, OPERATION_PATH,
-        "Connected development requires a Sources file and at least one Verify entry, or exactly `- Nothing.`.");
+        "Declare a default package type alone, or a Sources file with Verify entries or a Custom runner; use `- Nothing.` for no declaration.");
     }
   }
   const status = section.status === "blocked" || diagnostics.length
-    ? "blocked" : steps.length ? "ready" : "unconfigured";
+    ? "blocked" : steps.length || customRunner ? "ready" : "unconfigured";
   return {
     contract: VIBE64_CONNECTED_DEVELOPMENT_CONTRACT,
     declared,
     status,
     stackHash: section.stackHash,
-    recipeHash: status === "ready" ? stackOperationHash({ version: 1, sourcesFile, steps }) : "",
+    recipeHash: status === "ready" ? stackOperationHash({ version: 1, sourcesFile, defaultPackageType, customRunner, steps }) : "",
     components: [...(section.components || [])],
     source: section.source || null,
     sourcesFile,
+    defaultPackageType,
+    customRunner,
     steps,
-    runtimeRequirements: uniqueSorted(steps.flatMap(step => step.runtimeRequirements)),
+    runtimeRequirements: uniqueSorted([...steps, ...(customRunner ? [customRunner] : [])].flatMap(step => step.runtimeRequirements)),
     diagnostics
   };
 }

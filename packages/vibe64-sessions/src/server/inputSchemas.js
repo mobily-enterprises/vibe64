@@ -266,6 +266,10 @@ const sessionRepositoryReviewSchema = createSchema({
   repository: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true },
   branch: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true }
 });
+const connectedWorkReviewSchema = createSchema({
+  projectSlug: { type: "string", pattern: /^[a-z0-9][a-z0-9_-]{0,47}$/u, required: true },
+  destination: { type: "object", schema: sessionRepositoryReviewSchema, required: true }
+});
 const sessionHistoryReviewSchema = createSchema({
   ...Object.fromEntries(["baseCommit", "canonicalCommit", "sessionHead", "worktreeTree"].map((key) =>
     [key, { type: "string", minLength: 1, maxLength: 128, required: true }])),
@@ -300,13 +304,23 @@ const incomingInspectionInputValidator = patchSchema({
 const incomingChangeInputValidator = patchSchema({
   sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
   id: { type: "string", required: true, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
-  action: { type: "string", required: true, enum: ["merge", "discard"] },
-  review: { type: "object", required: true, schema: incomingReviewSchema }
+  action: { type: "string", required: true, enum: ["merge", "discard", "review-repair"] },
+  review: { type: "object", required: true, schema: incomingReviewSchema },
+  repairReview: { type: "object", required: false, schema: createSchema(Object.fromEntries(
+    ["tree", "worktreeTree", "head", "indexTree"].map(key => [key, {
+      type: "string", required: true, pattern: /^[a-f0-9]{40,64}$/u
+    }])) ) }
 });
 
 const connectedSourceAllocationInputValidator = patchSchema({
   contribution: { type: "object", additionalProperties: true, required: true },
   workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false }
+});
+
+const connectedWorkInputValidator = patchSchema({
+  contribution: { type: "object", additionalProperties: true, required: true },
+  submittedCommit: { type: "string", pattern: /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u, required: false },
+  destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: false }
 });
 
 const sessionCreateInputValidator = patchSchema({
@@ -450,6 +464,7 @@ const sessionIdInputValidator = patchSchema({
 
 const sessionSaveInputValidator = patchSchema({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
+  connectedReview: { type: "array", maxItems: 64, items: connectedWorkReviewSchema, required: false },
   ...optionalOrigin,
   ...optionalUser,
   sessionId: {
@@ -653,6 +668,8 @@ export {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
   connectedSourceAllocationInputValidator,
+  connectedWorkInputValidator,
+  connectedWorkReviewSchema,
   sessionRepositoryReviewSchema,
   sessionHistoryReviewSchema,
   sessionRenameInputValidator,

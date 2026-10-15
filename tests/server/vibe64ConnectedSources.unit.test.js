@@ -25,12 +25,15 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     let loseCreateResponse = true;
     let createCount = 0;
     let includeOther = false;
+    let connectedPreparation;
+    let automaticMode = "";
     const runtimeFor = projectSlug => ({
+      async resolvePromptEnvironment() { return {}; },
       store: {
         async writeMetadataValue(id, key, value) { sessionsByProject[projectSlug].get(id).metadata[key] = value; },
         async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); }
       },
-      async getSession(id) { return sessionsByProject[projectSlug].get(id) || null; },
+      async getSession(id) { return structuredClone(sessionsByProject[projectSlug].get(id) || null); },
       async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()]; },
       async createSession(input) {
         createCount++;
@@ -45,6 +48,21 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       }
     });
     const project = {
+      async inspectConnectedDevelopmentInputs({ session, projects }) {
+        assert.equal(session.sessionId, "parent");
+        assert.equal(projects.length, 1);
+        assert.equal(projects[0].session.sessionId, sessionConnectedSources(session)[0].contribution.id);
+        calls.push("inspect connected source inputs");
+        return { sourcesFile: ".development/sources.json", status: "inputs-prepared", recipeHash: "test-recipe" };
+      },
+      async prepareConnectedDevelopmentInputs({ session, projects }) {
+        assert.equal(session.sessionId, "parent");
+        assert.equal(projects.length, 1);
+        assert.equal(projects[0].repository, "https://github.com/example/library");
+        assert.equal(projects[0].session.sourceReady, true);
+        calls.push("project connected source inputs");
+        return { sourcesFile: ".development/sources.json", status: "inputs-prepared", recipeHash: "test-recipe" };
+      },
       async createRuntime() { return runtimeFor(currentProjectRequestContext().slug); },
       async connectedProjectTargets() { return [
         { name: "Library", repository: "https://github.com/example/library", relationship: "dependency", projectSlug: "library" },
@@ -63,11 +81,13 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
       workspaceSetupRunner: { start: async () => ({ completion: null }) },
       terminals: {
+        setConnectedPreparation(prepare) { connectedPreparation = prepare; },
         openBrowserConversation() { throw new Error("Source preparation must not start a conversation."); },
         async runConnectedSourcePreparation(id, _input, operation) {
           assert.equal(currentProjectRequestContext().slug, slug);
           assert.equal(id, parent.sessionId);
-          return operation({ runtime: runtimeFor(slug), session: parent });
+          const source = { runtime: runtimeFor(slug), session: parent };
+          return automaticMode ? connectedPreparation({ ...source, mode: automaticMode }) : operation(source);
         },
         async resolveAssistantPurpose() { return { available: true, connectionIdentity: "account", effectiveSelection: {
           agentId: "build", catalogRevision: `sha256:${"b".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
@@ -87,7 +107,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       async authorizeProject({ slug: target, definition }) {
         calls.push(`${definition.id}:${target}`);
         if (target === "other") throw Object.assign(new Error("Other project access unavailable"), { code: "other_unavailable" });
-        if (target === "library" && definition.id.endsWith(".allocate") && !allowReceiver) {
+        if (target === "library" && (definition.id.endsWith(".allocate") || definition.id.endsWith(".work.inputs")) && !allowReceiver) {
           throw Object.assign(new Error("Receiving project access revoked"), { code: "receiver_forbidden" });
         }
       }
@@ -115,9 +135,30 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.prepared[0].sessionId, binding.contribution.id);
     assert.equal(result.prepared[0].sourceReady, true);
+    assert.equal(result.development.status, "inputs-prepared");
+    assert.equal(result.development.sourcesFile, ".development/sources.json");
     assert.equal(createCount, 1, "retry reuses the exact existing source");
     assert.equal(parent.metadata.connected_sources, reserved);
     assert.ok(calls.includes("receiving capacity admission"));
+
+    const inspectInputs = () => actions.execute({ actionId: "vibe64.sessions.connected.inputs.inspect",
+      input: { sessionId: "parent" }, context: { ...context, channel: "internal" } });
+    const beforeInspection = calls.filter(value => value === "project connected source inputs").length;
+    assert.equal((await inspectInputs()).status, "inputs-prepared");
+    assert.equal(calls.filter(value => value === "project connected source inputs").length, beforeInspection);
+    assert.equal(createCount, 1, "readiness inspection neither allocates nor prepares source");
+    allowReceiver = false;
+    assert.equal((await inspectInputs()).code, "receiver_forbidden", "readiness reauthorizes the receiving project");
+    allowReceiver = true;
+
+    automaticMode = "prepare";
+    assert.equal((await prepare()).ok, true, "ordinary setup reuses the already-admitted preparation operation");
+    automaticMode = "inspect";
+    assert.equal((await prepare()).status, "inputs-prepared", "the runner retains the original action request for fresh inspection");
+    allowReceiver = false;
+    assert.equal((await prepare()).code, "receiver_forbidden", "retained request metadata never caches receiving access");
+    allowReceiver = true;
+    automaticMode = "";
 
     await mkdir(path.join(projectContext.projectsRoot, "other"));
     includeOther = true;

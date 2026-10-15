@@ -44,6 +44,15 @@ missing resources or changed Env files still require preparation. Wait for
 delivery or a reported failure before retrying the request. The same behaviour
 applies on desktop and mobile; Colleague can explain a delay but cannot skip
 the connection or preparation checks.
+While the first request is starting, you can submit a follow-up in a connected
+Codex or Claude chat. It appears as **Pending** while the delivery queue waits
+for the current submission. Pending is not a delivery acknowledgement. A lost
+connection or an unconfirmed stop can still prevent Send; resolve that notice
+before submitting more work. Desktop and mobile use the same queue.
+**Stop** also cancels follow-ups still waiting locally to be sent. **Send** stays
+unavailable while Stop is being confirmed. Already dispatched requests retain
+their delivery status; inspect them before deciding whether to send again.
+
 Codex, Claude and OpenCode share the project-format check before refreshing
 skills and agent guidance. This check reads the format marker without scanning
 application files; it does not replace the separate guidance checks.
@@ -59,8 +68,9 @@ If an assistant stops because its credits or quota are exhausted, open **Chat
 mode** and choose another connected **Orchestrator**, or choose **Custom** and a
 permitted model. A pending automatic continuation or review does not prevent
 this change: Vibe64 cancels its old scheduling and waits for routing-helper
-cleanup before switching. An active coding turn still requires **Stop** first;
-an unfinished goal requires **Cancel goal**. A reported cleanup failure keeps
+cleanup before switching. During an active turn, the new settings are saved for
+the next turn. An unfinished goal keeps its orchestrator; another orchestrator
+is saved for after that goal finishes. A reported cleanup failure keeps
 the previous selection; retry after restoring the execution service.
 The session's files and saved conversation remain. Switching does not resend
 the old request or confirm uncertain delivery. Use **Retry** for that
@@ -144,18 +154,20 @@ added. Use an open session before uploading again. Colleague can explain the
 notice; it cannot override the closing check. The same rule applies on desktop
 and mobile.
 
-If Claude asks you to stop before changing its settings or instructions, select
-**Stop**, wait for it to succeed, then retry the change. Its existing conversation
-history is retained. Colleague can explain the error and perform a supported
-change when you explicitly ask; stopping work still needs your instruction.
+Open **Chat mode** at any point to choose **Senior**, **Junior**, an
+**Orchestrator**, or **Custom** → **Apply**. Saving settings does not stop the
+current turn. The next turn uses the new settings; see [Goals and model
+changes](coding-agent-goals.md) for automatic continuations and an unfinished
+goal's retained orchestrator. If saving fails, the control reports the error;
+retry after resolving it. Colleague can explain or perform a supported selection
+change when you explicitly ask.
 
-To change the model for an active Update merge repair, select **Stop** first and
-wait for it to succeed. In that repair's composer, open **Chat mode**, then
-**Choose model**. In **Custom AI**, choose a **Model** and select **Apply**.
-The repair still uses **Senior**. Your selected model stays saved for that repair,
-its history is retained, and Main chat's model is unchanged. Select **Send** to
-continue the repair. On compact screens, reveal chat first; the controls are
-the same as on desktop.
+To change the model for an active Update merge repair, open **Chat mode** in
+that repair's composer, then **Choose model**. In **Custom AI**, choose a
+**Model** and select **Apply**. The repair keeps **Senior**, its history and its
+current turn. The next turn uses the selected model; Main chat's model is
+unchanged. On compact screens, reveal chat first; the controls are the same as
+on desktop.
 
 Returning to Main chat or reloading the page keeps a saved temporary conversation.
 To remove it, use the **Close** control on that chat's tab. If stopping or cleanup
@@ -178,7 +190,7 @@ check, but does not silently repeat your message.
 Progress summaries describe the work in progress; they do not mean the final
 answer is ready. They remain attached to the same conversation after reconnecting.
 
-For goal controls and changing models while a goal is paused, read
+For goal controls and changing models while a goal is running or paused, read
 [Goals and model changes](coding-agent-goals.md).
 
 If a Learning practice conversation's source clone was removed, Codex shows the

@@ -396,8 +396,15 @@ function createSessionConversations({
       return { turn: { id: state.runId, active: ["starting", "inProgress"].includes(state.status) } };
     },
     async readGoal(id, ctx) {
-      return { goal: (await nativeState(id, ctx)).goal };
+      const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+      try {
+        const state = await nativeState(id, ctx);
+        return { status: "available", threadId: record.providerConversationId, goal: state.goal };
+      } catch (error) {
+        return { status: "unavailable", threadId: record.providerConversationId, error: error.message };
+      }
     },
+    updateSessionSettings: (id, input, ctx) => sessionAgent.updateSessionSettings(id, input, nativeContext(ctx)),
     async inspectMessageAdmission(id, input, ctx) {
       let record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
       const turn = (await ctx.conversationContext.runtime.store.readConversationLog({
@@ -628,20 +635,12 @@ function createSessionConversations({
           { ...presentation(input.presentation), draftRevision: randomUUID() }, { requireOpen: true });
         return { ok: true };
       }
-      return write(sessionId, options, async (ctx) => {
+      const update = async (ctx) => {
         const record = await recordFor(ctx, input.conversationId);
         if (record.state === "closing") throw new Error("This conversation is closing.");
         const fields = presentation(input.presentation);
         const settingsChanged = input.agentSettings && ["model", "thinking"].some((key) =>
           input.agentSettings[key] !== record.agentSettings?.[key]);
-        if (input.assistantRouting || settingsChanged) {
-          const current = await snapshot(ctx, record);
-          if (current.readError) throw new Error("Reconnect this conversation before changing its mode or model.");
-          if (current.goal && !["complete", "completed"].includes(current.goal.status)) throw new Error("Finish this goal before changing chat modes or models.");
-          if (record.recoveryOperation === "update" && (["starting", "inProgress"].includes(current.status) || current.routingPending === true)) {
-            throw new Error("Stop this repair before changing its model.");
-          }
-        }
         if (input.assistantRouting) {
           const requested = assistantRoutingPreferences(input.assistantRouting);
           if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
@@ -669,6 +668,11 @@ function createSessionConversations({
           fields.routingMetadata = { ...record.routingMetadata,
             assistant_routing: JSON.stringify(assistantRoutingPreferences({ ...preferences, override })) };
         }
+        if (fields.routingMetadata) {
+          const preferences = assistantRoutingFromMetadata(fields.routingMetadata);
+          await routing.applyGoalSelection(sessionId, null, preferences,
+            await routingContext(ctx, record.conversationId));
+        }
         if (Object.hasOwn(input, "attachmentIds")) {
           const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, {
             message: "", attachmentIds: input.attachmentIds
@@ -683,7 +687,7 @@ function createSessionConversations({
               assistant_routing: fields.routingMetadata.assistant_routing };
           }
           if (Object.hasOwn(patch, "draft") || Object.hasOwn(patch, "attachments")) patch.draftRevision = randomUUID();
-          return save(ctx, current, patch);
+          return save(ctx, current, patch, { requireOpen: true });
         });
         if (fields.recoveryOutcome === "succeeded") {
           await ctx.runtime.store.writeConversationSystemMessage({ sessionId, conversationId: record.conversationId }, {
@@ -692,7 +696,14 @@ function createSessionConversations({
           });
         }
         return { ok: true, ...(fields.routingMetadata ? { routingMetadata: saved.routingMetadata, purposes: await purposes(ctx, saved) } : {}) };
-      });
+      };
+      if (!input.assistantRouting && !input.agentSettings) return write(sessionId, options, update);
+      const context = await readSessionContext(sessionId, options);
+      const result = await context.runtime.store.runSessionExclusive(sessionId,
+        `assistant-settings-${input.conversationId}`, () => update(context),
+        { operation: "temporary-assistant-settings", waitMs: 10_000 });
+      if (!result.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
+      return result.value;
     },
 
     async startTemporaryConversationTurn(sessionId, input = {}, options = {}) {

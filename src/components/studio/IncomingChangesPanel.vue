@@ -7,6 +7,8 @@ import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedba
 import { mdiArrowLeft, mdiRefresh, mdiSourceMerge, mdiArchiveOutline } from "@mdi/js";
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { vibe64ApiError, vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
+import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const route = useRoute();
@@ -31,8 +33,14 @@ const entry = computed(() => id.value ? resource.data.value?.contributions?.[0] 
 const confirmation = ref(null);
 const pending = ref(false);
 const uncertain = ref(false);
-watch(() => [path.value, sessionId.value], () => { confirmation.value = null; uncertain.value = false; });
-const actionDisabled = computed(() => pending.value || uncertain.value || resource.isFetching.value || props.dashboardContext.sourceOperationsSuspended);
+const conflict = ref(null);
+const repair = ref(null);
+const openingRepair = ref(false);
+const loadError = computed(() => resource.loadError.value || vibe64ResourceResponseError(resource.data.value));
+watch(() => [path.value, sessionId.value], () => {
+  confirmation.value = null; uncertain.value = false; conflict.value = null; repair.value = null;
+});
+const actionDisabled = computed(() => pending.value || openingRepair.value || uncertain.value || resource.isFetching.value || props.dashboardContext.sourceOperationsSuspended);
 
 function navigate(query) { return router.push({ query: { ...route.query, ...query } }); }
 function back() {
@@ -43,6 +51,7 @@ function back() {
 function confirm(action) {
   if (actionDisabled.value || !entry.value?.review || resource.data.value?.actions?.[action]) return;
   confirmation.value = { action, review: { ...entry.value.review }, id: entry.value.id,
+    ...(action === "merge" && repair.value ? { repairReview: { ...repair.value.repairReview } } : {}),
     path: path.value, sessionId: sessionId.value, basePath: basePath.value };
 }
 async function apply() {
@@ -50,19 +59,58 @@ async function apply() {
   const reviewed = confirmation.value;
   pending.value = true;
   try {
-    await resource.save({ sessionId: reviewed.sessionId, action: reviewed.action, review: reviewed.review }, { method: "POST", path: reviewed.path });
+    const result = await resource.save({ sessionId: reviewed.sessionId, action: reviewed.action, review: reviewed.review,
+      ...(reviewed.repairReview ? { repairReview: reviewed.repairReview } : {}) }, { method: "POST", path: reviewed.path });
+    if (result?.ok !== true) throw vibe64ApiError(result, "The contribution action was not confirmed.");
     feedback.success(reviewed.action === "merge" ? "Contribution merged." : "Contribution discarded; its commits are preserved.");
     confirmation.value = null;
+    conflict.value = null;
+    repair.value = null;
     await queryClient.invalidateQueries({ queryKey: ["vibe64.incoming", reviewed.basePath] });
   } catch (error) {
-    if (path.value === reviewed.path) uncertain.value = true;
+    if (path.value === reviewed.path && sessionId.value === reviewed.sessionId) {
+      confirmation.value = null;
+      repair.value = null;
+      if (error.code === "vibe64_incoming_merge_conflict") {
+        conflict.value = { ...error.details, review: reviewed.review };
+      } else uncertain.value = true;
+    }
     feedback.error(error, "The result was not confirmed. Refresh Incoming changes before trying again.");
+  } finally { pending.value = false; }
+}
+async function fixConflict() {
+  if (actionDisabled.value || !conflict.value || props.dashboardContext.assistantSeniorAllowed === false ||
+      typeof props.dashboardContext.requestTemporaryAi !== "function") return;
+  const { review, conflictPaths, checkpointCommit } = conflict.value;
+  openingRepair.value = true;
+  try {
+    await props.dashboardContext.requestTemporaryAi({ code: "vibe64_incoming_merge_conflict", title: "Resolve Incoming merge",
+      error: [`Receiving repository: ${review.repository}; target ${review.targetBranch} at ${review.targetHead}.`,
+        `Contribution vibe64-incoming/${review.id} at ${review.activeHead}.`,
+        `Original receiving work is preserved by checkpoint ${checkpointCommit}.`,
+        `Conflicting files: ${JSON.stringify(conflictPaths)}.`].join("\n") });
+  } finally { openingRepair.value = false; }
+}
+async function reviewRepair() {
+  if (actionDisabled.value || !entry.value?.review) return;
+  const reviewed = { path: path.value, sessionId: sessionId.value, review: { ...entry.value.review } };
+  pending.value = true;
+  try {
+    const result = await resource.save({ sessionId: reviewed.sessionId, action: "review-repair", review: reviewed.review },
+      { method: "POST", path: reviewed.path });
+    if (result?.ok !== true || result.status !== "repair-review") throw vibe64ApiError(result, "Repair review was not confirmed. Refresh before retrying.");
+    if (path.value === reviewed.path && sessionId.value === reviewed.sessionId) repair.value = result;
+  } catch (error) {
+    if (path.value === reviewed.path && sessionId.value === reviewed.sessionId) { repair.value = null; uncertain.value = true; }
+    feedback.error(error, "Repair review failed. The contribution has not been merged.");
   } finally { pending.value = false; }
 }
 async function refresh() {
   confirmation.value = null;
+  repair.value = null;
+  conflict.value = null;
   await resource.reload();
-  if (!resource.loadError.value) uncertain.value = false;
+  if (!loadError.value) uncertain.value = false;
 }
 </script>
 
@@ -85,7 +133,7 @@ async function refresh() {
       <v-sheet v-if="resource.isInitialLoading.value" border rounded="lg" class="pa-4" aria-label="Loading incoming changes" aria-busy="true">
         <v-skeleton-loader v-for="index in 3" :key="index" :type="id ? 'paragraph' : 'list-item-two-line'" />
       </v-sheet>
-      <v-alert v-else-if="resource.loadError.value" type="error" variant="tonal">{{ resource.loadError.value }}</v-alert>
+      <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }}</v-alert>
       <template v-else-if="!id">
         <v-alert v-if="resource.data.value?.unresolvedCount > 0 && state !== 'unresolved'" type="warning" variant="tonal">
           {{ resource.data.value.unresolvedCount }} interrupted discards need review.
@@ -113,13 +161,22 @@ async function refresh() {
           <p v-if="entry.status === 'unresolved'" class="ma-0">Both active and discarded branches exist. Refresh and finish Discard only when both still point to the same reviewed commit. Different heads require inspection by a coding agent.</p>
           <p v-if="resource.data.value.actions?.merge" class="ma-0">{{ resource.data.value.actions.merge }}</p>
           <div class="d-flex flex-wrap ga-2">
-            <v-btn v-if="entry.status === 'pending'" color="primary" height="48" :prepend-icon="mdiSourceMerge" :disabled="actionDisabled || Boolean(resource.data.value.actions?.merge)" @click="confirm('merge')">Merge into {{ resource.data.value.targetBranch }}</v-btn>
+            <v-btn v-if="entry.status === 'pending'" color="primary" height="48" :prepend-icon="mdiSourceMerge" :disabled="actionDisabled || Boolean(resource.data.value.actions?.merge) || Boolean(conflict && !repair)" @click="confirm('merge')">Merge into {{ resource.data.value.targetBranch }}</v-btn>
             <v-btn v-if="entry.activeHead && (!entry.discardedHead || entry.discardedHead === entry.activeHead)" variant="outlined" height="48" :prepend-icon="mdiArchiveOutline" :disabled="actionDisabled || Boolean(resource.data.value.actions?.discard)" @click="confirm('discard')">{{ entry.status === 'unresolved' ? 'Finish discard' : 'Discard contribution' }}</v-btn>
           </div>
+          <v-alert v-if="conflict" type="warning" variant="tonal">
+            These files need repair in this receiving session: {{ conflict.conflictPaths?.join(', ') }}.
+            Your original work has a private checkpoint. AI completion does not merge or publish anything.
+            <div class="d-flex flex-wrap ga-2 mt-2">
+              <Vibe64TemporaryAiFixAction :pending="openingRepair" :disabled="actionDisabled || dashboardContext.assistantSeniorAllowed === false || typeof dashboardContext.requestTemporaryAi !== 'function'" @click="fixConflict" />
+              <v-btn height="48" variant="tonal" :disabled="actionDisabled" @click="reviewRepair">Review resolved conflicts</v-btn>
+            </div>
+          </v-alert>
+          <p v-if="repair" class="ma-0" role="status">Review the repaired merge below, then choose Merge into {{ resource.data.value.targetBranch }}. Only the conflicting paths come from this session; unrelated local changes are excluded.</p>
           <p v-if="uncertain" class="ma-0" role="status">Refresh to inspect the current branches before acting again.</p>
         </v-sheet>
-        <p v-if="entry.diff?.truncated" class="ma-0">This diff is truncated. Inspect the complete change in a coding session before merging.</p>
-        <pre class="incoming__diff pa-4">{{ entry.diff?.content || 'No file differences from the target.' }}</pre>
+        <p v-if="(repair?.diff || entry.diff)?.truncated" class="ma-0">This diff is truncated. Inspect the complete change in a coding session before merging.</p>
+        <pre class="incoming__diff pa-4">{{ (repair?.diff || entry.diff)?.content || 'No file differences from the target.' }}</pre>
       </template>
     </template>
     <v-dialog :model-value="Boolean(confirmation)" max-width="640" :persistent="pending" @update:model-value="!$event && !pending && (confirmation = null)">
@@ -127,6 +184,7 @@ async function refresh() {
         <v-card-text class="incoming">
           <p>{{ confirmation.review.repository }} → {{ confirmation.review.targetBranch }}</p>
           <p><code>{{ confirmation.review.activeHead }}</code></p>
+          <p v-if="confirmation.repairReview">Merge the reviewed repair <code>{{ confirmation.repairReview.tree }}</code>. Changed source or remote heads require another review.</p>
           <p>{{ confirmation.action === 'merge' ? 'Integrate this reviewed commit while preserving its history. The contribution branch remains available.' : 'Rename the branch with _discarded appended. Its commits and the author’s checkout are preserved; dependent work remains blocked.' }}</p>
         </v-card-text>
         <v-card-actions class="flex-wrap">

@@ -1,5 +1,10 @@
 # Review and publish session work
 
+Receiving-status failures preserve the originating repository's work inspection
+and ordinary Main Save presentation. The Save operation rechecks connected
+authority and work before publication, so an unknown or inaccessible receiver
+still blocks the main push with an actionable error.
+
 People can deliberately publish the complete current session work to the
 project's configured source authority without asking the coding agent to run
 Git commands.
@@ -61,6 +66,11 @@ operation authenticates the original connection and authorizes that project
 again. Projects checks fresh repository write access and its integration target;
 Sessions reuses normal capacity admission and source creation. A lost response
 retries the reserved session identity and refuses a different existing binding.
+Trusted contribution creation allocates the receiving checkout without starting
+that receiving session's workspace setup. The originating Stack recipe treats
+its finite direct source map; allocation cannot recursively traverse receiving
+connection lists or cycles. Ordinary session creation still starts setup, and
+an explicit receiving-session Prepare remains its own operation.
 The Git checkout stays under the receiving project's managed session source root.
 Renewal retains these source bindings as well as exact submissions.
 Preparation failures retain completed receiver summaries, including when a later
@@ -69,8 +79,50 @@ session identity; allocation does not replace it or claim preparation succeeded.
 
 Automatic preparation, standalone connected-project ownership, task execution
 selection and Stack-declared development placement/treatment remain incomplete.
-Recording submissions from connected-first Save, dirty-source admission and
-accepted-source reconciliation also remain incomplete. Existing sessions without
+Connected-first Save now records each confirmed receiving commit before moving
+to the next repository. The main Save action accepts the exact reviewed connected
+destinations; this mode never publishes the main project. Each receiving action
+reauthenticates and checks its immutable source binding before using native Save.
+A retry skips unchanged completed sources and recovers a missing origin record
+from the receiving session. Main Save checks for new connected work before
+checkpoint preparation and again under the publication lock.
+The latter authorized inspection returns ephemeral receiving source snapshots
+through the existing internal action. Only those source roots enter the managed
+Save command. After preparing the main commit and checking exact submitted-SHA
+integration, native Save repeats the existing worktree-tree, HEAD and observed
+canonical reads immediately before publication. Changed or unreadable sources
+refuse publication and retain the main checkpoint. Browser Save input cannot
+supply these snapshots. This closes preparation-time staleness, not the interval
+between the final read and push: no receiving locks, cross-repository transaction,
+or persisted snapshot ledger are introduced.
+The coordinator reinspects each receiver immediately before its turn, retaining
+earlier confirmed results if later inspection fails. Native Save confirms a lost
+push acknowledgement when the remote contains its exact proposed commit, then
+uses the original reconciliation path. An unreadable post-push authority records
+`vibe64_session_save_publication_unknown` on the existing Save task; its original
+operation ID and prepared Git refs remain recovery evidence. Work inspection or
+an explicit retry resumes that verifier after restart, without publishing again.
+An unresolved unknown outcome cannot be overwritten by another Save or treated
+as a completed connected contribution.
+Failed native publishing tasks also use that verifier before replacement, so a
+post-push local write error cannot cause another publication. Proven unpublished
+attempts retain their original rejection. Receiving Save carries the authenticated
+action context into its own connected checks, without recursively submitting its
+dependencies or weakening their gate.
+A receiving Save still marked running blocks Main Save even if its native child
+has already made the receiving worktree clean; metadata/finalization must finish
+before that source is considered reconciled.
+Within the native Save owner, a refusal before the first publication command
+retires only that attempt's exact prepared ref while retaining its checkpoint.
+This lets an unpublished first contribution retry after its prerequisite is
+fixed. Once push or local baseline merge has been attempted, failure retains
+the prepared evidence; remote absence cannot prove that a first push never
+succeeded or authorize recreating a deleted branch.
+The chat Save control uses a branch icon and connected destination review while
+submission is required, including when the main source is clean. It reports
+confirmed receiving pushes on success or partial failure, then returns to ordinary
+Main Save after submission. Accepted-source reconciliation remains incomplete.
+Existing sessions without
 these new metadata fields retain their original behavior; no read creates inferred
 bindings. Development consumption must use the project's explicit Stack contract
 for its toolchain, across every supported stack; the connection file is not a
@@ -221,6 +273,20 @@ Receiving mutations use the same managed boundary and project source lock. They
 require the exact reviewed repository, target and contribution heads. Merge
 fast-forwards when possible or uses the existing tree-merge owner to create an
 ordinary two-parent commit; conflicts leave source and remote heads untouched.
+Conflicts retain a private checkpoint through the original Update checkpoint
+owner before offering the existing Temporary AI workspace in the receiving
+session. Incoming's explicit repair review reuses Update's conflict-path tree
+overlay; it changes neither the real index nor worktree. The candidate combines
+only conflicting local paths with the native merge result for other files.
+The shared overlay treats selected paths literally, including filenames with
+Git pathspec syntax, so a conflict filename cannot select unrelated work.
+The transient review carries exact candidate, source tree, HEAD and index
+identities, recomputed by the server rather than trusted as client evidence.
+Final Merge rechecks those identities and both remote heads, then creates the
+ordinary two-parent commit. Temporary AI starts with Senior and does not run
+Update or publish on completion. Restart/reload preserves the existing chat and
+checkpoint owners; fresh Git/source review replaces the transient candidate.
+No Incoming queue, repair-status store or second Git engine is introduced.
 The contribution branch remains after integration. Discard uses a guarded atomic
 create-and-delete push; only an explicit lack of atomic support permits copying
 and verifying the discarded ref before deleting the exact active head. An
@@ -232,6 +298,9 @@ Terminals records that actor before mutation and retains session admission and
 the project source lock. The dashboard defaults to pending contributions, links
 interrupted discards to recovery, exposes history filters and exact-head review,
 and confirms Merge or Discard. Its badge is replaceable Git-derived observation.
+Logical API failures remain failures even when HTTP delivery succeeds. Conflict
+failures expose Fix it with AI and Review resolved conflicts; uncertain actions
+require Refresh before retry. Candidate review never refreshes publication state.
 HTTP review includes a bounded diff; Colleague receives bounded summaries and
 exact confirmation identities without source contents. Mutations refresh the
 shared GitHub observation; a notification failure cannot negate a confirmed push.

@@ -118,7 +118,7 @@ import { createClaudeConversationHost } from "./agent/providers/claudeConversati
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createAssistantRouting } from "./assistantRouting.js";
-import { assistantModePrompt, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalObjective, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
 import {
   createOpenCodeMainMessagePreparation,
@@ -128,6 +128,7 @@ import {
   prepareSessionConversationRenewal,
   prepareSessionConversationRenewalProof,
   prepareSessionConversationReadiness,
+  prepareSessionConversationSettings,
   prepareSessionConversationDisposal,
   prepareProjectConversationCleanup,
   prepareConversationRuntimeInvalidation,
@@ -1062,8 +1063,13 @@ function createService({
 
   let databaseToolsProvider = null;
   let sourceEditorProvider = null;
+  let connectedPreparation = null;
   const workspaceSetup = createWorkspaceSetupRunner({
-    projectService
+    projectService,
+    connectedPreparation: options => {
+      if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
+      return connectedPreparation(options);
+    }
   });
   const publishAgentSessionChanged = async (sessionId, payload = {}) => {
     if (!closing) {
@@ -1291,7 +1297,7 @@ function createService({
               operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread"
             );
           }
-          if (operation !== "create" && operation !== "ensure" && operation !== "dispose" &&
+          if (operation !== "create" && operation !== "ensure" && operation !== "updateSettings" && operation !== "dispose" &&
               operation !== "generateRenewalHandover" && operation !== "seedRenewalHandover" && context.temporaryConversationId && !context.scopedConversationId && !context.assistantScope) {
             return sessionConversations.conversationBinding(id, context);
           }
@@ -1302,6 +1308,7 @@ function createService({
           }
           if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
           if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, learningToolManifest(context));
+          if (operation === "updateSettings") return prepareSessionConversationSettings(provider, id, context);
           if (operation === "dispose") {
             const runtime = context.runtime;
             if (runtime?.learningScope && runtime.learningTeaching) {
@@ -1341,7 +1348,7 @@ function createService({
   });
   const sessionAttachments = createSessionAttachments({ projectService, env });
   const claudeProvider = createClaudeConversationHost({
-    env, projectService, publishSessionChanged: publishAgentSessionChanged,
+    env, projectService, logger, publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
     systemRoot: codexProviderOptions.systemRoot,
     runNativeDetachedConversation,
@@ -1587,7 +1594,7 @@ function createService({
         await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
       }
       if (result.goal) return { ...result, goal: { ...result.goal,
-        objective: result.goal.objective === assistantModePrompt(pinned.mode, pinned.objective) ? pinned.objective : result.goal.objective },
+        objective: assistantGoalObjective(result.goal.objective, pinned) },
         routing: { mode: pinned.mode, selection: pinned.selection } };
     }
     return result;
@@ -1730,6 +1737,7 @@ function createService({
       }
     };
     await assertWorkflow();
+    await input.assertConnectedWorkSaved?.();
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
@@ -1805,6 +1813,7 @@ function createService({
       onProgress: input.onProgress,
       operationId: input.operationId,
       project,
+      readConnectedWorkSnapshots: input.assertConnectedWorkSaved,
       runCommand: execution.runCommand,
       runProjectSourceExclusive: (operation, options) => projectService.runProjectSourceExclusive(async () => {
         assertSessionRepositoryReview(await projectService.readCurrentProject(), session, input.destinationReview);
@@ -2643,6 +2652,10 @@ function createService({
     setSourceEditorProvider(provider = null) {
       sourceEditorProvider = provider;
     },
+    setConnectedPreparation(prepare) {
+      if (typeof prepare !== "function") throw new TypeError("Connected preparation requires its Sessions owner.");
+      connectedPreparation = prepare;
+    },
 
     setDatabaseToolsProvider(provider = null) {
       databaseToolsProvider = provider;
@@ -2919,6 +2932,14 @@ function createService({
       }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
     },
 
+    async runConnectedSessionSave(sessionId, input, operation) {
+      return runSessionRepositoryWrite(sessionId, input, {
+        operation: "save-connected-work",
+        activeCode: "vibe64_session_save_agent_active",
+        activeMessage: "Wait for the assistant turn to finish before saving connected work."
+      }, operation);
+    },
+
     // Internal server facility: callbacks are never accepted by an action or
     // model. Snapshot validation/installation remains with its content owner.
     async runConnectedSourcePreparation(sessionId, input, operation) {
@@ -3012,6 +3033,7 @@ function createService({
         session = recorded?.session || await runtime.getSession(sessionId, { inspectSource: false });
         const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
         await prepareSessionPullRequestBranch({
+          connectedWorkSnapshots: await input.assertConnectedWorkSaved?.(),
           project: await projectService.readCurrentProject(),
           session,
           commandOptions: execution.commandOptions,
@@ -3132,8 +3154,13 @@ function createService({
         : await runtime.getSession(normalizedSessionId, {
             inspectSource: false
           });
+      const execution = input.inspectContributionPublication === true
+        ? (await sessionWorkExecution(sessionId, { runtime, session }, "connected-publication-inspection")).execution
+        : null;
       const work = await inspectManagedSessionWork({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+        ...(execution ? { commandOptions: execution.commandOptions, runCommand: execution.runCommand,
+          inspectContributionPublication: true, knownSubmittedCommit: input.knownSubmittedCommit || "" } : {}),
         project: await projectService.readCurrentProject(),
         session
       });
@@ -3156,7 +3183,8 @@ function createService({
     async changeIncomingContribution(sessionId, input = {}) {
       return runSessionRepositoryWrite(sessionId, input, { operation: "incoming-contribution" }, context =>
         projectService.runProjectSourceExclusive(async () => {
-          const { project } = await projectService.incomingRepository(input);
+          const { project } = await projectService.incomingRepository({ ...input,
+            action: input.action === "review-repair" ? "merge" : input.action });
           // A receiving action belongs to its current actor, not the person
           // whose previous coding turn recorded this session's Git identity.
           const recorded = await service.recordSessionGitCommandActor(sessionId, {
@@ -3166,7 +3194,7 @@ function createService({
           const session = await context.runtime.getSession(sessionId, { inspectSource: false });
           const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution");
           return changeManagedIncomingContribution({ project, session, action: input.action,
-            id: input.id, review: input.review, identity: execution.identity,
+            id: input.id, review: input.review, repairReview: input.repairReview, identity: execution.identity,
             commandOptions: execution.commandOptions, runCommand: execution.runCommand });
         }, { operation: `incoming-${input.action}` }));
     },
@@ -3969,7 +3997,7 @@ function createService({
         assertProjectEffectAdmission();
         return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
-          if (assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
+          if (input.action === "set" && assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
             return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior before starting or resuming a goal." };
           }
           const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
@@ -3986,7 +4014,25 @@ function createService({
           const prepared = await assistantRouting.prepareGoal(sessionId, input, context);
           const completeResult = async result => {
             if (result?.ok !== false && prepared.pinned) {
-              await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
+              const commit = async () => {
+                const latest = await assistantSessionOptions(sessionId, { ...context, session: undefined });
+                const previousPin = context.session.metadata.assistant_routing_goal;
+                const latestPin = latest.session.metadata.assistant_routing_goal;
+                // A settings save can finish while the native goal command is
+                // awaiting acknowledgement. Keep its newer pin, then apply any
+                // preferences saved before the native goal became observable.
+                if (latestPin === previousPin) {
+                  await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
+                } else if (JSON.parse(latestPin || "null")?.objective !== prepared.pinned.objective) return;
+                if (latest.session.metadata.assistant_routing !== context.session.metadata.assistant_routing) {
+                  const refreshed = await assistantSessionOptions(sessionId, { ...context, session: undefined });
+                  const preferences = assistantRoutingFromMetadata(refreshed.session.metadata);
+                  if (preferences) await assistantRouting.applyGoalSelection(sessionId, null, preferences, refreshed);
+                }
+              };
+              const committed = await context.runtime.store.runSessionExclusive(sessionId, "assistant-settings", commit,
+                { operation: "apply-started-goal-settings", waitMs: 10_000 });
+              if (!committed.acquired) throw new Error("The goal started, but its settings are still being saved. Pause it before retrying the settings change.");
             }
             return result;
           };
@@ -4006,8 +4052,14 @@ function createService({
         }
         return result;
       };
-      const result = await sessionAgent.updateGoal(sessionId, pinned && input.objective === pinned.objective
-        ? { ...input, objective: assistantModePrompt(pinned.mode, input.objective) } : input,
+      let nativeInput = input;
+      if (!canonical && pinned && input.objective === pinned.objective) {
+        const observed = await sessionAgent.readGoal(sessionId, context);
+        if (observed?.status === "available" && assistantGoalObjective(observed.goal?.objective, pinned) === input.objective) {
+          nativeInput = { ...input, objective: observed.goal.objective };
+        }
+      }
+      const result = await sessionAgent.updateGoal(sessionId, nativeInput,
       { ...context, canonicalGoal: canonical, ...(canonical ? { onGoalResult: completeResult } : {}) });
       return canonical ? result : completeResult(result);
     },
@@ -4195,13 +4247,14 @@ function createService({
     prepareAssistantChangeover,
     prepareRoutingSelection,
 
-    // Prepare a new routing pin without starting, clearing or changing the native goal.
-    async preparePausedGoalSelection(sessionId, selection, preferences, context, goal) {
-      const prepared = await assistantRouting.prepareGoal(sessionId, { action: "rebind", selection, goal }, {
-        ...context, session: { ...context.session, metadata: { ...context.session.metadata,
-          assistant_routing: JSON.stringify(preferences) } }
-      });
-      return prepared.pinned;
+    async applyGoalSelection(sessionId, selection, preferences, context) {
+      const result = await assistantRouting.applyGoalSelection(sessionId, selection, preferences, context);
+      logOperationalEvent(logger, "info", {
+        event: "vibe64.assistant_settings.updated", component: "vibe64.agent_settings", sessionId,
+        engineId: selection.engineId, modelId: selection.modelId, mode: preferences.mode,
+        goalSettings: result
+      }, "Assistant settings prepared for subsequent turns.");
+      return result;
     },
 
     cancelAssistantRoutingForSelection(sessionId, messageId, options = {}) {

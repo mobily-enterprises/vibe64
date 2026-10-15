@@ -1,5 +1,12 @@
 # Development credentials for agents and browsers
 
+An installed Elastic Beanstalk runtime uses ID `awsebcli` and command `eb` in
+coding and terminal execution. Its installation and AWS credential policy belong
+to the host; standalone Vibe64 does not install that CLI or configure credentials
+automatically. Use the host's setup instructions when it provides a managed EB
+launcher. Development Env reaches it through the same command environment as
+other project tools.
+
 Open the project's **Env** view and select **Development**. Enter the variable
 name and value, enable **Secret** for credentials, then choose **Add** or
 **Replace value**. Existing editable rows also offer **Save**.

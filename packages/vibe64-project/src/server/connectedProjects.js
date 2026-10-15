@@ -7,6 +7,7 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMeta
 
 const CONNECTED_PROJECTS_FILE = "vibe64.connections.json";
 const CONNECTED_PROJECTS_LIMIT = 64;
+const CONNECTED_PROJECTS_MAX_BYTES = 64 * 1024;
 
 function invalid(message) {
   throw vibe64Error(`${CONNECTED_PROJECTS_FILE}: ${message}`, "vibe64_connections_invalid");
@@ -19,8 +20,8 @@ function normalizeConnectedProjects(value) {
   }
   const repositories = new Set();
   return { projects: value.projects.map((entry) => {
-    if (!isPlainObject(entry) || Object.keys(entry).some((key) => !["name", "repository", "relationship"].includes(key))) {
-      invalid("Each project must contain only name, repository and relationship.");
+    if (!isPlainObject(entry) || Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
+      invalid("Each project must contain name, repository and relationship, with optional type and script.");
     }
     if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 100 || /[\x00-\x1f\x7f]/u.test(entry.name)) {
       invalid("Each project needs a name of 1–100 characters on one line.");
@@ -34,7 +35,17 @@ function normalizeConnectedProjects(value) {
     if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
     repositories.add(repository);
     if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
-    return { name: entry.name.trim(), repository, relationship: entry.relationship };
+    if (entry.type !== undefined && !["npm", "custom"].includes(entry.type)) invalid("Type must be npm or custom, or omitted to use the consuming Stack default.");
+    if (entry.script !== undefined && (typeof entry.script !== "string" || !entry.script.trim() || entry.script.length > 1024 ||
+        /[\\:\x00-\x1f\x7f]/u.test(entry.script) ||
+        entry.script.split("/").some(part => ["", ".", "..", ".git"].includes(part.toLowerCase())))) {
+      invalid("Script must be a project-relative path outside .git, without absolute paths or traversal.");
+    }
+    if (entry.type === "custom" && entry.script === undefined) invalid("A custom connection requires its project-relative script.");
+    if (entry.type === "npm" && entry.script !== undefined) invalid("An npm connection cannot have a custom script.");
+    return { name: entry.name.trim(), repository, relationship: entry.relationship,
+      ...(entry.type === undefined ? {} : { type: entry.type }),
+      ...(entry.script === undefined ? {} : { script: entry.script }) };
   }) };
 }
 
@@ -51,7 +62,7 @@ async function readConnectedProjects(sourceRoot) {
     if (!entry.isFile()) invalid("Expected an ordinary connection file, not a symbolic link or directory.");
     file = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
     const stat = await file.stat();
-    if (!stat.isFile() || stat.size > 64 * 1024) invalid("Expected an ordinary file no larger than 64 KiB.");
+    if (!stat.isFile() || stat.size > CONNECTED_PROJECTS_MAX_BYTES) invalid("Expected an ordinary file no larger than 64 KiB.");
     const text = await file.readFile("utf8");
     const value = normalizeConnectedProjects(JSON.parse(text));
     return { ...value, exists: true, revision: createHash("sha256").update(text).digest("hex") };
@@ -71,6 +82,11 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   const current = await readConnectedProjects(sourceRoot);
   if (typeof expectedRevision !== "string" || current.revision !== expectedRevision) {
     throw vibe64Error("Connected projects changed. Refresh and review the current list before saving.", "vibe64_connections_changed");
+  }
+  // Match the shared atomic writer's formatted UTF-8 JSON before replacing a
+  // readable file with content that this owner's reader would reject.
+  if (Buffer.byteLength(`${JSON.stringify(normalized, null, 2)}\n`, "utf8") > CONNECTED_PROJECTS_MAX_BYTES) {
+    invalid("The connection list exceeds 64 KiB. Shorten its entries before saving.");
   }
   await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, { directoryMode: 0o2770, fileMode: 0o660 });
   return readConnectedProjects(sourceRoot);

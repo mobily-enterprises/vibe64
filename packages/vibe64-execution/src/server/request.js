@@ -84,7 +84,15 @@ const VIBE64_COMMAND_RUNTIMES = Object.freeze([
   "bun",
   "php",
   "composer",
+  "awsebcli",
   "cpp",
+  "python",
+  "ruby",
+  "go",
+  "java",
+  "kotlin",
+  "csharp",
+  "rust",
   "playwright",
   "operator-clis"
 ]);

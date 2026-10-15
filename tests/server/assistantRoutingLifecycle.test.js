@@ -12,7 +12,7 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
-import { assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 
@@ -356,19 +356,21 @@ test("steering does not classify, and an unfinished goal rejects Auto", async (t
   await assert.rejects(f.service.send("session-1", { ...request, messageId: "next" }, f.context), /before working on a goal/);
 });
 
-test("unavailable goal observation cannot erase a saved active goal and unlock Auto", async (t) => {
+test("unavailable goal observation retains the saved goal when Auto is selected for later", async (t) => {
   const f = await fixture(t);
   f.metadata.assistant_routing_goal = JSON.stringify({ mode: "junior", status: "active", selection: f.assignments.junior });
   for (const status of ["unsupported", "unavailable"]) {
     f.agent.readGoal = async () => ({ status, goal: null });
-    await assert.rejects(f.service.send("session-1", request, f.context), /before working on a goal/);
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.helperCalls(), 0, "the deferred Auto preference must not classify this goal's request");
+    assert.equal(f.sends.length, 1, "retrying the same request does not submit again");
+    assert.equal(f.sends[0].selection.modelId, f.assignments.junior.modelId);
   }
-  assert.equal(f.helperCalls(), 0);
-  assert.equal(f.sends.length, 0);
   assert.equal(JSON.parse(f.metadata.assistant_routing_goal).status, "active");
   f.agent.readGoal = async () => ({ status: "available", goal: null });
-  await f.service.send("session-1", request, f.context);
-  assert.equal(f.sends.length, 1);
+  await f.service.send("session-1", { ...request, messageId: "after-goal" }, f.context);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.helperCalls(), 1, "Auto starts only after the native goal has finished");
 });
 
 test("Stop cancels routing while helper cleanup finishes and prevents delivery", async (t) => {
@@ -1213,7 +1215,9 @@ test("a paused goal is explicitly repinned to a direct mode without native goal 
   await f.service.send("session-1", request, f.context);
   assert.equal(f.sends[0].selection.modelId, selection.modelId);
   f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active" });
-  await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior, goal: { ...pinned, status: "active" } }, f.context), /Pause this goal/);
+  const active = await f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.senior,
+    goal: { ...pinned, status: "active" } }, f.context);
+  assert.equal(active.pinned.status, "active");
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
   await assert.rejects(f.service.prepareGoal("session-1", { action: "rebind", selection: f.assignments.junior, goal: pinned }, f.context), /selected model changed/);
 });
@@ -1240,9 +1244,10 @@ test("a native paused goal without a routing pin can select Junior without nativ
   assert.deepEqual(f.metadata, before, "preparation does not write or backfill a routing pin");
   assert.deepEqual(goal, { status: "paused", objective: "Finish validation", tokenBudget: 20000, tokensUsed: 5000 });
   assert.equal(f.sends.length, 0);
-  await assert.rejects(f.service.prepareGoal("session-1", {
+  const active = await f.service.prepareGoal("session-1", {
     action: "rebind", selection: f.assignments.junior, goal: { ...goal, status: "active" }
-  }, f.context), /Pause this goal/);
+  }, f.context);
+  assert.equal(active.pinned.status, "active");
   await assert.rejects(f.service.prepareGoal("session-1", {
     action: "rebind", selection: f.assignments.junior
   }, f.context), /native goal is unavailable/);
@@ -1307,4 +1312,92 @@ test("failed delivery inspection keeps unmatched, attempted, live and foreign-ow
   await assert.rejects(inspected(), /selected AI connection changed/);
   assert.equal(f.sends.length, 0);
   assert.equal(f.helperCalls(), 0);
+});
+
+
+for (const status of ["active", "paused"]) {
+  test(`a ${status} goal applies next-turn settings without clearing progress or sending a message`, async t => {
+    const f = await fixture(t, { mode: "senior", review: false });
+    const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+      objective: "Finish validation", status, tokenBudget: 20000, tokensUsed: 5000 };
+    f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+    const goal = { objective: assistantModePrompt("junior", pinned.objective), status, tokenBudget: 20000, tokensUsed: 5000 };
+    const updates = [];
+    f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal });
+    f.agent.updateSessionSettings = async (sessionId, input, context) => {
+      updates.push({ sessionId, input, selection: context.assistantSelection });
+      return { ok: true };
+    };
+    assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
+      { mode: "senior", review: false, workflowEngineId: "codex" }, f.context), "next-turn");
+    assert.deepEqual(updates, [{ sessionId: "session-1", input: { threadId: "native-thread",
+      model: f.assignments.senior.modelId, effort: f.assignments.senior.variantId }, selection: f.assignments.senior }]);
+    const saved = JSON.parse(f.metadata.assistant_routing_goal);
+    for (const name of ["objective", "status", "tokenBudget", "tokensUsed"]) assert.equal(saved[name], pinned[name]);
+    assert.equal(saved.mode, "senior");
+    assert.equal(saved.selection.modelId, f.assignments.senior.modelId);
+    assert.equal(f.sends.length, 0);
+    assert.deepEqual(goal, { objective: assistantModePrompt("junior", pinned.objective), status, tokenBudget: 20000, tokensUsed: 5000 });
+    assert.equal(assistantGoalObjective(goal.objective, saved), pinned.objective);
+    assert.equal(assistantGoalObjective("A different native objective", saved), "A different native objective");
+    const resumed = await f.service.prepareGoal("session-1", { action: "resume" }, f.context);
+    assert.equal(resumed.input.objective, goal.objective, "Resume retains the native goal identity after the role changes");
+  });
+}
+
+test("goal settings keep other orchestrators and Auto deferred, and expose native failures without rewriting the pin", async t => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+    objective: "Finish validation", status: "active" };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  const original = f.metadata.assistant_routing_goal;
+  f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
+  f.agent.updateSessionSettings = async () => assert.fail("A deferred selection must not reach the current native goal");
+  assert.equal(await f.service.applyGoalSelection("session-1", { ...f.assignments.senior, engineId: "claude" },
+    { mode: "senior", workflowEngineId: "claude" }, f.context), "after-goal");
+  assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
+    { mode: "auto", workflowEngineId: "codex" }, f.context), "after-goal");
+  assert.equal(f.metadata.assistant_routing_goal, original);
+  f.agent.updateSessionSettings = async () => ({ ok: false, error: "Native settings failed", code: "settings_failed" });
+  await assert.rejects(f.service.applyGoalSelection("session-1", f.assignments.senior,
+    { mode: "senior", workflowEngineId: "codex" }, f.context), { code: "settings_failed" });
+  assert.equal(f.metadata.assistant_routing_goal, original);
+  f.agent.readGoal = async () => ({ status: "unavailable", goal: null });
+  assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
+    { mode: "senior", workflowEngineId: "codex" }, f.context), "unobserved");
+  assert.equal(f.metadata.assistant_routing_goal, original);
+});
+
+test("a concurrent goal pause survives a next-turn model update", async t => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+    objective: "Finish validation", status: "active" };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
+  f.agent.updateSessionSettings = async () => {
+    f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "paused" });
+    return { ok: true };
+  };
+  await f.service.applyGoalSelection("session-1", f.assignments.senior,
+    { mode: "senior", workflowEngineId: "codex" }, f.context);
+  const saved = JSON.parse(f.metadata.assistant_routing_goal);
+  assert.equal(saved.status, "paused");
+  assert.equal(saved.selection.modelId, f.assignments.senior.modelId);
+  assert.equal(f.sends.length, 0);
+});
+
+test("a goal model update does not overwrite a concurrently replaced objective", async t => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
+    objective: "Finish validation", status: "active" };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
+  const replacement = { ...pinned, objective: "A new goal", status: "paused" };
+  f.agent.updateSessionSettings = async () => {
+    f.metadata.assistant_routing_goal = JSON.stringify(replacement);
+    return { ok: true };
+  };
+  assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
+    { mode: "senior", workflowEngineId: "codex" }, f.context), "after-goal");
+  assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), replacement);
 });

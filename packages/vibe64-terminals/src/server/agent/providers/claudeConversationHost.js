@@ -35,7 +35,7 @@ const text = (value) => String(value ?? "").trim();
 const now = () => new Date().toISOString();
 
 function createClaudeConversationHost({
-  env = process.env, projectService, publishSessionChanged: publishApplicationSessionChanged = async () => {},
+  env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged = async () => {},
   publishConversation,
   runNativeDetachedConversation,
   command = env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
@@ -78,7 +78,7 @@ function createClaudeConversationHost({
         // Keep only the original CONTROL projection; tool effects still use
         // the saved-attempt action contributor's fresh admission.
         const projectContext = captureProjectRequestContext();
-        return createProcess({ ...options,
+        return createProcess({ ...options, logger,
           onEvent: frame => runWithProjectRequestContext(projectContext || {}, () => options.onEvent(frame)),
           onFailure: failure => runWithProjectRequestContext(projectContext || {}, () => options.onFailure(failure)),
           ...(options.onControlRequest ? {
@@ -93,10 +93,11 @@ function createClaudeConversationHost({
     }
   });
   const accounts = createClaudeConversationAccounts({ owner: conversations, configRoot, providerConnections,
-    accountStatus, connectionStatus, createProcess, command, commandRunner, stopExecution, credentialHome, env });
+    accountStatus, connectionStatus, createProcess: options => createProcess({ ...options, logger }),
+    command, commandRunner, stopExecution, credentialHome, env });
   const { queries: accountQueries, queryFailure: accountQueryFailure } = accounts;
   const publishTurnEvent = createClaudeConversationEvents({ projectService, storage: conversationStorage,
-    messagePolicy, owner: conversations, accountQueries, publishSessionChanged });
+    messagePolicy, owner: conversations, accountQueries, publishSessionChanged, logger });
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
   async function contextFor(context) {
     const projectContext = captureProjectRequestContext();
@@ -171,7 +172,7 @@ function createClaudeConversationHost({
   }
 
   const provider = {
-    conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof"]),
+    conversationOperations: Object.freeze(["createConversation", "ensureSession", "updateSessionSettings", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof"]),
     prepareConversationRequest(method, context, input) {
       if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
         return { input: input === undefined ? {} : input, context };
@@ -254,7 +255,7 @@ function createClaudeConversationHost({
           account: { queries: accountQueries, failure: accountQueryFailure } }
       };
       return (async () => {
-        if (mode === "readiness") return {
+        if (mode === "readiness" || mode === "settings") return {
           native: { owner: conversations }
         };
         if (mode === "scoped" || mode === "create" || mode === "dispose") return {

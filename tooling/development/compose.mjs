@@ -1,18 +1,31 @@
-import { cp, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
-import { resolveDevelopmentDependencySource } from "./source-roots.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import { readConnectedDevelopmentSources, resolveDevelopmentDependencySource } from "./source-roots.mjs";
 import { linkNodeModulesEntries, materializeLocalDevelopmentPackages, selectLocalDevelopmentPackages } from "./source-packages.mjs";
 
 const readJson = async (file) => JSON.parse(await readFile(file, "utf8"));
+const exec = promisify(execFile);
 
 // The ordinary installation remains untouched. Only the disposable app receives
 // source packages, using the same closure and materialization as hosted development.
-export async function composePublicDevelopment({ publicRoot, appRoot, env = process.env, includeTests = false }) {
+export async function composePublicDevelopment({ publicRoot, appRoot, env = process.env, includeTests = false,
+  connectedSourcesFile = env.VIBE64_CONNECTED_SOURCES_FILE }) {
   publicRoot = await realpath(publicRoot);
-  const jskit = await resolveDevelopmentDependencySource(env.VIBE64_JSKIT_SOURCE_ROOT, "jskit-monorepo");
-  const genesis = await resolveDevelopmentDependencySource(env.VIBE64_GENESIS_SOURCE_ROOT, "genesis-compiler");
+  const connected = connectedSourcesFile
+    ? await readConnectedDevelopmentSources(connectedSourcesFile, { projectRoot: publicRoot }) : null;
+  if (connected?.projects.some(project => project.relationship === "composition" && project.type === "npm")) {
+    throw new Error("Public Vibe64 source development supports npm dependencies, not npm composition projects. Declare a project-owned custom treatment for this composition.");
+  }
+  const dependencyRoots = connected?.projects.filter(project => project.relationship === "dependency" && project.type === "npm")
+    .map(project => project.sourceRoot) || [];
+  if (dependencyRoots.includes(publicRoot)) throw new Error("The development application cannot be its own connected dependency.");
+  // A prepared task selection is authoritative over older standalone Env pins.
+  const jskit = connected ? null : await resolveDevelopmentDependencySource(env.VIBE64_JSKIT_SOURCE_ROOT, "jskit-monorepo");
+  const genesis = connected ? null : await resolveDevelopmentDependencySource(env.VIBE64_GENESIS_SOURCE_ROOT, "genesis-compiler");
   const manifest = await readJson(path.join(publicRoot, "package.json"));
   if (manifest.name !== "vibe64") throw new Error(`Expected a Public Vibe64 checkout at ${publicRoot}.`);
   const consumerDependencies = { ...manifest.dependencies, ...manifest.devDependencies };
@@ -21,14 +34,14 @@ export async function composePublicDevelopment({ publicRoot, appRoot, env = proc
     Object.assign(consumerDependencies, dependency.dependencies);
   }
   const selected = await selectLocalDevelopmentPackages({
-    jskitRoot: jskit?.sourceRoot, genesisRoot: genesis?.sourceRoot,
+    jskitRoot: jskit?.sourceRoot, genesisRoot: genesis?.sourceRoot, sourceRoots: dependencyRoots,
     consumerDependencies, installedRoots: [publicRoot]
   });
-  if (!selected.length) throw new Error("Select VIBE64_JSKIT_SOURCE_ROOT or VIBE64_GENESIS_SOURCE_ROOT for source development.");
+  if (!selected.length && !connected) throw new Error("No declared application dependencies match the selected development sources.");
 
   const require = createRequire(path.join(publicRoot, "package.json"));
-  const catalogRoot = jskit ? path.join(jskit.sourceRoot, "tooling/jskit-catalog")
-    : path.dirname(require.resolve("@jskit-ai/jskit-catalog/package.json"));
+  const catalogRoot = selected.find(entry => entry.packageId === "@jskit-ai/jskit-catalog")?.root
+    || path.dirname(require.resolve("@jskit-ai/jskit-catalog/package.json"));
   const catalog = await readJson(path.join(catalogRoot, "catalog/packages.json"));
   const tools = await import(pathToFileURL(path.join(catalogRoot, "scripts/project-packages.mjs")).href);
   const sourcePackages = Object.fromEntries(selected.map(({ packageId, root }) => [packageId, root]));
@@ -62,5 +75,47 @@ export async function composePublicDevelopment({ publicRoot, appRoot, env = proc
   const installed = Object.fromEntries(localPackages.map(({ packageId, targetRoot }) => [packageId, targetRoot]));
   const graph = await tools.checkInstalledGraph({ catalog, manifestPaths: [path.join(appRoot, "package.json")], sourcePackages: installed });
   if (graph.issues.length) throw new Error(`Composed development dependencies are inconsistent:\n${graph.issues.join("\n")}`);
-  return { appRoot, localPackages, sourceRoots: [publicRoot, jskit?.sourceRoot, genesis?.sourceRoot].filter(Boolean) };
+  return { appRoot, localPackages,
+    sourceRoots: [...new Set([publicRoot, ...(connected?.projects.map(project => project.sourceRoot) || []),
+      jskit?.sourceRoot, genesis?.sourceRoot].filter(Boolean))],
+    connectedSourcesFile: connected?.file || "" };
+}
+
+export async function verifyPublicConnectedDevelopment({ publicRoot, connectedSourcesFile, env = process.env }) {
+  const parent = path.join(publicRoot, ".vibe64-local", "connected-development");
+  await mkdir(parent, { recursive: true });
+  const appRoot = await mkdtemp(path.join(parent, "verify-"));
+  try {
+    const composition = await composePublicDevelopment({ publicRoot, appRoot, connectedSourcesFile, env });
+    // Exercise the real application's interpretation boundary in a fresh Node
+    // process. Its imports must use the composed graph, not this tool's graph.
+    const { stdout } = await exec(process.execPath, ["--input-type=module", "-e", `
+import assert from 'node:assert/strict';
+import { realpath } from 'node:fs/promises';
+import path from 'node:path';
+for (const entry of JSON.parse(process.argv[1])) {
+  assert.equal(await realpath(path.join('node_modules', entry.packageId)), await realpath(entry.targetRoot));
+}
+const { inspectVibe64ConnectedDevelopment } = await import('@local/vibe64-genesis/server');
+const result = await inspectVibe64ConnectedDevelopment({ projectRoot: process.cwd() });
+assert.equal(result.contract, 'vibe64.connected-development.v1');
+assert.equal(result.status, 'ready', JSON.stringify(result.diagnostics));
+console.log('Public Vibe64 imported and inspected Connected development through its composed package graph.');
+`, JSON.stringify(composition.localPackages)], {
+      cwd: appRoot, env: { ...env, VIBE64_DEVELOPMENT_COMPOSED: "1" }, timeout: 60_000
+    });
+    return { packages: composition.localPackages.map(entry => entry.packageId), output: stdout.trim() };
+  } finally {
+    await rm(appRoot, { recursive: true, force: true });
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [operation, connectedSourcesFile, extra] = process.argv.slice(2);
+  if (operation !== "verify" || !connectedSourcesFile || extra) {
+    throw new Error("Usage: node tooling/development/compose.mjs verify <connected-sources-file>");
+  }
+  const result = await verifyPublicConnectedDevelopment({ publicRoot: process.cwd(), connectedSourcesFile });
+  console.log(result.output);
+  console.log(`Connected source packages: ${result.packages.join(", ")}`);
 }

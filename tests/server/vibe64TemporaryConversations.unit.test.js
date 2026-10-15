@@ -889,7 +889,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", review, workflowEngineId: "codex" }));
   await f.store.writeMetadataValue("one", "assistant_changeover", '{"mainChatSentinel":true}');
   const native = new Map();
-  const calls = { starts: [], stops: [], deletes: [] };
+  const calls = { starts: [], stops: [], deletes: [], settings: [] };
   const failures = { stop: "", delete: "", loseAdmission: false, read: false };
   let nextId = 0;
   const manager = createSessionAgentManager({
@@ -938,6 +938,14 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
       connectionIdentity: `${engineId}:${modelProviderId}` })
   });
   Object.assign(f.sessionAgent, manager);
+  f.sessionAgent.updateSessionSettings = async (id, input, ctx) => {
+    assert.equal(id, "one");
+    assert.equal(ctx.routingConversationId, "chat");
+    assert.equal(ctx.runtime.store, f.store, "Native settings use the actual store, with the temporary selection");
+    assert.ok(native.has(input.threadId));
+    calls.settings.push({ input, selection: ctx.assistantSelection });
+    return { ok: true };
+  };
   const options = { vibe64User: actor };
   const preparation = async (id, selection, ctx) => {
     if (selection.engineId !== "codex" || ctx.session.metadata.codex_routing_home_provider) return;
@@ -964,7 +972,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   };
 }
 
-test("a temporary native goal fixes its mode and model, suppresses review, and remains visible after restoration", async () => {
+test("temporary goals retain identity while settings remain editable during activity and unavailable reads", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, undefined, true);
     await f.send("junior", "start-goal");
@@ -975,9 +983,9 @@ test("a temporary native goal fixes its mode and model, suppresses review, and r
     assert.equal(f.calls.starts.length, 1, "a goal never starts automatic review");
     const restored = (await f.restart().listTemporaryConversations("one", f.options)).conversations[0];
     assert.deepEqual(restored.goal, goal);
-    for (const update of [{ assistantRouting: { mode: "auto", review: true } }, { agentSettings: { model: "gpt-6-astra" } }]) {
-      await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat", ...update }, f.options), /Finish this goal/);
-    }
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "auto", review: true }
+    }, f.options), /Auto is available in Main chat only/);
     const configuration = createAssistantRoutingStore({ systemRoot: root });
     const saved = await configuration.read();
     await configuration.write({ codex: { ...saved.orchestrators.codex, junior: f.senior } }, saved.revision);
@@ -985,11 +993,39 @@ test("a temporary native goal fixes its mode and model, suppresses review, and r
       conversationId: "chat", messageId: "changed-coder", message: "Continue."
     }, f.options), /Finish or cancel the current goal before changing its AI/);
     assert.equal(f.calls.starts.length, 1);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holding = f.store.runSessionExclusive("one", "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await entered.promise;
+    try {
+      for (const status of ["paused", "active"]) {
+        goal.status = status;
+        const result = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+          assistantRouting: { mode: "senior", review: false, override: f.senior }
+        }, { ...f.options, lockWaitMs: 0 });
+        assert.equal(result.ok, true);
+        assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_goal).objective, goal.objective);
+        assert.equal(f.calls.settings.at(-1).input.threadId, record.providerConversationId);
+        assert.equal(f.calls.settings.at(-1).selection.modelId, f.senior.modelId);
+        assert.equal(f.native.get(record.providerConversationId).goal, goal);
+      }
+    } finally {
+      release.resolve();
+      await holding;
+    }
+    assert.equal(f.calls.starts.length, 1);
+    assert.deepEqual(f.calls.stops, []);
+    const pinned = (await f.record()).routingMetadata.assistant_routing_goal;
     f.failures.read = true;
-    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
-      assistantRouting: { mode: "senior", review: false }
-    }, f.options), /Reconnect this conversation/);
-    assert.equal((await f.record()).routingMetadata.assistant_routing, record.routingMetadata.assistant_routing);
+    assert.equal((await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "junior", review: false }
+    }, f.options)).ok, true);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing).mode, "junior");
+    assert.equal((await f.record()).routingMetadata.assistant_routing_goal, pinned);
+    assert.equal(f.calls.settings.length, 2, "An unavailable native goal is never mutated speculatively");
   });
 });
 
@@ -1386,8 +1422,11 @@ test("existing idle merge repairs use Senior without rewriting saved preferences
     assert.equal(f.calls.starts[0].selection.modelId, "gpt-6-astra");
     assert.match(f.calls.starts[0].input.message, /Vibe64 role: Senior/);
     assert.equal(f.calls.starts[0].input.turnMetadata.assistantRouting.resolvedMode, "senior");
-    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
-      assistantRouting: { mode: "custom", override: f.helper } }, f.options), /Stop this repair/);
+    assert.equal((await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "custom", override: f.helper } }, f.options)).ok, true);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing).override.modelId, f.helper.modelId);
+    assert.equal(f.calls.starts.length, 1, "Saving the next repair model does not start another turn");
+    assert.deepEqual(f.calls.stops, []);
     await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
     await f.service.close();
   });
@@ -1717,6 +1756,7 @@ test("temporary repair model preferences survive recovered completion in either 
       const writes = [];
       let exclusiveCalls = 0;
       let recovery;
+      let reading;
       let updating;
       let accessHeld = false;
       const bounded = async (promise, label) => {
@@ -1746,7 +1786,7 @@ test("temporary repair model preferences survive recovered completion in either 
       };
       f.store.runSessionExclusive = (...args) => {
         if (args[1] !== "agent-write-mode" || ++exclusiveCalls !== 2) return exclusive(...args);
-        // Snapshot recovery is the second admission. Hold it before entering
+        // The read's snapshot is the second admission. Hold it before entering
         // the existing lock, never while owning the metadata mutation.
         recovery = (async () => {
           if (order === "preferences-first") await bounded(preferencesWritten.promise, "preferences write");
@@ -1763,12 +1803,13 @@ test("temporary repair model preferences survive recovered completion in either 
         }
       };
       try {
+        reading = f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
         updating = f.service.updateTemporaryConversation("one", { conversationId: "chat",
           assistantRouting: { mode: "custom", override: f.senior } }, f.options);
         const changed = await updating;
         await bounded(completionWritten.promise, "completion write");
         await recovery;
-        assert.ok(recovery, "the update snapshot recovered the missed completion");
+        assert.ok(recovery, "the concurrent read recovered the missed completion");
         assert.deepEqual(writes, order === "preferences-first" ? ["preferences", "completion"] : ["completion", "preferences"]);
         assert.equal(accessHeld, order === "completion-first");
         const saved = await f.record();
@@ -1785,7 +1826,7 @@ test("temporary repair model preferences survive recovered completion in either 
         assert.deepEqual((await f.store.readSession("one")).metadata, main);
       } finally {
         preferencesWritten.resolve(); completionWritten.resolve();
-        await Promise.allSettled([updating, recovery].filter(Boolean));
+        await Promise.allSettled([updating, reading, recovery].filter(Boolean));
         f.store.writeSessionConversation = writeRecord;
         f.store.runSessionExclusive = exclusive;
         f.sessionAgent.requireAssistantAccessForSelection = requireAccess;

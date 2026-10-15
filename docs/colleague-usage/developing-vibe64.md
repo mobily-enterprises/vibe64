@@ -3,7 +3,22 @@
 This is a coding-agent and developer workflow for working on Vibe64 itself.
 Colleague can explain it; it cannot edit source or run shell commands.
 
-## Select the library checkouts
+## Prepare the connected checkouts
+
+The Vibe64 repository declares its libraries in `vibe64.connections.json`.
+**Prepare workspace** creates or reuses this session's isolated contribution
+sources and writes its ignored `.development/connected.json` selection. The
+checked-in Preview command supplies that map to `dev:example`. It consumes the
+selected npm sources without modifying release manifests or installing over the
+editable checkouts. See [Connected projects](connected-projects.md) for Settings,
+preparation and contribution Save.
+
+For a local prepared map, run
+`npm run dev:example -- --connected-sources .development/connected.json`.
+An explicitly supplied missing or invalid map fails; it never falls back to
+another checkout. The map takes precedence over manual source variables below.
+
+## Select checkouts manually
 
 In the Vibe64 project's **Env → Development**, set either or both entries:
 
@@ -34,7 +49,7 @@ an error; Vibe64 does not silently substitute a published package.
 ## Start or check development
 
 Use **Start preview**, or run `npm run dev:example` locally. The launch resolves
-the current pins and composes a disposable application under
+the prepared map or explicitly selected manual sources and composes a disposable application under
 `.vibe64-local/source-development`. The normal `node_modules`, package manifest
 and release lockfile remain unchanged. The example project's source and state
 remain in the original development location, outside that disposable app.
@@ -59,6 +74,12 @@ result and log location. Relevant checks are already covered by the standing
 development permission; do not create another human-approval exchange.
 
 ## Recover and release
+
+New Hello Node examples include Node's default connected package type, `npm`.
+An existing example is preserved on restart. If current Genesis reports
+`STACK_PROJECT_CONTRACTS_INCOMPLETE`, explicitly reconcile that example's Stack
+with the current Node catalog before retrying; restarting does not rewrite its
+source or discard its state.
 
 If a source is unavailable, correct its path or pin and restart Preview. If a
 package reports missing dependencies or outputs, have its owner prepare and check

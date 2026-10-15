@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createVibe64ConversationExecution, shellQuote } from "@local/vibe64-execution/server";
-import { sanitizeOperationText, shouldRedactLogField } from "@local/vibe64-core/server/logging";
+import { logOperationalEvent, sanitizeOperationText, shouldRedactLogField } from "@local/vibe64-core/server/logging";
 import { claudeCodeArguments as nativeClaudeArguments, claudeFlagSettings as nativeClaudeFlagSettings, createClaudeCodeProcess as startClaude } from "@jskit-ai/assistant-core/server/claude-process";
 
 const CLAUDE_CODE_VERSION = "2.1.289";
@@ -20,7 +20,7 @@ function claudeCodeArguments(options = {}) {
 }
 
 async function createClaudeCodeProcess({
-  commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, ...options
+  commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, logger, ...options
 } = {}) {
   const host = createVibe64ConversationExecution({ commandRunner, stopExecution, credentialHome,
     execution, shimDirs, onStarted, purpose: options.toolFree ? "account" : "assistant",
@@ -29,6 +29,20 @@ async function createClaudeCodeProcess({
   let native;
   let secrets = [];
   let stderr = "";
+  let executionId;
+  const startedAt = Date.now();
+  function diagnostic(stage, failure) {
+    try {
+      logOperationalEvent(logger, failure ? "warn" : "info", {
+        component: "vibe64.claude", event: "vibe64.claude.startup", stage,
+        conversationId: options.sessionId, executionId, durationMs: Date.now() - startedAt,
+        code: failure?.code, error: failure ? sanitizeOperationText(failure.message, secrets) : undefined,
+        scopeEmpty: failure?.stopProof?.scopeEmpty,
+        nativeStartupStderr: failure ? stderr : undefined
+      }, failure ? "Claude startup failed." : "Claude startup progress.");
+    } catch { /* Diagnostics must not prevent startup or verified cleanup. */ }
+  }
+  diagnostic("starting");
   try {
     const process = await startClaude({
       ...options, onStarted, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
@@ -38,6 +52,8 @@ async function createClaudeCodeProcess({
           secrets = Object.entries(input.env || {}).filter(([name]) => shouldRedactLogField(name))
             .map(([, value]) => String(value ?? "")).filter(value => value.length >= 4);
           native = await host.start(input);
+          executionId = native.id;
+          diagnostic("stream_ready");
           return native;
         },
         async stop(id, ...args) {
@@ -58,11 +74,14 @@ async function createClaudeCodeProcess({
         }
       }
     });
+    diagnostic("initialized");
     starting = false;
     secrets = [];
     native = null;
     return process;
   } catch (error) {
+    executionId ||= error.executionId;
+    diagnostic("failed", error);
     starting = false;
     secrets = [];
     native = null;

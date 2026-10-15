@@ -5,6 +5,33 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
+// This is a development input reader, not an authorization boundary. Hosted
+// execution has already checked the map against the task's receiving sessions.
+export async function readConnectedDevelopmentSources(sourceFile, { projectRoot } = {}) {
+  const file = path.resolve(projectRoot, sourceFile);
+  const relative = path.relative(await realpath(projectRoot), await realpath(file));
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("The connected source map must belong to this development project.");
+  }
+  const map = JSON.parse(await readFile(file, "utf8"));
+  if (map?.contract !== "vibe64.connected-sources.v1" || typeof map.sessionId !== "string" || !map.sessionId ||
+      !Array.isArray(map.projects)) throw new Error("Expected a prepared vibe64.connected-sources.v1 source map.");
+  const roots = new Set();
+  const projects = [];
+  for (const project of map.projects) {
+    if (!["dependency", "composition"].includes(project?.relationship) ||
+        !["npm", "custom"].includes(project.type) ||
+        typeof project.sourceRoot !== "string" || !path.isAbsolute(project.sourceRoot)) {
+      throw new Error("Connected development requires an absolute source root, relationship and effective npm/custom type for each project.");
+    }
+    const sourceRoot = await realpath(project.sourceRoot);
+    if (roots.has(sourceRoot)) throw new Error(`Duplicate connected development source root: ${sourceRoot}.`);
+    roots.add(sourceRoot);
+    projects.push({ ...project, sourceRoot });
+  }
+  return { file, sessionId: map.sessionId, projects };
+}
+
 export function developmentProjectRoot(root) {
   const session = path.dirname(root);
   const active = path.dirname(session);

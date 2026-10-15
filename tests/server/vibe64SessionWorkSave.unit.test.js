@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -14,6 +15,7 @@ import {
   inspectSessionChangeDiff,
   inspectSessionChanges,
   inspectSessionWork,
+  inspectSessionWorkDirect,
   inspectIncomingContributions,
   inspectIncomingContributionsDirect,
   prepareSessionWorkSaveMessage,
@@ -2877,6 +2879,135 @@ test("later contribution Saves retain ancestry and cannot recreate a branch disc
   assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
 });
 
+test("accepted contribution source requires explicit Update and keeps publication on its incoming ref", async t => {
+  const receiver = await contributionFixture(t);
+  receiver.session.sessionId = receiver.contribution.id;
+  await writeFile(path.join(receiver.session.sourcePath, "shared.txt"), "submitted source\n");
+  const submitted = await saveSessionWork({ ...receiver, runCommand: commandRunner });
+  receiver.session.metadata.base_commit = submitted.saveCommit;
+  receiver.session.metadata.canonical_commit = submitted.saveCommit;
+
+  await git(receiver.seed, ["fetch", "origin", receiver.ref]);
+  await writeFile(path.join(receiver.seed, "shared.txt"), "receiving change\n");
+  await git(receiver.seed, ["commit", "-am", "Advance receiving source"]);
+  await assert.rejects(git(receiver.seed, ["merge", "--no-ff", submitted.saveCommit]));
+  await writeFile(path.join(receiver.seed, "shared.txt"), "accepted conflict repair\n");
+  await git(receiver.seed, ["add", "shared.txt"]);
+  await git(receiver.seed, ["commit", "-m", "Accept repaired contribution"]);
+  const accepted = await git(receiver.seed, ["rev-parse", "HEAD"]);
+  await git(receiver.seed, ["push", "origin", "main"]);
+
+  const main = await contributionFixture(t);
+  delete main.session.metadata.connected_contribution;
+  main.session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1,
+    submissions: [{ contribution: receiver.contribution, submittedCommit: submitted.saveCommit }] });
+  await writeFile(path.join(main.session.sourcePath, "consumer.txt"), "uses accepted library\n");
+  const runCommand = request => commandRunner({ ...request, env: { ...request.env,
+    GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${receiver.remote}.insteadOf`,
+    GIT_CONFIG_VALUE_0: "https://github.com/example/project.git" } });
+  const snapshot = async () => ({ contribution: receiver.contribution,
+    ...await inspectSessionWorkDirect({ ...receiver, runCommand: commandRunner }) });
+  await assert.rejects(saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: [await snapshot()] }),
+    { code: "vibe64_connected_integration_source_update_required" });
+  assert.equal(await git(main.remote, ["rev-parse", "main"]), main.baseCommit);
+  assert.equal(await readFile(path.join(receiver.session.sourcePath, "shared.txt"), "utf8"), "submitted source\n");
+
+  const checked = await checkSessionUpdates({ ...receiver, runCommand: commandRunner });
+  assert.equal(checked.canonicalCommit, accepted);
+  assert.equal(checked.canonicalSource.ref, "refs/heads/main");
+  assert.equal(checked.updateAvailable, true);
+  const updated = await updateSessionWork({ ...receiver, runCommand: commandRunner });
+  assert.equal(updated.canonicalCommit, accepted);
+  receiver.session.metadata.base_commit = accepted;
+  receiver.session.metadata.canonical_commit = accepted;
+  assert.equal(await readFile(path.join(receiver.session.sourcePath, "shared.txt"), "utf8"), "accepted conflict repair\n");
+  assert.equal(await git(receiver.remote, ["rev-parse", receiver.ref]), submitted.saveCommit);
+  const publication = await inspectSessionWork({ ...receiver, runCommand: commandRunner, inspectContributionPublication: true });
+  assert.equal(publication.publishedCommit, submitted.saveCommit, "accepted canonical is not a new contribution publication");
+  assert.equal(publication.unsaved, false);
+  await assert.rejects(saveSessionWork({ ...receiver, runCommand: commandRunner }), { code: "vibe64_session_save_no_changes" });
+  assert.equal((await inspectSessionWork({ ...receiver, runCommand: commandRunner,
+    inspectContributionPublication: true })).publishedCommit, submitted.saveCommit);
+
+  const saved = await saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: [await snapshot()] });
+  assert.equal(await git(main.remote, ["rev-parse", "main"]), saved.saveCommit);
+  await writeFile(path.join(receiver.session.sourcePath, "next.txt"), "next contribution\n");
+  let observedLease = "";
+  const next = await saveSessionWork({ ...receiver, runCommand: request => {
+    if (request.command === "git" && request.args[0] === "push") observedLease = request.args.find(arg => arg.startsWith("--force-with-lease="));
+    return commandRunner(request);
+  } });
+  assert.equal(observedLease, `--force-with-lease=${receiver.ref}:${submitted.saveCommit}`);
+  assert.equal(await git(receiver.remote, ["rev-parse", `${receiver.ref}^`]), accepted);
+  assert.equal(await git(receiver.remote, ["rev-parse", "main"]), accepted);
+  assert.equal(await git(receiver.remote, ["rev-parse", receiver.ref]), next.saveCommit);
+
+  // An independent writer cannot be silently recorded as this source's work.
+  await git(receiver.seed, ["fetch", "origin", receiver.ref]);
+  await git(receiver.seed, ["checkout", "-b", "external", next.saveCommit]);
+  await writeFile(path.join(receiver.seed, "external.txt"), "unconsumed work\n");
+  await git(receiver.seed, ["add", "."]);
+  await git(receiver.seed, ["commit", "-m", "Independent contribution advance"]);
+  await git(receiver.seed, ["push", "origin", `HEAD:${receiver.ref}`]);
+  await assert.rejects(inspectSessionWork({ ...receiver, runCommand: commandRunner,
+    inspectContributionPublication: true }), { code: "vibe64_connected_source_update_required" });
+});
+
+test("integrated discarded or deleted contributions retain accepted source and exact publication evidence", async t => {
+  for (const disposition of ["discarded", "deleted"]) {
+    const receiver = await contributionFixture(t);
+    receiver.session.sessionId = receiver.contribution.id;
+    await writeFile(path.join(receiver.session.sourcePath, "library.txt"), "submitted library\n");
+    const saved = await saveSessionWork({ ...receiver, runCommand: commandRunner });
+    receiver.session.metadata.base_commit = saved.saveCommit;
+    receiver.session.metadata.canonical_commit = saved.saveCommit;
+    if (disposition === "discarded") await git(receiver.remote, ["update-ref", `${receiver.ref}_discarded`, saved.saveCommit]);
+    await git(receiver.remote, ["update-ref", "-d", receiver.ref]);
+    await assert.rejects(checkSessionUpdates({ ...receiver, runCommand: commandRunner }), {
+      code: disposition === "discarded" ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing"
+    });
+
+    // Acceptance is proved by history, not the disposition of the queue ref.
+    await git(receiver.seed, ["fetch", receiver.session.sourcePath, saved.saveCommit]);
+    await git(receiver.seed, ["merge", "--ff-only", saved.saveCommit]);
+    await writeFile(path.join(receiver.seed, "accepted.txt"), "accepted source change\n");
+    await git(receiver.seed, ["add", "."]);
+    await git(receiver.seed, ["commit", "-m", "Complete accepted source"]);
+    await git(receiver.seed, ["push", "origin", "main"]);
+    const accepted = await git(receiver.seed, ["rev-parse", "HEAD"]);
+    const updated = await updateSessionWork({ ...receiver, runCommand: commandRunner });
+    assert.equal(updated.canonicalCommit, accepted);
+    receiver.session.metadata.base_commit = accepted;
+    receiver.session.metadata.canonical_commit = accepted;
+    const publication = await inspectSessionWork({ ...receiver, runCommand: commandRunner,
+      inspectContributionPublication: true, knownSubmittedCommit: saved.saveCommit });
+    assert.equal(publication.publishedCommit, saved.saveCommit);
+    assert.equal(publication.sessionHead, accepted);
+    if (disposition === "deleted") await assert.rejects(inspectSessionWork({ ...receiver,
+      runCommand: commandRunner, inspectContributionPublication: true }), { code: "vibe64_contribution_branch_missing" });
+
+    const main = await contributionFixture(t);
+    delete main.session.metadata.connected_contribution;
+    main.session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1,
+      submissions: [{ contribution: receiver.contribution, submittedCommit: publication.publishedCommit }] });
+    await writeFile(path.join(main.session.sourcePath, "consumer.txt"), "uses accepted library\n");
+    const runCommand = request => commandRunner({ ...request, env: { ...request.env,
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${receiver.remote}.insteadOf`,
+      GIT_CONFIG_VALUE_0: "https://github.com/example/project.git" } });
+    const result = await saveSessionWork({ ...main, runCommand,
+      connectedWorkSnapshots: [{ contribution: receiver.contribution, ...publication }] });
+    assert.equal(await git(main.remote, ["rev-parse", "main"]), result.saveCommit);
+    await writeFile(path.join(receiver.session.sourcePath, "later.txt"), "requires a new contribution\n");
+    await assert.rejects(saveSessionWork({ ...receiver, runCommand: commandRunner }), {
+      code: disposition === "discarded" ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing"
+    });
+    assert.equal(await git(receiver.remote, ["for-each-ref", "--format=%(refname)", `${receiver.ref}*`]),
+      disposition === "discarded" ? `${receiver.ref}_discarded` : "");
+    if (disposition === "discarded") assert.equal(await git(receiver.remote,
+      ["rev-parse", `${receiver.ref}_discarded`]), saved.saveCommit);
+  }
+});
+
 test("discarded, interrupted-discard and missing published contributions refuse further pushes", async t => {
   const f = await contributionFixture(t);
   const { project, session } = f;
@@ -2914,21 +3045,130 @@ test("first contribution push uses an absent-ref lease and preserves a racing cr
   assert.equal(await readFile(path.join(session.sourcePath, "new.txt"), "utf8"), "my work\n");
 });
 
-test("lost contribution push acknowledgement recovers the prepared commit without republishing", async t => {
+test("first contribution retries after a prepublication refusal while retaining its source checkpoint", async t => {
+  const f = await contributionFixture(t);
+  const { project, session } = f;
+  const requiredRemote = "https://github.com/example/required.git";
+  const requiredContribution = { ...f.contribution, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", repository: "example/required" };
+  const requiredSession = await sessionForRemote(path.dirname(f.remote), f, requiredContribution.id);
+  requiredSession.metadata.connected_contribution = JSON.stringify(requiredContribution);
+  const requiredProject = githubProject(path.dirname(f.remote), f.remote);
+  requiredProject.githubRepository.fullName = requiredContribution.repository;
+  const connectedWorkSnapshots = [{ contribution: requiredContribution,
+    ...await inspectSessionWorkDirect({ project: requiredProject, session: requiredSession, runCommand: commandRunner }) }];
+  session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1, submissions: [{
+    contribution: requiredContribution,
+    submittedCommit: f.baseCommit
+  }] });
+  await writeFile(path.join(session.sourcePath, "retry.txt"), "keep my contribution\n");
+  let dependencyAvailable = false;
+  let pushes = 0;
+  let checkpoint;
+  const runCommand = request => {
+    if (request.args[0] === "push") pushes++;
+    if (request.args.includes(requiredRemote)) {
+      if (!dependencyAvailable) return { ok: false, stderr: "receiving repository unavailable" };
+      request = { ...request, args: request.args.map(value => value === requiredRemote ? f.remote : value) };
+    }
+    return commandRunner(request);
+  };
+  await assert.rejects(saveSessionWork({ project, session, runCommand, connectedWorkSnapshots, operationId: "first-refused", onProgress(progress) {
+    if (progress.stage === "checkpointed") checkpoint = progress.checkpointCommit;
+  } }), { code: "vibe64_connected_integration_unknown" });
+  assert.equal(pushes, 0);
+  assert.equal(await git(f.remote, ["for-each-ref", "--format=%(refname)", f.ref]), "");
+  assert.equal(await git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]), "");
+  const checkpoints = await git(session.sourcePath, ["for-each-ref", "--format=%(objectname)", "refs/vibe64/checkpoints"]);
+  assert.ok(checkpoints.split("\n").includes(checkpoint), "private recovery checkpoint remains reachable");
+  assert.equal(await readFile(path.join(session.sourcePath, "retry.txt"), "utf8"), "keep my contribution\n");
+  dependencyAvailable = true;
+  const saved = await saveSessionWork({ project, session, runCommand, connectedWorkSnapshots, operationId: "first-retry" });
+  assert.equal(pushes, 1);
+  assert.equal(saved.reconciled, true);
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), saved.saveCommit);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
+});
+
+test("unconfirmed first contribution pushes retain evidence when the remote ref is absent", async t => {
+  for (const accepted of [false, true]) {
+    const f = await contributionFixture(t);
+    const { project, session } = f;
+    const operationId = `unknown-first-${accepted}`;
+    await writeFile(path.join(session.sourcePath, "unknown.txt"), "preserve uncertain work\n");
+    await assert.rejects(saveSessionWork({ project, session, operationId, runCommand: async request => {
+      if (request.args[0] === "push") {
+        if (accepted) {
+          assert.equal((await commandRunner(request)).ok, true);
+          await git(f.remote, ["update-ref", "-d", f.ref]);
+        }
+        return { ok: false, stderr: "connection lost" };
+      }
+      return commandRunner(request);
+    } }));
+    assert.match(await git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]), /\/prepared/u);
+    const noPush = request => {
+      assert.notEqual(request.args[0], "push", "absence cannot authorize publishing an uncertain attempt again");
+      return commandRunner(request);
+    };
+    await assert.rejects(recoverSessionWorkSave({ project, session, recovery: { operationId }, runCommand: noPush }),
+      { code: "vibe64_session_save_publication_unknown" });
+    await assert.rejects(saveSessionWork({ project, session, runCommand: noPush }),
+      { code: "vibe64_contribution_branch_missing" });
+    assert.equal(await readFile(path.join(session.sourcePath, "unknown.txt"), "utf8"), "preserve uncertain work\n");
+    assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
+  }
+});
+
+test("lost contribution push acknowledgement confirms the exact remote commit and reconciles without republishing", async t => {
   const f = await contributionFixture(t);
   const { project, session } = f;
   await writeFile(path.join(session.sourcePath, "new.txt"), "recover my work\n");
   let pushes = 0;
-  const operationId = "contribution-lost-ack";
-  await assert.rejects(saveSessionWork({ project, session, operationId, runCommand: async request => {
+  const saved = await saveSessionWork({ project, session, runCommand: async request => {
     const result = await commandRunner(request);
     if (request.command === "git" && request.args[0] === "push" && result.ok) {
       pushes++;
       return { ok: false, stderr: "connection lost after remote accepted push" };
     }
     return result;
-  } }));
+  } });
   const published = await git(f.remote, ["rev-parse", f.ref]);
+  assert.equal(saved.saveCommit, published);
+  assert.equal(saved.reconciled, true);
+  assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), published);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
+  assert.equal(pushes, 1);
+  session.metadata.base_commit = published;
+  session.metadata.canonical_commit = published;
+  await assert.rejects(saveSessionWork({ project, session, runCommand: request => {
+    assert.notEqual(request.args[0], "push", "unchanged retry must not publish another commit");
+    return commandRunner(request);
+  } }), { code: "vibe64_session_save_no_changes" });
+});
+
+test("unknown contribution publication retains its prepared commit across repeated recovery and restart", async t => {
+  const f = await contributionFixture(t);
+  const { project, session } = f;
+  await writeFile(path.join(session.sourcePath, "new.txt"), "recover my work\n");
+  let pushes = 0;
+  const operationId = "contribution-lost-ack";
+  await assert.rejects(saveSessionWork({ project, session, operationId, runCommand: async request => {
+    if (pushes && request.args[0] === "ls-remote") return { ok: false, stderr: "remote unavailable" };
+    const result = await commandRunner(request);
+    if (request.command === "git" && request.args[0] === "push" && result.ok) {
+      pushes++;
+      return { ok: false, stderr: "connection lost after remote accepted push" };
+    }
+    return result;
+  } }), { code: "vibe64_session_save_publication_unknown" });
+  const published = await git(f.remote, ["rev-parse", f.ref]);
+  await assert.rejects(recoverSessionWorkSave({ project, session, recovery: { operationId }, runCommand: request => {
+    assert.notEqual(request.args[0], "push");
+    if (request.args[0] === "ls-remote") return { ok: false, stderr: "remote still unavailable" };
+    return commandRunner(request);
+  } }), { code: "vibe64_session_save_publication_unknown" });
+  assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), f.baseCommit);
+  // Only durable operation identity and Git refs are supplied to a fresh recovery.
   const recovered = await recoverSessionWorkSave({ project, session, recovery: { operationId }, runCommand: request => {
     assert.notEqual(request.args[0], "push");
     return commandRunner(request);
@@ -2938,6 +3178,34 @@ test("lost contribution push acknowledgement recovers the prepared commit withou
   assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), published);
   assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
   assert.equal(pushes, 1);
+});
+
+test("contribution publication recovers a failed local canonical write without another push", async t => {
+  const f = await contributionFixture(t);
+  const { project, session } = f;
+  const operationId = "contribution-local-write-failure";
+  await writeFile(path.join(session.sourcePath, "new.txt"), "published once\n");
+  let pushed = false;
+  await assert.rejects(saveSessionWork({ project, session, operationId, runCommand: async request => {
+    if (pushed && request.args[0] === "update-ref" && request.args[1]?.startsWith("refs/vibe64/canonical/")) {
+      return { ok: false, code: "local_cache_write_failed", stderr: "local canonical write failed" };
+    }
+    const result = await commandRunner(request);
+    if (request.args[0] === "push" && result.ok) pushed = true;
+    return result;
+  } }), { code: "local_cache_write_failed" });
+  assert.equal(pushed, true);
+  const published = await git(f.remote, ["rev-parse", f.ref]);
+  assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), f.baseCommit);
+  const recovered = await recoverSessionWorkSave({ project, session, recovery: { operationId }, runCommand: request => {
+    assert.notEqual(request.args[0], "push");
+    return commandRunner(request);
+  } });
+  assert.equal(recovered.saveCommit, published);
+  assert.equal(recovered.reconciled, true);
+  assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), published);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
+  assert.equal(await readFile(path.join(session.sourcePath, "new.txt"), "utf8"), "published once\n");
 });
 
 test("Incoming reconstructs Git-only states and review through the managed boundary without changing source", async t => {
@@ -3041,6 +3309,57 @@ test("Incoming Merge preserves contribution ancestry and dirty source through th
   }
 });
 
+test("Incoming Merge recovers a lost accepted-target response from Git without another push", async t => {
+  const f = await contributionFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "library.txt"), "library contribution\n");
+  const saved = await saveSessionWork({ ...f, runCommand: commandRunner });
+  await writeFile(path.join(f.seed, "upstream.txt"), "independent upstream work\n");
+  await git(f.seed, ["add", "."]);
+  await git(f.seed, ["commit", "-m", "Independent upstream work"]);
+  await git(f.seed, ["push", "origin", "main"]);
+  const review = await incomingReview(f);
+  await writeFile(path.join(f.session.sourcePath, "dirty.txt"), "staged local work\n");
+  await git(f.session.sourcePath, ["add", "dirty.txt"]);
+  await writeFile(path.join(f.session.sourcePath, "dirty.txt"), "unsaved local work\n");
+  const before = await git(f.session.sourcePath, ["status", "--porcelain"]);
+  const head = await git(f.session.sourcePath, ["rev-parse", "HEAD"]);
+  const index = await git(f.session.sourcePath, ["write-tree"]);
+  let pushes = 0;
+  await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id, review,
+    runCommand: async request => {
+      const result = await commandRunner(request);
+      if (request.command === "git" && request.args[0] === "push" && result.ok) {
+        pushes++;
+        return { ok: false, stderr: "connection lost after receiving target accepted merge" };
+      }
+      return result;
+    } }), /connection lost after receiving target accepted merge/u);
+  const target = await git(f.remote, ["rev-parse", "main"]);
+  assert.notEqual(target, review.targetHead);
+  assert.deepEqual((await git(f.remote, ["show", "-s", "--format=%P", "main"])).split(" "),
+    [review.targetHead, saved.saveCommit]);
+  const readOnlyCommand = request => {
+    assert.notEqual(request.args[0], "push", "recovery must not publish again");
+    return commandRunner(request);
+  };
+  const refreshed = await inspectIncomingContributionsDirect({ ...f, id: f.contribution.id, runCommand: readOnlyCommand });
+  assert.equal(refreshed.pendingCount, 0);
+  assert.equal(refreshed.contributions[0].status, "merged");
+  assert.equal(refreshed.targetHead, target);
+  await assert.rejects(changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
+    review, runCommand: readOnlyCommand }), { code: "vibe64_incoming_review_changed" });
+  const result = await changeIncomingContributionDirect({ ...f, action: "merge", id: f.contribution.id,
+    review: refreshed.contributions[0].review, runCommand: readOnlyCommand });
+  assert.equal(result.status, "merged");
+  assert.equal(result.targetHead, target);
+  assert.equal(pushes, 1);
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), saved.saveCommit);
+  assert.equal(await git(f.session.sourcePath, ["rev-parse", "HEAD"]), head);
+  assert.equal(await git(f.session.sourcePath, ["write-tree"]), index);
+  assert.equal(await git(f.session.sourcePath, ["status", "--porcelain"]), before);
+  assert.equal(await readFile(path.join(f.session.sourcePath, "dirty.txt"), "utf8"), "unsaved local work\n");
+});
+
 test("Incoming Merge refuses conflicts and stale reviews without changing either remote head", async t => {
   const f = await contributionFixture(t);
   await writeFile(path.join(f.session.sourcePath, "shared.txt"), "contribution change\n");
@@ -3057,6 +3376,92 @@ test("Incoming Merge refuses conflicts and stale reviews without changing either
     review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_merge_conflict" });
   assert.equal(await git(f.remote, ["rev-parse", "main"]), target);
   assert.equal(await git(f.remote, ["rev-parse", f.ref]), saved.saveCommit);
+});
+
+async function conflictingIncomingFixture(t) {
+  const f = await contributionFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "shared.txt"), "contribution change\n");
+  await writeFile(path.join(f.session.sourcePath, "contribution.txt"), "retain contribution\n");
+  f.saved = await saveSessionWork({ ...f, runCommand: commandRunner });
+  await writeFile(path.join(f.seed, "shared.txt"), "upstream change\n");
+  await writeFile(path.join(f.seed, "upstream.txt"), "retain upstream\n");
+  await git(f.seed, ["add", "."]);
+  await git(f.seed, ["commit", "-m", "Advance receiving project"]);
+  await git(f.seed, ["push", "origin", "main"]);
+  f.review = await incomingReview(f);
+  return f;
+}
+
+test("Incoming repair uses private checkpoints and reviewed conflict paths without publishing unrelated source", async t => {
+  const f = await conflictingIncomingFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "unrelated.txt"), "staged original\n");
+  await git(f.session.sourcePath, ["add", "unrelated.txt"]);
+  await writeFile(path.join(f.session.sourcePath, "unrelated.txt"), "unsaved original\n");
+  const headBefore = await git(f.session.sourcePath, ["rev-parse", "HEAD"]);
+  const indexBefore = await git(f.session.sourcePath, ["write-tree"]);
+  let recovery;
+  await assert.rejects(changeIncomingContribution({ ...f, action: "merge", id: f.contribution.id,
+    runCommand: commandRunner }), error => {
+    recovery = error.details;
+    return error.code === "vibe64_incoming_merge_conflict";
+  });
+  assert.deepEqual(recovery.conflictPaths, ["shared.txt"]);
+  assert.equal(await git(f.session.sourcePath, ["show", `${recovery.checkpointCommit}:unrelated.txt`]), "unsaved original");
+  await writeFile(path.join(f.session.sourcePath, "shared.txt"), "upstream change plus contribution change\n");
+  const before = await git(f.session.sourcePath, ["status", "--porcelain"]);
+  const repaired = await changeIncomingContribution({ ...f, action: "review-repair", id: f.contribution.id, runCommand: commandRunner });
+  assert.equal(repaired.status, "repair-review");
+  assert.match(repaired.diff.content, /upstream change plus contribution change/);
+  assert.doesNotMatch(repaired.diff.content, /unrelated/);
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.review.targetHead, "review never publishes");
+  const result = await changeIncomingContribution({ ...f, action: "merge", id: f.contribution.id,
+    repairReview: repaired.repairReview, runCommand: commandRunner });
+  assert.equal(result.status, "merged");
+  assert.deepEqual((await git(f.remote, ["show", "-s", "--format=%P", "main"])).split(" "),
+    [f.review.targetHead, f.saved.saveCommit]);
+  assert.equal(await git(f.remote, ["show", "main:shared.txt"]), "upstream change plus contribution change");
+  assert.equal(await git(f.remote, ["show", "main:upstream.txt"]), "retain upstream");
+  assert.equal(await git(f.remote, ["show", "main:contribution.txt"]), "retain contribution");
+  await assert.rejects(git(f.remote, ["show", "main:unrelated.txt"]));
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
+  assert.equal(await git(f.session.sourcePath, ["status", "--porcelain"]), before);
+  assert.equal(await git(f.session.sourcePath, ["rev-parse", "HEAD"]), headBefore);
+  assert.equal(await git(f.session.sourcePath, ["write-tree"]), indexBefore);
+});
+
+test("Incoming repair rejects forged candidates and source changes before or during final review", async t => {
+  const f = await conflictingIncomingFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "shared.txt"), "resolved both sides\n");
+  const input = { ...f, id: f.contribution.id, runCommand: commandRunner };
+  const repaired = await changeIncomingContributionDirect({ ...input, action: "review-repair" });
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge",
+    repairReview: { ...repaired.repairReview, tree: f.baseCommit } }), { code: "vibe64_incoming_repair_changed" });
+  await writeFile(path.join(f.session.sourcePath, "shared.txt"), "later edit\n");
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge", repairReview: repaired.repairReview }),
+    { code: "vibe64_incoming_repair_changed" });
+  const current = await changeIncomingContributionDirect({ ...input, action: "review-repair" });
+  let reads = 0;
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge", repairReview: current.repairReview,
+    runCommand: async request => {
+      if (request.command === "git" && request.args[0] === "ls-remote" && ++reads === 2) {
+        await writeFile(path.join(f.session.sourcePath, "newer.txt"), "concurrent local work\n");
+      }
+      return commandRunner(request);
+    } }), { code: "vibe64_incoming_repair_changed" });
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.review.targetHead);
+  assert.equal(await git(f.remote, ["rev-parse", f.ref]), f.saved.saveCommit);
+  await git(f.remote, ["update-ref", f.ref, f.baseCommit]);
+  await assert.rejects(changeIncomingContributionDirect({ ...input, action: "merge", repairReview: current.repairReview }),
+    { code: "vibe64_incoming_review_changed" });
+});
+
+test("Incoming repair review cannot publish a nonconflicting contribution", async t => {
+  const f = await contributionFixture(t);
+  await writeFile(path.join(f.session.sourcePath, "library.txt"), "simple contribution\n");
+  await saveSessionWork({ ...f, runCommand: commandRunner });
+  await assert.rejects(changeIncomingContribution({ ...f, action: "review-repair", id: f.contribution.id,
+    review: await incomingReview(f), runCommand: commandRunner }), { code: "vibe64_incoming_review_changed" });
+  assert.equal(await git(f.remote, ["rev-parse", "main"]), f.baseCommit);
 });
 
 test("Incoming Discard renames the exact reviewed branch and preserves the receiving target", async t => {
@@ -3119,6 +3524,86 @@ test("Incoming Discard refuses a destination collision and preserves a contribut
 });
 
 
+test("connected source snapshot recheck refuses tree, HEAD, or canonical changes after main preparation", async t => {
+  for (const changed of ["tree", "head", "canonical"]) {
+    const receiver = await contributionFixture(t);
+    receiver.session.sessionId = receiver.contribution.id;
+    const main = await contributionFixture(t);
+    delete main.session.metadata.connected_contribution;
+    const work = await inspectSessionWorkDirect({ ...receiver, runCommand: commandRunner });
+    const snapshot = { contribution: receiver.contribution, sessionId: receiver.session.sessionId,
+      worktreePath: receiver.session.sourcePath, baseCommit: work.baseCommit, canonicalCommit: work.canonicalCommit,
+      sessionHead: work.sessionHead, worktreeTree: work.worktreeTree };
+    await writeFile(path.join(main.session.sourcePath, "consumer.txt"), "main work\n");
+    let pushes = 0;
+    await assert.rejects(saveSessionWork({ ...main, connectedWorkSnapshots: [snapshot],
+      runCommand: request => {
+        if (request.args[0] === "push") pushes++;
+        return commandRunner(request);
+      },
+      onProgress: async progress => {
+        if (progress.stage !== "prepared") return;
+        if (changed === "tree") {
+          await writeFile(path.join(receiver.session.sourcePath, "later.txt"), "new receiving work\n");
+        } else {
+          const commit = await git(receiver.session.sourcePath, ["commit-tree", work.worktreeTree,
+            "-p", work.sessionHead, "-m", "Later receiving revision"]);
+          const ref = changed === "head" ? "HEAD" : `refs/vibe64/canonical/${createHash("sha256")
+            .update(`vibe64-incoming/${receiver.contribution.id}`).digest("hex").slice(0, 32)}`;
+          await git(receiver.session.sourcePath, ["update-ref", ref, commit]);
+        }
+      }
+    }), { code: "vibe64_connected_save_required" });
+    assert.equal(pushes, 0, `${changed} changed after main preparation; main must not push`);
+    assert.equal(await git(main.remote, ["rev-parse", "main"]), main.baseCommit);
+    assert.equal(await readFile(path.join(main.session.sourcePath, "consumer.txt"), "utf8"), "main work\n");
+  }
+});
+
+test("connected source snapshots cross the managed Save boundary with only their authorized source roots", async t => {
+  const receiver = await contributionFixture(t);
+  receiver.session.sessionId = receiver.contribution.id;
+  const main = await contributionFixture(t);
+  delete main.session.metadata.connected_contribution;
+  const work = await inspectSessionWorkDirect({ ...receiver, runCommand: commandRunner });
+  const snapshot = { contribution: receiver.contribution, sessionId: receiver.session.sessionId,
+    worktreePath: receiver.session.sourcePath, baseCommit: work.baseCommit, canonicalCommit: work.canonicalCommit,
+    sessionHead: work.sessionHead, worktreeTree: work.worktreeTree };
+  await writeFile(path.join(main.session.sourcePath, "consumer.txt"), "main work\n");
+  const operationId = "connected-snapshot-save";
+  const { checkpoint } = await prepareSessionWorkSaveMessage({ ...main, operationId, runCommand: commandRunner });
+  let sourceLock = false;
+  let captured = false;
+  let admitted = false;
+  let maintained;
+  const maintenance = new Promise(resolve => { maintained = resolve; });
+  const result = await saveManagedSessionWorkImplementation({ ...main, checkpoint, operationId, message: "Use unchanged receiving sources",
+    runProjectSourceExclusive: async operation => {
+      sourceLock = true;
+      try { return await operation(); } finally { sourceLock = false; }
+    },
+    readConnectedWorkSnapshots: async () => {
+      assert.equal(sourceLock, true, "capture authorized snapshots inside the existing main source lock");
+      captured = true;
+      return [snapshot];
+    },
+    runCommand: request => {
+      const payload = request.command === "node" ? JSON.parse(request.input) : null;
+      if (payload?.operation === "save") {
+        assert.equal(captured, true);
+        assert.deepEqual(payload.input.connectedWorkSnapshots, [snapshot]);
+        assert.ok(request.allowedRoots.includes(receiver.session.sourcePath));
+        admitted = true;
+      }
+      return commandRunner(request);
+    }, onCacheMaintenance: maintained
+  });
+  await maintenance;
+  assert.equal(admitted, true);
+  assert.equal(await git(main.remote, ["rev-parse", "main"]), result.saveCommit);
+  assert.equal(await git(receiver.remote, ["rev-parse", "main"]), receiver.baseCommit);
+});
+
 test("connected integration gate retains exact revisions through the managed Save boundary", async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-connected-gate-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -3138,6 +3623,15 @@ test("connected integration gate retains exact revisions through the managed Sav
   await git(dependency.seed, ["commit", "-m", "Change the library"]);
   const submittedCommit = await git(dependency.seed, ["rev-parse", "HEAD"]);
   await git(dependency.seed, ["push", "origin", branch]);
+  const receiver = await sessionForRemote(dependencyRoot, dependency, contribution.id);
+  receiver.metadata.connected_contribution = JSON.stringify(contribution);
+  receiver.metadata.base_commit = submittedCommit;
+  receiver.metadata.canonical_commit = submittedCommit;
+  await git(receiver.sourcePath, ["reset", "--hard", submittedCommit]);
+  const receiverProject = githubProject(dependencyRoot, dependency.remote);
+  receiverProject.githubRepository.fullName = contribution.repository;
+  const snapshots = async () => [{ contribution, sessionId: contribution.id,
+    ...await inspectSessionWorkDirect({ project: receiverProject, session: receiver, runCommand: commandRunner }) }];
   const binding = { schemaVersion: 1, submissions: [{ contribution, submittedCommit }] };
   session.metadata.connected_submissions = JSON.stringify(binding);
   await writeFile(path.join(session.sourcePath, "consumer.txt"), "depends on library change\n");
@@ -3151,7 +3645,7 @@ test("connected integration gate retains exact revisions through the managed Sav
   const operationId = "connected-gate-save";
   const { checkpoint } = await prepareSessionWorkSaveMessage({ project, session, runCommand, operationId });
   const save = () => saveManagedSessionWorkImplementation({ project, session, runCommand, operationId,
-    checkpoint, message: "Use the library change" });
+    checkpoint, readConnectedWorkSnapshots: snapshots, message: "Use the library change" });
   await assert.rejects(save(), { code: "vibe64_connected_integration_pending" });
   assert.equal(await git(main.remote, ["rev-parse", "main"]), main.baseCommit);
   for (const request of requests.filter(request => request.command === "node")) {
@@ -3177,7 +3671,8 @@ test("connected integration gate retains exact revisions through the managed Sav
   let maintained;
   const maintenance = new Promise(resolve => { maintained = resolve; });
   const saved = await saveManagedSessionWorkImplementation({ project, session, runCommand, operationId,
-    checkpoint, message: "Use the integrated library", onCacheMaintenance: maintained });
+    checkpoint, readConnectedWorkSnapshots: snapshots,
+    message: "Use the integrated library", onCacheMaintenance: maintained });
   await maintenance;
   assert.equal(await git(main.remote, ["rev-parse", "main"]), saved.saveCommit);
   session.metadata.base_commit = saved.saveCommit;
@@ -3192,7 +3687,13 @@ test("connected integration gate retains exact revisions through the managed Sav
   await git(dependency.remote, ["update-ref", "-d", `refs/heads/${branch}`]);
   await assert.rejects(saveSessionWork({ project, session, runCommand }), { code: "vibe64_connected_integration_pending" });
   await git(dependency.remote, ["update-ref", "refs/heads/main", laterCommit]);
-  const afterDeletion = await saveSessionWork({ project, session, runCommand });
+  await assert.rejects(saveSessionWork({ project, session, runCommand,
+    connectedWorkSnapshots: await snapshots() }), { code: "vibe64_connected_integration_source_update_required" });
+  await git(receiver.sourcePath, ["fetch", "origin", "main"]);
+  await git(receiver.sourcePath, ["reset", "--hard", laterCommit]);
+  receiver.metadata.base_commit = laterCommit;
+  receiver.metadata.canonical_commit = laterCommit;
+  const afterDeletion = await saveSessionWork({ project, session, runCommand, connectedWorkSnapshots: await snapshots() });
   assert.equal(await git(main.remote, ["rev-parse", "main"]), afterDeletion.saveCommit);
   assert.equal((await git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]))
     .split("\n").some(ref => ref.endsWith("/connected-integration")), false);
@@ -3227,4 +3728,36 @@ test("connected integration gate refuses malformed bindings and feature branch p
   assert.equal(pushes, 0);
   assert.equal(await git(fixture.remote, ["for-each-ref", "--format=%(refname)", "refs/heads"]), "refs/heads/main");
   assert.equal(await readFile(path.join(session.sourcePath, "changed.txt"), "utf8"), "preserve work\n");
+});
+
+test("connected integration permits a reviewed PR branch only with unchanged accepted source snapshots", async t => {
+  const receiver = await contributionFixture(t);
+  receiver.session.sessionId = receiver.contribution.id;
+  await writeFile(path.join(receiver.session.sourcePath, "library.txt"), "accepted library change\n");
+  const submitted = await saveSessionWork({ ...receiver, runCommand: commandRunner });
+  receiver.session.metadata.base_commit = submitted.saveCommit;
+  receiver.session.metadata.canonical_commit = submitted.saveCommit;
+  await git(receiver.remote, ["update-ref", "refs/heads/main", submitted.saveCommit]);
+  const main = await contributionFixture(t);
+  delete main.session.metadata.connected_contribution;
+  main.session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1,
+    submissions: [{ contribution: receiver.contribution, submittedCommit: submitted.saveCommit }] });
+  main.session.metadata.repository_branch = "feature/consumer";
+  const runCommand = request => commandRunner({ ...request,
+    args: request.args.map(arg => arg === "https://github.com/example/project.git" ? receiver.remote : arg) });
+  const work = await inspectSessionWorkDirect({ ...receiver, runCommand: commandRunner });
+  const snapshot = { contribution: receiver.contribution, sessionId: receiver.contribution.id,
+    worktreePath: receiver.session.sourcePath, baseCommit: work.baseCommit, canonicalCommit: work.canonicalCommit,
+    sessionHead: work.sessionHead, worktreeTree: work.worktreeTree };
+  await assert.rejects(prepareSessionPullRequestBranch({ ...main, runCommand }),
+    { code: "vibe64_connected_integration_source_update_required" });
+  await writeFile(path.join(receiver.session.sourcePath, "unsaved.txt"), "new connected work\n");
+  await assert.rejects(prepareSessionPullRequestBranch({ ...main, runCommand, connectedWorkSnapshots: [snapshot] }),
+    { code: "vibe64_connected_save_required" });
+  assert.equal(await git(main.remote, ["for-each-ref", "--format=%(refname)", "refs/heads"]), "refs/heads/main");
+  await rm(path.join(receiver.session.sourcePath, "unsaved.txt"));
+  await prepareSessionPullRequestBranch({ ...main, runCommand, connectedWorkSnapshots: [snapshot] });
+  assert.equal(await git(main.remote, ["rev-parse", "refs/heads/feature/consumer"]), main.baseCommit);
+  assert.equal(await git(main.remote, ["rev-parse", "refs/heads/main"]), main.baseCommit);
+  assert.equal(await git(receiver.remote, ["rev-parse", receiver.ref]), submitted.saveCommit);
 });

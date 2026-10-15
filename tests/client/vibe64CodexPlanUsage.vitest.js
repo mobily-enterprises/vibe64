@@ -57,13 +57,13 @@ vi.mock("vuetify/components/VTextField", async () => {
 });
 import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 
-async function render(data, props = {}, viewer = { actorKey: "local" }) {
+async function render(data, props = {}, viewer = { actorKey: "local" }, goalState = {}) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
   mocks.resources = [];
   mocks.goalView = ref(mocks.goal);
   mocks.goalController = {
     goalView: mocks.goalView, goalLoadError: ref(""),
-    goalState: computed(() => ({ enabled: Boolean(mocks.goalView.value), pending: false, error: "",
+    goalState: computed(() => ({ enabled: Boolean(mocks.goalView.value), pending: false, error: "", ...goalState,
       cancel: () => mocks.goalController.changeGoal("cancel", {}) })),
     changeGoal: vi.fn().mockResolvedValue({ ok: true })
   };
@@ -453,3 +453,36 @@ it("preserves the displayed native goal identity through the actual shared contr
     mocks.goal = null;
   }
 });
+
+
+for (const engineId of ["codex", "claude"]) {
+  it(`${engineId} goal loading hides stale controls and never claims to resume a goal`, async () => {
+    const session = { sessionId: "one", assistantSelection: { engineId } };
+    for (const goal of [null, { id: "old", status: "paused", objective: "Previous conversation goal" }]) {
+      mocks.goal = { status: "available", goal };
+      const html = await render(null, { session }, undefined, { loading: true, pending: true, action: "" });
+      expect(html).toContain("Loading goal…");
+      for (const label of ["Resume goal", "Resuming…", "Start goal", "Starting…", "Previous conversation goal"]) {
+        expect(html).not.toContain(label);
+      }
+    }
+    mocks.goal = null;
+  });
+  it(`${engineId} goal labels describe only the actual command`, async () => {
+    const session = { sessionId: "one", assistantSelection: { engineId } };
+    mocks.goal = { status: "available", goal: { id: "goal", status: "paused", objective: "Finish" } };
+    let html = await render(null, { session }, undefined, { loading: false, pending: true, action: "" });
+    expect(html).toContain("Resume goal");
+    expect(html).not.toContain("Resuming…");
+    html = await render(null, { session }, undefined, { loading: false, pending: true, action: "resume" });
+    expect(html).toContain("Resuming…");
+    html = await render(null, { session }, undefined, { loading: false, pending: true, action: "cancel" });
+    expect(html).toContain("Cancelling…");
+    expect(html).not.toContain("Resuming…");
+    mocks.goal = { status: "available", goal: null };
+    html = await render(null, { session }, undefined, { loading: false, pending: false, action: "" });
+    expect(html).toContain("Start goal");
+    expect(html).not.toContain("Resume goal");
+    mocks.goal = null;
+  });
+}

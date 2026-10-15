@@ -63,7 +63,8 @@
               width="var(--session-action-size, 48px)"
               @click="requestSessionSaveWork"
             >
-              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
+              <v-icon v-if="saveConnectedFirst" :icon="mdiSourceBranch" />
+              <v-icon v-else-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
               <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
                 <v-icon :icon="mdiContentSaveOutline" size="26" class="studio-autopilot__save-symbol-disk" />
                 <v-icon :icon="mdiSourceCommit" size="24" class="studio-autopilot__save-symbol-commit" />
@@ -109,6 +110,16 @@
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
               <v-list-item
+                v-if="workspaceSetupActionVisible"
+                data-vibe64-prepare-workspace
+                min-height="48"
+                :disabled="workspaceSetupRetryDisabled"
+                :prepend-icon="mdiWrenchOutline"
+                subtitle="Run all declared setup steps again"
+                title="Prepare workspace"
+                @click="retryWorkspaceSetup"
+              />
+              <v-list-item
                 v-if="githubProject" min-height="48"
                 :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
                 :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
@@ -143,6 +154,19 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
+          <v-btn
+            v-if="workspaceSetupActionVisible"
+            aria-label="Prepare workspace"
+            data-vibe64-prepare-workspace
+            :disabled="workspaceSetupRetryDisabled"
+            height="var(--session-action-size, 48px)"
+            :icon="mdiWrenchOutline"
+            title="Prepare workspace: run all declared setup steps again"
+            type="button"
+            variant="text"
+            width="var(--session-action-size, 48px)"
+            @click="retryWorkspaceSetup"
+          />
           <v-btn
             v-if="githubProject" :icon="mdiSourcePull" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text"
             :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
@@ -261,6 +285,17 @@
             @recheck="props.refreshSessionData?.()"
           />
         </v-sheet>
+        <v-alert v-if="saveWorkConnectedResults.length" type="info" variant="tonal" closable @click:close="saveWorkConnectedResults = []">
+          <p class="mb-2">Connected contributions pushed. The main project was not pushed.</p>
+          <ul>
+            <li v-for="result in saveWorkConnectedResults" :key="result.sessionId">
+              {{ result.repository }} · <code>{{ result.saveCommit?.slice(0, 12) }}</code>
+              <span v-if="result.recorded === false"> — retry Save to record this confirmed commit.</span>
+              <span v-else-if="result.reconciled === false"> — open its session to finish reconciliation.</span>
+            </li>
+          </ul>
+          <p class="mt-2 mb-0">Review these contributions in the receiving projects’ Incoming changes.</p>
+        </v-alert>
         <Vibe64TemporaryActionTerminal
           :active="saveWorkOperationActive || saveWorkSending"
           :dismissed="saveWorkActivityDismissed || updateHandledInRepair"
@@ -465,7 +500,7 @@
                 <div class="studio-autopilot__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
-                    :goal="readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal" :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
+                    :goal="readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal" :purposes="assistantPurposes" :disabled="sourceOperationsSuspended" :active="agentActive" :can-configure="assistantCanConfigureRouting"
                     :connecting="['initializing', 'reconciling'].includes(props.agentConnectionStatus)"
                     :loading="assistantAccessLoading" :load-error="assistantAccessError" @reload="reloadAssistantAccess"
                     @saved="reloadAssistantAccess"
@@ -554,7 +589,7 @@
                     v-model="composerSettingsOpen"
                     :target="composerSettingsButton"
                     :can-configure="assistantCanConfigureRouting"
-                    :changes-disabled="composerSending || agentActive"
+                    :changes-disabled="sourceOperationsSuspended"
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
                     @saved="props.refreshSessionData?.(); reloadAssistantAccess()"
@@ -883,22 +918,30 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" aria-label="Save changes" scrollable>
+    <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" :aria-label="saveWorkConnectedReview ? 'Save connected first' : 'Save changes'" scrollable>
       <v-card rounded="xl">
-        <v-card-title>Save changes</v-card-title>
+        <v-card-title>{{ saveWorkConnectedReview ? 'Save connected first' : 'Save changes' }}</v-card-title>
         <v-card-text>
-          <div class="d-flex align-center justify-space-between ga-2 mb-2">
+          <template v-if="saveWorkConnectedReview">
+            <p>Commit and push changed connected sources to these contribution branches, one repository at a time.</p>
+            <v-sheet v-for="item in saveWorkConnectedReview" :key="item.destination.sessionId"
+              color="surface-light" rounded="lg" class="pa-3 mb-2" style="overflow-wrap: anywhere">
+              <strong>{{ item.destination.repository }}:{{ item.destination.branch }}</strong>
+            </v-sheet>
+            <p>The main project’s changes stay local. Each receiving project can merge or discard its contribution in Incoming changes.</p>
+          </template>
+          <div v-if="!saveWorkConnectedReview" class="d-flex align-center justify-space-between ga-2 mb-2">
             <span>{{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</span>
             <v-btn height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
           </div>
-          <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
+          <v-sheet v-if="saveWorkReview && !saveWorkConnectedReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
             <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
             <strong>{{ saveWorkReview.repository }}:{{ saveWorkReview.branch }}</strong>
             <p v-if="sessionPullRequest" class="text-body-small mt-1 mb-0">PR #{{ sessionPullRequest.number }} · {{ sessionPullRequest.headBranch }} → {{ sessionPullRequest.baseBranch }}</p>
           </v-sheet>
-          <p v-else role="status">Refresh repository status to review the destination.</p>
+          <p v-else-if="!saveWorkReview" role="status">Refresh repository status to review the destination.</p>
           <p class="text-body-small mt-3 mb-0">Save open file edits first.</p>
-          <p v-if="props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number" role="status" class="text-body-small mt-2">A pull request is required.</p>
+          <p v-if="saveWorkNeedsPullRequest" role="status" class="text-body-small mt-2">A pull request is required.</p>
           <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
         </v-card-text>
         <v-card-actions class="flex-wrap ga-2 px-6 pb-5">
@@ -907,7 +950,7 @@
             Cancel
           </v-btn>
           <v-btn
-            v-if="githubProject && !sessionPullRequest?.number"
+            v-if="!saveWorkConnectedReview && githubProject && !sessionPullRequest?.number"
             color="primary"
             height="48"
             :variant="saveWorkNeedsPullRequest ? 'flat' : 'outlined'"
@@ -952,6 +995,7 @@ import {
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
   mdiSourceCommit,
+  mdiSourceBranch,
   mdiDotsVertical,
   mdiEyePlusOutline,
   mdiGithub,
@@ -961,6 +1005,7 @@ import {
   mdiSend,
   mdiSourcePull,
   mdiStop,
+  mdiWrenchOutline,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
@@ -1239,6 +1284,9 @@ const {
   rightPaneTabMounted,
   saveWorkConfirmOpen,
   saveWorkReview,
+  saveConnectedFirst,
+  saveWorkConnectedReview,
+  saveWorkConnectedResults,
   saveWorkActivityDismissed,
   saveWorkActivityKey,
   saveWorkActivityIsUpdate,
@@ -1280,6 +1328,7 @@ const {
   connectionRecoveryVisible,
   updateComposerAttachments,
   updatePreviewAttachmentState,
+  workspaceSetupActionVisible,
   workspaceSetupAskDisabled,
   workspaceSetupActivityKey,
   workspaceSetupCurrentLabel,
@@ -1433,13 +1482,14 @@ const sessionPullRequestTarget = computed(() => sessionPullRequest.value?.number
   query: { pr: String(sessionPullRequest.value.number) }
 } : undefined);
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
-const saveWorkNeedsPullRequest = computed(() => githubProject.value &&
+const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value && githubProject.value &&
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");
 const assistantJuniorRestrictionMessage = computed(() => assistantPurposes.value.junior?.message || "Junior is unavailable. Review model routing.");
 const assistantSeniorRestrictionMessage = computed(() => assistantPurposes.value.senior?.message || "Senior is unavailable. Review model routing.");
 const publicationLabel = computed(() => {
+  if (saveWorkConnectedReview.value) return "Push connected contributions";
   const destination = saveWorkReview.value;
   if (destination?.mode === "github") return "Commit & push";
   return "Save";
@@ -1638,6 +1688,7 @@ const saveWorkCheckAvailable = computed(() => Boolean(
   typeof props.sessionToolbar?.refreshRepositoryState === "function"
 ));
 const saveWorkHeaderHint = computed(() => {
+  if (saveConnectedFirst.value) return saveWorkTitle.value;
   const status = saveWorkChecking.value ? "Checking for updates…"
     : saveWorkCheckAvailable.value ? `${saveWorkTitle.value}. Click to check for updates.`
       : saveWorkTitle.value;

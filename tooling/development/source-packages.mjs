@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, readFile, readdir, realpath, rm, symlink } from "node:fs/promises";
+import { cp, glob, lstat, mkdir, readFile, readdir, realpath, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 
 async function pathExists(pathname = "") {
@@ -35,41 +35,77 @@ async function removePath(pathname = "") {
   });
 }
 
-async function declaredJskitPackages(jskitRoot) {
-  const packages = [];
-  for (const parent of ["packages", "tooling"]) {
-    for (const entry of await readdir(path.join(jskitRoot, parent), { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const directory = path.join(jskitRoot, parent, entry.name);
-      const candidates = [directory];
-      if (parent === "packages") {
-        for (const child of await readdir(directory, { withFileTypes: true })) {
-          if (child.isDirectory()) candidates.push(path.join(directory, child.name));
-        }
-      }
-      for (const candidate of candidates) {
-        if (!(await pathExists(path.join(candidate, "package.json")))) continue;
-        const manifest = await readJson(path.join(candidate, "package.json"));
-        if (manifest.name) packages.push({ root: candidate, manifest });
-      }
-    }
-  }
-  return packages;
+function inside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
-async function selectLocalDevelopmentPackages({ jskitRoot = "", genesisRoot = "", consumerDependencies = {}, installedRoots = [] }) {
+async function declaredNodePackages(root, { legacyJskit = false, legacyGenesis = false } = {}) {
+  const rootManifest = await readJson(path.join(root, "package.json"));
+  const workspaces = rootManifest.workspaces?.packages ?? rootManifest.workspaces ??
+    (legacyJskit ? ["packages/*", "packages/*/*", "tooling/*"] : []);
+  if (!Array.isArray(workspaces)) throw new Error(`Expected an array of declared workspaces at ${root}.`);
+  const candidates = [root, ...(legacyGenesis ? [path.join(root, "packages/genesis-stack")] : [])];
+  for (const pattern of workspaces) {
+    if (typeof pattern !== "string" || !pattern || pattern.startsWith("!") || path.isAbsolute(pattern) ||
+        pattern.includes("\\") || pattern.split("/").some(part => ["..", "node_modules", ".git"].includes(part))) {
+      throw new Error(`Unsupported or escaping workspace pattern ${JSON.stringify(pattern)} at ${root}. Use project-relative positive workspace patterns for source development.`);
+    }
+    for await (const directory of glob(pattern, { cwd: root, exclude: ["**/node_modules/**", "**/.git/**"] })) {
+      const candidate = path.resolve(root, directory);
+      if (!inside(root, candidate)) throw new Error(`Declared source package escapes ${root}: ${candidate}.`);
+      if (await pathExists(path.join(candidate, "package.json"))) candidates.push(candidate);
+    }
+  }
+  const packages = new Map();
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = await realpath(candidates[index]);
+    if (!inside(root, candidate)) throw new Error(`Declared source package escapes ${root}: ${candidate}.`);
+    if (packages.has(candidate)) continue;
+    const manifest = await readJson(path.join(candidate, "package.json"));
+    packages.set(candidate, { root: candidate, manifest });
+    // A repository may declare local packages without npm workspaces. Follow
+    // only its explicit directory references, never another repository's tree.
+    for (const value of Object.values({ ...manifest.dependencies, ...manifest.devDependencies,
+      ...manifest.optionalDependencies })) {
+      if (typeof value !== "string" || !value.startsWith("file:")) continue;
+      const local = path.resolve(candidate, value.slice(5));
+      if (!inside(root, local)) throw new Error(`Declared source package escapes ${root}: ${value}.`);
+      const actual = await realpath(local);
+      if (!inside(root, actual)) throw new Error(`Declared source package escapes ${root}: ${value}.`);
+      if ((await lstat(actual)).isDirectory()) candidates.push(actual);
+    }
+  }
+  // Module-scope package.json files (for example test utilities declaring only
+  // type: module) are not installable source packages.
+  return [...packages.values()].filter(entry => entry.manifest.name);
+}
+
+async function selectLocalDevelopmentPackages({ jskitRoot = "", genesisRoot = "", sourceRoots = [], consumerDependencies = {}, installedRoots = [] }) {
+  if (!Array.isArray(sourceRoots)) throw new Error("Development sourceRoots must be an array of absolute directories.");
   const available = new Map();
+  const roots = new Set();
+  const requiredSources = [];
   const add = (root, manifest) => {
     if (!manifest.name || available.has(manifest.name)) throw new Error(`Duplicate or unnamed local package at ${root}.`);
-    if (!/^(?:@jskit-ai\/[a-z0-9][a-z0-9._-]*|genesis-(?:compiler|stack))$/u.test(manifest.name)) {
+    if (typeof manifest.name !== "string" || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u.test(manifest.name)) {
       throw new Error(`Unexpected local package name ${manifest.name} at ${root}.`);
     }
     available.set(manifest.name, { packageId: manifest.name, root, manifest });
   };
+  const discover = async (source, options = {}) => {
+    const root = await realpath(source);
+    if (!(await lstat(root)).isDirectory()) throw new Error(`Development source root must be a directory: ${root}.`);
+    if (roots.has(root)) throw new Error(`Duplicate development source root: ${root}.`);
+    roots.add(root);
+    const packages = await declaredNodePackages(root, options);
+    for (const entry of packages) add(entry.root, entry.manifest);
+    return { root, packages: packages.map(entry => entry.manifest.name) };
+  };
   if (jskitRoot) {
     const root = await realpath(jskitRoot);
     if ((await readJson(path.join(root, "package.json"))).name !== "jskit-monorepo") throw new Error(`Expected JSKIT checkout at ${root}.`);
-    for (const entry of await declaredJskitPackages(root)) add(entry.root, entry.manifest);
+    await discover(root, { legacyJskit: true });
     if (!available.has("@jskit-ai/kernel") || !available.has("@jskit-ai/jskit-catalog")) {
       throw new Error(`JSKIT source at ${root} is missing kernel or catalog workspace packages.`);
     }
@@ -80,10 +116,12 @@ async function selectLocalDevelopmentPackages({ jskitRoot = "", genesisRoot = ""
     const stackRoot = path.join(root, "packages", "genesis-stack");
     const stack = await readJson(path.join(stackRoot, "package.json"));
     if (compiler.name !== "genesis-compiler" || stack.name !== "genesis-stack") throw new Error(`Expected compiler and Stack catalog at ${root}.`);
-    add(root, compiler);
-    add(stackRoot, stack);
+    await discover(root, { legacyGenesis: true });
   }
-  if (!available.size) return [];
+  for (const root of sourceRoots) {
+    if (typeof root !== "string" || !path.isAbsolute(root)) throw new Error("Development sourceRoots must contain only absolute directories.");
+    requiredSources.push(await discover(root));
+  }
   if (jskitRoot) {
     const missing = Object.keys(consumerDependencies).filter((name) => name.startsWith("@jskit-ai/") && !available.has(name));
     if (missing.length) throw new Error(`Selected JSKIT source is missing required local packages: ${missing.join(", ")}.`);
@@ -113,6 +151,11 @@ async function selectLocalDevelopmentPackages({ jskitRoot = "", genesisRoot = ""
         throw new Error(`Local package ${name} requires missing JSKIT package ${dependency}.`);
       }
       if (available.has(dependency)) pending.push(dependency);
+    }
+  }
+  for (const source of requiredSources) {
+    if (!source.packages.some(name => selected.has(name))) {
+      throw new Error(`Connected npm source ${source.root} contributes no declared application dependency. Declare the package you consume in the application's package.json before preparing its source.`);
     }
   }
   // Explicit source selection replaces published versions, not dependency

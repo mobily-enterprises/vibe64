@@ -57,6 +57,17 @@ does not establish that the first one failed.
 Colleague can explain the tabs and open an accessible session through its
 navigation action when you explicitly ask it to do so.
 
+## Reconnect a chat
+
+If the conversation shows **Conversation subscription failed.**, choose
+**Reload chat** to reconnect to the same session. This reads its saved history
+and restores updates without sending your draft or repeating an earlier request.
+Standalone Vibe64 supports this through the local editor for its selected project;
+it does not require a hosted workspace login. Keep using the editor's localhost
+address. If the error persists, report the project, session and exact error.
+On phones, open the chat pane to find the same control. Colleague can explain
+recovery and open the session; the person selects **Reload chat**.
+
 ## Working and Learning session navigation: integration prerequisite
 
 The prepared mode filter uses the same session tabs and chat panel for Working

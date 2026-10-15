@@ -30,6 +30,8 @@ workspace.
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
+- `packages/vibe64-core/src/server/actionContext.js`
+- `tests/server/vibe64ActionContext.unit.test.js`
 - `packages/vibe64-training/src/server/learnerState.js`
 - `packages/vibe64-training/src/server/learningSessions.js`
 - `tests/server/studioProjectContext.unit.test.js`
@@ -98,6 +100,13 @@ writes and goal set/resume require a new create/write admission. The original
 naming, review, native goal continuations, Stop and reconciliation owners retain
 their admitted control flow; neutral source locks are not new-effect admissions.
 Ordinary project context capture and admission are unchanged.
+
+Working-project actions retain only their original request metadata under a
+private Core symbol through the existing in-memory context capture. Delayed
+setup can use that request to dispatch a freshly authorized receiving action;
+the previous action's authority is never retained with it. Each action replaces
+or clears the metadata, and Learning/practice contexts exclude it. The symbol
+is omitted from JSON and is not a saved permission or credential store.
 
 Focused component evidence covers private canonical creation/source cloning,
 held-barrier preparation, accepted delayed Workspace completion and denied fresh

@@ -62,7 +62,9 @@ const projectConnectedProjectsInputValidator = inputSchema({
   projects: { type: "array", required: true, maxItems: 64, items: createSchema({
     name: { type: "string", required: true, minLength: 1, maxLength: 100 },
     repository: { type: "string", required: true, minLength: 1, maxLength: 512 },
-    relationship: { type: "string", required: true, enum: ["dependency", "composition"] }
+    relationship: { type: "string", required: true, enum: ["dependency", "composition"] },
+    type: { type: "string", required: false, enum: ["npm", "custom"] },
+    script: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 1024 }
   }) }
 });
 

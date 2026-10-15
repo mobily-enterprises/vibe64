@@ -1,26 +1,53 @@
 # Configure connected projects
 
+If a receiving repository's status cannot be checked, the ordinary Main Save
+control remains available. Save checks access and state again and reports the
+blocker without pushing the main project. An unavailable status does not count
+as a merged contribution.
+
 Open the intended project and session, then **Dashboard → Project settings →
 Connected projects**. On phones, use **Show project** and **Dashboard section**
 to reach Project settings. The list belongs to the displayed source checkout.
 
-If no connection file exists, **Initialize from Stack** imports the initial
-list declared by that project. An existing file, including an empty list, is
-never replaced by initialization. Alternatively, use **Add project** to create
-the list yourself.
-
-Creating a working session or explicitly preparing its workspace also imports
-the declared initial list when the file is absent. Projects without a Connected
-projects Stack section are left unchanged. Passive checks and opening Settings
-do not create a file. A failed import appears in workspace preparation; correct
-the reported declaration or GitHub access problem and use **Retry**. Learning
-workspace preparation does not import connected repositories.
+`vibe64.connections.json` is the only repository connection list. If it does not
+exist, use **Add project**, then **Save connected projects** to create it. You can
+also edit this tracked source file directly. Stack contains technology and generic
+placement/treatment instructions, never repository identities or initial lists.
+Opening Settings and preparing a workspace do not create or import this file.
 
 For each entry, provide a **Name**, a **GitHub repository URL**, and a
 **Relationship**: Dependency for a library or tool; Composition for source
 assembled into this project. Use an HTTPS URL without credentials. The same
 repository cannot appear twice under different names. More projects can be
-added later, up to 64 entries.
+added later, up to 64 entries within a 64 KiB file. Oversized saves preserve the
+current list; shorten the entries before retrying.
+
+**Package type** is separate from Relationship. Choose **Stack default** to
+inherit the consuming Stack's package type; Node defines `npm`. Choose **npm**
+or **custom** to override it for this connection. Stack default leaves `type`
+out of the file, so a later Stack default change still applies.
+
+For **custom**, provide **Preparation script (project-relative)**, for example
+`tooling/prepare-native-worker.mjs`. The script lives in the consuming project;
+use a relative path outside `.git`, without `..`, absolute paths or backslashes.
+Stack declares the script runtime and runner, for example:
+
+```markdown
+- Custom runner with `nodejs` `cpp`: `node`
+```
+
+The existing preparer appends the absolute script path, then `--phase`
+(`prepare` or `verify`), `--source-root`, `--project-root`, `--sources-file` and
+`--repository` with their values. The script must remain inside the consuming
+project; preparation rejects missing files and symlinks that escape that root.
+An npm connection cannot have a script; choosing npm removes the script from
+the draft. Stack default may retain a script for a custom default, and workspace
+preparation checks the effective type before running anything. The script must
+handle both phases: prepare makes the development artifact available; verify
+checks that the consuming app uses the selected source and exits nonzero on
+failure. Keep generated development artifacts ignored by Git and preserve
+release manifests and lockfiles. Vibe64 provides execution and failure reporting;
+it cannot infer what a custom artifact means or prove it from a zero-exit no-op.
 
 Use **Save connected projects** to write the complete list to
 `vibe64.connections.json` in the selected source. You must be the project owner
@@ -33,16 +60,16 @@ a hosted account. A connected GitHub account still supplies repository access.
 
 **Remove** removes an entry from the draft. Saving that removal does not delete
 existing contribution source, branches or pending work. An empty saved list
-remains empty when initialization is requested again.
+remains authoritative.
 
 If another edit changed the file, saving refuses to overwrite it. Review your
 draft, use **Reload saved list**, and reapply the intended edits. A malformed
-file needs repair by a coding agent or through Files; initialization does not
-hide the error by replacing it. Missing GitHub write access requires the correct
+file needs repair by a coding agent or through Files; it is never silently
+replaced. Missing GitHub write access requires the correct
 connected account or repository permission. After an uncertain save, refresh and
 inspect the current list before retrying.
 
-Colleague can read this list, initialize it or save explicitly requested changes
+Colleague can read this list or save explicitly requested changes
 through the same actions. It preserves unrelated entries and uses the read
 source session and revision. A how-to question does not authorize changes.
 Account login and repository permission grants remain human-controlled steps.
@@ -54,6 +81,12 @@ GitHub receiving projects expose [Incoming changes](incoming-changes.md) in
 Dashboard. This view reconstructs contributions from Git, independently of the
 originating project's connection list.
 
+Allocating a connected contribution creates its receiving checkout without
+automatically preparing that receiving project's own connections. The originating
+project's Stack recipe prepares its directly connected sources. This prevents
+automatic chains and cycles of extra contribution checkouts. A receiving session
+can still be prepared separately when you deliberately work in that project.
+
 A connected contribution session saves to its own receiving-repository branch,
 shown in the normal Save destination review. Its first Save creates that branch;
 later Saves update the same contribution. The receiving project's main branch
@@ -62,45 +95,145 @@ but the receiving repository's branch permissions still apply.
 
 If the contribution was discarded, further work needs a new contribution. If both
 active and discarded branches exist, resolve the interrupted discard first. A
-missing branch after a publication attempt is an unknown outcome: keep the
-checkout and ask the coding agent to inspect its saved commit and receiving
-history. After a lost acknowledgement, existing Save recovery can reconcile a
+missing branch after a publication attempt needs its retained exact revision and
+receiving history checked; its absence alone proves nothing. An integrated
+revision remains accepted after its branch is discarded or deleted. Explicit
+Update can consume the proven accepted source, but further contribution pushes
+cannot recreate that removed branch. Keep the checkout and ask the coding agent
+to inspect uncertain saved work. After a lost acknowledgement, existing Save recovery can reconcile a
 publication when the remote confirms its exact prepared commit.
 
 When a session has recorded submitted contributions, its normal Save checks those
 exact revisions before publishing. If one is still pending, the error names the
 receiving repository, contribution, revision and integration branch. Open that
 receiving project's **Incoming changes**, review and merge the contribution, then
-retry Save. Discarding it or removing its connection does not satisfy the check.
+open its connected contribution session and use **Update this session (rebase)**
+to incorporate the accepted receiving source before retrying Main Save. This
+matters when merge conflict repairs changed the accepted code. Save never performs
+that update automatically. Discarding it or removing its connection does not satisfy the check.
 An access or incomplete-history error requires fixing that cause and retrying;
 Vibe64 does not infer a merge from a missing branch or a similar diff.
+
+After integration, the contribution session's existing update check follows the
+receiving integration branch. Its Save destination remains the reserved incoming
+branch; later edits become another contribution there. Main Save requires the
+accepted target in the connected source's history, so a newer receiving target
+can require another explicit Update. Rerun the originating project's workspace
+preparation when its connected outputs need rebuilding, then verify the app.
 
 A newer submitted revision needs its own integration. Later unrelated work on
 the contribution branch does not block a revision already merged. Colleague can
 explain a Save refusal and offer the supported receiving action, but must obtain
-an instruction to merge or discard. Automatic contribution preparation and
-connected-first publication are still being implemented; declaring a connection
-does not yet create these submitted-revision bindings.
+an instruction to merge or discard.
+
+For prepared sources, the chat Save button changes to a branch icon labelled **Save connected
+first** when connected work needs submission. It remains available when the main
+checkout has no changes. Its confirmation lists receiving repositories and
+contribution branches. Choose **Push connected contributions** to publish those
+changes; the main project's changes stay local. The same controls work on phones.
+The result lists confirmed pushes, including those completed before a later
+failure. Review them in each receiving project's **Incoming changes**.
+
+Once connected work is submitted, the button returns to its ordinary Save
+appearance. Pending integration does not disable it: clicking reports the
+receiving contribution that must be merged. New connected edits restore **Save
+connected first**. A main-project PR policy does not require a PR for submitting
+these contribution branches.
+
+Colleague and API clients use the existing
+work inspection and Save actions. When inspection returns
+`connectedSaveRequired: true`, review every `connectedReview` destination and
+pass that list unchanged with the main `destinationReview` to Save.
+
+This saves one connected repository at a time: commit, push, record its commit,
+then continue. It never pushes the main project in that action. A failure reports
+the completed repositories and the repository that failed. Inspect and retry:
+completed repositories without new changes are skipped. If publication succeeded
+but recording failed, retry records the confirmed receiving commit without
+republishing it. These commit records identify required integration, not a
+separate retry ledger. Files and existing receiving Save recovery remain available.
+Each receiver is checked again when its turn arrives, so new edits made while
+an earlier repository was saving are included in the next receiver's Save.
+If a push loses its acknowledgement, the exact remote commit can confirm it.
+If the remote is unavailable too, publication stays unknown: restore repository
+access and inspect work again. Recovery checks the original prepared commit
+without another push, including after restarting the editor. Main Save remains
+blocked while that outcome is unknown.
+The same recovery checks a failed local update after a push. When Git proves
+the attempt did not publish, its original rejection remains visible. A receiving
+project with its own connected work must satisfy its own Save checks; this action
+does not recursively publish further repositories.
+If preparation fails before any push is attempted, fix the reported cause and
+retry; the contribution's files and recovery checkpoint remain. A missing branch
+after an uncertain push is still unknown, so Vibe64 does not recreate it merely
+because it is absent.
+
+After connected work is saved, omit `connectedReview` for ordinary Main Save.
+Pending integration is reported by the existing exact-revision gate. New connected
+work or unreconciled publication blocks Main Save; inspect and save/recover the
+receiving session first. Colleague must review these destinations and have an
+explicit Save instruction before publishing.
+Main Save checks those sources again after preparing its commit, immediately
+before pushing. If a receiving worktree, HEAD, or recorded saved commit changed,
+inspect connected work and save it before retrying. This is a final snapshot
+check, not a lock across projects; avoid editing connected sources while Main
+Save is publishing, because changes after the final read belong to later work.
 
 Development consumption belongs to the project's Stack declarations. Those
 declarations must identify the connected source, where the task exposes it, how
 the selected toolchain builds/uses it, and how to verify that selection. This
-applies to every supported stack, including compiled libraries. A cloned
-repository alone does not establish that Preview or tests use its changes.
-Automatic Stack-driven placement and consumption are not complete yet.
-Vibe64 can inspect a `Connected development` declaration containing the source-map
-location and preparation/verification commands. A valid declaration is not a
-successful preparation result: the current preparation API still reports
-checkout readiness only. Colleague must not describe a declaration as proof
-that Preview or tests consume the selected dependency.
+applies to mixed-language connections too: a Node application can use a connected
+C executable or library. Choose **custom** for that connection's **Package type**. Package type is
+independent of programming language and relationship. **Stack default** omits
+`type` in the repository file; Node projects declare `npm` as their default.
+The prepared source map records the effective type. npm treatment requires a
+Node package manifest and excludes custom entries even if they contain one.
+Custom sources remain available to the project's build and execution commands. For a C program those commands must build it, expose its development
+executable or library to the app, and verify the app uses that build. It need
+not appear in `node_modules`. A cloned repository alone does not establish that
+Preview or tests use its changes.
+Use the existing **Prepare workspace** action (or its **Retry** action after a
+failure). When Stack declares `Connected development`, preparation creates or
+reuses the task's authorized contribution sources, writes the declared source
+map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
+commands in order. Success requires those commands to succeed. The preparation
+identity includes both recipes and the exact task source selection; changing
+that selection requires preparation again. Access is rechecked before each
+command and when checking whether preparation remains current.
+
+The initial consumption proof covers Node.js packages through `node_modules`:
+two tasks use distinct sources, source edits reach only the intended task, and
+an ordinary release installation retains its published dependency. PHP, Python,
+Ruby, C/C++, C#, Go, Java, Kotlin, Rust and framework-specific consumption still
+need their own commands and end-to-end proof. Installed language runtimes alone
+do not establish connected-source support. A declaration alone does not prove
+that Preview or tests consume the dependency.
 
 For API clients, the explicit **Prepare connected sources** operation is
 `POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare`. It uses the
 session's configured list and requires access to each registered receiving
 project plus GitHub write access. The returned `prepared` entries identify the
 receiving project/session and report source readiness and workspace setup.
-This operation creates isolated source through the receiving session owner;
-it does not yet select that source for the consuming application's commands.
+Once every receiving source is ready, the operation writes the Stack's
+`Sources file` and returns `development.status: "inputs-prepared"`. The JSON
+file uses contract `vibe64.connected-sources.v1` and identifies the originating
+session and each connected repository's exact source path and contribution ID.
+Vibe64 excludes this generated file from Git locally; the portable connection
+list remains unchanged. The consuming project's commands can read this map,
+and **Prepare workspace** executes and verifies the complete recipe. This explicit
+API operation only prepares inputs; `inputs-prepared` does not mean its commands
+have run.
+
+The source-map location must be a development-only, project-relative file.
+Vibe64 refuses to overwrite tracked files, symbolic links, unrelated content or
+another session's map. If this check fails, preserve the file, choose another
+`Sources file` location in Stack and retry. A missing or invalid Connected
+development declaration also requires correcting Stack before retrying; the
+already-created receiving sources remain available.
+An internal readiness check can recheck receiving access and compare the map
+with the task's saved bindings without changing files. The workspace runner uses that check before running
+commands and before accepting cached preparation. `inputs-prepared` still does
+not mean the Stack's development commands have run.
 After failure or a lost response, retry the same originating session: its saved
 reservation prevents duplicate source creation. A failure retains the earlier
 `prepared` entries and identifies the receiving repository that failed. If an
@@ -108,6 +241,6 @@ entry reports `sourceReady: false`, open that receiving session and use its
 source recovery controls before retrying; preparation does not replace the
 failed checkout with a fresh one. Missing registration requires
 setting up the receiving project first; mismatched saved authority requires
-inspection and reconciliation. There is no preparation button or Colleague
-preparation tool yet; Colleague can explain these limits but cannot claim it
-has prepared sources through an unavailable action.
+inspection and reconciliation. Use the existing workspace preparation controls for the full recipe. Colleague
+can explain the process and offer supported preparation actions; it must not
+claim successful preparation from a declaration or an input-map response alone.

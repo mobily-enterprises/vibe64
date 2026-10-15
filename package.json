@@ -90,7 +90,7 @@
     "@codemirror/view": "^6.43.4",
     "@fastify/static": "^10.1.4",
     "@fastify/websocket": "^11.2.0",
-    "@jskit-ai/assistant-core": "0.1.223",
+    "@jskit-ai/assistant-core": "0.1.224",
     "@jskit-ai/connector-google-calendar": "0.1.61",
     "@jskit-ai/connectors-catalog": "0.1.61",
     "@jskit-ai/connectors-core": "0.1.61",
@@ -147,9 +147,9 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.217",
+    "@jskit-ai/agent-docs": "0.1.218",
     "@jskit-ai/config-eslint": "0.1.241",
-    "@jskit-ai/jskit-catalog": "0.1.270",
+    "@jskit-ai/jskit-catalog": "0.1.271",
     "@playwright/test": "1.61.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "chokidar": "5.0.0",

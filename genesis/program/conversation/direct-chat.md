@@ -3,6 +3,12 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+Standalone Main and temporary browser conversations use the existing selected
+project request context and local-request admission, with a local actor and no
+hosted account. The internal Sessions context grant rechecks that boundary for
+reads and subscriptions. Hosted and Learning conversations retain their current
+action-contributor authority; a missing hosted grant cannot become local access.
+
 All three native engines use JSKIT's common delivery timing observer, separating
 preparation, provider readiness, dispatch, native acknowledgement, saved receipt,
 accepted delivery and first response. The application additionally records write
@@ -984,6 +990,9 @@ resource edits refreshes facts without restarting the native conversation.
 
 ## Sources
 
+- `packages/vibe64-sessions/src/server/actions.js`
+- `tests/server/vibe64ConversationActionDispatch.unit.test.js`
+
 - `packages/vibe64-terminals/src/server/projectMessage.js`
 
 - `tests/server/agentSessionCommand.unit.test.js`
@@ -1219,6 +1228,8 @@ the binding's single draft and delivery owner; restoration never resends or
 reconstructs a request. Failed Steer recovery keeps the captured request identity,
 latest-submission ordering and accepted-prefix removal. The binding also owns the
 original per-message HTTP abort, text/voice readers and final-reader cleanup.
+Stop cancels every undispatched local follower, including native startup and
+steering queues, and prevents new sends while cancellation is being confirmed.
 Vibe64 retains source/Save/access admission, Router state and cancellation,
 uploaded attachment policy, settings and the existing goal panel. Those mounted
 product facilities share the binding's retained scope through its optional
@@ -1369,10 +1380,10 @@ A failed switch retains the prior selection; the
 next ordinary Send supplies the existing conversation catch-up. Custom retains
 its exact-model picker, and temporary chats retain their independent controls.
 Main passes its existing initializing/reconciling state into the mode menu.
-The menu shows Connecting assistant and disables the orchestrator, modes, Custom
-entry and review toggle until preparation finishes, avoiding overlapping
-selection writes against the preparation lock. Failed or unavailable connections
-still allow explicit selection recovery; server locks remain authoritative.
+The menu shows Connecting assistant while keeping settings editable. Its existing
+settings lock serializes preference saves separately from turn admission. Saving
+a preference does not interrupt native startup or the current turn; native
+changeover retains the original admission and cleanup checks.
 The access inspection resolves saved assignments and current actor/connection
 permissions without provider catalogue discovery. Dispatch still validates models
 and capabilities against the live catalogue; a removed model can appear in the
@@ -1385,9 +1396,9 @@ shared Backup replaces both roles; same-engine Backup replaces restricted roles.
 Auto resolves Router, Senior and Junior through the same actor-aware fallback
 policy. A compatible shared destination can replace each owner-only connection;
 the captured submitter remains the actor for routing, delivery and review.
-Goals cannot start or resume in Auto, and an unfinished goal blocks switching
-to Auto. When native goal observation is unavailable, that switch still respects
-the saved goal; a confirmed completion or removal releases the restriction.
+Goals cannot start in Auto. Choosing Auto during an unfinished goal saves it
+for after the goal finishes. Resume and messages retain the existing goal
+orchestrator, including when its native status is temporarily unavailable.
 Chat modes are `custom`, `senior`, `junior` and `auto`. Model assignments additionally
 include `helper` and `router`; neither is selectable as a direct chat mode.
 Configuration and request snapshots use schema 4. The simplified classifier uses
@@ -1411,27 +1422,26 @@ A goal pins its role and model across account reconnection. A new Send or Resume
 resolves current actor/account access and captures the current connection identity;
 an earlier goal pin's account identity does not reject that new admission.
 Pending and uncertain deliveries retain their original connection checks, and a
-changed effective model still requires an explicit paused-goal selection.
-Send does not rewrite the goal pin; Resume commits its new pin only after native
-acceptance. No goal, history or account metadata repair is performed on reads.
+changed effective model requires an explicit settings choice. Resume commits its
+new pin only after native acceptance. No goal, history or account metadata repair
+is performed on reads.
 
-An idle paused goal permits an explicit Custom model or Senior/Junior mode
-change within its current orchestrator. The selection writer retains its native
-turn/access checks and lock, prepares the replacement routing pin through
-`preparePausedGoalSelection` and the existing `prepareGoal` owner, then publishes
-the new goal pin/preferences/selection only after native preparation succeeds.
-The picker consumes the same retained native goal as the toolbar, rather than
-session snapshots or the routing pin. Rebind requires the selection writer's
-fresh available native paused goal; a stale or missing pin cannot veto it.
-Explicit selection creates or refreshes the pin with the native objective and
-current authorized configuration. Reads do not backfill routing metadata.
-The internal rebind action does not update or execute the native goal. It retains
-objective and budget/progress fields, captures current authorized routing, and
-keeps status paused; subsequent messages and Resume use the new pin. Active goals,
-active turns, Auto and cross-orchestrator changes remain blocked. The mode menu
-explains the restriction instead of silently disabling all choices. Connection
-recovery notices use a primary tint and on-surface text; disabled retry remains
-legible while native preparation is pending.
+Active and paused goals permit Custom model or Senior/Junior changes within the
+same orchestrator. The selection writer calls `applyGoalSelection`, which
+validates current access, applies native future-turn settings and updates the
+routing pin without clearing objective, budget or progress. Auto and another
+orchestrator are saved for after the current goal. Native settings failures keep
+the previous pin and reach the caller. A concurrent pause or replaced objective
+is preserved. Startup acknowledgement uses the same settings lock and rereads
+preferences so an older goal-start callback cannot erase a newer settings save.
+
+The picker remains editable during active turns, native startup and goal work.
+It explains that model and Senior/Junior changes apply to the next goal turn;
+other orchestrators and Auto apply after the goal finishes. Exact native goal
+identity is retained after role changes: display removes only a recognized role
+wrapper for the same objective, and Resume uses the native objective rather than
+reconstructing one from the new role. Connection recovery notices use a primary
+tint and on-surface text; disabled retry remains legible during preparation.
 
 The Custom dialog starts model catalogue reads for connected engines together
 when opened, through the existing capabilities endpoint. It reuses those
@@ -2041,8 +2051,9 @@ thread, objective and creation expectations and do not add an authored message.
 Goal controls require assistant access and accept only
 pause/resume/cancel on that session's current thread and unchanged objective/creation
 identity. Status-only `thread/goal/set` preserves Codex-owned objective, budget
-and usage history. Pause prevents further automatic turns without interrupting
-the current turn or releasing its write ownership; Stop still interrupts work.
+and usage history. Pause first stops automatic scheduling, then uses the existing
+verified Stop operation to stop the current conversation turn. A stop failure
+remains explicit; paused scheduling alone is not evidence that work stopped.
 Resume uses Codex's native goal scheduler. Completed goals and exhausted token
 budgets are not restarted by this control. Cancel uses `thread/goal/clear` for
 any unfinished goal, including blocked and budget-limited goals. It removes the
@@ -2862,8 +2873,9 @@ when the dialog opens. It does not start OpenCode or read OpenCode's provider
 and model catalogue when
 the chooser opens or when the session is created; creation validates the
 selection against the same saved connection view. Between turns, Custom can
-change orchestrator through the existing context handoff. An active turn or
-unfinished goal prevents changing the selection. Creating a session does not
+change orchestrator through the existing context handoff. During an active turn,
+the picker saves settings for subsequent turns; unfinished goals retain their
+current orchestrator. Creating a session does not
 load model catalogues; opening Custom starts those reads separately from
 provider/thread preparation. Distinct OpenCode provider ids remain distinct
 model choices, so separate routes or plans from one provider can coexist. People can choose among

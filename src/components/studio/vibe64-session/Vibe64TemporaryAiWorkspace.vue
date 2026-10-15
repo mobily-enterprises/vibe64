@@ -273,7 +273,7 @@
                   v-if="!task.routingMetadata?.assistant_routing"
                   :agent-settings="task.agentSettings"
                   :assistant-selection="task.assistantSelection || props.assistantSelection"
-                  :disabled="taskInputDisabled(task) || task.busy"
+                  :disabled="props.repositoryBusy || task.status === 'closing'"
                   @update-setting="updateActiveAgentSetting"
                 />
               </AssistantComposerActions>
@@ -283,7 +283,7 @@
       </Vibe64EphemeralConversationMessages>
     </template>
     <Vibe64SessionAssistantMenu v-model="customOpen" :target="customTarget" :session="modeSession"
-      :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.busy"
+      :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.status === 'closing'"
       :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })" />
     <v-dialog
       v-if="taskToClose"

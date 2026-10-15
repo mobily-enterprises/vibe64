@@ -116,7 +116,7 @@ it("a failed orchestrator handover restores the workflow, mode and exact overrid
   expect(state.updatedPreferences).toEqual({ mode: "junior", review: false, workflowEngineId: "codex", override });
 });
 
-it("does not switch an active or unavailable workflow, or silently change Custom's exact model", async () => {
+it("does not switch an unavailable workflow or silently change Custom's exact model", async () => {
   const state = mount();
   await state.save("junior", false, "opencode");
   await state.save("custom", false, "claude");
@@ -131,60 +131,45 @@ it("does not switch an active or unavailable workflow, or silently change Custom
   });
   await state.save("junior", false, "claude");
   expect(mocks.save).not.toHaveBeenCalled();
-  app.unmount();
-  const active = mount(undefined, false, { active: true });
-  await active.save("junior", false, "claude");
-  expect(mocks.save).not.toHaveBeenCalled();
 });
 
-it("blocks selection changes during reconnection and permits them when preparation finishes", async () => {
-  const state = mount(undefined, false, { connecting: true });
-  state.detailsOpen = true;
-  await state.save("junior", false, "claude");
-  await state.save("senior", false);
-  state.openCustom();
-  expect(mocks.save).not.toHaveBeenCalled();
-  expect(state.workflowEngineId).toBe("codex");
-  expect(state.mode).toBe("junior");
-  expect(state.detailsOpen).toBe(true);
-  expect(state.saveError).toBe("");
-  app._instance.props.connecting = false;
-  await nextTick();
-  await state.save("junior", false, "claude");
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "claude" });
-});
+for (const temporary of [false, true]) {
+  for (const phase of [{ active: true }, { connecting: true }, { active: true, connecting: true }]) {
+    it(`saves ${temporary ? "temporary" : "main"} next-turn settings during ${JSON.stringify(phase)}`, async () => {
+      const openPicker = vi.fn();
+      const state = mount(temporary ? mocks.save : undefined, temporary, { ...phase, onCustom: openPicker });
+      state.detailsOpen = true;
+      state.openCustom();
+      expect(openPicker).toHaveBeenCalledOnce();
+      expect(state.detailsOpen).toBe(false);
+      await state.save("senior", false);
+      expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false,
+        ...(temporary ? {} : { workflowEngineId: "codex" }) });
+      if (!temporary) {
+        await state.save("junior", false, "claude");
+        expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "claude" });
+      }
+    });
+  }
+}
 
-
-it("lets an idle paused goal change direct modes and open Custom while retaining the goal", async () => {
-  const goal = { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000 };
-  const openPicker = vi.fn();
-  const state = mount(undefined, false, { goal, onCustom: openPicker, session: { sessionId: "session-1", agentSession: { goal },
-    metadata: { assistant_routing: JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex", override }) } } });
-  expect(state.hasGoal).toBe(true);
-  expect(state.goalLocksSelection).toBe(false);
-  state.openCustom();
-  expect(openPicker).toHaveBeenCalledOnce();
-  await state.save("senior");
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, workflowEngineId: "codex" });
-  mocks.save.mockClear();
-  await state.save("auto");
-  await state.save("senior", false, "claude");
-  expect(mocks.save).not.toHaveBeenCalled();
-  app._instance.props.active = true;
-  await nextTick();
-  await state.save("junior");
-  state.openCustom();
-  expect(mocks.save).not.toHaveBeenCalled();
-  expect(openPicker).toHaveBeenCalledOnce();
-  app._instance.props.active = false;
-  goal.status = "active";
-  app._instance.props.goal = { ...goal };
-  await nextTick();
-  expect(state.goalLocksSelection).toBe(true);
-  await state.save("junior");
-  expect(mocks.save).not.toHaveBeenCalled();
-});
-
+for (const status of ["paused", "active"]) {
+  it(`saves settings without cancelling a ${status} goal`, async () => {
+    const goal = { status, objective: "Finish the agreed work", tokenBudget: 20000 };
+    const openPicker = vi.fn();
+    const state = mount(undefined, false, { goal, active: true, onCustom: openPicker });
+    expect(state.hasGoal).toBe(true);
+    state.openCustom();
+    expect(openPicker).toHaveBeenCalledOnce();
+    await state.save("senior");
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, workflowEngineId: "codex" });
+    await state.save("auto");
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, workflowEngineId: "codex" });
+    await state.save("senior", false, "claude");
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, workflowEngineId: "claude" });
+    expect(goal).toEqual({ status, objective: "Finish the agreed work", tokenBudget: 20000 });
+  });
+}
 
 it("uses the shared native goal rather than stale session and routing snapshots", async () => {
   const state = mount(undefined, false, { goal: { status: "paused", objective: "Native goal" },
@@ -192,11 +177,9 @@ it("uses the shared native goal rather than stale session and routing snapshots"
       metadata: { assistant_routing: JSON.stringify({ mode: "senior", workflowEngineId: "codex" }),
         assistant_routing_goal: JSON.stringify({ status: "active" }) } } });
   expect(state.hasGoal).toBe(true);
-  expect(state.goalLocksSelection).toBe(false);
   await state.save("junior");
   expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "codex" });
   app._instance.props.goal = null;
   await nextTick();
   expect(state.hasGoal).toBe(false);
-  expect(state.goalLocksSelection).toBe(false);
 });

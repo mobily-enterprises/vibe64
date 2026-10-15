@@ -113,7 +113,11 @@ function createConversationApplication(conversation, { identity, viewer, summary
   function prepareMessage(payload, { messageId, submissionKind = steerable.value ? "steer" : "send" } = {}) {
     if (!available.value) throw new Error("This conversation is no longer available.");
     if (!access.canUseChat.value) throw new Error(access.restrictionMessage.value || "AI access is not ready.");
-    if (turn.value.active && conversation.steerable.value && !steerable.value) throw new Error("Wait for this turn to finish or stop it before sending.");
+    const queuedStartup = conversation.queueWhileSending.value && conversation.delivery.state.sending &&
+      turn.value.state === "starting" && turn.value.status !== "observation_lost" && mounted.agentConnectionStatus.value === "connected";
+    if (turn.value.active && conversation.steerable.value && !steerable.value && !queuedStartup) {
+      throw new Error("Wait for this turn to finish or stop it before sending.");
+    }
     const authored = conversation.delivery.find(messageId)?.payload || payload;
     if (authored.request) return authored;
     // Old browser drafts keep their original opaque payload. Only an explicit

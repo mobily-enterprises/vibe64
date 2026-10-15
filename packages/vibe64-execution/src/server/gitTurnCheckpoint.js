@@ -192,7 +192,7 @@ async function writeGitWorktreeTreeUnlocked({
       "-A",
       "--",
       ...(selectedPaths.length > 0 ? selectedPaths : ["."])
-    ], { env: indexEnv, project });
+    ], { env: { ...indexEnv, GIT_LITERAL_PATHSPECS: "1" }, project });
     return await requiredGitOutput(runCommand, normalizedWorktreePath, [
       "write-tree"
     ], { env: indexEnv, project });

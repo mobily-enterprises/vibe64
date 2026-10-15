@@ -434,6 +434,8 @@ function useVibe64AutopilotView(props, emit, {
   const discardingMessageIds = reactive(new Set());
   const composerSending = computed(() => messageDelivery.value?.state.sending === true);
   const composerQueueing = computed(() => props.conversationRuntime?.queueWhileSending.value === true);
+  const composerStartupQueueing = computed(() => composerQueueing.value && composerSending.value &&
+    activeAgentTurn.value.state === "starting" && !agentObservationLost.value);
   const composerSubmissionKind = ref("");
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
@@ -454,6 +456,8 @@ function useVibe64AutopilotView(props, emit, {
   const interrupting = ref(false);
   const saveWorkConfirmOpen = ref(false);
   const saveWorkReview = ref(null);
+  const saveWorkConnectedReview = ref(null);
+  const saveWorkConnectedResults = ref([]);
   const saveWorkError = ref("");
   const saveWorkFailure = ref(null);
   const saveWorkAttempt = ref(null);
@@ -584,7 +588,7 @@ function useVibe64AutopilotView(props, emit, {
       return "reconnecting";
     }
     if (routingBusy.value && !agentActive.value) return "routing";
-    if (agentActive.value && (!agentNativeTurnReady.value || !agentSteerable.value && !composerQueueing.value)) {
+    if (agentActive.value && (!agentNativeTurnReady.value && !composerStartupQueueing.value || !agentSteerable.value && !composerQueueing.value)) {
       return "waiting";
     }
     if (composerSending.value && !composerQueueing.value) {
@@ -638,7 +642,7 @@ function useVibe64AutopilotView(props, emit, {
       (composerSending.value && !composerQueueing.value) ||
       interrupting.value ||
       repositoryOperationActive.value ||
-      (agentActive.value && (!agentNativeTurnReady.value ||
+      (agentActive.value && (!agentNativeTurnReady.value && !composerStartupQueueing.value ||
         !agentSteerable.value && (!composerQueueing.value || composerAttachments.value.length > 0)))
     ) {
       return false;
@@ -726,6 +730,9 @@ function useVibe64AutopilotView(props, emit, {
     shortActionDismissals.value.workspaceSetup === workspaceSetupActivityKey.value
   ));
   const workspaceSetupRunning = computed(() => ["pending", "running"].includes(workspaceSetupStatus.value));
+  const workspaceSetupActionVisible = computed(() => Boolean(
+    props.sourceWorkspaceAvailable && sessionId.value && workspaceSetupStatus.value !== "unconfigured"
+  ));
   const workspaceSetupNeedsAttention = computed(() => (
     ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
   ));
@@ -773,6 +780,10 @@ function useVibe64AutopilotView(props, emit, {
   async function retryWorkspaceSetup() {
     if (workspaceSetupRetryDisabled.value) {
       return false;
+    }
+    shortActionDismissals.value = { ...shortActionDismissals.value, workspaceSetup: "" };
+    if (shortActionDismissalsStorageKey.value) {
+      writeLocalStorageJson(shortActionDismissalsStorageKey.value, shortActionDismissals.value);
     }
     workspaceSetupRetryError.value = "";
     workspaceSetupRetrying.value = true;
@@ -1010,7 +1021,8 @@ function useVibe64AutopilotView(props, emit, {
   } = {}) {
     const diagnostic = normalizedAgentTurnText(error);
     const isUpdate = ["vibe64_session_update_conflict", "vibe64_session_update_history_diverged"].includes(code);
-    if (temporaryAiRecoveryUnavailable(isUpdate) || !diagnostic) {
+    const isIncoming = code === "vibe64_incoming_merge_conflict";
+    if (temporaryAiRecoveryUnavailable(isUpdate || isIncoming) || !diagnostic) {
       return false;
     }
     repositoryRecoverySending.value = true;
@@ -1030,8 +1042,10 @@ function useVibe64AutopilotView(props, emit, {
           "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:",
           REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY,
           isUpdate ? UPDATE_REPAIR_MESSAGES.handoff : "",
+          isIncoming ? "Repair only the listed conflicting files in this receiving session's worktree. Inspect both exact reviewed commits, preserve both sides' intended behavior and all unrelated/staged work. Do not commit, merge, rebase or push. Return to Incoming changes → Review resolved conflicts; only the person's reviewed Merge may integrate this contribution." : "",
           diagnostic
         ].join("\n\n"),
+        ...(isIncoming ? { initialRouting: { mode: "senior", review: false } } : {}),
         nextStepMessage: isUpdate ? UPDATE_REPAIR_MESSAGES.nextStep : "Review the repair, then retry the repository operation.",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: isUpdate ? "update" : "",
@@ -1260,10 +1274,11 @@ function useVibe64AutopilotView(props, emit, {
       updateStatusPending: monitored.updateStatusPending === true || monitoredState === "updating"
     };
   });
-  const saveWorkUnsaved = computed(() => saveWorkRepositoryState.value?.unsaved === true);
+  const saveConnectedFirst = computed(() => saveWorkRepositoryState.value?.connectedSaveRequired === true);
+  const saveWorkUnsaved = computed(() => saveWorkRepositoryState.value?.unsaved === true || saveConnectedFirst.value);
   const saveWorkRequiresUpdate = computed(() => Boolean(
-    saveWorkRepositoryState.value?.updateAvailable === true ||
-    saveWorkRepositoryState.value?.updateStatusPending === true
+    !saveConnectedFirst.value && (saveWorkRepositoryState.value?.updateAvailable === true ||
+    saveWorkRepositoryState.value?.updateStatusPending === true)
   ));
   const saveWorkRepositoryBusy = computed(() => ["saving", "updating"].includes(
     String(toolbarRepositoryWorkState.value?.state || "")
@@ -1283,17 +1298,18 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const saveWorkDisabled = computed(() => Boolean(
     updateWorkDisabled.value ||
-    (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
+    (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
+      !saveWorkRepositoryState.value?.connectedInspectionError)
   ));
   const sessionUpdateLabel = computed(() => {
     const branch = saveWorkRepositoryState.value?.destination?.branch;
     return branch ? `Update session from ${branch}` : "Update session";
   });
   const saveWorkActionLabel = computed(() => (
-    saveWorkRequiresUpdate.value ? sessionUpdateLabel.value : "Review changes"
+    saveConnectedFirst.value ? "Save connected first" : saveWorkRequiresUpdate.value ? sessionUpdateLabel.value : "Review changes"
   ));
   const saveWorkHeaderAriaLabel = computed(() => (
-    saveWorkRequiresUpdate.value
+    saveConnectedFirst.value ? "Save connected first" : saveWorkRequiresUpdate.value
       ? sessionUpdateLabel.value
       : "Review selected session changes"
   ));
@@ -1321,12 +1337,14 @@ function useVibe64AutopilotView(props, emit, {
     if (saveWorkRepositoryState.value?.error) {
       return "Repository status is unavailable; check for updates before saving";
     }
+    if (saveConnectedFirst.value) return "Review and push connected contributions before saving this project";
     if (saveWorkRequiresUpdate.value) {
       return saveWorkUnsaved.value
         ? `${sessionUpdateLabel.value}, preserving its unsaved work. Save will be available when the update finishes.`
         : `${sessionUpdateLabel.value} to load its latest saved changes.`;
     }
-    if (!saveWorkUnsaved.value) {
+    if (!saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
+        !saveWorkRepositoryState.value?.connectedInspectionError) {
       return "No work to save";
     }
     return "Review changes and choose where to commit them";
@@ -1547,6 +1565,11 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkReview.value = saveWorkRepositoryState.value?.destination
       ? { ...saveWorkRepositoryState.value.destination }
       : null;
+    saveWorkConnectedReview.value = saveConnectedFirst.value
+      ? (saveWorkRepositoryState.value?.connectedReview || []).map(item => ({
+          projectSlug: item.projectSlug, destination: { ...item.destination }
+        }))
+      : null;
     saveWorkConfirmOpen.value = true;
     return true;
   }
@@ -1589,13 +1612,17 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkSending.value = true;
     saveWorkError.value = "";
     saveWorkFailure.value = null;
+    saveWorkConnectedResults.value = [];
     saveWorkConfirmOpen.value = false;
     try {
-      const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value });
+      const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,
+        ...(saveWorkConnectedReview.value !== null ? { connectedReview: saveWorkConnectedReview.value } : {})
+      });
       if (!requestIsCurrent()) {
         return false;
       }
       saveWorkAttempt.value = null;
+      saveWorkConnectedResults.value = result?.connected || [];
       return result;
     } catch (error) {
       if (!requestIsCurrent()) {
@@ -1611,6 +1638,7 @@ function useVibe64AutopilotView(props, emit, {
       saveWorkError.value = error instanceof Error
         ? error.message
         : String(error || "Session work could not be saved.");
+      saveWorkConnectedResults.value = saveWorkFailure.value?.details?.connected || [];
       return false;
     } finally {
       if (requestIsCurrent()) {
@@ -2022,6 +2050,8 @@ function useVibe64AutopilotView(props, emit, {
   watch([sessionId, projectSlug, actorKey], () => {
     repositoryRequestSequence += 1;
     saveWorkConfirmOpen.value = false;
+    saveWorkConnectedReview.value = null;
+    saveWorkConnectedResults.value = [];
     resolvedUpdateReview.value = null;
     saveWorkSending.value = false;
     saveWorkAttempt.value = null;
@@ -2154,6 +2184,9 @@ function useVibe64AutopilotView(props, emit, {
     rightPaneTabMounted,
     saveWorkConfirmOpen,
     saveWorkReview,
+    saveConnectedFirst,
+    saveWorkConnectedReview,
+    saveWorkConnectedResults,
     saveWorkDisabled,
     updateWorkDisabled,
     saveWorkActivityDismissed,
@@ -2199,6 +2232,7 @@ function useVibe64AutopilotView(props, emit, {
     updateAgentSetting,
     updateComposerAttachments,
     updatePreviewAttachmentState,
+    workspaceSetupActionVisible,
     workspaceSetupAskDisabled,
     workspaceSetupActivityKey,
     workspaceSetupCurrentLabel,

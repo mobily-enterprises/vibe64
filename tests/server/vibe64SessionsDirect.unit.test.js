@@ -84,7 +84,7 @@ import {
 } from "./vibe64TestHelpers.js";
 
 function agentWriteLockHarness() {
-  let active = false;
+  const active = new Set();
   const attempts = [];
   return {
     attempts,
@@ -95,20 +95,21 @@ function agentWriteLockHarness() {
       async writeMetadataValue() {},
       async runSessionExclusive(sessionId, operationName, operation) {
         attempts.push({ operationName, sessionId });
-        if (active) {
+        const key = operationName === "assistant-settings" ? operationName : "agent-operation";
+        if (active.has(key)) {
           return {
             acquired: false,
             value: null
           };
         }
-        active = true;
+        active.add(key);
         try {
           return {
             acquired: true,
             value: await operation()
           };
         } finally {
-          active = false;
+          active.delete(key);
         }
       }
     }
@@ -964,6 +965,65 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     ["session-1", "base_commit", "saved"]
   ]);
   assert.equal(writes[0].event.kind, "save-recovered");
+});
+
+test("unknown Save publication survives failed recovery and service restart without another push", async () => {
+  let task = { id: "save-work", operationId: "uncertain-save", status: "failed",
+    stage: "publishing", code: "local_cache_write_failed", error: "local write failed after push" };
+  const metadata = {};
+  let reachable = false;
+  let unpublished = false;
+  let recoveryCalls = 0;
+  let saves = 0;
+  const runtime = {
+    async getSession() { return { sessionId: "session-1", status: "active", metadata: { ...metadata } }; },
+    store: {
+      async readBackgroundTask(_id, key) { return key === "save-work" ? task : null; },
+      async writeBackgroundTaskEvent(_id, _key, { patch }) { task = { ...task, ...patch }; return task; },
+      async writeMetadataValue(_id, key, value) { metadata[key] = value; }
+    }
+  };
+  const restart = () => createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+    async inspectSessionWork() { return { unsaved: false }; },
+    async saveSessionWork() { saves++; throw new Error("An uncertain operation must not be overwritten."); },
+    async recoverSessionWorkSave(_id, { recovery }) {
+      recoveryCalls++;
+      assert.equal(recovery.operationId, "uncertain-save");
+      if (unpublished) throw Object.assign(new Error("No prepared publication was found."), {
+        code: "vibe64_session_save_interrupted_retryable", retryable: true
+      });
+      if (!reachable) throw Object.assign(new Error("remote unavailable"), { code: "vibe64_session_save_publication_unknown" });
+      return { saveCommit: "saved", reconciled: true, status: "saved" };
+    }
+  } });
+  const first = await restart().inspectSessionWork("session-1");
+  assert.equal(first.operation.code, "vibe64_session_save_publication_unknown");
+  assert.equal(first.operation.status, "failed");
+  assert.equal((await restart().saveSessionWork("session-1")).code, "vibe64_session_save_publication_unknown");
+  assert.equal(saves, 0);
+  assert.deepEqual(metadata, {});
+  reachable = true;
+  const resumed = restart();
+  const recovered = await resumed.inspectSessionWork("session-1");
+  assert.equal(recovered.operation.status, "ready");
+  assert.equal(recovered.operation.code, "");
+  assert.deepEqual(metadata, { canonical_commit: "saved", base_commit: "saved" });
+  await resumed.inspectSessionWork("session-1");
+  assert.equal(recoveryCalls, 3, "a confirmed recovery is not repeated");
+  assert.equal(saves, 0);
+  unpublished = true;
+  task = { id: "save-work", operationId: "uncertain-save", status: "failed", stage: "publishing",
+    code: "vibe64_pull_request_required", error: "GitHub requires a pull request." };
+  const originalRejection = { ...task };
+  const rejected = await restart().inspectSessionWork("session-1");
+  assert.deepEqual(rejected.operation, originalRejection,
+    "a verifier proving no publication must preserve the original actionable rejection");
+  assert.equal(saves, 0);
+  task = { ...task, code: "vibe64_session_save_publication_unknown", error: "remote was unavailable" };
+  const notPublished = await restart().inspectSessionWork("session-1");
+  assert.equal(notPublished.operation.code, "vibe64_session_save_interrupted_retryable",
+    "fresh proof of no publication must clear an unknown outcome and allow a deliberate retry");
+  assert.equal(notPublished.operation.retryable, true);
 });
 
 test("work inspection recovers an interrupted prepared Update and advances its base once", async () => {
@@ -2896,6 +2956,9 @@ test("assistant selection checks destination access and prepares routing before 
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
         async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" }, goal: failure === "goal" ? { status: "active" } : null }; },
+        async applyGoalSelection(id, selection) {
+          assert.equal(id, session.sessionId); assert.deepEqual(selection, next); operations.push("future");
+        },
         async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session, session);
@@ -2907,7 +2970,13 @@ test("assistant selection checks destination access and prepares routing before 
       const result = await service.updateAssistantSelection(session.sessionId, {
         assistantSelection: next, originId: "owner-browser", vibe64User: { role: "owner", username: "owner" }
       });
-      if (failure) {
+      if (["active", "goal"].includes(failure)) {
+        assert.notEqual(result.ok, false, JSON.stringify(result));
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "custom", review: false, workflowEngineId: next.engineId, override: next });
+        assert.deepEqual(operations, ["access", "state", "future", "write"]);
+        assert.equal(events.length, 1);
+      } else if (failure) {
         assert.equal(result.ok, false, JSON.stringify(result));
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
         assert.ok(!operations.includes("write"));
@@ -3374,7 +3443,9 @@ test("internal contribution creation retains normal admission and cannot select 
   await withTemporaryRoot(async (targetRoot) => {
     const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) };
-    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    let contributionSetupStarts = 0;
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      startWorkspaceSetup: async () => { contributionSetupStarts++; return { completion: null }; } });
     harness.project.readCurrentProject = async () => ({ repositoryMode: "github",
       repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/library" } } });
     const options = { sessionId: "contribution-session", expectedCommit: contribution.baseCommit, connectedContribution: contribution };
@@ -3391,9 +3462,14 @@ test("internal contribution creation retains normal admission and cannot select 
     assert.equal(harness.creationInputs[0].metadata.repository_branch, undefined);
     assert.equal(harness.creationInputs[0].sourceContext.expectedCommit, contribution.baseCommit);
     assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
-    const ordinary = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "ordinary") });
+    assert.equal(contributionSetupStarts, 0,
+      "receiving allocation cannot recursively start setup for its own connections or cycles");
+    let ordinarySetupStarts = 0;
+    const ordinary = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "ordinary"),
+      startWorkspaceSetup: async () => { ordinarySetupStarts++; return { completion: null }; } });
     assert.equal((await ordinary.service.createSession({ connectedContribution: contribution })).ok, true);
     assert.equal(ordinary.creationInputs[0].metadata.connected_contribution, undefined, "Client input grants no contribution authority.");
+    assert.equal(ordinarySetupStarts, 1, "ordinary creation retains automatic setup; browser input cannot suppress it");
     const full = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "full"),
       scope: "project", initialSessions: [{ sessionId: "existing" }] });
     full.project.readCurrentProject = harness.project.readCurrentProject;
@@ -3563,9 +3639,8 @@ test("new sessions publish running workspace preparation and its eventual result
   assert.equal(publications[1][1].session.workspaceSetup.status, "succeeded");
 });
 
-test("workspace preparation starts required or newly configured recipes and retries failed attempts", async () => {
+test("workspace preparation explicitly reruns succeeded recipes and retains retry admission", async () => {
   let admissionBlocked = false;
-  let prepared = true;
   let status = "succeeded";
   let startCount = 0;
   const retryValues = [];
@@ -3588,10 +3663,6 @@ test("workspace preparation starts required or newly configured recipes and retr
     terminals: {},
     workspaceSetupRunner: {
       isRunning: () => false,
-      async isPrepared(sessionId) {
-        assert.equal(sessionId, "session-1");
-        return prepared;
-      },
       async start(input) {
         startCount += 1;
         retryValues.push(input.retry);
@@ -3613,30 +3684,32 @@ test("workspace preparation starts required or newly configured recipes and retr
     }
   });
 
-  const rejected = await service.retryWorkspaceSetup("session-1");
-  assert.equal(rejected.code, "vibe64_workspace_setup_retry_not_available");
-  assert.equal(startCount, 0);
+  const repeated = await service.retryWorkspaceSetup("session-1");
+  assert.equal(repeated.ok, true);
+  assert.equal(repeated.workspaceSetup.status, "running");
+  assert.equal(startCount, 1);
+  assert.deepEqual(retryValues, [true]);
 
   status = "unconfigured";
   const newlyConfigured = await service.retryWorkspaceSetup("session-1");
   assert.equal(newlyConfigured.ok, true);
   assert.equal(newlyConfigured.workspaceSetup.status, "running");
-  assert.equal(startCount, 1);
-  assert.deepEqual(retryValues, [true]);
+  assert.equal(startCount, 2);
+  assert.deepEqual(retryValues, [true, true]);
 
   status = "failed";
   const retried = await service.retryWorkspaceSetup("session-1");
   assert.equal(retried.ok, true);
   assert.equal(retried.workspaceSetup.status, "running");
-  assert.equal(startCount, 2);
-  assert.deepEqual(retryValues, [true, true]);
+  assert.equal(startCount, 3);
+  assert.deepEqual(retryValues, [true, true, true]);
 
   status = "required";
   const required = await service.retryWorkspaceSetup("session-1");
   assert.equal(required.ok, true);
   assert.equal(required.workspaceSetup.status, "running");
-  assert.equal(startCount, 3);
-  assert.deepEqual(retryValues, [true, true, true]);
+  assert.equal(startCount, 4);
+  assert.deepEqual(retryValues, [true, true, true, true]);
 
   status = "failed";
   admissionBlocked = true;
@@ -3645,33 +3718,31 @@ test("workspace preparation starts required or newly configured recipes and retr
   assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
   assert.equal(blocked.retryable, true);
   assert.equal(status, "failed");
-  assert.equal(startCount, 4);
+  assert.equal(startCount, 5);
 
   status = "succeeded";
-  prepared = false;
   const changedButBusy = await service.retryWorkspaceSetup("session-1");
   assert.equal(changedButBusy.code, "vibe64_agent_write_mode_busy");
   assert.equal(status, "succeeded", "current preparation still uses the original admission guard");
-  assert.equal(startCount, 5);
+  assert.equal(startCount, 6);
 
   admissionBlocked = false;
   const changed = await service.retryWorkspaceSetup("session-1");
   assert.equal(changed.ok, true);
   assert.equal(changed.workspaceSetup.status, "running");
-  assert.equal(startCount, 6);
+  assert.equal(startCount, 7);
   assert.equal(retryValues.at(-1), true);
 
-  status = "succeeded";
-  prepared = undefined;
+  status = "running";
   const unconfirmed = await service.retryWorkspaceSetup("session-1");
   assert.equal(unconfirmed.code, "vibe64_workspace_setup_retry_not_available");
-  assert.equal(startCount, 6, "unknown preparation state does not authorize another run");
+  assert.equal(startCount, 7, "running preparation does not authorize another run");
 
+  status = "succeeded";
   const terminalCalls = [];
   const terminalOwned = createService({
     project: { async createRuntime() { return runtime; } },
     terminals: {
-      async workspaceSetupIsPrepared(id) { terminalCalls.push(["inspect", id]); return false; },
       async prepareWorkspaceSetup(id, options) {
         terminalCalls.push(["prepare", id, options.retry]);
         assert.equal(options.runtime, runtime);
@@ -3681,7 +3752,7 @@ test("workspace preparation starts required or newly configured recipes and retr
     }
   });
   assert.equal((await terminalOwned.retryWorkspaceSetup("session-1")).ok, true);
-  assert.deepEqual(terminalCalls, [["inspect", "session-1"], ["prepare", "session-1", true]]);
+  assert.deepEqual(terminalCalls, [["prepare", "session-1", true]]);
 });
 
 
@@ -3780,7 +3851,7 @@ test("chat mode changes retain the workflow after an answer using a foreign shar
   assert.match(foreignOverride.error, /workflow orchestrator/);
 });
 
-test("Auto cannot bypass an unfinished goal when native goal observation is unavailable", async () => {
+test("Auto preferences can be saved without changing an unfinished goal when observation is unavailable", async () => {
   const lock = agentWriteLockHarness();
   const initialRouting = JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex" });
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
@@ -3792,14 +3863,20 @@ test("Auto cannot bypass an unfinished goal when native goal observation is unav
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
   let observed = { status: "unavailable", goal: null };
   const service = createService({ project: { async createRuntime() { return runtime; } },
-    terminals: { async readAgentGoal() { return observed; } } });
+    terminals: {
+      async readAgentGoal() { return observed; },
+      async resolveAssistantPurpose() { return { available: true, seniorJuniorPair: { senior: {
+        effectiveSelection: JSON.parse(session.metadata.assistant_selection) } } }; },
+      async requireAssistantSelectionAccess() {},
+      async applyGoalSelection() { return "unobserved"; }
+    } });
   const input = { assistantRouting: { mode: "auto", review: false }, vibe64User: { role: "owner", username: "owner" } };
   for (const status of ["active", "paused", "blocked", "budgetLimited", "usageLimited"]) {
     session.metadata.assistant_routing_goal = JSON.stringify({ status, mode: "junior" });
-    const denied = await service.updateAssistantSelection(session.sessionId, input);
-    assert.equal(denied.ok, false, status);
-    assert.match(denied.error, /unfinished goal/);
-    assert.equal(session.metadata.assistant_routing, initialRouting);
+    const saved = await service.updateAssistantSelection(session.sessionId, input);
+    assert.notEqual(saved.ok, false, `${status}: ${JSON.stringify(saved)}`);
+    assert.equal(JSON.parse(session.metadata.assistant_routing).mode, "auto");
+    assert.deepEqual(JSON.parse(session.metadata.assistant_routing_goal), { status, mode: "junior" });
   }
   observed = { status: "available", goal: null };
   const cleared = await service.updateAssistantSelection(session.sessionId, input);
@@ -3855,6 +3932,9 @@ test("named chat modes switch workflow through authorized native handover and pr
           });
           assert.equal(cancelled.acquired, true, "cancel must run after the selection lock is released");
         },
+        async applyGoalSelection(id, selection) {
+          assert.equal(id, session.sessionId); assert.deepEqual(selection, next); operations.push("future");
+        },
         async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session.metadata.assistant_selection, original.assistant_selection);
@@ -3866,7 +3946,13 @@ test("named chat modes switch workflow through authorized native handover and pr
       const result = await service.updateAssistantSelection(session.sessionId, {
         assistantRouting: { mode, review: mode === "auto", workflowEngineId: "claude" }, vibe64User: actor
       });
-      if (failure && !["same-native-backup", "pending"].includes(failure)) {
+      if (["active", "goal"].includes(failure)) {
+        assert.notEqual(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
+        assert.equal(session.metadata.assistant_selection, original.assistant_selection);
+        assert.equal(session.metadata.assistant_routing_goal, original.assistant_routing_goal);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", workflowEngineId: "claude" });
+        assert.deepEqual(operations, ["resolve", "access", "future", "write"]);
+      } else if (failure && !["same-native-backup", "pending"].includes(failure)) {
         assert.equal(result.ok, false, `${mode}: ${failure}`);
         assert.deepEqual(session.metadata, original);
         assert.ok(!operations.includes("write"));
@@ -3923,13 +4009,21 @@ test("credit exhaustion permits an authorized assistant change without replaying
           await routing.cancel(id, options, { waitForCleanup: true, expectedMessageId: messageId });
           cancelled = true;
         },
+        async applyGoalSelection() { return "none"; },
         async prepareRoutingSelection() { prepared = true; }
       } });
       const result = await service.updateAssistantSelection(session.sessionId, { assistantSelection: next, vibe64User: { role: "owner", username: "owner" } });
       const retained = JSON.parse(session.metadata.assistant_routing_request);
       assert.equal(retained.attemptedMessageId, original.attemptedMessageId);
       assert.equal(retained.threadId, original.threadId);
-      if (failure) {
+      if (failure === "native-started") {
+        assert.notEqual(result.ok, false, `${status}: ${JSON.stringify(result)}`);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current, "the newly started turn retains its settings");
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing).override, next);
+        assert.equal(prepared, false);
+        assert.equal(retained.stopped, true);
+        assert.equal(retained.delivery, original.delivery);
+      } else if (failure) {
         assert.equal(result.ok, false, `${status}: ${failure}`);
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
         assert.equal(prepared, false);
@@ -4778,9 +4872,9 @@ test("source-bearing Learning creation retains the original source context, poli
 });
 
 
-test("paused goals change direct mode or model within their agent without clearing or resuming the goal", async () => {
+test("paused goals save next-turn settings without clearing, resuming or replacing the current turn", async () => {
   for (const mode of ["custom", "senior", "junior"]) {
-    for (const failure of ["", "active", "other-agent", "rebind", "prepare", "missing-pin", "stale-pin", "goal-unavailable"]) {
+    for (const failure of ["", "active", "other-agent", "rebind", "missing-pin", "stale-pin", "goal-unavailable"]) {
       const lock = agentWriteLockHarness();
       const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
         modelId: "gpt-6-sol", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
@@ -4804,34 +4898,33 @@ test("paused goals change direct mode or model within their agent without cleari
         async resolveAssistantPurpose() { return { available: true, effectiveSelection: next, connectionIdentity: "same-account" }; },
         async requireAssistantSelectionAccess() {},
         async agentSessionState() { return { turn: { active: failure === "active" }, goal: nativeGoal }; },
-        async preparePausedGoalSelection(id, selected, preferences, context, goal) {
+        async applyGoalSelection(id, selected, preferences, context) {
           assert.equal(id, session.sessionId); assert.deepEqual(selected, next); assert.equal(preferences.mode, mode);
           assert.equal(context.session, session);
-          if (failure === "goal-unavailable") {
-            assert.equal(goal, null, "unavailable native reads cannot authorize a routing rebind");
-            throw new Error("The native goal is unavailable.");
-          }
-          assert.equal(goal, nativeGoal);
+          if (["goal-unavailable", "other-agent"].includes(failure)) return "deferred";
           calls.push("rebind");
           if (failure === "rebind") throw new Error("Routing changed; choose the model again.");
-          return { ...pinned, mode, selection: next };
+          await runtime.store.writeMetadataValue(id, "assistant_routing_goal", JSON.stringify({ ...pinned, mode, selection: next }));
+          return "next-turn";
         },
-        async prepareRoutingSelection() { calls.push("prepare"); if (failure === "prepare") throw new Error("Preparation failed."); },
+        async prepareRoutingSelection() { assert.fail("goal settings must not replace the native conversation"); },
         async updateAgentGoal() { throw new Error("Must not resume or clear the native goal"); }
       } });
       const result = await service.updateAssistantSelection(session.sessionId, {
         assistantRouting: { mode, review: false, workflowEngineId: "codex", ...(mode === "custom" ? { override: next } : {}) },
         vibe64User: { role: "owner", username: "owner" }
       });
-      if (failure && !["missing-pin", "stale-pin"].includes(failure)) {
+      if (failure === "rebind") {
         assert.equal(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
         assert.deepEqual(session.metadata, original);
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
-        assert.deepEqual(JSON.parse(session.metadata.assistant_routing_goal), { ...pinned, mode, selection: next });
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing_goal),
+          ["goal-unavailable", "other-agent"].includes(failure) ? pinned : { ...pinned, mode, selection: next });
         assert.equal(JSON.parse(session.metadata.assistant_routing).mode, mode);
-        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
-        assert.deepEqual(calls, ["rebind", "prepare", "assistant_routing_goal", "assistant_routing", "assistant_selection"]);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+        assert.deepEqual(calls, ["goal-unavailable", "other-agent"].includes(failure)
+          ? ["assistant_routing"] : ["rebind", "assistant_routing_goal", "assistant_routing"]);
       }
       assert.deepEqual(nativeGoal, { status: "paused", objective: "Finish the agreed work", tokenBudget: 20000, tokensUsed: 5000 });
     }

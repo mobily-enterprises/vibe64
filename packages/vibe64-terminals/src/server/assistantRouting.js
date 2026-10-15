@@ -8,7 +8,7 @@ import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessio
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
-  ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
+  ROUTING_REASONS, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -493,7 +493,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
         if (explicitDeslop && activeGoal(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
-        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Senior or Junior before working on a goal.");
+        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
         const pinnedGoal = activeGoal(goal) && savedGoal;
         if (context.requiredAssistantMode && pinnedGoal && pinnedGoal.mode !== context.requiredAssistantMode) {
@@ -844,35 +844,69 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (outcome) await afterTurn(sessionId, { payload: { agentRun: outcome } }, options, { recovered: true });
   }
 
+  async function applyGoalSelection(sessionId, selection, preferences, context) {
+    const observed = await agent.readGoal(sessionId, context);
+    if (observed?.status !== "available") return "unobserved";
+    if (!activeGoal(observed.goal)) return "none";
+    const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const current = previous?.selection || vibe64AssistantSelectionFromMetadata(context.session.metadata);
+    if ((selection?.engineId || preferences.workflowEngineId || current.engineId) !== current.engineId || preferences.mode === "auto") return "after-goal";
+    const goal = { ...observed.goal, objective: assistantGoalObjective(observed.goal.objective, previous) };
+    let selected = selection ? withSelection(context, selection) : context;
+    const prepared = await prepareGoal(sessionId, { action: "rebind", selection, goal }, {
+      ...selected, session: { ...selected.session, metadata: { ...selected.session.metadata,
+        assistant_routing: JSON.stringify(preferences) } }
+    });
+    selection ||= prepared.pinned.selection;
+    selected = withSelection(context, selection);
+    const result = await agent.updateSessionSettings(sessionId, {
+      threadId: observed.threadId, model: selection.modelId, effort: selection.variantId
+    }, selected);
+    if (result?.ok === false) throw Object.assign(new Error(result.error), result);
+    // Preserve a concurrent pause/cancel or replacement's objective and status.
+    return context.runtime.store.mutateSession(sessionId, async () => {
+      const latest = JSON.parse(await context.runtime.store.readMetadataValue(sessionId, "assistant_routing_goal") || "null");
+      if (latest?.objective !== previous?.objective || latest?.selection && latest.selection.engineId !== current.engineId) return "after-goal";
+      await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
+        ...prepared.pinned, ...(latest?.status !== previous?.status ? { status: latest.status } : {})
+      }));
+      return "next-turn";
+    });
+  }
+
   async function prepareGoal(sessionId, input, context) {
     const preferences = assistantRoutingFromMetadata(context.session.metadata);
     if (!preferences) return { input, context };
-    if (preferences.mode === "auto") throw failure("Choose Senior or Junior before starting or resuming a goal.");
     const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    if (preferences.mode === "auto" && !(input.action === "resume" && previous)) throw failure("Choose Senior or Junior before starting a goal.");
     const rebind = input.action === "rebind";
     if (rebind && !input.goal) throw failure("The native goal is unavailable. Read its status again before changing its model.");
-    if (rebind && input.goal?.status !== "paused") throw failure("Pause this goal before changing its chat mode or model.");
     const saved = await createAssistantRoutingStore({ systemRoot }).read();
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const resume = input.action === "resume" && previous;
-    const mode = resume ? previous.mode : preferences.mode;
-    const workflowEngineId = (resume && previous.workflowEngineId) || preferences.workflowEngineId || current.engineId;
+    const changedPreferences = resume && (preferences.mode !== previous.mode ||
+      (preferences.override ? !sameSelection(preferences.override, previous.selection) : Boolean(previous.override)));
+    const retainGoalSettings = resume && (!changedPreferences || preferences.mode === "auto" ||
+      (preferences.workflowEngineId || current.engineId) !== (previous.workflowEngineId || previous.selection.engineId));
+    const mode = retainGoalSettings ? previous.mode : preferences.mode;
+    const workflowEngineId = (retainGoalSettings && previous.workflowEngineId) || preferences.workflowEngineId || current.engineId;
     const state = { mode, workflowEngineId, review: false, submittedBy: context.vibe64User || null,
-      configuration: (resume && previous.configuration) || { revision: saved.revision,
+      configuration: (retainGoalSettings && previous.configuration) || { revision: saved.revision,
         orchestrators: { [workflowEngineId]: saved.orchestrators[workflowEngineId] || {} } },
-      override: resume ? previous.override || (!previous.configuration ? { role: mode, selection: previous.selection } : undefined)
+      override: retainGoalSettings ? previous.override || (!previous.configuration ? { role: mode, selection: previous.selection } : undefined)
         : preferences.override ? { role: mode, selection: preferences.override } : undefined };
     const decision = await resolve(context, state);
     const selection = decision.effectiveSelection;
-    if (resume && !sameSelection(previous.selection, selection)) {
-      throw failure("The goal's pinned AI changed. Send a message with the intended AI before starting a new goal.");
+    if (resume && (previous.selection.engineId !== selection.engineId ||
+        retainGoalSettings && !sameSelection(previous.selection, selection))) {
+      throw failure("The goal's pinned AI changed. Select the intended model again before resuming.");
     }
     if (rebind) {
-      if (selection.engineId !== current.engineId || !sameSelection(selection, input.selection)) {
-        throw failure("The paused goal's selected model changed. Choose its model again.");
+      if (selection.engineId !== current.engineId || input.selection && !sameSelection(selection, input.selection)) {
+        throw failure("The goal's selected model changed. Choose its model again.");
       }
       return { pinned: { ...previous, objective: input.goal.objective, mode, workflowEngineId, selection, configuration: state.configuration, override: state.override,
-        settingsRevision: state.configuration.revision, connectionIdentity: decision.connectionIdentity, status: "paused" } };
+        settingsRevision: state.configuration.revision, connectionIdentity: decision.connectionIdentity, status: input.goal.status } };
     }
     await prepareSelection(sessionId, selection, context);
     await context.runtime.store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
@@ -880,8 +914,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const pinned = { mode, workflowEngineId, selection, configuration: state.configuration, override: state.override,
       settingsRevision: state.configuration.revision, connectionIdentity: decision.connectionIdentity,
       objective: input.action === "set" ? input.objective : previous?.objective || "", status: "active" };
+    let objective = pinned.objective ? assistantModePrompt(mode, pinned.objective) : undefined;
+    if (resume) {
+      const observed = await agent.readGoal(sessionId, context);
+      if (observed?.status === "available" && observed.goal?.objective) objective = observed.goal.objective;
+    }
     return { pinned, context: { ...withSelection(context, selection), expectedConnectionIdentity: decision.connectionIdentity }, input: { ...input,
-      ...(["set", "resume"].includes(input.action) && pinned.objective ? { objective: assistantModePrompt(mode, pinned.objective) } : {}) } };
+      ...(["set", "resume"].includes(input.action) && objective ? { objective } : {}) } };
   }
   async function close() {
     closing = true;
@@ -891,7 +930,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (failures.length) throw new AggregateError(failures, "Assistant routing shutdown did not complete successfully.");
   }
-  return { send, cancel, inspectDelivery, recordOutcome, afterTurn, prepareGoal, reconcile, close };
+  return { send, cancel, inspectDelivery, recordOutcome, afterTurn, prepareGoal, applyGoalSelection, reconcile, close };
 }
 
 export { createAssistantRouting };

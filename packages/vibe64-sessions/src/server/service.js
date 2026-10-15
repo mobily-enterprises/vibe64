@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
-import { sessionConnectedContribution, sessionConnectedSources, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
+import { assertSessionRepositoryReview, sessionConnectedContribution, sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
@@ -8,6 +8,7 @@ import {
   assertProjectEffectAdmission,
   captureProjectRequestContext,
   currentProjectRequestContext,
+  currentProjectActionRequestMeta,
   currentProjectVibe64User,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -30,7 +31,6 @@ import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
-  assertVibe64AssistantSelectionUpdate,
   defineVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionFromMetadata
@@ -272,6 +272,135 @@ function createService({
     return currentProjectVibe64User() || input.vibe64User || null;
   }
 
+  function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
+    const origin = currentProjectRequestContext();
+    if (!origin?.slug || origin.learningScope || origin.slug === projectSlug ||
+        !actions || !requestContext.requestMeta?.request) {
+      throw Object.assign(new Error("Use the originating working project's authenticated session for connected work."), {
+        code: "vibe64_connected_source_authority_required"
+      });
+    }
+    return actions.execute({
+      actionId, input: { ...input, projectSlug },
+      context: { surface: "app", channel: "internal", requestMeta: {
+        ...requestContext.requestMeta,
+        request: { ...requestContext.requestMeta.request, headers: requestContext.requestMeta.request.headers,
+          params: { slug: projectSlug } }
+      } }
+    });
+  }
+
+  async function inspectConnectedWork(session, requestContext, bindings = sessionConnectedSources(session), captureSnapshots = false) {
+    const submissions = sessionConnectedSubmissions(session);
+    const connected = [];
+    for (const binding of bindings) {
+      const submittedCommit = submissions.find(item => item.contribution.id === binding.contribution.id)?.submittedCommit || "";
+      const work = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.work.inspect", {
+        contribution: binding.contribution,
+        ...(submittedCommit ? { submittedCommit } : {})
+      }, requestContext);
+      if (work?.ok !== true) throw Object.assign(new Error(work?.error || "The connected source could not be inspected."), {
+        code: work?.code || "vibe64_connected_source_unavailable",
+        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, ...work?.details }
+      });
+      const publishedCommit = work.publishedCommit === binding.contribution.baseCommit ? "" : text(work.publishedCommit);
+      connected.push({
+        ...binding, destination: work.destination,
+        ...(captureSnapshots ? { snapshot: {
+          contribution: binding.contribution,
+          sessionId: binding.contribution.id,
+          worktreePath: work.worktreePath,
+          baseCommit: work.baseCommit,
+          canonicalCommit: work.canonicalCommit,
+          sessionHead: work.sessionHead,
+          worktreeTree: work.worktreeTree
+        } } : {}),
+        unsaved: work.unsaved === true || work.ahead > 0,
+        publishedCommit, submittedCommit,
+        needsSave: work.unsaved === true || work.ahead > 0 || Boolean(publishedCommit && publishedCommit !== submittedCommit),
+        reconciled: work.operation?.status !== "running" && work.operation?.reconciled !== false
+      });
+    }
+    return connected;
+  }
+
+  async function assertConnectedWorkSaved(runtime, sessionId, requestContext) {
+    const current = await runtime.getSession(sessionId, { inspectSource: false });
+    const connected = await inspectConnectedWork(current, requestContext, sessionConnectedSources(current), true);
+    const pending = connected.find(item => item.needsSave || !item.reconciled);
+    if (pending) throw Object.assign(new Error(
+      pending.needsSave
+        ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
+        : `Reconcile the published work in ${pending.contribution.repository} before saving the main project.`
+    ), { code: "vibe64_connected_save_required", details: {
+      repository: pending.contribution.repository, projectSlug: pending.projectSlug,
+      sessionId: pending.contribution.id
+    } });
+    return connected.map(item => item.snapshot);
+  }
+
+  async function saveConnectedWork(sessionId, input, requestContext) {
+    const saved = [];
+    let failedRepository = "";
+    const result = await sessionResult(() => terminals.runConnectedSessionSave(sessionId, input, async ({ runtime, session }) => {
+      assertProjectEffectAdmission();
+      assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);
+      const connected = await inspectConnectedWork(session, requestContext);
+      if (!Array.isArray(input.connectedReview) || input.connectedReview.length !== connected.length ||
+          connected.some((item, index) => {
+            const review = input.connectedReview[index];
+            return review?.projectSlug !== item.projectSlug ||
+              Object.entries(item.destination).some(([key, value]) => review.destination?.[key] !== value);
+          })) {
+        throw Object.assign(new Error("The connected Save destinations changed. Inspect work and review them again."), {
+          code: "vibe64_connected_save_review_changed"
+        });
+      }
+      const submissions = sessionConnectedSubmissions(session);
+      for (const reviewed of connected) {
+        failedRepository = reviewed.contribution.repository;
+        // Earlier repositories can take time to publish. Recheck this source
+        // at its turn rather than skipping work from the initial review snapshot.
+        const [item] = await inspectConnectedWork(
+          await runtime.getSession(sessionId, { inspectSource: false }), requestContext, [reviewed]
+        );
+        if (Object.entries(reviewed.destination).some(([key, value]) => item.destination?.[key] !== value)) {
+          throw Object.assign(new Error("The connected Save destination changed. Inspect work and review it again."), {
+            code: "vibe64_connected_save_review_changed"
+          });
+        }
+        if (!item.needsSave) continue;
+        const publication = item.unsaved
+          ? await executeConnectedAction(item.projectSlug, "vibe64.sessions.connected.work.save", {
+              contribution: item.contribution, destinationReview: item.destination
+            }, requestContext)
+          : { ok: true, status: "already_published", saveCommit: item.publishedCommit, reconciled: item.reconciled };
+        if (publication?.ok !== true) throw Object.assign(new Error(publication?.error || "Connected Save was not confirmed."), {
+          code: publication?.code || "vibe64_connected_save_failed", details: publication?.details
+        });
+        const entry = { contribution: item.contribution, submittedCommit: publication.saveCommit };
+        const previous = submissions.findIndex(value => value.contribution.id === item.contribution.id);
+        if (previous < 0) submissions.push(entry);
+        else submissions[previous] = entry;
+        const serialized = JSON.stringify({ schemaVersion: 1, submissions });
+        sessionConnectedSubmissions({ metadata: { connected_submissions: serialized } });
+        const completed = { projectSlug: item.projectSlug, repository: item.contribution.repository,
+          sessionId: item.contribution.id, saveCommit: publication.saveCommit,
+          status: publication.status, reconciled: publication.reconciled, recorded: false };
+        saved.push(completed);
+        // Persist every confirmed publication before attempting the next repository.
+        // If this write fails, the receiving session's normal Save recovery remains
+        // authoritative and a retry records that same commit without republishing.
+        await runtime.store.writeMetadataValue(sessionId, "connected_submissions", serialized);
+        completed.recorded = true;
+      }
+      return { ok: true, status: "connected_saved", connected: saved };
+    }), "Connected work could not be saved.");
+    return result?.ok === false
+      ? { ...result, details: { ...result.details, connected: saved, failedRepository } }
+      : result;
+  }
+
   const renewal = createSessionRenewalController({
     prepareArchive: (context) => archivePreparation?.(context),
     project,
@@ -453,7 +582,10 @@ function createService({
   }
 
   async function recoverInterruptedSave(runtime, session, task) {
-    if (task?.status !== "running" || typeof terminals.recoverSessionWorkSave !== "function") {
+    const failedPublication = task?.status === "failed" && (
+      task.stage === "publishing" || task.code === "vibe64_session_save_publication_unknown"
+    );
+    if ((task?.status !== "running" && !failedPublication) || typeof terminals.recoverSessionWorkSave !== "function") {
       return task;
     }
     if (activeSaveOperations.get(session.sessionId) === text(task.operationId)) {
@@ -481,10 +613,17 @@ function createService({
         },
         patch: {
           ...result,
+          code: "",
+          error: "",
           status: "ready"
         }
       });
     } catch (error) {
+      // A prepared-ref check can prove this failed attempt never published.
+      // Preserve its actionable original rejection instead of replacing it
+      // with a generic interrupted-Save notice.
+      if (failedPublication && task.code !== "vibe64_session_save_publication_unknown" &&
+          error.code === "vibe64_session_save_interrupted_retryable") return task;
       return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_SAVE_TASK_ID, {
         event: {
           kind: "save-recovery-failed",
@@ -741,81 +880,136 @@ function createService({
     }, "Vibe64 could not archive this session.");
   }
 
+  async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input = {}, requestContext = {}) {
+    const sessionId = session.sessionId;
+    const prepared = [];
+    const resolvedSources = [];
+    let preparingRepository = "";
+    const result = await sessionResult(async () => {
+      assertProjectEffectAdmission();
+      const origin = currentProjectRequestContext();
+      if (!origin?.slug || origin.learningScope || !actions || !requestContext.requestMeta?.request) {
+        throw Object.assign(new Error("Prepare connected sources from the originating working project's authenticated session."), {
+          code: "vibe64_connected_source_authority_required"
+        });
+      }
+      const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
+      const sources = sessionConnectedSources(session);
+      for (const target of targets) {
+        preparingRepository = target.repository;
+        if (target.projectSlug === origin.slug) throw Object.assign(new Error(
+          "A project cannot prepare itself as a connected contribution."), { code: "vibe64_connected_source_self_reference" });
+        const repository = target.repository.slice("https://github.com/".length);
+        const source = await executeConnectedAction(target.projectSlug, "vibe64.sessions.connected.source", {}, requestContext);
+        if (source.repository !== repository) throw Object.assign(new Error(
+          "The receiving project changed repositories. Review the connection before preparing it."), {
+          code: "vibe64_contribution_authority_changed"
+        });
+        let binding = sources.find(item => item.contribution.repository === repository);
+        if (binding && (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
+          throw Object.assign(new Error("This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."), {
+            code: "vibe64_contribution_authority_changed"
+          });
+        }
+        if (!binding) {
+          binding = { projectSlug: target.projectSlug, contribution: {
+            schemaVersion: 1, id: crypto.randomUUID(), ...source
+          } };
+          sources.push(binding);
+          const serialized = JSON.stringify({ schemaVersion: 1, sources });
+          sessionConnectedSources({ metadata: { connected_sources: serialized } });
+          // Reserve the exact identity before creation, so a lost response or
+          // partial preparation retries the same source instead of cloning again.
+          await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
+        }
+        const result = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
+          contribution: binding.contribution,
+          workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId
+        }, requestContext);
+        if (result?.ok === false) return { ...result, prepared };
+        prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: binding.contribution.id,
+          sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup });
+        if (result.sourceReady !== true) return {
+          ok: false,
+          code: "vibe64_connected_source_unavailable",
+          error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
+        };
+        resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: result });
+      }
+      preparingRepository = "";
+      const development = await project.prepareConnectedDevelopmentInputs({
+        session: await runtime.getSession(sessionId, { inspectSource: false }),
+        projects: resolvedSources,
+        environment: await runtime.resolvePromptEnvironment()
+      });
+      return { ok: true, prepared, development };
+    });
+    return result?.ok === false ? {
+      ...result, prepared,
+      ...(preparingRepository ? { failedRepository: preparingRepository } : {})
+    } : result;
+  }
+
   const service = Object.freeze({
     ...renewal,
     async prepareConnectedSources(sessionId, input = {}, requestContext = {}) {
-      const prepared = [];
-      let preparingRepository = "";
-      const result = await sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
-        assertProjectEffectAdmission();
-        const origin = currentProjectRequestContext();
-        if (!origin?.slug || origin.learningScope || !actions || !requestContext.requestMeta?.request) {
-          throw Object.assign(new Error("Prepare connected sources from the originating working project's authenticated session."), {
-            code: "vibe64_connected_source_authority_required"
-          });
-        }
-        const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
-        const sources = sessionConnectedSources(session);
-        const executeReceiving = (projectSlug, actionId, receivingInput) => actions.execute({
-          actionId,
-          input: { ...receivingInput, projectSlug },
-          // Preserve the original connection for fresh authentication. The
-          // receiving action rechecks its own project; no origin grant travels.
-          context: { surface: "app", channel: "internal", requestMeta: {
-            ...requestContext.requestMeta,
-            request: { ...requestContext.requestMeta.request, headers: requestContext.requestMeta.request.headers,
-              params: { slug: projectSlug } }
-          } }
-        });
-        for (const target of targets) {
-          preparingRepository = target.repository;
-          if (target.projectSlug === origin.slug) throw Object.assign(new Error(
-            "A project cannot prepare itself as a connected contribution."), { code: "vibe64_connected_source_self_reference" });
-          const repository = target.repository.slice("https://github.com/".length);
-          const source = await executeReceiving(target.projectSlug, "vibe64.sessions.connected.source", {});
-          if (source.repository !== repository) throw Object.assign(new Error(
-            "The receiving project changed repositories. Review the connection before preparing it."), {
-            code: "vibe64_contribution_authority_changed"
-          });
-          let binding = sources.find(item => item.contribution.repository === repository);
-          if (binding && (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
-            throw Object.assign(new Error("This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."), {
-              code: "vibe64_contribution_authority_changed"
-            });
-          }
-          if (!binding) {
-            binding = { projectSlug: target.projectSlug, contribution: {
-              schemaVersion: 1, id: crypto.randomUUID(), ...source
-            } };
-            sources.push(binding);
-            const serialized = JSON.stringify({ schemaVersion: 1, sources });
-            sessionConnectedSources({ metadata: { connected_sources: serialized } });
-            // Reserve the exact identity before creation, so a lost response or
-            // partial preparation retries the same source instead of cloning again.
-            await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
-          }
-          const result = await executeReceiving(binding.projectSlug, "vibe64.sessions.connected.allocate", {
-            contribution: binding.contribution,
-            workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId
-          });
-          if (result?.ok === false) return { ...result, prepared };
-          prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: binding.contribution.id,
-            sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup });
-          if (result.sourceReady !== true) return {
-            ok: false,
-            code: "vibe64_connected_source_unavailable",
-            error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
-          };
-        }
-        return { ok: true, prepared };
-      }));
-      return result?.ok === false ? {
-        ...result, prepared,
-        ...(preparingRepository ? { failedRepository: preparingRepository } : {})
-      } : result;
+      return sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input,
+        context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext)));
     },
     inspectConnectedContributionSource(input = {}) {
       return project.connectedContributionSource(input);
+    },
+    async inspectConnectedDevelopmentInputs(sessionId, input = {}, requestContext = {}) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
+        const bindings = sessionConnectedSources(session);
+        const projects = [];
+        for (const target of targets) {
+          const binding = bindings.find(item => `https://github.com/${item.contribution.repository}` === target.repository);
+          if (!binding || binding.projectSlug !== target.projectSlug) throw Object.assign(new Error(
+            "The connected project list no longer matches this task. Prepare connected sources again."), {
+            code: "vibe64_connected_inputs_required"
+          });
+          const receiving = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.work.inputs", {
+            contribution: binding.contribution
+          }, requestContext);
+          if (receiving?.ok === false) return receiving;
+          projects.push({ repository: target.repository, projectSlug: binding.projectSlug, session: receiving });
+        }
+        return project.inspectConnectedDevelopmentInputs({ session, projects, environment: await runtime.resolvePromptEnvironment() });
+      });
+    },
+    async connectedContributionWork(operation, input = {}, requestContext = {}) {
+      return sessionResult(async () => {
+        const contribution = sessionConnectedContribution({ metadata: {
+          connected_contribution: JSON.stringify(input.contribution)
+        } });
+        if (!contribution) throw new TypeError("Connected work requires its exact saved contribution binding.");
+        const source = await project.connectedContributionSource(input);
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const session = await runtime.getSession(contribution.id, { inspectSource: false });
+        const saved = sessionConnectedContribution(session);
+        if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch ||
+            !saved || Object.entries(contribution).some(([key, value]) => saved[key] !== value)) {
+          throw Object.assign(new Error("The receiving source binding changed. Preserve its checkout and review the connection."), {
+            code: "vibe64_contribution_authority_changed"
+          });
+        }
+        if (operation === "inputs") return session;
+        if (operation === "save") return service.saveSessionWork(contribution.id, input, requestContext);
+        const work = await service.inspectSessionWork(contribution.id, {}, {
+          includeConnected: false, inspectContributionPublication: true, knownSubmittedCommit: text(input.submittedCommit)
+        });
+        if (work.ok === false) return work;
+        if (work.operation?.status === "failed" && work.operation.code === "vibe64_session_save_publication_unknown") {
+          throw Object.assign(new Error(work.operation.error || "Connected publication is still unknown. Inspect work before retrying."), {
+            code: work.operation.code
+          });
+        }
+        return work;
+      });
     },
     async allocateConnectedSource(input = {}) {
       return sessionResult(async () => {
@@ -1093,7 +1287,10 @@ function createService({
         }
         let setup = null;
         try {
-          if (!runtime.learningScope?.noExercise) setup = await setupRunner.start({
+          // Allocation prepares a receiving checkout only. The originating
+          // recipe treats its direct sources; starting the receiver's setup
+          // here would recursively allocate its connections (including cycles).
+          if (!contribution && !runtime.learningScope?.noExercise) setup = await setupRunner.start({
             retry: true,
             runtime,
             session: created.session
@@ -1200,7 +1397,9 @@ function createService({
       }, "Vibe64 could not change this provider's model access.");
     },
 
-    async inspectSessionWork(sessionId) {
+    async inspectSessionWork(sessionId, requestContext = {}, {
+      includeConnected = true, inspectContributionPublication = false, knownSubmittedCommit = ""
+    } = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({
           inspectSource: false
@@ -1210,6 +1409,7 @@ function createService({
         });
         const existingTask = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
         const operation = await recoverInterruptedSave(runtime, session, existingTask);
+        const confirmedContributionCommit = text(operation?.verifiedCommit) || knownSubmittedCommit;
         const updateTask = await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID);
         const recoveredUpdateOperation = await recoverInterruptedUpdate(runtime, session, updateTask);
         const updateOperation = recoveredUpdateOperation?.status === "failed"
@@ -1220,11 +1420,17 @@ function createService({
           sessionId,
           session.metadata?.source_path,
           session.metadata?.base_commit,
-          session.metadata?.canonical_commit
+          session.metadata?.canonical_commit,
+          inspectContributionPublication,
+          confirmedContributionCommit
         ]);
         let inspection = activeWorkInspections.get(inspectionKey);
         if (!inspection) {
-          inspection = Promise.resolve().then(() => terminals.inspectSessionWork(sessionId, { runtime, session }));
+          inspection = Promise.resolve().then(() => terminals.inspectSessionWork(sessionId, {
+            runtime, session, ...(inspectContributionPublication ? {
+              inspectContributionPublication: true, knownSubmittedCommit: confirmedContributionCommit
+            } : {})
+          }));
           activeWorkInspections.set(inspectionKey, inspection);
         }
         let work;
@@ -1242,8 +1448,24 @@ function createService({
         ]);
         const activeSaveOperationId = text(activeSaveOperations.get(sessionId));
         const activeUpdateOperationId = text(activeUpdateOperations.get(sessionId));
+        let connected = [];
+        let connectedInspectionError = "";
+        if (includeConnected) {
+          try {
+            connected = await inspectConnectedWork(session, requestContext);
+          } catch (error) {
+            // Receiving status must not hide Main Save. Its separate publication
+            // preflight repeats the authorized inspection and refuses unknowns.
+            connectedInspectionError = text(error?.message) || "Connected repository status is unavailable. Retry Save to check it again.";
+          }
+        }
         return {
           ...work,
+          connected,
+          connectedInspectionError,
+          connectedSaveRequired: connected.some(item => item.needsSave),
+          connectedRequirementsPresent: sessionConnectedSubmissions(session).length > 0,
+          connectedReview: connected.map(({ projectSlug, destination }) => ({ projectSlug, destination })),
           activeOperation: activeSaveOperationId
             ? { kind: "save", operationId: activeSaveOperationId }
             : activeUpdateOperationId
@@ -1285,7 +1507,9 @@ function createService({
         });
         // The Git result is confirmed. A failed UI notification must not turn
         // that success into a retry of a remote write.
-        try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
+        if (result.status !== "repair-review") {
+          try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
+        }
         return result;
       }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");
     },
@@ -1306,13 +1530,14 @@ function createService({
       }, "Vibe64 could not inspect this changed file.");
     },
 
-    async createSessionPullRequest(sessionId, input = {}) {
+    async createSessionPullRequest(sessionId, input = {}, requestContext = {}) {
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         try {
           return await terminals.createSessionPullRequest(sessionId, {
+            assertConnectedWorkSaved: () => assertConnectedWorkSaved(runtime, sessionId, requestContext),
             destinationReview: input.destinationReview,
             title: input.title, body: input.body, draft: input.draft,
             operationId: crypto.randomUUID(), runtime, session, vibe64User
@@ -1326,20 +1551,34 @@ function createService({
       }, "The pull request could not be confirmed. Retry to check GitHub and continue publishing.");
     },
 
-    async saveSessionWork(sessionId, input = {}) {
+    async saveSessionWork(sessionId, input = {}, requestContext = {}) {
+      if (input.connectedReview !== undefined) return saveConnectedWork(sessionId, input, requestContext);
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
         const runtime = await project.createRuntime({
           inspectSource: false
         });
-        const session = await runtime.getSession(sessionId, {
+        let session = await runtime.getSession(sessionId, {
           inspectSource: false
         });
+        const previous = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
+        if (previous?.status === "failed" && (
+          previous.stage === "publishing" || previous.code === "vibe64_session_save_publication_unknown"
+        )) {
+          const recovered = await recoverInterruptedSave(runtime, session, previous);
+          if (recovered?.status === "failed" && recovered.code === "vibe64_session_save_publication_unknown") {
+            throw Object.assign(new Error(recovered.error || "Inspect the uncertain Save before publishing again."), {
+              code: recovered.code
+            });
+          }
+          session = await runtime.getSession(sessionId, { inspectSource: false });
+        }
         const operationId = crypto.randomUUID();
         let operationStarted = false;
         try {
           const result = await terminals.saveSessionWork(sessionId, {
             destinationReview: input.destinationReview,
+            assertConnectedWorkSaved: () => assertConnectedWorkSaved(runtime, sessionId, requestContext),
             onRepositoryWriteAcquired: async () => {
               operationStarted = true;
               activeSaveOperations.set(sessionId, operationId);
@@ -1774,11 +2013,9 @@ function createService({
           inspectSource: false
         });
         const status = text(session.workspaceSetup?.status);
-        const preparationChanged = status === "succeeded" && typeof setupRunner.isPrepared === "function" &&
-          await setupRunner.isPrepared(sessionId) === false;
-        if (!["ambiguous", "failed", "required", "unconfigured"].includes(status) && !preparationChanged) {
+        if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
           const error = new Error(
-            "Workspace preparation can only be started when it is required, newly configured, failed, or needs a recipe choice."
+            "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice."
           );
           error.code = "vibe64_workspace_setup_retry_not_available";
           throw error;
@@ -1874,114 +2111,119 @@ function createService({
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
         const runtime = await project.createRuntime({ inspectSource: false });
-        const update = () => runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-          const session = await runtime.getSession(sessionId, { inspectSource: false });
-          const current = vibe64AssistantSelectionFromMetadata(session.metadata);
-          let preferences = null;
-          let resolved;
-          let connectionIdentity;
-          if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
-            const previous = assistantRoutingFromMetadata(session.metadata);
-            const previousWorkflow = previous?.workflowEngineId || current.engineId;
-            preferences = assistantRoutingPreferences({ ...input.assistantRouting,
-              workflowEngineId: input.assistantRouting.workflowEngineId || previousWorkflow });
-            if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
-                preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
-            if (preferences.workflowEngineId === previousWorkflow) {
-              const observed = typeof terminals.readAgentGoal === "function"
-                ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
-              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-              if (goal && !["complete", "completed"].includes(goal.status)) {
-                if (preferences.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
-                if (goal.status !== "paused") throw new Error("Pause this goal before changing its chat mode or model.");
-              } else {
-                await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
-                return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+        const save = async () => {
+          const apply = async ({ deferred = false } = {}) => {
+            const session = await runtime.getSession(sessionId, { inspectSource: false });
+            const current = vibe64AssistantSelectionFromMetadata(session.metadata);
+            let preferences = null;
+            let resolved;
+            let connectionIdentity;
+            if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
+              const previous = assistantRoutingFromMetadata(session.metadata);
+              const previousWorkflow = previous?.workflowEngineId || current.engineId;
+              preferences = assistantRoutingPreferences({ ...input.assistantRouting,
+                workflowEngineId: input.assistantRouting.workflowEngineId || previousWorkflow });
+              if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
+                  preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
+              if (preferences.workflowEngineId === previousWorkflow) {
+                const observed = typeof terminals.readAgentGoal === "function"
+                  ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+                const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+                const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
+                if (!goal || ["complete", "completed"].includes(goal.status)) {
+                  await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
+                  return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+                }
               }
+              const decision = await terminals.resolveAssistantPurpose({
+                purpose: preferences.mode, workflowEngineId: preferences.workflowEngineId, reviewEnabled: preferences.review,
+                ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
+              }, { vibe64User });
+              if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
+              const destination = preferences.mode === "auto" ? decision.seniorJuniorPair.senior : decision;
+              resolved = destination.effectiveSelection;
+              connectionIdentity = destination.connectionIdentity;
+            } else {
+              const requestedSelection = input.assistantRouting?.mode === "custom"
+                ? input.assistantRouting.override : input.assistantSelection;
+              if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
+              resolved = await resolveAssistantSelection({
+                ...record(requestedSelection),
+                engineId: text(requestedSelection.engineId) || current.engineId
+              }, vibe64User);
             }
-            const decision = await terminals.resolveAssistantPurpose({
-              purpose: preferences.mode, workflowEngineId: preferences.workflowEngineId, reviewEnabled: preferences.review,
-              ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
-            }, { vibe64User });
-            if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
-            const destination = preferences.mode === "auto" ? decision.seniorJuniorPair.senior : decision;
-            resolved = destination.effectiveSelection;
-            connectionIdentity = destination.connectionIdentity;
-          } else {
-            const requestedSelection = input.assistantRouting?.mode === "custom"
-              ? input.assistantRouting.override : input.assistantSelection;
-            if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
-            resolved = await resolveAssistantSelection({
-              ...record(requestedSelection),
-              engineId: text(requestedSelection.engineId) || current.engineId
-            }, vibe64User);
-          }
-          await terminals.requireAssistantSelectionAccess(resolved, {
-            vibe64User, ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
-          });
-          const agentSession = typeof terminals.agentSessionState === "function"
-            ? await terminals.agentSessionState(sessionId, { runtime, session })
-            : null;
-          const next = assertVibe64AssistantSelectionUpdate(current, resolved, {
-            turnActive: agentSession?.turn?.active === true
-          });
-          const observedGoal = typeof terminals.readAgentGoal === "function"
-            ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-          const goal = observedGoal?.status === "available" ? observedGoal.goal
-            : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
-          if (goal && !["complete", "completed"].includes(goal.status)) {
-            if (goal.status !== "paused") throw new Error("Pause this goal before changing its chat mode or model.");
-            if (next.engineId !== current.engineId) throw new Error("A paused goal must stay with its current agent. Choose another model within that agent.");
-            if (preferences?.mode === "auto") throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
-          }
-          const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
-          if (routingRequest?.helper || !routingRequest?.stopped && (assistantRoutingStatusIsPending(routingRequest) ||
-              routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted")) {
-            return { cancelRouting: routingRequest.messageId };
-          }
-          const nextPreferences = preferences || {
-            mode: "custom", review: false, workflowEngineId: next.engineId, override: next
+            await terminals.requireAssistantSelectionAccess(resolved, {
+              vibe64User, ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
+            });
+            const agentSession = typeof terminals.agentSessionState === "function"
+              ? await terminals.agentSessionState(sessionId, { runtime, session })
+              : null;
+            const next = resolved;
+            const observedGoal = typeof terminals.readAgentGoal === "function"
+              ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+            const goal = observedGoal?.status === "available" ? observedGoal.goal
+              : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
+            const nextPreferences = preferences || {
+              mode: "custom", review: false, workflowEngineId: next.engineId, override: next
+            };
+            if (deferred || agentSession?.turn?.active || goal && !["complete", "completed"].includes(goal.status)) {
+              await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });
+              await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
+              return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+            }
+            const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
+            if (routingRequest?.helper || !routingRequest?.stopped && (assistantRoutingStatusIsPending(routingRequest) ||
+                routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted")) {
+              return { cancelRouting: routingRequest.messageId };
+            }
+            await terminals.prepareRoutingSelection(sessionId, next, { runtime, session, vibe64User });
+            await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
+            await runtime.store.writeMetadataValue(
+              sessionId,
+              VIBE64_ASSISTANT_SELECTION_METADATA,
+              serializeVibe64AssistantSelection(next)
+            );
+            return {
+              assistantSelection: next,
+              session: await runtime.getSession(sessionId, { inspectSource: false })
+            };
           };
-          const context = { runtime, session, vibe64User };
-          const pausedGoal = goal?.status === "paused"
-            ? await terminals.preparePausedGoalSelection(sessionId, next, nextPreferences, context, observedGoal?.status === "available" ? goal : null) : null;
-          await terminals.prepareRoutingSelection(sessionId, next, context);
-          if (pausedGoal) await runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(pausedGoal));
-          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
-          await runtime.store.writeMetadataValue(
-            sessionId,
-            VIBE64_ASSISTANT_SELECTION_METADATA,
-            serializeVibe64AssistantSelection(next)
-          );
-          return {
-            assistantSelection: next,
-            session: await runtime.getSession(sessionId, { inspectSource: false })
+          const update = async () => {
+            const result = await runVibe64AgentWriteExclusive(runtime, sessionId, () => apply(),
+              { operation: "update-assistant-selection" });
+            // Saving the next selection does not wait for native startup. Only
+            // immediate idle changeover requires the admission/cleanup lock.
+            return result.acquired ? result : { acquired: true, value: await apply({ deferred: true }) };
           };
-        }, { operation: "update-assistant-selection" });
-        let exclusive = await update();
-        if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
-          // Router cleanup needs this lock for its final callbacks. Release it,
-          // cancel through its owner, then revalidate access and native state.
-          await terminals.cancelAssistantRoutingForSelection(sessionId, exclusive.value.cancelRouting, { runtime, vibe64User });
-          exclusive = await update();
+          let exclusive = await update();
           if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
-            throw new Error("Another routing request started. Retry the assistant selection.");
+            // Router cleanup needs this lock for its final callbacks. Release it,
+            // cancel through its owner, then revalidate access and native state.
+            await terminals.cancelAssistantRoutingForSelection(sessionId, exclusive.value.cancelRouting, { runtime, vibe64User });
+            exclusive = await update();
+            if (exclusive.acquired && Object.hasOwn(exclusive.value || {}, "cancelRouting")) {
+              throw new Error("Another routing request started. Retry the assistant selection.");
+            }
           }
-        }
-        if (!exclusive.acquired) {
-          return exclusive.value;
-        }
-        if (exclusive.value?.ok === false) return exclusive.value;
-        await publishSessionChanged(sessionId, {
-          operation: "updated",
-          originId: text(input.originId),
-          reason: "session-assistant-selection-updated",
-          session: exclusive.value.session
-        });
-        return publicSession(exclusive.value.session, {
-          assistantSelection: exclusive.value.assistantSelection
-        });
+          if (!exclusive.acquired) {
+            return exclusive.value;
+          }
+          if (exclusive.value?.ok === false) return exclusive.value;
+          await publishSessionChanged(sessionId, {
+            operation: "updated",
+            originId: text(input.originId),
+            reason: "session-assistant-selection-updated",
+            session: exclusive.value.session
+          });
+          return publicSession(exclusive.value.session, {
+            assistantSelection: exclusive.value.assistantSelection
+          });
+        };
+        if (!runtime.store.runSessionExclusive) return save();
+        const saved = await runtime.store.runSessionExclusive(sessionId, "assistant-settings", save,
+          { operation: "save-assistant-settings", waitMs: 10_000 });
+        if (!saved.acquired) throw new Error("Another settings change is being saved. Try again in a moment.");
+        return saved.value;
       }, "Vibe64 could not update this session's assistant selection.");
     },
 
@@ -2038,6 +2280,12 @@ function createService({
         };
       });
     }
+  });
+  terminals.setConnectedPreparation?.(async ({ mode, runtime, session }) => {
+    const requestContext = { requestMeta: currentProjectActionRequestMeta() };
+    return mode === "prepare"
+      ? prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext)
+      : service.inspectConnectedDevelopmentInputs(session.sessionId, {}, requestContext);
   });
   return service;
 }

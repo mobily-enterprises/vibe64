@@ -24,6 +24,39 @@ Restore the execution service and retry **Stop**; wait for success before new
 work. Do not resubmit an uncertain request as a workaround. Project **Close**
 also retries pending cleanup and reports unconfirmed exit; a failed Close is
 not successful cleanup.
+
+If chat reports **Claude Code account status could not be checked**, read the
+reported cause. A permission, startup or timeout failure does not mean you signed
+out. Ask the workspace operator to repair the Claude installation or execution
+service, then refresh readiness in **AI Accounts** and retry the original request.
+Colleague can explain and recheck readiness; installation repair requires the
+operator. Only an actual signed-out status asks you to sign in again.
+Reconnecting cancels older model-list and usage checks. If one reports that it
+was cancelled for reconnection, refresh after reconnection completes.
+Claude can continue automatically when a background task reports back. The
+working indicator and **Stop** remain available for that work, even after an
+earlier answer. Sending guidance while only background work remains starts the
+next native instruction without waiting for the finished main reply to stop.
+These controls behave the same on desktop and mobile. Colleague can explain the
+state and perform supported Stop or Send actions when you ask.
+If Claude disconnects and cleanup cannot yet be confirmed, the chat shows
+**Assistant stop not yet confirmed** instead of claiming it is working.
+Restore the execution service and retry **Stop**. An unexpected parent-process
+exit is detected even if a child still holds the output connection open.
+
+For an operator investigation, retain the request time and session identity.
+Server events named `vibe64.claude.startup` report startup stages and failures;
+`vibe64.claude.lifecycle` reports activity, task counts and steering results.
+They correlate conversation, turn and execution IDs without recording prompts,
+responses or task descriptions. Startup failure diagnostics retain bounded,
+redacted native stderr. Colleague does not have raw server-log access.
+
+For interrupted renewal, an accepted prompt is not repeated automatically.
+Recovery requires a confirmed completed turn; partial text alone is insufficient.
+If completion cannot be confirmed, use the reported manual handover recovery.
+Claude tool progress remains commentary even when its text and tool call arrive
+separately; the final answer is saved when its message completes.
+
 If Codex reports lost observation, wait for it to confirm that work stopped.
 A failed application-tool call can also require confirmed native cleanup.
 Changing the model does not clear that responsibility; finish **Stop** before

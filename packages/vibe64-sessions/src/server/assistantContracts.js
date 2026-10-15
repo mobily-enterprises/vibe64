@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
+import { connectedWorkReviewSchema, incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS } from "./sessionRenewalState.js";
 
@@ -158,9 +158,9 @@ function incomingContributionTool(description) {
 
 function sessionWorkTool(description) {
   const strings = ["sessionId", "repositoryMode", "mode", "branch", "relationship", "updateStrategy", "status", "operationId",
-    "baseCommit", "canonicalCommit", "sessionHead", "saveCommit", "verifiedCommit", "code"];
+    "baseCommit", "canonicalCommit", "sessionHead", "saveCommit", "verifiedCommit", "code", "connectedInspectionError"];
   const booleans = ["unsaved", "dirty", "worktreeClean", "updateAvailable", "sessionCurrent", "sessionMatchesCanonical",
-    "publicationRequiresPullRequest", "reconciled", "recovered", "cached"];
+    "publicationRequiresPullRequest", "reconciled", "recovered", "cached", "connectedSaveRequired", "connectedRequirementsPresent"];
   const operationStrings = ["operationId", "kind", "status", "stage", "code", "error", "conflictReviewId"];
   const operationSchema = createSchema(Object.fromEntries(operationStrings.map((key) => [key, { ...shortText, maxLength: 512 }])));
   return {
@@ -173,6 +173,13 @@ function sessionWorkTool(description) {
       changedPaths: { type: "array", items: { type: "string", noTrim: true, maxLength: 512 }, required: false },
       changedPathCount: { type: "integer", required: false }, changedPathsTruncated: { type: "boolean", required: false },
       destination: { type: "object", schema: sessionRepositoryReviewSchema, required: false },
+      connectedReview: { type: "array", items: connectedWorkReviewSchema, maxItems: 64, required: false },
+      connected: { type: "array", maxItems: 64, required: false, items: createSchema({
+        projectSlug: shortText, repository: shortText, sessionId: shortText, saveCommit: shortText,
+        status: shortText, needsSave: { type: "boolean", required: false },
+        recorded: { type: "boolean", required: false }, reconciled: { type: "boolean", required: false }
+      }) },
+      failedRepository: shortText,
       historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
       ...Object.fromEntries(["operation", "updateOperation", "activeOperation"].map((key) => [key, { type: "object", schema: operationSchema, required: false }])),
       cacheMaintenance: { type: "object", required: false, schema: createSchema({
@@ -195,6 +202,18 @@ function sessionWorkTool(description) {
         // These are exact confirmation identities, not display excerpts.
         if (record) output[name] = Object.fromEntries(fields.map((key) => [key, record[key]]));
       }
+      if (Array.isArray(result.connectedReview)) output.connectedReview = result.connectedReview.map(item => ({
+        projectSlug: item.projectSlug,
+        destination: Object.fromEntries(["sessionId", "mode", "repository", "branch"].map(key => [key, item.destination[key]]))
+      }));
+      const connected = result.connected || result.details?.connected;
+      if (Array.isArray(connected)) output.connected = connected.slice(0, 64).map(item => ({
+        projectSlug: item.projectSlug, repository: item.repository || item.contribution?.repository,
+        sessionId: item.sessionId || item.contribution?.id,
+        ...Object.fromEntries(["saveCommit", "status", "needsSave", "recorded", "reconciled"]
+          .flatMap(key => item[key] === undefined ? [] : [[key, item[key]]]))
+      }));
+      if (result.details?.failedRepository) output.failedRepository = result.details.failedRepository;
       for (const name of ["operation", "updateOperation", "activeOperation"]) {
         if (!result[name]) continue;
         const record = { ...result[name], conflictReviewId: result[name].conflictRecovery?.reviewId };

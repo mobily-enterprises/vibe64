@@ -39,6 +39,7 @@ async function prepareExampleProject(projectRoot) {
 async function main() {
   const { values } = parseArgs({ options: {
     project: { type: "string" },
+    "connected-sources": { type: "string" },
     "state-dir": { type: "string" },
     host: { type: "string", default: "127.0.0.1" },
     port: { type: "string", default: "5173" }
@@ -50,6 +51,9 @@ async function main() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid preview port.");
   const developmentRoot = path.resolve(values["state-dir"] || path.join(appRoot, ".vibe64-local", "development"));
   const projectRoot = path.resolve(values.project || path.join(developmentRoot, "hello-node"));
+  if (values["connected-sources"]) {
+    process.env.VIBE64_CONNECTED_SOURCES_FILE = path.resolve(values["connected-sources"]);
+  }
 
   if (sourceDevelopmentSelected()) {
     process.exitCode = await runSourceDevelopment({ publicRoot: appRoot, command: process.execPath,

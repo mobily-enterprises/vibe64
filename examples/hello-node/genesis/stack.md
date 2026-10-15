@@ -21,6 +21,9 @@
 ## Workspace setup
 - Nothing.
 
+## Connected development
+- Default package type: `npm`
+
 ## Outputs
 
 ### Target `app`: Hello Node

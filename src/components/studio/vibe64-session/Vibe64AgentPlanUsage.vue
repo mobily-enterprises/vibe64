@@ -61,7 +61,9 @@ useRealtimeEvent({
 });
 const suppliedGoal = computed(() => unref(props.conversationRuntime?.goalState));
 const goalView = computed(() => unref(props.conversationRuntime?.goalView));
-const goal = computed(() => goalEnabled.value ? goalView.value?.goal || null : null);
+const goalAvailable = computed(() => goalEnabled.value && !suppliedGoal.value?.loading && suppliedGoal.value?.available !== false && !unref(props.conversationRuntime?.goalLoadError) &&
+  goalView.value?.status === "available");
+const goal = computed(() => goalAvailable.value ? goalView.value?.goal || null : null);
 const goalEngineId = computed(() => goalView.value?.routing?.selection?.engineId || engineId.value);
 const fullGoalOpen = ref(false);
 const goalPreview = computed(() => {
@@ -69,8 +71,6 @@ const goalPreview = computed(() => {
   return objective.length > 140 ? `${objective.slice(0, 140).trimEnd()}…` : objective;
 });
 watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = false; });
-const goalAvailable = computed(() => goalEnabled.value && !unref(props.conversationRuntime?.goalLoadError) &&
-  goalView.value?.status === "available");
 const goalExplicitMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode !== "auto");
 const changingGoal = computed(() => suppliedGoal.value?.pending === true);
 const goalError = computed(() => suppliedGoal.value?.error || "");
@@ -144,7 +144,7 @@ const details = computed(() => {
 });
 const goalState = computed(() => ({
   ...suppliedGoal.value,
-  enabled: goalEnabled.value && Boolean(goalAvailable.value || goalError.value),
+  enabled: goalEnabled.value && Boolean(suppliedGoal.value?.loading || goalAvailable.value || goalError.value),
   goal: goalAvailable.value && goal.value ? {
     ...goal.value,
     objective: goalPreview.value,
@@ -169,27 +169,27 @@ const goalState = computed(() => ({
   </AssistantGoalControl>
   <v-menu v-if="goalEngineId === 'claude' && goalState.enabled" v-model="claudeGoalOpen" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
-      <v-btn v-bind="menuProps" size="small" variant="text" :aria-label="goal ? `Goal ${goal.status}` : 'Set goal'">
-        {{ goal ? 'Goal' : 'Set goal' }}
+      <v-btn v-bind="menuProps" size="small" variant="text" :aria-label="goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? `Goal ${goal.status}` : 'Set goal'">
+        {{ goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? 'Goal' : 'Set goal' }}
         <span v-if="goal" class="ml-1 text-medium-emphasis">· {{ goal.status }}</span>
       </v-btn>
     </template>
     <v-card class="pa-3" max-width="360">
-      <strong role="status">{{ goal ? `Goal ${goal.status}` : 'Set a Claude goal' }}</strong>
+      <strong role="status">{{ goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? `Goal ${goal.status}` : 'Set a Claude goal' }}</strong>
       <p v-if="goal" class="my-2 agent-plan-usage__goal-text">{{ goalPreview }}</p>
       <p v-if="goal?.reason" class="text-body-small my-2">{{ goal.reason }}</p>
       <v-btn v-if="goal?.status === 'active'" size="small" :disabled="changingGoal" @click="changeGoal('pause')">
-        {{ changingGoal ? 'Pausing…' : 'Pause goal' }}
+        {{ goalState.action === 'pause' ? 'Pausing…' : 'Pause goal' }}
       </v-btn>
       <v-btn v-if="goal?.status === 'paused' && goalExplicitMode" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
-        {{ changingGoal ? 'Resuming…' : 'Resume goal' }}
+        {{ goalState.action === 'resume' ? 'Resuming…' : 'Resume goal' }}
       </v-btn>
-      <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">Cancel goal</v-btn>
+      <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">{{ goalState.action === 'cancel' ? 'Cancelling…' : 'Cancel goal' }}</v-btn>
       <p v-if="goal && goal.status !== 'complete'" class="text-body-small mt-2">Pause stops the current turn and keeps the goal for later. Cancel also clears the goal.</p>
       <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior or Junior before starting or resuming a goal.</p>
-      <form v-if="goalExplicitMode && (!goal || goal.status === 'complete')" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
+      <form v-if="goalAvailable && goalExplicitMode && (!goal || goal.status === 'complete')" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
         <v-textarea v-model="claudeObjective" label="Goal objective" placeholder="Describe the result Claude should work toward" rows="3" auto-grow maxlength="4000" :disabled="changingGoal" hide-details />
-        <v-btn type="submit" class="align-self-start" size="small" :disabled="changingGoal || !claudeObjective.trim()">{{ changingGoal ? 'Starting…' : 'Start goal' }}</v-btn>
+        <v-btn type="submit" class="align-self-start" size="small" :disabled="changingGoal || !claudeObjective.trim()">{{ goalState.action === 'set' ? 'Starting…' : 'Start goal' }}</v-btn>
       </form>
       <v-btn v-if="goal?.objective && goalPreview !== goal.objective" size="small" variant="text" @click="fullGoalOpen = true">View full goal</v-btn>
       <p v-if="goalError" role="alert" class="text-error text-body-small mt-2">{{ goalError }}</p>

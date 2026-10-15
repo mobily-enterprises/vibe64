@@ -26,10 +26,26 @@ contract transported by the project's Stack.
 
 The Genesis boundary also inspects `## Connected development` as
 `vibe64.connected-development.v1`. This is a separate development recipe, not
-an extension of the initial `Connected projects` list. One `Sources file`
+an alternative connection list. Repository identities belong only in the
+project's `vibe64.connections.json`; Stack owns generic treatment. Optional
+`Default package type` declares `npm` or `custom`, independently of command
+runtimes or the project's other technologies. A connection's explicit type
+wins; an omitted type requires this declared default. The resulting source map
+contains the effective type for each repository, and changing that selection
+invalidates preparation. A default-only section is unconfigured: it supplies
+metadata but cannot certify source consumption. A custom connection supplies a
+safe project-relative `script`; `Custom runner` declares the interpreter argv
+and runtimes using the existing setup grammar. The runner appends the resolved
+script and `--phase`, `--source-root`, `--project-root`, `--sources-file` and
+`--repository` arguments. Prepare runs before Verify; both phases must succeed.
+The script receives `prepare` or `verify` as its phase. Missing runners or
+scripts, symbolic-link escapes, and npm connections carrying a script fail.
+Custom source checks do not replace npm Verify commands when both types exist.
+One `Sources file`
 declares the project-relative input location. Ordered `Prepare` and `Verify`
 entries reuse the Workspace setup argv, runtime and working-directory grammar.
-Prepare entries precede verification; at least one Verify entry is required.
+Prepare entries precede verification. npm sources require a Verify entry;
+custom-only recipes may use the Custom runner's verification phase.
 Conditions are rejected so missing files cannot silently skip a consumption
 check. Exactly `- Nothing.` or an absent section is unconfigured. Invalid or
 blocked sections cannot yield a ready recipe identity.
@@ -38,15 +54,20 @@ Inspection preserves the selected toolchain's commands without language or
 repository switches. Its identity covers the source-map location, steps and
 runtimes. Genesis transports the opaque section; inspection neither creates
 that file nor runs commands. A ready inspection only means the declaration is
-valid. Connecting this recipe to authorized sources and the existing managed
-runner, and proving actual source consumption, remain unfinished.
+valid. Explicit connected-source preparation now asks Project to write the
+declared input map from authorized receiving sessions. That owner reports
+`inputs-prepared`; it does not run the recipe. Normal workspace preparation uses
+the same allocation owner, then executes ordinary setup followed by connected
+Prepare and Verify commands through the existing managed runner. Project's
+combined inspection includes both recipe identities and the exact source map.
+Sessions reauthorizes the receiving sources before each command and before
+accepting a cached success. Those authorized roots enter the existing execution
+request; the map itself grants no filesystem authority. Node.js consumption
+has a focused real npm/import proof; other toolchains remain unproven.
 
-Fresh working-session preparation and explicit Prepare/Retry first ask the
-Project owner to initialize declared connected projects in that exact source.
-The existing session write admission and Project source lock cover the import.
-Absent declarations and existing files are preserved. A malformed declaration
-or missing receiving-repository access produces a preparation failure before
-commands run. Passive checks and Learning setup do not import connections.
+Working-session preparation and explicit Prepare/Retry consume the existing
+project connection file. They never create that file or import connections from
+Stack. Settings or ordinary source editing owns changes to the connection list.
 
 Required workspace preparation is a neutral, dismissible action notice. The
 existing terminal summary shows the declared setup diagnostic once and keeps
@@ -54,6 +75,13 @@ Prepare workspace available without error styling or a duplicate error panel.
 Earlier setup output remains in the expandable log, not the required notice's summary.
 Failed/ambiguous preparation and failures to start it retain error diagnostics,
 retry and repair controls. Running output and terminal expansion are unchanged.
+The session header and compact Session actions menu retain Prepare workspace
+after success or notice dismissal. An explicit request reruns the complete current
+recipe through the same managed runner and admission, including an unchanged
+successful recipe; running or archived sessions remain unavailable. Cached success
+records earlier execution, not freshness of custom build outputs after source or
+script edits. Those changes can use this explicit rerun without a separate cache
+ledger or automatic custom rebuild watcher.
 
 `vibe64.workspace-setup.v1` is the only accepted schema. Its source is strict,
 readable Markdown: each `Prepare` entry declares a label, runtimes, optional
@@ -61,7 +89,7 @@ working directory and path condition, then separate backticked argv values.
 Vibe64 parses that opaque Stack section mechanically and runs the normalized
 argv with the project's resolved environment. It runs once for a fresh recipe,
 records progress and exact recipe identity, waits before dependent work, and
-exposes retry after failure. Missing or ambiguous declarations remain explicit;
+exposes explicit rerun after success or failure. Missing or ambiguous declarations remain explicit;
 Vibe64 never guesses an installer or reads a retired grammar.
 
 When managed workflow accounting is available, the full declared preparation
@@ -95,7 +123,8 @@ that explicit request in the required state and runs the full declared recipe,
 not merely an inferred package install. A command run independently in chat
 cannot certify that recipe. An explicit preparation retry at the runner seam
 reruns even a previously successful recipe, allowing repair of removed installed
-files; the public retry action still rejects an already-successful state.
+files. The public Prepare workspace action also permits this explicit rerun
+after success, including when the prior success notice was dismissed.
 
 Preview can inspect whether the current recipe already succeeded without taking
 assistant-write admission. If preparation is needed, it rereads the session under

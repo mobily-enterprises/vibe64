@@ -28,6 +28,23 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 
 ## Public contract
 
+The existing runtime catalogue also maps Python, Ruby, Go, Java, Kotlin, C# and
+Rust to explicit host packs. Kotlin receives Java tools, and Rust receives the
+native linker toolchain. Interactive coding and terminals use these same pack
+paths; declared operations prepend only their requested runtimes. On managed
+hosts the installed runtime guards block undeclared tool names before mutable
+host PATH entries. Standalone execution retains the developer's ordinary PATH
+and installed tools without requiring hosted runtime installation. The host
+owns installation, while the project owns build commands and dependency/source
+resolution. Frameworks reuse those toolchains; database CLI selection does not
+change resource lifecycle or apply migrations.
+
+The runtime catalogue recognizes `awsebcli` and its `eb` command for declared
+operations and interactive coding/terminal execution. Hosts own the actual CLI
+installation and credential policy. Public execution supplies its normal project
+environment and runtime paths; it neither stores separate EB credentials nor
+installs the tool for standalone users.
+
 Managed execution Stop asks systemd to stop the exact unit before attempting
 forced cgroup cleanup. This lets host-owned ExecStop hooks drain delegated
 resources before their processes receive termination signals. Completion still

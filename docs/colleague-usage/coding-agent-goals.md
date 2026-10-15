@@ -9,25 +9,38 @@ during a pending delivery may require cancelling that request and sending it aga
 These steps apply on desktop and mobile. Account sign-in and credential entry
 remain your actions; Colleague can explain the recovery and offer supported help.
 
-An unfinished goal stays with its current orchestrator. To change its model or
-direct mode without clearing it, choose **Pause goal** and wait until the current
-turn finishes. Open **Chat mode**, then choose **Senior**, **Junior**, or **Custom**
-and apply another model within that same orchestrator. The goal stays paused and
-keeps its objective, budget and progress. Its routing now uses your new choice for
-messages and **Resume goal**. You do not need **Cancel goal** or a reload.
-The same steps apply to a goal created by the assistant. If goal status is
-unavailable, wait for reconnection and retry the change. You do not need to
-cancel or recreate the goal to select another model.
-**Auto**, automatic review and changing orchestrators remain unavailable until
-the goal finishes or is cancelled. These steps work on desktop and mobile;
-Colleague can explain or offer the supported change, but needs your request
-before performing it.
-Goal status updates as the assistant reports changes and when the chat reconnects
-or regains focus. Claude also refreshes goal status when its reply completes.
-Background status updates keep the current goal controls available. After the
-chat's native conversation changes, wait for its goal status to load before
-using those controls. A pending goal command temporarily disables other goal
-commands; it does not mean the coding turn has stopped.
+An unfinished goal stays with its current orchestrator. Open **Chat mode** while
+it is running or paused and choose **Senior**, **Junior**, or **Custom**. A model
+or direct-mode change within the same orchestrator applies to the next turn,
+including automatic goal continuations. The current turn keeps its settings;
+the goal keeps its objective, budget and progress. You do not need **Pause goal**,
+**Cancel goal** or a reload to save settings.
+Choosing another **Orchestrator** or **Auto** saves the preference for after the
+goal finishes; it does not transfer or cancel the current goal. These steps apply
+on desktop and mobile, including goals created by the assistant. Colleague can
+explain or offer a supported change and needs your request before performing it.
+
+When changing a Codex model provider during a goal, the current turn finishes
+before the same conversation continues with the new provider. If that change
+cannot be applied, the goal stays paused. Check the selected model and account,
+save the selection again, then choose **Resume goal**. An operator can inspect
+the settings failure log if the problem continues; Colleague can explain these
+recovery steps.
+
+Temporary-chat settings also remain editable while work is running or a goal is
+paused. If goal status is temporarily unavailable, saving preferences does not
+change that unobserved goal. Reconnect before resuming it.
+
+Goal status updates as the assistant reports changes and when the chat reconnects.
+Claude also refreshes goal status when its reply completes. Returning focus to
+the browser alone does not request another goal read. Background status updates
+keep known goal controls available. After the chat's native conversation changes,
+**Loading goal…** appears until that conversation's goal is known; **Resume goal**
+is not offered based on the previous conversation. A failed read shows
+**Goal unavailable**. Wait for reconnection and use the offered retry control;
+unavailable status does not mean the goal was cleared. A pending goal command
+temporarily disables other goal commands and names that action; it does not mean
+the coding turn has stopped.
 If a goal command shows **Retry**, use it before retrying;
 reconnecting does not resend the command. These controls work the same on desktop
 and mobile.
@@ -44,8 +57,13 @@ renewal asks you to deliver the conversation briefing first, send an ordinary
 chat message before starting or resuming the goal.
 **Stop** remains available while Claude is waiting to acknowledge a goal command.
 
-For a Codex goal, **Pause goal** prevents further automatic turns and lets current
-work continue. **Cancel goal** clears an unfinished goal without interrupting the
+For a Codex goal, **Pause goal** stops automatic scheduling and the current
+conversation turn while preserving the goal. To use a different model sooner,
+choose **Pause goal**, wait for the turn to stop, change the model in **Chat mode**,
+then choose **Resume goal**. The same sequence works for Claude.
+If interruption cannot be confirmed, resolve the reported stop failure before
+resuming; a paused goal alone does not confirm that the current turn stopped.
+**Cancel goal** clears an unfinished goal without interrupting the
 current turn; use **Stop** to stop that work. If cancellation fails, the goal stays
 available for retry. Refresh a goal that changed before using its controls again.
 If its status is unavailable, wait for the assistant connection and refresh.

@@ -13,11 +13,6 @@
 
 - Dotenv `.env`
 
-## Connected projects
-
-- Connect `JSKIT AI` from `https://github.com/mobily-enterprises/jskit-ai` as `dependency`.
-- Connect `Genesis` from `https://github.com/mobily-enterprises/genesis-compiler` as `dependency`.
-
 ## Verification
 
 - Verify `application`: `npm` `run` `verify`
@@ -38,7 +33,7 @@
 - Mode: `interactive`
 - Workdir: `.`
 - Runtimes: `nodejs` `git`
-- Run `Develop with example project`: `npm` `run` `dev:example` `--` `--project` `{parameter:project-directory}` `--host` `{host}` `--port` `{port}`
+- Run `Develop with example project`: `npm` `run` `dev:example` `--` `--connected-sources` `.development/connected.json` `--project` `{parameter:project-directory}` `--host` `{host}` `--port` `{port}`
 
 #### Parameter `project-directory`: Project directory
 
@@ -57,6 +52,12 @@
 
 - Prepare `Install dependencies` with `nodejs` `cpp` when `package.json` exists: `npm` `install`
 - Prepare `Build terminal native dependency` with `nodejs` `cpp` when `package.json` exists: `npm` `rebuild` `node-pty`
+
+## Connected development
+
+- Default package type: `npm`
+- Sources file: `.development/connected.json`
+- Verify `Compose and verify connected Node packages` with `nodejs`: `node` `tooling/development/compose.mjs` `verify` `.development/connected.json`
 
 ## Resource estimates
 

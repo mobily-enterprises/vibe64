@@ -1,4 +1,5 @@
 import { normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "./connectedProjects.js";
+import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "./connectedDevelopment.js";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { githubApi, requireGithubRepository } from "./githubApi.js";
@@ -71,7 +72,8 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  inspectVibe64ConnectedProjects,
+  inspectVibe64ConnectedDevelopment,
+  inspectVibe64WorkspaceSetup,
   inspectGenesisCollaboration,
   inspectGenesisEngineering,
   inspectGenesisEnvironment,
@@ -287,7 +289,6 @@ function projectEnvironmentResult(resolved, input, userRecords) {
 function createService({
   env = process.env,
   logger = null,
-  inspectConnections = inspectVibe64ConnectedProjects,
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
     env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}`, undefined, "GET"),
@@ -794,8 +795,8 @@ function createService({
     }
   }
 
-  async function saveConnectedProjectsState(input = {}, { initialize = false, preparation = false } = {}) {
-    if (!preparation && !canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required");
+  async function saveConnectedProjectsState(input = {}) {
+    if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required");
     const selected = await genesisSettingsSourceForInput(input);
     const sourceInput = { ...input, sessionId: selected.sessionId };
     const write = async () => {
@@ -803,18 +804,7 @@ function createService({
       if (!source.sourceRoot) throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
       await assertProjectDirectoryUsable(source.sourceRoot);
       return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(), async () => {
-        const current = await readConnectedProjects(source.sourceRoot);
-        if (initialize && current.exists) return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
-        let projects = input.projects;
-        if (initialize) {
-          const initial = await inspectConnections({ projectRoot: source.sourceRoot });
-          if (initial.status === "blocked") throw vibe64Error("Repair the Connected projects Stack section before initializing connections.", "vibe64_connections_invalid");
-          if (preparation && initial.status === "unconfigured" && !initial.declared) {
-            return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
-          }
-          projects = initial.projects;
-        }
-        const normalized = normalizeConnectedProjects({ projects });
+        const normalized = normalizeConnectedProjects({ projects: input.projects });
         // Configuration declares intent; actual write access comes from the actor's account.
         if (normalized.projects.length) {
           for (const entry of normalized.projects) {
@@ -825,13 +815,11 @@ function createService({
             }
           }
         }
-        await saveConnectedProjects(source.sourceRoot, normalized, initialize ? "" : input.revision);
+        await saveConnectedProjects(source.sourceRoot, normalized, input.revision);
         return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
       }, { operation: "save-connected-projects" });
     };
-    // Workspace preparation already holds this exact session's write admission.
-    // It imports the declared initial list; it cannot supply replacement entries.
-    return preparation ? write() : runSessionSourceWorkExclusive(sourceInput, write, "save-connected-projects");
+    return runSessionSourceWorkExclusive(sourceInput, write, "save-connected-projects");
   }
 
   async function collaborationSettingsState(input = {}) {
@@ -1484,6 +1472,29 @@ function createService({
         return { ...connection, projectSlug: matches[0].slug };
       });
     },
+    async inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
+      const [setup, inspection] = await Promise.all([
+        inspectVibe64WorkspaceSetup({ projectRoot, environment }),
+        inspectVibe64ConnectedDevelopment({ projectRoot, environment })
+      ]);
+      return inspectConnectedWorkspaceSetup({ session, setup, inspection, env: environment });
+    },
+    async inspectConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
+      const inspection = await inspectVibe64ConnectedDevelopment({
+        projectRoot: sessionSourcePath(session), environment
+      });
+      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
+      return inspectConnectedDevelopmentInputs({ session, projects, inspection, env: environment });
+    },
+    async prepareConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
+      const inspection = await inspectVibe64ConnectedDevelopment({
+        projectRoot: sessionSourcePath(session), environment
+      });
+      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
+      return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(),
+        () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
+        { operation: "prepare-connected-development-inputs" });
+    },
     async connectedContributionSource(input = {}) {
       const current = await currentProjectState();
       const repository = requireGithubRepository(current, "Connected contribution");
@@ -1618,15 +1629,6 @@ function createService({
 
     async saveConnectedProjects(input = {}) {
       return projectResult(() => saveConnectedProjectsState(input));
-    },
-
-    async initializeConnectedProjects(input = {}) {
-      return projectResult(() => saveConnectedProjectsState(input, { initialize: true }));
-    },
-
-    initializeSessionConnections(input = {}) {
-      if (!input.sessionId) throw new TypeError("Workspace connection initialization requires an exact session.");
-      return saveConnectedProjectsState(input, { initialize: true, preparation: true });
     },
 
     async readSettings(input = {}) {

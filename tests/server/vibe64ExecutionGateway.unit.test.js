@@ -1250,7 +1250,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 16), [
+  assert.deepEqual(parts.slice(0, 25), [
     "/runtime-packs/policy-bin",
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
@@ -1265,9 +1265,60 @@ test("execution gateway gives interactive command purposes the shared runtime pa
     "/runtime-packs/bun/bin",
     "/runtime-packs/php/bin",
     "/runtime-packs/composer/bin",
+    "/runtime-packs/awsebcli/bin",
+    "/runtime-packs/cpp/bin",
+    "/runtime-packs/python/bin",
+    "/runtime-packs/ruby/bin",
+    "/runtime-packs/go/bin",
+    "/runtime-packs/java/bin",
+    "/runtime-packs/kotlin/bin",
+    "/runtime-packs/csharp/bin",
+    "/runtime-packs/rust/bin",
     "/runtime-packs/playwright/bin",
     "/runtime-packs/guard-bin"
   ]);
+});
+
+test("execution gateway selects declared language tools and blocks undeclared host tools", async (t) => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-language-runtime-"));
+  t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  for (const [runtime, command] of Object.entries({
+    python: "python3", ruby: "ruby", go: "go", java: "javac",
+    kotlin: "kotlinc", csharp: "dotnet", rust: "cargo"
+  })) {
+    await writeExecutable(path.join(runtimeRoot, runtime, "bin", command),
+      `#!${process.execPath}\nconsole.log(${JSON.stringify(runtime)});\n`);
+    await writeExecutable(path.join(runtimeRoot, "guard-bin", command),
+      `#!/bin/sh\necho 'Missing declared ${runtime} runtime' >&2\nexit 127\n`);
+    const request = {
+      command, args: ["--version"], purpose: "source",
+      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, runtimes: [runtime]
+    };
+    const selected = await runVibe64Command(request);
+    assert.equal(selected.ok, true, selected.output);
+    assert.equal(selected.stdout.trim(), runtime);
+    const undeclared = await runVibe64Command({ ...request, runtimes: [] });
+    assert.equal(undeclared.ok, false);
+    assert.match(undeclared.output, new RegExp(`Missing declared ${runtime} runtime`, "u"));
+  }
+});
+
+test("execution gateway exposes EB and project credentials to coding and terminal commands", async (t) => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-eb-"));
+  t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  await writeExecutable(path.join(runtimeRoot, "awsebcli/bin/eb"), `#!${process.execPath}
+console.log(JSON.stringify({ key: process.env.EB_AWS_ACCESS_KEY_ID, region: process.env.EB_AWS_REGION }));
+`);
+  for (const purpose of ["assistant", "terminal"]) {
+    const result = await runVibe64Command({
+      command: "eb", args: ["--version"], purpose,
+      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+      envPolicy: "project",
+      project: { runtimeConfigEnv: { EB_AWS_ACCESS_KEY_ID: "test-key", EB_AWS_REGION: "ap-southeast-2" } }
+    });
+    assert.equal(result.ok, true, result.output);
+    assert.deepEqual(JSON.parse(result.stdout), { key: "test-key", region: "ap-southeast-2" });
+  }
 });
 
 test("execution gateway lets declared runtime tools win before guard-bin", async () => {

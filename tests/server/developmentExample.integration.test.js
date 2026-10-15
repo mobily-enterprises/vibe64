@@ -55,7 +55,8 @@ test("Vibe64 declares native installation tools and its complete example preview
   const output = await inspectVibe64Outputs({ projectRoot });
   assert.equal(output.status, "ready");
   assert.deepEqual(output.diagnostics, []);
-  assert.deepEqual(output.targets[0].steps[0].argv, ["npm", "run", "dev:example", "--", "--project",
+  assert.deepEqual(output.targets[0].steps[0].argv, ["npm", "run", "dev:example", "--", "--connected-sources",
+    ".development/connected.json", "--project",
     "{parameter:project-directory}", "--host", "{host}", "--port", "{port}"]);
   assert.equal(output.targets[0].parameters[0].default, ".vibe64-local/development/hello-node");
   assert.equal(output.targets[0].presentation.urlPath, "/app");

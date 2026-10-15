@@ -9,6 +9,18 @@ Select **Prepare workspace**. The notice shows progress while those steps run.
 Use **Expand** to inspect output, or **Dismiss** to hide an inactive notice.
 Preparation does not publish the project.
 
+To rerun preparation after success, select **Prepare workspace** (the wrench)
+in the session header. On narrow screens, open **Session actions** (three dots)
+and select **Prepare workspace**. This stays available after dismissing the
+preparation notice. It runs the complete current recipe, including declared
+database steps and connected-source Prepare/Verify commands. It is unavailable
+while another assistant or repository operation is active, or for archived sessions.
+
+A successful result records the previous recipe execution. It does not prove
+that custom compiled outputs still match later source or script edits. Rerun
+preparation explicitly after those edits when the project needs rebuilt outputs;
+Vibe64 does not automatically rebuild custom connections.
+
 An actual failed command or failure to start preparation still displays an error
 and its diagnostic. Use the available retry or **Fix it with AI** action to deal
 with that failure; do not assume a required preparation step has already failed.

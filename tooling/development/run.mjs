@@ -5,7 +5,7 @@ import path from "node:path";
 import { composePublicDevelopment } from "./compose.mjs";
 
 export function sourceDevelopmentSelected(env = process.env) {
-  return !env.VIBE64_DEVELOPMENT_COMPOSED && Boolean(env.VIBE64_JSKIT_SOURCE_ROOT || env.VIBE64_GENESIS_SOURCE_ROOT);
+  return !env.VIBE64_DEVELOPMENT_COMPOSED && Boolean(env.VIBE64_CONNECTED_SOURCES_FILE || env.VIBE64_JSKIT_SOURCE_ROOT || env.VIBE64_GENESIS_SOURCE_ROOT);
 }
 
 export async function runSourceDevelopment({ publicRoot, command, args, watch = false, env = process.env }) {

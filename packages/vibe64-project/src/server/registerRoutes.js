@@ -189,13 +189,6 @@ function registerRoutes(http, {
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save the connected-project list in this source checkout."
   });
-  routes.actionRoute("POST", "/settings/connections/initialize", {
-    actionId: "vibe64.project.connections.initialize",
-    body: projectSettingsReadInputValidator,
-    buildInput: (request) => withoutUser(routes.requestBody(request)),
-    statusCode: projectSettingsMutationStatusCode,
-    summary: "Initialize the connection file from Stack only when absent."
-  });
   routes.actionRoute("PUT", "/settings/collaboration", {
     actionId: ACTION_SAVE_COLLABORATION_SETTINGS,
     body: projectCollaborationInputValidator,

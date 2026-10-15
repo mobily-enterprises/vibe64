@@ -11,6 +11,15 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
 
+If a push loses its response, Vibe64 checks the exact prepared commit on the
+remote before treating it as failed. If the remote cannot be read, restore access
+and inspect the session's work again. Recovery uses the original Save operation
+and Git evidence, including after an editor restart, without another push. A
+failed local update after publication uses the same recovery. If Git confirms
+that nothing was published, the original rejection remains visible or an
+uncertain attempt becomes explicitly retryable. Colleague can inspect work and
+explain that result; a new Save still requires your instruction.
+
 Save and Update can take time. Existing temporary chats remain readable, and
 plain text typed in an existing chat is saved without waiting for the source
 operation. A new assistant send or change to its model or attachments waits
@@ -63,6 +72,12 @@ records. Search or select the exact issue/PR before changing it or adding a comm
 External writes use the connected person's GitHub identity; missing sign-in or
 repository access cannot be bypassed by using another workspace account.
 On mobile, reveal the project and choose the corresponding **Dashboard section**.
+
+Creating a pull request uses the same connected-work checks as Main Save. Save
+connected work first, merge its submitted revisions in the receiving projects,
+and Update those connected sessions to the accepted source before creating the
+pull request. Changed source or revoked receiving access stops publication;
+creating a pull request does not bypass those checks.
 
 Colleague can explain these workflows, open their views, inspect bounded saved-work
 status, request native Save/Update, and use supported issue/PR actions when asked.

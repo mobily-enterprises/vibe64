@@ -759,16 +759,17 @@ selection to the native temporary conversation without changing main metadata.
 OpenCode applies the selection only to the temporary native session; its shared
 process retains the main session's configuration. Catalogue failures are shown
 with Retry, and unavailable selections cannot be applied or executed.
-An unfinished native goal fixes the temporary chat's mode and model and suppresses
-automatic review. Its observed goal reaches the mode menu through restoration,
+An unfinished native goal retains its orchestrator and suppresses automatic
+review; settings remain editable for subsequent turns. Its observed goal reaches the mode menu through restoration,
 canonical reads and live updates; an omitted goal in a failed read cannot clear
 an earlier observation.
 Native completion first saves the final reply through the ordinary snapshot
 owner. Review then checks the saved reply for the composer's structured questions;
 an unanswered question retains the coding model and waits for the user's answer.
 This also applies when a collaborator uses a foreign Backup pair.
-Changing modes or models requires a successful native read. Configuration changes
-cannot move a paused native goal to another model on its next Send.
+Settings saves retain current access and catalogue validation. An unavailable
+native goal does not disable preference saves or clear its existing pin. Native
+settings updates require an observed goal and preserve its objective and progress.
 
 Bounded tasks use the central resolver's exact destination. Their provider
 profiles validate that model and enforce workload limits without consulting a
@@ -786,8 +787,9 @@ Custom is the first mode in ordinary temporary chats and opens the same
 Orchestrator → Model → Thinking dialog as Main. Apply validates the exact
 selection and stores it in this conversation's routing preferences. The next
 send uses the existing native changeover and conversation handoff, leaving Main
-untouched. Active goals retain their selection restrictions. Merge repair uses
-the same picker after Stop while retaining Senior and its repair instructions.
+untouched. Active goals retain their orchestrator while accepting future-turn
+model settings. Merge repair keeps its picker available during work while
+retaining Senior and its repair instructions.
 Custom never silently substitutes a collaborator backup.
 
 Temporary conversation reads optionally accept a stable message cursor and a

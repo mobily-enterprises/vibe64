@@ -1,10 +1,14 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
+import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
 import {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
   connectedSourceAllocationInputValidator,
+  connectedWorkInputValidator,
   sessionRenameActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
@@ -136,6 +140,19 @@ function withoutSessionId(input = {}) {
 }
 
 function conversationContextGrant(_input, context) {
+  if (!context.vibe64Action) {
+    const request = context.requestMeta?.request;
+    const project = currentProjectRequestContext();
+    if (getStudioProjectContext().projectCatalogEnabled !== false || !project || !request ||
+        !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }))) {
+      throw Object.assign(new Error("Open this conversation from the local editor for its selected project."), {
+        code: "conversation_forbidden", statusCode: 403
+      });
+    }
+    // Standalone requests already resolve the selected project in the action
+    // wrapper. They have no hosted account or hosted authority contributor.
+    return { actor: { id: "local" }, project, user: null };
+  }
   return {
     actor: context.actor,
     project: context.vibe64Action.learning || context.vibe64Action.project,
@@ -181,6 +198,17 @@ function createSessionActions({ sessions } = {}) {
         execute: input => sessions.inspectConnectedContributionSource(input) }),
       channels: ["internal"]
     },
+    {
+      ...action({ id: "vibe64.sessions.connected.inputs.inspect", kind: "query", input: sessionIdInputValidator,
+        execute: (input, context) => sessions.inspectConnectedDevelopmentInputs(input.sessionId, input, context) }),
+      channels: ["internal"]
+    },
+    ...["inspect", "inputs", "save"].map(operation => ({
+      ...action({ id: `vibe64.sessions.connected.work.${operation}`, kind: operation === "save" ? "command" : "query",
+        input: connectedWorkInputValidator,
+        execute: (input, context) => sessions.connectedContributionWork(operation, input, context) }),
+      channels: ["internal"]
+    })),
     {
       ...action({ id: "vibe64.sessions.connected.allocate", kind: "command", input: connectedSourceAllocationInputValidator,
         execute: input => sessions.allocateConnectedSource(input) }),
@@ -411,24 +439,24 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_INSPECT_SESSION_WORK,
-      assistant: sessionWorkTool("Inspect the exact session's saved-work status, changed-file names, repository destination and any Save/Update operation. This reads no file contents or diffs; delegate code analysis to a coding conversation. It may reconcile an already interrupted repository operation through normal recovery. destination is the exact Save confirmation identity: describe the repository/branch to the user and pass it unchanged as destinationReview only when saving is requested. For local-source projects its repository value is a path used solely as that equality guard. Fresh remote update checks use updates.check; an inspection alone is not a remote fetch."),
+      assistant: sessionWorkTool("Inspect the exact session's saved-work status, changed-file names, repository destination and any Save/Update operation. This reads no file contents or diffs; delegate code analysis to a coding conversation. It may reconcile an already interrupted repository operation through normal recovery. destination is the exact Save confirmation identity: describe the repository/branch to the user and pass it unchanged as destinationReview only when saving is requested. For local-source projects its repository value is a path used solely as that equality guard. When connectedSaveRequired is true, review connectedReview as well: those repositories will be saved first, without publishing this main project. Fresh remote update checks use updates.check; an inspection alone is not a remote fetch."),
       kind: "query",
       input: sessionIdInputValidator,
-      execute: (input) => sessions.inspectSessionWork(input.sessionId)
+      execute: (input, context) => sessions.inspectSessionWork(input.sessionId, context)
     }),
     action({
       id: ACTION_CREATE_PULL_REQUEST,
       assistant: sessionPullRequestTool(),
       kind: "command",
       input: sessionPullRequestInputValidator,
-      execute: (input) => sessions.createSessionPullRequest(input.sessionId, withoutSessionId(input))
+      execute: (input, context) => sessions.createSessionPullRequest(input.sessionId, withoutSessionId(input), context)
     }),
     action({
       id: ACTION_SAVE_SESSION_WORK,
-      assistant: sessionWorkTool("Save/publish this session's work only when the user requests Save. First inspect work and review its exact destination; pass the complete returned destination unchanged as destinationReview. GitHub Save pushes to that repository branch; managed/local Save updates the configured canonical project. This saves all current work, not selected files, and does not deploy the application. The existing service blocks active agents, changed destinations, stale canonical bases and required PR workflows. Do not automatically apply updates or discard work to make Save pass. Inspect after an uncertain result before retrying; published_needs_reconcile means publication happened but local reconciliation is incomplete."),
+      assistant: sessionWorkTool("Save/publish this session's work only when the user requests Save. First inspect work and review its exact destination; pass the complete returned destination unchanged as destinationReview. GitHub Save pushes to that repository branch; managed/local Save updates the configured canonical project. When inspection reports connectedSaveRequired, also pass its complete connectedReview unchanged: Save commits and pushes each connected repository in sequence, records each confirmed commit, stops on failure and never publishes the main project in that action. Retry after inspection; completed repositories without new work are skipped. Otherwise omit connectedReview for ordinary Main Save, which requires submitted connected revisions to be integrated. This saves all current work, not selected files, and does not deploy the application. The existing service blocks active agents, changed destinations, stale canonical bases and required PR workflows. Do not automatically apply updates or discard work to make Save pass. Inspect after an uncertain result before retrying; published_needs_reconcile means publication happened but local reconciliation is incomplete."),
       kind: "command",
       input: sessionSaveInputValidator,
-      execute: (input) => sessions.saveSessionWork(input.sessionId, withoutSessionId(input))
+      execute: (input, context) => sessions.saveSessionWork(input.sessionId, withoutSessionId(input), context)
     }),
     action({
       id: ACTION_INSPECT_INCOMING,
@@ -474,7 +502,7 @@ function createSessionActions({ sessions } = {}) {
     action({
       id: ACTION_RETRY_WORKSPACE_SETUP,
       kind: "command",
-      assistant: sessionTool("Retry the existing workspace preparation for the exact requested session. Use only when the user requests preparation or retry; the existing service rejects running or unavailable retries. This can start installation and managed work. Inspect the returned setup status afterward; accepted preparation is not proof that it finished. Do not invent or edit setup commands."),
+      assistant: sessionTool("Run or rerun the existing workspace preparation for the exact requested session, including after an earlier success. Use only when the user requests preparation or retry; the existing service rejects running or unavailable retries. This runs the complete declared recipe and can start installation and managed work. Inspect the returned setup status afterward; accepted preparation is not proof that it finished. Do not invent or edit setup commands."),
       input: sessionIdInputValidator,
       execute: (input) => sessions.retryWorkspaceSetup(input.sessionId, {
         originId: input.originId || "",

@@ -7,7 +7,12 @@ import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import {
+  captureProjectRequestContext,
+  currentProjectActionRequestMeta,
+  currentProjectRequestContext,
+  runWithProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
 
 test("project owner actions admit the standalone local owner but not foreign requests or missing hosted authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
@@ -56,11 +61,11 @@ function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = 
   const definition = withVibe64ActionContext({
     id: "vibe64.test.read", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
     input: { schema: createSchema({ text: { type: "string", required: true }, vibe64User: { type: "object" } }), mode: "create" },
-    async execute(input) {
+    async execute(input, context) {
       const project = currentProjectRequestContext();
       await Promise.resolve();
       assert.equal(currentProjectRequestContext(), project);
-      calls.push({ input, project });
+      calls.push({ input, project, requestMeta: context.requestMeta });
       return { ok: true, projectSlug: project?.slug, username: input.vibe64User?.username };
     }
   }, { ownerRequired, projectScoped, allowDeleting });
@@ -101,6 +106,65 @@ test("HTTP and automation establish the same project and trusted actor", async (
     assert.equal(call.project.targetRoot, "/test/projects/alpha");
   }
   assert.equal(currentProjectRequestContext(), null);
+});
+
+test("captured working context retains only the original request for freshly authorized actions", async () => {
+  const f = fixture();
+  const requestMeta = { request: { params: { slug: "alpha" }, headers: { cookie: "original-test-credential" } } };
+  await f.execute({ text: "prepare" }, { requestMeta, unrelatedActionState: "not-retained" });
+  const admitted = f.calls[0].project;
+  const admittedRequestMeta = f.calls[0].requestMeta;
+  assert.equal(admittedRequestMeta.request, requestMeta.request);
+  assert.equal(admittedRequestMeta.request.headers, requestMeta.request.headers);
+  assert.equal(Object.hasOwn(admitted, "requestMeta"), false);
+  assert.equal(Object.hasOwn(admitted, "vibe64Action"), false);
+  assert.equal(Object.hasOwn(admitted, "unrelatedActionState"), false);
+  assert.equal(JSON.stringify(admitted).includes("original-test-credential"), false);
+
+  let captured;
+  await runWithProjectRequestContext(admitted, () => {
+    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta);
+    captured = captureProjectRequestContext();
+  });
+  await runWithProjectRequestContext(captured, async () => {
+    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta);
+    const receivingRequestMeta = { ...currentProjectActionRequestMeta(), request: {
+      ...currentProjectActionRequestMeta().request, params: { slug: "beta" }
+    } };
+    await f.execute({ text: "receiving work" }, { requestMeta: receivingRequestMeta });
+    assert.equal(f.calls.at(-1).project.slug, "beta");
+    f.state.allowed = false;
+    await assert.rejects(f.execute({ text: "revoked receiving work" }, { requestMeta: receivingRequestMeta }),
+      { statusCode: 403 });
+    assert.equal(f.calls.length, 2, "captured request metadata is not a cached permission grant");
+    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta, "nested dispatch preserves the originating scope");
+  });
+  assert.equal(currentProjectActionRequestMeta(), null);
+});
+
+test("requestless actions and Learning cannot inherit a working action request", async () => {
+  const f = fixture();
+  const requestMeta = { request: { params: { slug: "alpha" }, headers: { cookie: "working-test-credential" } } };
+  await f.execute({ text: "working" }, { requestMeta });
+  const admitted = f.calls[0].project;
+  const admittedRequestMeta = f.calls[0].requestMeta;
+  assert.equal(admittedRequestMeta.request, requestMeta.request);
+  await runWithProjectRequestContext(admitted, async () => {
+    await f.definition.execute({ text: "requestless nested action", projectSlug: "alpha" });
+    await runWithProjectRequestContext(f.calls.at(-1).project, () => {
+      assert.equal(currentProjectActionRequestMeta(), null);
+    });
+    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta);
+    await runWithProjectRequestContext({ ...admitted, learningScope: { learnerId: "42" } }, () => {
+      assert.equal(currentProjectActionRequestMeta(), null);
+      const learning = { ...captureProjectRequestContext() };
+      delete learning.learningScope;
+      return runWithProjectRequestContext(learning, () => assert.equal(currentProjectActionRequestMeta(), null));
+    }, { requestMeta });
+  });
+  await runWithProjectRequestContext({ slug: "alpha", requestMeta, actionRequestMeta: requestMeta }, () => {
+    assert.equal(currentProjectActionRequestMeta(), null, "ordinary fields cannot supply the private request projection");
+  });
 });
 
 test("project and actor authority cannot be supplied in operation input or override its URL", async () => {

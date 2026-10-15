@@ -519,6 +519,24 @@ describe("useVibe64TemporaryAi", () => {
     expect(observer).toHaveBeenLastCalledWith(expect.objectContaining({ runId: "turn-2", outcomeKind: "continue" }));
   });
 
+  it("starts an explicitly requested Senior repair without enabling automatic Update recovery", async () => {
+    const temporary = await temporaryAi();
+    mocks.responses.push(
+      { ok: true, conversationId: createdId },
+      { ok: true, runId: "incoming-turn", status: "inProgress" },
+      { ok: true, status: "completed", message: "Ready for reviewed Merge." }
+    );
+    const result = await temporary.startTask({ message: "Resolve the incoming contribution in this receiving source.",
+      initialRouting: { mode: "senior", review: false }, dedupeKey: "incoming-repair" });
+    await flushPromises();
+    expect(result.ok).toBe(true);
+    const creation = mocks.requests.find(([path, options]) => path.endsWith("/temporary-conversations") && options.method === "POST");
+    expect(creation[1].body.assistantRouting).toEqual({ mode: "senior", review: false });
+    expect(creation[1].body.presentation.recoveryOperation).toBe("");
+    expect(temporary.activeTask.value.recoveryOperation).toBe("");
+    expect(mocks.requests.some(([path]) => path.includes("/updates") || path.includes("/incoming"))).toBe(false);
+  });
+
   it("reuses a completed Update repair even when the conflict diagnostic changes", async () => {
     const temporary = await temporaryAi();
     const input = { recoveryOperation: "update", message: "Repair eight conflicts." };

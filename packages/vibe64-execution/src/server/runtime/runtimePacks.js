@@ -9,6 +9,10 @@ const VIBE64_RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
 const DEFAULT_RUNTIME_PACK_ROOT = "/opt/vibe64/runtime-packs";
 
 const RUNTIME_PACKS = Object.freeze({
+  "awsebcli": {
+    binDirs: ["awsebcli/bin"],
+    managedCommands: ["eb"]
+  },
   "bubblewrap": {
     binDirs: ["bubblewrap/bin"],
     managedCommands: []
@@ -70,6 +74,41 @@ const RUNTIME_PACKS = Object.freeze({
       "strip",
       "wasm-ld"
     ]
+  },
+  "python": {
+    binDirs: ["python/bin"],
+    dependencyFiles: ["pyproject.toml", "requirements.txt", "requirements.lock", "uv.lock", "poetry.lock", "Pipfile", "Pipfile.lock"],
+    managedCommands: ["python", "python3", "pip", "pip3", "virtualenv"]
+  },
+  "ruby": {
+    binDirs: ["ruby/bin"],
+    dependencyFiles: ["Gemfile", "Gemfile.lock"],
+    managedCommands: ["ruby", "gem", "rake", "irb", "erb", "ri", "rdoc", "bundle", "bundler"]
+  },
+  "go": {
+    binDirs: ["go/bin"],
+    dependencyFiles: ["go.mod", "go.sum", "go.work", "go.work.sum"],
+    managedCommands: ["go", "gofmt"]
+  },
+  "java": {
+    binDirs: ["java/bin"],
+    dependencyFiles: ["pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties"],
+    managedCommands: ["java", "javac", "jar", "javap", "javadoc", "jshell", "jlink", "jmod", "jdeps", "jpackage", "jcmd", "jconsole", "jdb", "jfr", "jhsdb", "jinfo", "jmap", "jps", "jrunscript", "jstack", "jstat", "jstatd", "keytool", "rmiregistry", "serialver", "mvn", "mvnDebug", "gradle"]
+  },
+  "kotlin": {
+    binDirs: ["kotlin/bin"],
+    dependencyFiles: ["build.gradle.kts", "settings.gradle.kts", "gradle.properties"],
+    managedCommands: ["kotlin", "kotlinc", "kotlinc-jvm", "kotlinc-js", "kapt"]
+  },
+  "csharp": {
+    binDirs: ["csharp/bin"],
+    dependencyFiles: ["global.json", "Directory.Build.props", "Directory.Packages.props", "packages.lock.json", "NuGet.Config"],
+    managedCommands: ["dotnet"]
+  },
+  "rust": {
+    binDirs: ["rust/bin"],
+    dependencyFiles: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo/config.toml"],
+    managedCommands: ["rustc", "rustdoc", "cargo", "rustfmt", "cargo-fmt", "clippy-driver", "cargo-clippy"]
   },
   "gh": {
     binDirs: ["gh/bin"],
@@ -138,6 +177,15 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "bun",
   "php",
   "composer",
+  "awsebcli",
+  "cpp",
+  "python",
+  "ruby",
+  "go",
+  "java",
+  "kotlin",
+  "csharp",
+  "rust",
   "playwright"
 ]);
 

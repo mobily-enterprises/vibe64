@@ -64,6 +64,23 @@ that turn without dropping either half. No saved history is rewritten.
 
 ## Public contract
 
+Connected contribution sessions distinguish their published incoming ref from
+the receiving integration target. Once the current incoming head is integrated,
+the existing explicit Update operation consumes the accepted target through its
+normal checkpoint, conflict and preparation lifecycle. Save retains the incoming
+destination and leases that exact observed published head. Internal connected
+inspection reads that ref with receiving credentials, without another mutation
+lock, and requires it in the selected source's history before reporting publication.
+Neither updated canonical metadata nor a replaced Save task can masquerade as a
+newly published contribution. Main Save's exact submitted-revision check also
+requires the accepted target in the freshly authorized connected source HEAD;
+missing or stale source evidence requires explicit Update, never an automatic rebase.
+Read-only inspection may use a sole discarded head, or an exact existing Save
+confirmation/originating submission after deletion, only with target-ancestry proof.
+Update can consume that accepted target; publication still refuses removed refs.
+Both active and discarded refs remain an unresolved discard, and absent refs with
+unconfirmed prepared publication retain their original recovery block.
+
 Source creation refuses any existing destination before preparing a Git baseline
 or refreshing a mirror. An existing checkout, including one left unattached by
 an interrupted attempt, is recovery work, not permission to reset its branch.

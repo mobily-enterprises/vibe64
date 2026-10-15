@@ -4,6 +4,7 @@ import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-cor
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution } from "@local/vibe64-runtime/shared";
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
+import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 
 const ENGINE = "claude";
 const TRANSPORT = "claude_stream_json";
@@ -41,7 +42,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
   createProcess, command, commandRunner, stopExecution, credentialHome, env }) {
   const accountQueries = owner.createAccountQueries({
     accountIdentity,
-    createProcess: () => createProcess({ command, commandRunner, stopExecution, credentialHome, env,
+    createProcess: ({ signal }) => createProcess({ command, commandRunner, stopExecution, credentialHome, env, signal,
       workdir: credentialHome.home, toolFree: true, onEvent: async () => {} })
   });
   function accountQueryFailure(failure) {
@@ -56,6 +57,10 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
       return claudeProviderAccountIdentity(configRoot, settings.providerId, settings.apiKey);
     }
     const account = await accountStatus(context);
+    if (account.error) {
+      throw error(`Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
+        "vibe64_claude_account_status_failed");
+    }
     const email = text(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
       throw error("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");

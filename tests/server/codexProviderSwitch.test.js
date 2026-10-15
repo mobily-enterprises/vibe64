@@ -16,6 +16,9 @@ test("native provider switches preserve history without restarting, and cold rec
 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-provider-switch-"));
   const requests = [];
+  let stage = "startup";
+  const nativeEvents = [];
+  const logs = [];
   let heldRequest = null;
   let rejectContext = false;
   let failCompaction = false;
@@ -93,6 +96,8 @@ test("native provider switches preserve history without restarting, and cold rec
   let nextChild;
   let nextClient;
   t.after(async () => {
+    t.diagnostic(JSON.stringify({ stage, events: nativeEvents.slice(-12), logs: logs.slice(-8),
+      routes: requests.slice(-4).map(request => request.route) }));
     heldRequest?.release.resolve();
     observer?.close(); client?.close(); nextClient?.close();
     for (const ownedChild of [child, nextChild].filter(Boolean)) {
@@ -119,21 +124,29 @@ test("native provider switches preserve history without restarting, and cold rec
   client = await connect();
   await client.request("account/login/start", { type: "apiKey", apiKey: "fixture-secret-openai" });
   const environment = { PATH: "/usr/bin:/bin", VIBE64_TEST_CONTROL_GENERATION: "routing-fixture" };
-  const logs = [];
+  let settingsProvider = "openai";
   const provider = new CodexAppServerAgentProvider({
     threadEnv: environment, prepareThreadEnvironment: async () => environment,
     logger: { info: (fields) => logs.push(fields), warn: (fields) => logs.push(fields) },
-    prepareThreadParams: async (params) => params.modelProvider === "openai" ? params : ({ ...params, config: { ...params.config,
-      [`model_providers.${params.modelProvider}`]: { name: params.modelProvider,
-        base_url: `http://127.0.0.1:${server.address().port}/${params.modelProvider}`, wire_api: "responses",
-        requires_openai_auth: false, supports_websockets: false, stream_max_retries: 0,
-        experimental_bearer_token: `fixture-secret-${params.modelProvider}` }
-    } })
+    prepareThreadParams: async (params) => {
+      const modelProvider = params.modelProvider || settingsProvider;
+      return modelProvider === "openai" ? { ...params, modelProvider } : { ...params, modelProvider, config: { ...params.config,
+        [`model_providers.${modelProvider}`]: { name: modelProvider,
+          base_url: `http://127.0.0.1:${server.address().port}/${modelProvider}`, wire_api: "responses",
+          requires_openai_auth: false, supports_websockets: false, stream_max_retries: 0,
+          experimental_bearer_token: `fixture-secret-${modelProvider}` }
+      } };
+    }
   });
   provider.runtime = { historyAdapterBaseUrl: adapter.baseUrl };
   provider.client = client;
   provider.activeClient = async () => client;
-  client.subscribe((event) => provider.publishNotification(event));
+  client.subscribe((event) => {
+    nativeEvents.push({ method: event.method, status: event.params?.goal?.status || event.params?.thread?.status,
+      ...(event.params?.threadSettings ? { settings: { model: event.params.threadSettings.model,
+        effort: event.params.threadSettings.effort, modelProvider: event.params.threadSettings.modelProvider } } : {}) });
+    provider.publishNotification(event);
+  });
   const settings = (modelProvider) => ({ modelProvider, model: "gpt-6-sol", cwd: root, approvalPolicy: "never", sandbox: "danger-full-access" });
   const { id: threadId } = await provider.startThread(settings("openai"));
   const { id: otherId } = await provider.startThread(settings("openai"));
@@ -200,6 +213,55 @@ test("native provider switches preserve history without restarting, and cold rec
   assert.equal((await client.request("thread/read", { threadId: otherId })).thread.status.type, "idle");
   assert.equal(child.exitCode, null);
   assert.ok(!JSON.stringify(logs).includes("fixture-secret"));
+
+  // A settings save during an automatic goal turn keeps that turn alive, then
+  // reloads the same native thread and lets its next turn use the new provider.
+  heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
+  stage = "starting native goal";
+  const startedGoal = await provider.setGoal(threadId, { objective: "Continue until explicitly paused", tokenBudget: 10000 });
+  stage = "waiting for first goal inference";
+  await heldRequest.entered.promise;
+  const nativeCalls = [];
+  const originalRequest = client.request.bind(client);
+  client.request = (method, ...args) => { nativeCalls.push(method); return originalRequest(method, ...args); };
+  settingsProvider = "deepseek";
+  stage = "saving next-turn provider";
+  assert.deepEqual(await provider.updateThreadSettings(threadId, { model: "gpt-6-sol", effort: "low" }), { ok: true, pending: true });
+  const changing = provider.threadEnvironmentTasks.get(threadId);
+  assert.equal((await client.request("thread/read", { threadId })).thread.status.type, "active");
+  assert.equal((await provider.readGoal(threadId)).goal.status, "active");
+  assert.equal((await client.request("thread/goal/get", { threadId })).goal.status, "paused");
+  assert.equal(nativeCalls.includes("turn/interrupt"), false);
+  assert.equal(nativeCalls.includes("thread/resume"), false);
+  const currentRequest = heldRequest;
+  heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
+  currentRequest.release.resolve();
+  stage = "applying deferred provider";
+  await changing;
+  stage = "waiting for next goal inference";
+  await heldRequest.entered.promise;
+  assert.equal(requests.at(-1).route, "/deepseek/responses");
+  assert.equal(requests.at(-1).input.reasoning.effort, "low");
+  const continuedGoal = (await provider.readGoal(threadId)).goal;
+  assert.equal(continuedGoal.createdAt, startedGoal.goal.createdAt);
+  assert.equal(continuedGoal.objective, startedGoal.goal.objective);
+  assert.equal(continuedGoal.tokenBudget, startedGoal.goal.tokenBudget);
+  assert.ok(continuedGoal.tokensUsed >= startedGoal.goal.tokensUsed);
+  assert.equal(nativeCalls.includes("turn/interrupt"), false, "The settings transition never interrupts native work");
+  await provider.setGoalStatus(threadId, "paused");
+  stage = "stopping goal fixture";
+  const finishedGoalTurn = nextTurn(client);
+  const activeTurn = (await client.request("thread/turns/list", { threadId, limit: 1, sortDirection: "desc", itemsView: "summary" })).data[0];
+  await provider.interruptTurn(threadId, activeTurn.id);
+  heldRequest.release.resolve();
+  heldRequest = null;
+  assert.equal((await finishedGoalTurn).status, "interrupted");
+  assert.equal((await provider.readGoal(threadId)).goal.status, "paused");
+  await provider.clearGoal(threadId);
+  client.request = originalRequest;
+  settingsProvider = "openai";
+  await provider.resumeThread(threadId, settings("openai"));
+  stage = "cold observer recovery";
 
   // A fresh observer must reconstruct the saved provider's configuration when
   // restoring a cold thread, even though a history read has no model override.

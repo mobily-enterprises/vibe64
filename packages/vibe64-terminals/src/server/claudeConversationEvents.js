@@ -1,6 +1,7 @@
 import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { claudeConversationError as error } from "./terminalShared.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 const ENGINE = "claude";
 const TRANSPORT = "claude_stream_json";
@@ -8,7 +9,7 @@ const text = (value) => String(value ?? "").trim();
 const now = () => new Date().toISOString();
 
 // The native owner emits once; Vibe64 persists and publishes its existing effects.
-function createClaudeConversationEvents({ projectService, storage, messagePolicy, owner, accountQueries, publishSessionChanged }) {
+function createClaudeConversationEvents({ projectService, storage, messagePolicy, owner, accountQueries, publishSessionChanged, logger }) {
   const { save } = storage;
   const { snapshot } = owner;
 
@@ -65,10 +66,26 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
   }
 
   async function receiveTurnEvent(entry, event) {
+    if (["state", "continued", "execution", "stop-unconfirmed", "diagnostic"].includes(event.type)) {
+      // Only normalized lifecycle facts belong in operator logs. Native frames
+      // contain prompts, replies, tool arguments and account data.
+      try {
+        logOperationalEvent(logger, event.type === "stop-unconfirmed" || event.stage === "steering_failed" ? "warn" : "info", {
+          component: "vibe64.claude", event: "vibe64.claude.lifecycle", stage: event.stage || event.type,
+          sessionId: entry.context.sessionId, conversationId: entry.id, turnId: entry.turn?.id,
+          executionId: event.executionId || entry.executionId, state: event.state, active: event.active,
+          source: event.source, nativeEvent: event.nativeEvent, status: event.status, terminalReason: event.terminalReason,
+          pendingCommands: event.pendingCommands, backgroundTasks: event.backgroundTasks
+        }, "Claude conversation lifecycle.");
+      } catch { /* Diagnostic sinks cannot interrupt native work. */ }
+    }
     if (event.type === "save") return save(entry);
     if (event.type === "state") return publishRun(entry, event);
     if (event.type === "goal-updated") return publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
-    if (event.type === "stop-unconfirmed") throw error(entry.observationError, "vibe64_claude_stop_unconfirmed");
+    if (event.type === "stop-unconfirmed") {
+      if (entry.turn) await publishRun(entry, { state: entry.turn.state, active: entry.turn.active, message: entry.observationError });
+      throw error(entry.observationError, "vibe64_claude_stop_unconfirmed");
+    }
     if (event.type === "execution") {
       const ctx = event.context;
       if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId: event.executionId });

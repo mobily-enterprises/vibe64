@@ -463,8 +463,8 @@ function codexAppServerRuntimeHost(options = {}) {
   };
   return {
     runtime, parameters, credentials, execution, configuration,
-    log: (event, fields, { threadId, environment, connectionGeneration }) => logOperationalEvent(options.logger,
-      event === "recovery_failed" ? "warn" : "info", {
+    log: (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(options.logger,
+      ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info", {
         component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
         threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
         generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>

@@ -8,7 +8,7 @@ import { createProjectActions } from "../../packages/vibe64-project/src/server/a
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
-const sourceOperations = ["connections.save", "connections.initialize", "settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read", "env.user-values.save"];
+const sourceOperations = ["connections.save", "settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read", "env.user-values.save"];
 const operations = [...sourceOperations, "prompt-hints.save", "repository.workflow.save", "development-database.scope.save"];
 
 async function withSettingsTools(run) {
@@ -50,10 +50,6 @@ async function withSettingsTools(run) {
       async saveConnectedProjects(input) {
         record("connections.save", input);
         state.connectedProjects.projects = input.projects;
-        return { ok: true, connectedProjects: state.connectedProjects };
-      },
-      async initializeConnectedProjects(input) {
-        record("connections.initialize", input);
         return { ok: true, connectedProjects: state.connectedProjects };
       },
       async readEngineeringSettings(input) { record("engineering.read", input); return { ok: true, engineering: state.engineering }; },
@@ -174,7 +170,7 @@ test("settings tools recheck owner and project authority and reject malformed in
   await withSettingsTools(async ({ calls, execute, state }) => {
     const valid = {
       "settings.read": {}, "engineering.read": {},
-      "connections.save": { projects: state.connectedProjects.projects, revision: state.connectedProjects.revision }, "connections.initialize": {},
+      "connections.save": { projects: state.connectedProjects.projects, revision: state.connectedProjects.revision },
       "collaboration.save": { ...preferences, requirements: "" },
       "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
       "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" },
@@ -190,7 +186,7 @@ test("settings tools recheck owner and project authority and reject malformed in
     assert.equal((await execute("development-database.scope.save", { scope: "workspace" })).ok, false);
     assert.equal(calls.length, 0);
     state.actor = { username: "member", role: "member" };
-    for (const operation of ["connections.save", "connections.initialize", "collaboration.save", "prompt-hints.save", "repository.workflow.save"]) assert.equal((await execute(operation, valid[operation])).ok, false);
+    for (const operation of ["connections.save", "collaboration.save", "prompt-hints.save", "repository.workflow.save"]) assert.equal((await execute(operation, valid[operation])).ok, false);
     assert.equal(calls.length, 0);
     // Engineering intentionally retains the source editor's ordinary project permission.
     assert.equal((await execute("engineering.profile.save", valid["engineering.profile.save"])).ok, true);
@@ -391,8 +387,23 @@ test("connection tools preserve source/revision and expose no private binding st
     assert.equal(read.ok, true, JSON.stringify(read));
     assert.deepEqual(read.result.connectedProjects.projects, state.connectedProjects.projects);
     assert.equal(JSON.stringify(read.result.connectedProjects).includes("private"), false);
-    const initialized = await execute("connections.initialize");
-    assert.equal(initialized.ok, true, JSON.stringify(initialized));
+    const projects = [
+      { name: "Library", repository: "https://github.com/example/library", relationship: "dependency", type: "custom", script: "tooling/prepare-native-worker.mjs" },
+      { name: "Editor", repository: "https://github.com/example/editor", relationship: "composition", type: "npm" },
+      { name: "Default", repository: "https://github.com/example/default", relationship: "dependency" },
+      { name: "Inherited custom", repository: "https://github.com/example/inherited", relationship: "dependency", script: "tooling/prepare-other.mjs" }
+    ];
+    const typed = await execute("connections.save", { projects, revision: "" });
+    assert.equal(typed.ok, true, JSON.stringify(typed));
+    assert.deepEqual(calls.at(-1).input.projects, projects);
+    assert.deepEqual(typed.result.connectedProjects.projects, projects);
+    assert.deepEqual((await execute("settings.read")).result.connectedProjects.projects, projects);
+    assert.equal(Object.hasOwn(typed.result.connectedProjects.projects[2], "type"), false);
+    const beforeRejected = calls.length;
+    for (const type of ["", "composer", null]) {
+      assert.equal((await execute("connections.save", { projects: [{ ...projects[0], type }], revision: "" })).ok, false);
+    }
+    assert.equal(calls.length, beforeRejected, "invalid types must not reach the Settings write owner");
     const saved = await execute("connections.save", { projects: [], revision: "" });
     assert.equal(saved.ok, true, JSON.stringify(saved));
     assert.equal(saved.result.ok, true);

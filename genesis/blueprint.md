@@ -1,16 +1,32 @@
 # Blueprint
 
-People can declare connected libraries and source projects in Project settings,
-initialize the list from their project's initial setup declarations, and add more
-repositories later. The list travels with project source. Configuration requires
+People declare connected libraries and source projects in the project's
+`vibe64.connections.json`, using Project settings or source editing, and can add
+repositories later. Stack describes technology and generic source treatment;
+it never contains repository identities or a starting connection list.
+Connections may use different package types from the app: each entry can
+choose npm or custom treatment, or inherit the default declared by Stack.
+Node projects declare npm; custom source treatment belongs to project scripts.
+The connection file travels with project source. Configuration requires
 the owner's connected account to have write access to the receiving repositories.
 Removing an entry preserves existing contributions; configuration changes alone
 do not publish, merge or deploy work.
 
+Workspace preparation retains an isolated receiving checkout for each task and
+provides the project's declared development commands with a local map of those
+exact sources. It runs ordinary setup followed by connected preparation and
+verification, and preserves authored files and receiving work on failure.
+Access and source selection are checked again before accepting preparation.
+Initial consumption verification covers Node.js; other stacks and the full
+hosted development workflow still require end-to-end evidence.
+
 Receiving GitHub projects show Incoming changes in Dashboard. People can review
 reserved contribution branches, merge them while preserving their history, or
 discard them while retaining the work on a renamed branch. An interrupted discard
-remains visible for recovery. Save checks any retained submitted revisions against
+remains visible for recovery. Conflicting contributions can use the existing
+Temporary AI chat in the receiving session, with a private checkpoint preserving
+its original work. People review the repaired result and explicitly merge it;
+AI completion does not publish. Save checks any retained submitted revisions against
 their receiving integration branches before publishing the originating project.
 The connection list alone does not establish contribution source preparation or
 the connected-first Save workflow.
@@ -32,6 +48,10 @@ and bring new permission decisions to the person without circular requests.
 
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
+
+Declared development commands select explicit language toolchains supplied by
+the host. Missing tooling remains a preparation error; a successful toolchain
+check is separate from proving the application's connected-source resolution.
 
 Main and temporary chat history load ten real messages at a time. A request and its answer count
 separately; reasoning and progress stay visible without consuming that allowance.

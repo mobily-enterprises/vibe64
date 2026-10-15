@@ -235,6 +235,28 @@ test("a worktree tree can overlay only selected resolution paths onto a prepared
   }
 });
 
+test("selected conflict paths are literal filenames, never Git pathspecs", async () => {
+  const root = await createRepository();
+  try {
+    const selected = ["file[1].txt", ":(glob)*"];
+    for (const name of [...selected, "file1.txt"]) await writeFile(path.join(root, name), "original\n");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "Literal path fixtures"]);
+    for (const name of selected) await writeFile(path.join(root, name), "resolved\n");
+    await writeFile(path.join(root, "file1.txt"), "unrelated staged work\n");
+    await git(root, ["add", "file1.txt"]);
+    const index = await git(root, ["write-tree"]);
+    const status = await git(root, ["status", "--porcelain"]);
+    const tree = await writeGitWorktreeTree({ paths: selected, worktreePath: root });
+    for (const name of selected) assert.equal(await git(root, ["show", tree + ":" + name]), "resolved");
+    assert.equal(await git(root, ["show", tree + ":file1.txt"]), "original");
+    assert.equal(await git(root, ["write-tree"]), index);
+    assert.equal(await git(root, ["status", "--porcelain"]), status);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("turn checkpoint refs use safe digests and invalid identities fail closed", async () => {
   const refs = checkpointRefs({
     outerTurnId: "message/with spaces",

@@ -8,7 +8,7 @@
     <div class="project-settings__content text-body-medium">
       <p v-if="!state.available">{{ state.unavailableReason || 'Select a session to configure connected projects.' }}</p>
       <template v-else>
-        <p v-if="!state.exists">No connection file yet. Initialize from Stack, or add projects below.</p>
+        <p v-if="!state.exists">No connection file yet. Add projects below, then save the list.</p>
         <v-alert v-if="stale" type="warning" variant="tonal">
           The saved list changed while you were editing. Reload the saved list and review your changes before saving.
           <v-btn variant="text" @click="resetDraft">Reload saved list</v-btn>
@@ -18,13 +18,14 @@
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.name" label="Name" maxlength="100" variant="outlined" hide-details="auto" />
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.repository" label="GitHub repository URL" placeholder="https://github.com/owner/repository" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" v-model="entry.relationship" label="Relationship" :items="relationships" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
+          <v-select :disabled="!state.canEdit || saving" :model-value="entry.type || ''" @update:model-value="setPackageType(entry, $event)" label="Package type" :items="packageTypes" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
+          <v-text-field :disabled="!state.canEdit || saving || entry.type === 'npm'" :model-value="entry.script || ''" @update:model-value="setScript(entry, $event)" label="Preparation script (project-relative)" placeholder="tooling/prepare-native-worker.mjs" maxlength="1024" hint="Required for custom. Relative to this project's root; Stack declares the runtime." persistent-hint variant="outlined" hide-details="auto" />
           <v-btn :disabled="!state.canEdit || saving" variant="text" :aria-label="`Remove ${entry.name || 'connected project'}`" @click="draft.splice(index, 1)">Remove</v-btn>
         </fieldset>
         <p v-if="state.exists && !draft.length">No connected projects.</p>
         <p class="text-body-small">Removing a connection preserves its existing contributions and pending work.</p>
         <div class="connection-actions">
           <v-btn :disabled="!state.canEdit || saving || draft.length >= 64" variant="outlined" @click="draft.push({ name: '', repository: '', relationship: 'dependency' })">Add project</v-btn>
-          <v-btn v-if="!state.exists" :disabled="!state.canEdit || saving || changed" variant="outlined" @click="initialize">Initialize from Stack</v-btn>
           <v-btn :disabled="!state.canEdit || saving || stale || (!changed && state.exists)" color="primary" variant="flat" @click="save">{{ saving ? 'Saving…' : 'Save connected projects' }}</v-btn>
         </div>
       </template>
@@ -51,6 +52,20 @@ const relationships = [
   { label: "Dependency — a library or tool", value: "dependency" },
   { label: "Composition — source assembled into this project", value: "composition" }
 ];
+const packageTypes = [
+  { label: "Stack default", value: "" },
+  { label: "npm", value: "npm" },
+  { label: "custom", value: "custom" }
+];
+function setPackageType(entry, value) {
+  if (value) entry.type = value;
+  else delete entry.type;
+  if (value === "npm") delete entry.script;
+}
+function setScript(entry, value) {
+  if (value) entry.script = value;
+  else delete entry.script;
+}
 function resetDraft() {
   draft.value = (props.state.projects || []).map((entry) => ({ ...entry }));
   baseline.value = JSON.stringify(draft.value);
@@ -73,15 +88,6 @@ const saveCommand = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, placementSource: "vibe64.project.connections.save",
   surfaceId: VIBE64_SURFACE_ID, writeMethod: "PUT"
 });
-const initializeCommand = useCommand({
-  access: "never", apiSuffix: "/vibe64/settings/connections/initialize",
-  buildCommandOptions: () => ({ method: "POST", path: scopedDevelopmentApiUrl("/api/vibe64/settings/connections/initialize", props.projectSlug) }),
-  buildRawPayload: (_model, { context }) => context,
-  fallbackRunError: "Connected projects could not be initialized.",
-  messages: { error: "Connected projects could not be initialized.", success: "Connection file initialized." },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, placementSource: "vibe64.project.connections.initialize",
-  surfaceId: VIBE64_SURFACE_ID, writeMethod: "POST"
-});
 async function save() {
   if (saving.value || stale.value || !props.state.canEdit) return;
   saving.value = true;
@@ -92,16 +98,6 @@ async function save() {
     baseline.value = JSON.stringify(draft.value);
     emit("saved");
   } catch { /* Shared command feedback presents the failure; preserve the draft. */ }
-  finally { saving.value = false; }
-}
-async function initialize() {
-  if (saving.value || changed.value || !props.state.canEdit) return;
-  saving.value = true;
-  try {
-    const result = await initializeCommand.run({ sessionId: props.state.source?.sessionId || "" });
-    if (!result) return;
-    emit("saved");
-  } catch { /* Shared command feedback presents the failure. */ }
   finally { saving.value = false; }
 }
 </script>

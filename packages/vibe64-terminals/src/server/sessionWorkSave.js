@@ -263,6 +263,7 @@ function sessionWorkOperationSession(context) {
 }
 
 async function runSessionWorkOperation({
+  additionalAllowedRoots = [],
   commandOptions = {},
   context,
   input = {},
@@ -283,7 +284,7 @@ async function runSessionWorkOperation({
     "node",
     [SESSION_WORK_OPERATION_COMMAND_PATH],
     {
-      additionalAllowedRoots: [path.dirname(SESSION_WORK_OPERATION_COMMAND_PATH)],
+      additionalAllowedRoots: [path.dirname(SESSION_WORK_OPERATION_COMMAND_PATH), ...additionalAllowedRoots],
       commandOptions: {
         ...commandOptions,
         timeout,
@@ -396,13 +397,15 @@ async function incomingVersionsBetween(
   };
 }
 
-async function prepareSessionPullRequestBranch({ project, session, commandOptions = {}, runCommand = runVibe64Command }) {
+async function prepareSessionPullRequestBranch({ project, session, connectedWorkSnapshots: suppliedSnapshots = [],
+  commandOptions = {}, runCommand = runVibe64Command }) {
   const context = repositoryContext(session, project);
   const ref = `refs/heads/${context.branch}`;
-  const options = { commandOptions, project };
+  const options = { commandOptions, project, connectedWorkSnapshots: connectedWorkSnapshots(suppliedSnapshots) };
   const existing = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ref], options);
   if (!existing) {
     await assertConnectedSubmissionsIntegrated(runCommand, context, options);
+    await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots, options);
     // An empty lease creates only an absent ref, including for locally committed baselines.
     await git(runCommand, context, ["push", `--force-with-lease=${ref}:`, context.remoteUrl, `${context.baseCommit}:${ref}`], options);
   }
@@ -513,9 +516,9 @@ async function inspectIncomingContributions({ project = {}, session = {}, offset
     input: { offset, limit, id, state, includeDiff }, label: "Reading incoming contributions", operation: "incoming" });
 }
 
-async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review = {},
+async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null,
   identity = {}, commandOptions = {}, operationId = crypto.randomUUID(), runCommand = runVibe64Command } = {}) {
-  if (!["merge", "discard"].includes(action) || !id) {
+  if (!["merge", "discard", "review-repair"].includes(action) || !id) {
     throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_input_invalid");
   }
   const context = incomingRepositoryContext(project, session);
@@ -531,23 +534,52 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
   const activeRef = `refs/heads/${entry.branch}`;
   const discardedRef = `${activeRef}_discarded`;
   const targetRef = `refs/heads/${context.branch}`;
-  if (action === "merge") {
+  if (action === "merge" || action === "review-repair") {
     if (entry.status === "merged") return { ok: true, status: "merged", head: entry.head, targetHead: current.targetHead };
     if (entry.status !== "pending") {
       throw saveError("Only a pending contribution can be merged. Resolve its discard state first.", "vibe64_incoming_not_pending");
     }
     let mergedCommit = entry.head;
+    let repairedTree = "";
     const targetAhead = await gitOutput(runCommand, context, ["rev-list", "--count", `${entry.head}..${current.targetHead}`], options);
     if (!/^\d+$/u.test(targetAhead)) throw saveError("Integration ancestry is unavailable.", "vibe64_incoming_history_incomplete");
+    if (targetAhead === "0" && (repairReview || action === "review-repair")) {
+      throw saveError("These heads do not need conflict repair. Refresh and review the contribution normally.", "vibe64_incoming_review_changed");
+    }
     if (targetAhead !== "0") {
       const merged = await mergeTrees(runCommand, context, { canonicalCommit: current.targetHead,
         virtualCommit: entry.head, commandOptions, project });
       if (merged.conflictPaths.length) {
-        throw saveError("This contribution conflicts with the integration branch. Resolve the listed files in its source, publish and review again.",
-          "vibe64_incoming_merge_conflict", { conflictPaths: merged.conflictPaths });
+        // Preserve the receiving source before offering Temporary AI. This is
+        // the same private checkpoint owner as Update; files/index/HEAD stay put.
+        const checkpoint = await captureSessionWorkUpdateCheckpointDirect({
+          project, session, commandOptions, operationId: `incoming:${operationId}`, runCommand
+        });
+        if (action === "merge" && !repairReview) {
+          throw saveError("This contribution conflicts with the integration branch. Use Fix it with AI or repair the listed files in this receiving session, then Review resolved conflicts before merging.",
+            "vibe64_incoming_merge_conflict", { conflictPaths: merged.conflictPaths,
+              checkpointCommit: checkpoint.checkpointCommit, review: expected });
+        }
+        repairedTree = await conflictWorktreeTree(runCommand, context, { conflictTree: merged.conflictTree,
+          conflictPaths: merged.conflictPaths, project });
+        const currentRepair = { tree: repairedTree, worktreeTree: checkpoint.checkpointTree,
+          head: checkpoint.oldHead, indexTree: checkpoint.oldIndexTree };
+        if (action === "review-repair") {
+          const result = await git(runCommand, context, ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3",
+            current.targetHead, repairedTree], options);
+          const content = String(result.stdout || result.output || "");
+          return { ok: true, status: "repair-review", review: expected, repairReview: currentRepair,
+            conflictPaths: merged.conflictPaths, diff: { content: content.slice(0, 100_000), truncated: content.length > 100_000 } };
+        }
+        if (Object.keys(currentRepair).some(key => repairReview?.[key] !== currentRepair[key])) {
+          throw saveError("The receiving source changed after repair review. Review resolved conflicts again before merging.",
+            "vibe64_incoming_repair_changed");
+        }
+      } else if (repairReview || action === "review-repair") {
+        throw saveError("These heads no longer need conflict repair. Refresh and review the contribution normally.", "vibe64_incoming_review_changed");
       }
       mergedCommit = await gitOutput(runCommand, context, ["-c", `user.name=${text(identity.name) || "Vibe64 Merge"}`,
-        "-c", `user.email=${text(identity.email) || "vibe64@localhost"}`, "commit-tree", merged.mergedTree,
+        "-c", `user.email=${text(identity.email) || "vibe64@localhost"}`, "commit-tree", repairedTree || merged.mergedTree,
         "-p", current.targetHead, "-p", entry.head], { ...options, input: `Merge contribution ${id}\n` });
     }
     // Recheck the contribution as well as using an exact target lease. Its ref
@@ -556,6 +588,15 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
     const refreshedEntry = refreshed.contributions[0];
     if (refreshed.targetHead !== current.targetHead || refreshedEntry.activeHead !== entry.activeHead || refreshedEntry.discardedHead) {
       throw saveError("The contribution changed while its merge was prepared. Review it again.", "vibe64_incoming_review_changed");
+    }
+    if (repairedTree) {
+      const head = await gitOutput(runCommand, context, ["rev-parse", "HEAD"], options);
+      const indexTree = await gitOutput(runCommand, context, ["write-tree"], options);
+      const worktreeTree = await writeGitWorktreeTree({ worktreePath: context.worktreePath,
+        project: commandProject(context, project), runCommand });
+      if (head !== repairReview.head || indexTree !== repairReview.indexTree || worktreeTree !== repairReview.worktreeTree) {
+        throw saveError("The receiving source changed while the merge was prepared. Review resolved conflicts again.", "vibe64_incoming_repair_changed");
+      }
     }
     await git(runCommand, context, ["push", `--force-with-lease=${targetRef}:${current.targetHead}`,
       context.remoteUrl, `${mergedCommit}:${targetRef}`], options);
@@ -597,11 +638,11 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
   return { ok: true, status: entry.status === "merged" ? "merged" : "discarded", head: entry.head };
 }
 
-async function changeIncomingContribution({ project = {}, session = {}, action = "", id = "", review = {}, identity = {},
+async function changeIncomingContribution({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null, identity = {},
   commandOptions = {}, runCommand = runVibe64Command, runProjectSourceExclusive = async operation => operation() } = {}) {
   const context = incomingRepositoryContext(project, session);
   return runProjectSourceExclusive(() => runSessionWorkOperation({ context, project, commandOptions, runCommand,
-    input: { action, id, review, identity }, label: "Updating incoming contribution", operation: "incoming-change" }),
+    input: { action, id, review, repairReview, identity }, label: "Updating incoming contribution", operation: "incoming-change" }),
   { operation: `incoming-${action}:${id}` });
 }
 
@@ -956,6 +997,8 @@ async function inspectSessionChangeDiffDirect({
 async function inspectSessionWorkDirect({
   commandOptions = {},
   derivedArtifactPaths = [],
+  inspectContributionPublication = false,
+  knownSubmittedCommit = "",
   project = {},
   runCommand = runVibe64Command,
   session = {},
@@ -1028,6 +1071,34 @@ async function inspectSessionWorkDirect({
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   const relationship = repositoryUpdateRelationship(ahead, behind);
   const worktreeClean = worktreePorcelain.length === 0;
+  let publishedCommit;
+  if (inspectContributionPublication) {
+    if (!context.contribution) throw saveError("Publication inspection requires a bound contribution.",
+      "vibe64_contribution_authority_changed");
+    publishedCommit = await readContributionHead(runCommand, context, { commandOptions, project }, true);
+    if (!publishedCommit && knownSubmittedCommit) {
+      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(knownSubmittedCommit)) throw saveError(
+        "The saved contribution evidence is invalid.", "vibe64_connected_integration_unknown");
+      publishedCommit = knownSubmittedCommit;
+    }
+    if (context.contributionDiscarded || (publishedCommit && context.contributionRemoteAbsent)) {
+      const target = `refs/heads/${context.contribution.integrationBranch}`;
+      const observed = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, target], { commandOptions, project });
+      const [accepted, ref, extra] = observed.split(/\s+/u);
+      if (ref !== target || extra || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(accepted) ||
+          !await commitIsAncestor(runCommand, context, publishedCommit, accepted, { commandOptions, project })) {
+        throw saveError("The removed contribution has not been proved integrated in this source. Check its receiving target and explicitly Update the connected session.",
+          context.contributionDiscarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing");
+      }
+    }
+    if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) throw saveError(
+      "The published contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
+      "vibe64_contribution_branch_missing");
+    if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {
+      throw saveError("The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",
+        "vibe64_connected_source_update_required", { repository: context.contribution.repository, sessionId: context.sessionId });
+    }
+  }
   return {
     ahead,
     baseCommit: context.baseCommit,
@@ -1042,6 +1113,7 @@ async function inspectSessionWorkDirect({
     dirty: tree !== headTree || !worktreeClean,
     mode: context.mode,
     ok: true,
+    ...(inspectContributionPublication ? { publishedCommit } : {}),
     repositoryMode: context.mode,
     relationship,
     sessionMatchesCanonical: changedPaths.length === 0,
@@ -1061,6 +1133,8 @@ async function inspectSessionWorkDirect({
 async function inspectSessionWork({
   commandOptions = {},
   derivedArtifactPaths = [],
+  inspectContributionPublication = false,
+  knownSubmittedCommit = "",
   project = {},
   runCommand = runVibe64Command,
   session = {}
@@ -1069,7 +1143,7 @@ async function inspectSessionWork({
   return runSessionWorkOperation({
     commandOptions,
     context,
-    input: { derivedArtifactPaths },
+    input: { derivedArtifactPaths, inspectContributionPublication, knownSubmittedCommit },
     label: "Inspecting session work",
     operation: "work",
     project,
@@ -1187,37 +1261,60 @@ async function rememberCanonicalCommit(runCommand, context, commit, options = {}
 async function readRemoteCanonical(runCommand, context, operationId, options) {
   await git(runCommand, context, ["remote", "set-url", "origin", context.remoteUrl], options);
   if (context.contribution) {
-    context.contributionRemoteAbsent = !await readContributionHead(runCommand, context, options);
+    context.contributionPublishedCommit = await readContributionHead(runCommand, context, options, true);
+    context.contributionRemoteAbsent = !context.contributionPublishedCommit;
     if (context.contributionRemoteAbsent) {
       const observed = await optionalGitOutput(runCommand, context,
         ["rev-parse", "--verify", `${canonicalRef(context)}^{commit}`], options);
       const prepared = await gitOutput(runCommand, context,
         ["for-each-ref", "--format=%(refname)", "refs/vibe64/save/"], options);
-      if (context.lastCanonicalCommit !== context.contribution.baseCommit ||
-          (observed && observed !== context.contribution.baseCommit) ||
-          prepared.split("\n").some(ref => ref.endsWith("/prepared"))) {
+      if (prepared.split("\n").some(ref => ref.endsWith("/prepared"))) {
         throw saveError("This contribution branch is missing after a publication attempt. Inspect its saved work and integration history before resubmitting it.",
           "vibe64_contribution_branch_missing");
       }
-      return context.contribution.baseCommit;
+      if (context.lastCanonicalCommit === context.contribution.baseCommit &&
+          (!observed || observed === context.contribution.baseCommit)) return context.contribution.baseCommit;
+      context.contributionMissingPublished = true;
     }
   }
   const operationRef = saveRef(context, operationId, "canonical");
+  const integrationRef = context.contribution ? saveRef(context, operationId, "integration") : "";
   try {
     await git(runCommand, context, [
       "fetch",
       "--no-tags",
       "origin",
-      `+refs/heads/${context.branch}:${operationRef}`
+      `+refs/heads/${context.contributionMissingPublished ? context.contribution.integrationBranch :
+        context.contributionDiscarded ? `${context.branch}_discarded` : context.branch}:${operationRef}`,
+      ...(integrationRef ? [`+refs/heads/${context.contribution.integrationBranch}:${integrationRef}`] : [])
     ], options);
-    const commit = await gitOutput(runCommand, context, ["rev-parse", "--verify", operationRef], options);
+    let commit = await gitOutput(runCommand, context, ["rev-parse", "--verify", operationRef], options);
+    if (integrationRef) {
+      if (!context.contributionMissingPublished && commit !== context.contributionPublishedCommit) throw saveError(
+        "The contribution branch changed during its authority check. Retry Update or Save.", "vibe64_session_save_update_required");
+      const accepted = await gitOutput(runCommand, context, ["rev-parse", "--verify", integrationRef], options);
+      // Once the exact published head is integrated, ordinary explicit Update
+      // consumes the accepted target. Save still publishes only the incoming ref.
+      const integrated = await commitIsAncestor(runCommand, context,
+        context.contributionMissingPublished ? context.baseCommit : commit, accepted, options);
+      if ((context.contributionDiscarded || context.contributionMissingPublished) &&
+          (!integrated || context.baseCommit === context.contribution.baseCommit && context.contributionMissingPublished)) {
+        throw saveError("This removed contribution has not been integrated. Preserve its source and inspect its saved work.",
+          context.contributionDiscarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing");
+      }
+      if (integrated) {
+        commit = accepted;
+        context.canonicalBranch = context.contribution.integrationBranch;
+      }
+    }
     return rememberCanonicalCommit(runCommand, context, commit, options);
   } finally {
     await deleteOperationRef(runCommand, context, operationRef, options);
+    await deleteOperationRef(runCommand, context, integrationRef, options);
   }
 }
 
-async function readContributionHead(runCommand, context, options) {
+async function readContributionHead(runCommand, context, options, allowDiscarded = false) {
   const active = `refs/heads/${context.branch}`;
   const discarded = `${active}_discarded`;
   const output = await gitOutput(runCommand, context,
@@ -1229,13 +1326,15 @@ async function readContributionHead(runCommand, context, options) {
     }
     return [ref, commit];
   }));
-  if (refs.has(discarded)) {
+  context.contributionDiscarded = refs.has(discarded) && !refs.has(active);
+  context.contributionRemoteAbsent = !refs.has(active) && !refs.has(discarded);
+  if (refs.has(discarded) && (!allowDiscarded || refs.has(active))) {
     throw saveError(refs.has(active)
       ? "Both contribution branches exist after an interrupted discard. Resolve that operation before publishing."
       : "This contribution was discarded. Preserve its source and submit further work as a new contribution.",
     refs.has(active) ? "vibe64_contribution_discard_incomplete" : "vibe64_contribution_discarded");
   }
-  return refs.get(active) || "";
+  return refs.get(active) || (allowDiscarded ? refs.get(discarded) : "") || "";
 }
 
 async function assertLocalAuthority(runCommand, context, options) {
@@ -1442,9 +1541,13 @@ async function resolvedConflictTree(runCommand, context, {
   if (!stable || reviewedConflictId !== previous.reviewId) {
     throw conflictRecoveryError(currentRecovery);
   }
+  return conflictWorktreeTree(runCommand, context, { ...currentRecovery, project });
+}
+
+function conflictWorktreeTree(runCommand, context, { conflictTree, conflictPaths, project }) {
   return writeGitWorktreeTree({
-    baseCommit: currentRecovery.conflictTree,
-    paths: currentRecovery.conflictPaths,
+    baseCommit: conflictTree,
+    paths: conflictPaths,
     project: commandProject(context, project),
     runCommand,
     worktreePath: context.worktreePath
@@ -1687,12 +1790,65 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
         throw saveError(`${repository} has ${wasDiscarded ? "discarded" : "not merged"} contribution ${id} at ${submittedCommit.slice(0, 12)}. Integrate that revision into ${integrationBranch} before saving this project.`,
           wasDiscarded ? "vibe64_connected_integration_discarded" : "vibe64_connected_integration_pending", details);
       }
+      const snapshot = (options.connectedWorkSnapshots || []).find(item => item.contribution.id === id &&
+        item.contribution.repository === repository && item.contribution.integrationBranch === integrationBranch);
+      if (!snapshot || !await commitIsAncestor(runCommand, context, heads.get(target), snapshot.sessionHead, options)) {
+        throw saveError(`Update the connected session for ${repository} to incorporate its accepted ${integrationBranch} source before saving this project.`,
+          "vibe64_connected_integration_source_update_required", details);
+      }
     } catch (error) {
       if (error.code?.startsWith("vibe64_connected_integration_")) throw error;
       throw saveError(`Could not verify contribution ${id} in ${repository}/${integrationBranch}. Check repository access and complete history, then retry Save.`,
         "vibe64_connected_integration_unknown", details);
     } finally {
       for (const ref of refs) await deleteOperationRef(runCommand, context, ref.local, options);
+    }
+  }
+}
+
+function connectedWorkSnapshots(value = []) {
+  if (!Array.isArray(value)) throw saveError("Connected source snapshots are unavailable.", "vibe64_connected_source_unavailable");
+  return value.map(snapshot => {
+    const contribution = sessionConnectedContribution({ metadata: {
+      connected_contribution: JSON.stringify(snapshot?.contribution)
+    } });
+    if (!contribution || snapshot.sessionId !== contribution.id || !path.isAbsolute(text(snapshot.worktreePath)) ||
+        [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
+          .some(commit => !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(text(commit)))) {
+      throw saveError("The connected source could not be captured. Inspect connected work before saving.",
+        "vibe64_connected_source_unavailable");
+    }
+    return { contribution, sessionId: contribution.id, worktreePath: text(snapshot.worktreePath),
+      baseCommit: snapshot.baseCommit, canonicalCommit: snapshot.canonicalCommit,
+      sessionHead: snapshot.sessionHead, worktreeTree: snapshot.worktreeTree };
+  });
+}
+
+async function assertConnectedWorkSnapshotsUnchanged(runCommand, snapshots, options) {
+  for (const snapshot of snapshots) {
+    const { contribution } = snapshot;
+    const context = repositoryContext({ sessionId: snapshot.sessionId, sourcePath: snapshot.worktreePath, metadata: {
+      base_commit: snapshot.baseCommit, canonical_commit: snapshot.canonicalCommit,
+      connected_contribution: JSON.stringify(contribution)
+    } }, { repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB,
+      repository: { defaultBranch: contribution.integrationBranch },
+      githubRepository: { fullName: contribution.repository, cloneUrl: `https://github.com/${contribution.repository}.git` }
+    });
+    try {
+      const tree = await writeGitWorktreeTree({ baseCommit: "HEAD", project: commandProject(context, options.project),
+        runCommand, worktreePath: context.worktreePath });
+      const [head, canonical] = await Promise.all([
+        gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD^{commit}"], options),
+        observedCanonicalCommit(runCommand, context, options)
+      ]);
+      if (tree !== snapshot.worktreeTree || head !== snapshot.sessionHead || canonical !== snapshot.canonicalCommit) {
+        throw saveError(`Connected work in ${contribution.repository} changed during Save. Inspect and save it before retrying Main Save.`,
+          "vibe64_connected_save_required", { repository: contribution.repository, sessionId: contribution.id });
+      }
+    } catch (error) {
+      if (error.code === "vibe64_connected_save_required") throw error;
+      throw saveError(`Connected work in ${contribution.repository} could not be rechecked. Restore source access and retry Save.`,
+        "vibe64_connected_source_unavailable", { repository: contribution.repository, sessionId: contribution.id });
     }
   }
 }
@@ -1711,6 +1867,8 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
       ...options,
       cwd: context.standaloneSourceRoot
     });
+    await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
+    options.onPublicationAttempt?.();
     await git(runCommand, context, ["merge", "--ff-only", saveCommit], {
       ...options,
       cwd: context.standaloneSourceRoot
@@ -1723,8 +1881,14 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
     return verified;
   }
   const pushArgs = ["push"];
+  const expectedRemoteCommit = context.contribution
+    ? context.contributionPublishedCommit
+    : canonicalCommit;
   if (context.contribution) {
-    const expected = context.contributionRemoteAbsent ? "" : canonicalCommit;
+    if (context.contributionMissingPublished) throw saveError(
+      "This contribution branch was removed after publication. Preserve its source and submit further work as a new contribution.",
+      "vibe64_contribution_branch_missing");
+    const expected = context.contributionRemoteAbsent ? "" : context.contributionPublishedCommit;
     if (await readContributionHead(runCommand, context, options) !== expected) {
       throw saveError("The contribution branch changed while Save was preparing. Inspect it before trying again.",
         "vibe64_session_save_update_required");
@@ -1737,27 +1901,43 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
     pushArgs.push("--push-option=vibe64-atomic");
   }
   pushArgs.push("origin", `${saveCommit}:refs/heads/${context.branch}`);
-  const pushed = await git(runCommand, context, pushArgs, {
-    ...options,
-    required: false
-  });
+  let pushed;
+  // This is a final read, not a lock on receiving repositories. It catches
+  // changes during preparation without claiming exclusion after this check.
+  await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
+  options.onPublicationAttempt?.();
+  try {
+    pushed = await git(runCommand, context, pushArgs, { ...options, required: false });
+  } catch (error) {
+    // A transport exception does not establish whether the remote accepted it.
+    pushed = { ok: false, code: error.code, error: error.message };
+  }
+  let verified;
+  try {
+    const remote = context.contribution ? await readContributionHead(runCommand, context, options) : await gitOutput(
+      runCommand, context, ["ls-remote", "--heads", "origin", `refs/heads/${context.branch}`], options
+    );
+    verified = remote.split(/\s+/u)[0] || "";
+  } catch (error) {
+    if (["vibe64_contribution_discarded", "vibe64_contribution_discard_incomplete"].includes(error.code)) throw error;
+    throw saveError(
+      `Save publication could not be confirmed. Inspect work to recover the prepared commit before retrying. ${text(error.message)}`,
+      "vibe64_session_save_publication_unknown"
+    );
+  }
+  if (verified === saveCommit) {
+    // Exact remote evidence also confirms a push whose acknowledgement was lost.
+    // Continue through the original reconciliation path without publishing again.
+    await rememberCanonicalCommit(runCommand, context, verified, options);
+    return verified;
+  }
   if (pushed?.ok !== true) {
-    const remote = context.contribution ? { stdout: await readContributionHead(runCommand, context, options) } : await git(runCommand, context, [
-      "ls-remote",
-      "--heads",
-      "origin",
-      `refs/heads/${context.branch}`
-    ], {
-      ...options,
-      required: false
-    });
-    const remoteCommit = output(remote).split(/\s+/u)[0] || "";
-    if (remoteCommit && remoteCommit !== canonicalCommit) {
+    if (verified && verified !== expectedRemoteCommit) {
       throw saveError(
         "The saved branch changed while Save was publishing. Update this session, then save again.",
         "vibe64_session_save_update_required",
         {
-          canonicalCommit: remoteCommit,
+          canonicalCommit: verified,
           reconciledCommit: canonicalCommit,
           updateRequired: true
         }
@@ -1775,21 +1955,10 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
       text(pushed?.code) || "vibe64_session_save_git_failed"
     );
   }
-  const remote = context.contribution ? await readContributionHead(runCommand, context, options) : await gitOutput(runCommand, context, [
-    "ls-remote",
-    "--heads",
-    "origin",
-    `refs/heads/${context.branch}`
-  ], options);
-  const verified = remote.split(/\s+/u)[0] || "";
-  if (verified !== saveCommit) {
-    throw saveError(
-      "Canonical repository verification did not return the commit Vibe64 published.",
-      "vibe64_session_save_verification_failed"
-    );
-  }
-  await rememberCanonicalCommit(runCommand, context, verified, options);
-  return verified;
+  throw saveError(
+    "Canonical repository verification did not return the commit Vibe64 published.",
+    "vibe64_session_save_verification_failed"
+  );
 }
 
 async function refreshVerifiedGithubMirror(
@@ -1975,7 +2144,7 @@ async function checkSessionUpdatesDirect({
     canonicalSource: {
       authority: context.mode,
       commit: canonicalCommit,
-      ref: `refs/heads/${context.branch}`,
+      ref: `refs/heads/${context.canonicalBranch || context.branch}`,
       ...(context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
         ? {}
         : { repository: context.remoteUrl })
@@ -2757,6 +2926,8 @@ async function prepareSessionWorkSave(runCommand, context, {
 
 async function publishPreparedSessionWorkSave(runCommand, context, {
   commandOptions = {},
+  connectedWorkSnapshots = [],
+  onPublicationAttempt,
   prepared = {},
   project = {}
 } = {}) {
@@ -2765,7 +2936,7 @@ async function publishPreparedSessionWorkSave(runCommand, context, {
     context,
     text(prepared.saveCommit),
     text(prepared.canonicalCommit),
-    { commandOptions, project }
+    { commandOptions, connectedWorkSnapshots, onPublicationAttempt, project }
   );
 }
 
@@ -2859,6 +3030,7 @@ async function deletePreparedSaveRef(runCommand, context, operationId, options =
 async function saveSessionWorkDirect({
   checkpoint: suppliedCheckpoint = null,
   commandOptions = {},
+  connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   deferCacheMaintenance = false,
   derivedArtifactPaths = [],
   identity = {},
@@ -2872,6 +3044,7 @@ async function saveSessionWorkDirect({
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);
+  const snapshots = connectedWorkSnapshots(suppliedConnectedSnapshots);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Saving session work",
     operationId
@@ -2924,26 +3097,42 @@ async function saveSessionWorkDirect({
       project,
       refreshDerivedArtifacts
     });
-    await onProgress({
-      expectedCanonicalCommit: prepared.canonicalCommit,
-      kind: "canonical",
-      message: "Canonical branch read.",
-      stage: "canonical-read"
-    });
-    await onProgress({
-      expectedCanonicalCommit: prepared.canonicalCommit,
-      kind: "publish",
-      mergedTree: prepared.mergedTree,
-      message: "Save commit prepared.",
-      proposedCommit: prepared.saveCommit,
-      stage: "prepared"
-    });
-    await onProgress({ kind: "publish", message: "Publishing one ordinary Save commit.", stage: "publishing" });
-    const verifiedCommit = await publishPreparedSessionWorkSave(runCommand, context, {
-      commandOptions,
-      prepared,
-      project
-    });
+    let publicationAttempted = false;
+    let verifiedCommit;
+    try {
+      await onProgress({
+        expectedCanonicalCommit: prepared.canonicalCommit,
+        kind: "canonical",
+        message: "Canonical branch read.",
+        stage: "canonical-read"
+      });
+      await onProgress({
+        expectedCanonicalCommit: prepared.canonicalCommit,
+        kind: "publish",
+        mergedTree: prepared.mergedTree,
+        message: "Save commit prepared.",
+        proposedCommit: prepared.saveCommit,
+        stage: "prepared"
+      });
+      await onProgress({ kind: "publish", message: "Publishing one ordinary Save commit.", stage: "publishing" });
+      verifiedCommit = await publishPreparedSessionWorkSave(runCommand, context, {
+        commandOptions,
+        connectedWorkSnapshots: snapshots,
+        onPublicationAttempt() { publicationAttempted = true; },
+        prepared,
+        project
+      });
+    } catch (error) {
+      if (!publicationAttempted) {
+        // No publication command ran. Retire only this prepared proposal;
+        // leaving it behind would make a first contribution's absent ref look
+        // like a lost publication forever. The source checkpoint remains.
+        await git(runCommand, context, ["update-ref", "-d", prepared.preparedRef, prepared.saveCommit], {
+          commandOptions, project
+        });
+      }
+      throw error;
+    }
     await onProgress({
       kind: "publish",
       message: "Canonical Save commit verified.",
@@ -3026,6 +3215,7 @@ async function saveSessionWork({
   onCacheMaintenance = async () => null,
   operationId = crypto.randomUUID(),
   project = {},
+  readConnectedWorkSnapshots = async () => [],
   runCommand = runVibe64Command,
   runProjectSourceExclusive = async (operation) => operation(),
   onProgress = async () => null,
@@ -3042,11 +3232,14 @@ async function saveSessionWork({
       sessionHead: text(checkpoint.sessionHead),
       stage: "publishing"
     });
+    const snapshots = connectedWorkSnapshots(await readConnectedWorkSnapshots());
     return runSessionWorkOperation({
+      additionalAllowedRoots: snapshots.map(snapshot => snapshot.worktreePath),
       commandOptions,
       context,
       input: {
         checkpoint,
+        connectedWorkSnapshots: snapshots,
         derivedArtifactPaths,
         identity,
         message
@@ -3152,19 +3345,24 @@ async function recoverSessionWorkSave({
     );
   }
   return runProjectSourceExclusive(async () => {
-    const authorityCommit = await currentCanonicalCommit(
-      runCommand,
-      context,
-      operationId,
-      { commandOptions, project }
-    );
-    if (authorityCommit === expectedCanonicalCommit) {
+    let authorityCommit;
+    try {
+      authorityCommit = await currentCanonicalCommit(runCommand, context, operationId, { commandOptions, project });
+    } catch (error) {
+      if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB) throw error;
+      throw saveError(
+        `Save publication is still unknown. Restore repository access and inspect work again. ${text(error.message)}`,
+        "vibe64_session_save_publication_unknown"
+      );
+    }
+    if (authorityCommit === expectedCanonicalCommit && context.contributionPublishedCommit !== proposedCommit) {
       throw saveError(
         "The interrupted Save did not publish. Retry Save when ready.",
         "vibe64_session_save_interrupted_retryable",
         { retryable: true }
       );
     }
+    if (context.contribution) authorityCommit = context.contributionPublishedCommit;
     if (authorityCommit !== proposedCommit) {
       throw saveError(
         "Canonical history advanced while the interrupted Save was being recovered.",

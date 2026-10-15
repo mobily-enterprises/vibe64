@@ -893,6 +893,34 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(sendAgentMessage).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["claude", "codex"])("queues %s startup follow-ups as Pending while the first admission is held", async engineId => {
+    const delivery = deferredResult();
+    const sendAgentMessage = vi.fn().mockImplementationOnce(() => delivery.promise).mockResolvedValue(true);
+    const { props, view } = await createViewWithProps({ sendAgentMessage,
+      session: { ...viewProps().session, assistantSelection: { engineId } }
+    }, { runtimeOptions: { deferWhileWorking: true } });
+    view.composerDraft.value = "First instruction";
+    const first = view.submitComposerMessage();
+    await vi.waitFor(() => expect(sendAgentMessage).toHaveBeenCalledTimes(1));
+    props.session.agentSession.turn = { active: true, id: "", state: "starting" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
+    view.composerDraft.value = "Follow-up while starting";
+    expect(view.composerCanSubmit.value).toBe(true);
+    const second = view.submitComposerMessage();
+    expect(view.composerDraft.value).toBe("");
+    expect(view.chatTurns.value.map(turn => [turn.user.text, turn.optimistic.status])).toEqual([
+      ["First instruction", "pending"], ["Follow-up while starting", "pending"]
+    ]);
+    expect(sendAgentMessage).toHaveBeenCalledTimes(1);
+    view.composerDraft.value = "Keep this newer draft";
+    props.session.agentSession.turn = { active: true, id: "native-turn", state: "active" };
+    delivery.resolve(true);
+    await first;
+    await second;
+    expect(sendAgentMessage).toHaveBeenCalledTimes(2);
+    expect(view.composerDraft.value).toBe("Keep this newer draft");
+  });
+
   it("keeps scroll identity stable and follows only an accepted local submission", async () => {
     const delivery = deferredResult();
     const sendAgentMessage = vi.fn()
@@ -1562,12 +1590,16 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(retryWorkspaceSetup).not.toHaveBeenCalled();
   });
 
-  it("keeps a ready workspace out of the chat activity area", async () => {
-    const view = await createView({
+  it("keeps successful preparation rerunnable after its notice is dismissed", async () => {
+    const retryWorkspaceSetup = vi.fn(async () => true);
+    const { view, props } = await createViewWithProps({
+      retryWorkspaceSetup,
+      sourceWorkspaceAvailable: true,
       session: {
         ...viewProps().session,
         workspaceSetup: {
-          status: "succeeded"
+          status: "succeeded",
+          startedAt: "2026-10-15T01:00:00.000Z"
         }
       }
     });
@@ -1575,6 +1607,29 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.workspaceSetupRunning.value).toBe(false);
     expect(view.workspaceSetupTitle.value).toBe("Workspace prepared");
     expect(view.composerHint.value).toBe("");
+    view.dismissWorkspaceSetupActivity();
+    expect(view.workspaceSetupDismissed.value).toBe(true);
+    expect(view.workspaceSetupActionVisible.value).toBe(true);
+    await expect(view.retryWorkspaceSetup()).resolves.toBe(true);
+    expect(retryWorkspaceSetup).toHaveBeenCalledTimes(1);
+    expect(view.workspaceSetupDismissed.value).toBe(false);
+
+    view.dismissWorkspaceSetupActivity();
+    retryWorkspaceSetup.mockRejectedValueOnce(new Error("Another assistant operation is starting."));
+    await expect(view.retryWorkspaceSetup()).resolves.toBe(false);
+    expect(view.workspaceSetupDismissed.value).toBe(false);
+    expect(view.workspaceSetupError.value).toBe("Another assistant operation is starting.");
+    expect(view.workspaceSetupActionVisible.value).toBe(true);
+    const reloaded = await createView({ sourceWorkspaceAvailable: true, session: props.session });
+    expect(reloaded.workspaceSetupDismissed.value).toBe(false);
+
+    props.sessionSelectionArchived = true;
+    expect(view.workspaceSetupRetryDisabled.value).toBe(true);
+    await expect(view.retryWorkspaceSetup()).resolves.toBe(false);
+    expect(retryWorkspaceSetup).toHaveBeenCalledTimes(2);
+    props.sessionSelectionArchived = false;
+    props.session.workspaceSetup.status = "unconfigured";
+    expect(view.workspaceSetupActionVisible.value).toBe(false);
   });
 
   it.each(["assistant", "update", "pending"])("does not run required setup over an active %s operation", async (operation) => {
@@ -2161,6 +2216,25 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value).toEqual(originalTurns);
   });
 
+  it("opens Incoming conflict repair with Senior and requires a separate reviewed Merge", async () => {
+    const senior = ref(true);
+    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "incoming-repair" }));
+    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseSenior: senior,
+      assistantCanUseJunior: ref(false), requestTemporaryAi });
+    const input = { code: "vibe64_incoming_merge_conflict", error: "Exact target abc and contribution def; shared.txt.", title: "Resolve Incoming merge" };
+    expect(await view.fixRepositoryError(input)).toBe(true);
+    const task = requestTemporaryAi.mock.calls[0][0];
+    expect(task.initialRouting).toEqual({ mode: "senior", review: false });
+    expect(task.recoveryOperation).toBe("");
+    expect(task.message).toContain("Repair only the listed conflicting files");
+    expect(task.message).toContain("Do not commit, merge, rebase or push");
+    expect(task.message).toContain("Review resolved conflicts");
+    expect(await view.handleTemporaryAiTaskFinished({ id: "incoming-repair", sessionId: "session-1", status: "completed" })).toBe(false);
+    senior.value = false;
+    expect(await view.fixRepositoryError(input)).toBe(false);
+    expect(requestTemporaryAi).toHaveBeenCalledOnce();
+  });
+
   it("shares one recovery identity between chat and Dashboard for the same update failure", async () => {
     const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
     const code = "vibe64_session_update_conflict";
@@ -2631,6 +2705,79 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(sendAgentMessage).not.toHaveBeenCalled();
     expect(view.saveWorkConfirmOpen.value).toBe(false);
     expect(view.saveWorkSending.value).toBe(false);
+  });
+
+  it("reviews connected-only work separately and returns to ordinary Main Save after publication", async () => {
+    const destination = { sessionId: "session-1", mode: "github", repository: "example/app", branch: "main" };
+    const connectedReview = [{ projectSlug: "library", destination: {
+      sessionId: "contribution-1", mode: "github", repository: "example/library", branch: "vibe64-incoming/123"
+    } }];
+    const completed = [{ repository: "example/library", sessionId: "contribution-1",
+      saveCommit: "b".repeat(40), recorded: true, reconciled: true }];
+    const saveSessionWork = vi.fn(async () => ({ ok: true, status: "connected_saved", connected: completed }));
+    const { props, view } = await createViewWithProps({ saveSessionWork,
+      workState: { destination, connectedReview, connectedSaveRequired: true, unsaved: false, updateAvailable: true }
+    });
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Save connected first");
+    expect(view.saveWorkRequiresUpdate.value).toBe(false);
+    expect(view.requestSaveWork()).toBe(true);
+    connectedReview[0].destination.branch = "changed-after-review";
+    await view.confirmSaveWork();
+    expect(saveSessionWork).toHaveBeenCalledTimes(1);
+    expect(saveSessionWork.mock.calls[0][0]).toEqual({ destinationReview: destination,
+      connectedReview: [{ projectSlug: "library", destination: {
+        sessionId: "contribution-1", mode: "github", repository: "example/library", branch: "vibe64-incoming/123"
+      } }]
+    });
+    expect(view.saveWorkConnectedResults.value).toEqual(completed);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+
+    props.workState = { destination, connectedReview, connectedSaveRequired: false,
+      connectedRequirementsPresent: true, unsaved: false, updateAvailable: false };
+    await nextTick();
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
+    view.requestSaveWork();
+    expect(view.saveWorkConnectedReview.value).toBeNull();
+    await view.confirmSaveWork();
+    expect(saveSessionWork.mock.calls[1][0]).toEqual({ destinationReview: destination });
+  });
+
+  it("keeps ordinary Main Save available when receiving status is unknown and reports its fresh refusal", async () => {
+    const destination = { sessionId: "session-1", mode: "github", repository: "example/app", branch: "main" };
+    const saveSessionWork = vi.fn(async () => { throw new Error("Receiving repository access is unavailable. Reconnect and retry."); });
+    const view = await createView({ saveSessionWork, workState: {
+      destination, unsaved: false, connectedSaveRequired: false, connectedRequirementsPresent: false,
+      connectedInspectionError: "Receiving status unavailable"
+    } });
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
+    expect(view.saveWorkTitle.value).not.toBe("No work to save");
+    expect(view.requestSaveWork()).toBe(true);
+    expect(view.saveWorkConnectedReview.value).toBeNull();
+    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(saveSessionWork).toHaveBeenCalledExactlyOnceWith({ destinationReview: destination });
+    expect(view.saveWorkError.value).toBe("Receiving repository access is unavailable. Reconnect and retry.");
+  });
+
+  it("keeps confirmed connected push results visible when a later repository fails", async () => {
+    const completed = [{ repository: "example/library", sessionId: "contribution-1",
+      saveCommit: "b".repeat(40), recorded: true }];
+    const { props, view } = await createViewWithProps({
+      workState: { connectedSaveRequired: true, connectedReview: [], unsaved: false },
+      saveSessionWork: vi.fn(async () => { throw Object.assign(new Error("Other repository refused the push"), {
+        details: { connected: completed, failedRepository: "example/other" }
+      }); })
+    });
+    view.requestSaveWork();
+    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(view.saveWorkConnectedResults.value).toEqual(completed);
+    expect(view.saveWorkError.value).toBe("Other repository refused the push");
+    props.session = { ...props.session, sessionId: "different-session" };
+    await nextTick();
+    expect(view.saveWorkConnectedResults.value).toEqual([]);
+    expect(view.saveWorkConnectedReview.value).toBeNull();
   });
 
   it("shows the Save action only in the active session chat", async () => {

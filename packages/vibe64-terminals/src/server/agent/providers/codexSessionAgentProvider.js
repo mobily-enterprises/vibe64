@@ -512,7 +512,7 @@ function createCodexSessionAgentProvider({
     transportId: CODEX_APP_SERVER_TRANSPORT_ID,
     prepareSelection: prepareCodexModelRouting,
     prepareConversationHost(sessionId, context = {}, mode = "main") {
-      if (mode === "activity") return { native: { runOwner: codexAppServerRunOwner } };
+      if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
       if (mode === "renewalProof") return {
         native: { providerOwner: codexAppServerProviderOwner, preparation: {
           predecessor(options) {
@@ -607,7 +607,7 @@ function createCodexSessionAgentProvider({
         };
       })();
     },
-    conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "unsubscribeSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
+    conversationOperations: Object.freeze(["createConversation", "ensureSession", "updateSessionSettings", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "unsubscribeSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
     prepareConversationRequest(method, context, input = {}) {
       if (method === "releaseRenewalPredecessorProcessExitProof") return { context: {
         renewalId: input.renewalId,

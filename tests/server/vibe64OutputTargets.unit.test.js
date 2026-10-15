@@ -177,10 +177,18 @@ async function outputContext(t) {
 }
 
 test("Vibe64 abstract runtimes map only through Vibe64-owned pinned packs", () => {
-  assert.deepEqual(vibe64RuntimePacks(["nodejs", "php", "composer", "cpp"]), {
+  assert.deepEqual(vibe64RuntimePacks(["nodejs", "php", "composer", "cpp", "awsebcli"]), {
     available: true,
     disabledReason: "",
-    runtimes: ["node26", "php", "composer", "cpp"],
+    runtimes: ["node26", "php", "composer", "cpp", "awsebcli"],
+    unsupported: []
+  });
+  assert.deepEqual(vibe64RuntimePacks([
+    "python", "ruby", "go", "java", "kotlin", "csharp", "rust", "sqlite", "shell"
+  ]), {
+    available: true,
+    disabledReason: "",
+    runtimes: ["python", "ruby", "go", "java", "kotlin", "csharp", "rust", "cpp", "sqlite"],
     unsupported: []
   });
   assert.deepEqual(vibe64RuntimePacks(["future-runtime"]), {

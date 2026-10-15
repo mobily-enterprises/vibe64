@@ -305,15 +305,6 @@ function createProjectActions({ project } = {}) {
       execute: (input) => project.saveConnectedProjects(input)
     }),
     action({
-      id: "vibe64.project.connections.initialize",
-      assistant: settingsTool("connections.initialize"),
-      ownerRequired: true,
-      kind: "command",
-      input: projectSettingsReadInputValidator,
-      events: [projectChangedEvent()],
-      execute: (input) => project.initializeConnectedProjects(input)
-    }),
-    action({
       id: ACTION_READ_ENGINEERING_SETTINGS,
       assistant: settingsTool("engineering.read"),
       kind: "query",

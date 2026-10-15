@@ -128,7 +128,9 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       const project = resolved || (current?.slug === slug ? current : await resolveProjectRequestContext({
         request: { params: { slug }, vibe64User: user, allowDeleting }
       }));
-      return runWithProjectRequestContext({ ...project, vibe64User: user }, () => execute(trustedInput, context, deps));
+      return runWithProjectRequestContext({ ...project, vibe64User: user }, () => execute(trustedInput, context, deps), {
+        requestMeta: context.requestMeta
+      });
     }
   });
 }

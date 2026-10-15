@@ -64,6 +64,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const notices = new Map();
   const session = { sessionId: "session-1", metadata };
   const store = {
+    mutateSession: async (_id, operation) => operation(),
     paths: () => ({ sessionRoot: path.join(root, "sessions", session.sessionId), conversationsRoot: path.join(root, "sessions", session.sessionId, "conversations") }),
     readMetadataValue: async (_id, name) => metadata[name],
     writeMetadataValue: async (_id, name, value) => { metadata[name] = value; },

@@ -669,6 +669,7 @@ async function createLaunchContext(projectService, sessionId, {
   }
   return {
     config: {},
+    projectService,
     previewApplicationIdentities: previewIdentitySettings.identities || [],
     projectEnvironment,
     projectsRoot: projectService?.selectedProject?.projectsRoot || "",

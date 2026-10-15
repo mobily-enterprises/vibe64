@@ -3,6 +3,7 @@ import path from "node:path";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import * as vue from "vue";
+import { renderToString } from "@vue/server-renderer";
 import * as mdi from "@mdi/js";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
@@ -812,6 +813,38 @@ describe("Vibe64 direct session view", () => {
     }
   });
 
+  it("renders connected Save with receiving destinations and no main publication or PR action", async () => {
+    const source = fs.readFileSync(componentPath, "utf8");
+    const template = source.match(/<v-dialog v-model="saveWorkConfirmOpen"[\s\S]*?<\/v-dialog>/u)?.[0];
+    expect(template).toBeTruthy();
+    const compiled = compileTemplate({ source: template, filename: componentPath, id: "connected-save-review" });
+    expect(compiled.errors).toEqual([]);
+    const module = { exports: {} };
+    new Function("require", "module", "exports", transformSync(compiled.code, { format: "cjs" }).code)(
+      name => { expect(name).toBe("vue"); return vue; }, module, module.exports
+    );
+    const state = {
+      saveWorkConfirmOpen: true, saveWorkConnectedReview: [{ destination: {
+        sessionId: "contribution-one", repository: "example/library", branch: "vibe64-incoming/123"
+      } }], saveWorkReview: { mode: "github", repository: "example/app", branch: "main" },
+      saveWorkNeedsPullRequest: false, saveWorkDisabled: false, saveWorkSending: false,
+      githubProject: true, sessionPullRequest: null, publicationLabel: "Push connected contributions",
+      cancelSaveWork() {}, confirmSaveWork() {}, selectSessionTool() {}, props: { workState: {} }
+    };
+    const app = vue.createSSRApp({ setup: () => state, render: module.exports.render });
+    for (const name of ["v-dialog", "v-card", "v-card-title", "v-card-text", "v-card-actions", "v-spacer", "v-sheet", "v-btn"]) {
+      app.component(name, { setup: (_, { slots }) => () => vue.h(name === "v-btn" ? "button" : "div", slots.default?.()) });
+    }
+    const html = await renderToString(app);
+    expect(html).toContain("Save connected first");
+    expect(html).toContain("example/library:vibe64-incoming/123");
+    expect(html).toContain("Push connected contributions");
+    expect(html).toContain("main project’s changes stay local");
+    expect(html).not.toContain("example/app:main");
+    expect(html).not.toContain("Create draft PR");
+    expect(html).not.toContain("disabled");
+  });
+
   it("offers native confirmed Save with temporary action output, not an AI prompt", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
@@ -832,7 +865,7 @@ describe("Vibe64 direct session view", () => {
     );
     expect(component).toContain('#error-actions');
     expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)");
-    expect(composable).toContain("const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value });");
+    expect(composable).toContain("const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,");
     expect(composable).toContain("const result = await props.updateSessionWork(input);");
     expect(composable).toContain("const saveWorkUnsaved = computed");
     expect(composable).toContain("const saveWorkOperationActive = computed");
@@ -868,7 +901,8 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
+    expect(sessionHeader).toContain('<v-icon v-if="saveConnectedFirst" :icon="mdiSourceBranch" />');
+    expect(sessionHeader).toContain('<v-icon v-else-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
     expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');
@@ -1068,6 +1102,10 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':title="workspaceSetupTitle"');
     expect(component).toContain("<Vibe64TemporaryAiFixAction");
     expect(component).toContain('@retry="retryWorkspaceSetup"');
+    const preparationActions = component.slice(chatStart, activityStart);
+    expect(preparationActions.match(/data-vibe64-prepare-workspace/gu)).toHaveLength(2);
+    expect(preparationActions.match(/v-if="workspaceSetupActionVisible"/gu)).toHaveLength(2);
+    expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(2);
     expect(component).not.toContain(':error-messages="composerError"');
     expect(composable).toContain("requestTemporaryAi({");
     expect(composable).not.toContain('policy: "workspace_write"');
