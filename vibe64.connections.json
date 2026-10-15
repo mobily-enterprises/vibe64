@@ -4,6 +4,11 @@
       "name": "Proof library",
       "repository": "https://github.com/mobily-enterprises/jskit-ai",
       "relationship": "dependency"
+    },
+    {
+      "name": "Added later library",
+      "repository": "https://github.com/mobily-enterprises/genesis-compiler",
+      "relationship": "dependency"
     }
   ]
 }
