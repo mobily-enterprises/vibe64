@@ -205,13 +205,17 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> <message> [message-id]';
+const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id]';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
 }
 const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
-const messageProject = args[0] === "message-project" && [3, 4].includes(args.length) && args[1].trim() && args[2].trim();
+const explicitSession = args[0] === "message-project" && args[2] === "--session";
+const messageIndex = explicitSession ? 4 : 2;
+const messageProject = args[0] === "message-project" &&
+  [messageIndex + 1, messageIndex + 2].includes(args.length) &&
+  args[1]?.trim() && args[messageIndex]?.trim() && (!explicitSession || args[3]?.trim());
 if (!status && !messageProject && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
@@ -221,7 +225,11 @@ try {
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
     throw new Error("Session control is unavailable. Reconnect the assistant.");
   }
-  const body = JSON.stringify({ name: args[1], projectSlug: args[1], message: args[2], messageId: args[3], token: control.token, sessionId: control.sessionId, generationId: control.generationId });
+  const body = JSON.stringify({
+    name: args[1], projectSlug: args[1], message: args[messageIndex], messageId: args[messageIndex + 1],
+    ...(explicitSession ? { destinationSessionId: args[3] } : {}),
+    token: control.token, sessionId: control.sessionId, generationId: control.generationId
+  });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
       socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
@@ -651,6 +659,7 @@ function createAgentSessionCommandService({
       const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       return sendProjectMessage({
         projectSlug: normalizeText(input.projectSlug), message: normalizeText(input.message),
+        ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
         messageId: normalizeText(input.messageId) || randomUUID(),
         sourceProject: binding.projectSlug, sourceSession: sessionId,
         actor: routing?.submittedBy || binding.actor

@@ -3966,12 +3966,16 @@ the editor's scoped styles indent their shaded bubbles beneath the name and
 cap the row at the same width as human messages. Project messages have separate
 neutral outlined bubbles and explicit To/From links.
 
-`vibe64-helper session message-project <project> <message> [message-id]` uses the
+`vibe64-helper session message-project <project> [--session <id>] <message> [message-id]` uses the
 existing bound session command socket. `agentSessionCommand.js` supplies the
 server-owned source project/session and admitted actor; `projectMessage.js`
-resolves the destination's current selected session and sends through ordinary
+resolves the explicit active destination session or, when omitted, the current
+selected session, and sends through ordinary
 Main admission/steering in the background. There is no separate inbox or queue for
-closed projects. Learning sessions cannot use this command.
+closed projects. Learning sessions cannot use this command. Self-delivery is
+rejected before assistant preparation or receipt writes. Explicit addressing never
+changes selection or substitutes a missing/inactive destination; preparation
+rechecks the addressed session rather than requiring it to be selected.
 
 Hosted admission re-reads the actor and checks destination project access. A
 closed/closing project, absent selected session or unavailable assistant fails
@@ -4000,7 +4004,8 @@ ordinary chat answers reach only the person. Completed reports need no acknowled
 unless requested. Guidance asks for natural Markdown and essential evidence, with
 tracking IDs in command metadata rather than visible prefixes.
 The in-process dispatch does not add durable restart recovery. A reply invokes the
-same command against the source project and resolves its selection at that time.
+same command with the exact source project and session ID. Reply instructions
+include `--session`, so selection and pin changes cannot redirect the reply.
 
 The native context also accepts optional host guidance bounded to 1024 UTF-8
 bytes. All capability combinations, including that maximum, fit Genesis’s 16384-byte

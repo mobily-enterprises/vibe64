@@ -24,6 +24,37 @@ implementation gap. This permission alone does not authorize npm publication,
 deployment, destructive Git operations or unrelated framework work. Existing
 architectural boundaries and test-scope requirements still apply.
 
+## Shared development checkouts
+
+Treat a pinned dependency session as an integration workspace with an owning
+agent, not an unrestricted shared editor. Existing permission to edit a dependency
+still applies; coordination does not require another human approval.
+
+Before editing a shared checkout, tell its owner the task and intended files.
+Agree who owns overlapping files before either agent edits them; independent,
+nonoverlapping edits may proceed. Include shared contracts when identifying
+possible overlaps, not just filenames. Preserve other agents' work and report
+changed files and verification results when handing ownership back.
+
+Tests run in the owning project's session. Its owner serializes runs and arranges
+a stable checkout for each check: no concurrent edits to the code, fixtures or
+dependencies being tested. Other agents request the exact focused command and
+receive its result and log location. Do not run sibling-project commands to
+bypass this boundary.
+
+Do not reconcile, rebase, merge, reset or replace a shared checkout while an
+agent is editing or testing it. Arrange a checkpoint with all active writers;
+the checkout owner then reconciles under the existing repository rules,
+preserving tracked, untracked and staged work. A pin change also needs coordination
+with consumers using that source. Pinning selects source; it is not a write lock.
+
+Keep large independent plans in separate, unpinned sessions so the pinned session
+can handle integration requests. Bring completed, tested slices back through the
+normal review and publication workflow. Incorporate main at agreed checkpoints,
+not in the middle of edits or tests. Address a particular colleague and replies
+by exact session ID; use the project default only when its pinned/selected owner
+is the intended recipient. If the recipient is unclear, ask instead of guessing.
+
 ## Ownership Extractions
 
 NO REIMPLEMENTATION FROM SCRATCH. An ownership move starts from the existing

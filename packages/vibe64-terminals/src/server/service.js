@@ -1155,9 +1155,12 @@ function createService({
         }
         const { runtime: openState } = await currentProjectRuntimeOpenState();
         projectServices.assertOpen(projectRuntimeContext());
-        const selected = await options.runtime.store.readCurrentSession();
-        if (!openState.open || selected?.sessionId !== sessionId) {
-          throw vibe64Error("The destination closed or its selected session changed. Check it before sending again.", "vibe64_project_message_destination_changed");
+        const destination = options.requireSelectedSession
+          ? await options.runtime.store.readCurrentSession()
+          : await options.runtime.store.readSession(sessionId);
+        if (!openState.open || destination?.sessionId !== sessionId ||
+            (!options.requireSelectedSession && destination.status !== VIBE64_SESSION_STATUS.ACTIVE)) {
+          throw vibe64Error("The destination closed, became unavailable or its selected session changed. Check it before sending again.", "vibe64_project_message_destination_changed");
         }
       },
       send: (sessionId, message, options) => service.sendAgentMessage(sessionId, message, options),

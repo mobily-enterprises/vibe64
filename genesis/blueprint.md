@@ -1869,7 +1869,9 @@ Main and Temporary chat present timestamped messages in chronological order,
 including replies streamed while follow-up questions are sent.
 
 With the person’s authorization, an assistant can send another open project a
-message. Its selected session receives it in Main chat. Closed projects and
+message. Its pinned/selected session receives it in Main chat by default; an
+exact session ID addresses a particular colleague, including in the same project.
+Replies target the original sender’s exact session. Self-messages are rejected. Closed projects and
 missing selections produce errors. Assistants can reply with progress or a
 published version; these messages preserve existing permissions.
 

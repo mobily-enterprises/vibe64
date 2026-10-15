@@ -53,6 +53,7 @@ test("project messages use only the current selected Main session with fresh acc
   assert.equal(result.messageId, "receipt");
   assert.match(sent[0][1].message, /^From project online \(session source\)/);
   assert.match(sent[0][1].message, /not new human authorization/);
+  assert.match(sent[0][1].message, /message-project online --session source;/);
   assert.equal(sent[0][1].submissionKind, undefined); // Existing owner chooses send or steering.
   assert.equal(sent[0][1].displayMessage, input.message);
   assert.equal(sent[0][1].turnMetadata.projectMessage.direction, "received");
@@ -136,4 +137,76 @@ test("the installed helper sends through its bound socket and supplies server-ow
   assert.equal(JSON.parse(result.stdout).sessionId, "selected");
   assert.deepEqual(calls, [{ projectSlug: "jskit-ai", message: "Publish then ping online with the version.",
     messageId: "stable-id", sourceProject: "online", sourceSession: "source", actor: { username: "owner" } }]);
+  await promisify(execFile)(path.join(root, "vibe64-helper"),
+    ["session", "message-project", "online", "--session", "other-session", "Please check this.", "exact-id"],
+    { env: { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL } });
+  assert.deepEqual(calls[1], { projectSlug: "online", destinationSessionId: "other-session", message: "Please check this.",
+    messageId: "exact-id", sourceProject: "online", sourceSession: "source", actor: { username: "owner" } });
+  await assert.rejects(promisify(execFile)(path.join(root, "vibe64-helper"),
+    ["session", "message-project", "online", "--session", "other-session"],
+    { env: { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL } }), /Usage:/);
+  assert.equal(calls.length, 2, "Malformed addressing never reaches the command service");
+});
+
+test("exact same-project messages and replies retain their recipients and reject self-delivery without side effects", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "project-message-siblings-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  for (const sessionId of ["a", "b", "other"]) await store.createSession({ runtimeKind: "genesis", sessionId });
+  let selected = "other";
+  let delivered;
+  const sent = [], prepared = [], failures = [];
+  const dependencies = {
+    authorize: async (actor, project) => { assert.equal(project, "compas-next"); return actor; },
+    projectService: {
+      runInProjectContext: async (project, operation) => { assert.equal(project, "compas-next"); return operation(); },
+      readCurrentProject: async () => ({ runtime: { open: true } }),
+      createRuntime: async () => ({ store: { readSession: store.readSession, readCurrentSession: () => store.readSession(selected) } }),
+      createSessionStore: async () => store
+    },
+    assertOpen: () => {},
+    prepare: async (sessionId, options) => { prepared.push(sessionId); assert.equal(options.requireSelectedSession, false); },
+    send: async (sessionId, message) => {
+      sent.push({ sessionId, message });
+      await store.conversationStorage.write(sessionId, async transaction => {
+        await transaction.appendMessage(await transaction.nextTurnId(), {
+          role: "user", messageId: message.messageId, text: message.displayMessage, at: new Date().toISOString(),
+          turnMetadata: message.turnMetadata
+        });
+      });
+      return { ok: true, delivered: true };
+    },
+    publish: async (_sessionId, patch) => {
+      if (patch.payload.conversationLogPatch.turn.metadata.projectMessage.status === "delivered") delivered.resolve();
+    },
+    reportFailure: error => { failures.push(error); delivered.reject(error); }
+  };
+  for (const [sourceSession, destinationSessionId] of [["a", "b"], ["b", "a"]]) {
+    delivered = Promise.withResolvers();
+    const receipt = await sendProjectMessage({ sourceProject: "compas-next", projectSlug: "compas-next",
+      sourceSession, destinationSessionId, message: `From ${sourceSession}`, messageId: `from-${sourceSession}` }, dependencies);
+    await delivered.promise;
+    assert.equal(receipt.sessionId, destinationSessionId);
+    assert.equal(sent.at(-1).sessionId, destinationSessionId);
+    assert.ok(sent.at(-1).message.message.includes(`message-project compas-next --session ${sourceSession};`));
+    const outbound = (await store.readConversationLog(sourceSession)).find(turn => turn.metadata?.projectMessage?.direction === "sent");
+    const inbound = (await store.readConversationLog(destinationSessionId)).find(turn => turn.metadata?.projectMessage?.direction === "received");
+    assert.equal(outbound.metadata.projectMessage.status, "delivered");
+    assert.equal(outbound.metadata.projectMessage.sessionId, destinationSessionId);
+    assert.equal(inbound.metadata.projectMessage.sourceSession, sourceSession);
+  }
+  assert.equal((await store.readConversationLog("other")).length, 0, "The selected session never receives explicit messages");
+  selected = "a";
+  const input = { sourceProject: "compas-next", projectSlug: "compas-next", sourceSession: "a", message: "Do not send", messageId: "refused" };
+  for (const target of [{}, { destinationSessionId: "a" }]) {
+    await assert.rejects(sendProjectMessage({ ...input, ...target }, dependencies), { code: "vibe64_project_message_self_delivery" });
+  }
+  await assert.rejects(sendProjectMessage({ ...input, destinationSessionId: "" }, dependencies), /exact destination session ID/);
+  await assert.rejects(sendProjectMessage({ ...input, destinationSessionId: "missing" }, dependencies));
+  await store.writeStatus("b", "blocked");
+  await assert.rejects(sendProjectMessage({ ...input, destinationSessionId: "b" }, dependencies), /not active/);
+  assert.deepEqual(prepared, ["b", "a"]);
+  assert.equal(sent.length, 2);
+  assert.equal((await store.readConversationLog("a")).length, 2, "Rejected messages leave no sender receipts");
+  assert.deepEqual(failures, []);
 });

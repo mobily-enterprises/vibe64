@@ -645,7 +645,7 @@ identity list. Browser identity exchange and downloads remain UI operations.
 Current-app output discovery uses the same fresh project authority before
 inspecting the selected project or session declaration.
 
-Owns assistant messages between open projects through the selected session’s Main admission, with source attribution and existing access checks.
+Owns assistant messages to exact or selected sessions in open projects through Main admission, with source attribution, self-delivery rejection and existing access checks.
 
 Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
 
