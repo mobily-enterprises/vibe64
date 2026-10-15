@@ -7,6 +7,7 @@ import {
   mdiFileCogOutline,
   mdiHeartPulse,
   mdiHistory,
+  mdiSourceMerge,
   mdiGithub
 } from "@mdi/js";
 import {
@@ -129,6 +130,15 @@ function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
 function githubProjectVisible({ projectContext = {} } = {}) {
   return githubProjectAvailable(projectContext);
 }
+
+addPlacement({
+  id: "vibe64.incoming.link", target: "page.section-nav", owner: "app-dashboard", kind: "link",
+  surfaces: ["app"], order: 320,
+  props: { label: "Incoming changes", icon: mdiSourceMerge, surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/incoming", unscopedSuffix: "/project/[slug]/dashboard/incoming",
+    visibleWhen: ({ projectContext = {} } = {}) => projectContext.repositoryMode === "github" },
+  when: ({ projectContext = {} } = {}) => projectContext.repositoryMode === "github"
+});
 
 addPlacement({
   id: "vibe64.issues.link", target: "page.section-nav", owner: "app-dashboard", kind: "link",

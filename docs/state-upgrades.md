@@ -99,6 +99,20 @@ permissions opportunistically. Project-specific upgrades must explicitly
 enumerate their canonical state through its owning subsystem and report each
 affected project; never infer it from the current editor tab.
 
+## Connected-project bindings
+
+`20261015-connected-project-bindings` records the prospective boundary for
+`connected_contribution` authority, `connected_sources` owner bindings and
+`connected_submissions` revision bindings
+in session metadata. Missing fields mean no recorded contribution or submission;
+they do not trigger source discovery or an inferred repair. Explicit connected
+operations establish new bindings, and renewal retains them. Core validates
+present bindings and refuses malformed authority instead of falling back to main.
+Existing files remain byte-for-byte unchanged, so this boundary needs no
+application-file backups. The ordinary candidate upgrade records it once; an
+older registry rejects the resulting ledger. This does not complete automatic
+source allocation or connected-first Save, and has not been applied live.
+
 ## Temporary conversation draft identity
 
 `20261014-conversation-draft-identity` records the new-write boundary for

@@ -936,6 +936,42 @@ test("PR context reaches the opening prompt and survives session renewal", async
 });
 
 
+test("contribution authority survives renewal without falling back to the integration branch", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const contribution = JSON.stringify({ schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) });
+    const submissions = JSON.stringify({ schemaVersion: 1, submissions: [{
+      contribution: JSON.parse(contribution), submittedCommit: "b".repeat(40)
+    }] });
+    const runtime = new Vibe64SessionRuntime({
+      createSessionSource: async ({ session, store }) => {
+        assert.equal(session.metadata.connected_contribution, contribution);
+        assert.equal(session.metadata.connected_submissions, submissions);
+        const metadata = sourceMetadata(targetRoot, session.sessionId);
+        await mkdir(metadata.source_path, { recursive: true });
+        for (const [name, value] of Object.entries(metadata)) await store.writeMetadataValue(session.sessionId, name, value);
+      },
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      projectSessionSourceRoot: managedSessionSourceRoot(targetRoot)
+    });
+    await runtime.createSession({ sessionId: "contribution", metadata: {
+      connected_contribution: contribution, connected_submissions: submissions
+    } });
+    await runtime.quiesceSessionForRenewal({ renewalId: "contribution-renewal", sourceSessionId: "contribution" });
+    const successor = await runtime.createRenewalSession({
+      actorId: "alice", actorDisplayName: "Alice", confirmedAt: "2026-10-15T01:00:00.000Z",
+      renewalId: "contribution-renewal", renewedFrom: "contribution", sessionId: "successor", startedAt: "2026-10-15T01:00:00.000Z"
+    });
+    assert.equal(successor.metadata.connected_contribution, contribution);
+    assert.equal(successor.metadata.connected_submissions, submissions);
+    const { sessionRepositoryDestination } = await import("@local/vibe64-core/server/projectRepository");
+    assert.equal(sessionRepositoryDestination({ repositoryMode: "github", repository: {
+      defaultBranch: "main", github: { fullName: "example/library" }
+    } }, successor).branch, "vibe64-incoming/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  });
+});
+
 const sourceLessLessonScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
   pin: { course: { courseId: "first-course", release: "0.1.0" },
     topic: { schemaVersion: 1, topicId: "getting-started", release: "0.1.0", repository: "vibe64/learn-getting-started",

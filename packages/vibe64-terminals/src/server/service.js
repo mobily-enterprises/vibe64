@@ -112,7 +112,7 @@ import { STUDIO_MANAGED_CLAUDE_COMMAND, STUDIO_MANAGED_CODEX_COMMAND } from "@lo
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
-import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
+import { assertSessionRepositoryReview, sessionConnectedContribution, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeConversationHost } from "./agent/providers/claudeConversationHost.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -179,6 +179,8 @@ import { closeAgentSessionCommandEnvironment, prepareAgentSessionCommandEnvironm
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
+  inspectIncomingContributions as inspectManagedIncomingContributions,
+  changeIncomingContribution as changeManagedIncomingContribution,
   inspectSessionChangeDiff as inspectManagedSessionChangeDiff,
   inspectSessionChanges as inspectManagedSessionChanges,
   inspectSessionWork as inspectManagedSessionWork,
@@ -1720,7 +1722,7 @@ function createService({
     const assertWorkflow = async () => {
       if (destination.mode !== "github") return;
       const workflow = await projectService.readRepositoryWorkflow();
-      if (workflow.requirePullRequest && !context.creatingPullRequest &&
+      if (workflow.requirePullRequest && !sessionConnectedContribution(session) && !context.creatingPullRequest &&
           !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
         const error = new Error("This project requires a pull request. Create or open a pull request before publishing this session.");
         error.code = "vibe64_pull_request_required";
@@ -2919,6 +2921,11 @@ function createService({
 
     // Internal server facility: callbacks are never accepted by an action or
     // model. Snapshot validation/installation remains with its content owner.
+    async runConnectedSourcePreparation(sessionId, input, operation) {
+      if (typeof operation !== "function") throw new TypeError("Connected preparation requires an internal source operation.");
+      return runSessionRepositoryWrite(sessionId, input, { operation: "prepare-connected-sources" }, operation);
+    },
+
     async runSessionSourceReadExclusive(sessionId, operation) {
       const id = assertValidVibe64SessionId(sessionId);
       if (typeof operation !== "function") {
@@ -3132,9 +3139,36 @@ function createService({
       });
       return {
         ...work,
-        publicationRequiresPullRequest: work.destination?.mode === "github" &&
+        publicationRequiresPullRequest: work.destination?.mode === "github" && !sessionConnectedContribution(session) &&
           (await projectService.readRepositoryWorkflow()).requirePullRequest
       };
+    },
+
+    async inspectIncomingContributions(sessionId, input = {}) {
+      const { project, actions } = await projectService.incomingRepository(input);
+      const { execution, session } = await sessionWorkExecution(sessionId, input, "incoming-inspection");
+      return { ...await inspectManagedIncomingContributions({ project, session,
+        id: input.id, state: input.state, offset: input.offset, limit: input.limit,
+        includeDiff: input.includeDiff === true,
+        commandOptions: execution.commandOptions, runCommand: execution.runCommand }), actions };
+    },
+
+    async changeIncomingContribution(sessionId, input = {}) {
+      return runSessionRepositoryWrite(sessionId, input, { operation: "incoming-contribution" }, context =>
+        projectService.runProjectSourceExclusive(async () => {
+          const { project } = await projectService.incomingRepository(input);
+          // A receiving action belongs to its current actor, not the person
+          // whose previous coding turn recorded this session's Git identity.
+          const recorded = await service.recordSessionGitCommandActor(sessionId, {
+            ...context, vibe64User: input.vibe64User, reason: "incoming-contribution"
+          });
+          if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
+          const session = await context.runtime.getSession(sessionId, { inspectSource: false });
+          const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution");
+          return changeManagedIncomingContribution({ project, session, action: input.action,
+            id: input.id, review: input.review, identity: execution.identity,
+            commandOptions: execution.commandOptions, runCommand: execution.runCommand });
+        }, { operation: `incoming-${input.action}` }));
     },
 
     async inspectSessionChanges(sessionId, input = {}) {
@@ -3156,7 +3190,7 @@ function createService({
       });
       return {
         ...work,
-        publicationRequiresPullRequest: work.destination?.mode === "github" &&
+        publicationRequiresPullRequest: work.destination?.mode === "github" && !sessionConnectedContribution(session) &&
           (await projectService.readRepositoryWorkflow()).requirePullRequest
       };
     },

@@ -6,6 +6,9 @@ Git commands.
 
 ## Sources
 
+- `src/components/studio/IncomingChangesPanel.vue`
+- `src/components/studio/Vibe64DashboardShell.vue`
+
 - `packages/vibe64-execution/src/server/gitTurnCheckpoint.js`
 
 - `packages/vibe64-core/src/server/projectRepository.js`
@@ -39,6 +42,39 @@ Git commands.
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 
 ## Public contract
+
+Core validates optional session `connected_submissions` metadata: schema one
+contains exact contribution identities and submitted commit IDs, without queue
+status. The original Save Git owner carries those bindings into managed native
+operations and fetches current receiving refs immediately before publication.
+The exact submitted revision must be an ancestor of the configured target;
+pending, discarded, interrupted-discard, inaccessible and incomplete-history
+evidence refuse publication. Retained ancestry can prove integration after a
+queue ref is deleted. Later unrelated branch commits do not invalidate that
+proof. Feature-branch creation checks the same requirements. Renewal preserves
+them; reading or removing connection-file entries cannot erase them.
+
+Explicit `vibe64.sessions.connected.prepare` now reserves source identities in
+the origin session's `connected_sources` metadata and dispatches receiving
+inspection/allocation through the original action catalogue. Each receiving
+operation authenticates the original connection and authorizes that project
+again. Projects checks fresh repository write access and its integration target;
+Sessions reuses normal capacity admission and source creation. A lost response
+retries the reserved session identity and refuses a different existing binding.
+The Git checkout stays under the receiving project's managed session source root.
+Renewal retains these source bindings as well as exact submissions.
+Preparation failures retain completed receiver summaries, including when a later
+action throws. An unready source returns a failure with its existing receiving
+session identity; allocation does not replace it or claim preparation succeeded.
+
+Automatic preparation, standalone connected-project ownership, task execution
+selection and Stack-declared development placement/treatment remain incomplete.
+Recording submissions from connected-first Save, dirty-source admission and
+accepted-source reconciliation also remain incomplete. Existing sessions without
+these new metadata fields retain their original behavior; no read creates inferred
+bindings. Development consumption must use the project's explicit Stack contract
+for its toolchain, across every supported stack; the connection file is not a
+package-manager prescription.
 
 Each outer assistant turn owns one private Git checkpoint. Later failed,
 cancelled or interrupted observations of the same session and turn validate
@@ -151,6 +187,56 @@ the session baseline and preserves any later session edits; an interrupted
 Save is reconciled only when the canonical authority proves the privately
 recorded prepared commit was already published. Disposable GitHub mirror
 maintenance runs after Save completes and cannot change the Save result.
+
+Contribution sessions retain their validated `connected_contribution` binding
+through the same managed command boundary. The native child receives the saved
+integration target and resolves the reserved incoming destination again. A first
+Save uses the bound base when neither remote contribution ref exists, prepares
+the ordinary Save commit, and creates the incoming ref with an absent-ref lease.
+Later Saves use an exact observed-head lease after the existing ancestry checks;
+they cannot recreate a branch removed by a racing discard. No preliminary empty
+branch or PR is published. The project's PR preference continues to govern
+ordinary sessions; contribution submission targets its separate incoming ref
+and still obeys GitHub's actual branch rules.
+
+An existing discarded ref refuses publication; both forms require interrupted-
+discard recovery. A missing ref after recorded or prepared publication remains
+unknown and refuses automatic recreation. The existing checkpoint and prepared
+ref retain work after failures, and recovery reconciles a lost acknowledgement
+only when the remote proves the exact prepared commit. These are contribution
+publication primitives, not the connected-first coordinator or main Save gate.
+
+Incoming inspection also uses this Git owner and its managed command boundary.
+It resolves the receiving project's configured target independently of the
+selected session's Save destination, enumerates only reserved UUID branch names,
+and fetches exact reviewed refs into operation-owned temporary refs. A changed
+head, incomplete history or unavailable remote fails rather than classifying an
+unknown result as integrated. Complete Git ancestry classifies current heads as
+pending, merged or discarded; both active/discarded refs require recovery.
+An integrated discarded head still reads as merged. Pagination includes all
+classified states, with commit titles, bounded changed-file lists and optional
+bounded review diffs. Reads preserve source files, index, branch, origin and
+remote refs, and do not replace FETCH_HEAD. There is no queue record.
+Receiving mutations use the same managed boundary and project source lock. They
+require the exact reviewed repository, target and contribution heads. Merge
+fast-forwards when possible or uses the existing tree-merge owner to create an
+ordinary two-parent commit; conflicts leave source and remote heads untouched.
+The contribution branch remains after integration. Discard uses a guarded atomic
+create-and-delete push; only an explicit lack of atomic support permits copying
+and verifying the discarded ref before deleting the exact active head. An
+interrupted copy leaves both refs available for a fresh reviewed retry. A
+different discarded head or a racing contribution update is never overwritten.
+Project-level Incoming actions use an existing session only for source storage.
+Projects checks the current actor's GitHub write access and configured PR policy;
+Terminals records that actor before mutation and retains session admission and
+the project source lock. The dashboard defaults to pending contributions, links
+interrupted discards to recovery, exposes history filters and exact-head review,
+and confirms Merge or Discard. Its badge is replaceable Git-derived observation.
+HTTP review includes a bounded diff; Colleague receives bounded summaries and
+exact confirmation identities without source contents. Mutations refresh the
+shared GitHub observation; a notification failure cannot negate a confirmed push.
+Configured GitHub receiving projects are supported here. Local-folder receiving
+target resolution and origin exact-submission gates remain separate work.
 
 The shared terminal surface gives operation cards a subtle theme-aware background
 in both compact and expanded states, separating them from the conversation.

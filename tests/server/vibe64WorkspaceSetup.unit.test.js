@@ -187,6 +187,36 @@ test("workspace preparation executes declared argv in order through the managed 
   });
 });
 
+test("only explicit working-session preparation initializes declared connections; failure stops setup", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { runtime, session } = await workspaceSession(root);
+    let initialized = 0;
+    let refuse = false;
+    const runner = createWorkspaceSetupRunner({
+      inspect: async () => ({ status: "unconfigured" }),
+      projectService: { async initializeSessionConnections(input) {
+        initialized++;
+        assert.equal(input.sessionId, session.sessionId);
+        assert.equal(input.session, session);
+        if (refuse) throw new Error("Connected repository access is unavailable.");
+      } },
+      runCommand: async () => assert.fail("Unconfigured or failed preparation must not run commands.")
+    });
+    assert.equal((await runner.start({ runtime, session })).state.status, "unconfigured");
+    assert.equal(initialized, 0, "Passive inspection must not create a connection file.");
+    assert.equal((await runner.start({ runtime, session, retry: true })).state.status, "unconfigured");
+    assert.equal(initialized, 1);
+    refuse = true;
+    const failed = await runner.start({ runtime, session, retry: true });
+    assert.equal(failed.state.status, "failed");
+    assert.match(failed.state.diagnostic, /Connected repository access/);
+    assert.equal(initialized, 2);
+    const learning = Object.assign(Object.create(runtime), { learningScope: { noExercise: false } });
+    assert.equal((await runner.start({ runtime: learning, session, retry: true })).state.status, "unconfigured");
+    assert.equal(initialized, 2, "Learning preparation cannot acquire connected repository authority.");
+  });
+});
+
 for (const [phase, change] of ["environment preparation", "admission"].flatMap((phase) =>
   ["command", "removed setup", "estimates", "removed estimates", "invalid estimates"].map((change) => [phase, change]))) {
   test(`workspace preparation rechecks ${change} after ${phase} before execution`, async () => {

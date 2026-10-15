@@ -15,6 +15,11 @@ if the checkout is still missing, use **Copy recovery details** and ask your
 administrator to restore the original work from a verified backup. Colleague
 can explain the notice, but cannot restore missing source through session creation.
 
+If creation reports **This session source already exists**, existing commits,
+staged changes and files have been preserved. Reopen that session if it is listed;
+otherwise keep the source and ask your administrator to inspect the recovery
+details. Repeating creation does not reset or replace the checkout.
+
 Colleague can explain the choices or create a session through its session
 creation action when you explicitly ask it to do so.
 

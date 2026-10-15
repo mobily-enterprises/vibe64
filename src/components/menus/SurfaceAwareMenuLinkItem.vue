@@ -1,5 +1,6 @@
 <script setup>
 import ShellSurfaceAwareMenuLinkItem from "@jskit-ai/shell-web/client/components/ShellSurfaceAwareMenuLinkItem";
+import { computed, inject } from "vue";
 
 const props = defineProps({
   label: {
@@ -35,10 +36,15 @@ const props = defineProps({
     default: false
   }
 });
+const incomingCount = inject("vibe64.incoming.pendingCount", null);
+const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/incoming"));
 </script>
 
 <template>
-  <ShellSurfaceAwareMenuLinkItem v-bind="props" />
+  <v-badge v-if="incomingLink" class="incoming-menu-link" :model-value="incomingCount > 0" :content="incomingCount" max="99" inline>
+    <ShellSurfaceAwareMenuLinkItem v-bind="props" />
+  </v-badge>
+  <ShellSurfaceAwareMenuLinkItem v-else v-bind="props" />
 </template>
 
 <style>
@@ -48,6 +54,7 @@ const props = defineProps({
 </style>
 
 <style scoped>
+.incoming-menu-link { width: 100%; }
 :deep(.v-list-item),
 :deep(a),
 :deep(button) {

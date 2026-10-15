@@ -28,6 +28,7 @@
     />
 
     <template v-else>
+      <ConnectedProjectsSettings :project-slug="projectSlug" :state="resource.data.value?.connectedProjects" @saved="resource.reload()" />
       <section class="project-settings__section" aria-labelledby="engineering-approach-title">
         <div class="project-settings__section-copy text-body-medium">
           <p v-if="engineeringAvailable" class="project-settings__scope text-label-medium">
@@ -327,6 +328,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
+import ConnectedProjectsSettings from "./ConnectedProjectsSettings.vue";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";

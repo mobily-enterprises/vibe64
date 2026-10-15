@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
-import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
+import { sessionConnectedContribution, sessionConnectedSources, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
@@ -741,8 +741,116 @@ function createService({
     }, "Vibe64 could not archive this session.");
   }
 
-  return Object.freeze({
+  const service = Object.freeze({
     ...renewal,
+    async prepareConnectedSources(sessionId, input = {}, requestContext = {}) {
+      const prepared = [];
+      let preparingRepository = "";
+      const result = await sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
+        assertProjectEffectAdmission();
+        const origin = currentProjectRequestContext();
+        if (!origin?.slug || origin.learningScope || !actions || !requestContext.requestMeta?.request) {
+          throw Object.assign(new Error("Prepare connected sources from the originating working project's authenticated session."), {
+            code: "vibe64_connected_source_authority_required"
+          });
+        }
+        const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
+        const sources = sessionConnectedSources(session);
+        const executeReceiving = (projectSlug, actionId, receivingInput) => actions.execute({
+          actionId,
+          input: { ...receivingInput, projectSlug },
+          // Preserve the original connection for fresh authentication. The
+          // receiving action rechecks its own project; no origin grant travels.
+          context: { surface: "app", channel: "internal", requestMeta: {
+            ...requestContext.requestMeta,
+            request: { ...requestContext.requestMeta.request, headers: requestContext.requestMeta.request.headers,
+              params: { slug: projectSlug } }
+          } }
+        });
+        for (const target of targets) {
+          preparingRepository = target.repository;
+          if (target.projectSlug === origin.slug) throw Object.assign(new Error(
+            "A project cannot prepare itself as a connected contribution."), { code: "vibe64_connected_source_self_reference" });
+          const repository = target.repository.slice("https://github.com/".length);
+          const source = await executeReceiving(target.projectSlug, "vibe64.sessions.connected.source", {});
+          if (source.repository !== repository) throw Object.assign(new Error(
+            "The receiving project changed repositories. Review the connection before preparing it."), {
+            code: "vibe64_contribution_authority_changed"
+          });
+          let binding = sources.find(item => item.contribution.repository === repository);
+          if (binding && (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
+            throw Object.assign(new Error("This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."), {
+              code: "vibe64_contribution_authority_changed"
+            });
+          }
+          if (!binding) {
+            binding = { projectSlug: target.projectSlug, contribution: {
+              schemaVersion: 1, id: crypto.randomUUID(), ...source
+            } };
+            sources.push(binding);
+            const serialized = JSON.stringify({ schemaVersion: 1, sources });
+            sessionConnectedSources({ metadata: { connected_sources: serialized } });
+            // Reserve the exact identity before creation, so a lost response or
+            // partial preparation retries the same source instead of cloning again.
+            await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
+          }
+          const result = await executeReceiving(binding.projectSlug, "vibe64.sessions.connected.allocate", {
+            contribution: binding.contribution,
+            workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId
+          });
+          if (result?.ok === false) return { ...result, prepared };
+          prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: binding.contribution.id,
+            sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup });
+          if (result.sourceReady !== true) return {
+            ok: false,
+            code: "vibe64_connected_source_unavailable",
+            error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
+          };
+        }
+        return { ok: true, prepared };
+      }));
+      return result?.ok === false ? {
+        ...result, prepared,
+        ...(preparingRepository ? { failedRepository: preparingRepository } : {})
+      } : result;
+    },
+    inspectConnectedContributionSource(input = {}) {
+      return project.connectedContributionSource(input);
+    },
+    async allocateConnectedSource(input = {}) {
+      return sessionResult(async () => {
+        assertProjectEffectAdmission();
+        if (currentProjectRequestContext()?.learningScope) throw new TypeError("Learning cannot allocate working contribution sources.");
+        const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(input.contribution) } });
+        if (!contribution) throw new TypeError("Contribution allocation requires an exact saved binding.");
+        const source = await project.connectedContributionSource(input);
+        if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
+          throw Object.assign(new Error("The receiving repository or integration target changed. Review the source binding."), {
+            code: "vibe64_contribution_authority_changed"
+          });
+        }
+        const runtime = await project.createRuntime({ inspectSource: false });
+        let existing;
+        try { existing = await runtime.getSession(contribution.id, { inspectSource: false }); }
+        catch (error) { if (error.code !== "vibe64_session_not_found") throw error; }
+        if (existing) {
+          const saved = sessionConnectedContribution(existing);
+          if (!saved || Object.entries(contribution).some(([key, value]) => saved[key] !== value)) {
+            throw Object.assign(new Error("The reserved contribution identity belongs to a different source. Preserve both bindings before retrying."), {
+              code: "vibe64_contribution_authority_changed"
+            });
+          }
+          if (!vibe64SessionStatusIsOpen(existing.status)) throw Object.assign(new Error(
+            "This contribution session is no longer open. Restore its source through the receiving project's recovery controls."), {
+            code: "vibe64_connected_source_unavailable"
+          });
+          return publicSession(existing);
+        }
+        return service.createSession({ workflowEngineId: input.workflowEngineId, vibe64User: trustedAssistantUser(input) }, {
+          sessionId: contribution.id, expectedCommit: contribution.baseCommit, connectedContribution: contribution
+        });
+      });
+    },
     browserConversations: actions ? createMainBrowserConversations({ actions, terminals }) : null,
     closeSessionPresence() {
       sessionPresence?.close?.();
@@ -866,7 +974,7 @@ function createService({
     },
 
     // Only an internal caller may supply a server-reserved identity.
-    async createSession(input = {}, { sessionId, expectedCommit } = {}) {
+    async createSession(input = {}, { sessionId, expectedCommit, connectedContribution } = {}) {
       return sessionResult(async () => {
         assertProjectEffectAdmission();
         if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
@@ -878,6 +986,17 @@ function createService({
           if (input.repositoryBranch != null || input.pullRequestNumber != null) {
             throw new TypeError("An internal source commit cannot be combined with a branch or pull request selection.");
           }
+        }
+        let contribution = null;
+        if (connectedContribution !== undefined) {
+          contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(connectedContribution) } });
+          if (!sessionId || !expectedCommit || contribution.baseCommit !== expectedCommit.toLowerCase() ||
+              currentProjectRequestContext()?.learningScope) {
+            throw new TypeError("Contribution creation requires a reserved working session and its exact source commit.");
+          }
+          sessionRepositoryProject(await project.readCurrentProject(), {
+            metadata: { connected_contribution: JSON.stringify(contribution) }
+          }, { sourcePreparation: true });
         }
         const vibe64User = trustedAssistantUser(input);
         let learningRuntime = null;
@@ -912,6 +1031,7 @@ function createService({
         const createAdmittedSession = ({ repositoryBranch = null } = {}) => runtime.createSession({
           ...(sessionId === undefined ? {} : { sessionId }),
           metadata: {
+            ...(contribution ? { connected_contribution: JSON.stringify(contribution) } : {}),
             ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
             ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
             [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
@@ -1150,6 +1270,24 @@ function createService({
           session
         });
       }, "Vibe64 could not inspect this session's current changes.");
+    },
+
+    async inspectIncomingContributions(sessionId, input = {}) {
+      return sessionResult(() => terminals.inspectIncomingContributions(requiredRepositorySessionId(sessionId), {
+        ...input, vibe64User: trustedAssistantUser(input)
+      }), "Incoming changes could not be read. Refresh before acting.");
+    },
+
+    async changeIncomingContribution(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const result = await terminals.changeIncomingContribution(requiredRepositorySessionId(sessionId), {
+          ...input, vibe64User: trustedAssistantUser(input)
+        });
+        // The Git result is confirmed. A failed UI notification must not turn
+        // that success into a retry of a remote write.
+        try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
+        return result;
+      }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");
     },
 
     async inspectSessionChangeDiff(sessionId, input = {}) {
@@ -1901,6 +2039,7 @@ function createService({
       });
     }
   });
+  return service;
 }
 
 export { createService };

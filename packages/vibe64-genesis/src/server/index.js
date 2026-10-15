@@ -1,3 +1,5 @@
+import { VIBE64_CONNECTED_PROJECTS_SECTION, vibe64ConnectedProjectsInspection } from "./connectedProjects.js";
+import { VIBE64_CONNECTED_DEVELOPMENT_SECTION, vibe64ConnectedDevelopmentInspection } from "./connectedDevelopment.js";
 import { vibe64ArchitectureInspection, VIBE64_ARCHITECTURE_INSPECTION_SECTION } from "./architectureInspection.js";
 import { vibe64ArchitectureLayout, VIBE64_ARCHITECTURE_LAYOUT_SECTION } from "./architectureLayout.js";
 import { existsSync } from "node:fs";
@@ -394,6 +396,14 @@ async function inspectVibe64IntegrationSetup(options = {}) {
   return vibe64IntegrationSetupInspection({ section });
 }
 
+async function inspectVibe64ConnectedProjects(options = {}) {
+  return vibe64ConnectedProjectsInspection(await inspectGenesisStackSection(VIBE64_CONNECTED_PROJECTS_SECTION, options));
+}
+
+async function inspectVibe64ConnectedDevelopment(options = {}) {
+  return vibe64ConnectedDevelopmentInspection(await inspectGenesisStackSection(VIBE64_CONNECTED_DEVELOPMENT_SECTION, options));
+}
+
 async function inspectVibe64ProjectServices(options = {}) {
   return vibe64ProjectServicesInspection(await inspectGenesisStackSection(VIBE64_PROJECT_SERVICES_SECTION, options));
 }
@@ -484,6 +494,8 @@ async function renderGenesisPrompt({
 }
 
 export {
+  inspectVibe64ConnectedProjects,
+  inspectVibe64ConnectedDevelopment,
   inspectVibe64ProjectServices,
   parseVibe64ProjectServicesLines,
   VIBE64_INTEGRATION_SETUP_CONTRACT,

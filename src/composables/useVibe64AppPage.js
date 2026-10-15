@@ -211,6 +211,7 @@ function useVibe64AppPage() {
       const labelsPath = scopedDevelopmentApiUrl("/api/vibe64/issue-labels", projectSlug.value);
       const mentionsPath = scopedDevelopmentApiUrl("/api/vibe64/issue-mentions", projectSlug.value);
       const prsPath = scopedDevelopmentApiUrl("/api/vibe64/pull-requests", projectSlug.value);
+      const incomingPath = scopedDevelopmentApiUrl("/api/vibe64/incoming", projectSlug.value);
       await queryClient.invalidateQueries({
         predicate: ({ queryKey }) => {
           if (!Array.isArray(queryKey)) return false;
@@ -219,7 +220,8 @@ function useVibe64AppPage() {
           (resource === "vibe64.issue" && path?.startsWith(`${issuesPath}/`)) ||
           (resource === "vibe64.issueLabels" && path === labelsPath) ||
           (resource === "vibe64.issueMentions" && path === mentionsPath) ||
-          (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath);
+          (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath) ||
+          (resource === "vibe64.incoming" && path === incomingPath);
         }
       });
     }

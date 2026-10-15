@@ -905,6 +905,25 @@ test("publication rejects missing reviews and enforces the project's PR workflow
   }), { code: "vibe64_pull_request_required" });
 });
 
+test("a bound contribution reaches ordinary Save preparation without requiring a pull request", async (t) => {
+  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
+  projectService.readCurrentProject = async () => ({
+    repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } }
+  });
+  projectService.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
+  const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  session.metadata.connected_contribution = JSON.stringify({ schemaVersion: 1, id,
+    repository: "example/project", integrationBranch: "main", baseCommit: "a".repeat(40) });
+  const destinationReview = { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: `vibe64-incoming/${id}` };
+  await assert.rejects(service.saveSessionWork(session.sessionId, {
+    destinationReview: { ...destinationReview, branch: "main" }
+  }), { code: "vibe64_session_repository_review_changed" });
+  // This fixture has no Git base: reaching the original preparation guard proves
+  // the PR preference did not grant a bypass of Save's source requirements.
+  await assert.rejects(service.saveSessionWork(session.sessionId, { destinationReview }),
+    { code: "vibe64_session_save_context_incomplete" });
+});
+
 test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
   const contended = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {

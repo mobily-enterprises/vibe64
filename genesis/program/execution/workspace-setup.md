@@ -13,6 +13,7 @@ contract transported by the project's Stack.
 - `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/workspaceSetup.js`
+- `packages/vibe64-genesis/src/server/connectedDevelopment.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
@@ -22,6 +23,30 @@ contract transported by the project's Stack.
 - `src/composables/useVibe64TemporaryAi.js`
 
 ## Public contract
+
+The Genesis boundary also inspects `## Connected development` as
+`vibe64.connected-development.v1`. This is a separate development recipe, not
+an extension of the initial `Connected projects` list. One `Sources file`
+declares the project-relative input location. Ordered `Prepare` and `Verify`
+entries reuse the Workspace setup argv, runtime and working-directory grammar.
+Prepare entries precede verification; at least one Verify entry is required.
+Conditions are rejected so missing files cannot silently skip a consumption
+check. Exactly `- Nothing.` or an absent section is unconfigured. Invalid or
+blocked sections cannot yield a ready recipe identity.
+
+Inspection preserves the selected toolchain's commands without language or
+repository switches. Its identity covers the source-map location, steps and
+runtimes. Genesis transports the opaque section; inspection neither creates
+that file nor runs commands. A ready inspection only means the declaration is
+valid. Connecting this recipe to authorized sources and the existing managed
+runner, and proving actual source consumption, remain unfinished.
+
+Fresh working-session preparation and explicit Prepare/Retry first ask the
+Project owner to initialize declared connected projects in that exact source.
+The existing session write admission and Project source lock cover the import.
+Absent declarations and existing files are preserved. A malformed declaration
+or missing receiving-repository access produces a preparation failure before
+commands run. Passive checks and Learning setup do not import connections.
 
 Required workspace preparation is a neutral, dismissible action notice. The
 existing terminal summary shows the declared setup diagnostic once and keeps

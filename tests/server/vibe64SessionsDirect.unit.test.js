@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -3366,6 +3367,38 @@ test("internal commit validation refuses missing identity, incomplete objects an
     assert.equal(result.ok, true, result.error);
     assert.equal(result.sessionId, "session-1");
     assert.deepEqual(harness.creationInputs[0].sourceContext, { vibe64User: null });
+  });
+});
+
+test("internal contribution creation retains normal admission and cannot select main for Save", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) };
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    harness.project.readCurrentProject = async () => ({ repositoryMode: "github",
+      repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/library" } } });
+    const options = { sessionId: "contribution-session", expectedCommit: contribution.baseCommit, connectedContribution: contribution };
+    for (const changed of [{ ...options, sessionId: undefined }, { ...options, expectedCommit: undefined },
+      { ...options, expectedCommit: "b".repeat(40) },
+      { ...options, connectedContribution: { ...contribution, repository: "other/library" } }]) {
+      assert.equal((await harness.service.createSession({}, changed)).ok, false);
+      assert.equal(harness.creationInputs.length, 0);
+    }
+    const created = await harness.service.createSession({ vibe64User: { username: "ada" } }, options);
+    assert.equal(created.ok, true, created.error);
+    assert.equal(created.sessionId, options.sessionId);
+    assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.connected_contribution), contribution);
+    assert.equal(harness.creationInputs[0].metadata.repository_branch, undefined);
+    assert.equal(harness.creationInputs[0].sourceContext.expectedCommit, contribution.baseCommit);
+    assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
+    const ordinary = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "ordinary") });
+    assert.equal((await ordinary.service.createSession({ connectedContribution: contribution })).ok, true);
+    assert.equal(ordinary.creationInputs[0].metadata.connected_contribution, undefined, "Client input grants no contribution authority.");
+    const full = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(targetRoot, "full"),
+      scope: "project", initialSessions: [{ sessionId: "existing" }] });
+    full.project.readCurrentProject = harness.project.readCurrentProject;
+    assert.equal((await full.service.createSession({}, options)).ok, false);
+    assert.equal(full.creationInputs.length, 0, "Contribution allocation retains the receiving project's session policy.");
   });
 });
 

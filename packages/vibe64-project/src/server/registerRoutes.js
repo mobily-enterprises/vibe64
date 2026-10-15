@@ -28,6 +28,7 @@ import {
   projectEngineeringSettingsReadInputValidator,
   projectCollaborationInputValidator,
   projectSettingsReadInputValidator,
+  projectConnectedProjectsInputValidator,
   projectPromptHintsInputValidator,
   projectEnvReadInputValidator,
   projectEnvSecretRevealInputValidator,
@@ -180,6 +181,20 @@ function registerRoutes(http, {
     buildInput: (request) => withoutUser(routes.requestQuery(request)),
     query: projectSettingsReadInputValidator,
     summary: "Read Vibe64 and source-owned project settings."
+  });
+  routes.actionRoute("PUT", "/settings/connections", {
+    actionId: "vibe64.project.connections.save",
+    body: projectConnectedProjectsInputValidator,
+    buildInput: (request) => withoutUser(routes.requestBody(request)),
+    statusCode: projectSettingsMutationStatusCode,
+    summary: "Save the connected-project list in this source checkout."
+  });
+  routes.actionRoute("POST", "/settings/connections/initialize", {
+    actionId: "vibe64.project.connections.initialize",
+    body: projectSettingsReadInputValidator,
+    buildInput: (request) => withoutUser(routes.requestBody(request)),
+    statusCode: projectSettingsMutationStatusCode,
+    summary: "Initialize the connection file from Stack only when absent."
   });
   routes.actionRoute("PUT", "/settings/collaboration", {
     actionId: ACTION_SAVE_COLLABORATION_SETTINGS,

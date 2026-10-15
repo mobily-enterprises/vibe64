@@ -26,6 +26,7 @@ import {
   projectsReadInputValidator,
   projectSelectInputValidator,
   projectSettingsReadInputValidator,
+  projectConnectedProjectsInputValidator,
   projectPromptHintsInputValidator,
   previewApplicationIdentitiesInputValidator,
   previewApplicationIdentitiesReadInputValidator
@@ -293,6 +294,24 @@ function createProjectActions({ project } = {}) {
       kind: "query",
       input: projectSettingsReadInputValidator,
       execute: (input) => project.readSettings(input)
+    }),
+    action({
+      id: "vibe64.project.connections.save",
+      assistant: settingsTool("connections.save"),
+      ownerRequired: true,
+      kind: "command",
+      input: projectConnectedProjectsInputValidator,
+      events: [projectChangedEvent()],
+      execute: (input) => project.saveConnectedProjects(input)
+    }),
+    action({
+      id: "vibe64.project.connections.initialize",
+      assistant: settingsTool("connections.initialize"),
+      ownerRequired: true,
+      kind: "command",
+      input: projectSettingsReadInputValidator,
+      events: [projectChangedEvent()],
+      execute: (input) => project.initializeConnectedProjects(input)
     }),
     action({
       id: ACTION_READ_ENGINEERING_SETTINGS,

@@ -1,9 +1,53 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import path from "node:path";
+import Fastify from "fastify";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+
+test("project owner actions admit the standalone local owner but not foreign requests or missing hosted authority", async () => {
+  await withRouteProject(async ({ projectContext, slug }) => {
+    const targetRoot = path.join(projectContext.projectsRoot, slug);
+    const configure = (projectCatalogEnabled) => configureStudioProjectContext({
+      explicitTargetRoot: targetRoot, explicitSystemRoot: path.join(projectContext.projectsRoot, "state"),
+      explicitManagedSourceRoot: path.join(projectContext.projectsRoot, "sessions"),
+      runtimeProfile: { local: !projectCatalogEnabled, projectCatalogEnabled, singleTargetRoot: targetRoot }, env: {}
+    });
+    configure(false);
+    let writes = 0;
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "local-owner", domain: "test", actions: [withVibe64ActionContext({
+      id: "vibe64.test.owner", kind: "command", channels: ["api", "automation"], surfaces: ["app"],
+      input: { schema: createSchema({}), mode: "create" },
+      execute() { writes += 1; return { project: currentProjectRequestContext().slug }; }
+    }, { ownerRequired: true })] });
+    const app = Fastify();
+    app.post("/write", (request) => actions.execute({ actionId: "vibe64.test.owner",
+      input: { projectSlug: request.query.project || slug },
+      context: { channel: "api", surface: "app", requestMeta: { request } } }));
+    const headers = { host: "localhost", origin: "http://localhost" };
+    try {
+      const response = await app.inject({ method: "POST", url: "/write", headers });
+      assert.equal(response.statusCode, 200, response.body);
+      assert.equal(response.json().project, slug);
+      assert.equal((await app.inject({ method: "POST", url: "/write", headers: { ...headers, origin: "https://foreign.example" } })).statusCode, 403);
+      assert.equal((await app.inject({ method: "POST", url: "/write", headers, remoteAddress: "198.51.100.9" })).statusCode, 403);
+      assert.notEqual((await app.inject({ method: "POST", url: "/write?project=other-project", headers })).statusCode, 200);
+      await assert.rejects(actions.execute({ actionId: "vibe64.test.owner", input: { projectSlug: slug },
+        context: { channel: "automation", surface: "app" } }), { code: "vibe64_owner_required" });
+      configure(true);
+      assert.equal((await app.inject({ method: "POST", url: "/write", headers })).statusCode, 403);
+      assert.equal(writes, 1);
+    } finally {
+      await app.close();
+      configureStudioProjectContext();
+    }
+  });
+});
 
 function fixture({ ownerRequired = false, projectScoped = true, allowDeleting = false } = {}) {
   const calls = [];

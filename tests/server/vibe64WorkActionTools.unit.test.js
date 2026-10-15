@@ -89,3 +89,66 @@ test("work tools retain exact review identities and project authority through HT
     }
   }));
 });
+
+test("Incoming actions share receiving authority, preserve exact reviews and keep diffs out of Colleague", async () => {
+  await withLocalRequestBypass(() => withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+    const actor = { username: "receiver", role: "member" };
+    let allowed = true;
+    const calls = [];
+    const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const review = { repository: "example/library", targetBranch: "main", targetHead: "a".repeat(40),
+      id, activeHead: "b".repeat(40), discardedHead: "" };
+    const native = { ok: true, repository: review.repository, targetBranch: review.targetBranch, targetHead: review.targetHead,
+      pendingCount: 1, totalCount: 1, nextOffset: null, actions: { merge: "", discard: "" },
+      contributions: [{ id, branch: `vibe64-incoming/${id}`, head: review.activeHead, status: "pending", title: "Improve library",
+        fileCount: 1, review, files: ["private-source.js"], diff: { content: "private-source" } }], credential: "private-credential" };
+    const sessions = Object.fromEntries(["inspectIncomingContributions", "changeIncomingContribution"].map(name => [name,
+      async (...args) => { calls.push({ name, args, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug }); return native; }]));
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "incoming", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
+      channels: ["api", "automation"], surfaces: ["app"], ...action
+    })) });
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => actor,
+      authorizeProject() { if (!allowed) throw Object.assign(new Error("Receiving project access revoked"), { statusCode: 403 }); } });
+    const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
+    const context = { channel: "automation", surface: "app" };
+    const toolSet = catalog.resolveToolSet(context);
+    const app = testRouteApp();
+    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.repository.incoming.review"), false);
+    for (const operation of ["inspect", "change"]) {
+      const actionId = `vibe64.repository.incoming.${operation}`;
+      const tool = toolSet.tools.find(item => item.actionId === actionId);
+      assert.ok(tool);
+      const input = { sessionId: "session-1", ...(operation === "change" ? { id, action: "discard", review } : { state: "pending", limit: 1 }) };
+      const route = findRegisteredRoute(app, { method: operation === "change" ? "POST" : "GET",
+        path: `${apiRouteBase}/vibe64/incoming${operation === "change" ? "/:id" : ""}` });
+      const request = { params: routeProjectParams({ id }), query: input, input: { body: input, query: input },
+        executeAction({ actionId: actual, input: args }) {
+          assert.equal(actual, actionId);
+          return actions.execute({ actionId, input: args, context: { channel: "api", surface: "app", requestMeta: { request } } });
+        } };
+      const reply = testReply();
+      await route.handler(request, reply);
+      assert.equal(reply.payload, native);
+      const httpCall = calls.at(-1);
+      const execute = patch => catalog.executeToolCall({ toolName: tool.name, toolSet, context,
+        argumentsText: JSON.stringify({ projectSlug: slug, ...input, ...patch }) });
+      const result = await execute();
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.deepEqual(calls.at(-1), httpCall);
+      assert.deepEqual(result.result.contributions[0].review, review);
+      assert.equal(JSON.stringify(result).includes("private"), false);
+      const count = calls.length;
+      allowed = false;
+      assert.equal((await execute()).ok, false);
+      allowed = true;
+      assert.equal((await execute({ vibe64User: { role: "owner" } })).ok, false);
+      if (operation === "change") {
+        assert.equal((await execute({ review: { ...review, targetHead: "" } })).ok, false);
+        assert.equal((await execute({ action: "delete" })).ok, false);
+      }
+      assert.equal(calls.length, count);
+    }
+  }));
+});

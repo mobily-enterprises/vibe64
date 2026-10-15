@@ -1,5 +1,7 @@
 import { runCaptureCommand } from "@local/vibe64-execution/server";
 import {
+  inspectIncomingContributionsDirect,
+  changeIncomingContributionDirect,
   checkSessionUpdatesDirect,
   captureSessionWorkUpdateCheckpointDirect,
   prepareSessionWorkUpdateDirect,
@@ -15,6 +17,8 @@ import {
 
 const MAX_INPUT_BYTES = 1024 * 1024;
 const OPERATION_IMPLEMENTATIONS = {
+  "incoming": inspectIncomingContributionsDirect,
+  "incoming-change": changeIncomingContributionDirect,
   "change-diff": inspectSessionChangeDiffDirect,
   "changes": inspectSessionChangesDirect,
   "check-updates": checkSessionUpdatesDirect,

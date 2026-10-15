@@ -1,5 +1,20 @@
 # Blueprint
 
+People can declare connected libraries and source projects in Project settings,
+initialize the list from their project's initial setup declarations, and add more
+repositories later. The list travels with project source. Configuration requires
+the owner's connected account to have write access to the receiving repositories.
+Removing an entry preserves existing contributions; configuration changes alone
+do not publish, merge or deploy work.
+
+Receiving GitHub projects show Incoming changes in Dashboard. People can review
+reserved contribution branches, merge them while preserving their history, or
+discard them while retaining the work on a renamed branch. An interrupted discard
+remains visible for recovery. Save checks any retained submitted revisions against
+their receiving integration branches before publishing the originating project.
+The connection list alone does not establish contribution source preparation or
+the connected-first Save workflow.
+
 Applications in Preview can request the person's microphone and play audio
 through the browser's ordinary permission controls, on HTTPS or localhost.
 Local Preview preserves the editor's loopback hostname through application login

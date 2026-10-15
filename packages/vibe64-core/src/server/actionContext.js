@@ -5,7 +5,8 @@ import {
   resolveProjectRequestContext,
   runWithProjectRequestContext
 } from "./projectRequestContext.js";
-import { normalizeProjectSlug } from "./studioProjectContext.js";
+import { getStudioProjectContext, normalizeProjectSlug } from "./studioProjectContext.js";
+import { isLocalStudioRequest } from "./localStudioRequest.js";
 
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -75,7 +76,11 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
     },
     async execute(input = {}, context = {}, deps) {
       const user = authenticatedVibe64User(context);
-      if (ownerRequired && user?.role !== "owner") {
+      const request = context.requestMeta?.request;
+      const localOwner = ownerRequired && projectScoped && !user && !context.vibe64Action && request &&
+        getStudioProjectContext().projectCatalogEnabled === false &&
+        isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }));
+      if (ownerRequired && user?.role !== "owner" && !localOwner) {
         throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
       }
       const operationInput = { ...input };

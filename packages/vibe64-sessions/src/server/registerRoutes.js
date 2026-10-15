@@ -1,4 +1,7 @@
 import {
+  ACTION_INSPECT_INCOMING,
+  ACTION_REVIEW_INCOMING,
+  ACTION_CHANGE_INCOMING,
   ACTION_RENAME_SESSION,
   ACTION_PIN_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
@@ -297,6 +300,32 @@ function registerRoutes(http, {
       sessionId: request.params.sessionId
     }),
     summary: "Inspect whether a Vibe64 session has work to save."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/connected/prepare", {
+    actionId: "vibe64.sessions.connected.prepare",
+    buildInput: request => ({ sessionId: request.params.sessionId }),
+    summary: "Prepare isolated contribution sources for the session's configured connected projects."
+  });
+
+  routes.actionRoute("GET", "/incoming", {
+    actionId: ACTION_INSPECT_INCOMING,
+    buildInput(request) {
+      const query = routes.requestQuery(request);
+      return Object.fromEntries(["sessionId", "id", "state", "offset", "limit"]
+        .filter(key => query[key] !== undefined).map(key => [key, firstValue(query[key])]));
+    },
+    summary: "List Git-derived contributions to the receiving project."
+  });
+  routes.actionRoute("GET", "/incoming/:id", {
+    actionId: ACTION_REVIEW_INCOMING,
+    buildInput: request => ({ sessionId: firstValue(routes.requestQuery(request).sessionId), id: request.params.id }),
+    summary: "Review the exact contribution and integration heads with a bounded diff."
+  });
+  routes.actionRoute("POST", "/incoming/:id", {
+    actionId: ACTION_CHANGE_INCOMING,
+    buildInput: request => ({ ...withoutVibe64User(routes.requestBody(request)), id: request.params.id }),
+    summary: "Merge or discard an exact reviewed contribution."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/changes", {

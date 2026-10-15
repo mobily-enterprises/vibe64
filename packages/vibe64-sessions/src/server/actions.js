@@ -1,7 +1,10 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
 import {
+  incomingInspectionInputValidator,
+  incomingChangeInputValidator,
+  connectedSourceAllocationInputValidator,
   sessionRenameActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
@@ -49,6 +52,9 @@ const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.u
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
 const ACTION_INSPECT_SESSION_WORK = "vibe64.sessions.work.inspect";
 const ACTION_SAVE_SESSION_WORK = "vibe64.sessions.work.save";
+const ACTION_INSPECT_INCOMING = "vibe64.repository.incoming.inspect";
+const ACTION_REVIEW_INCOMING = "vibe64.repository.incoming.review";
+const ACTION_CHANGE_INCOMING = "vibe64.repository.incoming.change";
 const ACTION_CHECK_SESSION_UPDATES = "vibe64.sessions.updates.check";
 const ACTION_UPDATE_SESSION_WORK = "vibe64.sessions.updates.apply";
 const ACTION_INSPECT_SESSION = "vibe64.sessions.inspect";
@@ -164,6 +170,22 @@ function createSessionActions({ sessions } = {}) {
   }
 
   return Object.freeze([
+    action({
+      id: "vibe64.sessions.connected.prepare",
+      kind: "command",
+      input: sessionIdInputValidator,
+      execute: (input, context) => sessions.prepareConnectedSources(input.sessionId, input, context)
+    }),
+    {
+      ...action({ id: "vibe64.sessions.connected.source", kind: "query", input: sessionCreateInputValidator,
+        execute: input => sessions.inspectConnectedContributionSource(input) }),
+      channels: ["internal"]
+    },
+    {
+      ...action({ id: "vibe64.sessions.connected.allocate", kind: "command", input: connectedSourceAllocationInputValidator,
+        execute: input => sessions.allocateConnectedSource(input) }),
+      channels: ["internal"]
+    },
     {
       ...action({
         id: ACTION_READ_CONVERSATION_CONTEXT,
@@ -409,6 +431,23 @@ function createSessionActions({ sessions } = {}) {
       execute: (input) => sessions.saveSessionWork(input.sessionId, withoutSessionId(input))
     }),
     action({
+      id: ACTION_INSPECT_INCOMING,
+      assistant: incomingContributionTool("List or inspect Git-derived Incoming contributions in the selected receiving project. sessionId supplies an existing checkout; it does not select a different target branch. Returns bounded summaries and exact review identities, never source diffs. Use state=pending for waiting work, unresolved for interrupted discards, or merged/discarded/all for history. A read does not authorize Merge or Discard."),
+      kind: "query", input: incomingInspectionInputValidator,
+      execute: input => sessions.inspectIncomingContributions(input.sessionId, withoutSessionId(input))
+    }),
+    action({
+      id: ACTION_REVIEW_INCOMING,
+      kind: "query", input: incomingInspectionInputValidator,
+      execute: input => sessions.inspectIncomingContributions(input.sessionId, { ...withoutSessionId(input), includeDiff: true })
+    }),
+    action({
+      id: ACTION_CHANGE_INCOMING,
+      assistant: incomingContributionTool("Merge or discard one exact Incoming contribution only when the person explicitly requests that action. First inspect it, explain its receiving repository, target and exact head, and pass the complete returned review unchanged. Merge preserves commit ancestry; discard renames the branch and does not satisfy dependent work. Respect permission, policy, conflict and stale-review errors. After an uncertain result refresh before retrying; do not automatically resolve conflicts or change repository policy."),
+      kind: "command", input: incomingChangeInputValidator,
+      execute: input => sessions.changeIncomingContribution(input.sessionId, withoutSessionId(input))
+    }),
+    action({
       id: ACTION_CHECK_SESSION_UPDATES,
       assistant: sessionWorkTool("Check the exact session against its canonical project version. force=true refreshes authority instead of using the short-lived cached check; this fetches repository state but does not update session files. Report updateAvailable and ahead/behind. A returned historyReview means local-source history was rewritten: explain it and obtain the user's instruction to reconcile that exact reviewed state before passing it to updates.apply. Do not invent or alter the review identities."),
       kind: "command",
@@ -503,6 +542,9 @@ function createSessionActions({ sessions } = {}) {
 }
 
 export {
+  ACTION_INSPECT_INCOMING,
+  ACTION_REVIEW_INCOMING,
+  ACTION_CHANGE_INCOMING,
   ACTION_RENAME_SESSION,
   ACTION_PIN_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,

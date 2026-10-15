@@ -64,6 +64,32 @@ that turn without dropping either half. No saved history is rewritten.
 
 ## Public contract
 
+Source creation refuses any existing destination before preparing a Git baseline
+or refreshing a mirror. An existing checkout, including one left unattached by
+an interrupted attempt, is recovery work, not permission to reset its branch.
+Contribution preparation must reuse the existing session through its lifecycle
+owner; calling source creation again cannot replace commits, staging or files.
+
+Internal contribution creation uses the ordinary Sessions admission and Runtime
+source lifecycle with a reserved identity and exact base commit. Its new
+`connected_contribution` metadata binds the receiving repository, integration
+branch, base commit and random contribution ID before source creation. Core's
+existing repository resolver clones the integration branch for preparation but
+selects `vibe64-incoming/<id>` for publication. Invalid metadata, a changed
+repository/target or mixed branch/PR authority refuses rather than falling back
+to main. Renewal retains this binding. Preparation creates no remote branch.
+Client-supplied creation arguments cannot grant contribution authority.
+
+Explicit connected preparation allocates these sessions through the receiving
+owner. Contribution publication and the retained-revision Main Save gate reuse
+the original Git owner. Automatic preparation, selecting source for execution
+and the connected-first Save coordinator remain unfinished.
+Sources: `packages/vibe64-core/src/server/projectRepository.js`, the original
+Sessions/Runtime/source owners above, and focused contribution cases in
+`tests/server/githubPullRequests.unit.test.js`,
+`tests/server/vibe64SessionsDirect.unit.test.js`,
+`tests/server/vibe64SessionSourceGit.unit.test.js` and the Runtime test file.
+
 The Store retains its existing filesystem creation lock through Runtime source
 initialization, outside the publication mutation queue so ordinary metadata
 writes can finish. Session lists omit records whose creation lock still has a

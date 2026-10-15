@@ -500,6 +500,13 @@ Conversation identity, message admission and native inference stay with the conv
 
 Owns project discovery, the portable collaboration, engineering and deployment
 settings, and the project-wide GitHub issue and pull request workflows.
+Owns the portable connected-project list and its Settings editor, explicit
+one-time Stack import, repository-access checks and source-write coordination.
+Checks fresh receiving-repository write access and publication policy for Incoming
+integration. Terminals retains the Git operation and source admission owners.
+Resolves portable connection repositories to registered project identities and
+supplies the receiving contribution's exact integration source after checking
+repository write access. This lookup grants no cross-project access itself.
 Its ordinary HTTP operations dispatch canonical project actions with fresh actor
 and project authority. Existing services retain source/repository review checks,
 GitHub credentials and locks; secret reveal and owner settings enforce the same
@@ -521,6 +528,7 @@ protect host-owned values; stored-value inspection and secret reveal stay in Env
 - `genesis/program/preview/application-identities.md`
 - `genesis/program/projects/catalog.md`
 - `genesis/program/projects/collaboration-approach.md`
+- `genesis/program/projects/connected-projects.md`
 - `genesis/program/projects/engineering-approach.md`
 - `genesis/program/projects/github-issues.md`
 - `genesis/program/projects/github-pull-requests.md`
@@ -538,6 +546,10 @@ Coordinates the selected project’s working conversations through the original 
 Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
 
 Runtime owns the stored session descriptors and source workspaces. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
+Sessions coordinates explicit connected-source preparation through receiving
+project actions and the existing session creation owner. It retains reserved
+source bindings in the originating session before creating receiving source,
+so retries reuse the same identity. Terminals owns origin write admission.
 
 ### Source
 - Directory `packages/vibe64-sessions`
@@ -647,7 +659,13 @@ inspecting the selected project or session declaration.
 
 Owns assistant messages to exact or selected sessions in open projects through Main admission, with source attribution, self-delivery rejection and existing access checks.
 
-Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
+Coordinates workspace preparation and Save work using the existing project, session, execution and source owners. Explicit working-session preparation delegates initial connected-project import to Projects under the existing source admission. It retains actor/project admission, provider selection, native conversation bindings, checkpoints, output lifecycle and recovery. JSKIT owns shared native-engine and conversation-runtime behavior; Runtime owns the session store and Git workspace records. Voice transport is a separate subsystem.
+Owns Git-derived Incoming inspection and ancestry-preserving Merge/Discard under
+the existing managed Git boundary. Sessions exposes the authorized actions;
+Projects retains receiving access and publication-policy decisions.
+The same Save owner verifies exact retained connected submissions against fresh
+receiving Git ancestry before publication; Core validates their metadata shape,
+and Runtime preserves the bindings across renewal.
 
 ### Source
 - Directory `packages/vibe64-terminals`
@@ -919,6 +937,9 @@ Terminal orchestration supplies workspace preparation policy; Genesis supplies d
 Provides the sole Vibe64 boundary to Genesis’s project contracts, prompts and inspection results. It transports the canonical subsystem and Program facts and interprets Vibe64-owned operation sections such as workspace preparation, outputs and deployment.
 
 Genesis owns the portable explanation grammar, explicit directory ownership, Program membership and required main source. This package does not generate a competing subsystem list. Execution and application services implement the operation recipes; Genesis descriptions are explanatory evidence rather than runtime instructions.
+The boundary validates Connected development declarations with the existing
+Workspace setup command grammar. It returns an exact recipe identity; it does
+not allocate source, run treatment commands or certify source consumption.
 
 ### Source
 - Directory `packages/vibe64-genesis`

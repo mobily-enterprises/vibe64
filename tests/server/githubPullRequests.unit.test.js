@@ -8,7 +8,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
-import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, sessionConnectedContribution, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
@@ -28,6 +28,34 @@ const pr = { number: 7, title: "Improve search", body: "A description", url: "ht
   baseRefName: "main", baseRepository: { nameWithOwner: "example/project" },
   headRepository: { nameWithOwner: "alice/project", viewerPermission: "WRITE", isArchived: false } };
 const success = (body) => ({ ok: true, stdout: JSON.stringify(body) });
+test("connected contribution source and Save destinations remain distinct and fail closed", () => {
+  const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    repository: "example/project", integrationBranch: "main", baseCommit: "a".repeat(40) };
+  const session = { sessionId: "contribution", metadata: { connected_contribution: JSON.stringify(contribution) } };
+  assert.deepEqual(sessionConnectedContribution(session), contribution);
+  assert.equal(sessionRepositoryProject(project, session, { sourcePreparation: true }).repository.defaultBranch, "main");
+  const destination = sessionRepositoryDestination(project, session);
+  assert.equal(destination.branch, `vibe64-incoming/${contribution.id}`);
+  assert.deepEqual(assertSessionRepositoryReview(project, session, destination), destination);
+  assert.throws(() => assertSessionRepositoryReview(project, session, { ...destination, branch: "main" }),
+    { code: "vibe64_session_repository_review_changed" });
+  for (const changed of ["", "broken", JSON.stringify(null), JSON.stringify({ ...contribution, id: "other_discarded" }),
+    JSON.stringify({ ...contribution, integrationBranch: "vibe64-incoming/other" }),
+    JSON.stringify({ ...contribution, baseCommit: "HEAD" }), JSON.stringify({ ...contribution, status: "merged" })]) {
+    assert.throws(() => sessionRepositoryDestination(project, { ...session, metadata: { connected_contribution: changed } }),
+      { code: "vibe64_contribution_authority_invalid" });
+  }
+  for (const changed of [
+    { ...project, repository: { ...project.repository, defaultBranch: "release" } },
+    { ...project, githubRepository: { fullName: "other/project" } },
+    { ...project, repositoryMode: "local_source", sourceRoot: "/other/source" }
+  ]) assert.throws(() => sessionRepositoryDestination(changed, session), { code: "vibe64_contribution_authority_changed" });
+  for (const extra of [{ repository_branch: "main" }, { github_pull_request: JSON.stringify(pr) }]) {
+    assert.throws(() => sessionRepositoryDestination(project, { ...session, metadata: { ...session.metadata, ...extra } }),
+      { code: "vibe64_contribution_authority_changed" });
+  }
+});
+
 test("local destination review stays bound to the session after the project folder switches branches", () => {
   const project = { sourceRoot: "/project", repositoryMode: "local_source", repository: { mode: "local_source", defaultBranch: "feature/new" } };
   const session = { sessionId: "old", metadata: { local_source_branch: "main" } };

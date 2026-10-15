@@ -1,6 +1,7 @@
+import { normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "./connectedProjects.js";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { requireGithubRepository } from "./githubApi.js";
+import { githubApi, requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "./githubPullRequests.js";
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
@@ -70,6 +71,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  inspectVibe64ConnectedProjects,
   inspectGenesisCollaboration,
   inspectGenesisEngineering,
   inspectGenesisEnvironment,
@@ -285,6 +287,10 @@ function projectEnvironmentResult(resolved, input, userRecords) {
 function createService({
   env = process.env,
   logger = null,
+  inspectConnections = inspectVibe64ConnectedProjects,
+  inspectConnectedRepository = (fullName, input) => githubApi(input, {
+    env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
+  })(`repos/${fullName}`, undefined, "GET"),
   inspectCollaboration = inspectGenesisCollaboration,
   inspectEngineering = inspectGenesisEngineering,
   inspectEnvironment = inspectGenesisEnvironment,
@@ -771,6 +777,61 @@ function createService({
 
   function canEditProjectSettings(input = {}) {
     return !input.vibe64User || input.vibe64User.role === "owner";
+  }
+
+  async function connectedProjectsState(input = {}) {
+    const source = await genesisSettingsSourceForInput(input);
+    const scope = { rootKind: source.rootKind, sessionId: source.sessionId };
+    if (!source.sourceRoot) return { available: false, canEdit: false, source: scope,
+      unavailableReason: "Create or select a session to configure connected projects." };
+    await assertProjectDirectoryUsable(source.sourceRoot);
+    try {
+      return { ...(await readConnectedProjects(source.sourceRoot)), available: true,
+        canEdit: canEditProjectSettings(input), source: scope };
+    } catch (error) {
+      if (error.code !== "vibe64_connections_invalid") throw error;
+      return { available: false, canEdit: false, source: scope, unavailableReason: error.message };
+    }
+  }
+
+  async function saveConnectedProjectsState(input = {}, { initialize = false, preparation = false } = {}) {
+    if (!preparation && !canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required");
+    const selected = await genesisSettingsSourceForInput(input);
+    const sourceInput = { ...input, sessionId: selected.sessionId };
+    const write = async () => {
+      const source = await genesisSettingsSourceForInput(sourceInput);
+      if (!source.sourceRoot) throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
+      await assertProjectDirectoryUsable(source.sourceRoot);
+      return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(), async () => {
+        const current = await readConnectedProjects(source.sourceRoot);
+        if (initialize && current.exists) return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
+        let projects = input.projects;
+        if (initialize) {
+          const initial = await inspectConnections({ projectRoot: source.sourceRoot });
+          if (initial.status === "blocked") throw vibe64Error("Repair the Connected projects Stack section before initializing connections.", "vibe64_connections_invalid");
+          if (preparation && initial.status === "unconfigured" && !initial.declared) {
+            return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
+          }
+          projects = initial.projects;
+        }
+        const normalized = normalizeConnectedProjects({ projects });
+        // Configuration declares intent; actual write access comes from the actor's account.
+        if (normalized.projects.length) {
+          for (const entry of normalized.projects) {
+            const fullName = entry.repository.slice("https://github.com/".length);
+            const repository = await inspectConnectedRepository(fullName, input);
+            if (!repository.permissions?.push || repository.archived || repository.disabled) {
+              throw vibe64Error(`Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`, "vibe64_connections_access_required");
+            }
+          }
+        }
+        await saveConnectedProjects(source.sourceRoot, normalized, initialize ? "" : input.revision);
+        return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
+      }, { operation: "save-connected-projects" });
+    };
+    // Workspace preparation already holds this exact session's write admission.
+    // It imports the declared initial list; it cannot supply replacement entries.
+    return preparation ? write() : runSessionSourceWorkExclusive(sourceInput, write, "save-connected-projects");
   }
 
   async function collaborationSettingsState(input = {}) {
@@ -1409,6 +1470,34 @@ function createService({
     async resolveSessionBranch(input = {}) {
       return repositoryBranches(await currentProjectState(), input, { env });
     },
+    async connectedProjectTargets(input = {}) {
+      const connections = await connectedProjectsState(input);
+      if (!connections.available) throw vibe64Error(connections.unavailableReason, "vibe64_connections_source_required");
+      const listed = await listProjectsState();
+      return connections.projects.map(connection => {
+        const repository = connection.repository.slice("https://github.com/".length);
+        const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
+          String(candidate.githubRepository?.fullName || candidate.repository?.github?.fullName || "").toLowerCase() === repository);
+        if (matches.length !== 1) throw vibe64Error(
+          `Register one accessible GitHub project for ${repository} before preparing this connection. Existing source and access are unchanged.`,
+          "vibe64_connected_project_registration_required");
+        return { ...connection, projectSlug: matches[0].slug };
+      });
+    },
+    async connectedContributionSource(input = {}) {
+      const current = await currentProjectState();
+      const repository = requireGithubRepository(current, "Connected contribution");
+      if (current.repositoryMode !== "github") throw vibe64Error(
+        "Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
+      const access = await inspectConnectedRepository(repository, input);
+      if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
+        `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
+      const integrationBranch = current.repository.defaultBranch;
+      const listed = await repositoryBranches(current, { ...input, name: integrationBranch, limit: 1 }, { env });
+      const branch = listed.branches.find(item => item.name === integrationBranch);
+      if (!branch) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
+      return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit };
+    },
     async readRepositoryWorkflow() {
       return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
     },
@@ -1429,6 +1518,26 @@ function createService({
       requireGithubRepository(project);
       await publishProjectChanged({ projectSlug: project.slug, githubRefresh: true }, { reason: "github-refreshed" });
       return { ok: true };
+    },
+
+    async incomingRepository(input = {}) {
+      const project = await currentProjectState();
+      const fullName = requireGithubRepository(project, "Incoming changes");
+      if (project.repositoryMode !== "github") {
+        throw vibe64Error("Incoming changes need a configured GitHub integration target.", "vibe64_incoming_repository_required");
+      }
+      const repository = await inspectConnectedRepository(fullName, input);
+      const writeReason = repository.archived || repository.disabled
+        ? "This repository is archived or disabled."
+        : repository.permissions?.push !== true ? "Your GitHub account needs write access to this receiving repository." : "";
+      const workflow = await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
+      const mergeReason = writeReason || (workflow.requirePullRequest
+        ? "This project requires pull requests for integration. Its current publication policy prevents direct Incoming merges." : "");
+      const actions = { merge: mergeReason, discard: writeReason };
+      if (input.action && actions[input.action]) {
+        throw vibe64Error(actions[input.action], "vibe64_incoming_integration_forbidden");
+      }
+      return { project, actions };
     },
 
     async githubIssues(input = {}) {
@@ -1507,10 +1616,24 @@ function createService({
       });
     },
 
+    async saveConnectedProjects(input = {}) {
+      return projectResult(() => saveConnectedProjectsState(input));
+    },
+
+    async initializeConnectedProjects(input = {}) {
+      return projectResult(() => saveConnectedProjectsState(input, { initialize: true }));
+    },
+
+    initializeSessionConnections(input = {}) {
+      if (!input.sessionId) throw new TypeError("Workspace connection initialization requires an exact session.");
+      return saveConnectedProjectsState(input, { initialize: true, preparation: true });
+    },
+
     async readSettings(input = {}) {
       return projectResult(async () => {
-        const [collaboration, { settings }, currentProject] = await Promise.all([
+        const [collaboration, connectedProjects, { settings }, currentProject] = await Promise.all([
           collaborationSettingsState(input),
+          connectedProjectsState(input),
           readProjectPromptHints({
             projectRuntimeRoot: selectedProjectRuntimeRoot()
           }),
@@ -1518,6 +1641,7 @@ function createService({
         ]);
         return {
           collaboration,
+          connectedProjects,
           repositoryWorkflow: {
             ...(await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot())),
             canEdit: canEditProjectSettings(input),

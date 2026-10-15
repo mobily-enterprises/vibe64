@@ -11,6 +11,11 @@ wait for its saved result. Changes to collaboration style apply to future work;
 they do not rewrite past messages. Engineering choices do not migrate existing
 code automatically. Prompt suggestions can be changed separately from those choices.
 
+**Connected projects** maintains the source-owned repository list. Initialize
+from Stack once, or add a name, GitHub URL and Dependency/Composition relationship.
+Use **Save connected projects** for the list; ordinary project Save publishes
+that source edit. See **Configure connected projects** for access and recovery.
+
 Hosted repository settings can also specify whether GitHub Save permits direct
 commits/pushes or requires pull requests. GitHub still enforces your repository
 permissions and branch rules. A hosted development database scope change requires

@@ -13,6 +13,11 @@
 
 - Dotenv `.env`
 
+## Connected projects
+
+- Connect `JSKIT AI` from `https://github.com/mobily-enterprises/jskit-ai` as `dependency`.
+- Connect `Genesis` from `https://github.com/mobily-enterprises/genesis-compiler` as `dependency`.
+
 ## Verification
 
 - Verify `application`: `npm` `run` `verify`

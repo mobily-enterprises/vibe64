@@ -282,6 +282,33 @@ const sessionPullRequestInputValidator = patchSchema({
   ...optionalUser
 });
 
+const incomingReviewSchema = createSchema({
+  repository: { type: "string", required: true, minLength: 1, maxLength: 256 },
+  targetBranch: { type: "string", required: true, minLength: 1, maxLength: 255, noTrim: true },
+  id: { type: "string", required: true, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+  ...Object.fromEntries(["targetHead", "activeHead", "discardedHead"].map(key => [key, {
+    type: "string", required: true, pattern: key === "targetHead" ? /^[a-f0-9]{40,64}$/u : /^(?:[a-f0-9]{40,64})?$/u
+  }]))
+});
+const incomingInspectionInputValidator = patchSchema({
+  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+  id: { type: "string", required: false, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+  state: { type: "string", required: false, enum: ["pending", "merged", "discarded", "unresolved", "all"] },
+  offset: { type: "integer", required: false, min: 0 },
+  limit: { type: "integer", required: false, min: 1, max: 50 }
+});
+const incomingChangeInputValidator = patchSchema({
+  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+  id: { type: "string", required: true, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+  action: { type: "string", required: true, enum: ["merge", "discard"] },
+  review: { type: "object", required: true, schema: incomingReviewSchema }
+});
+
+const connectedSourceAllocationInputValidator = patchSchema({
+  contribution: { type: "object", additionalProperties: true, required: true },
+  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false }
+});
+
 const sessionCreateInputValidator = patchSchema({
   workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   repositoryBranch: { type: "object", required: false, schema: createSchema({
@@ -622,6 +649,10 @@ const integrationSetupRequestActionInputValidator = requiredInputSchema({
 });
 
 export {
+  incomingReviewSchema,
+  incomingInspectionInputValidator,
+  incomingChangeInputValidator,
+  connectedSourceAllocationInputValidator,
   sessionRepositoryReviewSchema,
   sessionHistoryReviewSchema,
   sessionRenameInputValidator,

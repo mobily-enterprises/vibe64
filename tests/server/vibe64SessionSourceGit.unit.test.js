@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import {
   access,
   mkdir,
+  readFile,
   rename,
   readdir,
   writeFile
@@ -15,6 +16,7 @@ import {
   managedSessionSourcePath,
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import {
   createSessionSource,
   githubSourceCommandOptions
@@ -164,6 +166,72 @@ test("Vibe64 creates an isolated Git source for a session", async () => {
     assert.deepEqual(cloneRequest.args.slice(-2), [context.runtime.projectContextRoot, result.sourcePath]);
     assert.equal(cloneRequest.args.includes("--reference"), false);
     assert.equal(requests.some((request) => request.command === "bash"), false);
+  });
+});
+
+test("repeated source creation preserves committed, staged and untracked session work", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = sourceContext(root);
+    await createProject(context.runtime.projectContextRoot);
+    const created = await createSessionSource({ ...context, runCommand: directCommand });
+    await git(created.sourcePath, ["config", "user.name", "Vibe64 Test"]);
+    await git(created.sourcePath, ["config", "user.email", "vibe64@example.test"]);
+    await writeFile(path.join(created.sourcePath, "app.txt"), "committed work\n");
+    await git(created.sourcePath, ["add", "app.txt"]);
+    await git(created.sourcePath, ["commit", "-m", "Contribution work"]);
+    await writeFile(path.join(created.sourcePath, "app.txt"), "staged work\n");
+    await git(created.sourcePath, ["add", "app.txt"]);
+    await writeFile(path.join(created.sourcePath, "app.txt"), "unstaged work\n");
+    await writeFile(path.join(created.sourcePath, "new.txt"), "untracked work\n");
+    const commit = await git(created.sourcePath, ["rev-parse", "HEAD"]);
+    const index = await git(created.sourcePath, ["write-tree"]);
+    const status = await git(created.sourcePath, ["status", "--porcelain"]);
+    const metadata = { ...context.metadata };
+    await assert.rejects(createSessionSource({ ...context, runCommand: async () => {
+      assert.fail("Existing source must be refused before any Git command, cache refresh or baseline change.");
+    } }), { code: "vibe64_session_source_exists" });
+    assert.equal(await git(created.sourcePath, ["rev-parse", "HEAD"]), commit);
+    assert.equal(await git(created.sourcePath, ["write-tree"]), index);
+    assert.equal(await git(created.sourcePath, ["status", "--porcelain"]), status);
+    assert.equal(await readFile(path.join(created.sourcePath, "app.txt"), "utf8"), "unstaged work\n");
+    assert.equal(await readFile(path.join(created.sourcePath, "new.txt"), "utf8"), "untracked work\n");
+    assert.deepEqual(context.metadata, metadata);
+  });
+});
+
+test("two contributions clone their reserved integration base without creating remote branches or sharing edits", async () => {
+  await withTemporaryRoot(async (root) => {
+    const remoteRoot = path.join(root, "remote.git");
+    const publisher = path.join(root, "publisher");
+    await git(root, ["init", "--bare", "--initial-branch=main", remoteRoot]);
+    await createProject(publisher);
+    await git(publisher, ["remote", "add", "origin", remoteRoot]);
+    await git(publisher, ["push", "origin", "main"]);
+    const baseCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    const prepared = [];
+    for (const [sessionId, id] of [["task-one", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+      ["task-two", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]]) {
+      const context = githubSourceContext(root, sessionId, { remoteRoot });
+      await mkdir(context.runtime.projectContextRoot, { recursive: true });
+      context.project.githubRepository.fullName = "example/library";
+      context.project.repository.github.fullName = "example/library";
+      context.session.metadata = { connected_contribution: JSON.stringify({ schemaVersion: 1, id,
+        repository: "example/library", integrationBranch: "main", baseCommit }) };
+      await assert.rejects(createSessionSource({ ...context, expectedCommit: "f".repeat(40),
+        runCommand: () => assert.fail("Wrong contribution base must fail before Git.") }), { code: "vibe64_contribution_base_changed" });
+      const source = await createSessionSource({ ...context, runCommand: directCommand });
+      assert.equal(source.commit, baseCommit);
+      assert.equal(context.metadata.base_branch, "main");
+      assert.equal(sessionRepositoryDestination(context.project, context.session).branch, `vibe64-incoming/${id}`);
+      prepared.push(source.sourcePath);
+    }
+    await writeFile(path.join(prepared[0], "app.txt"), "task one edits\n");
+    await writeFile(path.join(prepared[1], "new.txt"), "task two addition\n");
+    assert.equal(await readFile(path.join(prepared[1], "app.txt"), "utf8"), "initial\n");
+    await assert.rejects(readFile(path.join(prepared[0], "new.txt")), { code: "ENOENT" });
+    assert.equal(await git(root, ["--git-dir", remoteRoot, "for-each-ref", "--format=%(refname)", "refs/heads"]), "refs/heads/main");
+    assert.equal(await git(publisher, ["status", "--porcelain"]), "");
+    assert.equal(await git(root, ["--git-dir", remoteRoot, "rev-parse", "main"]), baseCommit);
   });
 });
 

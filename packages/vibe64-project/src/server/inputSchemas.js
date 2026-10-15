@@ -56,6 +56,16 @@ const projectSettingsReadInputValidator = inputSchema({
   }
 });
 
+const projectConnectedProjectsInputValidator = inputSchema({
+  sessionId: { type: "string", noTrim: false },
+  revision: { type: "string", required: true, maxLength: 64 },
+  projects: { type: "array", required: true, maxItems: 64, items: createSchema({
+    name: { type: "string", required: true, minLength: 1, maxLength: 100 },
+    repository: { type: "string", required: true, minLength: 1, maxLength: 512 },
+    relationship: { type: "string", required: true, enum: ["dependency", "composition"] }
+  }) }
+});
+
 const projectEngineeringSettingsReadInputValidator = inputSchema({
   sessionId: {
     type: "string",
@@ -253,6 +263,7 @@ const projectPullRequestInputValidators = {
 };
 
 export {
+  projectConnectedProjectsInputValidator,
   pullRequestReviewSchema,
   projectRepositoryBranchesInputValidator,
   emptyProjectInputValidator,

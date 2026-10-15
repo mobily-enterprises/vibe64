@@ -230,7 +230,77 @@ function projectRepositoryMetadataError(code = "", message = "") {
   return error;
 }
 
-function sessionRepositoryProject(project = {}, session = {}) {
+function sessionConnectedContribution(session = {}) {
+  const serialized = session.metadata?.connected_contribution;
+  if (serialized === undefined) return null;
+  let value;
+  try { value = JSON.parse(serialized); } catch { /* Invalid authority must not fall back to main. */ }
+  if (!isPlainObject(value) || value.schemaVersion !== 1 ||
+      Object.keys(value).some(key => !["schemaVersion", "id", "repository", "integrationBranch", "baseCommit"].includes(key)) ||
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.id || "") ||
+      typeof value.repository !== "string" || !/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/u.test(value.repository) ||
+      !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
+      typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
+    throw projectRepositoryMetadataError("vibe64_contribution_authority_invalid",
+      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before publishing.");
+  }
+  return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
+}
+
+function sessionConnectedSubmissions(session = {}) {
+  const serialized = session.metadata?.connected_submissions;
+  if (serialized === undefined) return [];
+  let value;
+  try { value = JSON.parse(serialized); } catch { /* Never silently drop a publication requirement. */ }
+  const invalid = () => projectRepositoryMetadataError("vibe64_connected_submissions_invalid",
+    "This session's connected publication bindings are invalid. Preserve the session and inspect its bindings before saving.");
+  if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.submissions) ||
+      Object.keys(value).some(key => !["schemaVersion", "submissions"].includes(key))) throw invalid();
+  const identities = new Set();
+  return value.submissions.map(entry => {
+    if (!isPlainObject(entry) || Object.keys(entry).some(key => !["contribution", "submittedCommit"].includes(key)) ||
+        typeof entry.submittedCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(entry.submittedCommit)) throw invalid();
+    const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(entry.contribution) } });
+    if (!contribution || identities.has(contribution.id)) throw invalid();
+    identities.add(contribution.id);
+    return { contribution, submittedCommit: entry.submittedCommit.toLowerCase() };
+  });
+}
+
+function sessionConnectedSources(session = {}) {
+  const serialized = session.metadata?.connected_sources;
+  if (serialized === undefined) return [];
+  let value;
+  try { value = JSON.parse(serialized); } catch { /* Preserve invalid source ownership for repair. */ }
+  const invalid = () => projectRepositoryMetadataError("vibe64_connected_sources_invalid",
+    "This session's connected source bindings are invalid. Preserve its sources and inspect the saved bindings before preparing them.");
+  if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources) ||
+      Object.keys(value).some(key => !["schemaVersion", "sources"].includes(key))) throw invalid();
+  const repositories = new Set();
+  return value.sources.map(entry => {
+    if (!isPlainObject(entry) || Object.keys(entry).some(key => !["projectSlug", "contribution"].includes(key)) ||
+        typeof entry.projectSlug !== "string" || !/^[a-z0-9][a-z0-9_-]{0,47}$/u.test(entry.projectSlug)) throw invalid();
+    const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(entry.contribution) } });
+    if (!contribution || repositories.has(contribution.repository)) throw invalid();
+    repositories.add(contribution.repository);
+    return { projectSlug: entry.projectSlug, contribution };
+  });
+}
+
+function sessionRepositoryProject(project = {}, session = {}, { sourcePreparation = false } = {}) {
+  const contribution = sessionConnectedContribution(session);
+  if (contribution) {
+    const repository = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();
+    if (session.metadata.github_pull_request || session.metadata.repository_branch ||
+        normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_GITHUB ||
+        repository !== contribution.repository || project.repository?.defaultBranch !== contribution.integrationBranch) {
+      throw projectRepositoryMetadataError("vibe64_contribution_authority_changed",
+        "This contribution's repository or integration branch changed. Review its source binding before publishing.");
+    }
+    return { ...project, githubMirrorOptional: true,
+      repository: { ...project.repository, defaultBranch: sourcePreparation
+        ? contribution.integrationBranch : `vibe64-incoming/${contribution.id}` } };
+  }
   const serialized = session?.metadata?.github_pull_request;
   if (!serialized) {
     const branch = session?.metadata?.repository_branch;
@@ -324,5 +394,8 @@ export {
   projectRequiresGithubConnection,
   projectRepositoryMetadataFromInput,
   sessionRepositoryProject,
+  sessionConnectedContribution,
+  sessionConnectedSubmissions,
+  sessionConnectedSources,
   projectRepositoryView
 };

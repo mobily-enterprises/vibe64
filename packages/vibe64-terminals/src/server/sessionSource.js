@@ -17,6 +17,7 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeRepositoryMode,
+  sessionConnectedContribution,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -484,7 +485,14 @@ async function createSessionSource({
   store,
   vibe64User = null
 } = {}) {
-  project = sessionRepositoryProject(project, session);
+  const contribution = sessionConnectedContribution(session);
+  if (contribution && !session.metadata?.renewed_from) {
+    if (expectedCommit && normalizeText(expectedCommit).toLowerCase() !== contribution.baseCommit) {
+      throw sourceError("Contribution source must start at its reserved base commit.", "vibe64_contribution_base_changed");
+    }
+    expectedCommit = contribution.baseCommit;
+  }
+  project = sessionRepositoryProject(project, session, { sourcePreparation: true });
   const sessionId = normalizeText(session.sessionId || session.id);
   const projectContextRoot = normalizeText(runtime?.projectContextRoot);
   const managedSessionSourceRoot = normalizeText(runtime?.projectSessionSourceRoot);
@@ -518,6 +526,18 @@ async function createSessionSource({
     );
   }
   const sourcePath = managedSessionSourcePath(managedSessionSourceRoot, sessionId);
+  // Creation must never double as recovery: even an unattached checkout can
+  // contain work left by an interrupted preparation or another writer.
+  const existingSource = await lstat(sourcePath).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (existingSource) {
+    throw sourceError(
+      "This session source already exists. Reopen the existing session, or inspect its recovery details before preparing source again. Existing work has been preserved.",
+      "vibe64_session_source_exists"
+    );
+  }
   const sourceParent = path.dirname(sourcePath);
   const branch = `${SESSION_BRANCH_PREFIX}${sessionId}`;
   const canonical = canonicalProjectSource(project, standaloneSourceRoot);
@@ -562,6 +582,10 @@ async function createSessionSource({
       `Session source path is already owned by another Git repository: ${sourcePath}`,
       "vibe64_session_source_path_conflict"
     );
+  }
+  if (existingTopLevel) {
+    throw sourceError("The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
+      "vibe64_session_source_exists");
   }
   if (!existingTopLevel) {
     if (canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {

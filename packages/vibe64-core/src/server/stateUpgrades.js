@@ -39,10 +39,11 @@ import colleagueRetiredOperation from "./stateUpgrades/20261012-colleague-retire
 import colleagueInteractiveContinuity from "./stateUpgrades/20261012-colleague-interactive-continuity.js";
 import colleagueContinuityScope from "./stateUpgrades/20261012-colleague-continuity-scope.js";
 import conversationDraftIdentity from "./stateUpgrades/20261014-conversation-draft-identity.js";
+import connectedProjectBindings from "./stateUpgrades/20261015-connected-project-bindings.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings];
 
 async function readLedger(ledgerPath) {
   let source;

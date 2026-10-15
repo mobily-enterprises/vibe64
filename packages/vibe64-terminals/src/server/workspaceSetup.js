@@ -583,6 +583,21 @@ function createWorkspaceSetupRunner({
       });
     }
 
+    // Creation and explicit Prepare/Retry may import the initial source list.
+    // Passive recipe checks and after-turn inspection must never recreate it.
+    if (retry && !runtime.learningScope && ["ready", "unconfigured"].includes(setup?.status) &&
+        typeof projectService.initializeSessionConnections === "function") {
+      try {
+        await projectService.initializeSessionConnections({ sessionId, session,
+          vibe64User: projectContext?.vibe64User || null });
+      } catch (error) {
+        const state = await failed(runtime, sessionId, {
+          currentLabel: "Initialize connected projects", diagnostic: normalizeText(error?.message), renewal
+        });
+        return { completion: null, state };
+      }
+    }
+
     if (normalizeText(setup?.status) === "unconfigured") {
       const state = await persistInspectedState(runtime, sessionId, stateBase, {
         currentLabel: "",

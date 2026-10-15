@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
+import { incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS } from "./sessionRenewalState.js";
 
@@ -118,6 +118,40 @@ function sessionTool(description) {
           unavailableSessionCount: result.unavailableSessions?.length || 0
         } : {})
       };
+    }
+  };
+}
+
+function incomingContributionTool(description) {
+  const fields = Object.fromEntries(["id", "branch", "head", "status", "title"].map(key => [key, { ...shortText, maxLength: 512 }]));
+  return {
+    description,
+    output: { mode: "replace", schema: createSchema({
+      ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 }, code: shortText,
+      repository: shortText, targetBranch: shortText, targetHead: shortText, head: shortText, status: shortText,
+      pendingCount: { type: "integer", required: false }, totalCount: { type: "integer", required: false },
+      unresolvedCount: { type: "integer", required: false },
+      nextOffset: { type: "integer", nullable: true, required: false },
+      actions: { type: "object", required: false, schema: createSchema({ merge: { ...shortText, maxLength: 512 }, discard: { ...shortText, maxLength: 512 } }) },
+      contributions: { type: "array", required: false, items: createSchema({ ...fields,
+        fileCount: { type: "integer", required: false }, review: { type: "object", required: true, schema: incomingReviewSchema }
+      }) }
+    }) },
+    transformResult(result) {
+      const output = { ok: result.ok === true };
+      for (const key of ["error", "code", "repository", "targetBranch", "targetHead", "head", "status"]) {
+        if (typeof result[key] === "string") output[key] = result[key].slice(0, key === "error" ? 512 : 256);
+      }
+      for (const key of ["pendingCount", "unresolvedCount", "totalCount", "nextOffset"]) {
+        if (Number.isSafeInteger(result[key]) || key === "nextOffset" && result[key] === null) output[key] = result[key];
+      }
+      if (result.actions) output.actions = { merge: String(result.actions.merge || "").slice(0, 512), discard: String(result.actions.discard || "").slice(0, 512) };
+      if (Array.isArray(result.contributions)) output.contributions = result.contributions.slice(0, 50).map(entry => ({
+        ...Object.fromEntries(Object.keys(fields).map(key => [key, String(entry[key] || "").slice(0, 512)])),
+        fileCount: entry.fileCount,
+        review: Object.fromEntries(["repository", "targetBranch", "targetHead", "id", "activeHead", "discardedHead"].map(key => [key, entry.review?.[key]]))
+      }));
+      return output;
     }
   };
 }
@@ -281,4 +315,4 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-export { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool };
+export { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool };
