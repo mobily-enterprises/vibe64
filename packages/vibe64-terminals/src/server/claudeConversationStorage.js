@@ -1,9 +1,40 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 
 const ENGINE = "claude";
 const TRANSPORT = "claude_stream_json";
+
+/** Apply only to an offline disposable copy, never to a live execution owner. */
+export function prepareCopiedClaudeConversationState(serialized) {
+  const state = JSON.parse(serialized);
+  if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("Invalid copied Claude conversation state.");
+  state.executionId = "";
+  if (["starting", "active", "finalizing"].includes(state.state)) state.state = "interrupted";
+  return JSON.stringify(state);
+}
+
+/** Prepare retained Helper/Colleague receipts in an offline copied state tree. */
+export async function prepareCopiedScopedClaudeConversations(root) {
+  let count = 0;
+  async function visit(directory, receiptDepth = 0) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(file, entry.name === "claude-conversations" ? 1 : receiptDepth ? receiptDepth + 1 : 0);
+      } else if (receiptDepth === 2 && entry.name.endsWith(".json")) {
+        if (!entry.isFile()) throw new Error("Copied Claude receipts must be regular files.");
+        const serialized = await readFile(file, "utf8");
+        if (JSON.parse(serialized).schemaVersion !== 1) throw new Error("Upgrade the parent's retained Claude conversation before copying it.");
+        await writeFile(file, prepareCopiedClaudeConversationState(serialized), { mode: 0o600 });
+        count += 1;
+      }
+      // Directory aliases are never followed into the parent or another tree.
+    }
+  }
+  await visit(root);
+  return count;
+}
 
 /** Vibe64's existing session metadata and retained scoped-Claude receipt storage. */
 function createClaudeConversationStorage({ createError: error }) {

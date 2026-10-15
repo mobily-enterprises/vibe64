@@ -1,3 +1,5 @@
+import { createConversationStorage, prepareConversationRuntimeCopy } from "@jskit-ai/assistant-core/server/conversation";
+
 // The product record owns chat identities; JSKIT still owns every canonical turn.
 export function validateColleagueConversationRecord(record, ownerKey) {
   const invalid = () => { throw new Error("Colleague history has an unsupported shape. Inspect it before upgrading."); };
@@ -37,4 +39,40 @@ export function validateColleagueConversationRecord(record, ownerKey) {
       ids.add(message.messageId);
     }
   }
+}
+
+/** Explicit offline copy; never called by normal loading or recovery. */
+export async function prepareCopiedColleagueConversation(record, ownerKey, { at }) {
+  validateColleagueConversationRecord(record, ownerKey);
+  if (record.schemaVersion !== 3) throw new Error("Upgrade the parent's Colleague history before copying it.");
+  const copy = structuredClone(record);
+  if (copy.summaryHelper) copy.summaryHelper.executionId = "";
+  for (const chat of [copy, ...copy.previousConversations]) {
+    const storage = createConversationStorage({
+      readRecord: async () => ({ metadata: chat.conversationMetadata || {},
+        turns: new Map(chat.conversationLog.map(turn => [turn.turnId, turn])) }),
+      async writeRecord(_key, { turns, metadata }, transaction) {
+        chat.conversationMetadata = metadata;
+        chat.conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
+      }
+    });
+    await storage.write(chat.runtimeId, transaction => prepareConversationRuntimeCopy(transaction, { at }));
+    if (chat.status === "working") {
+      chat.status = "interrupted";
+      chat.error = "Copied into a stopped development environment.";
+    }
+  }
+  for (const watch of copy.watches || []) {
+    if (["active", "pending"].includes(watch.status)) watch.status = "paused";
+  }
+  for (const assignment of copy.assignments || []) {
+    if (["active", "waiting"].includes(assignment.status)) {
+      assignment.status = "needs-user";
+      assignment.summary = "Copied assignment is paused. Inspect its target before continuing.";
+    }
+  }
+  // These are queued notifications that could otherwise launch an autonomous
+  // turn when the copied user's browser reconnects; written history is retained.
+  copy.observations = [];
+  return copy;
 }

@@ -8,6 +8,7 @@ import { controllerHarness } from "../fixtures/opencodeController.js";
 
 async function fixture(t, options = {}) {
   const harness = await controllerHarness(options);
+  harness.controllerOptions.logger = options.logger;
   // The production native server memoizes confirmed stop proof. Model that
   // contract when both conversation observers retire the same dead server.
   const createServer = harness.controllerOptions.createServerProcess;
@@ -45,7 +46,9 @@ async function fixture(t, options = {}) {
 }
 
 test("main chat and Colleague acquire one OpenCode owner; project close retains the common conversation", async t => {
-  const f = await fixture(t, { helperResponse: "Colleague reply" });
+  const stopEvents = [];
+  const f = await fixture(t, { helperResponse: "Colleague reply",
+    logger: { info: fields => stopEvents.push(fields) } });
   const main = await f.controller.ensureSession("session-1");
   await f.colleague.send({ messageId: "first", text: "Hello" });
   assert.equal((await f.colleague.wait()).conversationLog[0].assistant.text, "Colleague reply");
@@ -64,6 +67,9 @@ test("main chat and Colleague acquire one OpenCode owner; project close retains 
   assert.equal(f.processStarts.length, 1);
   await f.common.close();
   assert.equal(f.processStops.length, 1);
+  assert.equal(stopEvents.length, 1);
+  assert.equal(stopEvents[0].event, "vibe64.opencode.shared_process_stop");
+  assert.equal(stopEvents[0].reason, "opencode-last-session-closed");
   const reopened = await f.controller.ensureSession("session-1");
   assert.equal(reopened.thread.id, main.thread.id);
   assert.equal(f.createdSessions.length, 2);

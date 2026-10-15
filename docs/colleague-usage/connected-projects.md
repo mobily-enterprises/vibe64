@@ -81,6 +81,10 @@ GitHub receiving projects expose [Incoming changes](incoming-changes.md) in
 Dashboard. This view reconstructs contributions from Git, independently of the
 originating project's connection list.
 
+Preparing a connected source records the creating user's Git identity for that
+receiving session. You can inspect and save its contribution without first
+opening an AI conversation there. GitHub access is still checked when used.
+
 Allocating a connected contribution creates its receiving checkout without
 automatically preparing that receiving project's own connections. The originating
 project's Stack recipe prepares its directly connected sources. This prevents
@@ -255,6 +259,12 @@ commands in order. Success requires those commands to succeed. The preparation
 identity includes both recipes and the exact task source selection; changing
 that selection requires preparation again. Access is rechecked before each
 command and when checking whether preparation remains current.
+
+If a command reports that it requires an undeclared runtime, add that runtime
+to the affected command in Stack and prepare again. Vibe64 and Online's own
+Node composition checks declare both `nodejs` and `git`: Genesis inspects the
+Git worktree while verifying the composed application. Do not bypass the managed
+runtime restriction by adding host executables to PATH.
 
 The initial consumption proof covers Node.js packages through `node_modules`:
 two tasks use distinct sources, source edits reach only the intended task, and

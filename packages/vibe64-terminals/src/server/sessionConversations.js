@@ -20,6 +20,16 @@ const messageFields = Object.keys(temporaryConversationTurnActionInputValidator.
 const temporaryConversationNamespace = (runtime, sessionId, conversationId) =>
   `${runtime.stateRoot}\0${sessionId}\0temporary\0${conversationId}`;
 
+/** Destination-only preparation; native bindings and the unsent draft survive. */
+export function prepareCopiedSessionConversation(record) {
+  const copy = structuredClone(record);
+  if (["starting", "inProgress"].includes(copy.status)) {
+    copy.status = "interrupted";
+    copy.error = "Copied into a stopped development environment.";
+  }
+  return copy;
+}
+
 function presentation(input = {}) {
   const result = {};
   for (const key of textFields) {

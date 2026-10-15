@@ -57,7 +57,7 @@
 
 - Default package type: `npm`
 - Sources file: `.development/connected.json`
-- Verify `Compose and verify connected Node packages` with `nodejs`: `node` `tooling/development/compose.mjs` `verify` `.development/connected.json`
+- Verify `Compose and verify connected Node packages` with `nodejs` `git`: `node` `tooling/development/compose.mjs` `verify` `.development/connected.json`
 
 ## Resource estimates
 

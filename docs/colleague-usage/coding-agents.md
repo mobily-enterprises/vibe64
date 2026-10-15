@@ -36,6 +36,12 @@ dark theme the notice uses the theme's contrasting text. Desktop and phone show
 the same status and recovery controls; Colleague can explain them, but reconnecting
 the browser requires your interaction.
 
+If an OpenCode readiness check times out, wait for **Retry connection** to become
+available and try it again. That timeout leaves the shared server and other chats
+running; it does not mean your submitted work stopped. Inspect the retained reply
+before resending. The same recovery applies on desktop and phone; Colleague can
+explain it, while the browser reconnection requires your interaction.
+
 ## Send, steer and stop
 
 While **Send** is pending, Vibe64 prepares the selected assistant and waits for
@@ -46,7 +52,9 @@ applies on desktop and mobile; Colleague can explain a delay but cannot skip
 the connection or preparation checks.
 While the first request is starting, you can submit a follow-up in a connected
 Codex or Claude chat. It appears as **Pending** while the delivery queue waits
-for the current submission. Pending is not a delivery acknowledgement. A lost
+for the current submission. The queued bubble stays after that submission even
+if preparation delays the earlier message's recorded time. Pending is not a
+delivery acknowledgement. A lost
 connection or an unconfirmed stop can still prevent Send; resolve that notice
 before submitting more work. Desktop and mobile use the same queue.
 **Stop** also cancels follow-ups still waiting locally to be sent. **Send** stays

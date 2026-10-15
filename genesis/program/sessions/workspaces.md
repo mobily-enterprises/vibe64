@@ -34,6 +34,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/e2e/session-naming.spec.ts`
 - `src/components/studio/vibe64-session/Vibe64RenameSessionDialog.vue`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
 - `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
@@ -64,6 +66,13 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/client/useVibe64SessionDialogs.vitest.js`
 
 ## Public contract
+
+Connected source creation records the trusted creating user's Git actor through
+the existing post-attachment actor owner, as PR source creation already does.
+It reloads the newly attached session and uses its exact source path; replacement
+contributions follow the same path. Contribution inspection can therefore reuse
+that actor before any conversation opens, retaining ordinary access checks.
+Inspection does not repair or invent actor metadata.
 
 Connected contribution sessions distinguish their published incoming ref from
 the receiving integration target. Once the current incoming head is integrated,

@@ -34,16 +34,33 @@ const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
 }
+function parseRequest(value) {
+  const request = value ? JSON.parse(value) : null;
+  if (request && request.schemaVersion !== 5) throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
+  if (request && (!["working", "waiting", "complete"].includes(request.status) ||
+      !["routing", "pending", "sending", "uncertain", "accepted", "failed"].includes(request.delivery))) {
+    throw failure("Saved workflow has an unsupported state. Inspect it before continuing.", "vibe64_assistant_workflow_invalid");
+  }
+  return request;
+}
 function read(store, sessionId) {
-  return store.readMetadataValue(sessionId, STATE_KEY).then((value) => {
-    const request = value ? JSON.parse(value) : null;
-    if (request && request.schemaVersion !== 5) throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
-    if (request && (!["working", "waiting", "complete"].includes(request.status) ||
-        !["routing", "pending", "sending", "uncertain", "accepted", "failed"].includes(request.delivery))) {
-      throw failure("Saved workflow has an unsupported state. Inspect it before continuing.", "vibe64_assistant_workflow_invalid");
-    }
-    return request;
-  });
+  return store.readMetadataValue(sessionId, STATE_KEY).then(parseRequest);
+}
+
+/** Only the host's stopped disposable copy may drop these process handles. */
+export function prepareCopiedAssistantRouting(metadata = {}) {
+  const patch = {};
+  const request = parseRequest(metadata[STATE_KEY]);
+  if (request) {
+    if (request.status !== "complete") Object.assign(request, { stopped: true, status: "waiting",
+      error: "Copied workflow is stopped. Inspect retained delivery before continuing." });
+    if (request.helper) request.helper.executionId = "";
+    // Keep uncertain delivery and the original message/turn receipt intact.
+    patch[STATE_KEY] = JSON.stringify(request);
+  }
+  const goal = JSON.parse(metadata.assistant_routing_goal || "null");
+  if (goal?.status === "active") patch.assistant_routing_goal = JSON.stringify({ ...goal, status: "paused" });
+  return patch;
 }
 async function recentVisibleMessages(store, sessionId, limit) {
   const turns = await store.readConversationTail(sessionId, { userLimit: limit });
@@ -829,7 +846,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       if (["sending", "uncertain"].includes(state.delivery) && state.attemptedMessageId &&
           await context.runtime.store.conversationMessageIdExists(sessionId, state.attemptedMessageId)) {
-        state.delivery = "accepted"; state.status = "working"; delete state.error; await save(context, state);
+        state.delivery = "accepted"; state.status = state.stopped ? "waiting" : "working";
+        if (!state.stopped) delete state.error;
+        await save(context, state);
       }
       if (["routing", "sending"].includes(state.delivery)) {
         state.delivery = state.attemptedMessageId ? "uncertain" : state.followup ? "pending" : "failed";

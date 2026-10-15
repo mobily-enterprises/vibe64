@@ -98,6 +98,11 @@ observer retirement and registry publication. Vibe64 retains authorized target
 selection, scoped Helper release and the parent's durable cleanup receipt.
 An uncertain delivery is inspected by its original message identity rather than
 replayed; an unreadable or absent receipt remains uncertain.
+The shared owner reports an expired health-probe deadline without stopping
+Main or temporary conversations. Vibe64 records shared-process stop reasons and
+session counts through its operational logger, including recovery failures,
+without requiring session debug logging. Provider identity and credentials are
+not included in that event.
 
 ## Sources
 

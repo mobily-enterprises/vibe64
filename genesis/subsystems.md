@@ -748,6 +748,8 @@ Reading health does not create an account, repair a project, launch a native con
 ## `packages-vibe64-runtime` Session runtime
 
 Owns isolated working sessions, their lifecycle and recoverable workspace history.
+Its explicit offline-copy operation prepares saved session work through JSKIT;
+the invoking host owns isolated file transfer and native goal pause.
 Owns the selected source alias and optional pinned source alias; pinning keeps that
 selection fixed and protects the session and project until explicitly unpinned.
 The same Runtime/Store accepts constructor-authorized learning scopes and
@@ -764,7 +766,7 @@ Sessions exposes the open/archive actions and bounded discovery; Runtime retains
 - Directory `packages/vibe64-runtime`
 
 ### Program
-- Nothing.
+- `genesis/program/runtime/development-copy.md`
 
 ### Data owned
 - Nothing.

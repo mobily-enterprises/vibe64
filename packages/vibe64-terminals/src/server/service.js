@@ -682,6 +682,7 @@ function createOpenCodeSessionRegistration({
   env = process.env,
   getAssistantManager = () => null,
   listConnections = async () => [],
+  logger = null,
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
   projectService,
   publishSessionChanged: publishApplicationSessionChanged = async () => null,
@@ -700,7 +701,14 @@ function createOpenCodeSessionRegistration({
     null, opencodeTerminalNamespace, publishApplicationSessionChanged, publishConversation
   );
   const sharedRuntime = createOpenCodeSharedRuntime({
-    onStop: details => vibe64SessionDebugLog("server.opencode.shared-process.stop", details)
+    onStop: details => {
+      vibe64SessionDebugLog("server.opencode.shared-process.stop", details);
+      logOperationalEvent(logger, /failed|lost/u.test(details.reason) ? "warn" : "info", {
+        component: "vibe64.opencode",
+        event: "vibe64.opencode.shared_process_stop",
+        ...details
+      }, "Stopping the shared OpenCode process.");
+    }
   });
   const { turns, temporaryConversations } = sharedRuntime;
   const hostPreparation = createOpenCodeHostPreparation({
@@ -1340,6 +1348,7 @@ function createService({
     env,
     getAssistantManager: () => sessionAgent,
     listConnections: (context) => assistantRuntime.listConnections(context),
+    logger,
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
@@ -2627,13 +2636,15 @@ function createService({
           env,
           project: await projectService.readCurrentProject()
         });
-        if (input.session?.metadata?.github_pull_request) {
+        if (input.session?.metadata?.github_pull_request || input.session?.metadata?.connected_contribution) {
           const session = input.session.metadata.renewed_from
             ? await input.store.readSessionForRenewal(input.session.sessionId)
             : await input.store.readSession(input.session.sessionId);
           const recorded = await writeSessionGitCommandActor({
             env,
-            reason: "pull-request-session",
+            reason: input.session.metadata.connected_contribution
+              ? "connected-contribution-session"
+              : "pull-request-session",
             runtime: input.runtime,
             session,
             sourceRoot: source.sourcePath,

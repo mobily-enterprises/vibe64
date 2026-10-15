@@ -345,6 +345,19 @@ test("a late saved receipt clears interrupted delivery without dispatching again
   assert.equal(f.sends.length, 1);
 });
 
+test("a stopped request stays waiting when its late saved receipt confirms delivery", async t => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+  await f.service.cancel("session-1", f.context, { waitForCleanup: true });
+  await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().delivery, "accepted");
+  assert.equal(f.state().stopped, true);
+  assert.equal(f.state().status, "waiting");
+  assert.equal(f.sends.length, 1);
+});
+
 test("steering does not classify, and an unfinished goal rejects Auto", async (t) => {
   const f = await fixture(t);
   f.agent.sessionState = async () => ({ turn: { active: true } });
