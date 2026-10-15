@@ -119,7 +119,9 @@ and focused test commands use that graph; missing configured sources fail clearl
 Preview recomposes after source edits only after its previous process exits. A
 changed pin is resolved on the next launch. Example source and state remain outside
 the disposable app. Watch subscriptions exclude dependency directories and generated
-state, and close before recomposition. See `docs/colleague-usage/developing-vibe64.md`.
+state, and close before recomposition. Restart handling begins after the watcher's
+initial scan, including symlink discovery, and logs the triggering path.
+See `docs/colleague-usage/developing-vibe64.md`.
 
 The repository's default Outputs target runs this complete development preview.
 Its declared Project directory parameter defaults to the persistent example;

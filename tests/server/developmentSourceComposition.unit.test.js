@@ -101,9 +101,11 @@ await composePublicDevelopment(${JSON.stringify({ publicRoot: f.publicRoot, appR
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "no-git"), env }), /Pin a valid jskit-monorepo session/u);
 });
 
-test("source watching ignores dependency writes and drains the old app before restarting with changed source", { timeout: 30_000 }, async (t) => {
+test("source watching ignores initial symlinks and dependency writes, then drains the old app before restarting", { timeout: 30_000 }, async (t) => {
   const f = await fixture(t);
   const source = await f.source("one", "first");
+  await mkdir(path.join(source, ".claude/skills"), { recursive: true });
+  await symlink("../../packages/kernel", path.join(source, ".claude/skills/existing"));
   const events = path.join(f.root, "events");
   await writeFile(events, "");
   await file(f.publicRoot, "server.js", `

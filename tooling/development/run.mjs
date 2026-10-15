@@ -25,10 +25,11 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
     stopping = true;
     child?.kill("SIGTERM");
   };
-  const changed = () => {
+  const changed = (event, file) => {
     if (stopping) return;
     clearTimeout(debounce);
     debounce = setTimeout(() => {
+      console.log(`[vibe64] Development source ${event}: ${file}. Restarting.`);
       restart = true;
       child?.kill("SIGTERM");
       // Do not start another application over an unconfirmed shutdown.
@@ -55,7 +56,7 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
           followSymlinks: false,
           ignored: (file) => file.split(path.sep).some((part) =>
             ["node_modules", ".git", ".genesis", ".vibe64-local", ".cache", "coverage", "test-results"].includes(part))
-        }).on("all", changed).on("error", (error) => {
+        }).on("error", (error) => {
           watcherError = error;
           stop();
         });
@@ -63,6 +64,8 @@ export async function runSourceDevelopment({ publicRoot, command, args, watch = 
           watcher.once("error", reject);
           watcher.once("ready", () => { watcher.off("error", reject); resolve(); });
         });
+        // Initial symlink discovery can emit add even with ignoreInitial.
+        watcher.on("all", changed);
       }
       for (const root of composition.sourceRoots) console.log(`[vibe64] Development source: ${root}`);
       console.log(`[vibe64] Source packages: ${composition.localPackages.map((entry) => entry.packageId).join(", ")}`);
