@@ -3,6 +3,15 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+Main Claude conversations follow the workspace's current authenticated account.
+Account replacement retains native history, stops the previous owned process
+before adopting the new identity, and refuses replacement when shutdown cannot
+be verified. Temporary/helper ownership checks remain scoped to their requests.
+Composer routing updates for the current pending message preserve local queue
+admission; unresolved delivery or observation still prevents unsafe submissions.
+Allowance reset/check times use the browser locale and time zone with named
+months for both Claude and Codex.
+
 Standalone Main and temporary browser conversations use the existing selected
 project request context and local-request admission, with a local actor and no
 hosted account. The internal Sessions context grant rechecks that boundary for
@@ -563,7 +572,9 @@ Claude's native goal status and command sequence also use JSKIT's Claude turn
 owner. Vibe64 authorizes the session/account, routes native goal commands through
 its normal Send admission and checkpoint path, and publishes the result after
 the command. Pause stops the work and retains the goal; Cancel stops the work and
-then clears the native goal. Stale goal revisions cannot apply to a newer goal.
+then clears the native goal. Set and Resume can steer an active Claude turn in
+the same process; only an existing unfinished goal blocks setting another goal.
+Stale goal revisions cannot apply to a newer goal.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,

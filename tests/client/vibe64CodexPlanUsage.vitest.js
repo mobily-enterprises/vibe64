@@ -116,6 +116,30 @@ it("shows only the weekly percentage with explanatory details", async () => {
 });
 
 it.each([
+  ["en-AU", "Australia/Perth", "16 Oct 2026, 6:40 am"],
+  ["en-US", "America/Los_Angeles", "Oct 15, 2026, 3:40 PM"]
+])("localizes Claude and Codex reset times for %s", async (locale, timeZone, expected) => {
+  const original = Date.prototype.toLocaleString;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-15T20:00:00Z"));
+  const formatter = vi.spyOn(Date.prototype, "toLocaleString").mockImplementation(function(locales, options) {
+    return original.call(this, locales ?? locale, { ...options, timeZone });
+  });
+  try {
+    for (const engineId of ["claude", "codex"]) {
+      const html = await render({ status: "available", windows: [
+        { id: engineId === "claude" ? "five_hour" : "primary", remainingPercent: 100, windowDurationMins: 300, resetsAt: Date.parse("2026-10-15T22:40:00Z") / 1000 },
+        { id: engineId === "claude" ? "seven_day" : "secondary", remainingPercent: 98, windowDurationMins: 10080, resetsAt: Date.parse("2026-10-15T22:40:00Z") / 1000 }
+      ] }, { session: { sessionId: "one", assistantSelection: { engineId } } });
+      expect(html).toContain(`Weekly resets ${expected}`);
+      expect(html).toContain(`5h resets ${expected}`);
+    }
+  } finally {
+    formatter.mockRestore();
+    clock.mockRestore();
+  }
+});
+
+it.each([
   ["deepseek", "DeepSeek", "https://platform.deepseek.com/top_up"],
   ["zai", "GLM", "https://z.ai/manage-apikey/billing"]
 ])("shows only the currency amount for %s across all three orchestrators", async (modelProviderId, providerLabel, managementUrl) => {

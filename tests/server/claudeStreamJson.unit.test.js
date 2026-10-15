@@ -897,7 +897,7 @@ test("Vibe64 supplies its managed account execution policy to the shared Claude 
   assert.equal(status.email, "owner@example.test");
 });
 
-test("Claude account identity survives restart and prevents another account from resuming owned history", async (t) => {
+test("Claude Main follows the current workspace account after stopping its previous process and preserves history across restart", async (t) => {
   const f = await fixture(t);
   const original = await f.provider.describeProvider(f.context);
   await f.provider.sendMessage(f.context, { message: "Work", messageId: "owned" });
@@ -909,14 +909,22 @@ test("Claude account identity survives restart and prevents another account from
   f.behavior.account = { ...f.behavior.account, email: "someone-else@example.test" };
   const changed = await restarted.describeProvider(f.context);
   assert.notEqual(changed.accountIdentitySignature, original.accountIdentitySignature);
-  await assert.rejects(restarted.sendMessage(f.context, { message: "Other account", messageId: "other" }),
-    (error) => error.code === "vibe64_claude_account_changed");
+  f.processes[1].stopAllowed = false;
+  await assert.rejects(restarted.sendMessage(f.context, { message: "Current account", messageId: "other" }),
+    (error) => error.code === "vibe64_claude_stop_unconfirmed");
+  assert.equal(f.processes.length, 2, "Unconfirmed cleanup cannot start another authenticated process");
+  f.processes[1].stopAllowed = true;
+  await restarted.sendMessage(f.context, { message: "Current account", messageId: "other" });
   assert.equal(f.processes[1].stopped, true);
+  assert.equal(f.processes[2].options.resume, true);
+  assert.equal(f.processes[2].options.sessionId, f.processes[0].options.sessionId);
+  await restarted.closeSession(f.context);
   const changedRestart = createClaudeSessionAgentProvider(f.providerOptions);
   assert.equal((await changedRestart.describeProvider(f.context)).accountIdentitySignature, changed.accountIdentitySignature);
-  await assert.rejects(changedRestart.sendMessage(f.context, { message: "Other account", messageId: "other" }),
-    (error) => error.code === "vibe64_claude_account_changed");
-  assert.equal(f.processes.length, 2);
+  await changedRestart.sendMessage(f.context, { message: "Continue on the current account", messageId: "current-resume" });
+  assert.equal(f.processes[3].options.resume, true);
+  assert.equal(f.processes[3].options.sessionId, f.processes[0].options.sessionId);
+  assert.equal(f.processes.length, 4);
 });
 
 test("Claude requires an authenticated account identity before starting a native conversation", async (t) => {
@@ -943,6 +951,25 @@ test("Claude account inspection failures do not ask a connected user to sign in 
 });
 
 
+
+test("Claude model settings use the current workspace account without requiring the previous login", async t => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Work", messageId: "before-account-change" });
+  const before = await f.provider.sessionState(f.context);
+  await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" });
+  f.behavior.account = { ...f.behavior.account, email: "current@example.test" };
+  const next = defineVibe64AssistantSelection({ ...f.context.assistantSelection, modelId: "haiku", variantId: "" });
+  const selected = { ...f.context, assistantSelection: next,
+    session: { ...f.context.session, metadata: { ...f.context.session.metadata, assistant_selection: JSON.stringify(next) } } };
+  const changed = await f.provider.updateSessionSettings(selected, { threadId: before.thread.id, model: next.modelId, effort: next.variantId });
+  assert.notEqual(changed.ok, false, JSON.stringify(changed));
+  assert.equal(f.processes[0].stopped, true);
+  await f.provider.sendMessage(selected, { message: "Continue", messageId: "after-account-change" });
+  const resumed = f.processes.at(-1);
+  assert.equal(resumed.options.sessionId, before.thread.id);
+  assert.equal(resumed.options.resume, true);
+  assert.equal(resumed.options.model, "haiku");
+});
 
 test("Claude next-turn settings reach the retained native owner while the current turn stays active", async t => {
   const f = await fixture(t);
@@ -1713,6 +1740,30 @@ test("main Claude raw goals retain original commands and stale identities", { ti
   assert.equal((await canonical.read()).capabilities.goalCommands.set.delivery, "message");
   assert.equal((await f.store.readSession("test")).metadata.runtime, undefined);
   assert.equal((await f.store.readConversationLog("test")).some(turn => turn.metadata.runtime), false);
+});
+
+test("main Claude accepts a goal while its canonical conversation is working", async t => {
+  const f = await boundMainFixture(t);
+  const canonical = await f.open();
+  const goalWritten = Promise.withResolvers();
+  f.behavior.afterSend = async (native, message) => {
+    if (!message.startsWith("/goal ")) return;
+    await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date().toISOString(),
+      attachment: { type: "goal_status", condition: message.slice(6), sentinel: true, met: false } }]);
+    goalWritten.resolve();
+  };
+  await canonical.send({ messageId: "before-goal", text: "Keep working" });
+  const { segmentId } = await canonical.read();
+  assert.equal(await canonical.readGoal(), null);
+  const result = await canonical.updateGoal({ action: "set", expectedSegmentId: segmentId,
+    objective: "Finish the work", messageId: "busy-goal" });
+  assert.equal(result.status, "accepted");
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].stopped, false);
+  assert.equal(f.processes[0].lastInput.message, "/goal Finish the work");
+  await goalWritten.promise;
+  assert.equal((await canonical.readGoal()).objective, "Finish the work");
+  assert.equal((await canonical.readGoal()).status, "active");
 });
 
 test("main Claude canonical goals adopt original receipts and keep literal commands outside chat changeover", { timeout: 15000 }, async t => {

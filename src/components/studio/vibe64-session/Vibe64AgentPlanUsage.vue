@@ -122,23 +122,23 @@ const details = computed(() => {
   const snapshot = currentUsage.value;
   if (balance.value) return [
     ...snapshot.balances.map((value) => `${value.currency} balance remaining: ${formatBalance(value)}.`),
-    `Checked ${new Date(snapshot.checkedAt).toLocaleString()}.`,
+    `Checked ${new Date(snapshot.checkedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`,
     "Account balance associated with this key. Shared across sessions. Updates at the start and end of a turn."
   ].join("\n");
   const lines = [`${summaryLabel.value}.`];
-  if (weekly.value?.resetsAt) lines.push(`Weekly resets ${new Date(weekly.value.resetsAt * 1000).toLocaleString()}.`);
+  if (weekly.value?.resetsAt) lines.push(`Weekly resets ${new Date(weekly.value.resetsAt * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`);
   const shortTerm = snapshot.windows.find((window) => window.windowDurationMins === 300);
   if (shortTerm) {
     const expired = shortTerm.resetsAt && shortTerm.resetsAt * 1000 <= Date.now();
     lines.push(expired ? "5h allowance: awaiting update." : `5h allowance remaining: ${Math.floor(shortTerm.remainingPercent)}%.`);
-    if (shortTerm.resetsAt) lines.push(`5h resets ${new Date(shortTerm.resetsAt * 1000).toLocaleString()}.`);
+    if (shortTerm.resetsAt) lines.push(`5h resets ${new Date(shortTerm.resetsAt * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`);
   }
   for (const window of snapshot.windows.filter((window) => window.id?.startsWith("seven_day_") &&
     (!window.resetsAt || window.resetsAt * 1000 > Date.now()))) {
     lines.push(`${window.id.slice(10).replaceAll("_", " ")}: ${Math.floor(window.remainingPercent)}% weekly remaining.`);
   }
   lines.push("Shared across sessions.");
-  if (keyUsage.value) lines.push(`Checked ${new Date(snapshot.checkedAt).toLocaleString()}.`,
+  if (keyUsage.value) lines.push(`Checked ${new Date(snapshot.checkedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`,
     "Updates at the start and end of a turn.");
   return lines.join("\n");
 });

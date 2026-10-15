@@ -71,6 +71,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
   function prepareAccount(entry) {
     return {
       identity: accountIdentity(entry.context),
+      allowAccountChange: entry.main === true,
       get providerId() { return entry.context.selection.modelProviderId; },
       changedCode: "vibe64_claude_account_changed"
     };

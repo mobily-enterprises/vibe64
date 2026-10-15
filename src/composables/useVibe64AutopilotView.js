@@ -442,6 +442,9 @@ function useVibe64AutopilotView(props, emit, {
   });
   const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) &&
     !assistantRoutingRequestCanBeReplaced(routingRequest.value, props.session?.assistantSelection));
+  const composerRoutingQueueing = computed(() => composerQueueing.value && composerSending.value &&
+    Boolean(routingRequest.value?.messageId) &&
+    messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
@@ -587,7 +590,7 @@ function useVibe64AutopilotView(props, emit, {
     if (composerConnectionStatus.value !== "connected") {
       return "reconnecting";
     }
-    if (routingBusy.value && !agentActive.value) return "routing";
+    if (routingBusy.value && !agentActive.value && !composerRoutingQueueing.value) return "routing";
     if (agentActive.value && (!agentNativeTurnReady.value && !composerStartupQueueing.value || !agentSteerable.value && !composerQueueing.value)) {
       return "waiting";
     }
@@ -636,7 +639,8 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
-    if (!props.conversationRuntime?.canSubmit.value || composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
+    if (!props.conversationRuntime?.canSubmit.value || composerDisabled.value ||
+        routingBusy.value && !agentSteerable.value && !composerRoutingQueueing.value) return false;
     if (
       composerConnectionStatus.value !== "connected" ||
       (composerSending.value && !composerQueueing.value) ||

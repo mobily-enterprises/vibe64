@@ -50,6 +50,10 @@ available without a goal; choose a goal-capable assistant when you need to creat
 one.
 
 For a Claude goal, **Pause goal** stops the current work and keeps the goal.
+You can choose **Set goal** and **Start goal** while Claude is working. The goal
+uses the same conversation's steering path, and **Goal** shows it after Claude
+acknowledges the command. You do not need to stop the current work first.
+An existing unfinished goal must be cancelled before setting a different one.
 **Resume goal** continues it in the same conversation. **Cancel goal** stops the
 work and clears the goal. If the goal changed while you were looking at it,
 refresh its status before trying the action again. If a model change or context

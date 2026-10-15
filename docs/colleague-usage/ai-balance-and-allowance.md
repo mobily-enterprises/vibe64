@@ -34,6 +34,10 @@ cost of the current turn or a separate per-key budget. Other usage and delayed
 provider accounting can make the snapshot differ from the provider's current
 value.
 
+Reset and checked times use your browser's locale and local time zone, including
+Claude and Codex allowances. Dates include a month name, for example
+**16 Oct 2026, 6:40 am** in Australian English, to avoid ambiguous numeric dates.
+
 If no value appears, a reading may not be available yet, the provider may have
 failed to answer, or the connection may not support balance checks. This does
 not mean the balance is zero. Continue using the chat normally; the next turn

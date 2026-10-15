@@ -57,6 +57,9 @@ if preparation delays the earlier message's recorded time. Pending is not a
 delivery acknowledgement. A lost
 connection or an unconfirmed stop can still prevent Send; resolve that notice
 before submitting more work. Desktop and mobile use the same queue.
+The current submission's routing status does not disable additional **Pending**
+messages in that queue. A genuinely uncertain delivery still needs its receipt
+checked before more work is submitted.
 **Stop** also cancels follow-ups still waiting locally to be sent. **Send** stays
 unavailable while Stop is being confirmed. Already dispatched requests retain
 their delivery status; inspect them before deciding whether to send again.

@@ -902,6 +902,9 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerDraft.value = "First instruction";
     const first = view.submitComposerMessage();
     await vi.waitFor(() => expect(sendAgentMessage).toHaveBeenCalledTimes(1));
+    props.session.metadata.assistant_routing_request = JSON.stringify({
+      status: "working", delivery: "sending", messageId: sendAgentMessage.mock.calls[0][0].messageId
+    });
     props.session.agentSession.turn = { active: true, id: "", state: "starting" };
     await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "Follow-up while starting";
