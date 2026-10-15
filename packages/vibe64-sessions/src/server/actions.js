@@ -454,7 +454,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_SEND_AGENT_MESSAGE,
-      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. Supply a unique messageId and reuse it unchanged on a retry. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work."),
+      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. For new work, supply a unique messageId and reuse it unchanged on a delivery retry. When the person explicitly asks to continue a waiting Auto workflow or check its uncertain delivery, read the saved routing request and use reviewAction=retry with that request's original messageId and message; do not invent a new message identity. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work."),
       kind: "command",
       input: agentMessageActionInputValidator,
       execute(input, context) {

@@ -190,6 +190,13 @@ describe("Vibe64 direct session view", () => {
     await action("continue");
     expect(props.conversationRuntime.continueWorkflow).toHaveBeenCalledExactlyOnceWith(routingRequest.value);
     expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
+    let finishContinue;
+    props.conversationRuntime.continueWorkflow.mockImplementationOnce(() => new Promise(resolve => { finishContinue = resolve; }));
+    const continuing = action("continue");
+    expect(routingActionSending.value).toBe("continue");
+    await action("continue");
+    expect(props.conversationRuntime.continueWorkflow).toHaveBeenCalledTimes(2);
+    finishContinue({ ok: true }); await continuing;
     props.conversationRuntime.continueWorkflow.mockRejectedValueOnce(new Error("Plan changed"));
     expect(await action("continue")).toBe(false);
     expect(routingActionError.value).toBe("Plan changed");

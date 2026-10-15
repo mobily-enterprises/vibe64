@@ -96,8 +96,13 @@ reason; select it again to collapse it. Restored outcomes are also collapsed.
 A separate delivery or cleanup error retains its own **Details** and recovery
 actions until resolved. Clicking a workflow action immediately shows **Starting…**,
 **Continuing…**, or **Checking…** on that button while it is submitted. Other
-workflow submissions are disabled until it settles; a failed submission restores
-the actions and uses the ordinary error feedback.
+workflow submissions are disabled until it settles. **Continue planning**,
+**Continue implementation**, and **Continue review** act on the saved workflow
+without resending its original chat message. **Check delivery** inspects the saved
+attempt without starting another copy. If a control cannot start or the saved
+plan has changed, its error appears beside the controls; inspect the current
+state before trying again. **Implement plan** still sends a new request, and
+shows a refusal beside the controls if that request cannot start.
 
 When Auto is waiting at Planning with an active saved plan, the notice offers
 **Implement plan**, **View plan** and **Stop**. These are
