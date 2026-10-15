@@ -308,6 +308,18 @@ function registerRoutes(http, {
     summary: "Prepare isolated contribution sources for the session's configured connected projects."
   });
 
+  routes.actionRoute("GET", "/sessions/:sessionId/connected/replacement", {
+    actionId: "vibe64.sessions.connected.replacement.inspect",
+    buildInput: request => ({ sessionId: request.params.sessionId,
+      repository: firstValue(routes.requestQuery(request).repository) }),
+    summary: "Review a discarded contribution before creating its replacement."
+  });
+  routes.actionRoute("POST", "/sessions/:sessionId/connected/replacement", {
+    actionId: "vibe64.sessions.connected.replace",
+    buildInput: request => ({ ...withoutVibe64User(routes.requestBody(request)), sessionId: request.params.sessionId }),
+    summary: "Prepare a replacement contribution without publishing either project."
+  });
+
   routes.actionRoute("GET", "/incoming", {
     actionId: ACTION_INSPECT_INCOMING,
     buildInput(request) {

@@ -77,3 +77,11 @@ ordinary workspace preparation prepares its configured connected sources through
 the existing receiving-project permissions and Stack recipe. See
 [Connected projects](connected-projects.md) for that setup and Save flow.
 Local-folder repositories do not provide this GitHub Incoming queue.
+
+
+To revise a discarded contribution, return to its originating session and use
+Save's **Review replacement contribution** recovery control. Confirm the exact
+revision to prepare a new contribution, then open that replacement session.
+The old branch and checkout remain; unsaved old edits are not copied silently.
+See [connected-project replacement and retry](connected-projects.md) for the
+preparation, submission and acceptance steps. Discard never unblocks Main Save.

@@ -19,6 +19,7 @@ that turn without dropping either half. No saved history is rewritten.
 
 - Main: `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
+- `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `tests/server/vibe64Runtime.unit.test.js`
@@ -99,8 +100,30 @@ Client-supplied creation arguments cannot grant contribution authority.
 
 Explicit connected preparation allocates these sessions through the receiving
 owner. Contribution publication and the retained-revision Main Save gate reuse
-the original Git owner. Automatic preparation, selecting source for execution
-and the connected-first Save coordinator remain unfinished.
+the original Git owner. Ordinary workspace preparation calls the same connected
+preparation owner, then Project materializes its authorized per-session source
+selection for the declared preparation recipe. Connected-first Save publishes
+those owned contributions sequentially and leaves the main push to a separate
+action.
+
+Every new connected binding reserves a fresh contribution UUID. Its receiving
+session starts without the origin's connected-source or submission metadata;
+receiving allocation does not recursively prepare more connections. Explicitly
+preparing a receiver creates its own fresh child contributions. Repository-level
+cycles therefore create distinct descendants, never a requirement edge back to
+an existing ancestor. Retry reuses the reserved child; replacement creates a new
+child and renewal preserves the existing logical contribution. No supported
+operation attaches an arbitrary existing contribution as a dependency. Any
+future operation allowing that attachment must check contribution cycles before
+persisting the edge; renewal-chain cycle checks protect a different lifecycle.
+
+Archiving one session remains local to its existing lifecycle owner. Connected
+bindings and submitted revisions remain in the full archive metadata, while
+commits, dirty patches and untracked files use the existing source-recovery
+artifacts. Neither child checkouts nor incoming refs are removed by originating
+session archival. A receiving contribution archived without a renewal successor
+is unavailable for connected preparation and Save; it is not silently replaced.
+Source recovery is explicit through the existing archive facilities.
 Sources: `packages/vibe64-core/src/server/projectRepository.js`, the original
 Sessions/Runtime/source owners above, and focused contribution cases in
 `tests/server/githubPullRequests.unit.test.js`,
@@ -761,3 +784,36 @@ current one is unpinned. VPS update cleanliness/origin checks remain independent
 Pin changes take the existing renewal-state and session-mutation boundaries, not
 the assistant write lock. Assistant preparation therefore cannot block a pin;
 closing rechecks the pin under the same session-mutation boundary before teardown.
+
+
+## Replace a discarded connected contribution
+
+The originating session's `connected.replacement.inspect` action reauthorizes
+its configured receiving repository and reads the exact discarded contribution
+through Incoming's existing Git owner. `connected.replace` repeats that review
+under ordinary originating source-write admission, reserves a new binding before
+allocation, then calls ordinary connected preparation. Retry reuses that binding.
+Old receiving sessions and `connected_submissions` are preserved. The new binding's
+optional `replaces` UUID identifies its predecessor; its base is the reviewed
+published discarded commit, never the predecessor's dirty worktree. Allocation
+checks the predecessor's saved repository/target and exact discarded ref before
+creating source. Existing completed allocation remains retryable independently.
+
+Core maps initial source preparation to that reserved discarded branch. The
+existing clone/frozen-commit check rejects missing or unrelated history. A renewal
+instead carries its already-confirmed owned authority ref and exact commit through
+source context; it does not permanently clone the original discarded branch after
+the replacement advances. Normal source preparation validates the ref allowlist.
+Main Save still proves every old and new submitted revision integrated, then proves
+the current authorized source for that repository includes the accepted target.
+The UI explicitly explains preservation of unsaved predecessor edits and the need
+to prepare the changed selection before testing. No push occurs during replacement.
+
+
+Connected receiving lookup follows only the original renewal owner's completed
+handover: archived predecessor, completed durable state, published successor,
+matching renewal identity and reciprocal successor metadata. Every hop retains
+the same exact contribution binding, and cycles or missing/incomplete successors
+fail closed. There is no global session alias or rewritten source binding.
+Work snapshots and visible source links use the actual current session ID;
+contribution IDs and recorded submitted revisions remain unchanged.

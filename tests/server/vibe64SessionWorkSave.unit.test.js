@@ -3761,3 +3761,63 @@ test("connected integration permits a reviewed PR branch only with unchanged acc
   assert.equal(await git(main.remote, ["rev-parse", "refs/heads/main"]), main.baseCommit);
   assert.equal(await git(receiver.remote, ["rev-parse", receiver.ref]), submitted.saveCommit);
 });
+
+
+test("replacement contribution preserves discarded ancestry and gates Main Save on accepted replacement source", async t => {
+  const receiver = await contributionFixture(t);
+  await writeFile(path.join(receiver.session.sourcePath, "library.txt"), "original contribution\n");
+  const original = await saveSessionWork({ ...receiver, runCommand: commandRunner });
+  await changeIncomingContributionDirect({ ...receiver, action: "discard", id: receiver.contribution.id,
+    review: await incomingReview(receiver), runCommand: commandRunner });
+  await writeFile(path.join(receiver.session.sourcePath, "unsaved.txt"), "keep this old checkout\n");
+
+  const replacement = { ...receiver.contribution, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    replaces: receiver.contribution.id, baseCommit: original.saveCommit };
+  const sourceRoot = path.dirname(receiver.seed);
+  const session = await sessionForRemote(sourceRoot, receiver, replacement.id);
+  await git(session.sourcePath, ["reset", "--hard", original.saveCommit]);
+  Object.assign(session.metadata, { connected_contribution: JSON.stringify(replacement),
+    base_commit: original.saveCommit, canonical_commit: original.saveCommit });
+  const replaced = { project: receiver.project, session, runCommand: commandRunner };
+  const initial = await checkSessionUpdates(replaced);
+  assert.equal(initial.canonicalSource.ref, `${receiver.ref}_discarded`, "renewal freezes the real initial authority ref");
+  await writeFile(path.join(session.sourcePath, "library.txt"), "revised contribution\n");
+  const submitted = await saveSessionWork(replaced);
+  assert.equal(await git(receiver.remote, ["rev-parse", `refs/heads/vibe64-incoming/${replacement.id}^`]), original.saveCommit);
+  assert.equal(await git(receiver.remote, ["rev-parse", `${receiver.ref}_discarded`]), original.saveCommit);
+  assert.equal(await git(receiver.remote, ["for-each-ref", "--format=%(refname)", receiver.ref]), "");
+  assert.equal(await readFile(path.join(receiver.session.sourcePath, "unsaved.txt"), "utf8"), "keep this old checkout\n");
+  Object.assign(session.metadata, { base_commit: submitted.saveCommit, canonical_commit: submitted.saveCommit });
+
+  const main = await contributionFixture(t);
+  delete main.session.metadata.connected_contribution;
+  main.session.metadata.connected_submissions = JSON.stringify({ schemaVersion: 1, submissions: [
+    { contribution: receiver.contribution, submittedCommit: original.saveCommit },
+    { contribution: replacement, submittedCommit: submitted.saveCommit }
+  ] });
+  await writeFile(path.join(main.session.sourcePath, "consumer.txt"), "use revised library\n");
+  const runCommand = request => commandRunner({ ...request, env: { ...request.env,
+    GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${receiver.remote}.insteadOf`,
+    GIT_CONFIG_VALUE_0: "https://github.com/example/project.git" } });
+  let selectedSession = session;
+  const snapshots = async () => [{ contribution: replacement, sessionId: selectedSession.sessionId,
+    ...await inspectSessionWorkDirect({ ...replaced, session: selectedSession }) }];
+  await assert.rejects(saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: await snapshots() }),
+    { code: "vibe64_connected_integration_discarded" });
+  assert.equal(await git(main.remote, ["rev-parse", "main"]), main.baseCommit);
+
+  // Receiving acceptance may include repairs beyond the submitted revision.
+  const accepted = await git(session.sourcePath, ["commit-tree", `${submitted.saveCommit}^{tree}`,
+    "-p", submitted.saveCommit, "-m", "Accept replacement"]);
+  await git(session.sourcePath, ["push", receiver.remote, `${accepted}:refs/heads/main`]);
+  await assert.rejects(saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: await snapshots() }),
+    { code: "vibe64_connected_integration_source_update_required" });
+  await updateSessionWork(replaced);
+  Object.assign(session.metadata, { base_commit: accepted, canonical_commit: accepted });
+  selectedSession = await sessionForRemote(sourceRoot, { ...receiver, baseCommit: accepted }, "renewed-replacement");
+  selectedSession.metadata.connected_contribution = JSON.stringify(replacement);
+  selectedSession.metadata.canonical_commit = accepted;
+  const saved = await saveSessionWork({ ...main, runCommand, connectedWorkSnapshots: await snapshots() });
+  assert.equal(await git(main.remote, ["rev-parse", "main"]), saved.saveCommit);
+  assert.equal(await git(receiver.remote, ["rev-parse", `${receiver.ref}_discarded`]), original.saveCommit);
+});

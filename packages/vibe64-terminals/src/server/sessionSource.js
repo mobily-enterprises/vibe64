@@ -478,6 +478,7 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
 async function createSessionSource({
   env = process.env,
   expectedCommit = "",
+  expectedSourceRef = "",
   project = {},
   runCommand = runVibe64Command,
   runtime,
@@ -493,6 +494,22 @@ async function createSessionSource({
     expectedCommit = contribution.baseCommit;
   }
   project = sessionRepositoryProject(project, session, { sourcePreparation: true });
+  if (contribution && session.metadata?.renewed_from) {
+    const allowedRefs = new Set([
+      `refs/heads/${contribution.integrationBranch}`,
+      `refs/heads/vibe64-incoming/${contribution.id}`,
+      ...(contribution.replaces ? [`refs/heads/vibe64-incoming/${contribution.replaces}_discarded`] : [])
+    ]);
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(expectedCommit) || !allowedRefs.has(expectedSourceRef)) {
+      throw sourceError("Contribution renewal requires its exact confirmed source commit and owned ref.",
+        "vibe64_contribution_renewal_source_invalid");
+    }
+    project = { ...project, repository: { ...project.repository,
+      defaultBranch: expectedSourceRef.slice("refs/heads/".length) } };
+  } else if (contribution && expectedSourceRef) {
+    throw sourceError("Only a confirmed renewal can select a contribution source ref.",
+      "vibe64_contribution_renewal_source_invalid");
+  }
   const sessionId = normalizeText(session.sessionId || session.id);
   const projectContextRoot = normalizeText(runtime?.projectContextRoot);
   const managedSessionSourceRoot = normalizeText(runtime?.projectSessionSourceRoot);

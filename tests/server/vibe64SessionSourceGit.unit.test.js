@@ -235,6 +235,100 @@ test("two contributions clone their reserved integration base without creating r
   });
 });
 
+test("replacement contribution source pins its discarded predecessor without touching old work", async () => {
+  await withTemporaryRoot(async (root) => {
+    const remoteRoot = path.join(root, "remote.git");
+    const publisher = path.join(root, "publisher");
+    await git(root, ["init", "--bare", "--initial-branch=main", remoteRoot]);
+    await createProject(publisher);
+    await git(publisher, ["remote", "add", "origin", remoteRoot]);
+    await git(publisher, ["push", "origin", "main"]);
+    const mainCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    const replaces = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const discardedBranch = `vibe64-incoming/${replaces}_discarded`;
+    await writeFile(path.join(publisher, "app.txt"), "discarded contribution\n");
+    await git(publisher, ["commit", "-am", "Discarded work"]);
+    const baseCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    await git(publisher, ["push", "origin", `HEAD:${discardedBranch}`]);
+    await writeFile(path.join(publisher, "later.txt"), "later branch advance\n");
+    await git(publisher, ["add", "."]);
+    await git(publisher, ["commit", "-m", "Advance after replacement review"]);
+    await git(publisher, ["push", "origin", `HEAD:${discardedBranch}`]);
+    const discardedHead = await git(publisher, ["rev-parse", "HEAD"]);
+    await writeFile(path.join(publisher, "app.txt"), "preserve old dirty work\n");
+    await writeFile(path.join(publisher, "private.txt"), "preserve old untracked work\n");
+    const oldStatus = await git(publisher, ["status", "--porcelain"]);
+    const context = githubSourceContext(root, id, { remoteRoot });
+    await mkdir(context.runtime.projectContextRoot, { recursive: true });
+    context.project.githubRepository.fullName = "example/library";
+    context.project.repository.github.fullName = "example/library";
+    context.session.metadata = { connected_contribution: JSON.stringify({ schemaVersion: 1, id, replaces,
+      repository: "example/library", integrationBranch: "main", baseCommit }) };
+    const source = await createSessionSource({ ...context, runCommand: directCommand });
+    assert.equal(source.commit, baseCommit, "replacement keeps its frozen reviewed revision when the discarded ref advances");
+    assert.equal(context.metadata.base_branch, discardedBranch);
+    assert.equal(await readFile(path.join(source.sourcePath, "app.txt"), "utf8"), "discarded contribution\n");
+    await assert.rejects(readFile(path.join(source.sourcePath, "later.txt")), { code: "ENOENT" });
+    await assert.rejects(readFile(path.join(source.sourcePath, "private.txt")), { code: "ENOENT" });
+    assert.equal(sessionRepositoryDestination(context.project, context.session).branch, `vibe64-incoming/${id}`);
+    assert.equal(await git(publisher, ["status", "--porcelain"]), oldStatus);
+    assert.equal(await readFile(path.join(publisher, "app.txt"), "utf8"), "preserve old dirty work\n");
+    assert.equal(await git(root, ["--git-dir", remoteRoot, "rev-parse", discardedBranch]), discardedHead);
+    assert.equal(await git(root, ["--git-dir", remoteRoot, "rev-parse", "main"]), mainCommit);
+    assert.equal(await git(root, ["--git-dir", remoteRoot, "for-each-ref", "--format=%(refname)", `refs/heads/vibe64-incoming/${id}`]), "");
+
+    await git(root, ["--git-dir", remoteRoot, "update-ref", "-d", `refs/heads/${discardedBranch}`]);
+    const missing = { ...context, session: { ...context.session, sessionId: "missing-predecessor" } };
+    await assert.rejects(createSessionSource({ ...missing, runCommand: directCommand }));
+    await assert.rejects(access(managedSessionSourcePath(context.runtime.projectSessionSourceRoot, "missing-predecessor")), { code: "ENOENT" });
+  });
+});
+
+test("renewed replacement sources use the confirmed owned ref and exact commit", async () => {
+  await withTemporaryRoot(async (root) => {
+    const remoteRoot = path.join(root, "remote.git");
+    const publisher = path.join(root, "publisher");
+    await git(root, ["init", "--bare", "--initial-branch=main", remoteRoot]);
+    await createProject(publisher);
+    await git(publisher, ["remote", "add", "origin", remoteRoot]);
+    await git(publisher, ["push", "origin", "main"]);
+    const replaces = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const baseCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    await git(publisher, ["push", "origin", `HEAD:vibe64-incoming/${replaces}_discarded`]);
+    await writeFile(path.join(publisher, "app.txt"), "replacement revision\n");
+    await git(publisher, ["commit", "-am", "Revise the contribution"]);
+    const replacementCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    await git(publisher, ["push", "origin", `HEAD:vibe64-incoming/${id}`]);
+    await writeFile(path.join(publisher, "accepted.txt"), "accepted target revision\n");
+    await git(publisher, ["add", "."]);
+    await git(publisher, ["commit", "-m", "Accept the replacement"]);
+    const acceptedCommit = await git(publisher, ["rev-parse", "HEAD"]);
+    await git(publisher, ["push", "origin", "main"]);
+    for (const [label, expectedSourceRef, expectedCommit] of [
+      ["incoming", `refs/heads/vibe64-incoming/${id}`, replacementCommit],
+      ["accepted", "refs/heads/main", acceptedCommit],
+      ["initial", `refs/heads/vibe64-incoming/${replaces}_discarded`, baseCommit]
+    ]) {
+      const context = githubSourceContext(root, `renewed-${label}`, { remoteRoot });
+      await mkdir(context.runtime.projectContextRoot, { recursive: true });
+      context.project.githubRepository.fullName = "example/library";
+      context.project.repository.github.fullName = "example/library";
+      context.session.metadata = { renewed_from: id, connected_contribution: JSON.stringify({ schemaVersion: 1, id, replaces,
+        repository: "example/library", integrationBranch: "main", baseCommit }) };
+      for (const invalidRef of ["", "refs/heads/other", `refs/heads/vibe64-incoming/${replaces}`, "main"]) {
+        await assert.rejects(createSessionSource({ ...context, expectedCommit, expectedSourceRef: invalidRef,
+          runCommand: () => assert.fail("Unowned renewal ref must fail before Git.") }), { code: "vibe64_contribution_renewal_source_invalid" });
+      }
+      const source = await createSessionSource({ ...context, expectedCommit, expectedSourceRef, runCommand: directCommand });
+      assert.equal(source.commit, expectedCommit);
+      assert.equal(context.metadata.base_branch, expectedSourceRef.slice("refs/heads/".length));
+      assert.equal(sessionRepositoryDestination(context.project, context.session).branch, `vibe64-incoming/${id}`);
+    }
+  });
+});
+
 test("Vibe64 ignores a stale hosted namespace checkout and clones the GitHub authority", async () => {
   await withTemporaryRoot(async (root) => {
     const remoteRoot = path.join(root, "remote.git");

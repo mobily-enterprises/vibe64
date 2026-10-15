@@ -317,6 +317,16 @@ const connectedSourceAllocationInputValidator = patchSchema({
   workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false }
 });
 
+const connectedReplacementInspectionInputValidator = patchSchema({
+  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u }
+});
+const connectedReplacementInputValidator = patchSchema({
+  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+  repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u },
+  review: { type: "object", required: true, schema: incomingReviewSchema }
+});
+
 const connectedWorkInputValidator = patchSchema({
   contribution: { type: "object", additionalProperties: true, required: true },
   submittedCommit: { type: "string", pattern: /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u, required: false },
@@ -668,6 +678,8 @@ export {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
   connectedSourceAllocationInputValidator,
+  connectedReplacementInspectionInputValidator,
+  connectedReplacementInputValidator,
   connectedWorkInputValidator,
   connectedWorkReviewSchema,
   sessionRepositoryReviewSchema,

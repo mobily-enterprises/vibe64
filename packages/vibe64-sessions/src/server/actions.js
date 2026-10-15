@@ -8,6 +8,8 @@ import {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
   connectedSourceAllocationInputValidator,
+  connectedReplacementInspectionInputValidator,
+  connectedReplacementInputValidator,
   connectedWorkInputValidator,
   sessionRenameActionInputValidator,
   integrationSetupRequestActionInputValidator,
@@ -203,7 +205,14 @@ function createSessionActions({ sessions } = {}) {
         execute: (input, context) => sessions.inspectConnectedDevelopmentInputs(input.sessionId, input, context) }),
       channels: ["internal"]
     },
-    ...["inspect", "inputs", "save"].map(operation => ({
+    action({ id: "vibe64.sessions.connected.replacement.inspect", kind: "query",
+      input: connectedReplacementInspectionInputValidator,
+      assistant: incomingContributionTool("Review a discarded connected contribution for replacement from its originating session. Returns the exact discarded commit and review. This does not copy, push or modify work. Explain that replacement starts at the discarded commit and leaves unsaved edits in the old receiving session."),
+      execute: (input, context) => sessions.reviewConnectedReplacement(input.sessionId, input, context) }),
+    action({ id: "vibe64.sessions.connected.replace", kind: "command", input: connectedReplacementInputValidator,
+      assistant: sessionTool("Only on a request to replace a discarded contribution, pass the exact review from connected.replacement.inspect. Reserve and prepare a new contribution from the discarded commit; preserve the old source, branch and integration requirements. No repository is pushed. Retry the same review after an uncertain result. Prepare the originating workspace before testing the new source."),
+      execute: (input, context) => sessions.replaceConnectedSource(input.sessionId, input, context) }),
+    ...["inspect", "inputs", "incoming", "save"].map(operation => ({
       ...action({ id: `vibe64.sessions.connected.work.${operation}`, kind: operation === "save" ? "command" : "query",
         input: connectedWorkInputValidator,
         execute: (input, context) => sessions.connectedContributionWork(operation, input, context) }),

@@ -34,6 +34,12 @@ test("connected contribution source and Save destinations remain distinct and fa
   const session = { sessionId: "contribution", metadata: { connected_contribution: JSON.stringify(contribution) } };
   assert.deepEqual(sessionConnectedContribution(session), contribution);
   assert.equal(sessionRepositoryProject(project, session, { sourcePreparation: true }).repository.defaultBranch, "main");
+  const replacement = { ...contribution, replaces: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+  const replacementSession = { ...session, metadata: { connected_contribution: JSON.stringify(replacement) } };
+  assert.deepEqual(sessionConnectedContribution(replacementSession), replacement);
+  assert.equal(sessionRepositoryProject(project, replacementSession, { sourcePreparation: true }).repository.defaultBranch,
+    `vibe64-incoming/${replacement.replaces}_discarded`);
+  assert.equal(sessionRepositoryDestination(project, replacementSession).branch, `vibe64-incoming/${replacement.id}`);
   const destination = sessionRepositoryDestination(project, session);
   assert.equal(destination.branch, `vibe64-incoming/${contribution.id}`);
   assert.deepEqual(assertSessionRepositoryReview(project, session, destination), destination);
@@ -41,6 +47,9 @@ test("connected contribution source and Save destinations remain distinct and fa
     { code: "vibe64_session_repository_review_changed" });
   for (const changed of ["", "broken", JSON.stringify(null), JSON.stringify({ ...contribution, id: "other_discarded" }),
     JSON.stringify({ ...contribution, integrationBranch: "vibe64-incoming/other" }),
+    ...["", "../main", contribution.id, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb_discarded", null,
+      ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"], {}]
+      .map(replaces => JSON.stringify({ ...contribution, replaces })),
     JSON.stringify({ ...contribution, baseCommit: "HEAD" }), JSON.stringify({ ...contribution, status: "merged" })]) {
     assert.throws(() => sessionRepositoryDestination(project, { ...session, metadata: { connected_contribution: changed } }),
       { code: "vibe64_contribution_authority_invalid" });

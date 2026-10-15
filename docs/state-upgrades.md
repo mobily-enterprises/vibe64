@@ -113,6 +113,14 @@ application-file backups. The ordinary candidate upgrade records it once; an
 older registry rejects the resulting ledger. This does not complete automatic
 source allocation or connected-first Save, and has not been applied live.
 
+The optional `connected_contribution.replaces` UUID is written only by explicit
+replacement of a discarded contribution. Existing bindings without it remain
+valid and unchanged; absence means an ordinary contribution. It identifies the
+preserved predecessor for source creation, not permission to erase historical
+submission requirements. No old source or metadata is transformed or backfilled,
+so this additive new-write field needs no historical repair. Renewal's confirmed
+source ref is passed through existing operation context, not a new persisted store.
+
 ## Temporary conversation draft identity
 
 `20261014-conversation-draft-identity` records the new-write boundary for

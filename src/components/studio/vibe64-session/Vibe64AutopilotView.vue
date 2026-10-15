@@ -337,6 +337,9 @@
             </v-btn>
           </template>
         </Vibe64TemporaryActionTerminal>
+        <Vibe64ConnectedReplacement :project-slug="projectSlug" :session-id="sessionId" :failure="saveWorkFailure"
+          :disabled="saveWorkSending || saveWorkOperationActive || sourceOperationsSuspended || agentActive"
+          @replaced="props.refreshSessionData?.(); props.refreshSessionWork?.()" />
 
         <Vibe64TemporaryActionTerminal
           :active="workspaceSetupRunning || workspaceSetupRetrying"
@@ -1026,6 +1029,7 @@ import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/ass
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
+import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue";
 import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
 import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";

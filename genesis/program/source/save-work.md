@@ -58,6 +58,12 @@ evidence refuse publication. Retained ancestry can prove integration after a
 queue ref is deleted. Later unrelated branch commits do not invalidate that
 proof. Feature-branch creation checks the same requirements. Renewal preserves
 them; reading or removing connection-file entries cannot erase them.
+Explicit replacement after discard preserves those requirements. Acceptance is
+checked for every exact submitted commit, while accepted-source consumption is
+checked against the current authorized source for that repository and target.
+Contribution UUIDs remain immutable across renewal; the authorized work snapshot
+identifies the actual receiving session that currently owns the source.
+
 
 Explicit `vibe64.sessions.connected.prepare` now reserves source identities in
 the origin session's `connected_sources` metadata and dispatches receiving

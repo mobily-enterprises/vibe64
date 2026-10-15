@@ -86,6 +86,12 @@ automatically preparing that receiving project's own connections. The originatin
 project's Stack recipe prepares its directly connected sources. This prevents
 automatic chains and cycles of extra contribution checkouts. A receiving session
 can still be prepared separately when you deliberately work in that project.
+If project A connects to B and B connects to A, preparing B's contribution creates
+a new A contribution; it does not attach the original A session. Each preparation
+owns its child contributions, and retry reuses those children. You cannot use
+these controls to make two existing contributions wait for each other. Split a
+shared library change from its consumer adaptation when they need separate
+acceptance steps.
 
 A connected contribution session saves to its own receiving-repository branch,
 shown in the normal Save destination review. Its first Save creates that branch;
@@ -103,6 +109,32 @@ cannot recreate that removed branch. Keep the checkout and ask the coding agent
 to inspect uncertain saved work. After a lost acknowledgement, existing Save recovery can reconcile a
 publication when the remote confirms its exact prepared commit.
 
+To revise a discarded, unmerged contribution, return to the originating session
+and press Save. Its refusal offers **Review replacement contribution**. Review
+the repository, integration target and exact discarded commit, then choose
+**Create replacement contribution**. The same controls are available on phones.
+This creates a new receiving session and contribution ID, selects it for this
+originating task and updates the development source map. It does not push anything.
+Use **Open replacement session** to revise that source.
+
+The replacement starts at the discarded commit. The old checkout, including
+unsaved edits, remains intact; copy any wanted unsaved edits into the replacement
+explicitly. The discarded branch remains available in Incoming changes. Old
+submitted revisions remain integration requirements, and the replacement retains
+their ancestry. Removing a connection or creating a replacement does not unblock
+Main Save by itself.
+
+After editing, run **Prepare workspace** in the originating project and restart
+Preview so it uses the replacement. Use **Save connected first** to submit the
+revision, merge it through the receiving project's Incoming changes, and Update
+the replacement session to the accepted target before Main Save. If creation's
+response is lost, retry the same confirmation: it reuses the reserved replacement.
+After reloading or closing that dialog, **Prepare workspace** also resumes the
+saved reservation. A changed review, revoked access or unavailable source stops
+preparation with an error and preserves both sources. Colleague can review and
+create a replacement through the same actions after an explicit request; it
+cannot silently discard or move unsaved edits.
+
 When a session has recorded submitted contributions, its normal Save checks those
 exact revisions before publishing. If one is still pending, the error names the
 receiving repository, contribution, revision and integration branch. Open that
@@ -113,6 +145,29 @@ matters when merge conflict repairs changed the accepted code. Save never perfor
 that update automatically. Discarding it or removing its connection does not satisfy the check.
 An access or incomplete-history error requires fixing that cause and retrying;
 Vibe64 does not infer a merge from a missing branch or a similar diff.
+
+After a receiving contribution session completes normal renewal, connected
+preparation and Save use its confirmed successor while retaining the same
+contribution branch and integration requirements. An unfinished, missing or
+mismatched handover blocks access instead of falling back to archived source.
+Complete or recover the renewal in the receiving project, then run **Prepare
+workspace** and restart the originating Preview to consume the new source path.
+
+Archiving the originating session does not archive its connected sessions or
+delete their incoming branches. Each receiving session has its own lifecycle.
+Use **Stop preview** when you only want to stop a dependency's running app; this
+keeps its source available to the originating project.
+
+Avoid archiving a receiving contribution while another session still needs its
+checkout. Archive preserves its commits, changed files, untracked files and
+connection metadata through the existing recovery archive, then removes the live
+checkout. The originating project reports unavailable source; it does not select
+a different session or silently use an npm package. Use normal renewal when you
+want a fresh conversation that continues the same contribution. If already
+archived, retain the archive and ask the administrator to recover its source
+through the existing archive facilities before preparing the originating project
+again. Colleague can explain the error; it cannot substitute another checkout or
+clear the integration requirement to make Save succeed.
 
 After integration, the contribution session's existing update check follows the
 receiving integration branch. Its Save destination remains the reserved incoming

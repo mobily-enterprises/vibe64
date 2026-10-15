@@ -283,6 +283,7 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
         async createSessionPullRequest(_id, input) {
           const snapshots = await input.assertConnectedWorkSaved();
           assert.equal(snapshots[0].contribution.id, contribution.id);
+          assert.equal(snapshots[0].sessionId, receiver.sessionId);
           assert.equal(snapshots[0].sessionHead, "c".repeat(40));
           publications++;
           return { ok: true, pullRequest: { number: 1 } };

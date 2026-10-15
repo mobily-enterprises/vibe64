@@ -1273,7 +1273,12 @@ async function readRemoteCanonical(runCommand, context, operationId, options) {
           "vibe64_contribution_branch_missing");
       }
       if (context.lastCanonicalCommit === context.contribution.baseCommit &&
-          (!observed || observed === context.contribution.baseCommit)) return context.contribution.baseCommit;
+          (!observed || observed === context.contribution.baseCommit)) {
+        context.canonicalBranch = context.contribution.replaces
+          ? `vibe64-incoming/${context.contribution.replaces}_discarded`
+          : context.contribution.integrationBranch;
+        return context.contribution.baseCommit;
+      }
       context.contributionMissingPublished = true;
     }
   }
@@ -1790,7 +1795,10 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
         throw saveError(`${repository} has ${wasDiscarded ? "discarded" : "not merged"} contribution ${id} at ${submittedCommit.slice(0, 12)}. Integrate that revision into ${integrationBranch} before saving this project.`,
           wasDiscarded ? "vibe64_connected_integration_discarded" : "vibe64_connected_integration_pending", details);
       }
-      const snapshot = (options.connectedWorkSnapshots || []).find(item => item.contribution.id === id &&
+      // A deliberate replacement changes the selected source, not the required
+      // submitted revision. Prove acceptance against that repository's current
+      // authorized source after checking every retained submission above.
+      const snapshot = (options.connectedWorkSnapshots || []).find(item =>
         item.contribution.repository === repository && item.contribution.integrationBranch === integrationBranch);
       if (!snapshot || !await commitIsAncestor(runCommand, context, heads.get(target), snapshot.sessionHead, options)) {
         throw saveError(`Update the connected session for ${repository} to incorporate its accepted ${integrationBranch} source before saving this project.`,
@@ -1812,13 +1820,14 @@ function connectedWorkSnapshots(value = []) {
     const contribution = sessionConnectedContribution({ metadata: {
       connected_contribution: JSON.stringify(snapshot?.contribution)
     } });
-    if (!contribution || snapshot.sessionId !== contribution.id || !path.isAbsolute(text(snapshot.worktreePath)) ||
+    if (!contribution || typeof snapshot.sessionId !== "string" || !text(snapshot.sessionId) ||
+        !path.isAbsolute(text(snapshot.worktreePath)) ||
         [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
           .some(commit => !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(text(commit)))) {
       throw saveError("The connected source could not be captured. Inspect connected work before saving.",
         "vibe64_connected_source_unavailable");
     }
-    return { contribution, sessionId: contribution.id, worktreePath: text(snapshot.worktreePath),
+    return { contribution, sessionId: snapshot.sessionId, worktreePath: text(snapshot.worktreePath),
       baseCommit: snapshot.baseCommit, canonicalCommit: snapshot.canonicalCommit,
       sessionHead: snapshot.sessionHead, worktreeTree: snapshot.worktreeTree };
   });

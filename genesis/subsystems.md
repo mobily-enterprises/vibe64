@@ -569,6 +569,10 @@ actions. Each confirmed commit becomes an exact integration requirement in the
 origin session before continuing; Git and the receiving Save owner determine
 publication and recovery, without a separate completion ledger. Main Save
 rechecks connected work through those same authorized receiving actions.
+Sessions also reviews and reserves explicit discarded-contribution replacements
+through the same source owner. It preserves old sources and submitted requirements;
+Core validates the predecessor identity and Terminals freezes source at its reviewed
+discarded commit. There is no second queue or replacement transaction store.
 
 ### Source
 - Directory `packages/vibe64-sessions`

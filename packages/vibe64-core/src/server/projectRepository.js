@@ -236,8 +236,10 @@ function sessionConnectedContribution(session = {}) {
   let value;
   try { value = JSON.parse(serialized); } catch { /* Invalid authority must not fall back to main. */ }
   if (!isPlainObject(value) || value.schemaVersion !== 1 ||
-      Object.keys(value).some(key => !["schemaVersion", "id", "repository", "integrationBranch", "baseCommit"].includes(key)) ||
+      Object.keys(value).some(key => !["schemaVersion", "id", "repository", "integrationBranch", "baseCommit", "replaces"].includes(key)) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.id || "") ||
+      (Object.hasOwn(value, "replaces") && (typeof value.replaces !== "string" || value.replaces === value.id ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.replaces || ""))) ||
       typeof value.repository !== "string" || !/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/u.test(value.repository) ||
       !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
       typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
@@ -299,7 +301,10 @@ function sessionRepositoryProject(project = {}, session = {}, { sourcePreparatio
     }
     return { ...project, githubMirrorOptional: true,
       repository: { ...project.repository, defaultBranch: sourcePreparation
-        ? contribution.integrationBranch : `vibe64-incoming/${contribution.id}` } };
+        ? contribution.replaces && !session.metadata.renewed_from
+          ? `vibe64-incoming/${contribution.replaces}_discarded`
+          : contribution.integrationBranch
+        : `vibe64-incoming/${contribution.id}` } };
   }
   const serialized = session?.metadata?.github_pull_request;
   if (!serialized) {

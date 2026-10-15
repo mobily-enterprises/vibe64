@@ -23,7 +23,9 @@ hosted development workflow still require end-to-end evidence.
 Receiving GitHub projects show Incoming changes in Dashboard. People can review
 reserved contribution branches, merge them while preserving their history, or
 discard them while retaining the work on a renamed branch. An interrupted discard
-remains visible for recovery. Conflicting contributions can use the existing
+remains visible for recovery. An explicit replacement starts a new contribution
+from the discarded revision, preserving the old source and integration requirements.
+Conflicting contributions can use the existing
 Temporary AI chat in the receiving session, with a private checkpoint preserving
 its original work. People review the repaired result and explicitly merge it;
 AI completion does not publish. Save checks any retained submitted revisions against
