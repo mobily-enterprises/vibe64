@@ -1,11 +1,12 @@
 <template>
-  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error ? 'warning' : 'info'" class="vibe64-routing-notice mb-2 px-2 py-1" role="status">
+  <v-alert v-if="actionable" variant="tonal" density="compact" :icon="false" :type="request.error || actionError ? 'warning' : 'info'" class="vibe64-routing-notice mb-2 px-2 py-1" role="status">
     <details v-if="previousAttempt || request.error && request.error !== request.outcome?.explanation" :key="request.messageId">
       <summary class="text-body-small">{{ label }} · <span class="text-decoration-underline">Details</span></summary>
       <p v-if="previousAttempt" class="text-body-small mb-2">Send a new message to continue with your selected assistant. Check delivery only checks the previous attempt.</p>
       <p v-if="request.error" class="text-body-small mb-2">{{ request.error }}</p>
     </details>
     <div v-else-if="!followupNeedsAction" class="text-body-small">{{ label }}</div>
+    <p v-if="actionError" class="text-body-small mb-1" role="alert">{{ actionError }}</p>
     <div v-if="followupNeedsAction" class="vibe64-routing-notice__actions d-flex flex-wrap ga-1">
       <v-btn v-if="canImplement" :variant="pendingAction === 'implement' ? 'text' : 'flat'" color="primary" size="small" density="compact" :disabled="Boolean(pendingAction) || busy" :aria-busy="pendingAction === 'implement'" @click="$emit('implement')">
         <span :class="{ 'action-label-pending': pendingAction === 'implement' }">Implement plan</span>
@@ -28,7 +29,7 @@ import { computed, watch } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 
-const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, busy: Boolean });
+const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, actionError: { type: String, default: "" }, busy: Boolean });
 defineEmits(["retry", "skip", "implement", "view-plan"]);
 const feedback = useShellWebErrorRuntime();
 const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&

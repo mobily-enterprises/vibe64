@@ -422,6 +422,7 @@
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
               :pending-action="routingActionSending"
+              :action-error="routingActionError"
               :busy="agentActive || composerSending || composerBlocked"
               @retry="sendRoutingAction('continue')"
               @implement="sendRoutingAction('implement')"
@@ -1332,16 +1333,25 @@ watch(agentActive, (active) => {
   }
 }, { flush: "sync", immediate: true });
 const routingActionSending = ref("");
+const routingActionError = ref("");
+watch(() => [routingRequest.value?.messageId, routingRequest.value?.stage, routingRequest.value?.status, routingRequest.value?.delivery],
+  () => { routingActionError.value = ""; });
 async function sendRoutingAction(action) {
   const request = routingRequest.value;
   if (routingActionSending.value || !request) return;
   routingActionSending.value = action;
+  routingActionError.value = "";
   try {
-    await props.sendAgentMessage(action === "implement"
-      ? { message: "Implement the saved plan. I authorize implementation within its agreed scope.",
-        planRevision: request.workPlan.revision, submissionKind: "send" }
-      : { messageId: request.messageId, message: request.input.message, reviewAction: "retry" });
+    const result = action === "implement"
+      ? await props.sendAgentMessage({ message: "Implement the saved plan. I authorize implementation within its agreed scope.",
+        planRevision: request.workPlan.revision, submissionKind: "send" })
+      : await props.conversationRuntime.continueWorkflow(request);
+    if (result === false || result?.ok === false) {
+      throw new Error(result?.error || "The workflow action did not start. Check the conversation and try again.");
+    }
+    return result;
   }
+  catch (error) { routingActionError.value = error?.message || "The workflow action did not start."; return false; }
   finally { routingActionSending.value = ""; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection

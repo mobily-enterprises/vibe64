@@ -74,6 +74,23 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
 }
 
 describe("retained project conversation ownership", () => {
+  it("continues accepted and uncertain workflows through the authorized session action", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const request = { messageId: "original-request", input: { message: "Review this work" } };
+    const endpoint = "/api/vibe64/sessions/s1/agent-message";
+    for (const status of ["accepted", "uncertain"]) {
+      runtime.delivery.state.messages = [{ id: request.messageId, status, payload: { message: request.input.message } }];
+      mocks.request.mockResolvedValueOnce({ ok: true, delivered: true });
+      expect(await runtime.continueWorkflow(request)).toMatchObject({ ok: true });
+      expect(mocks.request).toHaveBeenLastCalledWith(endpoint, {
+        body: { messageId: request.messageId, message: request.input.message, reviewAction: "retry" }, method: "POST"
+      });
+    }
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(runtime.delivery.state.messages).toHaveLength(1);
+    mocks.request.mockResolvedValueOnce({ ok: false, error: "The retained plan changed." });
+    await expect(runtime.continueWorkflow(request)).rejects.toThrow("The retained plan changed.");
+  });
   it("refreshes a pinned foreign goal through the same binding on scoped product invalidations", async () => {
     let view = { status: "available", goal: { id: "pinned", objective: "Plain objective", status: "paused" },
       target: { segmentId: "foreign-goal", capabilities: { goals: true, goalBudgets: false,

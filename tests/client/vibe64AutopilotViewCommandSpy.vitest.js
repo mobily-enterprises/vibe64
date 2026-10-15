@@ -167,15 +167,17 @@ function mountMainConversationLog({ render = false } = {}) {
 }
 
 describe("Vibe64 direct session view", () => {
-  it("sends explicit plan implementation as new human work and retains the original identity only for stage continuation", async () => {
+  it("sends implementation as new human work and uses the workflow action for stage continuation", async () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const owner = component.match(/async function sendRoutingAction\(action\) \{[\s\S]*?\n\}/u)?.[0];
     expect(owner).toBeTruthy();
     const routingRequest = vue.ref({ messageId: "planning-request", input: { message: "Make a plan" }, workPlan: { revision: "current-plan" } });
     const routingActionSending = vue.ref("");
+    const routingActionError = vue.ref("");
     let finish;
-    const props = { sendAgentMessage: vi.fn(() => new Promise(resolve => { finish = resolve; })) };
-    const action = new Function("routingRequest", "routingActionSending", "props", `${owner}\nreturn sendRoutingAction;`)(routingRequest, routingActionSending, props);
+    const props = { sendAgentMessage: vi.fn(() => new Promise(resolve => { finish = resolve; })),
+      conversationRuntime: { continueWorkflow: vi.fn(async () => ({ ok: true })) } };
+    const action = new Function("routingRequest", "routingActionSending", "routingActionError", "props", `${owner}\nreturn sendRoutingAction;`)(routingRequest, routingActionSending, routingActionError, props);
     const pending = action("implement");
     expect(routingActionSending.value).toBe("implement");
     await action("implement");
@@ -185,11 +187,15 @@ describe("Vibe64 direct session view", () => {
     });
     finish({ ok: true }); await pending;
     expect(routingActionSending.value).toBe("");
-    props.sendAgentMessage.mockResolvedValue({ ok: true });
     await action("continue");
-    expect(props.sendAgentMessage).toHaveBeenLastCalledWith({ messageId: "planning-request", message: "Make a plan", reviewAction: "retry" });
-    props.sendAgentMessage.mockRejectedValue(new Error("Plan changed"));
-    await expect(action("implement")).rejects.toThrow("Plan changed");
+    expect(props.conversationRuntime.continueWorkflow).toHaveBeenCalledExactlyOnceWith(routingRequest.value);
+    expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
+    props.conversationRuntime.continueWorkflow.mockRejectedValueOnce(new Error("Plan changed"));
+    expect(await action("continue")).toBe(false);
+    expect(routingActionError.value).toBe("Plan changed");
+    props.sendAgentMessage.mockResolvedValueOnce(false);
+    expect(await action("implement")).toBe(false);
+    expect(routingActionError.value).toContain("did not start");
     expect(routingActionSending.value).toBe("");
   });
 

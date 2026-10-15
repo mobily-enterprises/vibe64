@@ -140,6 +140,19 @@ function createConversationApplication(conversation, { identity, viewer, summary
       return result;
     } finally { void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {}); }
   }
+  async function continueWorkflow(request) {
+    if (!current.value || !available.value) throw new Error("This conversation is no longer available.");
+    const messageId = String(request?.messageId || "").trim();
+    const message = String(request?.input?.message || "");
+    if (!messageId || !message.trim()) throw new Error("Refresh the session before continuing this workflow.");
+    try {
+      const result = await getHttpWebClient().request(vibe64SessionPath(identity.sessionsApiPath, identity.sessionId, "/agent-message"), {
+        body: { messageId, message, reviewAction: "retry" }, method: "POST"
+      });
+      if (result?.ok === false) throw vibe64ApiError(result, "Workflow could not continue.");
+      return result;
+    } finally { void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {}); }
+  }
   async function submitDraft(payload, options = {}) {
     const prepared = prepareMessage(payload, options);
     try {
@@ -180,7 +193,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     canSubmit: conversation.canSubmit, queueWhileSending: conversation.queueWhileSending,
     delivery: conversation.delivery, draft: conversation.draft, draftAttachments: conversation.draftAttachments,
     draftRetry: conversation.draftRetry, draftRetryMatches: conversation.draftRetryMatches,
-    settleDraftRetry: conversation.settleDraftRetry, send, submitDraft, interrupt,
+    settleDraftRetry: conversation.settleDraftRetry, send, continueWorkflow, submitDraft, interrupt,
     goalState: conversation.goalState, goalView: conversation.goalView, goalLoadError: conversation.goalLoadError,
     changeGoal: conversation.changeGoal, refreshGoal: conversation.refreshGoal,
     sendAgentMessage: input => send(input, { messageId: input.messageId, submissionKind: input.submissionKind }),

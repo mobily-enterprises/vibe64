@@ -77,6 +77,13 @@ it("shows Check delivery without an unsent-handoff Stop for uncertain stage deli
   }
 });
 
+it("keeps a refused workflow action visible beside its retry control", async () => {
+  const html = await render(request("review", "pending"), null, { actionError: "The retained plan changed." });
+  expect(html).toContain("Continue review");
+  expect(html).toContain("The retained plan changed.");
+  expect(html).toContain('role="alert"');
+});
+
 it("can resume a stopped first implementation without an existing follow-up", async () => {
   const value = request("implementation", "accepted", { stopped: true, followup: null, error: "Paused at your request." });
   expect(mount(value).state().followupNeedsAction).toBe(true);
