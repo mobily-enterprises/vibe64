@@ -1593,8 +1593,25 @@ function reportVerifiedWorkspaceRecovery() {
 }
 
 function reportTemporaryRecovery(taskId, outcome) {
-  return temporaryAiWorkspace.value?.reportTaskRecovery?.(taskId, outcome);
+  if (!temporaryAiWorkspace.value) return false;
+  return outcome.status === "checking"
+    ? temporaryAiWorkspace.value.persistTaskRecovery?.(taskId, outcome) ?? false
+    : temporaryAiWorkspace.value.reportTaskRecovery?.(taskId, outcome) ?? false;
 }
+
+watch(() => [props.workState?.updateOperation, temporaryAiWorkspace.value?.updateRepairTask], ([operation, task]) => {
+  if (!task || task.sessionId !== sessionId.value || !task.recoveryRequestId ||
+      operation?.requestId !== task.recoveryRequestId ||
+      !["checking", "unconfirmed"].includes(task.recoveryOutcome)) return;
+  if (operation.status === "ready") {
+    reportTemporaryRecovery(task.id, { status: "succeeded",
+      message: "Session updated. Your changes were preserved. Nothing was published." });
+  } else if (operation.status === "failed") {
+    reportTemporaryRecovery(task.id, { status: "failed",
+      message: `Update still needs attention: ${operation.error || "The operation failed."}`,
+      recoveryConflictId: operation.conflictRecovery?.reviewId || "" });
+  }
+}, { flush: "post" });
 
 async function finishTemporaryAiTask(task = {}) {
   const recovery = await handleTemporaryAiTaskFinished(task, reportTemporaryRecovery);

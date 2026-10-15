@@ -513,6 +513,14 @@ retry rather than looping. Questions, interrupted or failed turns, stale session
 completions, and duplicate completion notifications do not automatically run
 Update.
 
+The selected chat's saved transcript is projected without provider observation
+when source coordination is busy; its snapshot explicitly defers reconciliation.
+Plain draft-only writes use the short session-store mutation and a durable draft
+revision, so admission of an older message cannot clear newer typing or files.
+The Update request identity is recorded on the existing background task. The
+repair view compares that identity and status after reconnect or reload rather
+than interpreting a lost response as completion or starting another Update.
+
 The compact repair status and Check Update action remain outside the scrolling
 transcript. Check Update deliberately verifies an idle repair, including one
 whose AI returned a continue result. The header's Update action uses that same

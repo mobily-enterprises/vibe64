@@ -16,6 +16,7 @@ function vibe64ErrorResponse(error, {
       }
     ],
     ok: false,
+    ...(error?.retryable === true ? { retryable: true } : {}),
     operationOutcome: String(error?.operationOutcome || ""),
     refreshRecommended: error?.refreshRecommended === true,
     sessionId: error?.sessionId || "",
@@ -61,6 +62,7 @@ function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
   }
   if (
     code === "vibe64_command_requires_terminal" ||
+    code === "vibe64_agent_write_mode_busy" ||
     code === "vibe64_agent_attachment_session_unavailable" ||
     code === "vibe64_project_not_selected" ||
     code === "vibe64_project_not_ready" ||

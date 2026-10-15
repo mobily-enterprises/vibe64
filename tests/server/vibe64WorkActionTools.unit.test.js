@@ -26,7 +26,8 @@ test("work tools retain exact review identities and project authority through HT
       ["GET", "/work", "work.inspect", "inspectSessionWork", {}],
       ["POST", "/save", "work.save", "saveSessionWork", { destinationReview: destination }],
       ["POST", "/updates/check", "updates.check", "checkSessionUpdates", { force: true }],
-      ["POST", "/updates/apply", "updates.apply", "updateSessionWork", { historyReview, reviewedConflictId: "review-1" }]
+      ["POST", "/updates/apply", "updates.apply", "updateSessionWork", { historyReview, reviewedConflictId: "review-1",
+        requestId: "11111111-1111-4111-8111-111111111111" }]
     ];
     const sessions = Object.fromEntries(cases.map(([, , , name]) => [name, async (...args) => {
       const context = currentProjectRequestContext();

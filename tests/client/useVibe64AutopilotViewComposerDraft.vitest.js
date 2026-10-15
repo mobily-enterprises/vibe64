@@ -1765,15 +1765,17 @@ describe("useVibe64AutopilotView direct chat", () => {
       runConflictId: "reviewed-conflict", recoveryConflictId: "newer-conflict"
     };
     const checking = view.handleTemporaryAiTaskFinished(task, report);
-    expect(report).toHaveBeenLastCalledWith(task.id, { status: "checking", message: "Checking Update…" });
+    expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({ status: "checking",
+      message: "Checking Update…", recoveryRequestId: expect.any(String) }));
     await expect(view.handleTemporaryAiTaskFinished(task, report)).resolves.toBe(false);
     expect(updateSessionWork).toHaveBeenCalledTimes(1);
-    expect(updateSessionWork).toHaveBeenLastCalledWith({ reviewedConflictId: "reviewed-conflict" });
-    pending.reject(new Error("Document still conflicts."));
+    expect(updateSessionWork).toHaveBeenLastCalledWith(expect.objectContaining({ reviewedConflictId: "reviewed-conflict",
+      requestId: expect.any(String) }));
+    pending.reject(Object.assign(new Error("Document still conflicts."), { code: "vibe64_session_update_conflict" }));
     await expect(checking).resolves.toBe("repository-update");
-    expect(report).toHaveBeenLastCalledWith(task.id, {
+    expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({
       status: "failed", message: "Update still needs attention: Document still conflicts."
-    });
+    }));
     await view.handleTemporaryAiTaskFinished({ ...task, runId: "repair-2" }, report);
     expect(updateSessionWork).toHaveBeenCalledTimes(2);
     expect(report).toHaveBeenLastCalledWith(task.id, expect.objectContaining({ status: "succeeded" }));
@@ -1781,7 +1783,8 @@ describe("useVibe64AutopilotView direct chat", () => {
 
   it.each([
     { status: "failed" }, { status: "interrupted" }, { outcomeKind: "continue" },
-    { outcomeKind: "" }, { sessionId: "another-session" }, { recoveryOperation: "" }, { runId: "" }
+    { outcomeKind: "" }, { sessionId: "another-session" }, { recoveryOperation: "" }, { runId: "" },
+    { recoveryOutcome: "checking" }, { recoveryOutcome: "unconfirmed" }
   ])("does not apply Update for an unverified repair completion: %j", async (override) => {
     const updateSessionWork = vi.fn();
     const view = await createView({ updateSessionWork });
@@ -1794,6 +1797,81 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(report).not.toHaveBeenCalled();
   });
 
+  it("does not start another Update while an earlier result remains unconfirmed", async () => {
+    const updateSessionWork = vi.fn();
+    const view = await createView({ updateSessionWork });
+    const task = {
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "continue", recoveryOutcome: "unconfirmed"
+    };
+    await expect(view.handleTemporaryAiTaskFinished(task, vi.fn(), { force: true })).resolves.toBe(false);
+    expect(updateSessionWork).not.toHaveBeenCalled();
+  });
+
+  it("does not start Update when its recovery checkpoint cannot be saved", async () => {
+    const updateSessionWork = vi.fn();
+    const view = await createView({ updateSessionWork });
+    const report = vi.fn().mockResolvedValueOnce(false);
+    await expect(view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete"
+    }, report)).resolves.toBe(false);
+    expect(updateSessionWork).not.toHaveBeenCalled();
+    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "failed" }));
+  });
+
+  it("uses a matching durable operation after the Update response is lost", async () => {
+    let requestId = "";
+    const updateSessionWork = vi.fn(async ({ requestId: id }) => {
+      requestId = id;
+      throw new Error("Connection lost.");
+    });
+    const refreshSessionWork = vi.fn(async () => ({ updateOperation: { requestId, status: "ready" } }));
+    const view = await createView({ updateSessionWork, refreshSessionWork });
+    const report = vi.fn();
+    await view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete"
+    }, report);
+    expect(updateSessionWork).toHaveBeenCalledTimes(1);
+    expect(refreshSessionWork).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "succeeded" }));
+  });
+
+  it("does not apply a saved repair checkpoint to a different selected session", async () => {
+    const checkpoint = deferredResult();
+    const updateSessionWork = vi.fn();
+    const { view, props } = await createViewWithProps({ updateSessionWork });
+    const report = vi.fn(() => checkpoint.promise);
+    const checking = view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete"
+    }, report);
+    expect(report).toHaveBeenCalledTimes(1);
+    props.session = { ...props.session, sessionId: "session-2" };
+    checkpoint.resolve(true);
+    await checking;
+    expect(updateSessionWork).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers a matching durable Update failure over a stale successful response", async () => {
+    const updateSessionWork = vi.fn(async () => ({ ok: true }));
+    const refreshSessionWork = vi.fn(async () => ({ updateOperation: {
+      requestId: updateSessionWork.mock.calls[0][0].requestId,
+      status: "failed", error: "Preparation failed."
+    } }));
+    const view = await createView({ updateSessionWork, refreshSessionWork });
+    const report = vi.fn();
+    await view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete"
+    }, report);
+    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({
+      status: "failed", message: "Update still needs attention: Preparation failed."
+    }));
+  });
+
   it("checks a prepared continue result on explicit request without starting another repair", async () => {
     const pending = deferredResult();
     const updateSessionWork = vi.fn(() => pending.promise);
@@ -1804,7 +1882,8 @@ describe("useVibe64AutopilotView direct chat", () => {
       status: "completed", outcomeKind: "continue", runConflictId: "unresolved-conflict"
     };
     const checking = view.handleTemporaryAiTaskFinished(task, report, { force: true });
-    expect(updateSessionWork).toHaveBeenLastCalledWith({ reviewedConflictId: "" });
+    expect(updateSessionWork).toHaveBeenLastCalledWith(expect.objectContaining({ reviewedConflictId: "",
+      requestId: expect.any(String) }));
     await expect(view.handleTemporaryAiTaskFinished(task, report, { force: true })).resolves.toBe(false);
     expect(updateSessionWork).toHaveBeenCalledTimes(1);
     pending.resolve({ ok: true, status: "updated" });
@@ -1821,7 +1900,8 @@ describe("useVibe64AutopilotView direct chat", () => {
       id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
       status: "completed", outcomeKind: "complete", runConflictId: "previous-review"
     }, vi.fn(), { force: true });
-    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "" });
+    expect(updateSessionWork).toHaveBeenCalledWith(expect.objectContaining({ reviewedConflictId: "",
+      requestId: expect.any(String) }));
   });
 
   it("applies a human-reviewed conflict without an AI chat and ignores duplicate confirmation", async () => {
@@ -1875,7 +1955,8 @@ describe("useVibe64AutopilotView direct chat", () => {
     const report = vi.fn();
     await view.applyResolvedUpdate({ id: "repair", sessionId: "session-1",
       recoveryOperation: "update", status: "interrupted", outcomeKind: "", runConflictId: "older-review" }, report);
-    expect(updateSessionWork).toHaveBeenCalledWith({ reviewedConflictId: "old-review" });
+    expect(updateSessionWork).toHaveBeenCalledWith(expect.objectContaining({ reviewedConflictId: "old-review",
+      requestId: expect.any(String) }));
     expect(report).toHaveBeenLastCalledWith("repair", {
       status: "failed", message: "Update still needs attention: Repository changed; review again.",
       recoveryConflictId: "new-review"

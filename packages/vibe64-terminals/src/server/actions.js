@@ -209,7 +209,7 @@ function createTerminalActions({ terminals } = {}) {
     }),
     action({
       id: ACTION_READ_TEMPORARY_CONVERSATION,
-      assistant: temporaryConversationTool("Read a temporary conversation's actual current status and up to twelve recent messages. Use beforeMessageId to read earlier messages. Text may be truncated; never invent the omitted text or assume a failed read means work stopped."),
+      assistant: temporaryConversationTool("Read a temporary conversation's saved status and up to twelve recent messages. Use beforeMessageId to read earlier messages. Deferred reconciliation means live provider status may be newer. Text may be truncated; never invent omitted text or assume a failed read means work stopped."),
       input: temporaryConversationReadInputValidator,
       idempotency: "none", kind: "query",
       execute: (input) => terminals.readTemporaryConversation(input.sessionId, input)

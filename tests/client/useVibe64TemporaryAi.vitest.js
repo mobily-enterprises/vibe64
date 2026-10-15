@@ -8,7 +8,8 @@ import { createTemporaryConversationFixture, temporaryRequestBody } from "./help
 const mocks = vi.hoisted(() => ({
   transport: null,
   requests: [],
-  responses: []
+  responses: [],
+  patchResponses: []
 }));
 
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
@@ -78,12 +79,16 @@ describe("useVibe64TemporaryAi", () => {
   beforeEach(() => {
     mocks.requests.length = 0;
     mocks.responses.length = 0;
+    mocks.patchResponses.length = 0;
     vi.useFakeTimers();
     createdId = "conversation-1";
     mocks.transport = createTemporaryConversationFixture({ created: id => { createdId = id; },
       async request(...args) {
         mocks.requests.push(args);
-        if (args[1]?.method === "PATCH") return { ok: true };
+        if (args[1]?.method === "PATCH") {
+          const response = mocks.patchResponses.shift();
+          return typeof response === "function" ? response(...args) : response || { ok: true };
+        }
         const response = mocks.responses.shift();
         return typeof response === "function" ? response(...args) : response;
       }
@@ -94,6 +99,142 @@ describe("useVibe64TemporaryAi", () => {
     mountedApps.clear();
     vi.clearAllTimers();
     vi.useRealTimers();
+  });
+
+  it("autosaves only changed draft text without resending attachments or recovery fields", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    expect(temporary.activeTask.value.draftSaveState).toBe("saving");
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+    const patches = mocks.requests.filter(([, options]) => options.method === "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0][1].body).toEqual({ presentation: { draft: "Explain this conflict." } });
+    temporary.updateDraft(task.id, "A newer draft.");
+    expect(temporary.activeTask.value.draftSaveState).toBe("saving");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+    expect(mocks.requests.filter(([, options]) => options.method === "PATCH").at(-1)[1].body)
+      .toEqual({ presentation: { draft: "A newer draft." } });
+  });
+
+  it("keeps newer text and its failed save visible after an older save settles", async () => {
+    const first = deferredPromise();
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    mocks.patchResponses.push(() => first.promise, () => {
+      throw Object.assign(new Error("Storage unavailable."), { code: "storage_unavailable" });
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateDraft(task.id, "The newer text.");
+    await vi.advanceTimersByTimeAsync(300);
+    first.resolve({ ok: true });
+    await flushPromises();
+    expect(temporary.activeTask.value.draft).toBe("The newer text.");
+    expect(temporary.activeTask.value.draftSaveState).toBe("failed");
+    expect(temporary.activeTask.value.error).toContain("Storage unavailable.");
+    expect(mocks.requests.filter(([, options]) => options.method === "PATCH").map(([, options]) => options.body.presentation.draft))
+      .toEqual(["Explain this conflict.", "The newer text."]);
+  });
+
+  it("does not keep retrying draft saves after another client starts Close", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    mocks.patchResponses.push(() => {
+      throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.error).toContain("retry Close");
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mocks.requests.filter(([, options]) => options.method === "PATCH")).toHaveLength(1);
+    expect(temporary.activeTask.value.id).toBe(task.id);
+  });
+
+  for (const draftSucceeded of [true, false]) {
+    it(`keeps the draft ${draftSucceeded ? "saved" : "failure"} state when a recovery-only save follows it`, async () => {
+      const first = Promise.withResolvers();
+      const { task, temporary } = await temporaryAiWithDraft();
+      mocks.responses.push({ ok: true, conversationId: createdId });
+      mocks.patchResponses.push(() => first.promise);
+      await vi.advanceTimersByTimeAsync(300);
+      temporary.reportRecoveryOutcome(task.id, { status: "unconfirmed", message: "Checking the saved operation." });
+      await vi.advanceTimersByTimeAsync(300);
+      if (draftSucceeded) first.resolve({ ok: true });
+      else first.reject(new Error("Draft storage unavailable."));
+      await flushPromises();
+      expect(temporary.activeTask.value.draftSaveState).toBe(draftSucceeded ? "saved" : "failed");
+      if (!draftSucceeded) expect(temporary.activeTask.value.error).toContain("Draft storage unavailable.");
+      const patches = mocks.requests.filter(([, options]) => options.method === "PATCH");
+      expect(patches).toHaveLength(2);
+      expect(patches[1][1].body.presentation).not.toHaveProperty("draft");
+    });
+  }
+
+  it("reports and clears a recovery-state save error without changing the saved draft indicator", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+    mocks.patchResponses.push(() => { throw new Error("Recovery storage unavailable."); });
+    temporary.reportRecoveryOutcome(task.id, { status: "unconfirmed", message: "Check pending." });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.error).toContain("Conversation state could not be saved: Recovery storage unavailable.");
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+    temporary.reportRecoveryOutcome(task.id, { status: "failed", message: "Check failed." });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.error).toBe("");
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+  });
+
+  it("clears a recovery-state failure when its retry also saves newer draft text", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    await vi.advanceTimersByTimeAsync(300);
+    mocks.patchResponses.push(() => { throw new Error("Recovery storage unavailable."); });
+    temporary.reportRecoveryOutcome(task.id, { status: "unconfirmed", message: "Check pending." });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(temporary.activeTask.value.error).toContain("Conversation state could not be saved:");
+    temporary.updateDraft(task.id, "Newer text while checking.");
+    await vi.advanceTimersByTimeAsync(300);
+    const patch = mocks.requests.filter(([, options]) => options.method === "PATCH").at(-1)[1].body;
+    expect(patch.presentation).toMatchObject({ draft: "Newer text while checking.", recoveryOutcome: "unconfirmed" });
+    expect(temporary.activeTask.value.draftSaveState).toBe("saved");
+    expect(temporary.activeTask.value.error).toBe("");
+  });
+
+  it("does not acknowledge failed model settings when a queued draft-only save succeeds", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    await vi.advanceTimersByTimeAsync(300);
+    const settingsSave = Promise.withResolvers();
+    mocks.patchResponses.push(() => settingsSave.promise);
+    temporary.updateAgentSetting(task.id, "model", "review-model");
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateDraft(task.id, "Queued draft.");
+    await vi.advanceTimersByTimeAsync(300);
+    settingsSave.reject(new Error("Settings storage unavailable."));
+    await flushPromises();
+    expect(temporary.activeTask.value.settingsToSave?.model).toBe("review-model");
+    temporary.updateDraft(task.id, "Retry the draft and settings.");
+    await vi.advanceTimersByTimeAsync(300);
+    const patches = mocks.requests.filter(([, options]) => options.method === "PATCH");
+    expect(patches.at(-1)[1].body.agentSettings.model).toBe("review-model");
+    expect(temporary.activeTask.value.settingsToSave).toBeNull();
+  });
+
+  it("cancels a queued draft save when another client has started Close", async () => {
+    const first = Promise.withResolvers();
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId });
+    mocks.patchResponses.push(() => first.promise);
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateDraft(task.id, "Queued later text.");
+    await vi.advanceTimersByTimeAsync(300);
+    first.reject(Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" }));
+    await flushPromises();
+    expect(mocks.requests.filter(([, options]) => options.method === "PATCH")).toHaveLength(1);
+    expect(temporary.activeTask.value.draft).toBe("Queued later text.");
+    expect(temporary.activeTask.value.draftSaveState).toBe("failed");
   });
 
   it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
@@ -207,7 +348,6 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.hasUnreadMessages.value).toBe(false);
     temporary.closeWorkspace();
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-2" },
       { ok: true, status: "inProgress", text: "A new reply." }
     );
     mocks.transport.notify();

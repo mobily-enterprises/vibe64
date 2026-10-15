@@ -435,6 +435,7 @@ const sessionSaveInputValidator = patchSchema({
 
 const sessionUpdateInputValidator = patchSchema({
   historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   ...optionalOrigin,
   ...optionalUser,
   reviewedConflictId: {

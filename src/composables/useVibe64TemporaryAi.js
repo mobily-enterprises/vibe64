@@ -69,6 +69,8 @@ function useVibe64TemporaryAi({
   const open = ref(false);
   const restorations = new Map();
   const saveTimers = new Map();
+  const pendingSaveFields = new Map();
+  const saveVersions = new Map();
   const creations = new Map();
   const saves = new Map();
   const closedConversationIds = new Set();
@@ -172,13 +174,13 @@ function useVibe64TemporaryAi({
           // pre-Send read cannot finish a newer request while preparation runs.
           const sameRequest = !task.messageId || observed.messageId === task.messageId || route?.messageId === task.messageId;
           if (canApplyProgress && !sending && (!task.busy || sameRequest)) {
-            if (!observed.readError) {
+            if (!observed.readError && !observed.deferredReconciliation) {
               update.status = temporaryAiText(observed.status) || task.status;
               update.busy = temporaryAiTurnIsActive(update.status);
               update.runId = observed.runId || task.runId;
               update.outcomeKind = temporaryAiText(observed.outcome?.kind);
             }
-            update.error = temporaryAiText(observed.error || error);
+            if (!observed.deferredReconciliation) update.error = temporaryAiText(observed.error || error);
           }
           if (snapshot.pendingRequest && !task.pendingMessageId) update.pendingMessageId = snapshot.pendingRequest.messageId;
         } else if (error && canApplyProgress) update.error = error;
@@ -190,6 +192,9 @@ function useVibe64TemporaryAi({
   }
 
   function updateTask(taskId = "", update = {}) {
+    if (Object.hasOwn(update, "draft") && !Object.hasOwn(update, "status")) {
+      update = { ...update, draftSaveState: "saving" };
+    }
     tasks.value = tasks.value.map((task) => {
       if (task.id !== taskId) return task;
       if (Object.hasOwn(update, "draft")) task.draft = update.draft;
@@ -197,17 +202,25 @@ function useVibe64TemporaryAi({
       return taskView({ ...task, ...update });
     });
     const task = tasks.value.find((task) => task.id === taskId) || null;
-    const draftChanged = ["draft", "agentSettings", "attachments", "recoveryOutcome", "recoveryRetryKeys"]
-      .some((key) => Object.hasOwn(update, key));
-    if (task && !Object.hasOwn(update, "status") && draftChanged) scheduleSave(taskId);
+    const changed = ["draft", "agentSettings", "attachments", "recoveryOutcome", "recoveryRetryKeys",
+      "recoveryOutcomeMessage", "recoveryContext", "recoveryConflictId", "recoveryRequestId", "recoveryAutoPaused"].filter(key => Object.hasOwn(update, key));
+    if (task && !Object.hasOwn(update, "status") && changed.length) {
+      saveVersions.set(taskId, {
+        draft: (saveVersions.get(taskId)?.draft || 0) + (changed.includes("draft") ? 1 : 0)
+      });
+      const pending = pendingSaveFields.get(taskId) || new Set();
+      for (const key of changed) pending.add(key);
+      pendingSaveFields.set(taskId, pending);
+      scheduleSave(taskId);
+    }
     return task;
   }
 
-  function taskPresentation(task) {
+  function taskPresentation(task, selected) {
     const fields = ["title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
       "recoveryNotice", "recoveryOperation", "recoveryConflictId", "recoveryContext", "recoveryOutcome",
-      "recoveryOutcomeMessage", "recoveryAutoPaused", "recoveryRetryKeys", "runConflictId"];
-    return Object.fromEntries(fields.map((key) => [key, task[key]]));
+      "recoveryOutcomeMessage", "recoveryRequestId", "recoveryAutoPaused", "recoveryRetryKeys", "runConflictId"];
+    return Object.fromEntries(fields.filter(key => !selected || selected.has(key)).map((key) => [key, task[key]]));
   }
 
   async function ensureConversation(task) {
@@ -249,46 +262,69 @@ function useVibe64TemporaryAi({
     // Keep the original queued PATCH's invocation snapshot now that draft and
     // attachments are accessors over the retained binding.
     const task = currentTask && { ...currentTask };
-    if (!task || disposed || closingTaskIds.has(taskId)) return;
+    if (!task || disposed || closingTaskIds.has(taskId) || task.state === "closing") return;
+    const fields = pendingSaveFields.get(taskId);
+    if (!fields?.size) return;
+    const version = saveVersions.get(taskId);
+    pendingSaveFields.delete(taskId);
     const previous = saves.get(taskId);
     const operation = (async () => {
       await previous;
-      if (!canApplyTaskResponse(task)) return;
+      if (!canApplyTaskResponse(task) || tasks.value.find(candidate => candidate.id === taskId)?.state === "closing") return false;
       const conversationId = await ensureConversation(task);
       if (!canApplyTaskResponse(task)) return;
+      const savedPresentation = taskPresentation(task, fields);
+      const savedSettings = fields.has("agentSettings") && task.settingsToSave;
       const saved = await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
         method: "PATCH",
         body: {
-          presentation: taskPresentation(task),
-          ...(task.settingsToSave ? { agentSettings: task.settingsToSave } : {}),
-          attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)
+          ...(Object.keys(savedPresentation).length ? { presentation: savedPresentation } : {}),
+          ...(savedSettings ? { agentSettings: savedSettings } : {}),
+          ...(fields.has("attachments") ? { attachmentIds: task.attachments.map((attachment) => attachment.attachmentId) } : {})
         }
       });
       if (saved?.routingMetadata && canApplyTaskResponse(task)) {
         updateTask(taskId, { routingMetadata: saved.routingMetadata, purposes: saved.purposes });
       }
-      if (canApplyTaskResponse(task) && task.settingsToSave) void task.binding.runtime.value.reload();
+      if (canApplyTaskResponse(task) && savedSettings) void task.binding.runtime.value.reload();
       const current = tasks.value.find((candidate) => candidate.id === taskId);
-      if (canApplyTaskResponse(task) && current.settingsToSave === task.settingsToSave) {
+      if (canApplyTaskResponse(task) && savedSettings && current.settingsToSave === savedSettings) {
         updateTask(taskId, { settingsToSave: null });
       }
-      if (!disposed && current?.error?.startsWith("Draft could not be saved:")) {
+      if (canApplyTaskResponse(task) && fields.has("draft") && version?.draft === saveVersions.get(taskId)?.draft) {
+        updateTask(taskId, { draftSaveState: "saved",
+          ...(current?.error?.startsWith("Draft could not be saved:") ? { error: "" } : {}) });
+      }
+      if (canApplyTaskResponse(task) && version === saveVersions.get(taskId) && !pendingSaveFields.get(taskId)?.size &&
+          current?.error?.startsWith("Conversation state could not be saved:")) {
         updateTask(taskId, { error: "" });
       }
+      return true;
     })().catch((error) => {
       if (!canApplyTaskResponse(task)) return;
+      const pending = pendingSaveFields.get(taskId) || new Set();
+      for (const key of fields) pending.add(key);
+      pendingSaveFields.set(taskId, pending);
       if (error.code === "vibe64_conversation_closed") {
         removeTask(taskId);
         return;
       }
-      updateTask(taskId, { error: `Draft could not be saved: ${error.message}` });
+      if (error.code === "vibe64_conversation_closing") {
+        pendingSaveFields.delete(taskId);
+        updateTask(taskId, { state: "closing", draftSaveState: "failed", error: "This conversation is closing; retry Close after cleanup." });
+        return false;
+      }
+      if ((fields.has("draft") && version?.draft === saveVersions.get(taskId)?.draft) || version === saveVersions.get(taskId)) updateTask(taskId, {
+        ...(fields.has("draft") ? { draftSaveState: "failed" } : {}),
+        error: `${fields.has("draft") ? "Draft" : "Conversation state"} could not be saved: ${error.message}` });
       if (error.code === "vibe64_agent_write_mode_busy" && !closingTaskIds.has(taskId)) {
         scheduleSave(taskId, 1000);
       }
+      return false;
     });
     saves.set(taskId, operation);
     try {
-      await operation;
+      return await operation;
     } finally {
       if (saves.get(taskId) === operation) saves.delete(taskId);
     }
@@ -338,14 +374,14 @@ function useVibe64TemporaryAi({
           attachments: record.attachments || [],
           pendingMessageId: "",
           draft: record.draft || "",
+          draftSaveState: record.draft ? "saved" : "",
           messages: record.messages || [],
           unread: false,
           busy: temporaryAiTurnIsActive(record.status),
           recoveryRetryKeys: record.recoveryRetryKeys || [],
-          // A client-side verification callback interrupted by navigation is not running now.
-          recoveryOutcome: record.recoveryOutcome === "checking" ? "failed" : record.recoveryOutcome,
+          recoveryOutcome: record.recoveryOutcome === "checking" ? "unconfirmed" : record.recoveryOutcome,
           recoveryOutcomeMessage: record.recoveryOutcome === "checking"
-            ? "Check Update again to verify this repair."
+            ? "The Update request was interrupted. Vibe64 is checking its saved result; do not start a second Update yet."
             : record.recoveryOutcomeMessage
         });
         tasks.value.push(task);
@@ -442,7 +478,7 @@ function useVibe64TemporaryAi({
     tasks.value = [...tasks.value, task];
     activeTaskId.value = task.id;
     open.value = true;
-    scheduleSave(task.id);
+    if (task.draft) updateTask(task.id, { draft: task.draft });
     return task;
   }
 
@@ -571,11 +607,12 @@ function useVibe64TemporaryAi({
     status = "",
     retryMessage = "",
     retryKey = "",
-    recoveryConflictId = ""
+    recoveryConflictId = "",
+    recoveryRequestId = ""
   } = {}) {
     const outcome = temporaryAiText(status);
     const task = tasks.value.find((task) => task.id === taskId);
-    if (disposed || !task || closingTaskIds.has(taskId) || !["checking", "failed", "succeeded"].includes(outcome)) {
+    if (disposed || !task || closingTaskIds.has(taskId) || !["checking", "failed", "succeeded", "unconfirmed"].includes(outcome)) {
       return false;
     }
     const messageId = `recovery_${task.runId || task.id}`;
@@ -584,6 +621,7 @@ function useVibe64TemporaryAi({
         recoveryMessage: { id: messageId, role: "system", text: temporaryAiText(message) || "Repair verified." }
       } : {}),
       recoveryOutcome: outcome,
+      ...(recoveryRequestId ? { recoveryRequestId } : {}),
       recoveryAutoPaused: false,
       recoveryOutcomeMessage: temporaryAiText(message),
       ...(outcome !== "checking" ? {
@@ -666,7 +704,7 @@ function useVibe64TemporaryAi({
       const current = tasks.value.find(candidate => candidate.id === taskId);
       if (current.pendingMessageId !== messageId) return;
       updateTask(taskId, { displayMessage: "", pendingMessageId: "", error: "", errorCode: "", status: current.status });
-      if (retry || current.draft || current.agentSettings !== task.agentSettings || current.attachments.length) scheduleSave(taskId);
+      if (retry || current.draft || current.attachments.length) updateTask(taskId, { draft: current.draft });
     }
     try {
       const submission = task.binding.submitPrepared(authored, {
@@ -715,7 +753,7 @@ function useVibe64TemporaryAi({
         task.delivery.remove(messageId);
         updateTask(taskId, { busy: false, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
           draft: current.draft ? `${text}\n\n${current.draft}` : text });
-        scheduleSave(taskId);
+        updateTask(taskId, { draft: tasks.value.find(candidate => candidate.id === taskId).draft });
         return false;
       }
       const current = tasks.value.find(candidate => candidate.id === taskId);
@@ -727,7 +765,7 @@ function useVibe64TemporaryAi({
         error: temporaryAiText(error?.message || error) || "Temporary AI message could not be sent.",
         errorCode: temporaryAiText(error?.code), pendingMessageId: messageId,
         runId: error?.conversationExpired === true ? "" : task.runId, status: stillWorking ? task.status : "failed" });
-      scheduleSave(taskId);
+      updateTask(taskId, { draft: current.draft });
       if (!stillWorking) reportTaskFinished(taskId);
       return false;
     }
@@ -824,6 +862,8 @@ function useVibe64TemporaryAi({
     closedConversationIds.add(task?.conversationId || taskId);
     clearTimeout(saveTimers.get(taskId));
     saveTimers.delete(taskId);
+    pendingSaveFields.delete(taskId);
+    saveVersions.delete(taskId);
     task?.releaseBinding();
     tasks.value = tasks.value.filter((candidate) => candidate.id !== taskId);
     if (activeTaskId.value === taskId) activeTaskId.value = tasks.value[0]?.id || "";
@@ -861,6 +901,8 @@ function useVibe64TemporaryAi({
       restoreError.value = "";
       for (const timer of saveTimers.values()) clearTimeout(timer);
       saveTimers.clear();
+      pendingSaveFields.clear();
+      saveVersions.clear();
       closedConversationIds.clear();
       for (const task of tasks.value) task.releaseBinding();
       tasks.value = [];
@@ -878,6 +920,8 @@ function useVibe64TemporaryAi({
     restoreGeneration += 1;
     for (const timer of saveTimers.values()) clearTimeout(timer);
     saveTimers.clear();
+    pendingSaveFields.clear();
+    saveVersions.clear();
     for (const task of tasks.value) task.releaseBinding();
   });
 
@@ -892,6 +936,7 @@ function useVibe64TemporaryAi({
     open,
     openTask,
     reportRecoveryOutcome,
+    saveTask,
     restoreError,
     restoreTasks,
     selectTask,

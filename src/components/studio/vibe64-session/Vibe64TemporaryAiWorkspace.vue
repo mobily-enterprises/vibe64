@@ -107,7 +107,7 @@
           v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
           class="vibe64-temporary-ai__check-update"
           data-temporary-ai-check-update
-          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy"
+          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
           :loading="activeTaskRecoveryChecking"
           :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
           size="small"
@@ -120,7 +120,7 @@
           v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified && props.canReviewUpdate"
           class="vibe64-temporary-ai__check-update"
           data-temporary-ai-review-update
-          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy"
+          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
           size="small" variant="tonal"
           @click="emit('review-update')"
         >
@@ -185,6 +185,9 @@
           </div>
         </template>
         <template #composer>
+          <p v-if="activeTask.draftSaveState" class="text-caption" role="status" aria-live="polite">
+            {{ activeTask.draftSaveState === 'saving' ? 'Saving draft…' : activeTask.draftSaveState === 'saved' ? 'Draft saved' : 'Draft not saved; check the error and retry.' }}
+          </p>
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
             v-show="task.id === activeTask.id"
@@ -196,8 +199,8 @@
             :model-value="task.draft && (task.displayMessage || task.draft)"
             aria-label="Message temporary AI"
             density="compact"
-            :attachments-enabled="Boolean(props.sessionId)"
-            :disabled="taskInputDisabled(task)"
+            :attachments-enabled="Boolean(props.sessionId) && !taskInputDisabled(task)"
+            :disabled="task.state === 'closing' || task.status === 'closing' || Boolean(taskAccessReason(task))"
             placeholder="Ask temporary AI…"
             :rows="2"
             :session-id="props.sessionId"
@@ -511,6 +514,9 @@ const activeTaskRecoveryTitle = computed(() => {
   if (activeTask.value?.recoveryOutcome === "failed") {
     return "Update needs attention";
   }
+  if (activeTask.value?.recoveryOutcome === "unconfirmed") {
+    return "Update result not confirmed";
+  }
   if (activeTask.value?.recoveryOperation === "update") {
     return "Update not yet verified";
   }
@@ -540,6 +546,9 @@ const activeTaskRecoveryStatus = computed(() => {
     return task.recoveryAutoPaused
       ? "Automatic repair paused after repeated conflicts. Continue here or check Update again. Main chat has the latest Update diagnostic."
       : "The Update check did not succeed. Continue this repair or check Update again. Main chat has the latest Update diagnostic.";
+  }
+  if (task.recoveryOutcome === "unconfirmed") {
+    return task.recoveryOutcomeMessage || "Vibe64 could not confirm this Update result. Check the current session before trying again.";
   }
   if (task.recoveryOperation === "update" && task.outcomeKind === "continue") {
     return "Reply if a decision is needed, or use Check Update to verify the prepared edits.";
@@ -609,7 +618,7 @@ function taskAccessReason(task) {
 }
 
 function taskInputDisabled(task) {
-  return props.repositoryBusy || task.status === "closing" || task.recoveryOutcome === "checking" || Boolean(taskAccessReason(task));
+  return props.repositoryBusy || task.state === "closing" || task.status === "closing" || task.recoveryOutcome === "checking" || Boolean(taskAccessReason(task));
 }
 
 function taskPrompt(taskId = "") {
@@ -673,6 +682,10 @@ function reportTaskRecovery(taskId = "", outcome = {}) {
     );
   }
   return reported;
+}
+
+async function persistTaskRecovery(taskId = "", outcome = {}) {
+  return reportTaskRecovery(taskId, outcome) && await temporary.saveTask(taskId) === true;
 }
 
 function showWorkspace() {
@@ -801,6 +814,7 @@ defineExpose({
   hasUnreadMessages: temporary.hasUnreadMessages,
   openTask,
   reportTaskRecovery,
+  persistTaskRecovery,
   selectTask,
   startTask,
   showWorkspace,

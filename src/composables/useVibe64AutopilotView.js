@@ -842,6 +842,7 @@ function useVibe64AutopilotView(props, emit, {
         !taskId || !runId || task.sessionId !== sessionId.value ||
         task.busy || ["starting", "inProgress"].includes(status) ||
         saveWorkSending.value || saveWorkOperationActive.value ||
+        ["checking", "unconfirmed"].includes(task.recoveryOutcome) ||
         (!force && (status !== "completed" || task.outcomeKind !== "complete" ||
           checkedUpdateRepairRuns.get(taskId) === runId))
       ) {
@@ -868,23 +869,41 @@ function useVibe64AutopilotView(props, emit, {
     const taskId = task?.id;
     const checkingSessionId = sessionId.value;
     const checkingProjectSlug = projectSlug.value;
-    if (taskId) reportRecovery(taskId, { status: "checking", message: "Checking Update…" });
-    const result = await updateBeforeSave({ reviewedConflictId });
+    const requestId = taskId ? crypto.randomUUID() : "";
+    const checkpoint = taskId ? reportRecovery(taskId, { status: "checking", message: "Checking Update…",
+      recoveryRequestId: requestId }) : true;
+    const checkpointSaved = checkpoint && typeof checkpoint.then === "function" ? await checkpoint : checkpoint;
+    if (checkingSessionId !== sessionId.value || checkingProjectSlug !== projectSlug.value) return false;
+    if (checkpointSaved === false) {
+      if (taskId) reportRecovery(taskId, { status: "failed",
+        message: "Update was not started because its recovery checkpoint could not be saved. Try again after the save error is resolved." });
+      return false;
+    }
+    const result = await updateBeforeSave({ reviewedConflictId, ...(requestId ? { requestId } : {}) });
+    const work = typeof props.refreshSessionWork === "function"
+      ? await props.refreshSessionWork().catch(() => null) : null;
     await nextTick();
     if (checkingSessionId !== sessionId.value || checkingProjectSlug !== projectSlug.value) {
       return false;
     }
     if (!taskId) return "repository-update";
-    const succeeded = result?.ok === true;
+    const operation = work?.updateOperation?.requestId === requestId ? work.updateOperation : null;
+    if (["queued", "running", "starting"].includes(operation?.status)) return "repository-update";
+    const succeeded = operation ? operation.status === "ready" : result?.ok === true;
+    const confirmedFailure = operation?.status === "failed" ||
+      ["vibe64_agent_write_mode_busy"].includes(saveWorkFailure.value?.code) ||
+      Boolean(saveWorkFailure.value?.code?.startsWith("vibe64_session_update_"));
     const outcome = {
-      status: succeeded ? "succeeded" : "failed",
+      status: succeeded ? "succeeded" : confirmedFailure ? "failed" : "unconfirmed",
       message: succeeded
         ? "Session updated. Your changes were preserved. Nothing was published."
-        : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`
+        : confirmedFailure
+          ? `Update still needs attention: ${operation?.error || saveWorkError.value || "The operation failed."}`
+          : "Vibe64 could not confirm this Update result. Check the session's current Update status before trying again."
     };
-    if (!succeeded && saveWorkCanResolveWithTemporaryAi.value) {
-      const failure = saveWorkFailure.value;
-      const recovery = failure?.details?.conflictRecovery;
+    if (confirmedFailure && (saveWorkCanResolveWithTemporaryAi.value || operation?.conflictRecovery)) {
+      const failure = saveWorkFailure.value || operation;
+      const recovery = failure?.details?.conflictRecovery || operation?.conflictRecovery;
       outcome.recoveryConflictId = recovery?.reviewId || "";
       if (retryAi) {
         outcome.retryKey = JSON.stringify([
@@ -1462,7 +1481,8 @@ function useVibe64AutopilotView(props, emit, {
     if (updateWorkDisabled.value || repositoryOperationActive.value || props.sessionRenewal?.sourceOperationsSuspended ||
         !review || review.reviewId !== updateConflictRecovery.value?.reviewId ||
         task && (task.sessionId !== sessionId.value || task.recoveryOperation !== "update" ||
-          task.busy || ["starting", "inProgress"].includes(task.status))) return false;
+          task.busy || ["starting", "inProgress"].includes(task.status) ||
+          ["checking", "unconfirmed"].includes(task.recoveryOutcome))) return false;
     resolvedUpdateReview.value = null;
     return verifySessionUpdate(task, reportRecovery, review.reviewId, { retryAi: false });
   }

@@ -64,6 +64,11 @@ Colleague reports publication that still needs reconciliation separately from
 a completed Save. After an uncertain result it inspects the saved operation
 before retrying. Update does not publish work and may restart workspace
 preparation; acceptance of either operation does not establish completion.
+Save and Update retain their source coordination for assistant and repository
+changes while already saved temporary-chat history and plain draft text remain
+available through the short session-store path. An Update repair records a
+request identity on its existing background task, allowing the chat to recover
+confirmed progress after a lost response without launching a duplicate Update.
 
 Colleague can read saved branches and open a session on an existing branch or
 create a new named branch through ordinary session creation. Branch discovery

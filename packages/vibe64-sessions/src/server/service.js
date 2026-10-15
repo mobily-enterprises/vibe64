@@ -1410,7 +1410,7 @@ function createService({
                   message: "Updating this session (rebase).",
                   status: "running"
                 },
-                patch: { operationId, status: "running" },
+                patch: { operationId, requestId: text(input.requestId), status: "running" },
                 reset: true
               });
               await publishSessionChanged(sessionId, {

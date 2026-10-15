@@ -13,7 +13,7 @@ import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVER
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
   "recoveryNotice", "recoveryOperation", "recoveryConflictId", "recoveryContext", "recoveryOutcome",
-  "recoveryOutcomeMessage", "runConflictId"
+  "recoveryOutcomeMessage", "recoveryRequestId", "runConflictId"
 ];
 const messageFields = Object.keys(temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions())
   .filter(key => !["sessionId", "conversationId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"].includes(key));
@@ -51,6 +51,7 @@ function createSessionConversations({
   actions,
   attachments,
   runAgentWrite,
+  readSessionContext,
   prepareAgentSkills,
   systemRoot,
   prepareSelection = async () => {},
@@ -75,8 +76,28 @@ function createSessionConversations({
     };
   }
 
-  async function save(ctx, record, patch) {
-    const saved = await ctx.runtime.store.writeSessionConversation(ctx.session.sessionId, record.conversationId, patch);
+  async function save(ctx, record, patch, { lifecycle = false, requireOpen = false } = {}) {
+    const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
+      const current = await recordFor(ctx, record.conversationId);
+      if (requireOpen && current.state === "closing") throw Object.assign(new Error("This conversation is closing."), {
+        code: "vibe64_conversation_closing", statusCode: 409
+      });
+      const next = { ...patch };
+      const newTurn = lifecycle && next.messageId && next.messageId !== record.messageId;
+      if (newTurn) {
+        next.submittedDraftRevision = record.draftRevision || randomUUID();
+        if (!current.draftRevision && !record.draftRevision) next.draftRevision = next.submittedDraftRevision;
+      }
+      if (lifecycle && (Object.hasOwn(next, "draft") || Object.hasOwn(next, "attachments"))) {
+        const submittedRevision = newTurn ? record.draftRevision || "" : current.submittedDraftRevision || "";
+        if (newTurn ? (current.draftRevision || "") !== submittedRevision
+          : !submittedRevision || (current.draftRevision || "") !== submittedRevision) {
+          delete next.draft;
+          delete next.attachments;
+        }
+      }
+      return ctx.runtime.store.writeSessionConversation(ctx.session.sessionId, record.conversationId, next);
+    });
     if (Object.keys(patch).some(key => !isDeepStrictEqual(record[key], saved[key]))) {
       await publish(ctx, saved.conversationId, { type: "phase",
         phase: ["starting", "inProgress"].includes(saved.status) ? "working" : "" });
@@ -142,12 +163,12 @@ function createSessionConversations({
     records: {
       input: providerInput,
       read: recordFor,
-      save,
+      save: (ctx, record, patch) => save(ctx, record, patch, { lifecycle: true }),
       bind(ctx, record, patch, binding) {
         return save(ctx, record, { ...patch,
           nativeBindings: { ...record.nativeBindings,
             [bindingKey(ctx, { ...record, assistantSelection: binding.assistantSelection })]: nativeBinding(binding) }
-        });
+        }, { lifecycle: true });
       },
       retained: record => Object.entries(record.nativeBindings || {}),
       select: (record, binding) => ({ ...record, assistantSelection: binding.assistantSelection, providerConversationId: binding.conversationId,
@@ -193,11 +214,11 @@ function createSessionConversations({
           ...(phase === "incomplete" ? { assistantSelection: record.assistantSelection,
             assistantRouting: JSON.parse(record.routingMetadata?.assistant_routing_request || "null") } : {}) };
       },
-      async snapshot({ context: ctx, record, response, messages, includeAccess, readPage }) {
+      async snapshot({ context: ctx, record, response, messages, includeAccess, readPage, savedOnly = false }) {
         const sessionId = ctx.session.sessionId;
         const outcome = response.outcome || normalizeVibe64AgentTaskResult(response.text);
         const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
-        if (route && route.status === "working" && route.delivery === "accepted" && response.runId &&
+        if (!savedOnly && route && route.status === "working" && route.delivery === "accepted" && response.runId &&
             !["starting", "inProgress", "ready"].includes(response.status)) {
           // Schedule after releasing the existing write lock. Native idle events
           // normally do this; a read also recovers a missed completion notification.
@@ -217,6 +238,7 @@ function createSessionConversations({
           routingMetadata: { ...record.routingMetadata, assistant_routing: ctx.session.metadata.assistant_routing },
           messages,
           ok: true,
+          ...(savedOnly ? { deferredReconciliation: true } : {}),
           ...(route && assistantRoutingStatusIsPending(route)
             ? { routingPending: true } : {}),
           ...(record.state === "closing" ? {
@@ -281,11 +303,19 @@ function createSessionConversations({
     });
   }
 
+  async function savedSnapshot(ctx, record, transcriptQuery) {
+    const projection = persistentConversationFacilities.projection;
+    return conversationRuntime.projectStoredPersistentConversation({
+      ...persistentConversationOptions(ctx, record), transcriptQuery,
+      projection: { ...projection, snapshot: input => projection.snapshot({ ...input, savedOnly: true }) }
+    });
+  }
+
   // All state transitions, including transcript reconciliation, use the existing
   // session write coordinator so a late read cannot recreate a closed record.
   const write = (sessionId, options, operation) => runAgentWrite(sessionId, options, operation, {
     operation: "temporary-conversation",
-    waitMs: 10_000
+    waitMs: options.lockWaitMs ?? 10_000
   });
 
   async function writeSnapshot(sessionId, options, operation) {
@@ -523,8 +553,10 @@ function createSessionConversations({
         const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false,
           workflowEngineId: parentPreferences?.workflowEngineId || parentSelection.engineId
         });
+        const initialPresentation = presentation(input.presentation);
         const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
-          ...presentation(input.presentation),
+          ...initialPresentation,
+          ...(Object.hasOwn(initialPresentation, "draft") ? { draftRevision: randomUUID() } : {}),
           ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences) } } : {}),
           agentSettings: input.agentSettings || {},
           assistantSelection: parentSelection,
@@ -539,14 +571,21 @@ function createSessionConversations({
 
     async listTemporaryConversations(sessionId, options = {}) {
       let context;
-      const result = await write(sessionId, options, async (ctx) => {
+      const list = async (ctx, savedOnly = false) => {
         context = ctx;
         const records = await ctx.runtime.store.listSessionConversations(sessionId);
         const conversations = [];
-        for (const record of records) conversations.push(await snapshot(ctx, record, true));
+        for (const record of records) conversations.push(savedOnly
+          ? await savedSnapshot(ctx, record) : await snapshot(ctx, record, true));
         return { ok: true, conversations };
-      });
+      };
+      let result = await write(sessionId, { ...options, lockWaitMs: 0 }, list);
+      if (result?.code === "vibe64_agent_write_mode_busy") {
+        context = await readSessionContext(sessionId, options);
+        result = await list(context, true);
+      }
       if (result?.ok === false) return result;
+      if (result.conversations.some(record => record.deferredReconciliation)) return result;
       // Provider availability is read-only and can be slow. Polling must not
       // hold the session write lock while looking up every chat's modes.
       return { ...result, conversations: await Promise.all(result.conversations.map(async (record) => ({
@@ -555,8 +594,20 @@ function createSessionConversations({
     },
 
     async readTemporaryConversation(sessionId, input = {}, options = {}, transcriptQuery) {
-      await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId });
-      const result = await writeSnapshot(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true, transcriptQuery));
+      let deferred = false;
+      try {
+        await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId, lockWaitMs: 0 });
+      } catch (error) {
+        if (error.code !== "vibe64_agent_write_mode_busy") throw error;
+        deferred = true;
+      }
+      let result = deferred ? { code: "vibe64_agent_write_mode_busy" }
+        : await writeSnapshot(sessionId, { ...options, lockWaitMs: 0 }, async (ctx) =>
+          snapshot(ctx, await recordFor(ctx, input.conversationId), true, transcriptQuery));
+      if (result?.code === "vibe64_agent_write_mode_busy") {
+        const ctx = await readSessionContext(sessionId, options);
+        result = await savedSnapshot(ctx, await recordFor(ctx, input.conversationId), transcriptQuery);
+      }
       if (result.ok === false || (!input.beforeMessageId && input.messageLimit === undefined)) return result;
       const messages = result.messages || [];
       const end = input.beforeMessageId ? messages.findIndex((message) => message.id === input.beforeMessageId) : messages.length;
@@ -568,6 +619,15 @@ function createSessionConversations({
     },
 
     async updateTemporaryConversation(sessionId, input = {}, options = {}) {
+      const draftOnly = input.presentation && Object.keys(input.presentation).length === 1 &&
+        Object.hasOwn(input.presentation, "draft") &&
+        Object.keys(input).every(key => ["sessionId", "conversationId", "vibe64User", "presentation"].includes(key));
+      if (draftOnly) {
+        const ctx = await readSessionContext(sessionId, options);
+        await save(ctx, { conversationId: input.conversationId },
+          { ...presentation(input.presentation), draftRevision: randomUUID() }, { requireOpen: true });
+        return { ok: true };
+      }
       return write(sessionId, options, async (ctx) => {
         const record = await recordFor(ctx, input.conversationId);
         if (record.state === "closing") throw new Error("This conversation is closing.");
@@ -622,6 +682,7 @@ function createSessionConversations({
             patch.routingMetadata = { ...current.routingMetadata,
               assistant_routing: fields.routingMetadata.assistant_routing };
           }
+          if (Object.hasOwn(patch, "draft") || Object.hasOwn(patch, "attachments")) patch.draftRevision = randomUUID();
           return save(ctx, current, patch);
         });
         if (fields.recoveryOutcome === "succeeded") {

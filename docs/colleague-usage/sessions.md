@@ -42,6 +42,13 @@ the smallest panes keep secondary actions in **Session actions**. Update uses a
 vertical line through a circle, distinct from the branching pull-request icon.
 Hover or focus a control to read its action label.
 
+During a session **Save** or **Update**, you can still open existing temporary
+chats, read their saved history and keep a plain text draft. The draft's save
+state appears in that chat. Sending or changing assistant work waits for the
+repository operation to finish. If an Update response is lost, use the saved
+Update status and recovery controls before requesting another Update; a reload
+does not establish that the first one failed.
+
 Colleague can explain the tabs and open an accessible session through its
 navigation action when you explicitly ask it to do so.
 

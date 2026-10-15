@@ -92,7 +92,10 @@ vi.mock("@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", () 
 }));
 
 vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", () => ({
-  default: defineComponent({ render: () => null })
+  default: defineComponent({
+    inheritAttrs: false,
+    setup(_props, { attrs }) { return () => h("textarea", attrs); }
+  })
 }));
 
 vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", () => ({
@@ -760,7 +763,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const checkUpdate = vi.fn();
     const reviewUpdate = vi.fn();
     const container = { children: [], parent: null, type: "root" };
-    const { app } = mountWorkspace(container, {
+    const { app, workspace } = mountWorkspace(container, {
       onCheckUpdate: checkUpdate, onReviewUpdate: reviewUpdate, canReviewUpdate: true,
       sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
     });
@@ -788,6 +791,27 @@ describe("Temporary AI recovery workspace accessibility", () => {
       await nextTick();
       expect(button.props.disabled).toBe(true);
       expect(nodeText(container)).toContain("Checking Update…");
+      const draft = findNode(container, node => node.props?.["aria-label"] === "Message temporary AI");
+      expect(draft.props.disabled).toBe(false);
+      expect(draft.props["attachments-enabled"]).toBe(false);
+      temporary.tasks.value[0].recoveryOutcome = "";
+      workspace.$.props.repositoryBusy = true;
+      await nextTick();
+      expect(draft.props.disabled).toBe(false);
+      expect(draft.props["attachments-enabled"]).toBe(false);
+      expect(button.props.disabled).toBe(true);
+      draft.props.onSubmit();
+      expect(temporary.send).not.toHaveBeenCalled();
+      workspace.$.props.repositoryBusy = false;
+      temporary.tasks.value[0].state = "closing";
+      await nextTick();
+      expect(draft.props.disabled).toBe(true);
+      expect(button.props.disabled).toBe(true);
+      temporary.tasks.value[0].state = "open";
+      temporary.tasks.value[0].status = "closing";
+      await nextTick();
+      expect(draft.props.disabled).toBe(true);
+      temporary.tasks.value[0].status = "completed";
       temporary.tasks.value[0].recoveryOutcome = "succeeded";
       await nextTick();
       expect(findNode(container, (node) => node.props?.["data-temporary-ai-recovery"] === "")).toBeNull();

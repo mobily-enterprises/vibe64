@@ -516,7 +516,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return result;
   }
 
-  async function updateSessionWork({ reviewedConflictId = "", historyReview = undefined } = {}) {
+  async function updateSessionWork({ reviewedConflictId = "", historyReview = undefined, requestId = "" } = {}) {
     if (learningScope) {
       return false;
     }
@@ -524,21 +524,26 @@ function useVibe64SessionRuntimeHost(props, emit) {
     if (!sessionId) {
       return false;
     }
-    const result = await getHttpWebClient().request(
-      vibe64SessionPath(
-        readRefOrGetterValue(props.sessionData.sessionsApiPath),
-        sessionId,
-        "/updates/apply"
-      ),
-      {
-        body: vibe64RealtimeOriginPayload({ reviewedConflictId, ...(historyReview ? { historyReview } : {}) }),
-        method: "POST"
-      }
-    );
-    await Promise.allSettled([
-      refreshSessionData({ reason: "session-work-update" }),
-      refreshWorkState()
-    ]);
+    let result;
+    try {
+      result = await getHttpWebClient().request(
+        vibe64SessionPath(
+          readRefOrGetterValue(props.sessionData.sessionsApiPath),
+          sessionId,
+          "/updates/apply"
+        ),
+        {
+          body: vibe64RealtimeOriginPayload({ reviewedConflictId, ...(historyReview ? { historyReview } : {}),
+            ...(requestId ? { requestId } : {}) }),
+          method: "POST"
+        }
+      );
+    } finally {
+      await Promise.allSettled([
+        refreshSessionData({ reason: "session-work-update" }),
+        refreshWorkState()
+      ]);
+    }
     if (result?.ok === false) {
       throw vibe64ApiError(result, "This session could not be updated.");
     }

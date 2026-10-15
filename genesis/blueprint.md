@@ -789,7 +789,13 @@ server lifecycle and does not depend on the person keeping its chat open.
 Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
-Save and Update wait for active assistant preparation to finish. Save can proceed
+Save and Update wait for active assistant preparation to finish. During either
+operation, an existing temporary chat's saved history remains readable and its plain
+text draft can be saved. Assistant sends, model or attachment changes and chat
+lifecycle actions still use source coordination. A lost Update response remains
+unconfirmed until the saved operation identity and status resolve it; reload
+does not turn an uncertain result into a failure or start another Update.
+Save can proceed
 without assistant naming, using a checkpoint-based version name and a visible
 notice when naming is unavailable. Members can Save and create pull requests
 when the main chat uses a personal connection. Optional naming uses effective

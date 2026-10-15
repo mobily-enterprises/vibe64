@@ -44,6 +44,22 @@ chat keeps receiving progress, and a new assistant reply marks it unread. Open
 that chat to clear its unread indicator. Returning to the view or reloading
 restores saved chats and their history; it does not send the request again.
 
+While Save or Update is changing the session source, an existing chat's saved
+messages remain readable, including older pages. You can keep typing in its
+composer; plain draft text saves independently and stays there after reload.
+The draft's saving/saved/error indicator follows that text save, independently
+of background Update-recovery status saves. Successfully saving text does not
+confirm a failed model-setting save. Failed settings remain pending, and their
+error clears only after the pending state saves. A failed draft save retains your
+text; do not assume it will survive reload until it is saved. If another client has
+started Close, queued autosaves stop and the chat explains that cleanup must
+finish; they do not recreate the closing conversation.
+An unsaved new chat still needs its normal creation step. Sending a message,
+changing its model or files (including pasted or dropped files), stopping work and closing the chat wait for the
+source operation to finish. If one of those actions reports that another
+operation is starting, wait for Save or Update to settle and try that action
+again; do not resend a message whose delivery is uncertain.
+
 Leaving the view does not stop work or close a chat. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** to remove that chat after
 cleanup succeeds. Colleague can explain the current state and perform supported
@@ -68,6 +84,12 @@ preserves the chat.
 
 Colleague can explain recovery and perform supported chat actions when asked.
 Choosing a model, stopping work and closing a chat remain separate requests.
+
+During Update repair, **Checking Update…** means the repository operation has
+not yet been confirmed. After a disconnect or reload, an uncertain result is
+shown as unconfirmed, not as success or failure. Check the saved Update status
+before trying again. Only its confirmed result clears the checking state; a
+failed conflict check keeps its review and retry controls.
 
 Background focused tasks keep their selected Helper model and workload limits;
 they do not add their exchanges to Main. A profile audit identifies the selected

@@ -189,9 +189,19 @@ test("feature errors retain their JSON body while response hooks are asynchronou
     const routes = createVibe64FeatureRoutes(app.http, {
       projectContext, routeRelativePath: "vibe64", routeSurface: "app"
     });
-    const busy = { ok: false, code: "vibe64_agent_write_mode_busy",
+    const busy = { ok: false, code: "vibe64_agent_write_mode_busy", retryable: true,
       error: "The assistant is still reconnecting. Wait until it is ready, then try again." };
-    routes.serviceRoute("GET", "/busy", { failureStatus: 400 }, () => busy);
+    routes.serviceRoute("GET", "/busy", {}, () => busy);
+    routes.actionRoute("GET", "/busy-action", {
+      actionId: "unit.busy.read", summary: "Read a busy action."
+    });
+    const actionReply = testReply();
+    const actionRoute = app.registeredRoutes.find(route => route.path.endsWith("/busy-action"));
+    await actionRoute.handler({
+      params: routeProjectParams(), async executeAction() { return busy; }
+    }, actionReply);
+    assert.equal(actionReply.statusCode, 409);
+    assert.deepEqual(actionReply.payload, busy);
     const server = Fastify();
     server.addHook("onSend", async (_request, _reply, payload) => {
       if (payload) await new Promise((resolve) => setImmediate(resolve));
@@ -200,7 +210,7 @@ test("feature errors retain their JSON body while response hooks are asynchronou
     for (const route of app.registeredRoutes) server.route({ method: route.method, url: route.path, handler: route.handler });
     try {
       const response = await server.inject({ method: "GET", url: `${apiBase}/vibe64/busy` });
-      assert.equal(response.statusCode, 400);
+      assert.equal(response.statusCode, 409);
       assert.equal(response.body, JSON.stringify(busy));
       const invalidProject = await server.inject({ method: "GET", url: "/api/app/bad!/vibe64/busy" });
       assert.equal(invalidProject.statusCode, 422);

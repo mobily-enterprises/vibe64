@@ -139,6 +139,17 @@ describe("temporary AI mounted lifetime", () => {
     expect(patches[0][1].body).not.toHaveProperty("agentSettings");
   });
 
+  it("restores an interrupted Update check as unconfirmed with its original operation identity", async () => {
+    http.request.mockResolvedValue({ conversations: [{ conversationId: "conversation-1", title: "Resolve Update",
+      status: "completed", recoveryOperation: "update", recoveryOutcome: "checking",
+      recoveryRequestId: "original-update", draft: "Keep typing", messages: [] }] });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.updateRepairTask.value).toMatchObject({ recoveryOutcome: "unconfirmed",
+      recoveryRequestId: "original-update", draft: "Keep typing", draftSaveState: "saved" });
+    expect(http.request.mock.calls.every(([, options]) => options.method === "GET")).toBe(true);
+  });
+
   it("persists explicit model edits without replaying them on later draft saves", async () => {
     const firstSave = Promise.withResolvers();
     let patchCount = 0;

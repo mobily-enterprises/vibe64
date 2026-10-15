@@ -554,6 +554,9 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
   });
   service = createSessionConversations({ systemRoot: root, sessionAgent, conversationRuntime: common, actions, attachments,
     prepareAgentSkills: async () => {},
+    readSessionContext: async (sessionId, options = {}) => ({
+      ...options, runtime, session: await runtime.getSession(sessionId)
+    }),
     runAgentWrite: async (sessionId, options, operation, lockOptions) => {
       const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
         const currentSession = await runtime.getSession(sessionId);

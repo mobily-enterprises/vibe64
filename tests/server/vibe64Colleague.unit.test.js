@@ -1230,8 +1230,10 @@ test("learning-task polling guides Main once after meaningful evidence and retai
   assert.equal(f.observations.starts.length, 0, "Learning evidence notifies Main without waking Colleague's model");
   const duplicate = await watchAction(f, "learning-watch.observe", event);
   assert.equal(duplicate.duplicate, true);
+  const repeatedFact = await watchAction(f, "learning-watch.observe", { ...event, eventId: "gesture-2" });
+  assert.equal(repeatedFact.duplicate, false, "a distinct browser event retains its own receipt");
   await new Promise(resolve => setTimeout(resolve, 30));
-  assert.equal(guidance.length, 2, "a duplicate event cannot notify Main again");
+  assert.equal(guidance.length, 2, "repeated task evidence cannot notify Main again, even with a new event ID");
   await watchAction(f, "watch.pause", { watchId: input.watchId });
   await assert.rejects(watchAction(f, "learning-watch.observe", { ...event, eventId: "gesture-2" }), /not active/);
   await watchAction(f, "watch.resume", { watchId: input.watchId,

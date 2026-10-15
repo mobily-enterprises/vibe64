@@ -1445,7 +1445,7 @@ function createService({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
       const result = await runMainAgentWrite(sessionId, options, operation,
-        { operation: "assistant-routing", waitMs: AGENT_WRITE_WAIT_MS });
+        { operation: "assistant-routing", waitMs: options.lockWaitMs ?? AGENT_WRITE_WAIT_MS });
       if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
       return result;
     },
@@ -2572,6 +2572,11 @@ function createService({
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
+    readSessionContext: async (sessionId, options = {}) => {
+      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      return { ...options, runtime, session };
+    },
     prepareAgentSkills: prepareAgentSkillsInsideAgentWrite,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event)

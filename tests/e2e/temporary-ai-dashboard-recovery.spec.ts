@@ -196,7 +196,13 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       expect(updateInputs[0].reviewedConflictId).toBe("");
       await expect(checkUpdate).toBeDisabled();
       await expect(workspace.getByRole("button", { name: "Close Resolve repository update", exact: true })).toBeDisabled();
-      await expect(workspace.getByLabel("Message temporary AI")).toBeDisabled();
+      const draft = workspace.getByLabel("Message temporary AI");
+      await expect(draft).toBeEnabled();
+      await draft.fill("Keep my draft while Update checks the repair.");
+      await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
+      await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeDisabled();
+      await draft.clear();
+      await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
       const activity = page.getByLabel("Session activity", { exact: true });
       await expect(activity).toBeHidden();
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
@@ -268,6 +274,66 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   }
 
   for (const width of [390, 1280]) {
+    for (const result of ["ready", "failed"]) {
+      test(`saved Update ${result} result and draft recover after reload at ${width}px`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 844 });
+        let operation: Record<string, unknown> = {
+          operationId: "previous-update", status: "failed", code: "vibe64_session_update_conflict",
+          error: "Review messages.vue"
+        };
+        let updates = 0;
+        const captured = await mockRepositoryRecovery(page, server, {
+          code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue",
+          async applyUpdate(input) {
+            updates += 1;
+            operation = { operationId: "review-update", requestId: input.requestId, status: "running" };
+            return { ok: true };
+          }
+        });
+        await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/work`, route => fulfillJson(route, {
+          ok: true, unsaved: true, operation: null, updateOperation: operation
+        }));
+        await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
+        const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+        if (await showChat.isVisible()) await showChat.click();
+        await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
+        const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+        await workspace.getByRole("button", { name: "Check Update", exact: true }).click();
+        await expect.poll(() => updates).toBe(1);
+        const draft = workspace.getByLabel("Message temporary AI");
+        await expect(draft).toBeEnabled();
+        await draft.fill("Keep this reply through reload.");
+        await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
+        await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeDisabled();
+        await page.screenshot({ path: testInfo.outputPath("draft-during-update.png"), animations: "disabled" });
+        operation.status = result;
+        if (result === "failed") operation.error = "One conflict still needs review.";
+        await page.reload();
+        await openTemporaryChat(page);
+        await expect(draft).toHaveValue("Keep this reply through reload.");
+        await expect(workspace).toContainText("Temporary recovery complete.");
+        if (result === "ready") {
+          await expect(workspace).toContainText("Session updated. Your changes were preserved. Nothing was published.");
+        } else {
+          await expect(workspace.getByText("Update needs attention", { exact: true })).toBeVisible();
+          await workspace.getByText("Details", { exact: true }).click();
+          await expect(workspace.getByText("The Update check did not succeed.", { exact: false })).toBeVisible();
+          await expect(workspace.getByRole("button", { name: "Check Update", exact: true })).toBeEnabled();
+          await expect(workspace).not.toContainText("Session updated.");
+        }
+        await expect(workspace).not.toContainText("Checking Update…");
+        await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeEnabled();
+        await page.screenshot({ path: testInfo.outputPath("restored-update-result.png"), animations: "disabled" });
+        if (result === "failed") {
+          await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
+          await expect(page.getByText("One conflict still needs review.", { exact: false }).first()).toBeVisible();
+        }
+        expect(updates).toBe(1);
+        expect(captured.temporaryCreates).toHaveLength(1);
+        expect(captured.temporaryTurns).toHaveLength(1);
+      });
+    }
+
     test(`repair chat replaces the persisted Update failure banner at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
       const diagnostic = "1 file needs review: data-overview.json.";

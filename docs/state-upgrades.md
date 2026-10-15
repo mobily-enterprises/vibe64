@@ -99,6 +99,16 @@ permissions opportunistically. Project-specific upgrades must explicitly
 enumerate their canonical state through its owning subsystem and report each
 affected project; never infer it from the current editor tab.
 
+## Temporary conversation draft identity
+
+`20261014-conversation-draft-identity` records the new-write boundary for
+temporary-chat draft and admitted-submission revisions. Older records have no
+revision; their saved drafts remain readable and are not inferred to belong to
+an in-flight native submission. The next draft save establishes a revision.
+There is no historical conversion or backup because no reliable old submission
+identity exists to derive. Live deployment must still apply the ordered ledger
+with writers stopped before activating code that writes these fields.
+
 ## Colleague assignment records
 
 Colleague's optional `assignments` list is created only by an explicit assignment

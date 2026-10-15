@@ -11,6 +11,13 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
 
+Save and Update can take time. Existing temporary chats remain readable, and
+plain text typed in an existing chat is saved without waiting for the source
+operation. A new assistant send or change to its model or attachments waits
+until that operation finishes. If the Update request loses its response, inspect
+the current Update operation in this session before starting another one; a
+disconnected browser does not prove that Update failed or succeeded.
+
 Use **Dismiss** to hide an inactive Save or Update notice. This browser remembers
 each dismissed operation in that project and session, including after reload or
 dismissing another notice. A new failed attempt still appears. Dismiss changes
