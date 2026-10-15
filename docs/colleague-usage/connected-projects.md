@@ -15,6 +15,15 @@ also edit this tracked source file directly. Stack contains technology and gener
 placement/treatment instructions, never repository identities or initial lists.
 Opening Settings and preparing a workspace do not create or import this file.
 
+For concurrent hosted tasks, configure each receiving project's **Project settings
+→ Development database → A separate database for each session** before opening
+its sessions. **One database shared by this project** permits only one open
+session, including connected contributions, even for a library that uses no
+database. An existing open session therefore blocks another contribution.
+Preserve that work; change the policy only when all sessions are closed, then
+use workspace preparation **Retry**. Preparation never archives existing work
+or changes the receiving project's database policy for you.
+
 For each entry, provide a **Name**, a **GitHub repository URL**, and a
 **Relationship**: Dependency for a library or tool; Composition for source
 assembled into this project. Use an HTTPS URL without credentials. The same
