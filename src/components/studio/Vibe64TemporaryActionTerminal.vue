@@ -126,7 +126,8 @@ const forwardedSlots = [
   "overlay"
 ];
 const visible = computed(() => !props.dismissed && Boolean(
-  props.active || props.error || props.status === "required" || detailsViewed.value
+  props.active || props.error || props.status === "required" ||
+  (detailsViewed.value && Boolean(props.status || props.stage || props.output))
 ));
 const summaryText = computed(() => {
   const outputLine = terminalLastMeaningfulLine(props.output);

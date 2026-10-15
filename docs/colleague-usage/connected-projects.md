@@ -5,6 +5,16 @@ control remains available. Save checks access and state again and reports the
 blocker without pushing the main project. An unavailable status does not count
 as a merged contribution.
 
+Checking connected Save status can take longer on a busy development workspace
+because it checks each receiving repository. Allow up to two minutes for the
+check. If status remains unavailable, use Save to check again and read its
+reported blocker; an incomplete check never publishes the main project.
+
+The session badge shows **Unsaved changes** when a connected repository needs
+publication, even if the main repository is clean. After connected Save succeeds,
+the result lists the pushed commits. An empty progress card closes when the action
+finishes; opened details with real output remain available until dismissed.
+
 Open the intended project and session, then **Dashboard → Project settings →
 Connected projects**. On phones, use **Show project** and **Dashboard section**
 to reach Project settings. The list belongs to the displayed source checkout.

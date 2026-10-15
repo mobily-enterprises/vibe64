@@ -205,6 +205,22 @@ describe("Vibe64 terminal lifecycle components", () => {
     app.unmount();
   });
 
+  it("hides viewed progress when a completed action leaves no operation or output", async () => {
+    const state = reactive({ active: true, status: "", stage: "", output: "" });
+    const { app, container } = mount(defineComponent({
+      render: () => h(Vibe64TemporaryActionTerminal, { ...state, title: "Save work" })
+    }));
+    findNode(container, (node) => (
+      node.type === "button" && node.props?.["aria-label"] === "Show Save work details"
+    )).props.onClick();
+    await nextTick();
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBeTruthy();
+    state.active = false;
+    await nextTick();
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBeNull();
+    app.unmount();
+  });
+
   it("allows collapse while active and dismissal only after the operation finishes", async () => {
     const state = reactive({
       active: false,

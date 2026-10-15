@@ -285,7 +285,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
           sessionId,
           "/work"
         ),
-        { method: "GET" }
+        // Connected repositories require sequential authenticated Git checks.
+        { method: "GET", timeoutMs: 120_000 }
       );
       if (result?.ok === false) {
         throw new Error(vibe64ApiResponseError(result, "Session work could not be inspected."));

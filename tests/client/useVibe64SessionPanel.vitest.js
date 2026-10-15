@@ -225,6 +225,22 @@ describe("useVibe64SessionPanel", () => {
     });
   });
 
+  it("shows connected work as unsaved even when the main repository is clean", () => {
+    const work = {
+      checkedAt: "now",
+      unsaved: false,
+      changedPaths: [],
+      connectedSaveRequired: true,
+      updateStatusPending: true
+    };
+    expect(sessionRepositoryWorkState(work)).toEqual({
+      checkedAt: "now", changedCount: 0, state: "unsaved",
+      updateAvailable: false, updateStatusPending: true
+    });
+    expect(sessionRepositoryWorkState({ ...work, connectedSaveRequired: false }).state).toBe("saved");
+    expect(sessionRepositoryWorkState({ ...work, operation: { status: "running" } }).state).toBe("saving");
+  });
+
   it("keeps ten uninspected session chips in a bounded honest checking state", () => {
     const sessions = Array.from({ length: 10 }, (_, index) => ({
       sessionId: `session-${index + 1}`,

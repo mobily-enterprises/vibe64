@@ -288,11 +288,12 @@ function useVibe64SessionRepositoryStatusRegistry({
   const queue = createVibe64SessionRepositoryStatusQueue({
     onState,
     async requestWork(sessionId) {
+      // Match the selected session's budget for connected Git inspections.
       return getHttpWebClient().request(vibe64SessionPath(
         apiPath.value,
         sessionId,
         "/work"
-      ), { method: "GET" });
+      ), { method: "GET", timeoutMs: 120_000 });
     }
   });
 

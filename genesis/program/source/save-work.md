@@ -1,5 +1,12 @@
 # Review and publish session work
 
+The existing session repository-state projection treats `connectedSaveRequired`
+as unsaved work without inventing a main-repository changed-file count. Running
+operations and failed/unknown inspections keep their existing precedence. The
+temporary action terminal retains viewed completed details only when status,
+stage or output remains; a connected Save with no origin operation therefore
+cannot leave an empty "Working…" card after success.
+
 Receiving-status failures preserve the originating repository's work inspection
 and ordinary Main Save presentation. The Save operation rechecks connected
 authority and work before publication, so an unknown or inaccessible receiver

@@ -329,6 +329,10 @@ workspace. Expired payloads return 410 while their descriptions remain readable.
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
 chat updates do not need a new managed Git process to report activity.
+Both selected-session and toolbar work-status reads allow two minutes for the
+sequential authenticated Git checks of connected repositories. Their existing
+refresh queues and late-result guards remain authoritative; this per-request
+deadline does not change the shared HTTP client's ordinary read timeout.
 Already visited sessions keep their runtime hosts mounted under `v-show`.
 Selecting one no longer reloads conversation history or unconditionally reconciles
 its provider. Actor-scoped assistant-access and model-routing resources remain
