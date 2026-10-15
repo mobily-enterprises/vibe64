@@ -3127,6 +3127,52 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(nextAttemptView.workspaceSetupDismissed.value).toBe(false);
   });
 
+  it("keeps separate Save and Update dismissals through refreshed operations and reloads", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    const failedSave = { operationId: "save-a", status: "failed", error: "Save failed." };
+    const failedUpdate = { operationId: "update-b", status: "failed", error: "Update failed." };
+    const { view, props } = await createViewWithProps({ workState: { operation: failedSave } });
+    expect(view.dismissSaveWorkActivity()).toBe(true);
+
+    props.workState = { updateOperation: failedUpdate };
+    await nextTick();
+    expect(view.saveWorkActivityDismissed.value).toBe(false);
+    expect(view.dismissSaveWorkActivity()).toBe(true);
+
+    props.workState = { operation: { ...failedSave } };
+    await nextTick();
+    expect(view.saveWorkActivityDismissed.value).toBe(true);
+    for (const workState of [{ operation: failedSave }, { updateOperation: failedUpdate }]) {
+      const restored = await createView({ workState });
+      expect(restored.saveWorkActivityDismissed.value).toBe(true);
+    }
+    props.workState = { updateOperation: { ...failedUpdate, operationId: "update-c" } };
+    await nextTick();
+    expect(view.saveWorkActivityDismissed.value).toBe(false);
+    const anotherSession = await createView({
+      session: { ...viewProps().session, sessionId: "session-2" },
+      workState: { operation: failedSave }
+    });
+    expect(anotherSession.saveWorkActivityDismissed.value).toBe(false);
+  });
+
+  it("retains an existing dismissal when another operation is dismissed", async () => {
+    const storage = memoryStorage();
+    storage.setItem("vibe64:short-action-dismissals:v1:chat-test:session-1",
+      JSON.stringify({ saveWork: "save-work:existing-save" }));
+    vi.stubGlobal("window", { localStorage: storage });
+    const existing = { operationId: "existing-save", status: "failed", error: "Save failed." };
+    const { view, props } = await createViewWithProps({ workState: { operation: existing } });
+    expect(view.saveWorkActivityDismissed.value).toBe(true);
+    props.workState = { updateOperation: { operationId: "new-update", status: "failed", error: "Update failed." } };
+    await nextTick();
+    expect(view.dismissSaveWorkActivity()).toBe(true);
+    props.workState = { operation: existing };
+    await nextTick();
+    expect(view.saveWorkActivityDismissed.value).toBe(true);
+  });
+
   it("turns the toolbar Save action into Update when the panel monitor finds an incoming version", async () => {
     const updateSessionWork = vi.fn(async () => ({ ok: true, status: "updated" }));
     const view = await createView({

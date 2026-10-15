@@ -1402,7 +1402,8 @@ Update is still running or require an AI repair for routine preparation.
 Short actions show one compact progress line that a person can dismiss or open
 for full history. Their output shows human-readable messages and omits internal
 bookkeeping entries that have no message. The browser remembers a dismissal for that exact attempt
-across reloads, while a new attempt appears normally. Long-running application
+across reloads. Save and Update retain each dismissal independently, so dismissing
+another operation does not reveal an earlier one; a new attempt appears normally. Long-running application
 output stays out of the way until opened and remains available after the run
 ends. Project agents are instructed to keep full test logs in local artifacts
 and return concise results, preserving failure evidence and Preview-restoration errors without

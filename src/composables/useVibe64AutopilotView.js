@@ -491,6 +491,7 @@ function useVibe64AutopilotView(props, emit, {
   watch(shortActionDismissalsStorageKey, (storageKey) => {
     const stored = readLocalStorageJson(storageKey, {});
     shortActionDismissals.value = {
+      ...stored,
       saveWork: normalizedAgentTurnText(stored?.saveWork),
       workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup),
       checkpoint: normalizedAgentTurnText(stored?.checkpoint)
@@ -504,8 +505,10 @@ function useVibe64AutopilotView(props, emit, {
       return false;
     }
     shortActionDismissals.value = {
+      ...readLocalStorageJson(storageKey, {}),
       ...shortActionDismissals.value,
-      [name]: key
+      // Save and Update can alternate; neither may forget a dismissed operation.
+      ...(name === "saveWork" ? { [key]: true } : { [name]: key })
     };
     writeLocalStorageJson(storageKey, shortActionDismissals.value);
     return true;
@@ -1382,7 +1385,8 @@ function useVibe64AutopilotView(props, emit, {
   });
   const saveWorkActivityDismissed = computed(() => Boolean(
     saveWorkActivityKey.value &&
-    shortActionDismissals.value.saveWork === saveWorkActivityKey.value
+    (shortActionDismissals.value.saveWork === saveWorkActivityKey.value ||
+      shortActionDismissals.value[saveWorkActivityKey.value] === true)
   ));
   const saveWorkActivityLabel = computed(() => (
     saveWorkActivityIsUpdate.value ? sessionUpdateLabel.value : "Save work"

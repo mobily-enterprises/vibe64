@@ -11,6 +11,12 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
 
+Use **Dismiss** to hide an inactive Save or Update notice. This browser remembers
+each dismissed operation in that project and session, including after reload or
+dismissing another notice. A new failed attempt still appears. Dismiss changes
+only the notice; it does not resolve a repository failure or stop active work.
+On phones, reveal chat to reach the notice and its controls.
+
 ## Apply an Update after resolving conflicts
 
 If Update reports conflicting files, repair them manually, in Main chat, or with

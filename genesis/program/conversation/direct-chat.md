@@ -4024,6 +4024,14 @@ Public Vibe64 does not define hosted platform update
 policy; hosts without this guidance keep their original instructions.
 
 
+## Save and Update notice dismissals
+
+Save and Update notices retain operation-keyed dismissal entries in the existing
+project/session browser preference record. The previous single saved dismissal
+remains respected; new dismissals do not replace it or one another. Writes merge
+other stored entries, and a new operation ID remains visible. This is presentation
+state only; operation history and server recovery are unchanged.
+
 ## Recovery snapshot notice
 
 The existing `codex_turn_checkpoint` task reports whether the latest observed
