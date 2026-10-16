@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import emptyHeaderTable from "../fixtures/assistantEmptyHeaderTable.json";
 
 import {
   parseLongTextInlineParts,
@@ -211,6 +212,29 @@ describe("Studio long text review blocks", () => {
         type: "table"
       }
     ]);
+  });
+
+  it("renders the reported empty-header estimate as a table without flattening its rows", () => {
+    const blocks = parseLongTextReviewBlocks(emptyHeaderTable.text);
+    const table = blocks.find((block) => block.type === "table");
+    expect(table).toMatchObject({
+      headers: ["", ""],
+      alignments: ["left", "left"],
+      rows: [
+        ["Main-owned open checks", "111 (the second session's 27 are separate)"],
+        ["Mix", "Mostly browser and data proofs against V1, plus about 20 final acceptance checks"],
+        ["S001-B1 so far", "About 3 hours and 60% done"],
+        ["Typical heavy browser check", "2–4 hours each"],
+        ["Faster checks", "Provider checks (now theory-only) and accepting the second session's evidence: 15–45 minutes each"],
+        ["Total", "About 150–300 hours of continuous work, run strictly one check at a time"]
+      ]
+    });
+    expect(blocks[0].text).toContain("My rough estimate is 2–4 weeks");
+    expect(blocks.at(-1).text).toContain("1.5–2.5 weeks");
+    expect(parseLongTextReviewBlocks("```markdown\n| | |\n|---|---|\n| a | b |\n```")).toEqual([
+      { type: "code", text: "| | |\n|---|---|\n| a | b |" }
+    ]);
+    expect(parseLongTextReviewBlocks("| | |\n| ordinary | prose |").every((block) => block.type === "paragraph")).toBe(true);
   });
 
   it("parses compact single-line pipe tables from flattened chat text", () => {

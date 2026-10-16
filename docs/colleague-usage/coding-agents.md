@@ -286,3 +286,9 @@ If Claude rejects an input before writing it to the native process, its retained
 request becomes retryable after delivery inspection. Use **Retry** on that exact
 message. An uncertain acknowledgement still uses **Retry delivery check** first;
 that action checks the existing receipt and does not submit a duplicate.
+
+### Tables in chat
+
+Assistant replies display Markdown tables as tables, including tables with blank
+column headings. On narrow screens, scroll a wide table horizontally to read
+its remaining columns. Reloading preserves the same table from saved history.
