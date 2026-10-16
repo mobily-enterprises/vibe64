@@ -73,13 +73,14 @@
           title="New temporary AI task"
           type="button"
           variant="text"
-          @click="newTaskOpen = true"
+          @click="openNewTask"
         />
       </div>
       <span class="vibe64-temporary-ai__tabs-spacer" />
     </nav>
 
-    <v-dialog v-if="newTaskOpen" v-model="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask">
+    <v-dialog v-if="newTaskOpen" :model-value="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask"
+      @update:model-value="value => { if (!value) cancelNewTask(); }">
       <v-card title="New temporary chat">
         <v-card-text>
           <v-checkbox v-model="includeRecentChatContext" :disabled="creatingTask || Boolean(creatingTaskId)" label="Include recent chat context" hide-details />
@@ -87,7 +88,7 @@
           <v-alert v-if="createTaskError" type="error" variant="tonal">{{ createTaskError }}</v-alert>
         </v-card-text>
         <v-card-actions>
-          <v-btn :disabled="creatingTask" @click="newTaskOpen = false">Cancel</v-btn>
+          <v-btn :disabled="creatingTask" @click="cancelNewTask">Cancel</v-btn>
           <v-btn :loading="creatingTask" :disabled="creatingTask" @click="createTask">Create chat</v-btn>
         </v-card-actions>
       </v-card>
@@ -400,6 +401,7 @@ function selectTask(id) {
   return temporary.selectTask(id);
 }
 const newTaskOpen = ref(false);
+const newTaskReturnsToMain = ref(false);
 const includeRecentChatContext = ref(false);
 const creatingTask = ref(false);
 const creatingTaskId = ref("");
@@ -407,12 +409,22 @@ const createTaskError = ref("");
 watch(() => [props.projectSlug, props.sessionId], () => {
   selectionRevision.value += 1;
   newTaskOpen.value = false;
+  newTaskReturnsToMain.value = false;
   creatingTask.value = false;
   creatingTaskId.value = "";
 });
 watch(newTaskOpen, value => {
   if (value) { includeRecentChatContext.value = false; createTaskError.value = ""; creatingTaskId.value = ""; }
 });
+function openNewTask() {
+  newTaskReturnsToMain.value = !activeTask.value && !hostConversation?.value?.selected;
+  newTaskOpen.value = true;
+}
+function cancelNewTask() {
+  if (creatingTask.value) return;
+  newTaskOpen.value = false;
+  if (newTaskReturnsToMain.value) selectMainChat();
+}
 async function createTask() {
   const revision = ++selectionRevision.value;
   creatingTask.value = true;
@@ -733,7 +745,7 @@ function showWorkspace() {
   hostConversation?.value?.close();
   if (!temporary.tasks.value.length) {
     temporary.open.value = true;
-    newTaskOpen.value = true;
+    openNewTask();
     return null;
   }
   const task = temporary.showWorkspace();

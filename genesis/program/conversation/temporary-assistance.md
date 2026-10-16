@@ -837,6 +837,12 @@ turn identities, metadata and stored history.
 
 ## Optional recent Main context
 
+The existing creation dialog remembers whether it was opened without a selected
+temporary or host conversation. Cancel and dialog dismissal then use the normal
+Main-selection event, even if saved chats finish restoring while the dialog is
+open. Otherwise the selected conversation and draft remain untouched. Cancellation
+never creates a record or sends a turn.
+
 The ordinary New temporary AI task control offers an unchecked context-copy
 option. Creation captures at most forty canonical visible user, assistant and
 commentary messages from the authorized session's Main transcript, bounded to

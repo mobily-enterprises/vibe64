@@ -353,6 +353,68 @@ describe("Temporary AI recovery workspace accessibility", () => {
     } finally { app.unmount(); }
   });
 
+  it.each(["Cancel", "dismiss", "restored while open"])("returns the first temporary-chat dialog to Main on %s without creating or sending", async (action) => {
+    const temporary = temporaryAiTestState();
+    temporary.closeWorkspace.mockImplementation(() => { temporary.open.value = false; });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const selectedMain = vi.fn(() => workspace.closeWorkspace());
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, onSelectMainChat: selectedMain });
+    try {
+      workspace.showWorkspace();
+      await nextTick();
+      expect(workspace.visible).toBe(true);
+      if (action === "restored while open") {
+        temporary.tasks.value = [{ id: "restored", title: "Saved chat", draft: "Keep this draft", messages: [],
+          agentSettings: {}, delivery: createAssistantMessageDelivery() }];
+        temporary.activeTaskId.value = "restored";
+        await nextTick();
+      }
+      if (action === "dismiss") {
+        findNode(container, node => node.props?.["aria-label"] === "New temporary chat").props["onUpdate:modelValue"](false);
+      } else {
+        findNode(container, node => node.type === "button" && nodeText(node) === "Cancel").props.onClick();
+      }
+      await nextTick();
+      expect(selectedMain).toHaveBeenCalledTimes(1);
+      expect(workspace.visible).toBe(false);
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.closeTask).not.toHaveBeenCalled();
+      if (action === "restored while open") expect(temporary.tasks.value[0].draft).toBe("Keep this draft");
+    } finally { app.unmount(); }
+  });
+
+  it.each(["temporary", "host"])("Cancel preserves an existing selected %s conversation and draft", async (selection) => {
+    const temporary = temporaryAiTestState();
+    const task = { id: "saved", title: "Saved chat", draft: "Keep this draft", messages: [],
+      agentSettings: {}, delivery: createAssistantMessageDelivery() };
+    temporary.tasks.value = [task];
+    temporary.activeTaskId.value = task.id;
+    temporary.open.value = selection === "temporary";
+    temporaryProvider.value = temporary;
+    const host = ref({ selected: selection === "host", label: "Colleague", close: vi.fn(), component: defineComponent({ render: () => null }) });
+    const selectedMain = vi.fn();
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "one", active: true, onSelectMainChat: selectedMain }, host);
+    try {
+      await nextTick();
+      findNode(container, node => node.props?.["aria-label"] === "New temporary AI task").props.onClick();
+      await nextTick();
+      findNode(container, node => node.type === "button" && nodeText(node) === "Cancel").props.onClick();
+      await nextTick();
+      expect(selectedMain).not.toHaveBeenCalled();
+      expect(host.value.close).not.toHaveBeenCalled();
+      expect(host.value.selected).toBe(selection === "host");
+      expect(temporary.open.value).toBe(selection === "temporary");
+      expect(temporary.activeTaskId.value).toBe(task.id);
+      expect(temporary.tasks.value[0].draft).toBe("Keep this draft");
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.closeTask).not.toHaveBeenCalled();
+    } finally { app.unmount(); }
+  });
+
   it("offers an unchecked context copy and waits for confirmed creation before closing", async () => {
     const pending = deferred();
     const temporary = temporaryAiTestState();

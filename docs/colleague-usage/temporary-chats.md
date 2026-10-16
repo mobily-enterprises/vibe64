@@ -4,6 +4,11 @@ Open **Temporary AI** from the session toolbar, or from **Session actions** in
 a narrow chat. Select the temporary chat you want to change. Its **Chat mode**
 icon is inside the message box.
 
+In **New temporary chat**, **Cancel** returns directly to Main when starting the
+first chat. If another temporary or host conversation was selected, it stays
+selected with its draft intact. Dismissing the dialog has the same effect; no
+chat is created and no message is sent. This applies on desktop and narrow screens.
+
 Ordinary temporary chats offer **Custom**, **Senior** and **Junior**. Choose
 **Custom** to open the **Orchestrator**, **Model** and **Thinking** fields. Select
 an available connection and model, then **Apply**. The next message uses that
