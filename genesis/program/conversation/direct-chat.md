@@ -3527,7 +3527,10 @@ these account-setup operations do not create a conversation runner.
   renewal facade: empty requests finish before storage reads; nonempty requests
   retain the fresh session source and environment lookup. `codexStartupHealth`
   owns the finished-task admission predicate, and `codexTurnOutcomeNotice` owns
-  the existing response-delivery failure wording. `terminalShared` supplies project-scoped namespaces;
+  the existing response-delivery and provider-failure wording. Known provider
+  failures retain their notice, including usage-limit detail, even when JSKIT
+  recovers saved assistant output from that turn; output preservation does not
+  replace the terminal outcome. `terminalShared` supplies project-scoped namespaces;
   execution's `terminalSessions` owns PTY admission, I/O, subscribers and cleanup.
   `codexInteractiveTerminals` owns the original session/global launch and access
   workflow around these facilities. It joins the same native run owner before

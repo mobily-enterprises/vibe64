@@ -224,6 +224,14 @@ provider failure. **Stop**, service restart, missing final-response delivery and
 confirmed provider failure retain their distinct notices. Your saved file changes
 remain; inspect the result and send a new message when ready to continue.
 
+If Codex reaches its total usage allowance, the chat shows the provider's limit
+message and any retry time it supplies, even if Codex already wrote progress or
+an answer during that turn. Saved replies and file changes remain. Use **View
+Codex usage & billing** to inspect the allowance, wait for availability, or choose
+another available AI through **Chat mode**. Restarting the conversation does not
+reset the allowance. Colleague can explain these options; it cannot increase
+your provider allowance.
+
 ## Answer assistant questions
 
 For numbered question fields, suggested answers and normal chat replies, read
