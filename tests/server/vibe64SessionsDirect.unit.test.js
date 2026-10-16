@@ -2394,6 +2394,88 @@ test("archiving retains main and temporary routing cleanup records", async () =>
   }
 });
 
+test("archive cancels exact pending routing outside its lock and retains delivery evidence", async () => {
+  for (const temporary of [false, true]) for (const delivery of ["pending", "sending", "uncertain"]) {
+    const lock = agentWriteLockHarness();
+    const route = { messageId: "original", delivery, status: "waiting", input: { message: "Keep my history" },
+      attemptedMessageId: delivery === "pending" ? "" : "native-attempt" };
+    const metadata = { assistant_routing_request: JSON.stringify(route) };
+    const session = { sessionId: "session-1", status: "active", sourceReady: true, metadata: temporary ? {} : metadata };
+    const calls = [];
+    if (temporary) lock.store.listSessionConversations = async () => [{ conversationId: "chat", routingMetadata: metadata }];
+    const runtime = { store: lock.store, getSession: async () => session,
+      markSessionClosing: async () => { calls.push("closing"); return session; },
+      archiveSession: async () => { calls.push("archive"); return { ...session, status: "archived" }; } };
+    const cancel = async (id, input, options) => {
+      assert.equal(id, "session-1");
+      assert.equal(options.runtime, runtime);
+      assert.deepEqual(input, temporary ? { conversationId: "chat", messageId: "original" } : "original");
+      await requireAgentWrite(runtime, id, async () => {
+        calls.push("cancel");
+        metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
+      });
+    };
+    const service = createService({ project: { createRuntime: async () => runtime },
+      terminals: { cancelAssistantRoutingForSelection: cancel, cancelTemporaryConversationRouting: cancel,
+        closeSessionTerminals: async () => { calls.push("stop-native"); } },
+      workspaceSetupRunner: { isRunning: () => false, wait: () => null } });
+    assert.equal((await service.archiveSession("session-1")).ok, true);
+    assert.deepEqual(calls, ["cancel", "closing", "stop-native", "archive"]);
+    assert.deepEqual(JSON.parse(metadata.assistant_routing_request), { ...route, stopped: true });
+  }
+});
+
+test("archive cancellation failures retain the session and a reload retries cleanup", async () => {
+  const lock = agentWriteLockHarness();
+  const route = { messageId: "original", delivery: "pending", status: "waiting", helper: { conversationId: "owned-helper" } };
+  const session = { sessionId: "session-1", status: "active", sourceReady: true,
+    metadata: { assistant_routing_request: JSON.stringify(route) } };
+  let cleanupFailed = true;
+  let archived = false;
+  const runtime = { store: lock.store, getSession: async () => session,
+    markSessionClosing: async () => session,
+    archiveSession: async () => { archived = true; return { ...session, status: "archived" }; } };
+  const options = { project: { createRuntime: async () => runtime },
+    terminals: { async cancelAssistantRoutingForSelection() {
+      session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
+      if (cleanupFailed) throw Object.assign(new Error("The routing helper could not be closed. Retry Close."), { code: "cleanup-failed" });
+      session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true, helper: null });
+    }, closeSessionTerminals: async () => {} },
+    workspaceSetupRunner: { isRunning: () => false, wait: () => null } };
+  const failed = await createService(options).archiveSession("session-1");
+  assert.equal(failed.code, "cleanup-failed");
+  assert.equal(archived, false);
+  assert.equal(JSON.parse(session.metadata.assistant_routing_request).helper.conversationId, "owned-helper");
+  cleanupFailed = false;
+  assert.equal((await createService(options).archiveSession("session-1")).ok, true);
+  assert.equal(archived, true);
+});
+
+test("archive preserves pin and renewal guards before cancelling routing and rejects replacement work", async () => {
+  for (const guard of ["pinned", "renewal", "replacement", "stopped-replacement", "preparation"]) {
+    const lock = agentWriteLockHarness();
+    const session = { sessionId: "session-1", status: "active", sourceReady: true,
+      metadata: { assistant_routing_request: JSON.stringify({ messageId: "original", delivery: "pending", status: "waiting" }) } };
+    let cancelled = 0;
+    let preparing = false;
+    if (guard === "pinned") lock.store.assertSessionNotPinned = async () => { throw new Error("Unpin this session first."); };
+    if (guard === "renewal") lock.store.listSessionsForRenewal = async () => [{ status: "renewal_pending", metadata: { renewed_from: "session-1" } }];
+    const service = createService({ project: { createRuntime: async () => ({ store: lock.store, getSession: async () => session,
+      markSessionClosing: async () => { assert.fail("must not close"); } }) },
+      terminals: { async cancelAssistantRoutingForSelection() {
+        cancelled++;
+        session.metadata.assistant_routing_request = JSON.stringify({ messageId: "replacement", delivery: "pending", status: "waiting",
+          stopped: guard === "stopped-replacement" });
+        preparing = guard === "preparation";
+      } }, workspaceSetupRunner: { isRunning: () => preparing, wait: () => null } });
+    const result = await service.archiveSession("session-1");
+    assert.equal(result.ok, false);
+    assert.equal(cancelled, ["pinned", "renewal"].includes(guard) ? 0 : 1);
+    if (["replacement", "stopped-replacement"].includes(guard)) assert.equal(result.code, "vibe64_assistant_routing_pending");
+    if (guard === "preparation") assert.equal(result.code, "vibe64_workspace_setup_running");
+  }
+});
+
 test("an active Save keeps archiving out of its agent-write window", async () => {
   const lock = agentWriteLockHarness();
   let finishSave;

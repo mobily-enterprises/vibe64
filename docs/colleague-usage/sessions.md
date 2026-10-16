@@ -118,6 +118,13 @@ removes its active workspace. Desktop and mobile use the same confirmation.
 An OpenCode session can be archived before its main chat has started; an idle
 assistant with no native conversation does not need a main-turn Stop request.
 Its helper conversations and terminals still go through normal cleanup.
+Archiving also cancels pending Main and temporary-chat routing, waits for its
+owned helpers to stop, then closes native work through the normal cleanup path.
+You do not need to send the pending request or change AI accounts to close it.
+If routing cleanup takes longer than 30 seconds, the session stays available
+with a retryable cleanup error; choose **Archive session** again. A new request
+arriving during cancellation can also require another Close attempt. Pinning,
+renewal and active workspace preparation still prevent archival.
 Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
 If history preservation fails, the operation reports the error and keeps the

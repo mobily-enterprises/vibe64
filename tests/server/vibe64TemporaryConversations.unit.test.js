@@ -448,6 +448,37 @@ test("temporary Auto requests cannot retry or continue into planning or review",
   });
 });
 
+test("archive routing cleanup can finish a closing temporary chat without reopening it", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    let cleanupSucceeds = false;
+    f.sessionAgent.deleteEphemeralConversation = async () => ({ ok: cleanupSucceeds });
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    const record = await f.store.readSessionConversation("one", "chat");
+    const helperRoot = path.join(f.runtime.stateRoot, "assistant-helpers", "saved-router");
+    const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
+      scope: { id: "saved-router", runtimeRoot: path.join(helperRoot, "runtime"), workdir: path.join(helperRoot, "workdir") } };
+    await f.store.writeSessionConversation("one", "chat", { state: "closing", routingMetadata: { ...record.routingMetadata,
+      assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "failed", messageId: "owned-helper",
+        input: { message: "Preserved request" }, mode: "auto", helper }) } });
+    await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "other" }), /routing request changed/);
+    await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" }), /helper could not be closed/);
+    let retained = await f.store.readSessionConversation("one", "chat");
+    assert.equal(retained.state, "closing");
+    assert.equal(JSON.parse(retained.routingMetadata.assistant_routing_request).helper.runId, "router-turn");
+    cleanupSucceeds = true;
+    await f.restart().cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" });
+    retained = await f.store.readSessionConversation("one", "chat");
+    const request = JSON.parse(retained.routingMetadata.assistant_routing_request);
+    assert.equal(retained.state, "closing");
+    assert.equal(request.helper, null);
+    assert.equal(request.stopped, true);
+    assert.equal(request.input.message, "Preserved request");
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", { conversationId: "chat", message: "No" }), /closing/);
+    assert.equal(f.native.starts, 0);
+  });
+});
+
 test("Close retains a temporary chat when its saved helper cannot be cleaned up", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);

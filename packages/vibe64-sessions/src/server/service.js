@@ -758,127 +758,161 @@ function createService({
         throw error;
       }
       const runtime = await project.createRuntime({ inspectSource: false });
-      const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-        const currentSession = await runtime.getSession(sessionId, {
-          inspectSource: false
-        });
-        await runtime.store.assertSessionNotPinned(sessionId);
-        const conversations = await runtime.store.listSessionConversations(sessionId);
-        const routingRequests = [currentSession.metadata, ...conversations.map((record) => record.routingMetadata || {})]
-          .map((metadata) => JSON.parse(metadata?.assistant_routing_request || "null"));
-        if (routingRequests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
-          throw Object.assign(new Error("Finish or cancel pending chat routing and its cleanup before archiving this session."), {
-            code: "vibe64_assistant_routing_pending", retryable: true
-          });
-        }
-        const renewalSessions = await runtime.store.listSessionsForRenewal();
-        const reservedSuccessor = renewalSessions.find((session) => (
-          ["renewal_pending", "renewal_activating"].includes(text(session.status)) &&
-          text(session.metadata?.renewed_from) === sessionId
-        ));
-        if (reservedSuccessor) {
-          const error = new Error("Finish the session renewal using Retry before archiving its original session.");
-          error.code = "vibe64_session_renewal_blocks_archive";
-          throw error;
-        }
-        const sourceCreationFailed = currentSession.sourceReady !== true &&
-          text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
-        const stored = text(currentSession.metadata?.session_archive_operation);
-        const previous = stored ? JSON.parse(stored) : {};
-        if (stored && (!["running", "failed"].includes(previous.status) ||
-          !["stopping", "resources", "source"].includes(previous.phase))) {
-          throw new Error("Session archive state is invalid; its recovery evidence was preserved.");
-        }
-        const operation = {
-          phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
-            ? "stopping"
-            : previous.phase || (currentSession.metadata?.source_recovery_saved === "yes" ? "source" : "stopping"),
-          startedAt: previous.status === "running" && previous.startedAt || new Date().toISOString(),
-          status: "running"
-        };
-        const persist = () => runtime.store.writeMetadataValue(
-          sessionId, "session_archive_operation", JSON.stringify(operation)
-        );
-        async function advanceArchivePhase(phase) {
-          operation.phase = phase;
-          await persist();
-          await publishSessionChanged(sessionId, {
-            operation: "updated",
-            originId: text(input.originId),
-            reason: "session-archive-progress",
-            payload: { clientRefresh: { includeList: true } }
-          });
-        }
-        await persist();
-        try {
-          const closingSession = await runtime.markSessionClosing(sessionId, {
-            reason: "archived"
-          });
-          await publishSessionChanged(sessionId, {
-            operation: "updated",
-            originId: text(input.originId),
-            reason: "session-archiving",
-            payload: { clientRefresh: { includeList: true } },
-            session: closingSession
-          });
-          if (operation.phase === "stopping") {
-            await terminals.closeSessionTerminals(sessionId, { session: currentSession });
-            if (typeof terminals.removeOutputResultsForSession === "function") {
-              await terminals.removeOutputResultsForSession(sessionId);
-            }
-          }
-          if (prepareArchive) {
-            const prepared = await prepareArchive({
-              phase: operation.phase,
-              runtime,
-              session: await runtime.getSession(sessionId, { inspectSource: false })
+      let routingCancelled = false;
+      const cancelledRouting = new Map();
+      while (true) {
+        const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+          if (setupRunner.isRunning(sessionId)) {
+            throw Object.assign(new Error("Wait for workspace preparation to finish before archiving this session."), {
+              code: "vibe64_workspace_setup_running"
             });
-            if (prepared?.ok === false) {
-              throw Object.assign(new Error(prepared.error || "Session archive preparation failed."), {
-                code: prepared.code || "vibe64_session_archive_preparation_failed"
-              });
-            }
           }
-          if (operation.phase === "stopping") {
-            await advanceArchivePhase("resources");
+          const currentSession = await runtime.getSession(sessionId, {
+            inspectSource: false
+          });
+          await runtime.store.assertSessionNotPinned(sessionId);
+          const conversations = await runtime.store.listSessionConversations(sessionId);
+          const routingRequests = [{ metadata: currentSession.metadata }, ...conversations.map(record => ({
+            conversationId: record.conversationId, metadata: record.routingMetadata
+          }))].map(({ conversationId, metadata }) => ({
+            conversationId, request: JSON.parse(metadata?.assistant_routing_request || "null")
+          }));
+          const renewalSessions = await runtime.store.listSessionsForRenewal();
+          const reservedSuccessor = renewalSessions.find((session) => (
+            ["renewal_pending", "renewal_activating"].includes(text(session.status)) &&
+            text(session.metadata?.renewed_from) === sessionId
+          ));
+          if (reservedSuccessor) {
+            const error = new Error("Finish the session renewal using Retry before archiving its original session.");
+            error.code = "vibe64_session_renewal_blocks_archive";
+            throw error;
           }
-          if (operation.phase === "resources") {
-            if (!sourceCreationFailed && typeof project.releaseSessionResources === "function") {
-              const released = await project.releaseSessionResources({ sessionId });
-              if (released?.ok === false) {
-                throw new Error(released.error || "Session resources could not be archived.");
+          const routingToCancel = routingRequests.filter(({ conversationId, request }) => request?.helper ||
+            assistantRoutingStatusIsPending(request) && (!routingCancelled || !request.stopped ||
+              cancelledRouting.get(conversationId || "") !== request.messageId));
+          if (routingToCancel.length) {
+            if (!routingCancelled) return { routingToCancel };
+            throw Object.assign(new Error("Chat routing changed while closing. Retry Close to cancel its remaining work."), {
+              code: "vibe64_assistant_routing_pending", retryable: true
+            });
+          }
+          const sourceCreationFailed = currentSession.sourceReady !== true &&
+            text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
+          const stored = text(currentSession.metadata?.session_archive_operation);
+          const previous = stored ? JSON.parse(stored) : {};
+          if (stored && (!["running", "failed"].includes(previous.status) ||
+            !["stopping", "resources", "source"].includes(previous.phase))) {
+            throw new Error("Session archive state is invalid; its recovery evidence was preserved.");
+          }
+          const operation = {
+            phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
+              ? "stopping"
+              : previous.phase || (currentSession.metadata?.source_recovery_saved === "yes" ? "source" : "stopping"),
+            startedAt: previous.status === "running" && previous.startedAt || new Date().toISOString(),
+            status: "running"
+          };
+          const persist = () => runtime.store.writeMetadataValue(
+            sessionId, "session_archive_operation", JSON.stringify(operation)
+          );
+          async function advanceArchivePhase(phase) {
+            operation.phase = phase;
+            await persist();
+            await publishSessionChanged(sessionId, {
+              operation: "updated",
+              originId: text(input.originId),
+              reason: "session-archive-progress",
+              payload: { clientRefresh: { includeList: true } }
+            });
+          }
+          await persist();
+          try {
+            const closingSession = await runtime.markSessionClosing(sessionId, {
+              reason: "archived"
+            });
+            await publishSessionChanged(sessionId, {
+              operation: "updated",
+              originId: text(input.originId),
+              reason: "session-archiving",
+              payload: { clientRefresh: { includeList: true } },
+              session: closingSession
+            });
+            if (operation.phase === "stopping") {
+              await terminals.closeSessionTerminals(sessionId, { session: currentSession });
+              if (typeof terminals.removeOutputResultsForSession === "function") {
+                await terminals.removeOutputResultsForSession(sessionId);
               }
             }
-            await advanceArchivePhase("source");
+            if (prepareArchive) {
+              const prepared = await prepareArchive({
+                phase: operation.phase,
+                runtime,
+                session: await runtime.getSession(sessionId, { inspectSource: false })
+              });
+              if (prepared?.ok === false) {
+                throw Object.assign(new Error(prepared.error || "Session archive preparation failed."), {
+                  code: prepared.code || "vibe64_session_archive_preparation_failed"
+                });
+              }
+            }
+            if (operation.phase === "stopping") {
+              await advanceArchivePhase("resources");
+            }
+            if (operation.phase === "resources") {
+              if (!sourceCreationFailed && typeof project.releaseSessionResources === "function") {
+                const released = await project.releaseSessionResources({ sessionId });
+                if (released?.ok === false) {
+                  throw new Error(released.error || "Session resources could not be archived.");
+                }
+              }
+              await advanceArchivePhase("source");
+            }
+            return await runtime.archiveSession(sessionId);
+          } catch (error) {
+            operation.status = "failed";
+            operation.error = text(error?.message) || "Session archive failed. Retry archiving this session.";
+            await persist().catch(() => null);
+            const restoredSession = await runtime.clearSessionClosing(sessionId).catch(() => null);
+            await publishSessionChanged(sessionId, {
+              operation: "updated",
+              originId: text(input.originId),
+              reason: "session-archive-failed",
+              payload: { archiveError: operation.error, clientRefresh: { includeList: true } },
+              session: restoredSession
+            }).catch(() => null);
+            throw error;
           }
-          return await runtime.archiveSession(sessionId);
-        } catch (error) {
-          operation.status = "failed";
-          operation.error = text(error?.message) || "Session archive failed. Retry archiving this session.";
-          await persist().catch(() => null);
-          const restoredSession = await runtime.clearSessionClosing(sessionId).catch(() => null);
-          await publishSessionChanged(sessionId, {
-            operation: "updated",
-            originId: text(input.originId),
-            reason: "session-archive-failed",
-            payload: { archiveError: operation.error, clientRefresh: { includeList: true } },
-            session: restoredSession
-          }).catch(() => null);
-          throw error;
+        }, { operation: "archive-session" });
+        if (!exclusive.acquired) {
+          return exclusive.value;
         }
-      }, { operation: "archive-session" });
-      if (!exclusive.acquired) {
-        return exclusive.value;
+        if (exclusive.value?.routingToCancel) {
+          // Routing owns its own agent-write admission and cleanup callbacks.
+          // Wait outside the archive lock, then recheck all archive guards.
+          for (const { conversationId, request } of exclusive.value.routingToCancel) {
+            const cancel = conversationId ? terminals.cancelTemporaryConversationRouting : terminals.cancelAssistantRoutingForSelection;
+            if (typeof cancel !== "function") {
+              throw Object.assign(new Error("Chat routing cancellation is unavailable. Retry Close after reconnecting the workspace."), {
+                code: "vibe64_assistant_routing_pending", retryable: true
+              });
+            }
+            await cancel.call(terminals, sessionId, conversationId
+              ? { conversationId, messageId: request.messageId }
+              : request.messageId, { runtime, vibe64User: input.vibe64User });
+            cancelledRouting.set(conversationId || "", request.messageId);
+          }
+          routingCancelled = true;
+          continue;
+        }
+        const session = exclusive.value;
+        await publishSessionChanged(sessionId, {
+          operation: "updated",
+          originId: text(input.originId),
+          reason: "session-archived",
+          payload: { clientRefresh: { includeList: true } },
+          session
+        });
+        return publicSession(session);
       }
-      const session = exclusive.value;
-      await publishSessionChanged(sessionId, {
-        operation: "updated",
-        originId: text(input.originId),
-        reason: "session-archived",
-        payload: { clientRefresh: { includeList: true } },
-        session
-      });
-      return publicSession(session);
     }, "Vibe64 could not archive this session.");
   }
 

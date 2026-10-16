@@ -382,9 +382,9 @@ function createSessionConversations({
 
   // Reuse the routing lifecycle with the temporary chat's existing metadata and
   // transcript scope. Native providers continue to receive the actual store.
-  async function routingContext(ctx, conversationId) {
+  async function routingContext(ctx, conversationId, { cleanup = false } = {}) {
     const record = await recordFor(ctx, conversationId);
-    if (record.state === "closing") throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
+    if (record.state === "closing" && !cleanup) throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
     const selected = selectedContext(ctx, record);
     const metadata = selected.session.metadata;
     const store = ctx.runtime.store;
@@ -395,7 +395,7 @@ function createSessionConversations({
       // Read and replace this field together inside the existing store mutation.
       writeMetadataValue: async (_id, key, value) => store.mutateSession(ctx.session.sessionId, async () => {
         const current = await recordFor(ctx, conversationId);
-        if (current.state === "closing") throw new Error("This conversation is closing.");
+        if (current.state === "closing" && !(cleanup && key === "assistant_routing_request")) throw new Error("This conversation is closing.");
         const routingMetadata = { ...current.routingMetadata, [key]: value };
         const patch = { routingMetadata };
         if (key === "assistant_selection") {
@@ -480,7 +480,7 @@ function createSessionConversations({
   };
   const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
     exclusive: async (id, options, operation) => {
-      const result = await write(id, options, async (ctx) => operation(await routingContext(ctx, options.conversationId)));
+      const result = await write(id, options, async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
       if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
       return result;
     },
@@ -766,6 +766,12 @@ function createSessionConversations({
     async startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
       return routing.send(sessionId, input, {
         ...options, conversationId: input.conversationId, vibe64User: input.vibe64User || options.vibe64User
+      });
+    },
+
+    cancelTemporaryConversationRouting(sessionId, input = {}, options = {}) {
+      return routing.cancel(sessionId, { ...options, conversationId: input.conversationId, routingCleanup: true }, {
+        waitForCleanup: true, expectedMessageId: input.messageId
       });
     },
 

@@ -687,32 +687,49 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     });
   }
 
-  async function cancel(sessionId, options, { waitForCleanup = false, expectedMessageId } = {}) {
-    let stop;
-    let finished;
-    const result = await exclusive(sessionId, options, async context => {
-      const state = await read(context.runtime.store, sessionId);
-      if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) throw failure("The routing request changed. Retry the assistant selection.");
-      const task = running.get(keyFor(sessionId, context));
-      liveFollowupRequests.delete(keyFor(sessionId, context));
-      if (task) { task.cancelled = true; stop = task.stop; finished = task.finished.promise; }
-      if (!state) return false;
-      const pending = ["routing", "pending", "failed"].includes(state.delivery) && !state.attemptedMessageId;
-      state.stopped = true; state.status = "waiting";
-      delete state.outcome;
-      if (pending) delete state.error;
-      await save(context, state);
-      if (!task && state.helper) {
-        await cleanupHelper(context, state); state.helper = null; delete state.error; await save(context, state);
-      }
-      return pending;
-    });
-    await stop?.();
-    if (waitForCleanup) await finished;
-    if (waitForCleanup) await exclusive(sessionId, options, async context => {
-      if ((await read(context.runtime.store, sessionId))?.helper) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
-    });
-    return result;
+  async function cancel(sessionId, options, { waitForCleanup = false, expectedMessageId, cleanupTimeoutMs = 30_000 } = {}) {
+    async function cancelRouting() {
+      let stop;
+      let finished;
+      const result = await exclusive(sessionId, options, async context => {
+        const state = await read(context.runtime.store, sessionId);
+        if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) throw failure("The routing request changed. Retry the assistant selection.");
+        const task = running.get(keyFor(sessionId, context));
+        liveFollowupRequests.delete(keyFor(sessionId, context));
+        if (task) { task.cancelled = true; stop = task.stop; finished = task.finished.promise; }
+        if (!state) return false;
+        const pending = ["routing", "pending", "failed"].includes(state.delivery) && !state.attemptedMessageId;
+        state.stopped = true; state.status = "waiting";
+        delete state.outcome;
+        if (pending) delete state.error;
+        await save(context, state);
+        if (!task && state.helper) {
+          await cleanupHelper(context, state); state.helper = null; delete state.error; await save(context, state);
+        }
+        return pending;
+      });
+      await stop?.();
+      if (waitForCleanup) await finished;
+      if (waitForCleanup) await exclusive(sessionId, options, async context => {
+        if ((await read(context.runtime.store, sessionId))?.helper) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+      });
+      return result;
+    }
+    if (!waitForCleanup) return cancelRouting();
+    let timer;
+    try {
+      return await Promise.race([
+        cancelRouting(),
+        new Promise((resolve, reject) => {
+          timer = setTimeout(() => reject(Object.assign(failure(
+            "Chat routing cleanup is still pending. Retry Close or Stop to finish cleanup before continuing.",
+            "vibe64_assistant_routing_cleanup_pending"
+          ), { retryable: true })), cleanupTimeoutMs);
+        })
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // The active agent declares an outcome; this does not dispatch while its turn runs.

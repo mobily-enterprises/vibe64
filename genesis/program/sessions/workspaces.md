@@ -410,6 +410,16 @@ Initial session loading stays visible until the session list resolves, including
 when the remembered session's runtime mounts first. A mounted runtime alone does
 not establish that session creation is unavailable.
 
+Archive first checks pin and renewal protection under agent-write admission.
+Pending Main and temporary routing is cancelled by its existing owner outside
+that lock, so its own admission and completion callbacks can finish. The next
+archive admission rechecks all guards; a newly replaced request requires Retry.
+A stopped request retains its delivery evidence, but no longer blocks archive
+once its routing helper and in-process task are cleaned up. Routing cleanup has
+a 30-second response deadline; timeout preserves custody and the session for
+retry. An already-closing temporary chat allows only routing-cancellation metadata
+writes, without reopening it or admitting messages/selection changes.
+
 The server records `session_archive_operation` before cleanup and uses the
 closing marker to reject new work. Preview, active AI turns, and remaining tools
 stop before resources and source are removed. Cleanup uses the saved session

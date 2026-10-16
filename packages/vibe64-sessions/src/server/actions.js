@@ -521,7 +521,7 @@ function createSessionActions({ sessions } = {}) {
     action({
       id: ACTION_ARCHIVE_SESSION,
       kind: "command",
-      assistant: sessionTool("Archive/close the exact session requested by the user. This stops its active work, removes its working workspace and temporary conversations, and retains the ordinary read-only archive history. Do not interpret stopping an agent or ending Colleague as an archive request. Existing routing, renewal, preparation and resource guards still apply. Inspect current sessions and archive state before retrying an uncertain result."),
+      assistant: sessionTool("Archive/close the exact session requested by the user. This stops its active work, removes its working workspace and temporary conversations, and retains the ordinary read-only archive history. Do not interpret stopping an agent or ending Colleague as an archive request. Pending chat routing is cancelled through its existing cleanup owner; a cleanup failure preserves the session for retry. Pin, renewal, preparation and resource guards still apply. Inspect current sessions and archive state before retrying an uncertain result."),
       input: sessionIdInputValidator,
       execute: (input) => sessions.archiveSession(input.sessionId, {
         originId: input.originId || "",

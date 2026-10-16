@@ -1427,3 +1427,25 @@ test("a goal model update does not overwrite a concurrently replaced objective",
     { mode: "senior", workflowEngineId: "codex" }, f.context), "after-goal");
   assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), replacement);
 });
+
+
+test("routing cancellation bounds a stalled cleanup and preserves custody for retry", async t => {
+  const f = await fixture(t);
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  f.router.respond = async () => { started.resolve(); await finish.promise; throw new Error("Routing stopped"); };
+  f.agent.stopEphemeralConversation = async () => { await finish.promise; return { ok: true }; };
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, /Routing stopped|cancelled/);
+  await started.promise;
+  await assert.rejects(f.service.cancel("session-1", f.context,
+    { waitForCleanup: true, expectedMessageId: request.messageId, cleanupTimeoutMs: 10 }),
+    { code: "vibe64_assistant_routing_cleanup_pending", retryable: true });
+  assert.equal(f.state().stopped, true);
+  assert.equal(f.state().helper.conversationId, "helper-1");
+  assert.equal(f.sends.length, 0);
+  finish.resolve();
+  await rejected;
+  await f.service.cancel("session-1", f.context, { waitForCleanup: true, expectedMessageId: request.messageId });
+  assert.equal(f.state().helper, null);
+});
