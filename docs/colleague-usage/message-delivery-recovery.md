@@ -16,6 +16,11 @@ and hides the previous failure controls while it is sending. If that attempt
 fails or its receipt becomes uncertain, the corresponding recovery controls
 return with its current delivery state.
 
+Accepted messages appear in timestamp order with the conversation, even while
+their saved history is loading. Pending, failed and uncertain messages retain
+their queue position and recovery controls. Loading older history replaces the
+matching local copy rather than showing the same message twice.
+
 Colleague can explain these steps and offer supported message actions. Server
 maintenance requires an operator; Colleague must not invent a receipt, clear
 unknown delivery or claim a failed request was delivered.
