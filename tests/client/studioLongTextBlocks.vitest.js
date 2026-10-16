@@ -237,6 +237,22 @@ describe("Studio long text review blocks", () => {
     expect(parseLongTextReviewBlocks("| | |\n| ordinary | prose |").every((block) => block.type === "paragraph")).toBe(true);
   });
 
+  it("recognises the empty-header table as streamed delimiter and rows arrive", () => {
+    const lines = emptyHeaderTable.text.split("\n").filter((line) => line.startsWith("|"));
+    const complete = parseLongTextReviewBlocks(emptyHeaderTable.text).find((block) => block.type === "table");
+    expect(lines).toHaveLength(8);
+    expect(parseLongTextReviewBlocks(lines[0]).some((block) => block.type === "table")).toBe(false);
+    for (let received = 2; received <= lines.length; received += 1) {
+      const streamed = parseLongTextReviewBlocks(lines.slice(0, received).join("\n"));
+      expect(streamed).toEqual([{
+        type: "table",
+        headers: ["", ""],
+        alignments: ["left", "left"],
+        rows: complete.rows.slice(0, received - 2)
+      }]);
+    }
+  });
+
   it("parses compact single-line pipe tables from flattened chat text", () => {
     expect(parseLongTextReviewBlocks(
       "| Table | Rows | Role | | --- | ---: | --- | | users | 3 | JSKIT user mirror. | | user_settings | 2 | One settings row per user. |"
