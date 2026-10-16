@@ -265,6 +265,8 @@ to apply it. Vibe64 passes this flag to the shared chat runtime; setting it in a
 project's Preview environment does not enable chat diagnostics. Subscription
 diagnostics then record the pending
 server stage at the 10-second acknowledgement budget and the stage/reason when
-that observer is released. They contain no chat text or credentials. This does
+that observer is released. With this option enabled, each preceding stage and
+its elapsed time are also retained in warning-level logs, so an operator can
+distinguish slow admission from slow snapshot reading. They contain no chat text or credentials. This does
 not change the deadline, start a model, resend a message or retry a subscription;
 use **Reload chat** after correcting the cause.
