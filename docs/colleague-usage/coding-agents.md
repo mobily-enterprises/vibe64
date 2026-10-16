@@ -20,11 +20,13 @@ alone cannot establish whether the agent is running. Access denial clears cached
 messages and hides Reload: sign in with the authorized account and reopen chat.
 Desktop and phone use the same recovery. Colleague can explain it; reconnecting
 this browser view requires your interaction.
-While that warning is shown, the avatar and its controls occupy space above the
-messages so they cannot cover the warning or **Reload chat**, including on a
-phone. History has less visible height until the warning clears; your avatar
-preference, loaded messages and draft stay intact.
-Scroll chat if a short phone view cannot fit the warning and composer together.
+Connection and chat-update warnings use a compact full-width row above the
+avatar: the recovery button is on the left and the explanation is on the right.
+Text wraps on phones without moving the row below the avatar. The avatar stays
+over the conversation below the warning; its size does not push history down.
+Your avatar preference, loaded messages and draft stay intact. **Reloading…**
+is disabled while reconnection is pending. Scroll chat if a short phone view
+cannot fit the warning and composer together.
 
 Status and recovery panels use a pale blue background with dark text in the
 light theme, and a blue tinted background with light text in the dark theme.

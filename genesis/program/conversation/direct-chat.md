@@ -4139,3 +4139,9 @@ cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
 identity evidence blocks continuation. This does not replay ordinary messages,
 repair historical state, or enroll older goals. Development copies drop intent.
 Temporary-chat restart continuation remains separate unfinished work.
+
+Connection recovery stays in a compact top row: the action sits to the left of
+wrapping status text, and the draft-kept explanation remains visible. The shared
+transcript warning reserves only its own height above the floating avatar, so
+avatar size cannot move Reload below the conversation header. Reloading and
+connection-check controls retain their existing disabled and recovery behavior.

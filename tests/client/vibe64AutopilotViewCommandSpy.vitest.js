@@ -1224,3 +1224,32 @@ it("opens native plan history from its system-message link without treating it a
     expect(f.props.turns).toEqual(original);
   } finally { f.app.unmount(); }
 });
+
+for (const state of ["failed", "reconciling", "disconnected", "account-unavailable"]) {
+  it(`renders the compact ${state} connection row with recovery before the explanation`, async () => {
+    const source = fs.readFileSync(componentPath, "utf8");
+    const template = source.match(/<v-sheet\s+v-if="connectionRecoveryVisible"[\s\S]*?<\/v-sheet>/u)?.[0];
+    expect(template).toBeTruthy();
+    const compiled = compileTemplate({ source: template, filename: componentPath, id: "compact-connection" });
+    expect(compiled.errors).toEqual([]);
+    const module = { exports: {} };
+    new Function("require", "module", "exports", transformSync(compiled.code, { format: "cjs" }).code)(
+      name => { expect(name).toBe("vue"); return vue; }, module, module.exports
+    );
+    const app = vue.createSSRApp({ setup: () => ({ connectionRecoveryVisible: true,
+      assistantAccountUnavailable: state === "account-unavailable", assistantAccountMessage: "Connect your AI account.",
+      requestVibe64AccountConnectionsDialog() {}, requestSessionRenewal() {},
+      props: { agentConnectionStatus: state, agentConnectionError: state === "failed" ? "Connection interrupted." : "", retryAgentConnection() {} }
+    }), render: module.exports.render });
+    for (const name of ["v-sheet", "v-btn"]) app.component(name, { setup: (_, { attrs, slots }) =>
+      () => vue.h(name === "v-btn" ? "button" : "section", attrs, slots.default?.()) });
+    const html = await renderToString(app);
+    const label = state === "account-unavailable" ? "Open AI Accounts" : state === "disconnected" ? "Reconnect" : "Retry connection";
+    expect(html).toContain(label);
+    expect(html.indexOf(label)).toBeLessThan(html.indexOf("Your draft is kept."));
+    expect(html).toContain('role="status"');
+    expect(html.includes("disabled")).toBe(state === "reconciling");
+    expect(html).toContain('min-height="32"');
+    expect(html).not.toContain('min-height="48"');
+  });
+}

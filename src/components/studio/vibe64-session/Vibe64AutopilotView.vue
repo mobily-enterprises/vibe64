@@ -223,32 +223,37 @@
           role="status"
           data-vibe64-connection-recovery
         >
-          <v-btn
-            v-if="assistantAccountUnavailable"
-            color="primary"
-            variant="flat"
-            min-height="48"
-            @click="requestVibe64AccountConnectionsDialog({ section: 'ai' })"
-          >
-            Open AI Accounts
-          </v-btn>
-          <v-btn
-            v-else
-            variant="tonal"
-            min-height="48"
-            :disabled="props.agentConnectionStatus === 'reconciling'"
-            @click="props.retryAgentConnection()"
-          >
-            {{ props.agentConnectionStatus === 'disconnected' ? 'Reconnect' : 'Retry connection' }}
-          </v-btn>
-          <v-btn
-            v-if="props.agentConnectionStatus === 'failed' && props.sessionRenewal?.visible"
-            variant="tonal"
-            min-height="48"
-            @click="requestSessionRenewal($event.currentTarget)"
-          >
-            Renew session
-          </v-btn>
+          <div class="studio-autopilot__connection-actions">
+            <v-btn
+              v-if="assistantAccountUnavailable"
+              color="primary"
+              variant="flat"
+              min-height="32"
+              size="small"
+              @click="requestVibe64AccountConnectionsDialog({ section: 'ai' })"
+            >
+              Open AI Accounts
+            </v-btn>
+            <v-btn
+              v-else
+              variant="tonal"
+              min-height="32"
+              size="small"
+              :disabled="props.agentConnectionStatus === 'reconciling'"
+              @click="props.retryAgentConnection()"
+            >
+              {{ props.agentConnectionStatus === 'disconnected' ? 'Reconnect' : 'Retry connection' }}
+            </v-btn>
+            <v-btn
+              v-if="props.agentConnectionStatus === 'failed' && props.sessionRenewal?.visible"
+              variant="tonal"
+              min-height="32"
+              size="small"
+              @click="requestSessionRenewal($event.currentTarget)"
+            >
+              Renew session
+            </v-btn>
+          </div>
           <span v-if="assistantAccountUnavailable" class="text-body-small">
             {{ assistantAccountMessage }} Your draft is kept.
           </span>
@@ -2014,19 +2019,22 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(var(--v-theme-primary), 0.24);
   color: rgb(var(--v-theme-on-surface));
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
 }
 
 .studio-autopilot__connection-recovery > span {
-  flex: 1 1 100%;
+  overflow-wrap: anywhere;
   min-width: 0;
 }
 
-.studio-autopilot__connection-recovery > .v-btn {
-  flex: 0 0 auto;
+.studio-autopilot__connection-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
 }
 
 .studio-autopilot__composer {
