@@ -375,26 +375,58 @@ describe("Vibe64 conversation scroll following", () => {
     }
   });
 
-  it("hides exact generated role instructions in native goal confirmations without changing history", async () => {
+  it("hides delivered Claude goal commands and confirmations while retaining work, failed controls and native history", async () => {
+    const objective = "Finish the remaining checks.";
     for (const mode of ["custom", "senior", "junior"]) {
-      for (const role of ["assistant", "commentary"]) {
-        const objective = "Finish the remaining checks.";
-        const nativeText = `Goal set: ${assistantModePrompt(mode, objective)}`;
-        const message = { messageId: "goal-confirmation", role, text: nativeText, complete: true };
-        const mounted = mountConversation({ turns: [{ turnId: "goal-confirmation", messages: [message] }] });
+      for (const prefix of ["Goal set: ", "Goal cleared: ", "Goal active: "]) {
+        const command = prefix === "Goal cleared: " ? "/goal clear" : `/goal ${assistantModePrompt(mode, objective)}`;
+        const confirmation = { messageId: "claude_8d9f8b5f-81a2-4a08-a0ee-bf2e0ed1160b_0", role: "assistant",
+          text: prefix + assistantModePrompt(mode, objective), complete: true };
+        const work = { role: "commentary", messageId: "work", text: "I am checking the next item.", complete: true };
+        const turn = { ...userTurn("goal", command), metadata: { engineId: "claude", upstreamMessageId: "native-goal" },
+          messages: [confirmation, work] };
+        const original = JSON.stringify(turn);
+        const mounted = mountConversation({ turns: [turn] });
         await nextTick();
-        const blocks = () => findNode(mounted.container, node => Array.isArray(node.props?.blocks))?.props.blocks;
-        expect(JSON.stringify(blocks())).toContain(`Goal set: ${objective}`);
-        expect(JSON.stringify(blocks())).not.toContain("Vibe64 role:");
-        expect(message.text).toBe(nativeText);
-
-        const authored = "Goal set: [Vibe64 role: Junior]\n\nKeep this example verbatim.";
-        mounted.state.turns.value = [{ turnId: "authored", messages: [{ ...message, text: authored }] }];
+        const transcript = () => findNode(mounted.container, node => Array.isArray(node.props?.blocks))?.props.blocks;
+        expect(JSON.stringify(transcript())).toContain(work.text);
+        expect(JSON.stringify(transcript())).not.toContain("/goal");
+        expect(JSON.stringify(transcript())).not.toContain(prefix);
+        expect(JSON.stringify(turn)).toBe(original);
+        // Reloaded canonical rows and legacy separate commentary arrays use the same projection.
+        mounted.state.turns.value = [{ ...structuredClone(turn), messages: undefined,
+          assistant: work, commentary: [{ ...confirmation, role: "commentary" }] }];
         await nextTick();
-        expect(JSON.stringify(blocks())).toContain("Vibe64 role: Junior");
-        expect(JSON.stringify(blocks())).toContain("Keep this example verbatim.");
+        expect(JSON.stringify(transcript())).toContain(work.text);
+        expect(JSON.stringify(transcript())).not.toContain(prefix);
         mounted.app.unmount();
       }
+    }
+    for (const status of ["pending", "failed", "uncertain"]) {
+      const turn = { ...userTurn("retry", `/goal ${assistantModePrompt("junior", objective)}`),
+        metadata: { engineId: "claude", upstreamMessageId: "native-goal" }, optimistic: { id: "retry-user", status } };
+      const mounted = mountConversation({ turns: [turn] });
+      await nextTick();
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).toContain(`/goal ${objective}`);
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).not.toContain("Vibe64 role:");
+      mounted.app.unmount();
+    }
+  });
+
+  it("keeps ordinary assistant goal prose and authored examples while hiding proven native command outputs", async () => {
+    const native = { engineId: "claude", type: "system", subtype: "local_command_output" };
+    const prose = "Goal set: smash every remaining item. I will work in order.";
+    for (const text of ["Goal set: Finish checks", "Goal cleared: Finish checks", "Goal active: Finish checks (1 turn)", "No goal set"]) {
+      const turn = { ...userTurn("normal", "Explain how /goal clear works."), metadata: { engineId: "claude", upstreamMessageId: "native-user" },
+        messages: [{ role: "commentary", text, messageId: "native-output", data: { native } },
+          { role: "assistant", text: prose, messageId: "genuine-reply" }] };
+      const mounted = mountConversation({ turns: [turn] });
+      await nextTick();
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).toContain("Explain how /goal clear works.");
+      const assistant = findNode(mounted.container, node => Array.isArray(node.props?.blocks) && JSON.stringify(node.props.blocks).includes(prose));
+      expect(assistant).not.toBeNull();
+      expect(findNode(mounted.container, node => Array.isArray(node.props?.blocks) && JSON.stringify(node.props.blocks).includes(text))).toBeNull();
+      mounted.app.unmount();
     }
   });
 

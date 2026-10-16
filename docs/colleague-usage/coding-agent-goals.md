@@ -69,9 +69,13 @@ chat message before starting or resuming the goal.
 If Claude cannot confirm interruption, the error explains that the new instruction
 was not sent. Reconnect and retry it after the previous process has stopped. An
 unconfirmed process stop still requires recovery before a new attempt.
-The chat shows `/goal` followed by your objective. Internal role instructions
-are hidden from that bubble and Claude's **Goal set:** confirmation, including
-when reopening earlier goal messages.
+Use the goal control to inspect the objective and its current state. Delivered
+Claude goal commands and native management confirmations stay out of ordinary
+chat, including earlier generated **Goal set:** and **Goal cleared:** records
+when you reopen it. Actual assistant work and explanations remain visible.
+Failed, pending or uncertain goal instructions keep their recovery controls and
+show your objective without internal role instructions. Nothing is deleted from
+native history, and quoted command examples remain readable.
 
 For a Codex goal, **Pause goal** stops automatic scheduling and the current
 conversation turn while preserving the goal. To use a different model sooner,

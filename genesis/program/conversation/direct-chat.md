@@ -4112,3 +4112,13 @@ The Public Claude process wrapper records one slow-success startup warning after
 five seconds, splitting managed stream readiness from subsequent native
 initialization. These content-free durations reuse its existing startup event;
 normal starts remain informational and failure cleanup retains its original owner.
+
+Goal management presentation uses `assistantGoalManagementMessage` beside the
+existing exact-envelope decoder. Native-admitted Claude `/goal` user records,
+exact generated confirmations and protocol-proven local command outputs are
+hidden consistently in chat and context snapshots. Failed or uncertain delivery,
+authored examples and genuine assistant work stay visible; no retained record is
+rewritten. The existing native event and transcript owners retain command-output
+provenance in message data for new writes, independently of goal state.
+Session routing preserves native terminal status so only proven completed turns
+permit the stale-steer fallback.

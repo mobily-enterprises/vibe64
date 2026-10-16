@@ -137,7 +137,7 @@
   </AssistantConversationElement>
 </template>
 <script setup>
-import { assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalManagementMessage, assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
@@ -418,19 +418,16 @@ watch(() => [props.sessionId, props.visible, props.integrationRequestsEnabled,
   recoveredRequests.add(`${turn.turnId}/${turn.integrationSetup.requestId}`);
   emit("check-integration", { sessionId: key, turnId: turn.turnId, requestId: turn.integrationSetup.requestId });
 }, { immediate: true });
-function presentationMessage(message) {
-  if (!message) {
-    return message;
-  }
-  const goalPrefix = message.role === "user" ? "/goal "
-    : ["assistant", "commentary"].includes(message.role) ? "Goal set: " : "";
-  if (goalPrefix && message.text?.startsWith(goalPrefix)) {
-    const objective = message.text.slice(goalPrefix.length);
+function presentationMessage(message, turn) {
+  if (!message || assistantGoalManagementMessage(message, turn)) return null;
+  const prefix = message.role === "user" ? "/goal "
+    : ["Goal set: ", "Goal cleared: ", "Goal active: "].find(value => message.text?.startsWith(value));
+  if (prefix && message.text?.startsWith(prefix)) {
+    const objective = message.text.slice(prefix.length);
     const separator = objective.indexOf("\n\n");
     if (separator !== -1) {
-      // Match the exact application-authored envelope, never arbitrary user instructions.
       const display = assistantGoalObjective(objective, { objective: objective.slice(separator + 2) });
-      if (display !== objective) return { ...message, text: `${goalPrefix}${display}` };
+      if (display !== objective) return { ...message, text: `${prefix}${display}` };
     }
   }
   const integrationRequest = parseIntegrationSetupRequest(message);
@@ -473,7 +470,7 @@ const adapter = computed(() => ({
         ...turn,
         assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}`,
         ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${vibe64AssistantSelectionLabel(selection)}` } } : {}),
-        user: presentationMessage(turn.user),
+        user: presentationMessage(turn.user, turn),
         ...(turn.metadata?.projectMessage ? {
           user: null,
           system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
@@ -481,10 +478,10 @@ const adapter = computed(() => ({
         assistantDetails: selection
           ? `${vibe64AssistantSelectionLabel(selection)}\nProvider: ${selection.modelProviderId}`
           : undefined,
-        assistant: presentationMessage(turn.assistant),
+        assistant: presentationMessage(turn.assistant, turn),
         thinking: turn.thinking?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
-        commentary: turn.commentary?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
-        messages: turn.messages?.map((message) => thinkingMessagePresentation(presentationMessage(message), selection)).filter(Boolean)
+        commentary: turn.commentary?.map((message) => thinkingMessagePresentation(presentationMessage(message, turn), selection)).filter(Boolean),
+        messages: turn.messages?.map((message) => thinkingMessagePresentation(presentationMessage(message, turn), selection)).filter(Boolean)
       };
     })
   },

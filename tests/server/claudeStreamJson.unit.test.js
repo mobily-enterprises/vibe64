@@ -1,3 +1,4 @@
+import { assistantGoalManagementMessage } from "@local/vibe64-runtime/shared/assistantRouting";
 import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationSettings, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -337,6 +338,17 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
   assert.equal(f.git("show", `${f.checkpoints.at(-1).checkpointCommit}:edited.txt`), "Retain this work");
   assert.equal(f.git("rev-parse", "HEAD"), previousHead);
   assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "first" })).duplicate, true);
+});
+
+test("Claude local command provenance survives the public writer and reload", async t => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "/goal clear", messageId: "goal-clear" });
+  await f.processes[0].options.onEvent({ type: "system", subtype: "local_command_output", uuid: "goal-confirmation",
+    content: "Goal cleared: Finish checks" });
+  const turns = await f.context.runtime.store.readConversationLog("test");
+  const confirmation = turns.flatMap(turn => turn.messages).find(message => message.messageId === "claude_goal-confirmation");
+  assert.deepEqual(confirmation.data, { native: { engineId: "claude", type: "system", subtype: "local_command_output" } });
+  assert.equal(assistantGoalManagementMessage(confirmation, turns.find(turn => turn.messages.includes(confirmation))), true);
 });
 
 test("Claude compaction status is scoped to the active conversation and clears after completion or Stop", async (t) => {

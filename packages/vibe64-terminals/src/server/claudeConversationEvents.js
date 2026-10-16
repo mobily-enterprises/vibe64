@@ -56,7 +56,8 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (!text(message.text)) return;
     const writer = message.role === "thinking" ? "writeConversationThinkingMessage"
       : message.role === "commentary" ? "writeConversationCommentaryMessage" : "writeConversationAssistantMessage";
-    const turn = await runtime.store[writer](sessionId, { messageId: message.id, outputId, text: message.text });
+    const turn = await runtime.store[writer](sessionId, { messageId: message.id, outputId, text: message.text,
+      ...(message.data === undefined ? {} : { data: message.data }) });
     runtime.store.completeConversationStreamMessage(sessionId, outputId);
     await publishSessionChanged(sessionId, { reason: "claude-stream-message", payload: {
       conversationLogPatch: { type: "upsert-turn", turn },

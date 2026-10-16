@@ -7,7 +7,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { assistantModePrompt, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
+import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
   ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
@@ -23,6 +23,35 @@ function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engine
       id: modelId, label: modelId, status: "available", variants: [{ id: "low" }, { id: "high" }]
     })) })) };
 }
+
+test("goal management presentation requires native admission or exact generated confirmation provenance", () => {
+  const turn = { metadata: { engineId: "claude", upstreamMessageId: "native-user" } };
+  for (const text of ["/goal", "/goal Finish checks", "/goal clear", "/goal stop", "/goal off", "/goal reset", "/goal none", "/goal cancel"]) {
+    const message = { role: "user", text };
+    assert.equal(assistantGoalManagementMessage(message, turn), true, text);
+    assert.equal(assistantGoalManagementMessage(message, { ...turn, optimistic: { status: "pending" } }), false);
+    assert.equal(assistantGoalManagementMessage(message, { ...turn, optimistic: { status: "failed" } }), false);
+    assert.equal(assistantGoalManagementMessage({ ...message, receipt: false }, turn), false);
+    assert.equal(assistantGoalManagementMessage(message, { metadata: { engineId: "claude" } }), false);
+    assert.equal(assistantGoalManagementMessage(message, { metadata: { engineId: "codex", upstreamMessageId: "native-user" } }), false);
+  }
+  for (const text of ["Use /goal to set an objective.", "`/goal clear`", "/goals are useful"]) {
+    assert.equal(assistantGoalManagementMessage({ role: "user", text }, turn), false);
+  }
+  for (const role of ["assistant", "commentary"]) {
+    for (const prefix of ["Goal set: ", "Goal cleared: ", "Goal active: "]) {
+      for (const mode of ["custom", "senior", "junior"]) {
+        const message = { role, text: prefix + assistantModePrompt(mode, "Finish checks") };
+        assert.equal(assistantGoalManagementMessage(message, turn), true);
+        assert.equal(assistantGoalManagementMessage({ role, text: prefix + "[Vibe64 role: Junior]\n\nKeep this example." }, turn), false);
+      }
+      const prose = { role, text: prefix + "Finish checks" };
+      assert.equal(assistantGoalManagementMessage(prose, turn), false, "Ordinary assistant goal prose remains visible");
+      assert.equal(assistantGoalManagementMessage({ ...prose, data: { native: { engineId: "claude", type: "system", subtype: "local_command_output" } } }, turn), true);
+    }
+  }
+  assert.equal(assistantGoalManagementMessage({ role: "assistant", text: "The goal is paused; the work is saved." }, turn), false);
+});
 
 test("Codex recommendations prefer native OpenAI for every role when DeepSeek and GLM are connected", () => {
   for (const providers of [["openai"], ["openai", "zai-coding-plan"],

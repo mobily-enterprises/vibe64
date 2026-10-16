@@ -367,6 +367,30 @@ function assistantGoalObjective(objective, pinned) {
   return objective;
 }
 
+function assistantGoalManagementMessage(message, turn = {}) {
+  if (!message || message.receipt === false || turn.user?.receipt === false ||
+      turn.optimistic && turn.optimistic.status !== "accepted" || turn.system?.delivery) return false;
+  const native = message.data?.native;
+  const claude = turn.metadata?.engineId === "claude" || turn.metadata?.assistantSelection?.engineId === "claude" ||
+    native?.engineId === "claude";
+  if (!claude) return false;
+  const text = String(message.text || "");
+  if (message.role === "user") {
+    // Only native-admitted commands disappear; drafts and failed delivery stay recoverable.
+    return Boolean(turn.metadata?.upstreamMessageId || message.receipt === true) && /^\/goal(?:\s|$)/u.test(text);
+  }
+  if (!["assistant", "commentary"].includes(message.role)) return false;
+  const prefix = ["Goal set: ", "Goal cleared: ", "Goal active: "].find(value => text.startsWith(value));
+  if (prefix) {
+    const objective = text.slice(prefix.length);
+    const separator = objective.indexOf("\n\n");
+    if (separator !== -1 && assistantGoalObjective(objective, { objective: objective.slice(separator + 2) }) !== objective) return true;
+  }
+  // These are protocol outputs, not assistant prose that happens to mention a goal.
+  return native?.type === "system" && native.subtype === "local_command_output" &&
+    Boolean(prefix || text === "No goal set" || text === "No goal set. Usage: `/goal <condition>`");
+}
+
 function assistantWorkflowInstructions(state) {
   return [
     `Auto workflow stage: ${state.stage}. The workflow remains Working until an explicit outcome is processed; a native turn ending does not finish the task.`,
@@ -445,5 +469,5 @@ export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, A
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
-  assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
+  assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges };
