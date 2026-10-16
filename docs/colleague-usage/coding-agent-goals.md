@@ -50,8 +50,9 @@ available without a goal; choose a goal-capable assistant when you need to creat
 one.
 
 For a Claude goal, **Pause goal** stops the current work and keeps the goal.
-If Claude ends a turn because its native goal checker repeatedly prevented it
-from stopping, the goal shows **blocked**, with the native explanation. The
+If Claude's native checker reports that the goal is impossible, or ends a turn
+after repeatedly preventing it from stopping, the goal shows **blocked**, with
+the native explanation. The
 unfinished objective remains available. A server restart does not automatically
 resume that blocked goal. Resolve the reported prerequisite, then open **Goal**
 and choose **Resume goal**; use **Cancel goal** to clear it instead. These controls

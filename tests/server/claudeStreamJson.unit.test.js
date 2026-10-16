@@ -2434,6 +2434,16 @@ createInterface({ input: process.stdin }).on('line', async line => {
         "a native blocker preserves the person's unfinished goal intent");
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
         "restart never blindly starts the same native loop again");
+      await writeFile(historyFile.path, beforeLoopLimit + JSON.stringify({ type: "attachment",
+        timestamp: new Date().toISOString(), attachment: { type: "goal_status", condition: nativeObjective,
+          met: false, failed: true, reason: "The remaining checks need credentials from the user." } }) + "\n");
+      const impossible = await service.recoverActiveGoals();
+      assert.equal(impossible.results.at(-1).blocked, true, JSON.stringify(impossible));
+      const impossibleRead = await service.readAgentGoal("test", options, { canonical: true });
+      assert.equal(impossibleRead.goal.status, "blocked");
+      assert.equal(impossibleRead.goal.reason, "The remaining checks need credentials from the user.");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "a native failed evaluation must not be resumed after restart either");
       await service.close();
       await writeFile(historyFile.path, beforeLoopLimit);
       service = createService();
