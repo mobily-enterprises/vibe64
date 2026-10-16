@@ -219,6 +219,12 @@ Native conversation IDs are scoped to that temporary chat. A fresh repair can
 start even when the main chat retains Codex history in an older provider home;
 neither chat's existing history is moved or converted. A chat with its own
 unsupported history reports the required action as a conflict, not a server error.
+Settings-only updates use their existing settings lock; payloads combining
+settings with attachments or repair fields retain the source-write coordinator.
+The saved-record mutation computes its patch from current state and releases the
+storage lease before publishing, so subscriber initialization cannot block an
+independent plain draft save.
+
 Creation and reading release that lock before looking up mode availability.
 Slow provider catalogue reads therefore do not block sibling Router updates or
 draft saves; native admission and transcript reconciliation remain serialized.

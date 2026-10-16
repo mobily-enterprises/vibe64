@@ -125,12 +125,14 @@ function createSessionConversations({
     };
   }
 
-  async function save(ctx, record, patch, { lifecycle = false, requireOpen = false } = {}) {
+  async function save(ctx, record, changes, { lifecycle = false, requireOpen = false } = {}) {
+    let patch;
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
       const current = await recordFor(ctx, record.conversationId);
       if (requireOpen && current.state === "closing") throw Object.assign(new Error("This conversation is closing."), {
         code: "vibe64_conversation_closing", statusCode: 409
       });
+      patch = typeof changes === "function" ? changes(current) : changes;
       const next = { ...patch };
       const newTurn = lifecycle && next.messageId && next.messageId !== record.messageId;
       if (newTurn) {
@@ -733,16 +735,15 @@ function createSessionConversations({
           }, { durable: true, conversationId: record.conversationId });
           fields.attachments = prepared.displayAttachments;
         }
-        const saved = await ctx.runtime.store.mutateSession(sessionId, async () => {
-          const current = await recordFor(ctx, record.conversationId);
+        const saved = await save(ctx, record, current => {
           const patch = { ...fields, ...(input.agentSettings ? { agentSettings: input.agentSettings } : {}) };
           if (fields.routingMetadata) {
             patch.routingMetadata = { ...current.routingMetadata,
               assistant_routing: fields.routingMetadata.assistant_routing };
           }
           if (Object.hasOwn(patch, "draft") || Object.hasOwn(patch, "attachments")) patch.draftRevision = randomUUID();
-          return save(ctx, current, patch, { requireOpen: true });
-        });
+          return patch;
+        }, { requireOpen: true });
         if (fields.recoveryOutcome === "succeeded") {
           await ctx.runtime.store.writeConversationSystemMessage({ sessionId, conversationId: record.conversationId }, {
             messageId: `recovery_${record.runId || record.conversationId}`,
@@ -751,7 +752,9 @@ function createSessionConversations({
         }
         return { ok: true, ...(fields.routingMetadata ? { routingMetadata: saved.routingMetadata, purposes: await purposes(ctx, saved) } : {}) };
       };
-      if (!input.assistantRouting && !input.agentSettings) return write(sessionId, options, update);
+      const settingsOnly = (input.assistantRouting || input.agentSettings) && Object.keys(input).every(key =>
+        ["sessionId", "conversationId", "vibe64User", "assistantRouting", "agentSettings"].includes(key));
+      if (!settingsOnly) return write(sessionId, options, update);
       const context = await readSessionContext(sessionId, options);
       const result = await context.runtime.store.runSessionExclusive(sessionId,
         `assistant-settings-${input.conversationId}`, () => update(context),

@@ -54,9 +54,13 @@ error clears only after the pending state saves. A failed draft save retains you
 text; do not assume it will survive reload until it is saved. If another client has
 started Close, queued autosaves stop and the chat explains that cleanup must
 finish; they do not recreate the closing conversation.
-An unsaved new chat still needs its normal creation step. Sending a message,
-changing its model or files (including pasted or dropped files), stopping work and closing the chat wait for the
-source operation to finish. If one of those actions reports that another
+An unsaved new chat still needs its normal creation step. A model or mode choice
+on its own can be saved for the next turn while Save or Update runs. An update
+that also changes files or repair state waits for the source operation, even if
+it includes a model choice. Sending a message, changing files (including pasted
+or dropped files), stopping work and closing the chat also wait for the source
+operation to finish. A slow chat-update notification does not hold up a separate
+plain draft save once the earlier update has been stored. If one of those actions reports that another
 operation is starting, wait for Save or Update to settle and try that action
 again; do not resend a message whose delivery is uncertain.
 

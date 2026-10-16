@@ -1962,3 +1962,74 @@ test("temporary context follows visible chronology across interleaved native tur
     await f.service.close();
   });
 });
+
+test("mixed temporary settings updates retain source exclusion while settings-only stays available", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    let prepared = 0;
+    const service = f.restart({ attachments: { ...f.attachments, async prepareMessage(...args) {
+      prepared += 1;
+      return f.attachments.prepareMessage(...args);
+    } } });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holding = f.store.runSessionExclusive("one", "agent-write-mode", async () => {
+      entered.resolve(); await release.promise;
+    }, { operation: "save-session" });
+    await entered.promise;
+    try {
+      for (const patch of [
+        { agentSettings: {}, attachmentIds: [] },
+        { assistantRouting: { mode: "junior" }, presentation: { recoveryOutcome: "failed" } }
+      ]) {
+        const result = await service.updateTemporaryConversation("one", { conversationId: "chat", ...patch }, { lockWaitMs: 0 });
+        assert.equal(result.code, "vibe64_agent_write_mode_busy");
+        assert.equal(result.retryable, true);
+      }
+      assert.equal(prepared, 0, "blocked mixed input cannot prepare attachments");
+      assert.equal((await f.store.readSessionConversation("one", "chat")).recoveryOutcome, undefined);
+      assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", agentSettings: {} })).ok, true);
+      assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "junior" } })).ok, true);
+      assert.equal(JSON.parse((await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing).mode, "junior");
+    } finally {
+      release.resolve(); await holding;
+    }
+    assert.equal((await service.updateTemporaryConversation("one", { conversationId: "chat", agentSettings: {}, attachmentIds: [] })).ok, true);
+    assert.equal(prepared, 1);
+    await service.close(); await f.service.close();
+  });
+});
+
+test("temporary update publication releases storage before waiting for subscribers", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    let publications = 0;
+    const service = f.restart({ publishConversation: async () => {
+      if (++publications === 1) { entered.resolve(); await release.promise; }
+    } });
+    const updating = service.updateTemporaryConversation("one", {
+      conversationId: "chat", agentSettings: { model: "chosen", thinking: "high" }
+    });
+    let draft;
+    let timer;
+    try {
+      await entered.promise;
+      draft = service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Keep typing" } });
+      await Promise.race([draft, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Draft save waited for the held publisher.")), 2000);
+      })]);
+      assert.equal((await f.store.readSessionConversation("one", "chat")).draft, "Keep typing");
+      assert.equal(publications, 2);
+    } finally {
+      clearTimeout(timer); release.resolve();
+      await Promise.allSettled([updating, draft].filter(Boolean));
+      await service.close(); await f.service.close();
+    }
+    assert.equal((await updating).ok, true);
+    assert.equal((await f.store.readSessionConversation("one", "chat")).agentSettings.model, "chosen");
+  });
+});
