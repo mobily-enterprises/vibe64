@@ -612,6 +612,7 @@ function useVibe64SessionData({
         archiveAttempts.value[sessionId] = { succeeded: true };
       } else {
         delete archiveAttempts.value[sessionId];
+        if (!selectedSessionId.value) selectSessionId(sessionId);
       }
     },
     archiveAllowed: computed(() => selectedListSession.value?.purpose !== "learning"),
@@ -662,6 +663,7 @@ function useVibe64SessionData({
         archiveAttempts.value[id] = { succeeded: true };
       } else if (payload.reason === "session-archive-failed") {
         delete archiveAttempts.value[id];
+        if (!selectedSessionId.value) selectSessionId(id);
       }
     }
   });

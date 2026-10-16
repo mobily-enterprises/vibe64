@@ -321,6 +321,9 @@ across UI refreshes. Archiving stops active work, removes its active workspace,
 and preserves the read-only history needed to recover its conversation and
 understand what happened. Session History reads lightweight archive indexes and
 shows the most recently archived session first.
+If archiving fails after clearing the last selection, the original session is
+selected again for recovery. A person already viewing another session keeps
+that selection; the failed session's tab becomes available again.
 Archived session detail reads the retained record and chat without asking a
 native provider for live state; its source and native conversation can be gone.
 Saved attachment reads likewise use the archive, without requiring a source

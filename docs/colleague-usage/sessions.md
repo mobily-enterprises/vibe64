@@ -122,6 +122,9 @@ Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
 If history preservation fails, the operation reports the error and keeps the
 workspace for retry. Resolve the reported problem, then retry **Archive session**.
+If the last open session cannot be archived, its chat is selected again so you
+can inspect the failure and retry. If another session is already selected, that
+selection stays in place and the failed session becomes available in its tab.
 Colleague can explain these steps and the reported error; the existing session
 permissions and confirmation still apply.
 

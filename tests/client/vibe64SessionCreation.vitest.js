@@ -766,6 +766,36 @@ describe("background session archive selection", () => {
     scope.stop();
   });
 
+  it("reopens the only session after archive rejection instead of leaving an empty chat", async () => {
+    creationHarness.queryData.value.sessions = [{ sessionId: "session-a", status: "active" }];
+    creationHarness.selectedId.value = "session-a";
+    creationHarness.archiveRun.mockRejectedValue(new Error("Pending routing could not be cancelled"));
+    const { scope, sessionData } = mountSessionData();
+    sessionData.archive.request();
+    expect(await sessionData.archive.confirm()).toBe(false);
+    await nextTick();
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    expect(sessionData.sessions.value[0].archiving).toBe(false);
+    scope.stop();
+  });
+
+  it("restores the only session when another tab reports archive failure", async () => {
+    creationHarness.queryData.value.sessions = [{ sessionId: "session-a", status: "active" }];
+    creationHarness.selectedId.value = "session-a";
+    const { scope, sessionData } = mountSessionData();
+    const receive = reason => creationHarness.realtime.onEvent({ payload: {
+      projectSlug: "project-a", sessionId: "session-a", reason
+    } });
+    receive("session-archiving");
+    await nextTick();
+    expect(sessionData.selectedSessionId.value).toBe("");
+    receive("session-archive-failed");
+    await nextTick();
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    expect(sessionData.sessions.value[0].archiving).toBe(false);
+    scope.stop();
+  });
+
   it("reacts to another tab's start and completion announcements", async () => {
     twoSessions();
     const { scope, sessionData } = mountSessionData();
