@@ -32,6 +32,9 @@ interrupted partial reply, not a completed answer, and remains after reload.
 If Claude saves more of that same output while Stop is finishing, it remains one
 reply; the saved native copy does not add a second bubble on reload. Text already
 retained for a stopped request is not replayed as a new completed answer.
+Claude's internal no-response placeholder after Stop or a model change is not
+an AI reply. It does not add a new answer to the stopped request. Actual assistant
+replies and provider errors remain visible, even when their wording is similar.
 
 Assistant replies show their recorded AI and model, including streaming and
 reopened history. Hover the label to see its provider. Changing Chat mode affects
