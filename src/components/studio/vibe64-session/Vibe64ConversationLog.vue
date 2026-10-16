@@ -138,6 +138,7 @@
 </template>
 <script setup>
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
@@ -468,16 +469,13 @@ const adapter = computed(() => ({
       const selection = turn.metadata?.assistantSelection;
       return {
         ...turn,
-        assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}`,
+        ...conversationAttribution(selection, turn.metadata?.assistantRouting),
         ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${vibe64AssistantSelectionLabel(selection)}` } } : {}),
         user: presentationMessage(turn.user, turn),
         ...(turn.metadata?.projectMessage ? {
           user: null,
           system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
         } : {}),
-        assistantDetails: selection
-          ? `${vibe64AssistantSelectionLabel(selection)}\nProvider: ${selection.modelProviderId}`
-          : undefined,
         assistant: presentationMessage(turn.assistant, turn),
         thinking: turn.thinking?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
         commentary: turn.commentary?.map((message) => thinkingMessagePresentation(presentationMessage(message, turn), selection)).filter(Boolean),

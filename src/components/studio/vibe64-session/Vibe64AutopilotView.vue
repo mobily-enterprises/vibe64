@@ -602,21 +602,12 @@
                     :sessions-api-path="props.sessionsApiPath"
                     @saved="props.refreshSessionData?.(); reloadAssistantAccess()"
                   />
-                  <div class="studio-autopilot__composer-delivery">
-                    <v-btn
-                      v-if="agentStopVisible" aria-label="Stop" title="Stop assistant"
-                      :disabled="!agentStopEnabled" :aria-busy="interrupting ? 'true' : undefined"
-                      :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
-                      @click="requestAgentInterrupt"
-                    />
-                    <v-btn
-                      ref="composerSendButton" :aria-label="composerSubmitAriaLabel"
-                      :title="composerSubmitTitle" :disabled="!composerCanSubmit || composerBlocked || !attachmentState.canSubmit"
-                      :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
-                      :icon="composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight"
-                      class="studio-autopilot__composer-action" @click="sendComposerMessage"
-                    />
-                  </div>
+                  <Vibe64ComposerDelivery ref="composerSendButton"
+                    :stop-visible="agentStopVisible" :stop-enabled="agentStopEnabled" :stopping="interrupting"
+                    :can-submit="composerCanSubmit && !composerBlocked && attachmentState.canSubmit"
+                    :sending="composerSending" :submit-mode="composerSubmitMode"
+                    :submit-aria-label="composerSubmitAriaLabel" :submit-title="composerSubmitTitle"
+                    @stop="requestAgentInterrupt" @submit="sendComposerMessage" />
                 </div>
                 <div :ref="setVoiceFeedbackTarget" class="studio-autopilot__voice-feedback" />
               </template>
@@ -997,7 +988,6 @@ import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   mdiArrowLeft,
-  mdiArrowTopRight,
   mdiAutorenew,
   mdiCircle,
   mdiConsoleNetworkOutline,
@@ -1010,9 +1000,7 @@ import {
   mdiIncognito,
   mdiPaperclip,
   mdiPlus,
-  mdiSend,
   mdiSourcePull,
-  mdiStop,
   mdiWrenchOutline,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
@@ -1038,6 +1026,7 @@ import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe6
 import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
 import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
+import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
@@ -1543,7 +1532,7 @@ async function continueConversation() {
 }
 
 function focusComposerSendButton() {
-  composerSendButton.value?.$el?.focus();
+  composerSendButton.value?.focus();
 }
 
 function updateComposerAttachmentState(state = {}) {
@@ -2048,8 +2037,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.studio-autopilot__composer-actions,
-.studio-autopilot__composer-delivery {
+.studio-autopilot__composer-actions {
   align-items: center;
   display: flex;
   gap: 0.25rem;
@@ -2059,11 +2047,6 @@ onBeforeUnmount(() => {
 .studio-autopilot__composer-actions {
   column-gap: clamp(0rem, calc(4% - 1.25rem), 0.5rem);
   width: 100%;
-}
-
-.studio-autopilot__composer-delivery {
-  margin-inline-start: auto;
-  flex-shrink: 0;
 }
 
 .studio-autopilot__settings-access {
@@ -2109,8 +2092,7 @@ onBeforeUnmount(() => {
 }
 
 @container studio-chat-pane (max-width: 32rem) {
-  .studio-autopilot__composer-actions,
-  .studio-autopilot__composer-delivery {
+  .studio-autopilot__composer-actions {
     gap: 0;
   }
 

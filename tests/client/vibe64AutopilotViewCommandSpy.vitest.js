@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { conversationAttribution } from "../../src/lib/vibe64ConversationAttribution.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import * as vue from "vue";
@@ -76,6 +77,7 @@ function mountMainConversationLog({ render = false } = {}) {
     "@local/vibe64-runtime/shared/assistantRouting": { assistantModeLabel },
     "@local/vibe64-runtime/shared": { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel },
     "@/lib/vibe64SourceEditorLinks.js": { sourceEditorLinkTarget },
+    "@/lib/vibe64ConversationAttribution.js": { conversationAttribution },
     "@/lib/vibe64ThinkingPresentation.js": { thinkingMessagePresentation, usesCommentaryForThinking }
   };
   const controls = [];
@@ -267,9 +269,9 @@ describe("Vibe64 direct session view", () => {
     expect(stopTyping).toHaveBeenCalledTimes(1);
     expect(deliver).toHaveBeenCalledTimes(1);
     expect(component).toContain(':submit-enabled="composerCanSubmit && !composerBlocked"');
-    expect(component).toContain(':disabled="!composerCanSubmit || composerBlocked || !attachmentState.canSubmit"');
-    const footer = component.slice(component.indexOf('<div class="studio-autopilot__composer-delivery">'), component.indexOf('</div>', component.indexOf('<div class="studio-autopilot__composer-delivery">')));
-    expect(footer.indexOf('aria-label="Stop"')).toBeLessThan(footer.indexOf('ref="composerSendButton"'));
+    expect(component).toContain(':can-submit="composerCanSubmit && !composerBlocked && attachmentState.canSubmit"');
+    const footer = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64ComposerDelivery.vue"), "utf8");
+    expect(footer.indexOf('aria-label="Stop"')).toBeLessThan(footer.indexOf('ref="sendButton"'));
     expect(footer).not.toContain('<Vibe64ProjectVoiceLauncher');
     expect(footer).not.toContain('VoiceConversationControls');
   });
@@ -1043,13 +1045,13 @@ describe("Vibe64 direct session view", () => {
     const promptHints = fs.readFileSync(promptHintsPath, "utf8");
     const composerActions = fs.readFileSync(sharedComposerActionsPath, "utf8");
 
-    expect(component).toContain('v-if="agentStopVisible"');
-    expect(component).toContain(':disabled="!agentStopEnabled"');
-    expect(component).toContain(':aria-label="composerSubmitAriaLabel"');
-    expect(component).toContain("composerSubmitMode === 'send' ? mdiSend");
-    expect(component).toContain(':aria-busy="composerSending && !composerCanSubmit ? \'true\' : undefined"');
-    expect(component).toContain('@click="sendComposerMessage"');
-    expect(component).toContain('@click="requestAgentInterrupt"');
+    expect(component).toContain(':stop-visible="agentStopVisible"');
+    expect(component).toContain(':stop-enabled="agentStopEnabled"');
+    expect(component).toContain(':submit-aria-label="composerSubmitAriaLabel"');
+    expect(component).toContain(':submit-mode="composerSubmitMode"');
+    expect(component).toContain(':sending="composerSending"');
+    expect(component).toContain('@submit="sendComposerMessage"');
+    expect(component).toContain('@stop="requestAgentInterrupt"');
     expect(composerActions).toContain(':aria-busy="state.pending && !state.canSend ? \'true\' : undefined"');
     expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
     expect(composerActions).not.toContain(":loading=");
@@ -1078,7 +1080,7 @@ describe("Vibe64 direct session view", () => {
     expect(questions).not.toContain("#selection=");
     expect(questions).toContain("Answer normally instead");
     expect(questions).toContain(':prepend-icon="mdiPencilOutline"');
-    expect(component.match(/:disabled="!composerCanSubmit \|\| composerBlocked \|\| !attachmentState\.canSubmit"/gu)).toHaveLength(1);
+    expect(component.match(/:can-submit="composerCanSubmit && !composerBlocked && attachmentState\.canSubmit"/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');
     expect(composable).toContain("numberedQuestions.value.every");
   });

@@ -67,7 +67,7 @@ for (const engineId of ["codex", "opencode"]) {
       await expect(composer(reader)).toBeVisible();
       await composer(writer).fill("Ready to send");
       await expect(typing(reader)).toBeVisible();
-      await workspace(writer).getByRole("button", { name: "Send to temporary AI" }).click();
+      await workspace(writer).getByRole("button", { name: /^(Send message|Steer assistant)$/ }).click();
       await expect(typing(reader)).toHaveCount(0);
       await composer(writer).fill("Close this conversation");
       await expect(typing(reader)).toBeVisible();

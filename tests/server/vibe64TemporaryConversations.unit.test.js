@@ -1667,6 +1667,9 @@ test("temporary canonical facade uses the original logical record, actions, stre
     const live = await browser.read();
     assert.equal(live.segmentId, "codex:native");
     assert.equal(live.streaming.messages[0].text, "Editing");
+    assert.deepEqual(live.streaming.messages[0].metadata.assistantSelection, f.native.turnSelection);
+    assert.deepEqual(live.streaming.messages[0].metadata.assistantRouting,
+      { resolvedMode: live.conversationLog[0].metadata.assistantRouting.resolvedMode });
     assert.equal(live.conversationLog[0].user.receipt, undefined);
     assert.equal(peerEvents.length, 0);
     assert.equal((await peer.read()).segmentId, null);

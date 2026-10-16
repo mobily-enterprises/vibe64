@@ -102,6 +102,31 @@ describe("useVibe64TemporaryAi", () => {
     vi.useRealTimers();
   });
 
+  it("queues another authored message while the first prepared send is waiting and preserves both receipts", async () => {
+    const held = deferredPromise();
+    const { temporary, task } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId }, () => held.promise);
+    const first = temporary.send(task.id);
+    await flushPromises();
+    temporary.updateDraft(task.id, "And check the second case.");
+    const second = temporary.send(task.id);
+    await flushPromises();
+    const queued = temporary.activeTask.value.delivery.state.messages;
+    expect(queued).toHaveLength(2);
+    expect(queued.map(message => message.text)).toEqual(["Explain this conflict.", "And check the second case."]);
+    expect(queued.every(message => message.status === "pending")).toBe(true);
+    expect(temporary.activeTask.value.draft).toBe("");
+    expect(mocks.requests.filter(([url]) => url.endsWith("/messages"))).toHaveLength(1);
+    mocks.responses.push({ ok: true, status: "inProgress", runId: "turn-1" });
+    held.resolve({ ok: true, status: "inProgress", runId: "turn-1" });
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    const sent = mocks.requests.filter(([url]) => url.endsWith("/messages")).map(([, options]) => temporaryRequestBody(options));
+    expect(sent.map(input => input.message)).toEqual(["Explain this conflict.", "And check the second case."]);
+    expect(sent[1].submissionKind).toBe("steer");
+    expect(new Set(sent.map(input => input.messageId)).size).toBe(2);
+  });
+
   it("captures opted-in context immediately without sending and retains the choice on creation retry", async () => {
     const temporary = await temporaryAi();
     mocks.responses.push({ ok: true, conversationId: createdId, recentChatContext: { messages: [], truncated: false } });

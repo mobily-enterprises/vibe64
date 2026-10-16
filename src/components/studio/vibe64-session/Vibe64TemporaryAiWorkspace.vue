@@ -231,20 +231,7 @@
             @update:model-value="temporary.updateDraft(task.id, $event)"
           >
             <template #footer="{ attachmentState }">
-              <AssistantComposerActions
-                :ref="(element) => setTaskSendButton(task.id, element)"
-                :state="{
-                  canSend: !props.connectionUnavailable && !taskInputDisabled(task) && !routingPending && Boolean(task.draft.trim()) && attachmentState.canSubmit,
-                  canStop: task.busy,
-                  stopDisabled: !task.conversationId,
-                  stopPending: stoppingTaskId === task.id,
-                  pending: task.delivery.state.sending,
-                  submitAriaLabel: task.busy ? 'Steer temporary AI' : 'Send to temporary AI',
-                  submitLabel: task.busy ? 'Steer' : 'Send'
-                }"
-                @submit="sendTask(task.id)"
-                @stop="stopTask(task.id)"
-              >
+              <div class="vibe64-temporary-ai__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="task.id === activeTask.id" :session="modeSession" :goal="task.goal" temporary
                     :required-mode="task.recoveryOperation === 'update' ? 'senior' : ''"
@@ -294,7 +281,15 @@
                   :disabled="props.repositoryBusy || task.status === 'closing'"
                   @update-setting="updateActiveAgentSetting"
                 />
-              </AssistantComposerActions>
+                <Vibe64ComposerDelivery :ref="element => setTaskSendButton(task.id, element)"
+                  :stop-visible="task.busy" :stop-enabled="Boolean(task.conversationId) && stoppingTaskId !== task.id"
+                  :stopping="stoppingTaskId === task.id" :sending="task.delivery.state.sending"
+                  :can-submit="!props.connectionUnavailable && stoppingTaskId !== task.id && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit"
+                  :submit-mode="task.busy ? 'steer' : 'send'"
+                  :submit-aria-label="task.busy ? 'Steer assistant' : 'Send message'"
+                  :submit-title="task.busy ? 'Send this guidance to the active assistant turn' : 'Send message'"
+                  @submit="sendTask(task.id)" @stop="stopTask(task.id)" />
+              </div>
             </template>
           </Vibe64AutopilotPromptTextarea>
         </template>
@@ -338,8 +333,7 @@
 </template>
 
 <script setup>
-import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
-import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch, watchEffect } from "vue";
@@ -489,7 +483,6 @@ const customTarget = ref(null);
 const activeTask = temporary.activeTask;
 watch(() => activeTask.value?.id, () => { customOpen.value = false; });
 const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
-const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
   agentSession: { goal: activeTask.value?.goal || null },
@@ -876,6 +869,14 @@ defineExpose({
 </script>
 
 <style scoped>
+.vibe64-temporary-ai__composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  width: 100%;
+}
+
 .vibe64-temporary-ai.vibe64-temporary-ai--host {
   border-color: rgba(var(--v-theme-secondary), 0.65);
   grid-template-rows: auto minmax(0, 1fr);

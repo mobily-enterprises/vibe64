@@ -200,7 +200,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(draft).toBeEnabled();
       await draft.fill("Keep my draft while Update checks the repair.");
       await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
-      await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeDisabled();
+      await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeDisabled();
       await draft.clear();
       await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
       const activity = page.getByLabel("Session activity", { exact: true });
@@ -304,7 +304,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         await expect(draft).toBeEnabled();
         await draft.fill("Keep this reply through reload.");
         await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
-        await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeDisabled();
+        await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeDisabled();
         await page.screenshot({ path: testInfo.outputPath("draft-during-update.png"), animations: "disabled" });
         operation.status = result;
         if (result === "failed") operation.error = "One conflict still needs review.";
@@ -322,7 +322,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
           await expect(workspace).not.toContainText("Session updated.");
         }
         await expect(workspace).not.toContainText("Checking Update…");
-        await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeEnabled();
+        await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("restored-update-result.png"), animations: "disabled" });
         if (result === "failed") {
           await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
@@ -494,7 +494,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     expect(captured.temporaryTurns).toHaveLength(1);
     fail = false;
     await workspace.getByLabel("Message temporary AI").fill("Continue preserving both changes.");
-    await workspace.getByRole("button", { name: "Send to temporary AI", exact: true }).click();
+    await workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ }).click();
     await expect(workspace).toContainText("Session updated");
     expect(captured.temporaryTurns).toHaveLength(2);
     expect(captured.temporaryCreates).toHaveLength(1);
@@ -567,7 +567,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
     const input = workspace.getByLabel("Message temporary AI");
-    const send = workspace.getByRole("button", { name: "Send to temporary AI", exact: true });
+    const send = workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ });
     await expect(input).toHaveValue("Fix this repository problem without losing work.");
     await expect(workspace).not.toContainText("Ask a focused question");
     server.state.rejectConnections = true;
@@ -614,7 +614,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     }));
     await input.fill("Keep both notification types.");
     await input.press("Tab");
-    await expect(workspace.getByRole("button", { name: "Send to temporary AI", exact: true })).toBeFocused();
+    await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect.poll(() => captured.temporaryTurns.length).toBe(2);
     expect(captured.temporaryTurns[1].message).toBe("Keep both notification types.");

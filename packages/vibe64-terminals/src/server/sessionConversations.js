@@ -255,9 +255,14 @@ function createSessionConversations({
       },
       message(message, record, phase) {
         if (phase === "stream") {
-          if (record.recoveryOperation !== "update" || (message.role || "assistant") !== "assistant") return message;
+          // The scoped stream owner has already matched this captured native
+          // thread. Keep its admitted selection, not a later composer choice.
+          const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
+          const attributed = { ...message, metadata: { assistantSelection: record.assistantSelection,
+            ...(route?.resolvedMode ? { assistantRouting: { resolvedMode: route.resolvedMode } } : {}) } };
+          if (record.recoveryOperation !== "update" || (message.role || "assistant") !== "assistant") return attributed;
           const outcome = normalizeVibe64AgentTaskResult(message.text);
-          return outcome ? { ...message, text: outcome.message, delta: undefined } : null;
+          return outcome ? { ...attributed, text: outcome.message, delta: undefined } : null;
         }
         const outcome = message.role === "assistant" ? normalizeVibe64AgentTaskResult(message.text) : null;
         if (phase === "incomplete" && message.role === "assistant" && record.recoveryOperation === "update" && !outcome) return null;

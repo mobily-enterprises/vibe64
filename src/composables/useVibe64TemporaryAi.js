@@ -1,5 +1,4 @@
 import { routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
-import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
@@ -79,7 +78,7 @@ function useVibe64TemporaryAi({
   const actorKey = computed(() => readRefOrGetterValue(viewer)?.actorKey || "");
   const acquireConversation = useAssistantConversationFactory({
     actorKey: () => actorKey.value, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
-    workspaceSlug: "", queueWhileSending: false, clearDraftOn: "dispatch",
+    workspaceSlug: "", queueWhileSending: true, clearDraftOn: "dispatch",
     presentation: { assistantLabel: "Temporary AI", variant: "task", visible: true, userMessageFormat: "plain", systemLabel: "System" }
   });
   const restoreError = ref("");
@@ -694,9 +693,7 @@ function useVibe64TemporaryAi({
   async function send(taskId = "", { retryMessageId = "", generatedMessage = null, attachmentOwner = null } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
-        readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") return false;
-    const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
-    if (!retryMessageId && assistantRoutingStatusIsPending(route)) return false;
+        readRefOrGetterValue(operationBusy) || task.recoveryOutcome === "checking") return false;
     const retry = retryMessageId ? pendingMessage(task, retryMessageId) : null;
     const draftPayload = generatedMessage || chatMessagePayload(task.draft, task.attachments);
     const payload = retry?.payload || (draftPayload && {

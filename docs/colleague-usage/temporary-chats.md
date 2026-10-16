@@ -9,6 +9,22 @@ Ordinary temporary chats offer **Custom**, **Senior** and **Junior**. Choose
 an available connection and model, then **Apply**. The next message uses that
 choice and the existing conversation history. Main chat's selection is unchanged.
 
+## Send and steer
+
+Temporary chat uses Main's round Send arrow and square Stop control. While a
+message is being delivered, you can type and send another; it appears as
+**Pending** until the earlier delivery settles. The diagonal arrow sends guidance
+to a working assistant. **Stop** interrupts that chat without closing it.
+The same controls remain available in narrow layouts. Goals are not offered in
+Temporary chat.
+
+Assistant replies show their recorded AI and model, including streaming and
+reopened history. Hover the label to see its provider. Changing Chat mode affects
+the next request; it does not relabel earlier replies. An older reply without
+recorded selection says **agent**, rather than claiming it used today's choice.
+The existing **Retry**, **Cancel** and **Edit** controls belong to the original
+message; uncertain delivery is checked before any resend.
+
 ## Hand a merge repair to another model
 
 **Fix it with AI** for an Update conflict opens a temporary repair using Senior

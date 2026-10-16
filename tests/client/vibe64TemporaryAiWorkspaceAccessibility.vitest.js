@@ -94,7 +94,8 @@ vi.mock("@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", () 
 vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", () => ({
   default: defineComponent({
     inheritAttrs: false,
-    setup(_props, { attrs }) { return () => h("textarea", attrs); }
+    setup(_props, { attrs, slots }) { return () => h("div", [h("textarea", attrs),
+      ...(slots.footer?.({ attachmentState: { canSubmit: true, canAddFiles: true } }) || [])]); }
   })
 }));
 
@@ -103,6 +104,7 @@ vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", 
 }));
 
 import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
+import Vibe64ComposerDelivery from "../../src/components/studio/vibe64-session/Vibe64ComposerDelivery.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 
@@ -117,6 +119,7 @@ for (const [name, component] of [
   ...["AssistantConversationElement", "AssistantConversationStatus", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
   ["AssistantComposerSupport", AssistantComposerSupport],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
+  ["Vibe64ComposerDelivery", Vibe64ComposerDelivery],
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
   ["Vibe64ConversationStatus", Vibe64ConversationStatus]
 ]) {
@@ -315,6 +318,41 @@ async function flushWorkspaceReveal() {
 }
 
 describe("Temporary AI recovery workspace accessibility", () => {
+  it("uses Main delivery controls while sending and preserves each reply's recorded AI attribution", async () => {
+    const temporary = temporaryAiTestState();
+    const claude = { engineId: "claude", modelProviderId: "anthropic", modelId: "opus", variantId: "high" };
+    const codex = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6", variantId: "medium" };
+    const delivery = createAssistantMessageDelivery();
+    delivery.state.sending = true;
+    temporary.tasks.value = [{ id: "task-1", conversationId: "task-1", status: "inProgress", busy: true,
+      draft: "More guidance", agentSettings: {}, assistantSelection: codex, delivery, messages: [
+        { id: "answer-1", role: "assistant", text: "Earlier answer", assistantSelection: claude },
+        { id: "answer-2", role: "assistant", text: "Current answer", metadata: { assistantSelection: codex }, status: "inProgress" }
+      ] }];
+    temporary.activeTaskId.value = "task-1";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1", active: true });
+    try {
+      await flushWorkspaceReveal();
+      const steer = findNode(container, node => node.type === "button" && node.props?.["aria-label"] === "Steer assistant");
+      expect(steer).toBeTruthy();
+      expect(steer.props.disabled).toBe(false);
+      steer.props.onClick();
+      expect(temporary.send).toHaveBeenCalledWith("task-1", expect.any(Object));
+      const stop = findNode(container, node => node.type === "button" && node.props?.["aria-label"] === "Stop");
+      expect(stop.props.disabled).toBe(false);
+      stop.props.onClick();
+      await flushWorkspaceReveal();
+      expect(temporary.stopTask).toHaveBeenCalledWith("task-1");
+      expect(nodeText(container)).toContain("Claude Code (opus high)");
+      expect(nodeText(container)).toContain("Codex (gpt-6 medium)");
+      expect(findNode(container, node => node.props?.title?.includes("Provider: anthropic"))).toBeTruthy();
+      expect(findNode(container, node => node.props?.title?.includes("Provider: openai"))).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
   it("offers an unchecked context copy and waits for confirmed creation before closing", async () => {
     const pending = deferred();
     const temporary = temporaryAiTestState();
@@ -692,7 +730,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     try {
       await flushWorkspaceReveal();
       const progress = findNode(container, (node) => (
-        node.props?.["aria-label"] === "Temporary AI progress"
+        node.props?.["aria-label"] === "agent progress"
       ));
       expect(progress).toBeTruthy();
       expect(nodeText(progress)).toBe("Show all 2 progress updates");
@@ -715,7 +753,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       ));
       expect(userMessage).toBeTruthy();
       expect(findNode(userMessage, (node) => (
-        node.props?.["aria-label"] === "Temporary AI progress"
+        node.props?.["aria-label"] === "agent progress"
       ))).toBeNull();
       expect(nodeText(container)).not.toContain("This is not assistant progress.");
 
@@ -725,7 +763,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       });
       await nextTick();
       const updatedProgress = findNode(container, (node) => (
-        node.props?.["aria-label"] === "Temporary AI progress"
+        node.props?.["aria-label"] === "agent progress"
       ));
       expect(nodeText(updatedProgress)).toBe(
         "Hide progress updates Inspecting the conflict. Checking the repair. The repair is ready for verification."

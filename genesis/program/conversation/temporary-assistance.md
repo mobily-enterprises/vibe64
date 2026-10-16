@@ -104,7 +104,19 @@ session counts through its operational logger, including recovery failures,
 without requiring session debug logging. Provider identity and credentials are
 not included in that event.
 
+Temporary and Main reuse `Vibe64ComposerDelivery` for Send/Steer and Stop,
+extracted from Main's existing controls. Preparation, attachment ownership,
+permissions and model routing remain with the existing application owners.
+Temporary opts into the shared binding's serial prepared-send queue; queued
+messages retain their authored payload and identity, and uncertain delivery is
+inspected rather than replayed. Both transcripts use the same recorded-selection
+attribution; message-level selection remains available for live scoped replies.
+Changing the composer selection never rewrites historical attribution.
+
 ## Sources
+
+- `src/components/studio/vibe64-session/Vibe64ComposerDelivery.vue`
+- `src/lib/vibe64ConversationAttribution.js`
 
 - `src/lib/vibe64ThinkingPresentation.js`
 

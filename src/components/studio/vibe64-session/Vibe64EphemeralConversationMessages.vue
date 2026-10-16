@@ -24,8 +24,7 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
-import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
-import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
 import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 const props = defineProps({
   adapter: { type: Object, required: true },
@@ -43,9 +42,16 @@ const displayAdapter = computed(() => {
   const supplied = props.adapter;
   let turns = (supplied.conversation.turns || []).map(turn => {
     const selection = turn.metadata?.assistantSelection;
-    const present = message => thinkingMessagePresentation(message, selection);
+    const present = message => {
+      if (!message) return message;
+      const recordedSelection = message.assistantSelection || message.metadata?.assistantSelection || selection;
+      const displayed = thinkingMessagePresentation(message, recordedSelection);
+      return displayed && { ...displayed,
+        ...conversationAttribution(recordedSelection, message.assistantRouting || message.metadata?.assistantRouting || turn.metadata?.assistantRouting) };
+    };
     return { ...turn,
-      ...(selection ? { assistantLabel: `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}` } : {}),
+      ...conversationAttribution(selection, turn.metadata?.assistantRouting),
+      assistant: present(turn.assistant),
       thinking: turn.thinking?.map(present).filter(Boolean),
       commentary: turn.commentary?.map(present).filter(Boolean),
       messages: turn.messages?.map(present).filter(Boolean)
@@ -60,7 +66,7 @@ const displayAdapter = computed(() => {
   return { ...supplied,
     // Apply the existing receipt projection once, before product Router status.
     delivery: null,
-    conversation: { ...supplied.conversation,
+    conversation: { ...supplied.conversation, cancellableDelivery: true,
       working: props.working ?? supplied.conversation.working, turns,
       assistantLabel: props.assistantLabel, scrollKey: props.scrollKey, variant: "task", visible: true,
       userMessageFormat: "plain", progressPreviewLimit: usesCommentaryForThinking(turns.at(-1)?.metadata?.assistantSelection) ? 1 : 0,
