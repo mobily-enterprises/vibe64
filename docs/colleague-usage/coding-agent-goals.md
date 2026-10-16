@@ -55,6 +55,8 @@ uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
 Internal task notifications do not keep a finished Claude turn artificially busy.
 You can set the next goal after the turn finishes as well as while it is working.
+If the previous reply is still saving, the goal waits for that save before it is sent;
+a failed save keeps the goal unsent and reports the storage error.
 The goal dialog closes after the command succeeds. While acknowledgement is
 pending, or if delivery fails or remains uncertain, it stays open with your
 objective intact. Switching chats prevents a late reply from closing the new
