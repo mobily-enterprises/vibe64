@@ -1210,3 +1210,16 @@ an unchanged recipe after daemon restart. This script neither reads nor rewrites
 historical session setup; old records lack evidence and run the full recipe once.
 Preflight reports that rule; apply records the boundary in the existing ledger,
 and retry is a no-op. No application files change, so this boundary needs no backup.
+
+## Goal continuation intent
+
+`20261016-goal-continuation-intent` records the new-write boundary for Main
+`assistant_goal_intent` session metadata. New Set/Resume controls record the
+request to continue an exact native goal across daemon restarts, independently
+of observed native status. Stop/Pause/Cancel clears intent. Existing goals remain
+byte-for-byte unchanged: historical paused status cannot establish whether a
+person requested Pause, so explicit Resume enrolls an older intended goal.
+There is no historical backfill and no application-file backup is required.
+Pending delivery still belongs to the canonical receipt owner. Startup only
+continues newly recorded intent after authorization and verified native cleanup;
+it does not run this upgrade or rewrite historical goals.

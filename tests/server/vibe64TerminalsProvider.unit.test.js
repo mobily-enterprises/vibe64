@@ -44,7 +44,7 @@ async function failingCodexAuthPreflight() {
   throw new Error("test Codex authentication unavailable");
 }
 
-function featureDependencies({ env = {}, project, published = [] } = {}) {
+function featureDependencies({ env = {}, project, published = [], hooks = [] } = {}) {
   return {
     actionCatalogue: createActionCatalogue(),
     env,
@@ -55,6 +55,7 @@ function featureDependencies({ env = {}, project, published = [] } = {}) {
       }
     },
     fastify: {
+      addHook(name, callback) { hooks.push({ name, callback }); },
       get() {}
     },
     http: {
@@ -404,9 +405,11 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
     const runtimeRoot = path.join(root, "runtime");
     const targetRoot = path.join(root, "project");
     await mkdir(targetRoot, { recursive: true });
+    let recovered = 0;
     const project = {
       createSessionStore() { return {}; },
-      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot }; },
+      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot,
+        async listSessions() { recovered += 1; return []; } }; },
       currentProjectRuntimeRoot() { return runtimeRoot; },
       currentTargetRoot() { return targetRoot; },
       async readCurrentProject() { return { slug: "project" }; },
@@ -414,15 +417,21 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
       runInProjectContext(_slug, operation) { return operation(); },
       async saveEnvUserValues() { return { ok: true }; }
     };
-    const published = [];
+    const published = [], hooks = [];
     const dependencies = featureDependencies({
       env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
       project,
-      published
+      published,
+      hooks
     });
     const feature = createVibe64TerminalsFeature();
     const outputs = await feature.setup(dependencies, { profile: "test" });
     try {
+      assert.equal(recovered, 0, "feature setup must not recover before hosted admission is configured");
+      await hooks.find(hook => hook.name === "onReady").callback();
+      assert.equal(recovered, 0, "recovery does not block Fastify's readiness hook");
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(recovered, 1);
       const reasons = Array.from({ length: 6 }, (_, index) => `tab-${index}`);
       const results = await Promise.all(reasons.map((reason) => (
         outputs.terminals.openProjectRuntime({ reason })

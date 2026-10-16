@@ -1989,7 +1989,7 @@ test("main Claude canonical goal acknowledgement leaves Stop available and canno
 });
 
 
-for (const busyGoal of [false, true]) test(`main Claude terminal service uses actual owners for an ${busyGoal ? "active" : "idle"} goal`, { timeout: 30000 }, async t => {
+for (const busyGoal of [false, true]) test(`main Claude terminal service uses actual owners for an ${busyGoal ? "active" : "idle"} goal`, { timeout: 60000 }, async t => {
   let removeFixture;
   const f = await fixture({ after(callback) { removeFixture = callback; } });
   let service;
@@ -2001,7 +2001,8 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
   await store.createSession({ sessionId: "test", runtimeKind: "genesis",
     metadata: { ...f.context.session.metadata, label: "BoundClaude" } });
   const runtime = { ...f.context.runtime, stateRoot: path.join(f.root, "runtime"),
-    projectContextRoot: f.root, store, getSession: id => store.readSession(id) };
+    projectContextRoot: f.root, store, getSession: id => store.readSession(id),
+    listSessions: async () => [await store.readSession("test")] };
   const projectService = {
     ...f.providerOptions.projectService,
     createRuntime: () => runtime,
@@ -2074,7 +2075,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     deliveryDiagnostics.push(record);
     if (record.event === "vibe64.agent_message.delivery_timing" && record.stage === "first-response") firstResponseTiming.resolve();
   };
-  service = createTerminalService({ projectService,
+  const createService = () => createTerminalService({ projectService,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
     env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command,
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
@@ -2085,6 +2086,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.some(message => message.text === "Service progress")) streamed.resolve();
     } }
   });
+  service = createService();
   const actor = { username: "service-owner", role: "owner" };
   const options = { runtime, vibe64User: actor };
   const actions = createActionCatalogue();
@@ -2206,6 +2208,73 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(working.delivered, true);
       assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, true);
     }
+    if (!busyGoal) {
+      await store.writeMetadataValue("test", "assistant_goal_intent", "null");
+      const preparationEntered = Promise.withResolvers();
+      const preparationRelease = Promise.withResolvers();
+      t.signal.addEventListener("abort", () => preparationRelease.resolve(), { once: true });
+      const waitStoppedIntent = async () => {
+        const deadline = Date.now() + 5000;
+        while (JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active) {
+          assert.ok(Date.now() < deadline, "Stop records its intent before waiting for native preparation");
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      };
+      let holdPreparation = true;
+      service.configureAssistantRuntime({ async resolveAssistantUser(user) {
+        if (holdPreparation) {
+          holdPreparation = false;
+          preparationEntered.resolve();
+          await preparationRelease.promise;
+        }
+        return user;
+      } });
+      const beforeStoppedSet = (await trace()).filter(row => row.frame?.type === "user").length;
+      const stoppedSet = startGoal({ action: "set",
+        expectedSegmentId: `claude:${state.thread.id}`, objective: "Do not dispatch this stopped goal",
+        messageId: "stopped-first-goal" }, { canonical: true }).then(value => ({ value }), error => ({ error }));
+      await Promise.race([preparationEntered.promise, stoppedSet.then(result => {
+        throw new Error(`Goal ended before preparation gate: ${result.error?.message || JSON.stringify(result.value)}`);
+      })]);
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+        "the first goal records intent before asynchronous preparation");
+      const stoppingPreparation = service.interruptAgentTurn("test", {}, options);
+      await waitStoppedIntent();
+      preparationRelease.resolve();
+      await stoppingPreparation;
+      assert.match((await stoppedSet).error?.message || "", /stopped during preparation/u);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, beforeStoppedSet);
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false,
+        "Stop cannot be undone by a late first-goal preparation");
+
+      const dispatchEntered = Promise.withResolvers();
+      const dispatchRelease = Promise.withResolvers();
+      t.signal.addEventListener("abort", () => dispatchRelease.resolve(), { once: true });
+      let holdDispatch = true;
+      service.configureAssistantRuntime({ async resolveAssistantUser(user) {
+        const intent = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent || "null");
+        if (holdDispatch && intent?.selection && intent.pending?.messageId === "stopped-authorized-goal") {
+          holdDispatch = false;
+          dispatchEntered.resolve();
+          await dispatchRelease.promise;
+        }
+        return user;
+      } });
+      const stoppedDispatch = startGoal({ action: "set",
+        expectedSegmentId: `claude:${state.thread.id}`, objective: "Do not dispatch after authorization",
+        messageId: "stopped-authorized-goal" }, { canonical: true }).then(value => ({ value }), error => ({ error }));
+      await Promise.race([dispatchEntered.promise, stoppedDispatch.then(result => {
+        throw new Error(`Goal ended before dispatch gate: ${result.error?.message || JSON.stringify(result.value)}`);
+      })]);
+      const stoppingDispatch = service.interruptAgentTurn("test", {}, options);
+      await waitStoppedIntent();
+      dispatchRelease.resolve();
+      await stoppingDispatch;
+      assert.match((await stoppedDispatch).error?.message || "", /stopped before dispatch/u);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, beforeStoppedSet,
+        "Stop during final account authorization prevents native dispatch");
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
+    }
     const processCountBeforeGoal = (await trace()).filter(row => row.args?.includes("--print")).length;
     await writeFile(goalAcknowledgementGate, "hold");
     let canonicalSettled = false;
@@ -2247,7 +2316,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(pinned.status, "active");
     assert.equal(pinned.mode, "junior");
     const readView = await goalFacade.readGoal();
-    const visible = readView.goal;
+    let visible = readView.goal;
     assert.equal(readView.target.segmentId, `claude:${state.thread.id}`);
     assert.equal(readView.target.capabilities.goalBudgets, false);
     assert.equal(readView.target.capabilities.goalCommands.set.delivery, "message");
@@ -2273,6 +2342,50 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
     assert.equal((await store.readSession("test")).metadata.assistant_routing_goal, pinBeforeDuplicate,
       "an existing UUID has no new native result and cannot commit a different goal pin");
+    const intentBeforeRestart = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
+    assert.equal(intentBeforeRestart.active, true);
+    assert.equal(intentBeforeRestart.pending, null);
+    assert.equal(intentBeforeRestart.native.objective, nativeObjective);
+    assert.equal(intentBeforeRestart.actor.username, actor.username);
+    await service.close();
+    assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+      "daemon shutdown preserves the person's active goal intent");
+    service = createService();
+    if (!busyGoal) {
+      service.configureAssistantRuntime({ authorizeProjectMessage: async () => {
+        throw new Error("The original actor no longer has project access.");
+      } });
+      const denied = await service.recoverActiveGoals();
+      assert.equal(denied.ok, false);
+      assert.match(denied.results[0].error, /actor no longer/u);
+      assert.match((await service.readAgentGoal("test", options, { canonical: true })).error, /actor no longer/u,
+        "recovery failure remains visible without removing native goal controls");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
+      await service.close();
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify({ ...intentBeforeRestart,
+        pending: { action: "resume", messageId: "unknown-goal-receipt", objective: nativeObjective } }));
+      service = createService();
+      const uncertain = await service.recoverActiveGoals();
+      assert.equal(uncertain.ok, false);
+      assert.match(uncertain.results[0].error, /delivery is uncertain/u);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "unknown goal delivery is never replaced with a new Resume");
+      await service.close();
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(intentBeforeRestart));
+      service = createService();
+    }
+    if (!busyGoal) runtime.listSessions = async () => [{ sessionId: "removed-during-recovery" }, await store.readSession("test")];
+    const recovery = await service.recoverActiveGoals();
+    assert.equal(recovery.ok, busyGoal, JSON.stringify(recovery));
+    assert.equal(recovery.results.at(-1).resumed, true, "one removed session cannot suppress the next goal's recovery");
+    if (!busyGoal) assert.equal(recovery.results[0].ok, false);
+    runtime.listSessions = async () => [await store.readSession("test")];
+    const framesAfterRecovery = (await trace()).filter(row => row.frame?.type === "user").length;
+    assert.equal(framesAfterRecovery, nativeMessagesBeforeDuplicate + 1, "restart admits exactly one canonical Resume");
+    await service.recoverActiveGoals();
+    assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesAfterRecovery);
+    visible = (await service.readAgentGoal("test", options, { canonical: true })).goal;
+    assert.equal(visible.status, "active");
     const differentSelection = { ...f.context.assistantSelection, engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: "gpt-6-astra" };
     await store.writeMetadataValue("test", "assistant_selection", JSON.stringify(differentSelection));
@@ -2289,6 +2402,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
     pinned = JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal);
     assert.equal(pinned.status, "paused");
     assert.equal(pinned.selection.engineId, "claude");
+    assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
+    await service.close();
+    service = createService();
+    assert.equal((await service.recoverActiveGoals()).results[0].skipped, true);
+    assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesAfterRecovery,
+      "explicit Pause survives another daemon restart");
     rows = await store.readConversationLog("test");
     assert.equal(rows.filter(turn => turn.user?.messageId === canonicalCommand.messageId).length, 1);
     assert.equal(rows.some(turn => turn.metadata.runtime), false);

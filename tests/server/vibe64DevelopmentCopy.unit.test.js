@@ -14,7 +14,8 @@ test("offline workflow preparation preserves uncertain delivery while stopping s
   const request = { schemaVersion: 5, status: "working", delivery: "uncertain", attemptedMessageId: "pending",
     input: { message: "Retain this request" }, helper: { executionId: "parent", conversationId: "native-helper" } };
   const goal = { status: "active", objective: "Retain the goal", selection: { modelId: "original" } };
-  const metadata = { assistant_routing_request: JSON.stringify(request), assistant_routing_goal: JSON.stringify(goal) };
+  const metadata = { assistant_routing_request: JSON.stringify(request), assistant_routing_goal: JSON.stringify(goal),
+    assistant_goal_intent: JSON.stringify({ version: 1, id: "parent", active: true }) };
   const before = structuredClone(metadata);
   const copy = prepareCopiedAssistantRouting(metadata);
   const saved = JSON.parse(copy.assistant_routing_request);
@@ -25,6 +26,7 @@ test("offline workflow preparation preserves uncertain delivery while stopping s
   assert.deepEqual(saved.input, request.input);
   assert.deepEqual(saved.helper, { executionId: "", conversationId: "native-helper" });
   assert.deepEqual(JSON.parse(copy.assistant_routing_goal), { ...goal, status: "paused" });
+  assert.equal(copy.assistant_goal_intent, "null", "a disposable copy cannot resume its parent’s active goal");
   assert.deepEqual(metadata, before);
   assert.throws(() => prepareCopiedAssistantRouting({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion: 4 }) }), /upgrade/u);
 });

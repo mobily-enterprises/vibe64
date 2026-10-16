@@ -50,6 +50,7 @@ function read(store, sessionId) {
 /** Only the host's stopped disposable copy may drop these process handles. */
 export function prepareCopiedAssistantRouting(metadata = {}) {
   const patch = {};
+  if (metadata.assistant_goal_intent) patch.assistant_goal_intent = "null";
   const request = parseRequest(metadata[STATE_KEY]);
   if (request) {
     if (request.status !== "complete") Object.assign(request, { stopped: true, status: "waiting",

@@ -1268,7 +1268,15 @@ function createSessionAgentManager({
         ? providerFor({ ...options, providerId: sessionAgentProviderId(options,
           bindings.get(bindingKey(sessionId, options)) || defaultProviderId) })
         : bindSession(sessionId, options);
-      const authorization = stopping ? null : await requireAccessContext(provider, sessionId, options);
+      let authorization;
+      try {
+        authorization = stopping ? null : await requireAccessContext(provider, sessionId, options);
+        options.signal?.throwIfAborted();
+      } catch (error) {
+        // The native goal operation has not been invoked yet.
+        error.delivery = "not-sent";
+        throw error;
+      }
       const operation = conversationOperation(provider, "updateGoal") || provider.updateGoal;
       if (typeof operation !== "function") {
         throw new TypeError("This assistant does not support goal controls.");
@@ -1276,7 +1284,7 @@ function createSessionAgentManager({
       if (options.canonicalGoal && !["claude", "codex"].includes(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
         code: "conversation_unsupported"
       });
-      return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
+      return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session, signal: options.signal,
         ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
         assistantSelection: sessionAssistantSelection(options), vibe64User: authorization ? authorization.vibe64User : assistantUser(options) }, input);
     },

@@ -2247,20 +2247,25 @@ async function withAgentMessageController(operation, {
     },
     projectService
   };
-  const terminalService = throughTerminalService
-    ? createTerminalService({
-        actions,
-        codexTerminalController: controllerOptions,
-        env: controllerOptions.env,
-        publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
-        projectService
-      })
-    : null;
+  const terminalServices = [];
+  const createService = () => {
+    const service = createTerminalService({
+      actions,
+      codexTerminalController: controllerOptions,
+      env: controllerOptions.env,
+      publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
+      projectService
+    });
+    terminalServices.push(service);
+    return service;
+  };
+  const terminalService = throughTerminalService ? createService() : null;
   const controller = terminalService ? null : createCodexTerminalController(controllerOptions);
 
   try {
     await operation({
       captures,
+      createService,
       controller,
       controllerOptions,
       projectService,
@@ -2271,7 +2276,7 @@ async function withAgentMessageController(operation, {
     });
   } finally {
     if (terminalService) {
-      await terminalService.close();
+      for (const service of terminalServices) await service.close();
     } else {
       await controller.closeAllForSession(session.sessionId);
     }
@@ -12260,6 +12265,8 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         assert.equal(stopped.error, undefined);
         assert.equal(stopped.value.ok, true, JSON.stringify(stopped.value));
         assert.equal(stopped.value.operationOutcome, "already_idle", "ordinary Stop does not pause the native goal");
+        assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).active, false,
+          "late native acknowledgement cannot undo explicit Stop's continuation intent");
         assert.equal(nativeCalls.some(([kind]) => kind === "status" || kind === "clear"), false);
         const created = completed.value;
         assert.equal(created.status, "active", JSON.stringify(created));
@@ -13754,4 +13761,75 @@ test("Main browser fresh authorization survives expired publishing scope and sti
       await unsubscribe?.();
     }
   }, { actions, throughTerminalService: true });
+});
+
+
+test("Main Codex active goal continues once after service restart and explicit Pause survives restart", { timeout: 30_000 }, async () => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+    const actor = { ...os.userInfo(), role: "owner" };
+    const options = { runtime, vibe64User: actor };
+    runtime.listSessions = async () => [await store.readSession(sessionId)];
+    await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+    let goal = null;
+    const writes = [];
+    captures.onProviderCreated = provider => {
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (threadId, input, { signal } = {}) => {
+        signal?.throwIfAborted();
+        writes.push(["set", threadId]);
+        return { goal: goal = { ...input, status: "active", createdAt: 100, tokensUsed: 0, timeUsedSeconds: 0 } };
+      };
+      provider.setGoalStatus = async (threadId, status, { signal } = {}) => {
+        signal?.throwIfAborted();
+        writes.push([status, threadId]);
+        return { goal: goal = { ...goal, status } };
+      };
+      const stopRuntime = provider.stopRuntime;
+      provider.stopRuntime = async (...args) => {
+        const result = await stopRuntime(...args);
+        if (result.stopped && goal?.status === "active") goal = { ...goal, status: "paused" };
+        return result;
+      };
+    };
+    const configure = service => service.configureAssistantRuntime({
+      authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
+    });
+    configure(terminalService);
+    const created = await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work", tokenBudget: 5000 }, { canonical: true });
+    const initial = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
+    assert.equal(initial.active, true);
+    assert.equal(initial.native.threadId, captures.provider.threadId);
+    await terminalService.close();
+    projectService.listProjects = async () => ({ projects: [
+      { slug: "removed-project", runtime: { open: true } }, { slug: "test-project", runtime: { open: true } }
+    ] });
+    projectService.runInProjectContext = async (slug, operation) => {
+      if (slug === "removed-project") throw new Error("Project was removed during startup.");
+      return operation();
+    };
+    const resumedService = createService();
+    configure(resumedService);
+    const recovered = await resumedService.recoverActiveGoals();
+    assert.equal(recovered.ok, false, JSON.stringify(recovered));
+    assert.match(recovered.results[0].error, /removed during startup/u);
+    assert.equal(recovered.results[1].resumed, true, "one unavailable project cannot suppress another goal");
+    delete projectService.listProjects;
+    assert.deepEqual(writes.map(([action]) => action), ["set", "active"]);
+    assert.equal(writes[0][1], writes[1][1], "restart retains the same native conversation");
+    const resumed = await resumedService.readAgentGoal(sessionId, options, { canonical: true });
+    assert.equal(resumed.goal.id, created.id);
+    assert.equal(resumed.goal.tokenBudget, 5000);
+    assert.deepEqual(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).native, initial.native);
+    await resumedService.recoverActiveGoals();
+    assert.equal(writes.length, 2, "a repeated startup request cannot dispatch twice");
+    await resumedService.updateAgentGoal(sessionId, { ...options, action: "pause",
+      expectedSegmentId: resumed.target.segmentId, expectedGoalId: resumed.goal.id }, { canonical: true });
+    assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).active, false);
+    await resumedService.close();
+    const pausedService = createService();
+    configure(pausedService);
+    assert.equal((await pausedService.recoverActiveGoals()).ok, true);
+    assert.deepEqual(writes.map(([action]) => action), ["set", "active", "paused"]);
+  }, { throughTerminalService: true });
 });

@@ -100,6 +100,13 @@ function createVibe64TerminalsFeature({
         fastify, actions: actionCatalogue, learningScoped: true,
         routeSurface: "app", terminals
       });
+      fastify.addHook("onReady", async () => {
+        // All feature boot hooks (including hosted execution/auth configuration)
+        // have completed before recovery can admit work.
+        setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
+          logger?.warn({ code: error.code, error: error.message }, "Active goals could not be recovered after server restart.");
+        }));
+      });
       return { terminals };
     },
     actions: ({ terminals }) => createTerminalActions({ terminals }),

@@ -108,3 +108,22 @@ of the goal's completion condition. Starting a goal while Claude is busy keeps
 its current process and instructions. An older goal retains its original native
 condition when resumed; cancel it and set your intended plain objective again
 if it was created with internal role instructions.
+
+A Main-chat goal started or explicitly resumed after this release retains your
+request to keep working across server restarts, including an unexpected server
+exit. Vibe64 verifies the previous process has stopped, rechecks your current
+project and AI access, then resumes the same native goal. **Pause goal**,
+**Cancel goal**, and **Stop** prevent that automatic continuation. A completed
+or cleared goal is not restarted. Existing goals are not guessed from their
+old paused status: choose **Resume goal** once to enroll the intended goal.
+
+If the account changed, cleanup cannot be verified, or an interrupted goal
+command has uncertain delivery, recovery stays stopped. Check the original
+receipt and current account, then use **Resume goal**; an uncertain command is
+never replaced with a blind send. A crash during the first goal command, before
+its accepted settings were saved, requires that explicit confirmation too.
+A copied development workspace never inherits permission to run its parent's
+goals. Restart continuation applies to supported Main native goals; temporary
+logical and scoped conversations do not expose native goal controls or receipts.
+Colleague can explain these controls and offer the supported action, but needs
+your request before changing a goal.

@@ -4128,3 +4128,14 @@ pins the selected model/role separately. Existing host and per-turn instructions
 remain unchanged; starting a busy Claude goal does not replace its system prompt
 or restart its process. Resume preserves the exact native goal identity, including
 older conditions, until an explicit goal replacement.
+
+Main goal continuation uses `assistant_goal_intent` metadata beside the existing
+accepted routing pin. Set/Resume records actor, connection and exact native goal
+identity; canonical in-flight commands retain their existing receipt ID. Observed
+native paused status cannot erase active intent. Explicit Stop/Pause/Cancel does.
+The Terminals on-ready sweep visits open project sessions once per daemon, checks
+fresh project/account access, requires native reconciliation to prove old process
+cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
+identity evidence blocks continuation. This does not replay ordinary messages,
+repair historical state, or enroll older goals. Development copies drop intent.
+Temporary-chat restart continuation remains separate unfinished work.
