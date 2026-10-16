@@ -29,6 +29,9 @@ Reloading the chat preserves that relationship and the recorded AI labels.
 After **Stop** confirms a Claude reply has stopped, text already shown remains
 under **Show all … progress updates** on its original request. It is an
 interrupted partial reply, not a completed answer, and remains after reload.
+If Claude saves more of that same output while Stop is finishing, it remains one
+reply; the saved native copy does not add a second bubble on reload. Text already
+retained for a stopped request is not replayed as a new completed answer.
 
 Assistant replies show their recorded AI and model, including streaming and
 reopened history. Hover the label to see its provider. Changing Chat mode affects
