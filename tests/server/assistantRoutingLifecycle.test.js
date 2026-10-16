@@ -560,7 +560,8 @@ test("goal preparation pins an explicit route only for the caller to commit afte
   const f = await fixture(t, { mode: "junior", review: true });
   const prepared = await f.service.prepareGoal("session-1", { action: "set", objective: "Implement agreed validation" }, f.context);
   assert.equal(prepared.pinned.selection.modelId, "deepseek-flash");
-  assert.match(prepared.input.objective, /Vibe64 role: Junior/);
+  assert.equal(prepared.input.objective, "Implement agreed validation");
+  assert.equal(prepared.pinned.mode, "junior");
   assert.equal(f.metadata.assistant_routing_goal, undefined);
 });
 

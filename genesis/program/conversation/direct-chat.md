@@ -4122,3 +4122,9 @@ rewritten. The existing native event and transcript owners retain command-output
 provenance in message data for new writes, independently of goal state.
 Session routing preserves native terminal status so only proven completed turns
 permit the stale-steer fallback.
+
+Goal preparation passes the plain user objective to the native evaluator and
+pins the selected model/role separately. Existing host and per-turn instructions
+remain unchanged; starting a busy Claude goal does not replace its system prompt
+or restart its process. Resume preserves the exact native goal identity, including
+older conditions, until an explicit goal replacement.

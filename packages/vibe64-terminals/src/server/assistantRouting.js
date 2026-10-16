@@ -937,7 +937,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const pinned = { mode, workflowEngineId, selection, configuration: state.configuration, override: state.override,
       settingsRevision: state.configuration.revision, connectionIdentity: decision.connectionIdentity,
       objective: input.action === "set" ? input.objective : previous?.objective || "", status: "active" };
-    let objective = pinned.objective ? assistantModePrompt(mode, pinned.objective) : undefined;
+    let objective = pinned.objective || undefined;
     if (resume) {
       const observed = await agent.readGoal(sessionId, context);
       if (observed?.status === "available" && observed.goal?.objective) objective = observed.goal.objective;

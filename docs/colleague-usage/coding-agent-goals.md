@@ -99,3 +99,10 @@ newer goal or deleting delivered conversation history. For a request still
 owned by the current route, the bubble hides while cancellation is checked; it
 returns if delivery remains unknown or cancellation fails. Colleague can explain
 these controls; the person presses them in Main chat.
+
+New goals pass exactly your objective to the native goal evaluator. Model and
+role selection still use **Chat mode**; internal role instructions are not part
+of the goal's completion condition. Starting a goal while Claude is busy keeps
+its current process and instructions. An older goal retains its original native
+condition when resumed; cancel it and set your intended plain objective again
+if it was created with internal role instructions.

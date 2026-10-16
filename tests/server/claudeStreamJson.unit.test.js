@@ -1989,7 +1989,7 @@ test("main Claude canonical goal acknowledgement leaves Stop available and canno
 });
 
 
-test("main Claude terminal service uses the actual manager, shared runtime and native receipt owner", { timeout: 30000 }, async t => {
+for (const busyGoal of [false, true]) test(`main Claude terminal service uses actual owners for an ${busyGoal ? "active" : "idle"} goal`, { timeout: 30000 }, async t => {
   let removeFixture;
   const f = await fixture({ after(callback) { removeFixture = callback; } });
   let service;
@@ -2201,6 +2201,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
       claude: { senior: routedSelection, junior: routedSelection }
     }, 0);
     await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "claude" }));
+    if (busyGoal) {
+      const working = await service.sendAgentMessage("test", { message: "Continue working", messageId: "before-busy-goal" }, options);
+      assert.equal(working.delivered, true);
+      assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, true);
+    }
+    const processCountBeforeGoal = (await trace()).filter(row => row.args?.includes("--print")).length;
     await writeFile(goalAcknowledgementGate, "hold");
     let canonicalSettled = false;
     const canonicalCommand = { action: "set", expectedSegmentId: `claude:${state.thread.id}`,
@@ -2212,7 +2218,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       canonicalSettled = true;
       return { error };
     });
-    const nativeObjective = assistantModePrompt("senior", canonicalCommand.objective);
+    const nativeObjective = canonicalCommand.objective;
     const frameDeadline = Date.now() + 5000;
     while (!(await trace()).some(row => row.frame?.type === "user" && row.frame.message.content === `/goal ${nativeObjective}`)) {
       if (canonicalSettled) {
@@ -2250,6 +2256,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
     const nativeHistory = await readClaudeHistory({ configRoot: f.providerOptions.env.CLAUDE_CONFIG_DIR,
       workdir: f.context.session.metadata.source_path, conversationId: state.thread.id });
     assert.equal(nativeHistory.goal.objective, nativeObjective);
+    assert.doesNotMatch(nativeHistory.goal.objective, /Vibe64 role|Auto plan/);
+    if (busyGoal) assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, processCountBeforeGoal,
+      "setting a busy goal retains its current native process and instructions");
+    for (const key of ["engineId", "modelProviderId", "agentId", "modelId", "variantId"]) {
+      assert.equal(pinned.selection[key], routedSelection[key], `goal retains selected ${key}`);
+    }
     assert.equal(visible.id, createHash("sha256").update(JSON.stringify([
       state.thread.id, nativeHistory.goal.createdAt, nativeObjective
     ])).digest("hex"), "display decoration never changes the canonical native identity");
