@@ -152,7 +152,11 @@ While that choice saves, the speaker control briefly waits; microphone capture
 and typed chat remain available.
 For coding assistants, **Read thinking**, **Read progress** and **Thinking sounds**
 also select optional thinking, interim work and a short sound while working.
-These activities use the same speaker and queue as answers.
+These activities use the same speaker and queue as answers. New messages wait
+for the current message to finish; arriving progress or an answer does not cut off
+spoken text. Repeated updates do not restart a message. The optional thinking
+sound yields to a real answer. **Stop speaking**, turning off spoken replies and
+switching voice targets still cancel playback.
 Thinking and interim speech default off; thinking sounds default on. They follow
 only the exact current, accessible Main view while the page is visible; hiding
 the avatar does not disable them. Loading history primes the narrator rather
