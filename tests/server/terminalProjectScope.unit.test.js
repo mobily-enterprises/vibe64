@@ -105,3 +105,35 @@ test("shared conversation hosts preserve Claude's native profile lookup", () => 
       "Inventing a config override relocates the CLI's existing account profile.");
   }
 });
+
+test("opt-in browser opening timings retain failure boundaries without request or account data", async () => {
+  for (const enabled of [false, true]) {
+    for (const failSessionRead of [false, true]) {
+      const events = [];
+      const privateFailure = new Error("private account detail must not enter timing logs");
+      const runtime = { async getSession() {
+        if (failSessionRead) throw privateFailure;
+        return { metadata: {} }; // Selection is unavailable; native opening must still fail.
+      } };
+      const unused = () => assert.fail("A failed browser read must not start work.");
+      const service = createService({ env: { JSKIT_REALTIME_DEBUG: enabled ? "1" : "0" },
+        logger: { warn: event => events.push(event) },
+        projectService: { readCurrentProject: unused, readEnv: unused, runInProjectContext: unused,
+          saveEnvUserValues: unused, createRuntime: async () => runtime, createSessionStore: unused } });
+      await assert.rejects(service.openBrowserConversation("session-1", {}), { code: "conversation_forbidden" });
+      assert.equal(events.length, 0, "Unadmitted handles do not enter diagnostics");
+      await assert.rejects(service.openBrowserConversation("session-1", {
+        browserAuthority: { sessionId: "session-1", requestContext: { secret: "private request" } }
+      }), failSessionRead ? error => error === privateFailure : error => Boolean(error));
+      assert.equal(events.length, enabled ? (failSessionRead ? 1 : 2) : 0);
+      if (!enabled) continue;
+      assert.equal(events.at(-1).phase, failSessionRead ? "session-read" : "native-open");
+      assert.equal(events.at(-1).completed, false);
+      for (const event of events) {
+        assert.equal(event.event, "vibe64.conversation.browser_timing");
+        assert.ok(event.durationMs >= 0 && Number.isFinite(event.durationMs));
+        assert.equal(JSON.stringify(event).includes("private"), false);
+      }
+    }
+  }
+});

@@ -1247,7 +1247,7 @@ function createService({
       }, "Assistant delivery timing.");
     },
     ...(mainToolCatalog ? { toolCatalog: mainToolCatalog } : {}),
-    async authorize({ context, conversationId }) {
+    async authorize({ context, conversationId, operation }) {
       if (context?.sessionId !== conversationId) return false;
       const authority = context.browserAuthority;
       if (!authority) return true; // Existing, already-authorized manager callers.
@@ -1260,9 +1260,24 @@ function createService({
           : { projectSlug: authority.projectSlug, sessionId: conversationId },
         context: authority.requestContext
       });
-      const grant = await (context.browserProjectContext
-        ? runWithProjectRequestContext(context.browserProjectContext, readGrant) : readGrant());
-      return grant.actor.id === authority.actorId;
+      const started = performance.now();
+      let allowed = false;
+      try {
+        const grant = await (context.browserProjectContext
+          ? runWithProjectRequestContext(context.browserProjectContext, readGrant) : readGrant());
+        allowed = grant.actor.id === authority.actorId;
+        return allowed;
+      } finally {
+        const durationMs = performance.now() - started;
+        // Stream publications also reauthorize as "subscribe". Retain slow or
+        // denied checks without adding a log write for every healthy token.
+        if ((operation !== "subscribe" || !allowed || durationMs >= 100) &&
+            ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase())) {
+          logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
+            sessionId: conversationId, phase: "authorization", operation, allowed,
+            durationMs }, "Browser conversation authorization timing.");
+        }
+      }
     },
     host: {
       nativeTools: true,
@@ -4466,30 +4481,44 @@ function createService({
           code: "conversation_forbidden", statusCode: 403
         });
       }
-      const context = await assistantSessionOptions(sessionId, options);
-      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-      if (!["codex", "claude", "opencode"].includes(selection.engineId)) {
-        throw Object.assign(new Error("This Main conversation's engine is not connected to the browser facade yet."), {
-          code: "conversation_unsupported", statusCode: 400
-        });
+      const diagnostics = ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase());
+      let phase = "session-read";
+      let started = performance.now();
+      let completed = false;
+      try {
+        const context = await assistantSessionOptions(sessionId, options);
+        if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
+          sessionId, phase, completed: true, durationMs: performance.now() - started }, "Browser conversation opening timing.");
+        phase = "native-open";
+        started = performance.now();
+        const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+        if (!["codex", "claude", "opencode"].includes(selection.engineId)) {
+          throw Object.assign(new Error("This Main conversation's engine is not connected to the browser facade yet."), {
+            code: "conversation_unsupported", statusCode: 400
+          });
+        }
+        const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId,
+          browserProjectContext: captureProjectRequestContext() };
+        const conversation = await mainConversations.open({ id: sessionId, context: current });
+        completed = true;
+        const browser = Object.freeze({ ...conversation, async inspectDelivery(input) {
+          const receipt = await conversation.inspectDelivery(input);
+          if (receipt?.status !== "unknown") return receipt;
+          const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
+          if (routed?.delivered === true) return conversation.inspectDelivery(input);
+          return routed?.status === "not-sent" ? routed : receipt;
+        } });
+        if (!context.runtime.learningScope || !context.runtime.learningTeaching) return browser;
+        return Object.freeze({ ...browser, async read(query) {
+          const result = await conversation.read(query);
+          const trainingQuestion = await context.runtime.learningTeaching.readQuestion({ runtime: context.runtime,
+            sessionId, context: current, actions });
+          return { ...result, trainingQuestion };
+        } });
+      } finally {
+        if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
+          sessionId, phase, completed, durationMs: performance.now() - started }, "Browser conversation opening timing.");
       }
-      const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId,
-        browserProjectContext: captureProjectRequestContext() };
-      const conversation = await mainConversations.open({ id: sessionId, context: current });
-      const browser = Object.freeze({ ...conversation, async inspectDelivery(input) {
-        const receipt = await conversation.inspectDelivery(input);
-        if (receipt?.status !== "unknown") return receipt;
-        const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
-        if (routed?.delivered === true) return conversation.inspectDelivery(input);
-        return routed?.status === "not-sent" ? routed : receipt;
-      } });
-      if (!context.runtime.learningScope || !context.runtime.learningTeaching) return browser;
-      return Object.freeze({ ...browser, async read(query) {
-        const result = await conversation.read(query);
-        const trainingQuestion = await context.runtime.learningTeaching.readQuestion({ runtime: context.runtime,
-          sessionId, context: current, actions });
-        return { ...result, trainingQuestion };
-      } });
     },
 
     async openTemporaryBrowserConversation(sessionId, conversationId, options = {}) {

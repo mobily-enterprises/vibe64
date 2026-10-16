@@ -2133,9 +2133,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     deliveryDiagnostics.push(record);
     if (record.event === "vibe64.agent_message.delivery_timing" && record.stage === "first-response") firstResponseTiming.resolve();
   };
-  const createService = () => createTerminalService({ projectService,
+  const actions = createActionCatalogue();
+  const createService = () => createTerminalService({ projectService, actions,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
-    env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command,
+    env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command, JSKIT_REALTIME_DEBUG: "1",
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
     codexTerminalController: { codexToolHomeRequired: false,
       codexAppServerProviderOptions: { systemRoot: path.join(f.root, "system") } },
@@ -2147,7 +2148,6 @@ createInterface({ input: process.stdin }).on('line', async line => {
   service = createService();
   const actor = { username: "service-owner", role: "owner" };
   const options = { runtime, vibe64User: actor };
-  const actions = createActionCatalogue();
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
       return { project: { projectRoot: f.root, projectRuntimeRoot: runtime.stateRoot } };
@@ -2171,6 +2171,25 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(emptyGoalRead.goal, null);
     const state = await service.agentSessionState("test", { ...options, session: await store.readSession("test") });
     assert.ok(state.thread.id);
+    const browserAuthority = { sessionId: "test", projectSlug: "claude-main-fixture", actorId: actor.username,
+      requestContext: { channel: "internal", surface: "app" } };
+    const browser = await service.openBrowserConversation("test", { ...options, browserAuthority });
+    const releaseBrowser = await browser.subscribe(() => {});
+    await browser.read();
+    releaseBrowser();
+    await assert.rejects(service.openBrowserConversation("test", { ...options,
+      browserAuthority: { ...browserAuthority, actorId: "another-person" } }), { code: "conversation_forbidden" });
+    const browserTimings = deliveryDiagnostics.filter(event => event.event === "vibe64.conversation.browser_timing");
+    assert.ok(browserTimings.some(event => event.phase === "session-read" && event.completed));
+    assert.ok(browserTimings.some(event => event.phase === "native-open" && event.completed));
+    for (const operation of ["open", "read"]) {
+      assert.ok(browserTimings.some(event => event.phase === "authorization" && event.operation === operation && event.allowed));
+    }
+    assert.ok(browserTimings.filter(event => event.phase === "authorization" && event.operation === "subscribe")
+      .every(event => !event.allowed || event.durationMs >= 100), "Healthy streaming checks do not log per token");
+    assert.ok(browserTimings.some(event => event.phase === "authorization" && event.allowed === false));
+    assert.ok(browserTimings.every(event => Number.isFinite(event.durationMs) && event.durationMs >= 0));
+    assert.equal(JSON.stringify(browserTimings).includes(actor.username), false);
     assert.equal(emptyGoalRead.target.segmentId, `claude:${state.thread.id}`,
       "the empty-goal read returns its selected identity without a second target lookup");
     const trace = async () => {

@@ -267,6 +267,12 @@ diagnostics then record the pending
 server stage at the 10-second acknowledgement budget and the stage/reason when
 that observer is released. With this option enabled, each preceding stage and
 its elapsed time are also retained in warning-level logs, so an operator can
-distinguish slow admission from slow snapshot reading. They contain no chat text or credentials. This does
+distinguish slow admission from slow snapshot reading. With the environment flag
+enabled, `vibe64.conversation.browser_timing` also separates Main's session loading,
+native conversation opening and fresh authorization, including failed boundaries.
+Repeated subscription authorization is recorded only when denied or taking at
+least 100 milliseconds, to avoid a diagnostic log entry for every healthy token.
+These records identify the session and operation, without chat text, request
+details, account credentials or error contents. This does
 not change the deadline, start a model, resend a message or retry a subscription;
 use **Reload chat** after correcting the cause.
