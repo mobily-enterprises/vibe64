@@ -1,3 +1,4 @@
+import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
 import {
@@ -144,12 +145,12 @@ function registerRoutes(http, {
     input: areaQuery(request, operation)
   })));
   routes.serviceRoute("POST", "/sessions/:sessionId/files/:area/upload", {
-    bodyLimit: 101 * 1024 * 1024, summary: "Upload one file into the authorized Drop Zone."
+    bodyLimit: VIBE64_UPLOAD_BODY_LIMIT_BYTES, summary: "Upload one file into the authorized Drop Zone."
   }, (request) => request.executeAction({
     actionId: "vibe64.source-editor.file-area.upload",
     input: sourceInput(request, { ...routes.requestQuery(request), area: request.params.area }),
     context: { sourceEditorUpload: { readUpload: () => request.parts({
-      throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: 100 * 1024 * 1024 }
+      throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: VIBE64_UPLOAD_MAX_BYTES }
     }) } }
   }));
 

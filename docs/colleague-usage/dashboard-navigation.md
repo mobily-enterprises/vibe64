@@ -66,7 +66,7 @@ copy. The same controls are available in Session Dropzone. On phones, file
 browsing and editing share the pane and secondary actions are in the file menu.
 Confirm **Delete** to remove the selected item; **New folder** creates an empty
 folder in the currently displayed directory.
-Uploads accept individual files up to 100 MiB; use a zip to exchange a directory.
+Uploads accept individual files up to 500 MiB; use a zip to exchange a directory.
 
 Project Backups is an ordinary directory outside Git. The coding agent can put
 files there using its supplied path; **Copy AI path** lets you refer to that same

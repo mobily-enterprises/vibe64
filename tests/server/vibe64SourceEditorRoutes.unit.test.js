@@ -384,7 +384,7 @@ test("multipart upload passes its bounded transport reader through the authorize
     const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/files/:area/upload` });
     let readCount = 0;
     const request = { params: routeProjectParams({ sessionId: "session-1", area: "drop-zone" }), input: { query: { path: "notes" } },
-      parts(options) { readCount++; assert.deepEqual(options, { throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: 100 * 1024 * 1024 } }); return parts; }
+      parts(options) { readCount++; assert.deepEqual(options, { throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: 500 * 1024 * 1024 } }); return parts; }
     };
     await route.handler(request, testReply());
     await actions.execute({ actionId: "vibe64.source-editor.file-area.upload", input: { sessionId: "session-1", projectSlug: slug, area: "drop-zone", path: "notes" },

@@ -929,6 +929,8 @@ Stores project-specific agent configuration.
 
 Provides the shared paths, errors, request/context helpers, atomic file publication and state-upgrade facilities used by Vibe64’s product packages. It defines common mechanics without owning project, session, teaching or conversation policy.
 
+The shared upload byte policy keeps Files, chat HTTP admission and browser validation aligned; each product service retains authorization, streaming storage and cleanup.
+
 Persisted-state upgrades use the existing numbered registry, preflight, backups and retry rules. Product services supply the data and admission boundary; normal reads do not silently repair historical state.
 
 ### Source

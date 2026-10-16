@@ -179,6 +179,37 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
     assert.ok((await fetch(`${base}/drop-zone/download?path=${invalidPart}.bin`)).status >= 400, invalidPart);
   }
   assert.deepEqual((await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).sort(), ["file.bin", "shared.txt"]);
+  // Exercise the real HTTP parser and streaming writer without allocating a
+  // 500 MiB buffer. The next byte must reject and remove the staged file.
+  const chunk = Buffer.alloc(1024 * 1024, 0x5a);
+  const boundary = "vibe64-upload-limit-proof";
+  for (const extra of [false, true]) {
+    const name = extra ? "oversized.bin" : "boundary.bin";
+    const body = Readable.from((function* () {
+      yield `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+      for (let i = 0; i < 500; i++) yield chunk;
+      if (extra) yield Buffer.from([1]);
+      yield `\r\n--${boundary}--\r\n`;
+    })());
+    const reply = await fetch(`${base}/drop-zone/upload?path=${name}`, {
+      method: "POST", headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      body, duplex: "half", signal: AbortSignal.timeout(30_000)
+    });
+    assert.equal(reply.status, extra ? 413 : 200, await reply.text());
+    if (extra) {
+      assert.ok((await fetch(`${base}/drop-zone/download?path=${name}`)).status >= 400);
+    } else {
+      const download = await fetch(`${base}/drop-zone/download?path=${name}`);
+      let received = 0;
+      for await (const bytes of download.body) {
+        received += bytes.length;
+        assert.ok(bytes.every(value => value === 0x5a));
+      }
+      assert.equal(received, 500 * 1024 * 1024);
+    }
+    assert.ok(!(await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).some(name => name.startsWith(".upload-")));
+  }
+
 });
 
 test("archival waits for an admitted upload and rejects writes queued after closing", async (t) => {

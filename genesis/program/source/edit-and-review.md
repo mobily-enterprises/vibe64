@@ -143,7 +143,7 @@ folder navigation. Repo retains source editing, stars, explanations and selected
 file sync. Drop Zone belongs to the selected session and lives outside its Git
 source. Project members may list, preview, download, upload, create folders,
 rename, edit text and delete files or directory trees there. Upload and file
-drag-and-drop accept multiple files sequentially, up to 100 MiB each, and never
+drag-and-drop accept multiple files sequentially, up to 500 MiB each, and never
 overwrite an existing item. Larger files placed there by the assistant remain
 downloadable. Drag-and-drop upload is available in Session Dropzone and Project Backups. Unsaved text stays
 in its area when switching tabs; uploads cannot discard it.

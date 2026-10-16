@@ -54,6 +54,21 @@ async function flushPromises() {
 }
 
 describe("useAgentAttachments", () => {
+  it("accepts files above the former limit and exactly 500 MiB, rejecting the next byte", async () => {
+    const uploadAttachment = vi.fn(async (sessionId, file) => uploadedAttachment(sessionId, file));
+    const attachments = useAgentAttachments({ sessionId: ref("session-1"), uploadAttachment });
+    expect(AGENT_ATTACHMENT_MAX_BYTES).toBe(500 * 1024 * 1024);
+    const result = await attachments.uploadFiles([
+      testFile("above-old.bin", 101 * 1024 * 1024),
+      testFile("boundary.bin", 500 * 1024 * 1024),
+      testFile("oversized.bin", 500 * 1024 * 1024 + 1)
+    ]);
+    expect(result.map(file => file.fileName)).toEqual(["above-old.bin", "boundary.bin"]);
+    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(attachments.queueItems.value[2].error).toContain("500 MiB");
+    await attachments.disposeAttachments();
+  });
+
   it("shares file filtering for drag, picker, and terminal uploads", () => {
     const files = codexAttachmentFiles([
       testFile("valid.txt"),
@@ -424,7 +439,7 @@ describe("useAgentAttachments", () => {
       failureStage: "validation",
       phase: "failed"
     });
-    expect(attachments.queueItems.value[0].error).toContain("100 MB");
+    expect(attachments.queueItems.value[0].error).toContain("500 MiB");
     expect(attachments.hasUnresolved.value).toBe(true);
     expect(uploadAttachment).not.toHaveBeenCalled();
 

@@ -344,7 +344,7 @@ test("real multipart parsing drains file streams when the action returns or thro
   }
 });
 
-test("real multipart parsing accepts exactly 100 MB and rejects the next byte without buffering the test payload", async () => {
+test("real multipart parsing accepts exactly 500 MiB and rejects the next byte without buffering the test payload", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-http-boundary-test-"));
   const harness = await realAttachmentRouteHarness(root);
   try {
@@ -354,7 +354,7 @@ test("real multipart parsing accepts exactly 100 MB and rejects the next byte wi
         size += chunk.length;
       }
       if (action.input.stream.truncated) {
-        const error = new Error("Attachment file is too large. Maximum allowed size is 100 MB.");
+        const error = new Error("Attachment file is too large. Maximum allowed size is 500 MiB.");
         error.statusCode = 413;
         throw error;
       }
@@ -367,7 +367,7 @@ test("real multipart parsing accepts exactly 100 MB and rejects the next byte wi
       method: "POST",
       payload: exactPayload.body,
       url: harness.url
-    }), 5_000, "The exact 100 MB multipart request did not settle.");
+    }), 5_000, "The exact 500 MiB multipart request did not settle.");
     assert.equal(exactReply.statusCode, 200);
     assert.equal(exactReply.json().size, CODEX_ATTACHMENT_MAX_BYTES);
 
@@ -1557,12 +1557,12 @@ test("attachment cleanup is idempotent and cannot cross session namespaces", asy
   }
 });
 
-test("the exact decimal 100 MB boundary succeeds and one extra byte is rejected", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-decimal-limit-test-"));
-  const oneMegabyte = Buffer.alloc(1_000_000, 0x61);
-  function decimalUpload(extraByte = false) {
+test("the exact binary 500 MiB boundary succeeds and one extra byte is rejected", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-binary-limit-test-"));
+  const oneMegabyte = Buffer.alloc(1024 * 1024, 0x61);
+  function binaryUpload(extraByte = false) {
     return Readable.from((function *attachmentChunks() {
-      for (let index = 0; index < 100; index += 1) {
+      for (let index = 0; index < 500; index += 1) {
         yield oneMegabyte;
       }
       if (extraByte) {
@@ -1572,24 +1572,24 @@ test("the exact decimal 100 MB boundary succeeds and one extra byte is rejected"
   }
   try {
     await withAttachmentRoot(root, async () => {
-      assert.equal(CODEX_ATTACHMENT_MAX_BYTES, 100_000_000);
+      assert.equal(CODEX_ATTACHMENT_MAX_BYTES, 500 * 1024 * 1024);
       const accepted = await storeCodexAttachment({
         executionRoot: "/source/project",
-        input: { fileName: "exact.bin", stream: decimalUpload() },
+        input: { fileName: "exact.bin", stream: binaryUpload() },
         sessionId: "exact-limit"
       });
       const rejected = await storeCodexAttachment({
         executionRoot: "/source/project",
-        input: { fileName: "too-large.bin", stream: decimalUpload(true) },
+        input: { fileName: "too-large.bin", stream: binaryUpload(true) },
         sessionId: "over-limit"
       });
 
       assert.equal(accepted.ok, true);
-      assert.equal(accepted.size, 100_000_000);
-      assert.equal((await stat(accepted.path)).size, 100_000_000);
+      assert.equal(accepted.size, 500 * 1024 * 1024);
+      assert.equal((await stat(accepted.path)).size, 500 * 1024 * 1024);
       assert.equal(rejected.ok, false);
       assert.equal(rejected.code, "vibe64_agent_attachment_too_large");
-      assert.match(rejected.error, /100 MB/u);
+      assert.match(rejected.error, /500 MiB/u);
       assert.deepEqual((await attachmentFiles(root)).filter((name) => name.includes("uploading")), []);
       await cleanupCodexAttachments("/source/project", "exact-limit");
     });
@@ -2056,14 +2056,14 @@ async function settleWithin(promise, timeoutMs, message) {
 
 function streamingBoundaryMultipartPayload({ extraByte = false } = {}) {
   const boundary = `----vibe64-boundary-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const megabyte = Buffer.alloc(1_000_000, 0x61);
+  const megabyte = Buffer.alloc(1024 * 1024, 0x61);
   const body = Readable.from((function *multipartChunks() {
     yield Buffer.from(
       `--${boundary}\r\n` +
       "Content-Disposition: form-data; name=\"file\"; filename=\"boundary.bin\"\r\n" +
       "Content-Type: application/octet-stream\r\n\r\n"
     );
-    for (let index = 0; index < 100; index += 1) {
+    for (let index = 0; index < 500; index += 1) {
       yield megabyte;
     }
     if (extraByte) {

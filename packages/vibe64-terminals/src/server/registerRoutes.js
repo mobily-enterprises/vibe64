@@ -32,6 +32,8 @@ import {
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
+import { VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
+
 const VIBE64_TERMINALS_UNAVAILABLE = "Vibe64 terminal service is unavailable.";
 
 function outputResultContentDisposition(name = "download") {
@@ -177,7 +179,7 @@ async function withExactlyOneAttachment(request, consume) {
 
 function normalizeAttachmentMultipartError(error) {
   if (isMultipartError(error, "FST_REQ_FILE_TOO_LARGE")) {
-    return attachmentMultipartError("Attachment file is too large. Maximum allowed size is 100 MB.");
+    return attachmentMultipartError(`Attachment file is too large. Maximum allowed size is ${VIBE64_UPLOAD_MAX_LABEL}.`);
   }
   if (isMultipartError(error, "FST_FILES_LIMIT") || isMultipartError(error, "FST_PARTS_LIMIT")) {
     return attachmentMultipartError("Attachment upload allows exactly one file and no other fields.");

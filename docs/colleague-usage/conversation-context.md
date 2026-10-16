@@ -30,3 +30,12 @@ interrupting healthy work. Preparing that guidance does not consume the separate
 native-control timeout. If a connection error still appears, read the saved reply
 and check any uncertain delivery before sending new work; do not assume the model
 failed or repeat a request whose outcome is unknown.
+
+## Attach files
+
+Use **Add to message** or drop/paste files into the conversation. Each file may
+be up to 500 MiB. Wait for its upload to finish before sending; an oversized
+file remains marked as failed so you can remove it and choose a smaller file.
+For a directory, upload an archive through Files → Session Dropzone. Uploading
+does not itself send a message. Colleague can explain these steps; choosing a
+file from the person's computer requires their interaction.

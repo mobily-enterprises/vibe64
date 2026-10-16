@@ -100,6 +100,7 @@
 </template>
 
 <script setup>
+import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { mdiArrowLeft, mdiContentCopy, mdiDeleteOutline, mdiDotsVertical, mdiDownload, mdiFileOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiPencilOutline, mdiRefresh, mdiUpload } from "@mdi/js";
@@ -257,7 +258,7 @@ function uploadFiles(files) {
     for (const selected of files) {
       if (disposed) break;
       try {
-        if (selected.size > 100 * 1024 * 1024) throw new Error("Choose a file no larger than 100 MiB.");
+        if (selected.size > VIBE64_UPLOAD_MAX_BYTES) throw new Error(`Choose a file no larger than ${VIBE64_UPLOAD_MAX_LABEL}.`);
         const data = new FormData();
         data.append("file", selected);
         const target = [folder, selected.name].filter(Boolean).join("/");

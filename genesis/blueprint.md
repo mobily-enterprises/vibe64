@@ -505,7 +505,8 @@ Files separates the repository, a per-session Session Dropzone, and the session'
 read-only runtime tree with distinct area icons. The workspace owner can browse
 Session files, including archived history; other project members see Repo, Session Dropzone and Project Backups (2w retention). People and the AI can exchange files outside the repository through
 the Drop Zone. People can upload, drop multiple files, download, edit, rename,
-and delete its contents. This temporary exchange is excluded from saved work
+and delete its contents. Files and chat attachments accept individual uploads up
+to 500 MiB. This temporary exchange is excluded from saved work
 and archives and disappears after successful archival; a renewed session
 starts with an empty Drop Zone. Project Backups is a normal directory shared
 by all sessions of its project, outside Git and session archives. Users and coding

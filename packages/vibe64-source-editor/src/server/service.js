@@ -1,3 +1,4 @@
+import { VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 import { BACKUP_RETENTION_MS, withProjectBackupsLock } from "@local/vibe64-runtime/server/projectBackups";
 import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
 import crypto from "node:crypto";
@@ -1780,7 +1781,7 @@ async function uploadDropZoneFile(context, input, readUpload) {
         throw sourceEditorError("Upload was interrupted or exceeded the allowed limits.", "vibe64_files_invalid_upload");
       }
       await pipeline(part.file, createWriteStream(staged, { flags: "wx", mode: 0o660 }));
-      if (part.file.truncated) throw sourceEditorError("Upload exceeds the 100 MiB limit.", "vibe64_files_upload_too_large", {}, 413);
+      if (part.file.truncated) throw sourceEditorError(`Upload exceeds the ${VIBE64_UPLOAD_MAX_LABEL} limit.`, "vibe64_files_upload_too_large", {}, 413);
     }
     if (count !== 1) throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
     // Publish without overwriting or making another temporary copy.
@@ -1791,6 +1792,11 @@ async function uploadDropZoneFile(context, input, readUpload) {
       throw error;
     }
     return { ok: true, path: relativePath };
+  } catch (error) {
+    if (error.code === "FST_REQ_FILE_TOO_LARGE") {
+      throw sourceEditorError(`Upload exceeds the ${VIBE64_UPLOAD_MAX_LABEL} limit.`, "vibe64_files_upload_too_large", {}, 413);
+    }
+    throw error;
   } finally {
     await rm(staged, { force: true });
   }

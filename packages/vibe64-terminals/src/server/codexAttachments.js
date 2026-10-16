@@ -32,8 +32,9 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
-const CODEX_ATTACHMENT_MAX_BYTES = 100_000_000;
-const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = CODEX_ATTACHMENT_MAX_BYTES + 1_000_000;
+import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
+const CODEX_ATTACHMENT_MAX_BYTES = VIBE64_UPLOAD_MAX_BYTES;
+const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = VIBE64_UPLOAD_BODY_LIMIT_BYTES;
 const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
 const ATTACHMENT_FILES_DIRECTORY = "files";
 const ATTACHMENT_LOCKS_DIRECTORY = "locks";
@@ -117,6 +118,7 @@ function attachmentUploadValidationError(code, message, statusCode = 400) {
 }
 
 function attachmentLimitLabel(maxBytes = CODEX_ATTACHMENT_MAX_BYTES) {
+  if (maxBytes % (1024 * 1024) === 0) return `${maxBytes / (1024 * 1024)} MiB`;
   const megabytes = maxBytes / 1_000_000;
   return Number.isInteger(megabytes) && megabytes >= 1
     ? `${megabytes} MB`
