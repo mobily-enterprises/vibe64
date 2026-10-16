@@ -21,6 +21,12 @@ the repair, then use **Save** again. The failed preflight leaves your source and
 published version unchanged. Colleague can explain this recovery; the coding
 agent performs the source repair. These steps apply on desktop and mobile.
 
+If assistant naming is unavailable, Save uses a checkpoint-based version name
+and continues. A successful Save clears that nonfatal diagnostic from its current
+failure status; the fallback notice remains in its progress history. Check the
+final Save result and the session's **All work is saved** indicator rather than
+treating the naming notice as a failed push.
+
 If a push loses its response, Vibe64 checks the exact prepared commit on the
 remote before treating it as failed. If the remote cannot be read, restore access
 and inspect the session's work again. Recovery uses the original Save operation

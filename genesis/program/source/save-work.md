@@ -25,6 +25,11 @@ optional inference or publication. Source is never silently migrated. This is an
 early check; final map regeneration on the proposed tree and publication checks
 still apply, including when source changes after preflight.
 
+Successful Save completion clears the current task's diagnostic code, including
+an earlier optional naming failure. Progress history retains the fallback notice;
+the verified publication result owns the final outcome. Publication failures keep
+their own diagnostic, and cache-maintenance warnings remain separately recorded.
+
 People can deliberately publish the complete current session work to the
 project's configured source authority without asking the coding agent to run
 Git commands.

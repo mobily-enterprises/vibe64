@@ -1409,94 +1409,108 @@ test("native Save persists bounded progress and advances the session base only a
   });
 });
 
-test("native Save persists its semantic commit-title profile across a durable task reload", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "save-profile-audit";
-    const store = createVibe64SessionStore({
-      projectContextRoot: targetRoot,
-      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
-    });
-    await store.createSession({
-      runtimeKind: "genesis",
-      sessionId
-    });
-    const executionProfile = {
-      limits: {
-        maxInputCharacters: 12_000,
-        maxOutputCharacters: 1_000,
-        timeoutMs: 45_000
-      },
-      model: "provider-owned-helper-model",
-      policy: {
-        environmentAccess: false,
-        networkAccess: false,
-        repositoryWrite: false,
-        tools: "none"
-      },
-      profileId: "helper",
-      providerId: "codex",
-      request: {
-        allowProviderModelFallback: false,
-        reasoning: true,
-        summary: false
-      },
-      revision: "codex-helper-v2",
-      thinking: "low",
-      workloadId: "commit_title"
-    };
-    const runtime = {
-      getSession(id) {
-        return store.readSession(id);
-      },
-      async listSessionSummaries() {
-        return [await store.readSession(sessionId)];
-      },
-      store
-    };
-    const service = createService({
-      project: {
-      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
-        async createRuntime() {
-          return runtime;
-        }
-      },
-      terminals: {
-        async requireAssistantAccess() {
-          return { ok: true };
+for (const namingFallback of [false, true]) {
+  test(`native Save persists its ${namingFallback ? "successful naming fallback" : "semantic commit-title profile"} across a durable task reload`, async () => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const sessionId = "save-profile-audit";
+      const store = createVibe64SessionStore({
+        projectContextRoot: targetRoot,
+        projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+      });
+      await store.createSession({
+        runtimeKind: "genesis",
+        sessionId
+      });
+      const executionProfile = {
+        limits: {
+          maxInputCharacters: 12_000,
+          maxOutputCharacters: 1_000,
+          timeoutMs: 45_000
         },
-        async saveSessionWork(_sessionId, input) {
-          await input.onRepositoryWriteAcquired();
-          await input.onProgress({
-            executionProfile,
-            kind: "message",
-            message: "Version name ready.",
-            stage: "message-ready"
-          });
-          return {
-            commitTitleExecutionProfile: executionProfile,
-            reconciled: true,
-            saveCommit: "saved-profile-commit",
-            status: "saved"
-          };
+        model: "provider-owned-helper-model",
+        policy: {
+          environmentAccess: false,
+          networkAccess: false,
+          repositoryWrite: false,
+          tools: "none"
+        },
+        profileId: "helper",
+        providerId: "codex",
+        request: {
+          allowProviderModelFallback: false,
+          reasoning: true,
+          summary: false
+        },
+        revision: "codex-helper-v2",
+        thinking: "low",
+        workloadId: "commit_title"
+      };
+      const runtime = {
+        getSession(id) {
+          return store.readSession(id);
+        },
+        async listSessionSummaries() {
+          return [await store.readSession(sessionId)];
+        },
+        store
+      };
+      const service = createService({
+        project: {
+        async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
+          async createRuntime() {
+            return runtime;
+          }
+        },
+        terminals: {
+          async requireAssistantAccess() {
+            return { ok: true };
+          },
+          async saveSessionWork(_sessionId, input) {
+            await input.onRepositoryWriteAcquired();
+            if (namingFallback) await input.onProgress({
+              code: "vibe64_session_save_message_failed",
+              kind: "message",
+              message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
+              stage: "message-fallback"
+            });
+            await input.onProgress({
+              executionProfile,
+              kind: "message",
+              message: "Version name ready.",
+              stage: "message-ready"
+            });
+            return {
+              commitTitleExecutionProfile: executionProfile,
+              reconciled: true,
+              saveCommit: "saved-profile-commit",
+              status: "saved"
+            };
+          }
         }
-      }
-    });
+      });
 
-    const saved = await service.saveSessionWork(sessionId);
-    assert.equal(saved.ok, true);
+      const saved = await service.saveSessionWork(sessionId);
+      assert.equal(saved.ok, true);
 
-    const reloadedStore = createVibe64SessionStore({
-      projectContextRoot: targetRoot,
-      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+      const reloadedStore = createVibe64SessionStore({
+        projectContextRoot: targetRoot,
+        projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+      });
+      const reloadedTask = await reloadedStore.readBackgroundTask(sessionId, "save-work");
+      assert.equal(reloadedTask.status, "ready");
+      assert.equal(reloadedTask.error, "");
+      assert.equal(reloadedTask.code || "", "");
+      assert.equal(reloadedTask.saveCommit, "saved-profile-commit");
+      if (namingFallback) assert.ok(reloadedTask.events.some(event =>
+        event.message === "Assistant naming is unavailable. Saving with a checkpoint-based version name."));
+      assert.deepEqual(reloadedTask.executionProfile, executionProfile);
+      assert.deepEqual(reloadedTask.commitTitleExecutionProfile, executionProfile);
+      assert.equal(reloadedTask.commitTitleExecutionProfile.profileId, "helper");
+      assert.equal(reloadedTask.commitTitleExecutionProfile.revision, "codex-helper-v2");
+      assert.equal(reloadedTask.commitTitleExecutionProfile.workloadId, "commit_title");
     });
-    const reloadedTask = await reloadedStore.readBackgroundTask(sessionId, "save-work");
-    assert.deepEqual(reloadedTask.executionProfile, executionProfile);
-    assert.deepEqual(reloadedTask.commitTitleExecutionProfile, executionProfile);
-    assert.equal(reloadedTask.commitTitleExecutionProfile.profileId, "helper");
-    assert.equal(reloadedTask.commitTitleExecutionProfile.revision, "codex-helper-v2");
-    assert.equal(reloadedTask.commitTitleExecutionProfile.workloadId, "commit_title");
   });
-});
+}
 
 test("a successful Save keeps mirror maintenance failure as a visible retryable warning", async () => {
   const taskEvents = [];
