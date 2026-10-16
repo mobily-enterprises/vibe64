@@ -98,6 +98,12 @@ observer retirement and registry publication. Vibe64 retains authorized target
 selection, scoped Helper release and the parent's durable cleanup receipt.
 An uncertain delivery is inspected by its original message identity rather than
 replayed; an unreadable or absent receipt remains uncertain.
+Accepted Claude steering retains the original input identity on partial output.
+The shared scoped reader resolves native input identities against authored
+messages and uses the existing transcript turn IDs when saving replies. A
+follow-up cannot take ownership of the interrupted request's partial reply,
+including after a cold native-history read; existing saved rows are not repaired
+or rewritten by this read path.
 The shared owner reports an expired health-probe deadline without stopping
 Main or temporary conversations. Vibe64 records shared-process stop reasons and
 session counts through its operational logger, including recovery failures,

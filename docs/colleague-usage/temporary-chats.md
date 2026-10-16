@@ -23,6 +23,10 @@ to a working assistant. **Stop** interrupts that chat without closing it.
 The same controls remain available in narrow layouts. Goals are not offered in
 Temporary chat.
 
+Steering can interrupt an unfinished reply. Any partial reply remains attached
+to its original request; the follow-up response belongs to the new request.
+Reloading the chat preserves that relationship and the recorded AI labels.
+
 Assistant replies show their recorded AI and model, including streaming and
 reopened history. Hover the label to see its provider. Changing Chat mode affects
 the next request; it does not relabel earlier replies. An older reply without
