@@ -2419,6 +2419,24 @@ createInterface({ input: process.stdin }).on('line', async line => {
       "daemon shutdown preserves the person's active goal intent");
     service = createService();
     if (!busyGoal) {
+      const historyFile = await claudeHistoryPath({ configRoot: f.providerOptions.env.CLAUDE_CONFIG_DIR,
+        workdir: f.context.session.metadata.source_path, conversationId: state.thread.id });
+      const beforeLoopLimit = await readFile(historyFile.path, "utf8");
+      await writeFile(historyFile.path, JSON.stringify({ type: "system", subtype: "informational",
+        timestamp: new Date().toISOString(),
+        content: "A hook blocked the turn from ending 9 consecutive times — overriding and ending turn." }) + "\n", { flag: "a" });
+      const blocked = await service.recoverActiveGoals();
+      assert.equal(blocked.results.at(-1).blocked, true, JSON.stringify(blocked));
+      const blockedRead = await service.readAgentGoal("test", options, { canonical: true });
+      assert.equal(blockedRead.goal.status, "blocked");
+      assert.match(blockedRead.goal.reason, /Resolve the blocker/);
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+        "a native blocker preserves the person's unfinished goal intent");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "restart never blindly starts the same native loop again");
+      await service.close();
+      await writeFile(historyFile.path, beforeLoopLimit);
+      service = createService();
       service.configureAssistantRuntime({ authorizeProjectMessage: async () => {
         throw new Error("The original actor no longer has project access.");
       } });

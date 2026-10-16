@@ -184,7 +184,7 @@ const goalState = computed(() => ({
       <v-btn v-if="goal?.status === 'active'" size="small" :disabled="changingGoal" @click="changeGoal('pause')">
         {{ goalState.action === 'pause' ? 'Pausing…' : 'Pause goal' }}
       </v-btn>
-      <v-btn v-if="goal?.status === 'paused' && goalExplicitMode" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
+      <v-btn v-if="['paused', 'blocked'].includes(goal?.status) && goalExplicitMode" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
         {{ goalState.action === 'resume' ? 'Resuming…' : 'Resume goal' }}
       </v-btn>
       <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">{{ goalState.action === 'cancel' ? 'Cancelling…' : 'Cancel goal' }}</v-btn>

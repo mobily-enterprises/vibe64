@@ -1699,6 +1699,9 @@ function createService({
         intent.native?.createdAt !== native.goal.createdAt || intent.native?.objective !== native.goal.objective) {
       throw new Error("The native goal changed after continuation was requested. Resume the intended goal explicitly.");
     }
+    if (native.goal.status === "blocked") {
+      return { sessionId, blocked: true, reason: native.goal.reason };
+    }
     if (native.goal.status === "active") {
       const current = await sessionAgent.sessionState(sessionId, context);
       if (current?.ok !== false && current.turn?.active === true && current.thread?.id === native.threadId) {

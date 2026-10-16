@@ -4151,6 +4151,11 @@ cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
 identity evidence blocks continuation. This does not replay ordinary messages,
 repair historical state, or enroll older goals. Development copies drop intent.
 Temporary-chat restart continuation remains separate unfinished work.
+The shared native reader also preserves Claude's explicit repeated-stop-hook
+termination as `blocked`. Main restart recovery retains the goal and its intent
+without sending Resume for that native state. The existing goal controls show
+its reason and offer explicit Resume/Cancel. An assistant's prose is not pause
+or blocker evidence; conversational pause control remains a separate gap.
 
 Connection recovery stays in a compact top row: the action sits to the left of
 wrapping status text, and the draft-kept explanation remains visible. The shared
