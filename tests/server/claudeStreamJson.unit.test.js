@@ -1997,7 +1997,13 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
     try { await service?.close(); }
     finally { await removeFixture(); }
   });
-  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime") });
+  let recoveryLockContended;
+  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime"),
+    logger: { warn(record) {
+      if (record.operation === "resume-agent-goal" && ["vibe64.session_lock.contended", "vibe64.session_lock.rejected"].includes(record.event)) {
+        recoveryLockContended?.resolve(record);
+      }
+    } } });
   await store.createSession({ sessionId: "test", runtimeKind: "genesis",
     metadata: { ...f.context.session.metadata, label: "BoundClaude" } });
   const runtime = { ...f.context.runtime, stateRoot: path.join(f.root, "runtime"),
@@ -2374,8 +2380,52 @@ createInterface({ input: process.stdin }).on('line', async line => {
       await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(intentBeforeRestart));
       service = createService();
     }
-    if (!busyGoal) runtime.listSessions = async () => [{ sessionId: "removed-during-recovery" }, await store.readSession("test")];
-    const recovery = await service.recoverActiveGoals();
+    if (!busyGoal) {
+      // Exercise real lock expiry without spending its production minute in a
+      // test; only the deadline is shortened at the existing store boundary.
+      const held = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const preparing = store.runSessionExclusive("test", "agent-write-mode", async () => {
+        held.resolve(); await release.promise;
+      }, { operation: "prepare-workspace" });
+      await held.promise;
+      runtime.store = { ...store, runSessionExclusive(id, name, operation, lockOptions = {}) {
+        if (lockOptions.operation === "resume-agent-goal") {
+          assert.equal(lockOptions.waitMs, 60_000);
+          lockOptions = { ...lockOptions, waitMs: 20 };
+        }
+        return store.runSessionExclusive(id, name, operation, lockOptions);
+      } };
+      try {
+        const timedOut = await service.recoverActiveGoals();
+        assert.equal(timedOut.ok, false);
+        assert.equal(timedOut.results[0].code, "vibe64_agent_write_mode_busy");
+        assert.match((await service.readAgentGoal("test", options, { canonical: true })).error, /Another assistant operation/u);
+        assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+          "lock timeout is visible and never dispatches or retries a goal");
+      } finally { release.resolve(); runtime.store = store; }
+      await preparing;
+      await service.close();
+      service = createService();
+      runtime.listSessions = async () => [{ sessionId: "removed-during-recovery" }, await store.readSession("test")];
+    }
+    const prepareEntered = Promise.withResolvers();
+    const prepareReleased = Promise.withResolvers();
+    recoveryLockContended = Promise.withResolvers();
+    const preparing = store.runSessionExclusive("test", "agent-write-mode", async () => {
+      prepareEntered.resolve();
+      await prepareReleased.promise;
+    }, { operation: "prepare-workspace" });
+    await prepareEntered.promise;
+    const recovering = service.recoverActiveGoals();
+    try {
+      const contention = await recoveryLockContended.promise;
+      assert.equal(contention.waitMs, 60_000, "restart recovery queues behind ordinary workspace preparation");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "waiting for the preparation owner cannot dispatch a goal");
+    } finally { prepareReleased.resolve(); }
+    await preparing;
+    const recovery = await recovering;
     assert.equal(recovery.ok, busyGoal, JSON.stringify(recovery));
     assert.equal(recovery.results.at(-1).resumed, true, "one removed session cannot suppress the next goal's recovery");
     if (!busyGoal) assert.equal(recovery.results[0].ok, false);
@@ -2386,6 +2436,32 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesAfterRecovery);
     visible = (await service.readAgentGoal("test", options, { canonical: true })).goal;
     assert.equal(visible.status, "active");
+    if (busyGoal) {
+      await service.close();
+      service = createService();
+      const held = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      recoveryLockContended = Promise.withResolvers();
+      const preparing = store.runSessionExclusive("test", "agent-write-mode", async () => {
+        held.resolve(); await release.promise;
+      }, { operation: "prepare-workspace" });
+      await held.promise;
+      const recovering = service.recoverActiveGoals();
+      let stopping;
+      try {
+        await recoveryLockContended.promise;
+        stopping = service.interruptAgentTurn("test", {}, options);
+        const deadline = Date.now() + 5000;
+        while (JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active) {
+          assert.ok(Date.now() < deadline, "Stop records intent before waiting for the preparation lock");
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      } finally { release.resolve(); }
+      await preparing;
+      await stopping;
+      assert.equal((await recovering).ok, false, "Stop prevents a queued automatic Resume");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesAfterRecovery);
+    }
     const differentSelection = { ...f.context.assistantSelection, engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: "gpt-6-astra" };
     await store.writeMetadataValue("test", "assistant_selection", JSON.stringify(differentSelection));

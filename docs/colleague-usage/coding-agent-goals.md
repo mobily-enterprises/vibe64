@@ -117,7 +117,10 @@ uncertain delivery stays visible; check its receipt before trying again.
 A Main-chat goal started or explicitly resumed after this release retains your
 request to keep working across server restarts, including an unexpected server
 exit. Vibe64 verifies the previous process has stopped, rechecks your current
-project and AI access, then resumes the same native goal. **Pause goal**,
+project and AI access, then resumes the same native goal. If workspace preparation
+is already starting, recovery waits up to one minute for that operation's lock;
+it does not send a second goal command. A timeout stays visible on the goal control.
+**Pause goal**,
 **Cancel goal**, and **Stop** prevent that automatic continuation. A completed
 or cleared goal is not restarted. Existing goals are not guessed from their
 old paused status: choose **Resume goal** once to enroll the intended goal.

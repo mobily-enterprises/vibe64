@@ -4233,7 +4233,8 @@ function createService({
           } finally {
             if (intent) goalAdmissions.delete(intent.id);
           }
-        }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
+        }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal",
+          ...(restartIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {}) });
       }
       const context = await assistantSessionOptions(sessionId, input);
       const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
