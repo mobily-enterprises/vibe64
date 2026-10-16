@@ -52,7 +52,7 @@ function date(value) {
 
 <template>
   <section class="issues-panel d-flex flex-column ga-2">
-    <div class="issues-panel__toolbar d-flex align-center ga-2">
+    <div class="issues-panel__toolbar d-flex flex-wrap align-center ga-2">
       <Vibe64DashboardBackButton
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
         @click="available && number && navigate({ issue: undefined })"

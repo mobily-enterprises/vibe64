@@ -12,7 +12,8 @@ state when hidden; leaving the preview does not stop its application.
 
 The left-arrow **Back to dashboard** control has the same appearance in
 Architecture, Current changes, Files, Database, Issues and Pull requests, including
-the same readable text size on phones. Use
+the same readable text size on phones. Issue actions wrap below it when space is
+limited. Use
 Tab to focus it and Enter to activate it. Files and Database opened from
 Architecture instead show **Back to Architecture**, returning to that view.
 Inside an individual issue or pull request, the same control says **All issues**
