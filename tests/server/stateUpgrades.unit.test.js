@@ -41,6 +41,7 @@ const connectedProjectBindingsId = "20261015-connected-project-bindings";
 const claudeRejectedInputId = "20261016-claude-rejected-input";
 const workspaceResourceIdentityId = "20261016-workspace-resource-identity";
 const goalContinuationIntentId = "20261016-goal-continuation-intent";
+const claudeCommandMessagesId = "20261016-claude-command-messages";
 // Historical registry fixtures do not clear credentials; the real reset is
 // exercised by its original companion and providerCredentialsUpgrade.unit.test.js.
 const upgradeIndependentProviderCredentials = async () => {};
@@ -60,11 +61,34 @@ const nativeContinuityId = "20261009-colleague-native-continuity";
 const nativeInstructionsId = "20261010-colleague-native-instructions";
 const codexCompletedPolicyId = "20261010-colleague-codex-completed-policy";
 const upgradeClaudeRejectedInput = async () => {};
-const runStateUpgrades = options => runUpgrades({ upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, ...options });
+// Detailed message/backup behavior lives in claudeCommandUpgrade.unit.test.js.
+const upgradeClaudeCommandMessages = async () => {};
+const runStateUpgrades = options => runUpgrades({ upgradeClaudeCommandMessages, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, ...options });
 const personalPreferencesId = "20261006-personal-assistant-preferences";
 const routingCompatibilityId = "20261006-routing-format-compatibility";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+
+test("Claude command upgrade requires its owner and records completion only after successful apply", async t => {
+  const f = await fixture(t);
+  const prior = { version: 1, applied: upgradeIds.slice(0, -1).map(id => ({ id, completedAt: "2026-10-16T00:00:00.000Z" })) };
+  await mkdir(path.dirname(f.ledgerPath), { recursive: true });
+  await writeFile(f.ledgerPath, JSON.stringify(prior));
+  await assert.rejects(runUpgrades({ systemRoot: f.systemRoot, report() {} }), /Claude message repair owner is required/);
+  const calls = [];
+  const options = { systemRoot: f.systemRoot, report() {}, upgradeClaudeCommandMessages: async context => {
+    calls.push(context.apply);
+    assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", claudeCommandMessagesId));
+  } };
+  await runUpgrades(options);
+  assert.deepEqual(JSON.parse(await readFile(f.ledgerPath)), prior);
+  await assert.rejects(runUpgrades({ ...options, apply: true, upgradeClaudeCommandMessages: async () => { throw new Error("proof failed"); } }), /proof failed/);
+  assert.deepEqual(JSON.parse(await readFile(f.ledgerPath)), prior);
+  await runUpgrades({ ...options, apply: true });
+  assert.ok(calls.includes(false));
+  assert.equal(calls.at(-1), true);
+  assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied.at(-1).id, claudeCommandMessagesId);
+});
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity, nativeInstructions = upgradeColleagueNativeInstructions, retiredOperation = repairColleagueRetiredOperation, interactiveContinuity = upgradeColleagueHistoricalInteractiveContinuity } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-upgrade-test-"));
@@ -963,7 +987,7 @@ test("Codex tool-policy registry checks its original owner before writing and re
   await assert.rejects(runUpgrades({ systemRoot: f.systemRoot, report() {} }), /tool-policy owner is required/);
   assert.deepEqual(await readFile(f.ledgerPath), original);
   const calls = [];
-  const options = { systemRoot: f.systemRoot, report() {}, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, upgradeColleagueCodexCompletedPolicy: async context => {
+  const options = { systemRoot: f.systemRoot, report() {}, upgradeClaudeCommandMessages, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, upgradeColleagueCodexCompletedPolicy: async context => {
     assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", codexCompletedPolicyId));
     calls.push(context.apply);
     await upgradeColleagueCodexCompletedPolicy(context);
@@ -995,7 +1019,7 @@ test("native continuity registry requires its original owner, checks before publ
     calls.push(context.apply);
     if (context.apply && fail) throw new Error("native evidence changed");
   };
-  const options = { systemRoot: f.systemRoot, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity: owner, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, report() {} };
+  const options = { systemRoot: f.systemRoot, upgradeClaudeCommandMessages, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity: owner, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, report() {} };
   assert.deepEqual(await runUpgrades(options), { pending: [nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId], applied: [] });
   await assert.rejects(runUpgrades({ ...options, apply: true }), /native evidence changed/);
   assert.deepEqual(await readFile(f.ledgerPath), previous);

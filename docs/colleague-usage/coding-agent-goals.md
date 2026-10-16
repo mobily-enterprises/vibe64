@@ -76,7 +76,9 @@ Claude goal commands and native management confirmations stay out of ordinary
 chat, including earlier generated **Goal set:** and **Goal cleared:** records
 when you reopen it. New confirmations such as **No goal set** are also omitted;
 command errors remain visible. Older confirmations whose command origin was not
-saved may still appear until historical repair is applied. Actual assistant work
+saved may still appear until the operator applies the historical repair during
+a stopped-service update. If the original native evidence is unavailable, those
+older records stay visible; reporting the affected conversation is useful. Actual assistant work
 and explanations remain visible.
 Failed, pending or uncertain goal instructions keep their recovery controls and
 show your objective without internal role instructions. Nothing is deleted from

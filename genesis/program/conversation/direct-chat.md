@@ -4164,3 +4164,14 @@ Main records continuation identity only after that proof, never from the previou
 goal snapshot or matching condition text. Restart recovery can resolve an accepted
 pending command through the same proof. Stop and replacement keep the existing
 intent-generation fence, and missing attachment evidence remains actionable.
+
+
+The numbered `20261016-claude-command-messages` repair restores presentation
+provenance for saved command output through the original session/archive owner.
+[assistantClaudeCommandUpgrade.js](../../../packages/vibe64-terminals/src/server/assistantClaudeCommandUpgrade.js)
+matches exact canonical message IDs and text against JSKIT native command
+evidence; unproven records stay intact and conflicting evidence refuses repair.
+`prepareConversationMessageDataUpgrade` changes only supplied message data,
+retaining every other record field. The existing offline publisher backs up
+original records/archives and resumes frozen replacements after interruption.
+This is an operator upgrade, never a history-read or startup side effect.

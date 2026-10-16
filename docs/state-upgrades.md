@@ -1223,3 +1223,22 @@ There is no historical backfill and no application-file backup is required.
 Pending delivery still belongs to the canonical receipt owner. Startup only
 continues newly recorded intent after authorization and verified native cleanup;
 it does not run this upgrade or rewrite historical goals.
+
+
+## Claude command-message provenance
+
+`20261016-claude-command-messages` adds command-origin data to historical Main
+and temporary assistant/commentary messages only when their exact message ID and
+text match an explicitly identified native Claude local-command record. It uses
+the session owner to inspect active, closing, archived and prepared-renewal
+histories. Existing provenance, text, ordering, timestamps, receipts and native
+history remain intact. Failed command output remains distinguishable from stdout.
+
+The candidate CLI supplies the Terminals repair owner. Run its ordinary `--check`
+before stopped-writer `--apply`; neither normal reads nor startup repair history.
+Missing native history produces an actionable warning and leaves those messages
+unchanged. Conflicting evidence, malformed records or unsafe paths block writes.
+The existing publisher keeps immutable before/after files and archive replacements
+under `upgrades/backups/20261016-claude-command-messages/`, verifies every destination
+and resumes prepared bytes after interruption. Restore only through an assessed,
+consistent backup recovery; never delete the ledger to rerun an applied entry.

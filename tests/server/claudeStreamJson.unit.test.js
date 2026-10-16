@@ -537,6 +537,38 @@ test("Claude split native frames retain thinking and answers across streaming an
   await assert.rejects(readClaudeHistory({ ...options, includeUserMessages: true, includeFinalCarriers: true }), /incomplete/);
 });
 
+test("offline Claude command inspection retains exact identity without changing ordinary history", async t => {
+  const f = await fixture(t);
+  const sent = await f.provider.sendMessage(f.context, { message: "Start", messageId: "command-inspection" });
+  const options = { configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path,
+    conversationId: sent.thread.id, allowIncompleteTail: false };
+  // Claude 2.1.289 stores its synthetic live assistant confirmation this way.
+  const command = { type: "system", subtype: "local_command", uuid: "clear-command",
+    commandRun: { command: "goal", args: "clear" },
+    content: "<local-command-stdout>Goal cleared: Original objective\n\nRetained text</local-command-stdout>" };
+  await writeHistory(f, sent.thread.id, [command,
+    { ...command, uuid: "error-command", content: "<local-command-stderr>Not allowed</local-command-stderr>" },
+    { ...command, uuid: "missing-command", commandRun: undefined },
+    { ...command, uuid: "bad-wrapper", content: "<local-command-stdout>Wrong close</local-command-stderr>" },
+    { ...command, uuid: "nested-command", parent_tool_use_id: "parent" },
+    { ...command, uuid: "side-command", isSidechain: true },
+    { type: "assistant", uuid: "ordinary-answer", message: { content: [{ type: "text", text: "Goal cleared: Here is my explanation" }] } }
+  ]);
+  const file = (await claudeHistoryPath(options)).path;
+  const bytes = await readFile(file);
+  const ordinary = await readClaudeHistory(options);
+  assert.equal(Object.hasOwn(ordinary, "commandMessages"), false);
+  const { commandMessages, ...rest } = await readClaudeHistory({ ...options, includeCommandMessages: true });
+  assert.deepEqual(rest, ordinary);
+  assert.deepEqual(commandMessages, [
+    { id: "claude_clear-command_0", text: "Goal cleared: Original objective\n\nRetained text",
+      data: { native: { engineId: "claude", type: "system", subtype: "local_command", command: "goal", output: "stdout" } } },
+    { id: "claude_error-command_0", text: "Not allowed",
+      data: { native: { engineId: "claude", type: "system", subtype: "local_command", command: "goal", output: "stderr" } } }
+  ]);
+  assert.deepEqual(await readFile(file), bytes);
+});
+
 test("Claude inspection defers native hooks until the prepared first Send", async (t) => {
   const f = await fixture(t);
   const hookPath = path.join(f.context.session.metadata.source_path, ".claude", "settings.json");

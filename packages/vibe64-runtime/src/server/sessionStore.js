@@ -5454,6 +5454,62 @@ function createVibe64SessionStore({
     return { found, files, updates };
   }
 
+  // Offline message-data repair uses the same active/closing/archive inventory.
+  // The feature owner supplies proven data only; content and receipts stay here.
+  async function prepareConversationMessageDataUpgrade({ temporaryRoot, transform }) {
+    if (typeof transform !== "function") throw new Error("Conversation data upgrade requires a transform.");
+    return prepareSessionStateUpgrade({ temporaryRoot, async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
+      await checkedPath(sessionPaths.sessionRoot, true);
+      await checkedPath(sessionPaths.manifestPath);
+      await readManifestFromPaths(sessionPaths);
+      await inventory(sessionPaths.metadataRoot);
+      const metadata = await readMetadataFromPaths(sessionPaths);
+      const scopes = [{ paths: sessionPaths, conversation: null }];
+      for (const entry of await inventory(sessionPaths.conversationsRoot)) {
+        if (!entry.isDirectory()) continue;
+        const paths = conversationPaths(sessionPaths, entry.name);
+        const source = await readRegularText(path.join(paths.conversationRoot, "conversation.json"));
+        const conversation = source ? JSON.parse(source) : null;
+        if (!isPlainObject(conversation) || conversation.conversationId !== entry.name) {
+          throw new Error(`Invalid temporary conversation ${entry.name}. Inspect it before upgrading message data.`);
+        }
+        scopes.push({ paths, conversation });
+      }
+      const changes = [];
+      for (const scope of scopes) {
+        await inventory(scope.paths.conversationLogRoot);
+        const filePath = path.join(scope.paths.conversationLogRoot, "transcript.json");
+        if (!await checkedPath(filePath)) continue;
+        const original = await readRegularText(filePath);
+        parseConversationRecord(original);
+        const document = JSON.parse(original);
+        const messages = document.turns.flatMap(([, turn]) => turn.messages);
+        const patches = await transform({ sessionId: sessionPaths.sessionId, metadata: { ...metadata },
+          conversation: structuredClone(scope.conversation), messages: structuredClone(messages) });
+        if (!Array.isArray(patches)) throw new Error("Conversation data upgrade must return message-data patches.");
+        let changed = false;
+        const patched = new Set();
+        for (const patch of patches) {
+          const matches = messages.filter(message => message.messageId === patch.messageId);
+          if (!patch.messageId || patched.has(patch.messageId) || matches.length !== 1 || !isPlainObject(patch.data)) {
+            throw new Error("Conversation data upgrade has an unknown or ambiguous message identity.");
+          }
+          patched.add(patch.messageId);
+          const message = matches[0];
+          if (message.data !== undefined && !isPlainObject(message.data)) throw new Error("Conversation message has invalid data. Inspect it before upgrading.");
+          const data = { ...message.data, ...patch.data };
+          if (!isDeepStrictEqual(message.data, data)) { message.data = data; changed = true; }
+        }
+        if (changed) {
+          const contents = `${JSON.stringify(document, null, 2)}\n`;
+          parseConversationRecord(contents);
+          changes.push({ filePath, original, contents });
+        }
+      }
+      return changes;
+    } });
+  }
+
   async function prepareConversationStorageUpgrade({ temporaryRoot }) {
     return prepareSessionStateUpgrade({ temporaryRoot, async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
       await checkedPath(sessionPaths.sessionRoot, true);
@@ -5518,6 +5574,7 @@ function createVibe64SessionStore({
     prepareRenewalSessionArchive,
     prepareAssistantRoutingStateUpgrade,
     prepareConversationStorageUpgrade,
+    prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade,
     conversationMessageIdExists,
     conversationStorage,

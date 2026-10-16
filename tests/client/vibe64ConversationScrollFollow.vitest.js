@@ -416,6 +416,7 @@ describe("Vibe64 conversation scroll following", () => {
   it("keeps ordinary assistant goal prose and authored examples while hiding proven native command outputs", async () => {
     const protocols = [
       { engineId: "claude", type: "system", subtype: "local_command_output" },
+      { engineId: "claude", type: "system", subtype: "local_command", command: "goal", output: "stdout" },
       { engineId: "claude", type: "assistant", command: "goal", output: "stdout" },
       { engineId: "claude", type: "result", command: "goal", output: "stdout" }
     ];

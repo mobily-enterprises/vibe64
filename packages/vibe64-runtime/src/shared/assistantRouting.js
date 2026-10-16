@@ -381,7 +381,8 @@ function assistantGoalManagementMessage(message, turn = {}) {
   }
   if (!["assistant", "commentary"].includes(message.role)) return false;
   if (native?.command) {
-    return native.engineId === "claude" && ["assistant", "result"].includes(native.type) &&
+    return native.engineId === "claude" && (["assistant", "result"].includes(native.type) ||
+      native.type === "system" && ["local_command", "local_command_output"].includes(native.subtype)) &&
       native.command === "goal" && native.output === "stdout";
   }
   const prefix = ["Goal set: ", "Goal cleared: ", "Goal active: "].find(value => text.startsWith(value));
