@@ -243,7 +243,8 @@ retry events are sent through the session's authenticated Preview action to the
 workspace's private operational log (`vibe64.preview.browser_diagnostic`). An
 operator can inspect that log after the page reloads or the person leaves. Each
 record identifies the project, session, frame attempt, retry count and browser
-observation time. URLs keep only origin/path: credentials, query values and
+observation time. The authenticated route selects the project and session; the
+browser sends only diagnostic fields in the request body. URLs keep only origin/path: credentials, query values and
 fragments are removed. Console text, request/response bodies and headers are not
 uploaded. Each iframe reports at most 50 failed resources; the daemon accepts
 at most 120 records per minute. Excess diagnostics

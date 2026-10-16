@@ -788,6 +788,48 @@ function fakeStorage() {
 
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 
+it("Preview diagnostic browser payload passes the HTTP schema with project authority in the route", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const { previewDiagnosticInputValidator } = await import("../../packages/vibe64-terminals/src/server/inputSchemas.js");
+  const requests = [];
+  vi.stubGlobal("window", { location: new URL("http://localhost/app/project/compas-next"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  configureHttpWebClient({ request(url, options) {
+    if (url.endsWith("/preview-diagnostics")) {
+      requests.push({ url, body: options.body });
+      const { errors } = previewDiagnosticInputValidator.schema.create(options.body);
+      if (Object.keys(errors).length) return Promise.reject(new Error(JSON.stringify(errors)));
+      return Promise.resolve({ recorded: true });
+    }
+    return Promise.resolve({ outputTargets: [], preview: { state: "idle" } });
+  } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session: Vue.ref({ sessionId: "offload" }) });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await expect(controls.publishPreviewDiagnostic({ event: "resource.failed", timestamp: "2026-10-16T20:51:00Z",
+      frameRequestId: 1, resourceKind: "script", retryCount: 0, willRetry: true,
+      frameUrl: "https://preview.example/jobs?token=secret",
+      resourceUrl: "https://user:password@preview.example/src/main.js?secret=yes#private" })).resolves.toBe(true);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe("/api/vibe64/sessions/offload/preview-diagnostics");
+    expect(requests[0].body).not.toHaveProperty("projectSlug");
+    expect(requests[0].body.resourceUrl).toBe("https://preview.example/src/main.js");
+    expect(requests[0].body.frameUrl).toBe("https://preview.example/jobs");
+  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+});
+
 it("practice output controls use captured Learning reads and named Stop while Working Ctrl-C keeps raw FIFO input", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");

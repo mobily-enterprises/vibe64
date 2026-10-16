@@ -1355,7 +1355,7 @@ function useVibe64OutputControls({
     try {
       const result = await getHttpWebClient().request(
         vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/preview-diagnostics"),
-        { method: "POST", body: { ...record, enabled: true, projectSlug: projectSlug.value,
+        { method: "POST", body: { ...record, enabled: true,
           frameUrl: previewDiagnosticUrl(record.frameUrl), resourceUrl: previewDiagnosticUrl(record.resourceUrl) } }
       );
       return result?.recorded === true;
