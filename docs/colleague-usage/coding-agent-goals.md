@@ -109,6 +109,11 @@ its current process and instructions. An older goal retains its original native
 condition when resumed; cancel it and set your intended plain objective again
 if it was created with internal role instructions.
 
+If Claude finishes its previous turn while **Set goal** or **Resume goal** is
+preparing, Vibe64 retries that same goal command once only when the provider proves
+it was not sent. No second click is needed for that race. A repeated failure or
+uncertain delivery stays visible; check its receipt before trying again.
+
 A Main-chat goal started or explicitly resumed after this release retains your
 request to keep working across server restarts, including an unexpected server
 exit. Vibe64 verifies the previous process has stopped, rechecks your current
