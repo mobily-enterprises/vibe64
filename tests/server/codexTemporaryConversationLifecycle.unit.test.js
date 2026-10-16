@@ -11273,6 +11273,58 @@ for (const loaded of [true, false]) {
   });
 }
 
+for (const failure of [
+  { code: "usageLimitExceeded", message: "You've hit your usage limit. Try again tomorrow." },
+  { code: "contextWindowExceeded", message: "The conversation exceeded the context window." },
+  { code: "internalServerError", message: "The provider could not complete this request." }
+]) {
+  test(`recovered Codex output retains ${failure.code} through Main storage, realtime and reopen`, async () => {
+    await withAgentMessageController(async ({ captures, terminalService, createService, runtime, sessionId, store }) => {
+      const input = { message: "Continue the work", messageId: `recovered-failure-${failure.code}` };
+      const started = await terminalService.sendAgentMessage(sessionId, input);
+      assert.equal(started.ok, true, JSON.stringify(started));
+      const { threadId, turnId } = captures.provider;
+      const partial = "The first part is done; the remaining work is unfinished.";
+      // Recover the native output only at terminal reconciliation, as in the
+      // reported failure. Do not publish an ordinary final-answer event first.
+      captures.finalText = partial;
+      captures.provider.status = "failed";
+      const patches = [];
+      captures.onSessionChanged = (_id, event) => {
+        if (event.payload?.conversationLogPatch) patches.push(event.payload.conversationLogPatch.turn);
+      };
+      const completed = turnCompleted({ threadId, turnId, status: "failed" });
+      completed.params.turn.error = { message: failure.message, codexErrorInfo: failure.code };
+      emitCodexNotification(captures.subscribers, completed);
+      const stopped = await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+        run => run?.state === VIBE64_AGENT_RUN_STATE.FAILED && !run.active, "provider failure after recovered output");
+      assert.ok(stopped.error.includes(failure.message), stopped.error);
+      const saved = await store.readConversationLog(sessionId);
+      const answers = saved.flatMap(turn => turn.messages || []);
+      assert.equal(answers.filter(message => message.role === "assistant" && message.text === partial).length, 1);
+      const notices = answers.filter(message => message.text?.includes(failure.message));
+      assert.equal(notices.length, 1, JSON.stringify(saved));
+      assert.equal(notices[0].text.includes("https://chatgpt.com/codex/settings/usage"), failure.code === "usageLimitExceeded");
+      await waitForSessionValue(() => patches,
+        rows => JSON.stringify(rows).includes(failure.message), "the terminal notice's realtime publication");
+
+      emitCodexNotification(captures.subscribers, completed);
+      await terminalService.agentSessionState(sessionId, { runtime });
+      assert.deepEqual(await store.readConversationLog(sessionId), saved, "duplicate completion preserves one notice");
+      await terminalService.close();
+      const reopened = createService();
+      const state = await reopened.agentSessionState(sessionId, { runtime });
+      assert.equal(state.ok, true, JSON.stringify(state));
+      assert.deepEqual(await store.readConversationLog(sessionId), saved, "cold service read retains output and failure");
+      const duplicate = await reopened.sendAgentMessage(sessionId, input);
+      assert.equal(duplicate.ok, true, JSON.stringify(duplicate));
+      assert.equal(duplicate.delivered, true, JSON.stringify(duplicate));
+      assert.equal(captures.turns.length, 1, "receipt recovery must not replay accepted work");
+      assert.deepEqual(await store.readConversationLog(sessionId), saved, "receipt recovery adds no transcript rows");
+    }, { throughTerminalService: true });
+  });
+}
+
 test("Codex streamed commentary disappears after completion even when saved progress is deduplicated", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
     await controller.sendMessage(sessionId, { message: "Work", messageId: "stream-commentary" });
@@ -12074,6 +12126,38 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(goal.statusCode, 400, goal.body);
       assert.equal(captures.turns.length, 1, "the canonical route cannot accept a client representation flag");
       assert.equal((await store.readSession(sessionId)).metadata.runtime, undefined);
+
+      // Restore the fixture's direct selection after the independent routing
+      // control assertions above; it has no configured Senior/Helper roles.
+      await store.writeMetadataValue(sessionId, "assistant_routing", before.assistant_routing || "");
+      const limitRequest = { messageId: "main-browser-limit", text: "Continue after the checkpoint" };
+      const limitSent = await request("POST", "/messages", limitRequest);
+      assert.equal(limitSent.statusCode, 202, limitSent.body);
+      captures.finalText = "The saved checkpoint is ready. The rest is unfinished.";
+      captures.provider.status = "failed";
+      const limitMessage = "You've hit your usage limit. Try again tomorrow.";
+      const limitEvent = turnCompleted({ threadId: captures.provider.threadId,
+        turnId: captures.provider.turnId, status: "failed" });
+      limitEvent.params.turn.error = { message: limitMessage, codexErrorInfo: "usageLimitExceeded" };
+      emitCodexNotification(captures.subscribers, limitEvent);
+      await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+        run => run?.state === VIBE64_AGENT_RUN_STATE.FAILED && !run.active, "browser-visible limit outcome");
+      const limitRead = await request("GET");
+      assert.equal(limitRead.statusCode, 200, limitRead.body);
+      const limitState = limitRead.json();
+      assert.equal(limitState.pendingRequest, null);
+      assert.ok(limitState.error.includes(limitMessage), limitState.error);
+      const limitRows = limitState.conversationLog.flatMap(turn => turn.messages || []);
+      assert.equal(limitRows.filter(message => message.text === captures.finalText).length, 1);
+      const limitNotice = limitRows.filter(message => message.text?.includes(limitMessage));
+      assert.equal(limitNotice.length, 1);
+      assert.ok(limitNotice[0].text.includes("https://chatgpt.com/codex/settings/usage"));
+      await waitForSessionValue(() => events,
+        updates => JSON.stringify(updates).includes(limitMessage), "authorized browser subscription receives the limit notice");
+      assert.deepEqual((await request("GET")).json().conversationLog, limitState.conversationLog,
+        "a new browser read returns the persisted partial answer and notice");
+      assert.equal((await request("POST", "/messages", limitRequest)).statusCode, 202);
+      assert.equal(captures.turns.length, 2, "checking the original receipt never sends the work again");
     } finally {
       access.allowed = true;
       release?.();
