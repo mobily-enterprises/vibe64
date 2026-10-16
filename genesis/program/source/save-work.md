@@ -18,6 +18,13 @@ and ordinary Main Save presentation. The Save operation rechecks connected
 authority and work before publication, so an unknown or inaccessible receiver
 still blocks the main push with an actionable error.
 
+For Genesis projects with declared generated artifacts, the managed `save-message`
+operation inspects the current selected Stack through the existing Genesis owner
+before capturing/naming work. Missing operation contracts fail read-only, before
+optional inference or publication. Source is never silently migrated. This is an
+early check; final map regeneration on the proposed tree and publication checks
+still apply, including when source changes after preflight.
+
 People can deliberately publish the complete current session work to the
 project's configured source authority without asking the coding agent to run
 Git commands.

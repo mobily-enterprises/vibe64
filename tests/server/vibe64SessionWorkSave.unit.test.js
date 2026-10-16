@@ -239,6 +239,46 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
   }
 });
 
+test("managed Save rejects missing Stack contracts before naming and accepts the explicit repair", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-stack-contract-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    const project = githubProject(root, fixture.remote);
+    const { initializeGenesisProject, addGenesisStack } = await import("@local/vibe64-genesis/server");
+    await initializeGenesisProject({ projectRoot: session.sourcePath });
+    await addGenesisStack({ projectRoot: session.sourcePath, pieces: ["nodejs"] });
+    const stackPath = path.join(session.sourcePath, "genesis/stack.md");
+    const complete = await readFile(stackPath, "utf8");
+    const incomplete = complete.replace(/\n## Connected development\n[\s\S]*?(?=\n## |$)/u, "");
+    assert.notEqual(incomplete, complete);
+    await writeFile(stackPath, incomplete);
+    const head = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+    const remote = await git(fixture.remote, ["rev-parse", "main"]);
+    const input = { operationId: "missing-stack-contract", project, session, runCommand: commandRunner,
+      derivedArtifactPaths: [".genesis/machine-city.json", ".genesis/program-city.json"] };
+    await assert.rejects(prepareSessionWorkSaveMessage(input), error =>
+      error.code === "STACK_PROJECT_CONTRACTS_INCOMPLETE" && /Connected development/u.test(error.message));
+    assert.equal(await readFile(stackPath, "utf8"), incomplete, "preflight cannot repair authored source");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), head);
+    assert.equal(await git(fixture.remote, ["rev-parse", "main"]), remote);
+    await addGenesisStack({ projectRoot: session.sourcePath, pieces: ["nodejs"] });
+    const prepared = await prepareSessionWorkSaveMessage(input);
+    assert.ok(prepared.checkpoint.checkpointCommit);
+    assert.equal(await readFile(stackPath, "utf8"), complete);
+    let finishMaintenance;
+    const maintenance = new Promise(resolve => { finishMaintenance = resolve; });
+    const saved = await saveManagedSessionWorkImplementation({ ...input,
+      checkpoint: prepared.checkpoint, message: "Save repaired Stack", onCacheMaintenance: finishMaintenance });
+    await maintenance;
+    assert.equal(saved.status, "saved");
+    assert.equal(await git(fixture.remote, ["rev-parse", "main"]), saved.saveCommit);
+    assert.equal(await git(fixture.remote, ["show", "main:genesis/stack.md"]), complete.trim());
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("managed Save publishes its named checkpoint and preserves work added during naming", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-naming-race-"));
   try {

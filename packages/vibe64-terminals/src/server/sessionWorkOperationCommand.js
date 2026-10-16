@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { runCaptureCommand } from "@local/vibe64-execution/server";
 import {
   inspectIncomingContributionsDirect,
@@ -34,7 +36,15 @@ const OPERATION_IMPLEMENTATIONS = {
     });
   },
   "save-maintenance": refreshSessionWorkSaveCacheDirect,
-  "save-message": prepareSessionWorkSaveMessageDirect,
+  "save-message": async (input) => {
+    // Map regeneration validates the project's Stack before publication. Catch
+    // missing contracts before optional model naming, without rewriting source.
+    if (input.derivedArtifactPaths?.length && existsSync(path.join(input.session.sourcePath, "genesis/blueprint.md"))) {
+      const { inspectGenesisStackComponents } = await import("@local/vibe64-genesis/server");
+      await inspectGenesisStackComponents({ projectRoot: input.session.sourcePath });
+    }
+    return prepareSessionWorkSaveMessageDirect(input);
+  },
   "work": inspectSessionWorkDirect,
   "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,
   "update-prepare": prepareSessionWorkUpdateDirect,

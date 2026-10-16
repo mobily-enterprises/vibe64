@@ -11,6 +11,16 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
 
+For Genesis projects, Save checks the selected Stack contracts before asking the
+assistant to name the version. If it reports a missing **Connected development**
+section, the project needs its Stack reconciled; retrying Save alone does not
+repair it. Ask the coding agent to reconcile the existing selected component as
+the error directs, preserving the project's authored setup and output sections.
+This does not require installing dependencies or preparing the database. Review
+the repair, then use **Save** again. The failed preflight leaves your source and
+published version unchanged. Colleague can explain this recovery; the coding
+agent performs the source repair. These steps apply on desktop and mobile.
+
 If a push loses its response, Vibe64 checks the exact prepared commit on the
 remote before treating it as failed. If the remote cannot be read, restore access
 and inspect the session's work again. Recovery uses the original Save operation
