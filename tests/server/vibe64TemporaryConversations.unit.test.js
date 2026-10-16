@@ -850,6 +850,35 @@ test("saved temporary draft attachments survive restart and cannot take ownershi
 });
 
 
+test("session conversation routing preserves native completed status for a stale steer", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, native, store } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
+    native.admitted = false;
+    const input = { conversationId: "chat", messageId: "followup", message: "Continue carefully" };
+    for (const status of ["completed", "interrupted", "stopped", "failed", "unverified", "ready"]) {
+      native.status = status;
+      await assert.rejects(service.startTemporaryConversationTurn("one", { ...input, submissionKind: "steer" }), error => {
+        assert.equal(error.code, status === "completed" ? "conversation_steer_turn_finished" : "conversation_not_steerable");
+        assert.equal(error.delivery, "not-sent");
+        return true;
+      });
+      assert.equal(native.starts, 1, `${status} must not admit the rejected steer`);
+      assert.equal(await store.conversationMessageIdExists({ sessionId: "one", conversationId: "chat" }, input.messageId), false);
+    }
+    native.status = "completed";
+    const sent = await service.startTemporaryConversationTurn("one", { ...input, submissionKind: "send" });
+    assert.equal(sent.delivered, true);
+    assert.equal(native.starts, 2);
+    assert.equal(native.lastInput.messageId, input.messageId);
+    assert.equal(native.lastInput.steer, false);
+    await service.startTemporaryConversationTurn("one", { ...input, submissionKind: "send" });
+    assert.equal(native.starts, 2, "retrying the accepted fallback must not send twice");
+    await service.close();
+  });
+});
+
 test("temporary conversations steer active work without changing its model or preparing source", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, native, restart, store } = await conversationFixture(root);

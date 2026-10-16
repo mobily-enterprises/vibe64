@@ -403,7 +403,7 @@ function createSessionConversations({
       .map((name) => [name, (...args) => sessionAgent[name](...args)])),
     async sessionState(id, ctx) {
       const state = await nativeState(id, ctx);
-      return { turn: { id: state.runId, active: ["starting", "inProgress"].includes(state.status) } };
+      return { turn: { id: state.runId, status: state.status, active: ["starting", "inProgress"].includes(state.status) } };
     },
     async readGoal(id, ctx) {
       const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);

@@ -28,3 +28,7 @@ only when the server confirms the steer was rejected before admission. It retain
 the same message identity and tries ordinary Send once. A timeout or uncertain
 receipt is still checked rather than resent. If ordinary Send fails, **Retry**
 keeps the request as Send instead of targeting the finished turn again.
+
+This recovery applies to project chats and temporary conversations such as
+**Fix it with AI**. A completed turn allows the one ordinary-send retry; stopped,
+failed or unverified turns do not silently restart through this recovery.
