@@ -4102,3 +4102,8 @@ later goal wait for an interruption of an already finished generation.
 The same exact-envelope goal presentation also covers Claude's native
 `Goal set: ` confirmation in assistant or commentary messages. Native history
 and command text remain intact; similar authored text is preserved.
+
+A failed pre-write Claude interruption preserves definite non-delivery only after
+the retained process cleanup succeeds; cleanup refusal keeps execution custody.
+The native interrupt deadline has a recoverable error code instead of a generic
+HTTP500. No automatic resend follows unknown delivery or failed stop proof.

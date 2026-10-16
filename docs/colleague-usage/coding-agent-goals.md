@@ -66,6 +66,9 @@ refresh its status before trying the action again. If a model change or context
 renewal asks you to deliver the conversation briefing first, send an ordinary
 chat message before starting or resuming the goal.
 **Stop** remains available while Claude is waiting to acknowledge a goal command.
+If Claude cannot confirm interruption, the error explains that the new instruction
+was not sent. Reconnect and retry it after the previous process has stopped. An
+unconfirmed process stop still requires recovery before a new attempt.
 The chat shows `/goal` followed by your objective. Internal role instructions
 are hidden from that bubble and Claude's **Goal set:** confirmation, including
 when reopening earlier goal messages.
