@@ -305,12 +305,18 @@ function useVibe64MountedSessionData({
       status: agentConnectionStatus.value
     });
     const checking = (async () => {
-      const refreshed = await refresh({ reason });
-      if (!currentConnection() || controller.signal.aborted) {
-        return null;
-      }
-      if (refreshed?.isError) {
-        throw refreshed.error;
+      if (mountedActive.value) {
+        // The selected provider verifies current access and session state itself.
+        // A slow display read must not delay or replace that verification.
+        refreshInBackground(reason);
+      } else {
+        const refreshed = await refresh({ reason });
+        if (!currentConnection() || controller.signal.aborted) {
+          return null;
+        }
+        if (refreshed?.isError) {
+          throw refreshed.error;
+        }
       }
       const recoveringActiveAgentWork = sessionRecordHasActiveAgentWork(session.value);
       if (!mountedActive.value && !recoveringActiveAgentWork) {

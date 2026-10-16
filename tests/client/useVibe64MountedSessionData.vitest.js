@@ -721,12 +721,61 @@ describe("useVibe64MountedSessionData", () => {
       expect(httpMocks.request).toHaveBeenCalledTimes(1);
     });
 
-    it("retries failed query results instead of treating cached idle state as verified", async () => {
+    it("checks the selected assistant before its held display read completes", async () => {
+      const display = Promise.withResolvers();
+      endpointMocks.resource.query.refetch.mockReturnValueOnce(display.promise);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      display.resolve(null);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
+    it.each([false, true])("keeps display failures separate from selected assistant verification (throws: %s)", async throws => {
+      endpointMocks.resource.query.refetch.mockImplementationOnce(async () => {
+        const error = new Error("Session display timed out");
+        endpointMocks.resource.loadError.value = error.message;
+        if (throws) throw error;
+        return { isError: true, error };
+      });
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
+      expect(controller.resource.loadError.value).toBe("Session display timed out");
+      expect(controller.session.value.agentSession.turn.active).toBe(true);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores an older selection's late check and display failure", async () => {
+      const display = Promise.withResolvers();
+      const previous = Promise.withResolvers();
+      endpointMocks.resource.query.refetch.mockReturnValueOnce(display.promise);
+      httpMocks.request.mockReturnValueOnce(previous.promise);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      const payload = { projectSlug: "project-a", sessionId: "session-a", reason: "session-assistant-selection-updated" };
+      realtimeMocks.events.find(({ event, matches }) => event === "vibe64.session.changed" && matches?.({ payload })).onEvent({ payload });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(httpMocks.request.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      previous.resolve({ ok: false, error: "Old model disconnected" });
+      display.reject(new Error("Old display timed out"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
+    });
+
+    it("retries failed hidden-view reads instead of treating cached idle state as verified", async () => {
       endpointMocks.resource.query.refetch.mockResolvedValueOnce({
         error: new Error("Session read failed"),
         isError: true
       });
-      const controller = mountAssistant();
+      const controller = mountAssistant({ active: ref(false) });
       await vi.advanceTimersByTimeAsync(0);
       expect(controller.agentConnectionStatus.value).toBe("unknown");
       expect(httpMocks.request).not.toHaveBeenCalled();
@@ -816,10 +865,27 @@ describe("useVibe64MountedSessionData", () => {
       expect(controller.agentConnectionStatus.value).toBe("connected");
     });
 
+    it("aborts selected-view verification on disposal and ignores its late result", async () => {
+      const display = Promise.withResolvers();
+      const verification = Promise.withResolvers();
+      endpointMocks.resource.query.refetch.mockReturnValueOnce(display.promise);
+      httpMocks.request.mockReturnValueOnce(verification.promise);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      scope.stop();
+      expect(httpMocks.request.mock.calls[0][1].signal.aborted).toBe(true);
+      verification.resolve({ ok: true });
+      display.resolve(null);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+    });
+
     it("does not start provider work after disposal during the initial read", async () => {
       const response = Promise.withResolvers();
       endpointMocks.resource.query.refetch.mockReturnValueOnce(response.promise);
-      mountAssistant();
+      mountAssistant({ active: ref(false) });
       await vi.advanceTimersByTimeAsync(0);
       scope.stop();
       response.resolve(null);

@@ -35,6 +35,10 @@ unavailable while Vibe64 is checking the connection; your draft is kept. In the
 dark theme the notice uses the theme's contrasting text. Desktop and phone show
 the same status and recovery controls; Colleague can explain them, but reconnecting
 the browser requires your interaction.
+The selected chat checks its assistant connection while session details refresh.
+A slow or failed details refresh keeps its own loading/error notice and does not
+turn a verified assistant connection into a connection failure. Hidden idle chats
+refresh their details without starting a provider until you select them.
 
 If an OpenCode readiness check times out, wait for **Retry connection** to become
 available and try it again. That timeout leaves the shared server and other chats
