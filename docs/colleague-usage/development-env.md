@@ -30,6 +30,14 @@ failure blocks that command and should be reported for investigation. Provisioni
 a newly declared resource and running application migrations remain preparation
 steps; configured names alone do not prove either has completed.
 
+For a long-running shell task, the coding agent can request its native tool's
+background mode and timeout. Binding the command to the Vibe64 session preserves
+those settings; the coding tool still applies its own supported limits. This is
+not a promise that the process survives a workspace restart. Use the project's
+declared managed outputs/services for persistent application servers. If a task
+unexpectedly runs in the foreground or times out, report its requested settings
+and returned task ID rather than starting a duplicate or detaching another copy.
+
 The coding agent can read `vibe64-helper session status --json` for current
 resource readiness, environment names, declared Workspace setup commands and
 managed tool entry points. This read exposes no environment values and starts

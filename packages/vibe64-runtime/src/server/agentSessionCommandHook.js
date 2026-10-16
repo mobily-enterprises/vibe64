@@ -19,13 +19,15 @@ async function readInput() {
     : {};
 }
 
-function hookOutput(command = "") {
+function hookOutput(toolInput) {
+  const { command } = toolInput;
   const quoted = `'${command.replaceAll("'", `'"'"'`)}'`;
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "allow",
       updatedInput: {
+        ...toolInput,
         command: `"$${WRAPPER_ENV_NAME}" ${quoted}`
       }
     }
@@ -46,7 +48,7 @@ const input = await readInput();
 const command = input?.tool_input?.command;
 if (input.hook_event_name === "PreToolUse" && input.tool_name === "Bash") {
   const output = typeof command === "string" && command
-    ? hookOutput(command)
+    ? hookOutput(input.tool_input)
     : denyOutput("Vibe64 rejected a shell command without valid command text.");
   process.stdout.write(`${JSON.stringify(output)}\n`);
 }

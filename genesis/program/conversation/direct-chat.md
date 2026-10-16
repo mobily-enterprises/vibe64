@@ -6,6 +6,11 @@ Hosted Claude cold initialization has a 90-second bound for managed startup
 probes; normal controls retain their separate deadline and failed startup still
 requires verified process cleanup.
 
+The application shell hook wraps only Bash command text for session-owned
+execution. It preserves the native tool's remaining input, including background
+execution, timeout and description, rather than resetting those options when
+binding the command to the session. Native engine limits still apply.
+
 Main Claude conversations follow the workspace's current authenticated account.
 Account replacement retains native history, stops the previous owned process
 before adopting the new identity, and refuses replacement when shutdown cannot

@@ -42,3 +42,17 @@ test("Codex denies a Bash tool call without command text", () => {
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
   assert.match(output.hookSpecificOutput.permissionDecisionReason, /without valid command text/u);
 });
+
+test("The shared Claude/Codex shell hook retains native background and timeout settings", () => {
+  for (const settings of [
+    { run_in_background: true, timeout: 7200000, description: "Run the reference server" },
+    { run_in_background: false, timeout: 5000, description: "Read server status" }
+  ]) {
+    const input = { command: "printf '%s' 'reference server'", ...settings };
+    const output = runHook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: input });
+    const { command, ...retained } = output.hookSpecificOutput.updatedInput;
+    assert.equal(output.hookSpecificOutput.permissionDecision, "allow");
+    assert.deepEqual(retained, settings);
+    assert.match(command, /^"\$VIBE64_WRAPPER" /u);
+  }
+});
