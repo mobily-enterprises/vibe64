@@ -97,6 +97,14 @@ to restore execution, then retry in the same conversation. Use **AI Accounts**
 to reconnect only when the account check asks you to sign in.
 Colleague uses the same saved native Claude login as Main. Opening Colleague
 does not move that login to another profile or require a separate sign-in.
+After the workspace Claude account changes, your next Colleague request uses the
+current account and keeps the conversation history. The old assistant process
+must stop first. If cleanup fails, restore execution and use **Stop**, then retry;
+Colleague will not continue with the old credentials. A completed action receipt
+from the old account cannot be replayed as the new account.
+Saved Colleague errors stay inside Colleague when you reopen the workspace; they
+do not raise an unrelated global alert over your project chat. Open Colleague to
+read the error and its recovery controls.
 If reopening reports another working directory or credential home, ask the
 workspace operator to restore the original host configuration. Do not move native
 history files or change accounts to bypass the warning. The shared driver can

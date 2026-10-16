@@ -91,7 +91,19 @@ test("Colleague recovers connection status and reports failed commands without c
   await flush();
   await view.state.refresh();
   await flush();
-  assert.equal(view.notices.length, 2, "unchanged retained failures are reported once, not every poll");
+  assert.equal(view.notices.length, 1, "retained failures stay inside Colleague, not global page-load alerts");
+});
+
+test("a saved Colleague account error remains inline without a global page-load alert", async t => {
+  const error = "This conversation belongs to another Claude account. Reconnect that account or start a new session.";
+  const view = mount(t, async () => ({ messages: [], status: "failed", error }));
+  await flush();
+  assert.equal(view.state.turnError.value, error);
+  assert.deepEqual(view.notices, []);
+  await view.state.refresh();
+  await flush();
+  assert.equal(view.state.turnError.value, error);
+  assert.deepEqual(view.notices, []);
 });
 
 test("voice admission sends directly to Colleague and preserves its identity and focus", async (t) => {

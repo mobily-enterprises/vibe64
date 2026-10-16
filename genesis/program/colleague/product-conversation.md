@@ -153,10 +153,16 @@ Stop and account invalidation keep their existing guards; no new recovery owner
 or repeated application effect is introduced.
 The shared host preserves the native Claude profile lookup used by Main;
 it inherits an explicit configuration directory without inventing a default override.
+Colleague explicitly opts its workspace-owned host into the original Claude
+account-change policy. Verified old-process retirement precedes current-account
+binding and same-history resume. Generic hosts remain strict by default, and
+completed response receipts retain their original identity checks. Hydrating a
+saved Colleague error keeps its inline presentation and recovery controls without
+issuing a global page-load toast; explicit action failures retain their notices.
 The shared Claude driver also retains the original distinction between the private
 logical scope and credential-home native history: an explicitly supplied scoped
 binding must match both trusted host paths and retains its saved native UUID under
-the unchanged account guard. Ordinary bindings retain their workdir checks.
+the shared account guard. Ordinary bindings retain their workdir checks.
 During native initialization, the factory shares its existing private stop closure
 through the trusted startup callback. The shared owner retains an exact-ID,
 in-memory cleanup receipt until native-handle transfer or confirmed release;

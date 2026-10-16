@@ -168,6 +168,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     createConversationHost(scope) {
       observations.creates += 1;
       observations.scope = scope;
+      assert.equal(scope.allowAccountChange, true, "Colleague follows the currently authorized workspace account");
       assert.ok(scope.workdir.startsWith(path.join(root, "colleague")));
       return nativeCommands ? nativeCommands.host(scope) : { workdir: scope.workdir, stateDirectory: scope.runtimeRoot };
     },

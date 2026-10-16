@@ -3671,6 +3671,7 @@ function createService({
       if (credentialHome.ok === false) throw new Error(credentialHome.error);
       return {
         workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
+        allowAccountChange: scope.allowAccountChange === true,
         env: { ...actorHomeEnv(credentialHome, env),
           CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex") },
         commands: { codex: codexProviderOptions.codexCommand || STUDIO_MANAGED_CODEX_COMMAND,

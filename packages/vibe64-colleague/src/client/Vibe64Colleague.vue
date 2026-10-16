@@ -699,7 +699,6 @@ watch(actorKey, () => {
   voiceTranscript.value = null;
   void refresh();
 }, { flush: "sync" });
-watch(() => product.value.error, (error) => { if (error) reportFailure(error); });
 watch([actorKey, () => props.focus, learningTask], ([, focus, task]) => {
   const expectedActor = actorKey.value;
   void requestColleague("/focus", { method: "POST", body: { clientId, focus,

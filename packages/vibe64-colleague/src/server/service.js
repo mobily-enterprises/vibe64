@@ -484,7 +484,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const workdir = path.join(state.root, scopeId);
       await mkdir(workdir, { recursive: true, mode: 0o700 });
       assertCurrentConversation(state, scopeId);
-      host = state.host || terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
+      host = state.host || terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir, allowAccountChange: true });
       state.host = host;
     }
     state.opening += 1;

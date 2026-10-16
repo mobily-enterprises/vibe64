@@ -98,6 +98,9 @@ test("shared conversation hosts preserve Claude's native profile lookup", () => 
       runInProjectContext: unused, saveEnvUserValues: unused, createRuntime: unused, createSessionStore: unused } });
     const host = service.createConversationHost({ id: "colleague-profile", workdir: "/tmp/colleague-profile",
       runtimeRoot: "/tmp/colleague-profile-runtime" });
+    assert.equal(host.allowAccountChange, false);
+    assert.equal(service.createConversationHost({ id: "authorized-colleague", workdir: "/tmp/colleague-profile",
+      runtimeRoot: "/tmp/colleague-profile-runtime", allowAccountChange: true }).allowAccountChange, true);
     assert.equal(host.env.CLAUDE_CONFIG_DIR, env.CLAUDE_CONFIG_DIR,
       "Inventing a config override relocates the CLI's existing account profile.");
   }
