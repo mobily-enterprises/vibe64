@@ -10,6 +10,10 @@ import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { createCapabilityRuntime } from "@jskit-ai/kernel/shared/capabilities";
+import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
+import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
+import { io } from "socket.io-client";
+import { once } from "node:events";
 import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
@@ -11978,15 +11982,17 @@ test("Main browser facade uses the original native owner and action authority wi
       assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } }
     };
     const hosting = createCapabilityRuntime({
-      providers: [Vibe64ConversationsProvider, AssistantFeature],
+      providers: [Vibe64ConversationsProvider, RealtimeProvider, AssistantFeature],
       inputs: { "runtime.actions": actions, "runtime.http": http, "runtime.config": config,
-        "runtime.env": {}, "vibe64.sessions": sessions }
+        "runtime.env": {}, "vibe64.sessions": sessions, "runtime.fastify": app,
+        "runtime.logger": app.log, "runtime.events": createEventRuntime() }
     });
     let release;
+    let socket;
     try {
       await hosting.start();
       http.start();
-      await app.ready();
+      const origin = await app.listen({ host: "127.0.0.1", port: 0 });
       assert.equal(hosting.diagnostics().capabilityIds.includes("vibe64.colleague"), false);
       assert.equal(hosting.diagnostics().providerOrder.filter(id => id === "assistant.runtime").length, 1);
       assert.equal(http.router.list().filter(route => route.method === "GET" &&
@@ -12130,6 +12136,20 @@ test("Main browser facade uses the original native owner and action authority wi
       // Restore the fixture's direct selection after the independent routing
       // control assertions above; it has no configured Senior/Helper roles.
       await store.writeMetadataValue(sessionId, "assistant_routing", before.assistant_routing || "");
+      // The same production transport used by the browser must carry the
+      // recovered-output failure. Direct action observers alone do not prove it.
+      socket = io(origin, { autoConnect: false, forceNew: true, reconnection: false,
+        transports: ["websocket"], extraHeaders: { Origin: origin } });
+      const connected = once(socket, "connect", { signal: AbortSignal.timeout(5000) });
+      socket.connect();
+      await connected;
+      const socketEvents = [];
+      socket.on("assistant.conversation.event", event => socketEvents.push(event));
+      const subscription = { subscriptionId: "main-limit-view", conversationId: id,
+        targetSurfaceId: "app", hostSurfaceId: "app" };
+      const subscribed = await socket.timeout(5000).emitWithAck("assistant.conversation.subscribe", subscription);
+      assert.equal(subscribed.ok, true, JSON.stringify(subscribed));
+      assert.equal(subscribed.state.id, id);
       const limitRequest = { messageId: "main-browser-limit", text: "Continue after the checkpoint" };
       const limitSent = await request("POST", "/messages", limitRequest);
       assert.equal(limitSent.statusCode, 202, limitSent.body);
@@ -12156,12 +12176,26 @@ test("Main browser facade uses the original native owner and action authority wi
         state => state.status === "ready", "browser stops showing work after the limit");
       await waitForSessionValue(() => events,
         updates => JSON.stringify(updates).includes(limitMessage), "authorized browser subscription receives the limit notice");
+      await waitForSessionValue(() => socketEvents,
+        updates => JSON.stringify(updates).includes(limitMessage), "real socket receives the recovered-output limit notice");
+      assert.ok(socketEvents.every(event => event.conversationId === id &&
+        event.streamEpoch === subscribed.streamEpoch && event.subscriptionId === subscription.subscriptionId));
+      socket.disconnect();
+      const reconnected = once(socket, "connect", { signal: AbortSignal.timeout(5000) });
+      socket.connect();
+      await reconnected;
+      const restored = await socket.timeout(5000).emitWithAck("assistant.conversation.subscribe", subscription);
+      assert.equal(restored.ok, true, JSON.stringify(restored));
+      assert.notEqual(restored.streamEpoch, subscribed.streamEpoch);
+      assert.deepEqual(restored.state.conversationLog, limitState.conversationLog,
+        "a fresh browser subscription restores the persisted partial answer and failure exactly once");
       assert.deepEqual((await request("GET")).json().conversationLog, limitState.conversationLog,
         "a new browser read returns the persisted partial answer and notice");
       assert.equal((await request("POST", "/messages", limitRequest)).statusCode, 202);
       assert.equal(captures.turns.length, 2, "checking the original receipt never sends the work again");
     } finally {
       access.allowed = true;
+      socket?.disconnect();
       release?.();
       await hosting.shutdown();
       await app.close();
