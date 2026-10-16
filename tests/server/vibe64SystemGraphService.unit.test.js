@@ -420,7 +420,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     assert.ok(progress.refresh.elapsedSeconds >= 0);
     const cancel = service.cancelRefresh({ sessionId: 'session-1' }); await aborted;
     assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.message, 'Stopping analysis…');
-    assert.equal((await service.refresh({ sessionId: 'session-1' })).code, 'vibe64_architecture_refresh_busy');
+    assert.equal((await service.refresh({ sessionId: 'session-1' })).alreadyRunning, true);
     let completed = false; cancel.then(() => { completed = true; }); await Promise.resolve(); assert.equal(completed, false);
     cleanup();
     assert.equal((await refresh).code, 'vibe64_architecture_cancelled'); assert.equal((await cancel).cancelled, true);
@@ -428,7 +428,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
     assert.deepEqual((await service.readMachineCity({ sessionId: 'session-1' })).city.architecture, machine.architecture);
     assert.equal((await service.cancelRefresh({ sessionId: 'session-1' })).cancelled, false);
-    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh, null);
+    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.status, 'cancelled');
   });
 });
 
@@ -444,7 +444,7 @@ test('missing declared inspector prerequisites fail before source scanning or pu
     const result = await service.refresh({ sessionId: 'session-1' });
     assert.equal(result.code, 'vibe64_architecture_prerequisite_missing');
     assert.match(result.error, /tools\/missing-inspector.py/u);
-    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh, null);
+    assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.status, 'failed');
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
   });
 });
@@ -520,5 +520,56 @@ test('Architecture projects hash-matched source size and declared entry files wi
     assert.match(retained.architecture.entryPointDiagnostic, /Malformed entry declarations/);
     assert.match(retained.architecture.layoutDiagnostic, /Malformed group declarations/);
     assert.equal(retained.architecture.layout, null);
+  });
+});
+
+
+test('scan status and notifications survive readers leaving, duplicate admission and a failed next scan', async () => {
+  await withTempRoot(async root => {
+    await writeCities(root);
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    let started;
+    const entered = new Promise(resolve => { started = resolve; });
+    let calls = 0;
+    const events = [];
+    const service = createService({
+      projectService: projectServiceFor(root),
+      inspectorReader: async () => ({ status: 'unconfigured', inspectors: [] }),
+      publishSessionChanged: async (sessionId, payload) => { events.push({ sessionId, reason: payload.reason, refresh: (await service.readRefreshStatus({ sessionId })).refresh }); },
+      refresher: async () => {
+        calls++;
+        if (calls === 2) throw new Error('Inspector failed after navigation');
+        started(); await held;
+        return { machine: machineCityFixture(), program: programCityFixture() };
+      }
+    });
+    const first = service.refresh({ sessionId: 'session-1' });
+    await entered;
+    const returningReader = (await service.readRefreshStatus({ sessionId: 'session-1' })).refresh;
+    const duplicate = await service.refresh({ sessionId: 'session-1' });
+    assert.equal(duplicate.ok, true);
+    assert.equal(duplicate.alreadyRunning, true);
+    assert.equal(duplicate.refresh.startedAt, returningReader.startedAt);
+    assert.equal(duplicate.refresh.id, returningReader.id);
+    assert.equal(duplicate.refresh.status, 'running');
+    assert.equal(calls, 1);
+    release();
+    assert.equal((await first).ok, true);
+    const completed = (await service.readRefreshStatus({ sessionId: 'session-1' })).refresh;
+    assert.equal(completed.status, 'complete');
+    assert.equal(completed.startedAt, returningReader.startedAt);
+    assert.ok(completed.finishedAt >= completed.startedAt);
+    assert.ok(events.some(event => event.refresh.status === 'running'));
+    assert.equal(events.at(-1).refresh.status, 'complete');
+    assert.ok(events.every(event => event.sessionId === 'session-1' && event.reason === 'architecture-refresh'));
+    assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, false);
+    const failure = (await service.readRefreshStatus({ sessionId: 'session-1' })).refresh;
+    assert.equal(failure.status, 'failed');
+    assert.notEqual(failure.id, completed.id, 'separate scans have independent identities even within the same millisecond');
+    assert.equal(failure.message, 'Inspector failed after navigation');
+    assert.equal(events.at(-1).refresh.status, 'failed');
+    assert.equal(calls, 2);
+    assert.equal((await service.readMachineCity({ sessionId: 'session-1' })).ok, true, 'failure retains the last valid artifact');
   });
 });

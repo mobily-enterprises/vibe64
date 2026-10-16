@@ -47,6 +47,7 @@ import {
 function endpointResource(data = null) {
   return {
     data: ref(data),
+    mutation: { reset: vi.fn() },
     isLoading: ref(false),
     isSaving: ref(false),
     loadError: ref(""),
@@ -170,8 +171,8 @@ describe("Genesis City client resources", () => {
     scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); });
     const refresh = endpointMocks.resources[4];
     const status = endpointMocks.calls[7];
-    expect(unref(status.enabled)).toBe(false);
-    expect(status.queryOptions.refetchInterval).toBe(1000);
+    expect(unref(status.enabled)).toBe(true);
+    expect(status.realtime.event).toBe("vibe64.session.changed");
     const pending = Promise.withResolvers();
     refresh.save.mockImplementation(async () => {
       refresh.isSaving.value = true;
@@ -181,15 +182,16 @@ describe("Genesis City client resources", () => {
     });
     const result = graph.refresh();
     expect(unref(status.enabled)).toBe(true);
-    endpointMocks.resources[7].data.value = { refresh: { message: "Running UI inspector…", elapsedSeconds: 12 } };
+    endpointMocks.resources[7].data.value = { refresh: { status: "running", startedAt: Date.now() - 12000, message: "Running UI inspector…", elapsedSeconds: 12 } };
     expect(graph.refreshProgress.value.message).toBe("Running UI inspector…");
+    endpointMocks.resources[7].data.value = { refresh: { status: "failed", message: "UI inspector failed.", commandOutput: "Required file missing." } };
     pending.reject(Object.assign(new Error("UI inspector failed."), { details: { commandOutput: "Required file missing." } }));
     await expect(result).resolves.toBeNull();
     expect(graph.error.value).toBe("UI inspector failed.");
     expect(graph.refreshOutput.value).toBe("Required file missing.");
     expect(graph.refreshProgress.value).toBeNull();
-    expect(unref(status.enabled)).toBe(false);
-    expect(endpointMocks.resources[0].reload).not.toHaveBeenCalled();
+    expect(unref(status.enabled)).toBe(true);
+    expect(endpointMocks.resources[0].reload).toHaveBeenCalled();
     scope.stop();
   });
 

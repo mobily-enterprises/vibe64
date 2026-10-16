@@ -1,3 +1,4 @@
+import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import { registerRoutes } from "./registerRoutes.js";
@@ -8,6 +9,8 @@ const Vibe64SystemGraphProvider = defineFeature({
   id: "vibe64.system-graph",
   domain: "vibe64-system-graph",
   requires: {
+    events: "runtime.events",
+    logger: "runtime.logger",
     http: "runtime.http",
     project: "vibe64.project"
   },
@@ -15,9 +18,11 @@ const Vibe64SystemGraphProvider = defineFeature({
     systemGraph: "vibe64.system-graph"
   },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ http, project }) {
+  setup({ events, logger, http, project }) {
     const systemGraph = createService({
-      projectService: project
+      projectService: project,
+      logger,
+      publishSessionChanged: createSessionChangedPublisher(events)
     });
     registerRoutes(http, {
       routeRelativePath: "vibe64",

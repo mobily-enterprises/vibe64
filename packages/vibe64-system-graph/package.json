@@ -20,6 +20,8 @@
       "requires": [
         "runtime.actions",
         "runtime.http",
+        "runtime.events",
+        "runtime.logger",
         "vibe64.project"
       ]
     },
@@ -58,6 +60,7 @@
     "@vue-flow/core": "^1.48.2",
     "@jskit-ai/kernel": "0.1.244",
     "@jskit-ai/http-web": "0.1.89",
+    "@jskit-ai/realtime": "0.1.241",
     "@jskit-ai/shell-web": "0.1.248",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",

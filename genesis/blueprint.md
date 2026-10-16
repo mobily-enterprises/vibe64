@@ -1913,7 +1913,10 @@ Reload architecture reads existing snapshots. Re-scan project is a separate
 Architecture toolbar option, absent from individual files. It rebuilds signatures
 and links from source and existing Genesis documents, without rewriting Program
 or asking the Helper for explanations. The running stage and elapsed seconds
-show progress; cancellation waits for cleanup. Inspector failures retain the
+show progress, including after leaving and returning to the view. Other viewers
+of the same session share that status through live updates, and reconnect reads
+the current outcome. Duplicate scan requests reuse the running operation;
+cancellation waits for cleanup. Inspector failures retain the
 previous index and show bounded command output inline.
 Unchanged source indexing retains valid UI observations; stale UI evidence shows
 a short refresh notice while Engine browsing remains available.

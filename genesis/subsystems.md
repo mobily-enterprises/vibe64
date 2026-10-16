@@ -424,6 +424,8 @@ Provides the shared file viewer and editor used by Files and Architecture, inclu
 Owns presenting Genesis explanations, authored subsystems and indexed source relationships.
 System Graph reads and refresh share named actions and actor/project authority
 across HTTP and direct callers; coding conversations own engineering investigation.
+Its existing scan owner exposes process-local progress and last outcome, with
+session notifications and remount/reconnect reconciliation for all viewers.
 
 The Architecture canvas combines registered UI pages with directory-bound subsystems. It reads the same authored responsibilities and Program membership as Genesis. A Program opens as a capability explanation inside the canvas, with its explicitly designated main source and supporting files. Source links use the same file viewer and editor as Files, preserving navigation back to the Program or subsystem. It does not generate a competing owner list or treat every file export as an intended subsystem API.
 

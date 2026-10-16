@@ -206,6 +206,14 @@ the scan. Existing indexes are read as saved; opening a file never triggers it.
 It reads existing Genesis documents; it does not rewrite Program or generate
 file or function explanations. This project-wide action is in Architecture
 options, never the file view. The running stage and elapsed seconds show what is happening.
+Leaving Architecture does not stop the scan. Returning restores its original
+elapsed time, and other viewers of that session see the same progress. While it
+runs, **Cancel analysis** replaces **Re-scan project**; a racing second request
+joins the existing scan instead of starting another one. Progress and completion
+arrive through live updates. Returning or reconnecting rereads the server state,
+including a failure that happened while the view was closed. Use **Reload
+architecture** if a connection warning persists. Scan status lasts for the current
+server process; it does not claim that an interrupted scan survived a server restart.
 **Cancel analysis** waits for cleanup and preserves the previous valid index.
 Large refreshes have a ten-minute request budget; inspectors retain their own
 finite limits. Invalid output, changed source or missing prerequisites leaves

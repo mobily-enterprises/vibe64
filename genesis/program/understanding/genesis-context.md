@@ -41,6 +41,18 @@ The existing service remains responsible for resolving the selected source and
 validating Genesis results. These engineering views are not direct Colleague
 tools; investigation belongs to a coding conversation.
 
+The existing source-keyed scan owner retains one current/last small status per
+source for its process lifetime: original start, stage, terminal outcome and
+bounded failure diagnostics. It retains no City result or separate job runner.
+Duplicate admission returns the running scan, while cancellation waits for its
+existing managed cleanup. Session-change notifications use `architecture-refresh`
+through runtime events; the client filters project/session identity and rereads
+status. Mount, reactivation and socket reconnect reconcile independently of the
+view which submitted the request. A local timer advances elapsed display from
+the server start; inactive/disposed views release timers and listeners. Terminal
+status refreshes the existing City readers. No persisted state format changes or
+restart replay are introduced.
+
 `inspectGenesisStackComponents` validates the current project format and requires
 an explicitly saved Stack before returning normalized components and its hash.
 The pinned Genesis parser and installed catalog own interpretation; callers do
