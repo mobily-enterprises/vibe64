@@ -12152,6 +12152,8 @@ test("Main browser facade uses the original native owner and action authority wi
       const limitNotice = limitRows.filter(message => message.text?.includes(limitMessage));
       assert.equal(limitNotice.length, 1);
       assert.ok(limitNotice[0].text.includes("https://chatgpt.com/codex/settings/usage"));
+      await waitForSessionValue(async () => (await request("GET")).json(),
+        state => state.status === "ready", "browser stops showing work after the limit");
       await waitForSessionValue(() => events,
         updates => JSON.stringify(updates).includes(limitMessage), "authorized browser subscription receives the limit notice");
       assert.deepEqual((await request("GET")).json().conversationLog, limitState.conversationLog,
