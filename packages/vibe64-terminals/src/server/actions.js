@@ -203,7 +203,7 @@ function createTerminalActions({ terminals } = {}) {
     }),
     action({
       id: ACTION_CREATE_TEMPORARY_CONVERSATION,
-      assistant: temporaryConversationTool("Create a separate temporary conversation in a session. Use assistantRouting.mode senior or junior when requested. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser."),
+      assistant: temporaryConversationTool("Create a separate temporary conversation in a session. Use assistantRouting.mode senior or junior when requested. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser. Only when requested, includeRecentChatContext=true captures up to forty visible Main messages as independent initial context."),
       input: temporaryConversationCreateActionInputValidator,
       execute: (input) => terminals.createTemporaryConversation(input.sessionId, input)
     }),

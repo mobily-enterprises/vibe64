@@ -31,7 +31,7 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   });
 }
 
-function changeoverFor(store, sessionId, { agent, context, log } = {}) {
+function changeoverFor(store, sessionId, { agent, context, log, maximumInitialMessages } = {}) {
   const binding = createMainConversationBinding(store, sessionId, context);
   return createConversationChangeover({
     state: binding.state,
@@ -43,7 +43,8 @@ function changeoverFor(store, sessionId, { agent, context, log } = {}) {
       closeSession: () => agent.closeSession(sessionId, { ...context, changeover: true, forgetConversationBinding: true })
     },
     presentation: MAIN_CONVERSATION_PRESENTATION,
-    log
+    log,
+    ...(maximumInitialMessages ? { maximumInitialMessages } : {})
   });
 }
 
@@ -53,12 +54,13 @@ export async function rememberAssistantBeforeChangeover({ runtime, session }, en
   await changeoverFor(runtime.store, session.sessionId).remember({ engineId, messages });
 }
 
-export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}) {
+export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}, initialMessages = []) {
   requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;
   const engineId = sessionConversationKey(context.session);
-  const messages = await history(store, sessionId);
-  return changeoverFor(store, sessionId, { agent, context, log }).send({
+  const messages = [...initialMessages, ...await history(store, sessionId)];
+  return changeoverFor(store, sessionId, { agent, context, log,
+    ...(initialMessages.length ? { maximumInitialMessages: 40 } : {}) }).send({
     engineId, messages, input,
     turnMetadata: { engineId: engineId.split("/")[0] }
   });

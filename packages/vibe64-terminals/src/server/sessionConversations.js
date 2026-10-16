@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { conversationMessageVersion } from "@jskit-ai/assistant-core/server/conversation";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { ACTION_START_TEMPORARY_CONVERSATION_TURN, ACTION_STOP_TEMPORARY_CONVERSATION,
   ACTION_UPDATE_TEMPORARY_CONVERSATION } from "./actions.js";
 import { temporaryConversationTurnActionInputValidator, temporaryConversationUpdateInputValidator } from "./inputSchemas.js";
-import { normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
@@ -46,6 +47,44 @@ function presentation(input = {}) {
     result.recoveryRetryKeys = input.recoveryRetryKeys;
   }
   return result;
+}
+
+function visibleContextText(message) {
+  const prefix = message.role === "user" ? "/goal "
+    : ["Goal set: ", "Goal cleared: ", "Goal active: "].find(value => message.text.startsWith(value));
+  if (!prefix || !message.text.startsWith(prefix)) return parseIntegrationSetupRequest(message)?.text ?? message.text;
+  const objective = message.text.slice(prefix.length);
+  const separator = objective.indexOf("\n\n");
+  return separator < 0 ? message.text : prefix + assistantGoalObjective(objective, { objective: objective.slice(separator + 2) });
+}
+
+// Capture only the canonical visible transcript, never native prompts or live reasoning.
+async function recentChatContext(store, sessionId) {
+  const turns = await store.readConversationLog(sessionId, { presentation: true });
+  const selected = turns.flatMap(turn => (turn.messages || []).filter(message =>
+    ["user", "assistant", "commentary"].includes(message.role) && message.text?.trim() &&
+    !assistantGoalManagementMessage(message, turn) && !(message.role === "user" && turn.metadata?.projectMessage)
+  ).map((message, index) => ({
+    id: `main-context/${turn.turnId}/${index}`, role: message.role, text: visibleContextText(message), at: message.at,
+    attachments: [], receipt: false
+  }))).filter(message => message.text.trim()).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-40);
+  let remaining = 64 * 1024;
+  let truncated = false;
+  const messages = [];
+  for (const message of selected.reverse()) {
+    if (!remaining) { truncated = true; continue; }
+    const bytes = Buffer.from(message.text, "utf8");
+    let text = message.text;
+    if (bytes.length > remaining) {
+      // TextDecoder drops an incomplete UTF-8 suffix rather than splitting a character.
+      text = new TextDecoder().decode(bytes.subarray(0, remaining), { stream: true });
+      truncated = true;
+    }
+    remaining -= Buffer.byteLength(text, "utf8");
+    const value = { ...message, text };
+    messages.unshift({ ...value, version: conversationMessageVersion(value) });
+  }
+  return { messages, truncated, capturedAt: new Date().toISOString() };
 }
 
 function requireSuccess(result) {
@@ -265,10 +304,11 @@ function createSessionConversations({
         const store = ctx.runtime.store;
         if (!remember) engineId = sessionConversationKey(ctx.session);
         const id = remember ? ctx.session.sessionId : sessionId;
-        const messages = await readMainConversationHistory(store, id);
+        const messages = [...(ctx.recentChatContext?.messages || []), ...await readMainConversationHistory(store, id)];
         const binding = createMainConversationBinding(store, id, remember ? undefined : ctx);
         return { state: binding.state, identity: binding.identity, transcript: binding.transcript,
           presentation: MAIN_CONVERSATION_PRESENTATION, engineId, messages,
+          ...(ctx.recentChatContext ? { maximumInitialMessages: 40 } : {}),
           ...(!remember ? { turnMetadata: { engineId: engineId.split("/")[0] } } : {}) };
       },
       async selection(sessionId, input, record, steering, ctx) {
@@ -376,7 +416,7 @@ function createSessionConversations({
         ...(turn.user ? { user: { ...turn.user, receipt: false } } : {}),
         messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message) });
     scopedStore.writeConversationUserMessage = (_id, ...args) => store.writeConversationUserMessage(scope, ...args);
-    const context = { ...selected, routingConversationId: conversationId, conversationContext: ctx,
+    const context = { ...selected, routingConversationId: conversationId, conversationContext: ctx, recentChatContext: record.recentChatContext,
       requiredAssistantMode: record.recoveryOperation === "update" ? "senior" : "",
       runtime: { ...ctx.runtime, store: scopedStore }, session: { ...ctx.session, metadata } };
     scopedStore.conversationMessageIdExists = async (_id, messageId) => {
@@ -464,7 +504,7 @@ function createSessionConversations({
         ...(message.turnMetadata?.assistantRouting ? { agentSettings: {
           model: context.assistantSelection.modelId, thinking: context.assistantSelection.variantId } } : {})
       }, nativeContext(context))
-    })
+    }, undefined, ctx.recentChatContext?.messages)
   });
 
   async function startInsideWrite(sessionId, input, ctx) {
@@ -571,10 +611,14 @@ function createSessionConversations({
           workflowEngineId: parentPreferences?.workflowEngineId || parentSelection.engineId
         });
         const initialPresentation = presentation(input.presentation);
+        const recentContext = input.includeRecentChatContext === true
+          ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;
         const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
           ...initialPresentation,
           ...(Object.hasOwn(initialPresentation, "draft") ? { draftRevision: randomUUID() } : {}),
-          ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences) } } : {}),
+          ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences),
+            ...(recentContext ? { assistant_changeover: JSON.stringify({ lastEngine: "", engines: {} }) } : {}) } } : {}),
+          ...(recentContext ? { recentChatContext: recentContext } : {}),
           agentSettings: input.agentSettings || {},
           assistantSelection: parentSelection,
           providerConversationId: "", nativeBindings: {},

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRenderer, nextTick, ref } from "vue";
 import { EventEmitter } from "node:events";
 import { routeLocationKey } from "vue-router";
@@ -76,6 +76,7 @@ async function runningTemporaryAi() {
 }
 
 describe("useVibe64TemporaryAi", () => {
+  beforeAll(async () => { await import("../../src/composables/useVibe64TemporaryAi.js"); }, 30_000);
   beforeEach(() => {
     mocks.requests.length = 0;
     mocks.responses.length = 0;
@@ -99,6 +100,35 @@ describe("useVibe64TemporaryAi", () => {
     mountedApps.clear();
     vi.clearAllTimers();
     vi.useRealTimers();
+  });
+
+  it("captures opted-in context immediately without sending and retains the choice on creation retry", async () => {
+    const temporary = await temporaryAi();
+    mocks.responses.push({ ok: true, conversationId: createdId, recentChatContext: { messages: [], truncated: false } });
+    const task = await temporary.createTask({ includeRecentChatContext: true });
+    const create = mocks.requests.find(([, options]) => options.method === "POST");
+    expect(create[1].body.includeRecentChatContext).toBe(true);
+    expect(temporary.tasks.value.find(value => value.id === task.id).recentChatContext).toEqual({ messages: [], truncated: false });
+    expect(mocks.requests.filter(([url]) => url.endsWith("/turns"))).toHaveLength(0);
+    await temporary.createTask({ taskId: task.id });
+    expect(mocks.requests.filter(([, options]) => options.method === "POST")).toHaveLength(1);
+  });
+
+  it("retries failed creation with the same context choice and clears the creation error", async () => {
+    const temporary = await temporaryAi();
+    mocks.responses.push(() => { throw new Error("Creation response lost."); });
+    await expect(temporary.createTask({ includeRecentChatContext: true })).rejects.toThrow("Creation response lost.");
+    const task = temporary.tasks.value[0];
+    expect(task.error).toBe("Creation response lost.");
+    mocks.responses.push({ ok: true, conversationId: task.id, recentChatContext: { messages: [], truncated: false } });
+    await temporary.createTask({ taskId: task.id });
+    const creates = mocks.requests.filter(([, options]) => options.method === "POST");
+    expect(creates).toHaveLength(2);
+    expect(creates.map(([, options]) => [options.body.conversationId, options.body.includeRecentChatContext]))
+      .toEqual([[task.id, true], [task.id, true]]);
+    expect(temporary.tasks.value).toHaveLength(1);
+    expect(temporary.tasks.value[0].error).toBe("");
+    expect(mocks.requests.filter(([url]) => url.endsWith("/turns"))).toHaveLength(0);
   });
 
   it("autosaves only changed draft text without resending attachments or recovery fields", async () => {

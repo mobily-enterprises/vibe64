@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
@@ -1862,5 +1863,102 @@ test("temporary repair model preferences survive recovered completion in either 
         await f.service.close();
       }
     });
+  });
+});
+
+
+test("temporary context captures forty visible messages once, without reasoning or native goal scaffolding", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    for (let i = 0; i < 22; i++) {
+      await f.store.writeConversationUserMessage("one", { text: `Question ${i}`, messageId: `main-${i}` });
+      await f.store.writeConversationAssistantMessage("one", { text: `Answer ${i}` });
+    }
+    await f.store.writeConversationThinkingMessage("one", { text: "PRIVATE REASONING" });
+    await f.store.writeConversationCommentaryMessage("one", { text: "Visible progress" });
+    await f.store.writeConversationUserMessage("one", {
+      text: `/goal ${assistantModePrompt("junior", "Keep my authored objective")}`, messageId: "goal"
+    });
+    const parentBefore = await f.store.readConversationLog("one");
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "context", includeRecentChatContext: true });
+    const snapshot = created.recentChatContext;
+    assert.equal(snapshot.messages.length, 40);
+    assert.equal(snapshot.messages[0].text, "Question 3");
+    assert.equal(snapshot.messages.at(-2).text, "Visible progress");
+    assert.equal(snapshot.messages.at(-1).text, "/goal Keep my authored objective");
+    assert.ok(!JSON.stringify(snapshot).includes("PRIVATE REASONING"));
+    assert.ok(!JSON.stringify(snapshot).includes("Vibe64 role"));
+    assert.deepEqual(await f.store.readConversationLog("one"), parentBefore);
+    assert.deepEqual(await f.store.readConversationLog({ sessionId: "one", conversationId: "context" }), []);
+    await f.store.writeConversationAssistantMessage("one", { text: "Later Main reply" });
+    const retry = await f.service.createTemporaryConversation("one", { conversationId: "context", includeRecentChatContext: true });
+    assert.deepEqual(retry.recentChatContext, snapshot);
+    const ordinary = await f.service.createTemporaryConversation("one", { conversationId: "empty" });
+    assert.equal(ordinary.recentChatContext, undefined);
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "context", messageId: "ask", message: "Explain that progress" });
+    assert.match(f.native.lastInput.message, /Question 3/);
+    assert.match(f.native.lastInput.message, /Visible progress/);
+    assert.ok(!f.native.lastInput.message.includes("Later Main reply"));
+    assert.ok(!f.native.lastInput.message.includes("PRIVATE REASONING"));
+    const log = await f.store.readConversationLog({ sessionId: "one", conversationId: "context" });
+    assert.equal(log.length, 1);
+    assert.equal(log[0].user.text, "Explain that progress");
+    await f.service.close();
+  });
+});
+
+test("temporary context is UTF-8 bounded and reports omitted older text", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    await f.store.writeConversationUserMessage("one", { text: "Old "+"🐨".repeat(30000), messageId: "big" });
+    await f.store.writeConversationAssistantMessage("one", { text: "Most recent answer" });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "bounded", includeRecentChatContext: true });
+    assert.equal(created.recentChatContext.truncated, true);
+    assert.equal(created.recentChatContext.messages.at(-1).text, "Most recent answer");
+    assert.ok(created.recentChatContext.messages.reduce((total, message) => total + Buffer.byteLength(message.text), 0) <= 64 * 1024);
+    assert.ok(created.recentChatContext.messages.every(message => !message.text.includes("�")));
+    await f.service.close();
+  });
+});
+
+
+test("temporary context uses existing visible goal and integration projections", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    const objective = assistantModePrompt("junior", "Keep writing my report");
+    await f.store.writeConversationUserMessage("one", { text: "My own instructions remain verbatim", messageId: "authored", turnMetadata: { engineId: "claude" } });
+    await f.store.writeConversationCommentaryMessage("one", { text: `Goal active: ${objective} (3 turns)` });
+    await f.store.writeConversationAssistantMessage("one", { text: `Goal cleared: ${objective}` });
+    await f.store.writeConversationCommentaryMessage("one", { text: "No goal set", data: {
+      native: { engineId: "claude", type: "system", subtype: "local_command_output" }
+    } });
+    await f.store.writeConversationAssistantMessage("one", { text: "Goal set: ordinary authored explanation" });
+    await f.store.writeConversationUserMessage("one", { text: `/goal ${objective}`, messageId: "admitted-goal",
+      turnMetadata: { engineId: "claude", upstreamMessageId: "native-goal" } });
+    await f.store.writeConversationAssistantMessage("one", { text: "I will continue writing the report." });
+    await f.store.writeConversationUserMessage("one", { text: "Please configure the integration", messageId: "integration" });
+    await f.store.writeConversationAssistantMessage("one", { text: 'Configure this connection.\n```vibe64-integration\n{"integrationId":"private-slot"}\n```' });
+    await f.store.writeConversationSystemMessage("one", { text: "INTERNAL SYSTEM TEXT" });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "visible", includeRecentChatContext: true });
+    assert.deepEqual(created.recentChatContext.messages.map(message => message.text), [
+      "My own instructions remain verbatim", "Goal set: ordinary authored explanation",
+      "I will continue writing the report.", "Please configure the integration", "Configure this connection."
+    ]);
+    await f.service.close();
+  });
+});
+
+
+test("temporary context follows visible chronology across interleaved native turns", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    await f.store.writeConversationUserMessage("one", { text: "Start the report", messageId: "first", at: "2026-10-16T01:00:00.000Z" });
+    await f.store.writeConversationAssistantMessage("one", { text: "The final result", at: "2026-10-16T01:00:03.000Z" });
+    await f.store.writeConversationUserMessage("one", { text: "Include this correction", messageId: "steer", at: "2026-10-16T01:00:02.000Z" });
+    const created = await f.service.createTemporaryConversation("one", { conversationId: "chronology", includeRecentChatContext: true });
+    assert.deepEqual(created.recentChatContext.messages.map(message => message.text), [
+      "Start the report", "Include this correction", "The final result"
+    ]);
+    await f.service.close();
   });
 });

@@ -816,3 +816,22 @@ Temporary chat uses the same chronological transcript rendering as Main. Saved
 authored rows and native streamed replies interleave by their message times,
 including user steering inside one native turn. Rendering preserves the original
 turn identities, metadata and stored history.
+
+## Optional recent Main context
+
+The ordinary New temporary AI task control offers an unchecked context-copy
+option. Creation captures at most forty canonical visible user, assistant and
+commentary messages from the authorized session's Main transcript, bounded to
+64 KiB of text, without attachment payloads or reasoning. The shared goal-message
+classifier excludes native management records just as the transcript UI does; the
+existing exact objective decoder removes generated role envelopes from remaining
+visible goal text.
+The optional `recentChatContext` field belongs to the newly created temporary
+record; absent means no copy. Existing records require no conversion or backfill.
+Repeated creation with the same ID preserves the captured text and timestamp.
+
+The temporary routing owner supplies this immutable snapshot to the existing
+conversation continuity owner alongside its own transcript. Existing seen/pending
+admission state delivers context and manages retries and model changes. Copied
+messages are not written as newly delivered turns. Main remains unchanged, and
+neither conversation observes later messages or edits in the other.

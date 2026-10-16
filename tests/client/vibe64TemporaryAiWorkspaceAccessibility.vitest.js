@@ -163,6 +163,7 @@ function temporaryAiTestState(startResult) {
     closeWorkspace: vi.fn(),
     open,
     openTask: vi.fn(),
+    createTask: vi.fn(async () => ({})),
     restoreError: ref(""),
     restoreTasks: vi.fn(),
     reportRecoveryOutcome: vi.fn((taskId, outcome = {}) => {
@@ -280,7 +281,7 @@ function mountWorkspace(container, props, hostConversation = null, colleagueView
       return () => h("button", attrs, slots.default?.());
     }
   }));
-  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog", "VChip"]) {
+  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog", "VChip", "VCheckbox"]) {
     app.component(name, defineComponent({ setup: (_props, { attrs, slots }) => () => h("div", attrs, slots.default?.()) }));
   }
   app.provide(ssrContextKey, { modules: new Set() });
@@ -314,6 +315,32 @@ async function flushWorkspaceReveal() {
 }
 
 describe("Temporary AI recovery workspace accessibility", () => {
+  it("offers an unchecked context copy and waits for confirmed creation before closing", async () => {
+    const pending = deferred();
+    const temporary = temporaryAiTestState();
+    temporary.createTask.mockImplementation(() => pending.promise);
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true });
+    try {
+      workspace.showWorkspace();
+      await nextTick();
+      const checkbox = findNode(container, node => node.props?.label === "Include recent chat context");
+      expect(checkbox.props.modelValue).toBe(false);
+      checkbox.props["onUpdate:modelValue"](true);
+      await nextTick();
+      const create = findNode(container, node => node.type === "button" && nodeText(node) === "Create chat");
+      const submitted = create.props.onClick();
+      await nextTick();
+      expect(temporary.createTask).toHaveBeenCalledWith({ includeRecentChatContext: true, taskId: "" });
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeTruthy();
+      pending.resolve({});
+      await submitted;
+      await nextTick();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+    } finally { app.unmount(); }
+  });
+
   it("retains the selected conversation owner while chat is hidden and withdraws it on deselection", async () => {
     temporaryProvider.value = temporaryAiTestState();
     const view = VueRuntime.shallowRef(null);

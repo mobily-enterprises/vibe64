@@ -58,6 +58,12 @@ check is separate from proving the application's connected-source resolution.
 Main and temporary chat history load ten real messages at a time. A request and its answer count
 separately; reasoning and progress stay visible without consuming that allowance.
 
+When creating a temporary chat, people can explicitly include up to forty recent
+visible Main messages as bounded text context. The copy is fixed at creation,
+excludes hidden reasoning and internal instructions, and reports any size-based
+omission. Main and the new conversation continue independently while sharing the
+same session source; later messages do not flow between them.
+
 Sending to Codex reuses the project's environment when current resources and
 Env files are ready. Missing or changed preparation is completed before delivery;
 current account, workspace and delivery checks remain required.

@@ -92,6 +92,7 @@ const temporaryConversationUpdateInputValidator = validator({
   attachmentIds: attachmentIdsField
 });
 const temporaryConversationCreateActionInputValidator = validator({
+  includeRecentChatContext: { type: "boolean", required: false },
   assistantRouting: temporaryConversationRoutingField,
   conversationId: optionalText,
   presentation: temporaryConversationPresentationField,

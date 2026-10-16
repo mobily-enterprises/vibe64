@@ -73,11 +73,25 @@
           title="New temporary AI task"
           type="button"
           variant="text"
-          @click="openTask()"
+          @click="newTaskOpen = true"
         />
       </div>
       <span class="vibe64-temporary-ai__tabs-spacer" />
     </nav>
+
+    <v-dialog v-if="newTaskOpen" v-model="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask">
+      <v-card title="New temporary chat">
+        <v-card-text>
+          <v-checkbox v-model="includeRecentChatContext" :disabled="creatingTask || Boolean(creatingTaskId)" label="Include recent chat context" hide-details />
+          <p>Copy up to 40 recent visible messages from Main, including progress. Text only, limited to 64 KiB. Later messages stay separate.</p>
+          <v-alert v-if="createTaskError" type="error" variant="tonal">{{ createTaskError }}</v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn :disabled="creatingTask" @click="newTaskOpen = false">Cancel</v-btn>
+          <v-btn :loading="creatingTask" :disabled="creatingTask" @click="createTask">Create chat</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <component
       :is="hostConversation.component" v-if="hostConversation?.selected && props.active"
@@ -159,6 +173,10 @@
           </v-btn>
         </template>
         <template #hints>
+          <p v-if="activeTask.recentChatContext">
+            Copied {{ activeTask.recentChatContext.messages.length }} messages from Main when this chat was created.
+            <span v-if="activeTask.recentChatContext.truncated">Some text was omitted to fit the 64 KiB context limit.</span>
+          </p>
           <div
             v-if="activeTaskError || actionErrors[activeTask.id] || activityLabel"
             class="vibe64-temporary-ai__feedback"
@@ -386,6 +404,35 @@ function selectTask(id) {
   selectionRevision.value += 1;
   hostConversation?.value?.close();
   return temporary.selectTask(id);
+}
+const newTaskOpen = ref(false);
+const includeRecentChatContext = ref(false);
+const creatingTask = ref(false);
+const creatingTaskId = ref("");
+const createTaskError = ref("");
+watch(() => [props.projectSlug, props.sessionId], () => {
+  selectionRevision.value += 1;
+  newTaskOpen.value = false;
+  creatingTask.value = false;
+  creatingTaskId.value = "";
+});
+watch(newTaskOpen, value => {
+  if (value) { includeRecentChatContext.value = false; createTaskError.value = ""; creatingTaskId.value = ""; }
+});
+async function createTask() {
+  const revision = ++selectionRevision.value;
+  creatingTask.value = true;
+  createTaskError.value = "";
+  hostConversation?.value?.close();
+  try {
+    await temporary.createTask({ includeRecentChatContext: includeRecentChatContext.value, taskId: creatingTaskId.value });
+    if (revision === selectionRevision.value) newTaskOpen.value = false;
+  } catch (error) {
+    if (revision === selectionRevision.value) {
+      creatingTaskId.value = error.taskId || "";
+      createTaskError.value = error.message || "Temporary chat could not be created.";
+    }
+  } finally { if (revision === selectionRevision.value) creatingTask.value = false; }
 }
 function openTask(options) {
   selectionRevision.value += 1;
@@ -691,6 +738,11 @@ async function persistTaskRecovery(taskId = "", outcome = {}) {
 function showWorkspace() {
   selectionRevision.value += 1;
   hostConversation?.value?.close();
+  if (!temporary.tasks.value.length) {
+    temporary.open.value = true;
+    newTaskOpen.value = true;
+    return null;
+  }
   const task = temporary.showWorkspace();
   void revealTaskTab(temporary.activeTaskId.value);
   return task;

@@ -232,13 +232,14 @@ function useVibe64TemporaryAi({
       method: "POST",
       body: {
         conversationId: task.id,
+        ...(task.includeRecentChatContext ? { includeRecentChatContext: true } : {}),
         ...(task.initialRouting ? { assistantRouting: task.initialRouting } : {}),
         agentSettings: current.agentSettings,
         presentation: taskPresentation(current)
       }
     }).then((created) => {
       if (canApplyTaskResponse(task)) updateTask(task.id, { conversationId: created.conversationId, assistantSelection: created.assistantSelection,
-        routingMetadata: created.routingMetadata, purposes: created.purposes, goal: created.goal || null });
+        routingMetadata: created.routingMetadata, recentChatContext: created.recentChatContext, purposes: created.purposes, goal: created.goal || null });
       return created.conversationId;
     });
     creations.set(task.id, creation);
@@ -439,12 +440,14 @@ function useVibe64TemporaryAi({
     recoveryConflictId = "",
     recoveryContext = "",
     initialRouting = null,
+    includeRecentChatContext = false,
     title = ""
   } = {}) {
     const number = nextTaskNumber;
     nextTaskNumber += 1;
     const task = bindTask({
       initialRouting,
+      includeRecentChatContext,
       agentSettings: normalizeVibe64AgentSettings(readRefOrGetterValue(agentSettings)),
       apiPath: currentSessionsApiPath(),
       attachments: [],
@@ -480,6 +483,19 @@ function useVibe64TemporaryAi({
     open.value = true;
     if (task.draft) updateTask(task.id, { draft: task.draft });
     return task;
+  }
+
+  async function createTask(options = {}) {
+    const task = tasks.value.find(value => value.id === options.taskId) || openTask(options);
+    try {
+      await ensureConversation(task);
+      if (canApplyTaskResponse(task)) updateTask(task.id, { error: "" });
+      return task;
+    } catch (error) {
+      if (canApplyTaskResponse(task)) updateTask(task.id, { error: error.message });
+      error.taskId = task.id;
+      throw error;
+    }
   }
 
   async function startTask(options = {}) {
@@ -930,6 +946,7 @@ function useVibe64TemporaryAi({
     activeTaskId,
     closeTask,
     closeWorkspace,
+    createTask,
     cancelMessage,
     editMessage,
     hasUnreadMessages,
