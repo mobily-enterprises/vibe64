@@ -4,6 +4,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { request as httpRequest } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { promisify } from "node:util";
 import Fastify from "fastify";
@@ -179,6 +181,22 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
     assert.ok((await fetch(`${base}/drop-zone/download?path=${invalidPart}.bin`)).status >= 400, invalidPart);
   }
   assert.deepEqual((await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).sort(), ["file.bin", "shared.txt"]);
+  // A real peer disconnect must release the writer, not leave an incomplete
+  // multipart stream holding the session mutation lock indefinitely.
+  const dropZone = stores.get("one").paths("shared-id").dropZoneRoot;
+  const interrupted = httpRequest(`${base}/drop-zone/upload?path=interrupted.bin`, {
+    method: "POST", headers: { "content-type": "multipart/form-data; boundary=interrupted-upload" }
+  });
+  interrupted.on("error", () => {});
+  interrupted.write('--interrupted-upload\r\nContent-Disposition: form-data; name="file"; filename="interrupted.bin"\r\nContent-Type: application/octet-stream\r\n\r\n');
+  interrupted.write(Buffer.alloc(64 * 1024, 0x33));
+  const stagedFiles = async () => (await readdir(dropZone)).filter(name => name.startsWith(".upload-"));
+  for (let attempt = 0; attempt < 100 && !(await stagedFiles()).length; attempt++) await delay(10);
+  assert.equal((await stagedFiles()).length, 1, "interrupted upload reached its staging writer");
+  interrupted.destroy();
+  for (let attempt = 0; attempt < 100 && (await stagedFiles()).length; attempt++) await delay(10);
+  assert.deepEqual(await stagedFiles(), [], "peer disconnect removes incomplete upload");
+  assert.ok(!(await readdir(dropZone)).includes("interrupted.bin"));
   // Exercise the real HTTP parser and streaming writer without allocating a
   // 500 MiB buffer. The next byte must reject and remove the staged file.
   const chunk = Buffer.alloc(1024 * 1024, 0x5a);
