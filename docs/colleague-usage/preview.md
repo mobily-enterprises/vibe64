@@ -44,6 +44,11 @@ choose **Preview options**, fill the required fields and choose **Run**.
 **Remember for this project** saves those ordinary settings in this browser for
 future sessions. **Cancel** leaves the current run alone.
 
+Preview checks the current output, workspace setup and resource declarations
+together. Later checks reread changes to those declarations. Invalid resource
+estimates retain their diagnostic and generic fallback; they do not by themselves
+make an otherwise valid output unavailable.
+
 If the previewed application shows its own login screen, enter that application's
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set

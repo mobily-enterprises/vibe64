@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import childProcess, { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -158,7 +159,7 @@ test("mixed Stack identities require reinspection, never silent fallback", () =>
   assert.throws(() => inspect(appLines, { workspaceSetupSection: { stackHash: "changed" } }), { code: "VIBE64_STACK_CHANGED" });
 });
 
-test("public inspections transport hints without changing setup identity, blocking outputs or rewriting source", async () => {
+test("public inspections batch related sections without changing identity, blocking outputs or rewriting source", async (t) => {
   await withTemporaryRoot(async (projectRoot) => {
     await execFileAsync("git", ["init", "--initial-branch=main"], { cwd: projectRoot });
     await initializeGenesisProject({ projectRoot });
@@ -168,11 +169,24 @@ test("public inspections transport hints without changing setup identity, blocki
     const originalSetup = await inspectVibe64WorkspaceSetup({ projectRoot });
     assert.equal(originalSetup.status, "ready");
     assert.equal(originalSetup.resourceEstimates.status, "unconfigured");
+    const spawn = childProcess.spawn;
+    let discoveries = 0;
+    const mocked = t.mock.method(childProcess, "spawn", function (command, args, ...rest) {
+      if (command === "git" && args.includes("--show-toplevel")) discoveries++;
+      return spawn.call(this, command, args, ...rest);
+    });
+    syncBuiltinESMExports();
+    t.after(() => { mocked.mock.restore(); syncBuiltinESMExports(); });
     const source = `${stack}\n## Resource estimates\n\n${[...appLines, ...setupLines].join("\n")}\n`;
     await writeFile(stackPath, source);
     const outputs = await inspectVibe64Outputs({ projectRoot });
+    assert.equal(discoveries, 2, "one Stack discovery plus the separate environment inspection");
+    discoveries = 0;
     const setup = await inspectVibe64WorkspaceSetup({ projectRoot });
+    assert.equal(discoveries, 1);
+    discoveries = 0;
     const estimates = await inspectVibe64ResourceEstimates({ projectRoot });
+    assert.equal(discoveries, 1);
     assert.equal(outputs.status, "ready");
     assert.equal(setup.status, "ready");
     assert.equal(setup.recipeHash, originalSetup.recipeHash);

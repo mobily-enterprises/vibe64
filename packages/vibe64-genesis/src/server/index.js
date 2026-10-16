@@ -94,6 +94,7 @@ const {
   inspectAgentIntegrations,
   inspectSkills,
   inspectStackSection,
+  inspectStackSections,
   inspectSubsystems,
   listTemplates,
   parserEnvironment,
@@ -310,6 +311,18 @@ function inspectGenesisStackSection(name, options = {}) {
   );
 }
 
+async function inspectGenesisStackSections(names, options = {}) {
+  const sections = await runGenesisOperation(
+    (inspectionOptions) => inspectStackSections({ ...inspectionOptions, names }),
+    options
+  );
+  if (!Array.isArray(sections) || sections.length !== names.length ||
+      sections.some((section, index) => section?.contract !== GENESIS_CONTRACTS.stackSection || section.name !== names[index])) {
+    throw new Error("Genesis returned an invalid Stack section inspection batch.");
+  }
+  return sections;
+}
+
 async function inspectGenesisStackComponents(options = {}) {
   const format = await inspectGenesisProjectFormat(options);
   if (format.status !== "current") {
@@ -373,11 +386,11 @@ function setGenesisCollaboration(options = {}) {
 }
 
 async function inspectVibe64Outputs(options = {}) {
-  const [section, environment, resourceSection, workspaceSetupSection] = await Promise.all([
-    inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options),
-    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options),
-    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
-    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options)
+  const [[section, resourceSection, workspaceSetupSection], environment] = await Promise.all([
+    inspectGenesisStackSections([
+      VIBE64_OUTPUTS_SECTION, VIBE64_RESOURCE_ESTIMATES_SECTION, VIBE64_WORKSPACE_SETUP_SECTION
+    ], options),
+    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
   ]);
   const outputs = vibe64OutputsInspection({ environment, section });
   return {
@@ -404,11 +417,9 @@ async function inspectVibe64ProjectServices(options = {}) {
 }
 
 async function inspectVibe64WorkspaceSetup(options = {}) {
-  const [section, resourceSection, outputsSection] = await Promise.all([
-    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options),
-    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
-    inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options)
-  ]);
+  const [section, resourceSection, outputsSection] = await inspectGenesisStackSections([
+    VIBE64_WORKSPACE_SETUP_SECTION, VIBE64_RESOURCE_ESTIMATES_SECTION, VIBE64_OUTPUTS_SECTION
+  ], options);
   const setup = await vibe64WorkspaceSetupInspection({
     projectRoot: options.projectRoot,
     section
@@ -424,11 +435,9 @@ async function inspectVibe64WorkspaceSetup(options = {}) {
 }
 
 async function inspectVibe64ResourceEstimates(options = {}) {
-  const [section, outputsSection, workspaceSetupSection] = await Promise.all([
-    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
-    inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options),
-    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options)
-  ]);
+  const [section, outputsSection, workspaceSetupSection] = await inspectGenesisStackSections([
+    VIBE64_RESOURCE_ESTIMATES_SECTION, VIBE64_OUTPUTS_SECTION, VIBE64_WORKSPACE_SETUP_SECTION
+  ], options);
   return vibe64ResourceEstimatesInspection({ section, outputsSection, workspaceSetupSection });
 }
 
