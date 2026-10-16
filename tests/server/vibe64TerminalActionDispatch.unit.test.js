@@ -1,3 +1,4 @@
+import { createPreviewDiagnosticRecorder } from "../../packages/vibe64-terminals/src/server/previewDiagnostics.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
@@ -40,6 +41,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["POST", "/project-runtime/open", "project-runtime.open", "openProjectRuntime", { reason: "project-open" }],
       ["POST", "/project-runtime/close", "project-runtime.close", "closeProjectRuntime", { reason: "user-request" }],
       ["GET", "/sessions/:sessionId/outputs", "outputs.read", "outputTargetStatus", {}],
+      ["POST", "/sessions/:sessionId/preview-diagnostics", "preview-diagnostics.record", "recordPreviewDiagnostic", { enabled: true, event: "resource.failed", resourceUrl: "https://preview.example/src/jobs.js" }],
       ["POST", "/sessions/:sessionId/output-runs", "output-target.start", "startOutputTargetTerminal", { outputTargetId: "web", outputParameters: { audience: "Preview" }, forceRestart: true }],
       ["POST", "/sessions/:sessionId/output-runs/open", "output-target.open", "openOutputTarget", {}],
       ["POST", "/sessions/:sessionId/output-runs/:terminalSessionId/stop", "output-target.stop", "stopOutputTargetTerminal", {}],
@@ -77,7 +79,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     });
     const app = testRouteApp();
     registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
-    assert.equal(actions.listDefinitions().length, 47);
+    assert.equal(actions.listDefinitions().length, 48);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
@@ -374,4 +376,32 @@ test("Learning Main readiness uses the original preparer with fresh saved write 
   assert.equal(grants.length, 4);
   assert.equal(calls.length, 1);
   assert.equal(currentProjectRequestContext(), null);
+});
+
+
+test("opt-in Preview diagnostics retain module identity without credentials and cap the private log", () => {
+  const entries = [];
+  let time = 60_000;
+  const record = createPreviewDiagnosticRecorder({ logger: { warn: entry => entries.push(entry) }, now: () => time });
+  const scope = { projectSlug: "compas-next", sessionId: "session-1" };
+  const input = { enabled: true, event: "resource.failed", timestamp: "2026-10-16T03:14:00Z",
+    resourceKind: "script", resourceUrl: "https://user:password@preview.example/src/jobs.js?token=secret#private",
+    frameUrl: "https://preview.example/jobs?session=secret", retryCount: 1, willRetry: true,
+    headers: { authorization: "secret" }, body: "private", sessionId: "forged", projectSlug: "forged" };
+  assert.equal(record({ ...input, enabled: false }, scope).recorded, false);
+  assert.equal(record({ ...input, event: "arbitrary-event" }, scope).recorded, false);
+  assert.equal(record(input, scope).recorded, true);
+  assert.equal(entries[0].resourceUrl, "https://preview.example/src/jobs.js");
+  assert.equal(entries[0].frameUrl, "https://preview.example/jobs");
+  assert.equal(entries[0].sessionId, "session-1");
+  assert.equal(entries[0].observedAt, "2026-10-16T03:14:00.000Z");
+  assert.doesNotMatch(JSON.stringify(entries), /secret|password|private|forged/u);
+  for (let i = 1; i < 120; i += 1) record(input, scope);
+  assert.equal(record(input, scope).limited, true);
+  assert.equal(entries.length, 120);
+  time += 60_000;
+  assert.equal(record({ ...input, resourceUrl: "data:text/plain,secret", frameUrl: "bad?secret", timestamp: "bad" }, scope).recorded, true);
+  assert.equal(entries.at(-1).resourceUrl, "");
+  assert.equal(entries.at(-1).frameUrl, "");
+  assert.equal(entries.at(-1).observedAt, null);
 });

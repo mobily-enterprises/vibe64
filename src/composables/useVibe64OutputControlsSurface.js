@@ -632,6 +632,7 @@ function useVibe64OutputControlsSurface(props) {
     previewState,
     previewStoppedIntent,
     publishPreviewState,
+    publishPreviewDiagnostic,
     requestPreviewIdentityGrant,
     refresh: refreshOutputs,
     restartTerminal,
@@ -1136,6 +1137,14 @@ function useVibe64OutputControlsSurface(props) {
     if (!previewClientDebugEnabled()) {
       return;
     }
+    if (["resource.failed", "resource.retry", "resource.retry.skipped", "resource.retry.unavailable",
+      "frame.requested", "iframe.loaded", "iframe.ready"].includes(event)) {
+      // Only fixed diagnostic fields cross the authenticated action boundary.
+      void publishPreviewDiagnostic?.({ event, timestamp: new Date().toISOString(),
+        frameUrl: previewUrl.value, frameRequestId: previewFrameRequestId.value,
+        resourceUrl: details.resourceUrl || "", resourceKind: details.resourceKind || "resource",
+        retryCount: details.retryCount ?? previewResourceRetryCount, willRetry: details.willRetry === true });
+    }
     vibe64SessionDebugLog(`client.launchPreview.${event}`, redactPreviewDebugDetails({
       frameRequestId: previewFrameRequestId.value,
       frameSrc: String(previewFrame.value?.getAttribute?.("src") || ""),
@@ -1313,13 +1322,12 @@ function useVibe64OutputControlsSurface(props) {
     if (previewResourceRetryLifecycle !== lifecycle) {
       resetPreviewResourceRecovery(lifecycle);
     }
-    if (previewResourceRetryTimer !== null) {
-      return false;
-    }
-
     const resourceKind = String(message?.kind || "resource").trim() || "resource";
     const resourceUrl = String(message?.href || "").trim();
     const willRetry = previewResourceRetryCount < PREVIEW_RESOURCE_RETRY_LIMIT;
+    previewDebugLog("resource.failed", { resourceKind, resourceUrl,
+      retryCount: previewResourceRetryCount, willRetry });
+    if (message.recover === false || previewResourceRetryTimer !== null) return false;
     const notice = willRetry
       ? "Preview could not load an application resource. Retrying automatically…"
       : "Preview could not load an application resource after retrying. Use Reload preview to try again.";
@@ -1327,12 +1335,6 @@ function useVibe64OutputControlsSurface(props) {
     console.error(`[Vibe64 preview] ${notice}`, {
       resourceKind,
       resourceUrl
-    });
-    previewDebugLog("resource.failed", {
-      resourceKind,
-      resourceUrl,
-      retryCount: previewResourceRetryCount,
-      willRetry
     });
     if (!willRetry) {
       return false;
@@ -1346,13 +1348,16 @@ function useVibe64OutputControlsSurface(props) {
         previewResourceRetryLifecycle !== previewIdentityLifecycleKey.value ||
         failedFrameRequestId !== previewFrameRequestId.value
       ) {
+        previewDebugLog("resource.retry.skipped");
         return;
       }
+      previewDebugLog("resource.retry");
       const reloaded = requestPreviewFrame({
         force: true,
         reason: "resource-load-retry"
       });
       if (!reloaded) {
+        previewDebugLog("resource.retry.unavailable");
         const failureNotice = "Preview could not be reloaded automatically. Use Reload preview to try again.";
         showPreviewResourceNotice(failureNotice);
         console.error(`[Vibe64 preview] ${failureNotice}`);

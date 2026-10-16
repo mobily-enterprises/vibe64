@@ -1,6 +1,7 @@
 import {
   outputTargetInputValidator,
   previewIdentityInputValidator,
+  previewDiagnosticInputValidator,
   terminalControlKeyInputValidator,
   terminalControlTextInputValidator
 } from "./inputSchemas.js";
@@ -258,6 +259,13 @@ function registerRoutes(
     actionId: "vibe64.terminals.project-runtime.close",
     buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Close all Vibe64 runtime processes for the current project."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/preview-diagnostics", {
+    actionId: "vibe64.terminals.preview-diagnostics.record",
+    body: previewDiagnosticInputValidator,
+    buildInput: request => withoutVibe64User(bodyWithSessionId(routes)(request)),
+    summary: "Record opt-in, bounded Preview resource diagnostics."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/outputs", {

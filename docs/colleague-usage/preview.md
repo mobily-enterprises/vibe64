@@ -220,3 +220,37 @@ Colleague can inspect onboarding, explain the available choices and offer to
 apply one. After you choose a starter and accept its offer or directly request
 it, Colleague can use the existing onboarding action and recheck the result.
 A successful import does not mean dependencies are prepared or Preview is running.
+
+For recurring **Preview could not load an application resource** errors, enable
+Preview diagnostics in the affected Studio browser before reproducing: add
+`vibe64_preview_debug=1` to the page URL, or set
+`localStorage.setItem("vibe64:preview-debug", "1")` in that browser's developer
+console. The option applies to that browser, on desktop or mobile; Colleague can
+explain it but cannot change browser developer settings for the person.
+
+While enabled, failed script/style/module URLs, frame readiness and automatic
+retry events are sent through the session's authenticated Preview action to the
+workspace's private operational log (`vibe64.preview.browser_diagnostic`). An
+operator can inspect that log after the page reloads or the person leaves. Each
+record identifies the project, session, frame attempt, retry count and browser
+observation time. URLs keep only origin/path: credentials, query values and
+fragments are removed. Console text, request/response bodies and headers are not
+uploaded. Each iframe reports at most 50 failed resources; the daemon accepts
+at most 120 records per minute. Excess diagnostics
+are omitted without changing Preview. These records can identify a failing
+module, but browser resource errors do not themselves provide its HTTP status.
+A log outage does not trigger another Preview retry.
+
+Remove the URL option and run
+`localStorage.removeItem("vibe64:preview-debug")` to stop recording. Existing
+private log retention remains the operator's responsibility. The ordinary
+Preview diagnostics attachment remains a separate, explicitly requested snapshot
+of the current iframe's console/network history.
+
+For a **Chat updates could not reconnect** investigation, the operator can enable
+existing `JSKIT_REALTIME_DEBUG=1` on the workspace daemon (or `realtime.debug` in
+its runtime configuration). Subscription diagnostics then record the pending
+server stage at the 10-second acknowledgement budget and the stage/reason when
+that observer is released. They contain no chat text or credentials. This does
+not change the deadline, start a model, resend a message or retry a subscription;
+use **Reload chat** after correcting the cause.

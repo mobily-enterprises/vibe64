@@ -168,6 +168,21 @@ const outputTargetActionInputValidator = validator({
 const openOutputTargetActionInputValidator = validator({
   sessionId: sessionIdField
 });
+const previewDiagnosticFields = {
+  enabled: { type: "boolean", required: true },
+  event: { ...requiredText, enum: ["resource.failed", "resource.retry", "resource.retry.skipped",
+    "resource.retry.unavailable", "frame.requested", "iframe.loaded", "iframe.ready"] },
+  timestamp: { ...optionalText, maxLength: 40 },
+  resourceUrl: { ...optionalText, maxLength: 2048 },
+  frameUrl: { ...optionalText, maxLength: 2048 },
+  resourceKind: { ...optionalText, maxLength: 20 },
+  frameRequestId: { type: "number", required: false },
+  retryCount: { type: "number", required: false },
+  willRetry: { type: "boolean", required: false }
+};
+const previewDiagnosticInputValidator = validator(previewDiagnosticFields);
+const previewDiagnosticActionInputValidator = validator({ ...previewDiagnosticFields, sessionId: sessionIdField });
+
 const previewIdentityInputValidator = validator({
   identityName: optionalText,
   mode: {
@@ -269,6 +284,8 @@ function terminalControlActionInputValidator(global, control) {
 }
 
 export {
+  previewDiagnosticInputValidator,
+  previewDiagnosticActionInputValidator,
   workPlanReadInputValidator,
   workPlanArchiveInputValidator,
   workPlanRestoreInputValidator,

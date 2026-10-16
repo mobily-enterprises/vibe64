@@ -1,3 +1,4 @@
+import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationConfiguration } from "./conversationConfiguration.js";
@@ -1049,6 +1050,7 @@ function createService({
   if (!projectService) {
     throw new TypeError("createService requires vibe64.project.");
   }
+  const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
   const goalRuntimeId = randomUUID();
   const goalAdmissions = new Map();
   let goalRecovery;
@@ -2719,6 +2721,12 @@ function createService({
   });
   const service = {
     ...sessionConversations,
+    async recordPreviewDiagnostic(sessionId, input) {
+      // Action admission owns project access; read the exact existing session without preparing it.
+      const { session } = await assistantSessionOptions(sessionId);
+      return previewDiagnostics(input, { projectSlug: currentProjectRequestContext()?.slug || "",
+        sessionId: session.sessionId });
+    },
     configureAssistantRuntime(input = {}) {
       for (const name of [
         "claudeConnectionStatus",

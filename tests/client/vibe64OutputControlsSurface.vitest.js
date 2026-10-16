@@ -13,7 +13,8 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug:
 import {
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
-  PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE
+  PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+  PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import {
   defaultPreviewIdentitySelection,
@@ -755,7 +756,7 @@ function mountOrientationSurface({ createOwner = null } = {}) {
   Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
     previewTestNotice: ref(null), resourceAdmissionId: ref(""), testApproval: ref(null), run: vi.fn(async () => ({ ok: true })),
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
-    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
+    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), publishPreviewDiagnostic: vi.fn(async () => true), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
   surfaceHost.projectSlug = ref("practice");
   const windowListeners = new Map();
@@ -980,4 +981,23 @@ it("eligible actual Main collector consumes the same real App port/request/displ
   fixture.props.learningBinding = { ...identity, learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
   await fixture.state.reloadPreview(); fixture.replaceFrame(); fixture.load(); fixture.announce();
   expect(fixture.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
+});
+
+
+it("opt-in Preview diagnostics capture each failed module and retry without accepting a foreign iframe", async () => {
+  vi.useFakeTimers();
+  const f = mountOrientationSurface();
+  const failure = { type: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION,
+    kind: "script", href: "https://preview.example.test/src/jobs.js?token=secret" };
+  f.announce(failure);
+  expect(f.outputs.publishPreviewDiagnostic).not.toHaveBeenCalled();
+  f.windowObject.location.href += "?vibe64_preview_debug";
+  f.announce({ ...failure, recover: false }, {}, "https://preview.example.test");
+  f.announce({ ...failure, recover: false }, f.frame.contentWindow, "https://untrusted.example");
+  expect(f.outputs.publishPreviewDiagnostic).not.toHaveBeenCalled();
+  f.announce({ ...failure, recover: false });
+  expect(f.outputs.publishPreviewDiagnostic).toHaveBeenCalledWith(expect.objectContaining({ event: "resource.failed", resourceKind: "script" }));
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(f.outputs.publishPreviewDiagnostic.mock.calls.some(([entry]) => entry.event === "resource.retry")).toBe(true);
+  vi.useRealTimers();
 });

@@ -46,6 +46,7 @@ function launchPreviewBridgeScript({
   let networkSequence = 0;
   let networkSuppressedResourceCount = 0;
   let resourceFailurePublished = false;
+  let resourceFailureCount = 0;
   const consoleEntries = [];
   const networkEntries = [];
   const networkEntryCharacterCounts = new WeakMap();
@@ -558,9 +559,11 @@ function launchPreviewBridgeScript({
         phase: "failed",
         url: safeResourceUrl
       });
-      if (applicationResource && !resourceFailurePublished) {
+      if (applicationResource && resourceFailureCount++ < 50) {
+        const recover = !resourceFailurePublished;
         resourceFailurePublished = true;
         window.parent.postMessage({
+          recover,
           href: safeResourceUrl,
           kind: resourceKind,
           timestamp: new Date().toISOString(),

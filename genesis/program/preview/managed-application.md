@@ -504,3 +504,10 @@ Relevant original proofs are `terminalWebSocketRoutes.unit.test.js`,
 serial execution. No test result is asserted by this draft explanation.
 
 The existing Onboarding Preview registration carries its captured Learning attempt, learner and no-exercise fields when App is available. Its original screen status and presentation handle stay on that registration; the same captured viewer/session/scope predicate gates registration independently of the App-only setup read. A hidden App does not disable a valid lesson presentation, and a stale identity cannot re-register a Working Preview handle.
+
+Opt-in browser Preview diagnostics use the existing terminal action boundary to
+record bounded failure/retry/readiness fields in the private operational logger.
+Project authority is rechecked and the existing session is read without preparing
+or starting it. The server removes URL credentials, queries and fragments and
+limits records per daemon/minute. This is diagnostic logging, not a second
+Preview lifecycle or application-state store.

@@ -1,3 +1,4 @@
+import { previewDiagnosticUrl } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -1349,6 +1350,18 @@ function useVibe64OutputControls({
     }
   }
 
+  async function publishPreviewDiagnostic(record) {
+    if (practiceBinding || !sessionId.value || !projectSlug.value) return false;
+    try {
+      const result = await getHttpWebClient().request(
+        vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/preview-diagnostics"),
+        { method: "POST", body: { ...record, enabled: true, projectSlug: projectSlug.value,
+          frameUrl: previewDiagnosticUrl(record.frameUrl), resourceUrl: previewDiagnosticUrl(record.resourceUrl) } }
+      );
+      return result?.recorded === true;
+    } catch { return false; } // Diagnostic delivery must never trigger Preview recovery.
+  }
+
   async function publishPreviewState(previewState = {}) {
     // The practical producer needs its own Learning admission; do not publish through Working.
     if (practiceBinding) return false;
@@ -1951,6 +1964,7 @@ function useVibe64OutputControls({
     terminalPreviewRequiresProxy,
     terminalPreviewProxyPending,
     publishPreviewState,
+    publishPreviewDiagnostic,
     outputProjectSlug: projectSlug,
     outputStorageScope,
     practiceBindingCurrent,

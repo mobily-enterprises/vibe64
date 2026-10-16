@@ -1,3 +1,4 @@
+import vm from "node:vm";
 import assert from "node:assert/strict";
 import { lstat, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -2202,3 +2203,24 @@ function sendWebSocketMessage(socket, message = "") {
     socket.send(message);
   });
 }
+
+
+test("Preview bridge reports bounded module failures while requesting only one automatic recovery", () => {
+  const listeners = new Map();
+  const messages = [];
+  const window = { location: new URL("https://preview.example/jobs"), history: {},
+    parent: { postMessage: value => messages.push(value) },
+    addEventListener: (type, listener) => listeners.set(type, listener) };
+  const html = injectLaunchPreviewBridge("<head></head>", { targetOrigin: "http://127.0.0.1:4000" });
+  const script = html.match(/<script[^>]*>([\s\S]*?)<\/script>/u)[1];
+  vm.runInNewContext(script, { window, document: { readyState: "complete", title: "Jobs" }, URL,
+    ErrorEvent: class ErrorEvent {}, queueMicrotask });
+  for (let i = 0; i < 60; i += 1) {
+    listeners.get("error")({ target: { tagName: "SCRIPT", src: `https://preview.example/src/jobs-${i}.js?vibe64_preview_token=secret` } });
+  }
+  const failures = messages.filter(message => message.type === PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE);
+  assert.equal(failures.length, 50);
+  assert.equal(failures.filter(message => message.recover).length, 1);
+  assert.equal(failures[1].href, "http://127.0.0.1:4000/src/jobs-1.js");
+  assert.doesNotMatch(JSON.stringify(failures), /secret/u);
+});
