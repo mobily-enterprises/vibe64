@@ -911,6 +911,56 @@ test("session conversation routing preserves native completed status for a stale
   });
 });
 
+test("a definitely rejected temporary steer preserves the earlier answer's owner and permits one new send", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    const admitted = new Set();
+    const originalStart = f.sessionAgent.startConversationTurn;
+    f.sessionAgent.readConversation = async (_id, input) => ({ ok: true, ...f.native, admitted: admitted.has(input.messageId) });
+    f.sessionAgent.startConversationTurn = async (id, input, context) => {
+      if (input.messageId === "second" && input.steer) {
+        await input.onPromptSending?.({ threadId: input.conversationId });
+        f.native.status = "completed";
+        f.native.messages = [{ id: "first-answer", role: "assistant", text: "FIRST-OK", complete: true }];
+        throw Object.assign(new Error("This Claude turn cannot accept steering now."), {
+          code: "conversation_steer_turn_finished", statusCode: 409, delivery: "not-sent"
+        });
+      }
+      const result = await originalStart(id, input, context);
+      admitted.add(input.messageId);
+      return result;
+    };
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "First" });
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "second", message: "Second", submissionKind: "steer"
+    }), error => error.delivery === "not-sent" && error.code === "conversation_steer_turn_finished");
+    const scope = { sessionId: "one", conversationId: "chat" };
+    let history = await f.store.readConversationLog(scope);
+    assert.equal(history.find(turn => turn.user?.messageId === "first").assistant?.text, "FIRST-OK");
+    assert.equal(history.find(turn => turn.user?.messageId === "second").assistant, null);
+    const rejected = await f.service.readTemporaryConversation("one", { conversationId: "chat" });
+    assert.equal(rejected.messages.find(message => message.id === "first").receipt, undefined);
+    assert.equal(rejected.messages.find(message => message.id === "second").receipt, false);
+    assert.equal((await f.store.readSessionConversation("one", "chat")).messageId, "first");
+    await f.service.close();
+    const current = f.restart();
+    const next = { conversationId: "chat", messageId: "second", message: "Second", submissionKind: "send" };
+    const sent = await current.startTemporaryConversationTurn("one", next);
+    assert.equal(sent.delivered, true);
+    f.native.status = "completed";
+    f.native.messages.push({ id: "second-answer", role: "assistant", text: "SECOND-OK", complete: true });
+    await current.readTemporaryConversation("one", { conversationId: "chat" });
+    await current.startTemporaryConversationTurn("one", next);
+    history = await f.store.readConversationLog(scope);
+    assert.equal(history.find(turn => turn.user?.messageId === "first").assistant?.text, "FIRST-OK");
+    assert.equal(history.find(turn => turn.user?.messageId === "second").assistant?.text, "SECOND-OK");
+    assert.equal(history.flatMap(turn => turn.messages).filter(message => message.messageId === "first-answer").length, 1);
+    assert.equal(f.native.starts, 2, "the rejected steer never starts work; accepted retry is not duplicated");
+    await current.close();
+  });
+});
+
 test("temporary conversations steer active work without changing its model or preparing source", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, native, restart, store } = await conversationFixture(root);

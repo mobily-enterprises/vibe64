@@ -113,7 +113,8 @@ test("changeover accompanies the normal user prompt and keeps the authored bubbl
   assert.equal(h.calls[2].threadId, h.calls[0].threadId);
   assert.match(h.calls[2].message, /Make it blue/);
   assert.doesNotMatch(h.calls[2].message, /Build a clock/);
-  assert.equal(h.logs.filter((entry) => entry.event === "accepted").length, 2);
+  assert.equal(h.logs.filter((entry) => entry.event === "accepted").length, 3,
+    "ordinary sends and catch-up sends both retain exact native admission evidence");
   assert.ok(h.logs.every((entry) => !Object.hasOwn(entry, "message")));
 });
 

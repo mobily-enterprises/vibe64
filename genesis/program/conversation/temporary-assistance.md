@@ -853,3 +853,12 @@ conversation continuity owner alongside its own transcript. Existing seen/pendin
 admission state delivers context and manages retries and model changes. Copied
 messages are not written as newly delivered turns. Main remains unchanged, and
 neither conversation observes later messages or edits in the other.
+
+Definite pre-delivery rejection retains the authored follow-up but restores the
+previous admitted message/run identity before reconciling native output. The
+shared scoped owner anchors the first answer to its original unanswered transcript
+turn, preserving the existing separate-turn projection for later native messages.
+New ordinary sends reserve the existing pending shape just like catch-up sends;
+only the same message ID with retained `attempted: false` allows a pre-write retry
+after reload. Unknown delivery still uses receipt inspection and never grants
+automatic replay. Historical rows and missing pending evidence are unchanged.

@@ -87,6 +87,12 @@ chat actions when you request them.
 
 ## Recover a lost delivery confirmation
 
+If the assistant finishes just as you send a steer, a confirmed pre-delivery
+completion rejection lets that same queued message continue once as a new request.
+Stop, cancellation and uncertain delivery never trigger that automatic retry.
+An earlier answer remains attached to its original message even when a later
+message is rejected; the rejected message and its recovery controls remain visible.
+
 If a send fails before admission, **Retry** sends the original message with its
 original settings and files. Anything you typed or attached afterward stays in
 the composer. Accepted files leave the composer; later attachments remain.
