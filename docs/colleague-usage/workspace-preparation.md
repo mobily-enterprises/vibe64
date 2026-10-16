@@ -37,8 +37,11 @@ a declaration problem; repeatedly retrying dependency installation will not
 repair it.
 
 For an older Genesis project format, follow the diagnostic's `genesis migrate`
-instruction. For a current-format project, migration does not add new catalog
-proposals. Use **Fix it with AI** or ask your coding assistant to inspect
+instruction first. If the missing-section diagnostic remains after migration,
+explicitly reconcile the selected component as described below. A format upgrade
+does not necessarily add newer catalog proposals, and migration on a
+current-format project does not add them. Use **Fix it with AI** or ask your
+coding assistant to inspect
 `genesis/stack.md` and reconcile the missing section with the actual application.
 If `nodejs` is already listed under **Components**, the existing explicit repair
 is `genesis stack add nodejs`. Use the project's installed Genesis command
