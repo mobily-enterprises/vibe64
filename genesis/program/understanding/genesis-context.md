@@ -111,6 +111,10 @@ outputs to stay below Claude's per-output truncation limit. The composer and
 host bridge remain shared with the other agents. Genesis reports guidance above
 its 36,000-character Claude capacity explicitly instead of delivering a partial
 guide; Claude does not enforce startup-hook stop requests.
+The packaged host resolver keeps its instruction-generation import behind the
+existing external Genesis package boundary. Ownership-only hooks validate the
+native conversation and workdir without loading the compiler again; explicit
+instruction generation still loads the same implementation on demand.
 Claude session inspection binds its account and reconciles already-owned
 processes, but defers a new native process until Send. This lets the existing
 source-write preparation refresh project hooks before native startup reads them.

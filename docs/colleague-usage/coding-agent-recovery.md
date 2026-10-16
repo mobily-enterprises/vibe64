@@ -44,6 +44,11 @@ If Claude disconnects and cleanup cannot yet be confirmed, the chat shows
 Restore the execution service and retry **Stop**. An unexpected parent-process
 exit is detected even if a child still holds the output connection open.
 
+The first send after a restart can remain **Pending** while Claude starts.
+Startup improvements do not eliminate provider initialization time.
+Wait for delivery to settle; if the request becomes uncertain,
+use its existing **Retry** receipt check instead of submitting another copy.
+
 For an operator investigation, retain the request time and session identity.
 Server events named `vibe64.claude.startup` report startup stages and failures;
 `vibe64.claude.lifecycle` reports activity, task counts and steering results.

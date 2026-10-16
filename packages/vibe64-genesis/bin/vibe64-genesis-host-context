@@ -9,7 +9,9 @@ for await (const chunk of process.stdin) {
 }
 const request = JSON.parse(source);
 if (process.argv[2] === "--instructions") {
-  const { vibe64ConversationInstructions } = await import("../src/server/index.js");
+  // Keep the release's external boundary lazy: bundling a relative import here
+  // hoists the compiler dependency into every ownership-only hook invocation.
+  const { vibe64ConversationInstructions } = await import("@local/vibe64-genesis/server");
   process.stdout.write(await vibe64ConversationInstructions(request));
 } else {
   const deliver = createConversationHookBridge({

@@ -8,11 +8,66 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
-import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle } from "../../tooling/release/server-build.mjs";
+import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, SERVER_BUNDLE_EXTERNALS } from "../../tooling/release/server-build.mjs";
 import { verifyRuntime } from "../../tooling/release/verify-runtime.mjs";
 
 const execute = promisify(execFile);
 const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
+
+test("bundled Genesis ownership hook defers the compiler until instructions are requested", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-context-hook-bundle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const outfile = path.join(root, "resolver.mjs");
+  await buildNodeBundle({
+    appRoot: sourceRoot,
+    entryPoint: path.join(sourceRoot, "packages/vibe64-genesis/bin/vibe64-genesis-host-context"),
+    outfile,
+    external: [...SERVER_BUNDLE_EXTERNALS, "@local/vibe64-genesis/server"]
+  });
+  const registryPath = path.join(root, "sessions.json");
+  await writeFile(registryPath, JSON.stringify({ sessions: ["main", "temporary"].map(kind => ({
+    upstreamSessionId: kind, workdir: root,
+    promptContext: { scope: "session", conversationKind: kind, session: {
+      managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true
+    } }
+  })) }));
+  const run = (request, instructions = false) => new Promise((resolve, reject) => {
+    const child = execFile(process.execPath, ["--input-type=module", "--eval", `
+      import { registerHooks } from "node:module";
+      registerHooks({ resolve(specifier, context, nextResolve) {
+        if (specifier === "@local/vibe64-genesis/server" && ${instructions}) {
+          return { url: "data:text/javascript," + encodeURIComponent(
+            'export const vibe64ConversationInstructions = async request => "instructions:" + JSON.stringify(request);'
+          ), shortCircuit: true };
+        }
+        if (specifier === "@local/vibe64-genesis/server" || specifier.startsWith("genesis-compiler")) {
+          throw new Error("Ownership checks must not load the compiler: " + specifier);
+        }
+        return nextResolve(specifier, context);
+      } });
+      process.argv[2] = ${JSON.stringify(instructions ? "--instructions" : "")};
+      await import(${JSON.stringify(pathToFileURL(outfile).href)});
+    `], { cwd: root, timeout: 10000 }, (error, stdout) => error ? reject(error) : resolve(stdout));
+    child.stdin.end(JSON.stringify(request));
+  });
+  const request = { scope: "session", providerSessionId: "main", data: { registryPath } };
+  for (const providerSessionId of ["main", "temporary"]) {
+    assert.deepEqual(JSON.parse(await run({ ...request, providerSessionId })), { kind: "delivery", text: "" });
+  }
+  assert.deepEqual(JSON.parse(await run({ ...request, providerSessionId: "child", parentSessionIds: ["main"] })),
+    { kind: "delivery", text: "" });
+  assert.deepEqual(JSON.parse(await run({ ...request, providerSessionId: "unmanaged" })), { kind: "unclaimed" });
+  assert.deepEqual(JSON.parse(await run({ ...request, scope: "turn" })), { kind: "unclaimed" });
+  await writeFile(registryPath, JSON.stringify({ sessions: [{
+    upstreamSessionId: "main", workdir: path.join(root, "another-project"),
+    promptContext: { scope: "session" }
+  }] }));
+  await assert.rejects(run(request), /different project directory/u);
+  await writeFile(registryPath, "invalid JSON");
+  await assert.rejects(run(request), /JSON/u);
+  const input = { projectRoot: root, scope: "session", providerSessionId: "main" };
+  assert.equal(await run(input, true), `instructions:${JSON.stringify(input)}`);
+});
 
 test("bundled source search helper builds and searches a persistent index", async (t) => {
   const entry = "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js";
