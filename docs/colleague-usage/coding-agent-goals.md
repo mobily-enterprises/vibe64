@@ -78,7 +78,12 @@ objective intact. Switching chats prevents a late reply from closing the new
 chat's goal dialog.
 An existing unfinished goal must be cancelled before setting a different one.
 **Resume goal** continues it in the same conversation. **Cancel goal** stops the
-work and clears the goal. If the goal changed while you were looking at it,
+work and clears the goal, including a blocked goal that Claude has already
+removed from its running process. After successful cancellation, **Set goal**
+becomes available and reopening the chat does not restore the cancelled goal.
+The native confirmation stays out of ordinary chat. Colleague can explain these
+steps; use the same goal control on desktop and mobile.
+If the goal changed while you were looking at it,
 refresh its status before trying the action again. If a model change or context
 renewal asks you to deliver the conversation briefing first, send an ordinary
 chat message before starting or resuming the goal.
