@@ -23,6 +23,12 @@ delegation to approve an in-scope assignment plan, authorizes sending that exact
 revision as `planRevision` through the existing Main Send action. Readiness,
 active work, role, goal and access checks remain in the existing routing owner.
 
+Reopening a native request that failed before dispatch keeps its reservation and
+history, but does not show an uncertain-delivery banner. The shared runtime uses
+the same dispatch evidence for status, pending delivery and its displayed error.
+Attempted and inspection-only requests retain their receipt-inspection controls;
+no saved request or application operation is replayed merely by reopening.
+
 ## Sources
 
 - `packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js`

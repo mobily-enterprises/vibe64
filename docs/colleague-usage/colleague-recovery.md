@@ -8,6 +8,12 @@ Completed replies restore the ready controls through the live connection. If
 that connection is unavailable, refresh or reopen Colleague to reconcile the
 saved result; this does not resend your request.
 
+If a previous attempt failed before it was sent to the AI, reopening Colleague
+leaves it ready without an uncertain-delivery warning. The earlier failed reply
+stays in history. Send a new message when ready; reopening does not repeat the
+old request or any operation. A request that may have reached the AI still needs
+the delivery checks below.
+
 While Colleague is working, you can type a follow-up and choose **Send**. Each
 message keeps its own words. Colleague considers the queued messages in order
 before acting on an earlier response and answers the latest request. Sending a
