@@ -114,6 +114,12 @@ preparing, Vibe64 retries that same goal command once only when the provider pro
 it was not sent. No second click is needed for that race. A repeated failure or
 uncertain delivery stays visible; check its receipt before trying again.
 
+After Claude acknowledges **Set goal** or **Resume goal**, Vibe64 waits briefly
+for the native goal record linked to that exact command before saving its restart
+identity. It does not wait for the work to finish. If this record is still missing
+after 30 seconds, the control reports that the command was accepted but its goal
+attachment is pending. Check the original receipt; do not resend it blindly.
+
 A Main-chat goal started or explicitly resumed after this release retains your
 request to keep working across server restarts, including an unexpected server
 exit. Vibe64 verifies the previous process has stopped, rechecks your current
@@ -128,8 +134,10 @@ old paused status: choose **Resume goal** once to enroll the intended goal.
 If the account changed, cleanup cannot be verified, or an interrupted goal
 command has uncertain delivery, recovery stays stopped. Check the original
 receipt and current account, then use **Resume goal**; an uncertain command is
-never replaced with a blind send. A crash during the first goal command, before
-its accepted settings were saved, requires that explicit confirmation too.
+never replaced with a blind send. After a crash, an accepted Claude command can
+be recovered only when its saved native attachment identifies that exact command.
+A different goal with the same text is insufficient; missing proof requires
+explicit confirmation.
 A copied development workspace never inherits permission to run its parent's
 goals. Restart continuation applies to supported Main native goals; temporary
 logical and scoped conversations do not expose native goal controls or receipts.

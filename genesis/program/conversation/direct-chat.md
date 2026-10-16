@@ -4150,3 +4150,10 @@ wrapping status text, and the draft-kept explanation remains visible. The shared
 transcript warning reserves only its own height above the floating avatar, so
 avatar size cannot move Reload below the conversation header. Reloading and
 connection-check controls retain their existing disabled and recovery behavior.
+
+Claude goal admission and native goal attachment are separate events. The shared
+native history owner correlates the attachment with its authored command UUID;
+Main records continuation identity only after that proof, never from the previous
+goal snapshot or matching condition text. Restart recovery can resolve an accepted
+pending command through the same proof. Stop and replacement keep the existing
+intent-generation fence, and missing attachment evidence remains actionable.

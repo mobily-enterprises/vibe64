@@ -117,6 +117,7 @@ import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import { assertSessionRepositoryReview, sessionConnectedContribution, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeConversationHost } from "./agent/providers/claudeConversationHost.js";
+import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createAssistantRouting } from "./assistantRouting.js";
@@ -1630,6 +1631,10 @@ function createService({
     // Explicit Stop/Pause can run while native acknowledgement is outstanding.
     await changeGoalIntent(sessionId, context, latest => {
       if (!latest?.active || latest.id !== intent.id) return null;
+      if (latest.pending?.messageId && latest.selection?.engineId === "claude" &&
+          result.goalCommandId !== claudeNativeMessageId(latest.pending.messageId)) {
+        throw new Error("The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying.");
+      }
       const segment = latest.pending?.expectedSegmentId;
       const prefix = `${latest.selection?.engineId}:`;
       const threadId = result.threadId || latest.native?.threadId ||
@@ -1663,13 +1668,6 @@ function createService({
     if (failed(recovered)) throw new Error("The goal's previous execution could not be verified stopped.");
     const native = await sessionAgent.readGoal(sessionId, context);
     if (native.status !== "available") throw new Error("The goal is unavailable after restart. Retry its status before resuming.");
-    if (!native.goal || ["complete", "completed"].includes(native.goal.status)) {
-      // An unresolved Set may have been accepted without its goal attachment
-      // reaching storage. Its existing receipt must not be replaced by a send.
-      if (intent.pending) throw new Error("The interrupted goal command needs its saved delivery receipt checked.");
-      await stopGoalIntent(sessionId, context, intent.id);
-      return { sessionId, completed: true };
-    }
     if (intent.pending) {
       const messageId = intent.pending.messageId;
       let accepted = messageId && await context.runtime.store.conversationMessageIdExists(sessionId, messageId);
@@ -1678,8 +1676,24 @@ function createService({
         accepted = receipt?.ok !== false && receipt?.admission === "accepted";
       }
       if (!accepted) throw new Error("The interrupted goal command's delivery is uncertain. Check its original receipt before resuming.");
-      // Receipt acceptance alone does not prove which goal a later native
-      // attachment describes. Never adopt a replacement by matching its text.
+      // The native history owner links this attachment to the exact authored
+      // command. Its condition text alone is never sufficient for adoption.
+      if (intent.selection?.engineId === "claude") {
+        if (!native.goal || native.goalCommandId !== claudeNativeMessageId(messageId)) {
+          throw new Error("The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying.");
+        }
+        await completeGoalIntent(sessionId, context, intent, native);
+        const latest = readGoalIntent(await context.runtime.getSession(sessionId, { inspectSource: false }));
+        if (latest?.id !== intent.id) throw new Error("Goal continuation changed while its attachment was being checked.");
+        intent = latest;
+      }
+    }
+    if (!native.goal || ["complete", "completed"].includes(native.goal.status)) {
+      // An unresolved Set may have been accepted without its goal attachment
+      // reaching storage. Its existing receipt must not be replaced by a send.
+      if (intent.pending) throw new Error("The interrupted goal command needs its saved delivery receipt checked.");
+      await stopGoalIntent(sessionId, context, intent.id);
+      return { sessionId, completed: true };
     }
     if (!intent?.active || intent.native?.threadId !== native.threadId ||
         intent.native?.createdAt !== native.goal.createdAt || intent.native?.objective !== native.goal.objective) {

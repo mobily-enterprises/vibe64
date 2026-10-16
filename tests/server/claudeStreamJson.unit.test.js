@@ -658,6 +658,14 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   assert.equal((await native.stop()).scopeEmpty, true);
 });
 
+function nativeGoalFrames(native, condition, timestamp = Date.now()) {
+  const uuid = native.lastInput.messageId;
+  const marker = { type: "attachment", uuid: `${uuid}-goal`, timestamp: new Date(timestamp).toISOString(),
+    attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
+      sentinel: true, met: condition === "clear" } };
+  return [marker, { type: "user", uuid, parentUuid: marker.uuid, message: { content: native.lastInput.message } }];
+}
+
 async function writeHistory(f, id, events, workdir = f.context.session.metadata.source_path) {
   const directory = path.join(f.root, "config", "projects", workdir.replace(/[^a-zA-Z0-9]/gu, "-"));
   await mkdir(directory, { recursive: true });
@@ -1126,10 +1134,7 @@ test("Claude goals use native commands, preserve the goal on pause and reject st
     const directory = path.join(f.root, "config", "projects", native.options.workdir.replace(/[^a-zA-Z0-9]/gu, "-"));
     await mkdir(directory, { recursive: true });
     const condition = message.slice(6);
-    await writeFile(path.join(directory, `${native.options.sessionId}.jsonl`), `${JSON.stringify({
-      type: "attachment", timestamp: new Date(timestamp++).toISOString(),
-      attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition, sentinel: true, met: condition === "clear" }
-    })}\n`);
+    await writeFile(path.join(directory, `${native.options.sessionId}.jsonl`), nativeGoalFrames(native, condition, timestamp++).map(JSON.stringify).join("\n") + "\n");
     if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", result: "" });
   };
   const started = await f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
@@ -1727,9 +1732,7 @@ test("main Claude raw goals retain original commands and stale identities", { ti
   let timestamp = Date.now();
   f.behavior.afterSend = async (native, message) => {
     const condition = message.slice(6);
-    await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date(timestamp++).toISOString(),
-      attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
-        sentinel: true, met: condition === "clear" } }]);
+    await writeHistory(f, native.options.sessionId, nativeGoalFrames(native, condition, timestamp++));
     if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", result: "" });
   };
   const started = await f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
@@ -1760,8 +1763,7 @@ test("main Claude accepts a goal while its canonical conversation is working", a
   const goalWritten = Promise.withResolvers();
   f.behavior.afterSend = async (native, message) => {
     if (!message.startsWith("/goal ")) return;
-    await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date().toISOString(),
-      attachment: { type: "goal_status", condition: message.slice(6), sentinel: true, met: false } }]);
+    await writeHistory(f, native.options.sessionId, nativeGoalFrames(native, message.slice(6)));
     goalWritten.resolve();
   };
   await canonical.send({ messageId: "before-goal", text: "Keep working" });
@@ -1790,9 +1792,7 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
     sent.push(message);
     if (message.startsWith("/goal ")) {
       const condition = message.slice(6);
-      await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date(timestamp++).toISOString(),
-        attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
-          sentinel: true, met: condition === "clear" } }]);
+      await writeHistory(f, native.options.sessionId, nativeGoalFrames(native, condition, timestamp++));
       goalWritten.resolve();
       if (condition !== "clear") return;
     }
@@ -2028,6 +2028,7 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
   const command = path.join(f.root, "service-claude.cjs");
   const tracePath = path.join(f.root, "service-claude-trace.jsonl");
   const goalAcknowledgementGate = path.join(f.root, "hold-goal-acknowledgement");
+  const goalAttachmentGate = path.join(f.root, "hold-goal-attachment");
   await writeFile(command, `#!${process.execPath}
 const { createInterface } = require('node:readline');
 const { appendFileSync, existsSync, mkdirSync } = require('node:fs');
@@ -2059,11 +2060,14 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const text = frame.message.content;
   if (text.startsWith('/goal ')) {
     while (existsSync(${JSON.stringify(goalAcknowledgementGate)})) await new Promise(resolve => setTimeout(resolve, 5));
-    const condition = text.slice(6);
-    record({ type: 'attachment', timestamp: new Date().toISOString(), attachment: {
-      type: 'goal_status', condition: condition === 'clear' ? 'Tests pass' : condition, sentinel: true, met: condition === 'clear'
-    } });
     emit(frame);
+    while (existsSync(${JSON.stringify(goalAttachmentGate)})) await new Promise(resolve => setTimeout(resolve, 5));
+    const condition = text.slice(6);
+    const marker = { type: 'attachment', uuid: frame.uuid + '-goal', timestamp: new Date().toISOString(), attachment: {
+      type: 'goal_status', condition: condition === 'clear' ? 'Tests pass' : condition, sentinel: true, met: condition === 'clear'
+    } };
+    record(marker);
+    record({ ...frame, parentUuid: marker.uuid });
     if (condition === 'clear') emit({ type: 'result', subtype: 'success', result: '' });
     return;
   }
@@ -2310,7 +2314,16 @@ createInterface({ input: process.stdin }).on('line', async line => {
     // Save a different role while native acknowledgement is still held. Its
     // next-turn pin must survive the older goal-start completion callback.
     await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "junior", workflowEngineId: "claude" }));
+    await writeFile(goalAttachmentGate, "hold");
     await rm(goalAcknowledgementGate);
+    while (!await store.conversationMessageIdExists("test", canonicalCommand.messageId)) {
+      assert.ok(Date.now() < frameDeadline, "native admission is saved before its attachment");
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(canonicalSettled, false, "command acknowledgement cannot adopt an older goal snapshot");
+    assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).pending.messageId, canonicalCommand.messageId);
+    await rm(goalAttachmentGate);
     const accepted = await canonicalResult;
     assert.equal(accepted.error, undefined);
     assert.equal(accepted.value.status, "accepted");
@@ -2341,14 +2354,14 @@ createInterface({ input: process.stdin }).on('line', async line => {
       state.thread.id, nativeHistory.goal.createdAt, nativeObjective
     ])).digest("hex"), "display decoration never changes the canonical native identity");
     const pinBeforeDuplicate = (await store.readSession("test")).metadata.assistant_routing_goal;
-    const nativeMessagesBeforeDuplicate = (await trace()).filter(row => row.frame?.type === "user").length;
+    let nativeMessagesBeforeDuplicate = (await trace()).filter(row => row.frame?.type === "user").length;
     const duplicateGoal = await startGoal({ ...canonicalCommand, objective: "A changed retry" }, { canonical: true });
     assert.equal(duplicateGoal.duplicate, true);
     assert.equal(duplicateGoal.turnId, accepted.value.turnId);
     assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
     assert.equal((await store.readSession("test")).metadata.assistant_routing_goal, pinBeforeDuplicate,
       "an existing UUID has no new native result and cannot commit a different goal pin");
-    const intentBeforeRestart = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
+    let intentBeforeRestart = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
     assert.equal(intentBeforeRestart.active, true);
     assert.equal(intentBeforeRestart.pending, null);
     assert.equal(intentBeforeRestart.native.objective, nativeObjective);
@@ -2367,6 +2380,28 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.match((await service.readAgentGoal("test", options, { canonical: true })).error, /actor no longer/u,
         "recovery failure remains visible without removing native goal controls");
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
+      await service.close();
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify({ ...intentBeforeRestart, native: null,
+        pending: { action: "set", messageId: canonicalCommand.messageId, expectedSegmentId: canonicalCommand.expectedSegmentId,
+          objective: nativeObjective } }));
+      service = createService();
+      const attachedAfterCrash = await service.recoverActiveGoals();
+      assert.equal(attachedAfterCrash.results.at(-1).resumed, true, JSON.stringify(attachedAfterCrash));
+      intentBeforeRestart = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
+      assert.equal(intentBeforeRestart.active, true);
+      assert.equal(intentBeforeRestart.pending, null);
+      nativeMessagesBeforeDuplicate++;
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "the original accepted attachment is reconciled, then exactly one Resume is sent");
+      await service.close();
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify({ ...intentBeforeRestart,
+        pending: { action: "resume", messageId: canonicalCommand.messageId, objective: nativeObjective } }));
+      service = createService();
+      const unrelatedAttachment = await service.recoverActiveGoals();
+      assert.equal(unrelatedAttachment.ok, false);
+      assert.match(unrelatedAttachment.results.at(-1).error, /own native goal attachment/u);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+        "an accepted old command cannot adopt a newer goal with identical text");
       await service.close();
       await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify({ ...intentBeforeRestart,
         pending: { action: "resume", messageId: "unknown-goal-receipt", objective: nativeObjective } }));
@@ -2417,6 +2452,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       await prepareReleased.promise;
     }, { operation: "prepare-workspace" });
     await prepareEntered.promise;
+    await writeFile(goalAttachmentGate, "hold");
     const recovering = service.recoverActiveGoals();
     try {
       const contention = await recoveryLockContended.promise;
@@ -2425,6 +2461,15 @@ createInterface({ input: process.stdin }).on('line', async line => {
         "waiting for the preparation owner cannot dispatch a goal");
     } finally { prepareReleased.resolve(); }
     await preparing;
+    const attachmentDeadline = Date.now() + 5000;
+    while ((await trace()).filter(row => row.frame?.type === "user").length === nativeMessagesBeforeDuplicate) {
+      assert.ok(Date.now() < attachmentDeadline, "restart Resume reaches native admission");
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).pending,
+      "restart Resume retains its pending command until its own attachment arrives");
+    await rm(goalAttachmentGate);
     const recovery = await recovering;
     assert.equal(recovery.ok, busyGoal, JSON.stringify(recovery));
     assert.equal(recovery.results.at(-1).resumed, true, "one removed session cannot suppress the next goal's recovery");
