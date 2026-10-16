@@ -10,6 +10,13 @@ to choose a tool and **Back to dashboard** to return from its detail. **Show cha
 returns to the coding conversation. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
 
+The left-arrow **Back to dashboard** control has the same appearance in
+Architecture, Current changes, Files, Database, Issues and Pull requests. Use
+Tab to focus it and Enter to activate it. Files and Database opened from
+Architecture instead show **Back to Architecture**, returning to that view.
+Inside an individual issue or pull request, the same control says **All issues**
+or **All pull requests** and returns to its list.
+
 **Git log** is in the project section above the active session's tools. Open it
 to review saved commits and their file differences. **Current changes** remains
 with the selected session. If Git log offers a session update or reconciliation,

@@ -685,15 +685,7 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <v-btn
-            :prepend-icon="mdiArrowLeft"
-            size="x-small"
-            type="button"
-            variant="tonal"
-            @click="backToDashboard"
-          >
-            Back to dashboard
-          </v-btn>
+          <Vibe64DashboardBackButton @click="backToDashboard" />
         </header>
         <div class="studio-autopilot__right-pane-page">
           <slot name="dashboard" :dashboard-context="dashboardContext" />
@@ -706,26 +698,9 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <v-btn
-            v-if="systemBackAvailable"
-            :prepend-icon="mdiArrowLeft"
-            size="x-small"
-            type="button"
-            variant="tonal"
-            @click="backToSystemFromEditor"
-          >
-            Back to Architecture
-          </v-btn>
-          <v-btn
-            v-else
-            :prepend-icon="mdiArrowLeft"
-            size="x-small"
-            type="button"
-            variant="tonal"
-            @click="backToDashboard"
-          >
-            Back to dashboard
-          </v-btn>
+          <Vibe64DashboardBackButton @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
+            {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
+          </Vibe64DashboardBackButton>
         </header>
         <Vibe64SessionFiles
           :key="assistantAccessScopeKey"
@@ -753,15 +728,9 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <v-btn
-            :prepend-icon="mdiArrowLeft"
-            size="x-small"
-            type="button"
-            variant="tonal"
-            @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()"
-          >
+          <Vibe64DashboardBackButton @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
             {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
-          </v-btn>
+          </Vibe64DashboardBackButton>
         </header>
         <Vibe64DatabaseWorkspace
           :key="assistantAccessScopeKey"
@@ -801,7 +770,7 @@
           @open-source-file="openSourceEditorFile"
         >
           <template #navigation>
-            <v-btn :prepend-icon="mdiArrowLeft" size="x-small" type="button" variant="text" @click="backToDashboard">Back to dashboard</v-btn>
+            <Vibe64DashboardBackButton @click="backToDashboard" />
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
           <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
@@ -976,6 +945,7 @@
 </template>
 
 <script setup>
+import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
@@ -987,7 +957,6 @@ import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnec
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
-  mdiArrowLeft,
   mdiAutorenew,
   mdiCircle,
   mdiConsoleNetworkOutline,

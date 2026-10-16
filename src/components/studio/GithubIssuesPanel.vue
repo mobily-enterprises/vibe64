@@ -1,7 +1,8 @@
 <script setup>
+import Vibe64DashboardBackButton from "./Vibe64DashboardBackButton.vue";
 import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
-import { mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCommentOutline,
+import { mdiArrowRight, mdiCheck, mdiCommentOutline,
   mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline, mdiPencilOutline } from "@mdi/js";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
@@ -52,13 +53,12 @@ function date(value) {
 <template>
   <section class="issues-panel d-flex flex-column ga-2">
     <div class="issues-panel__toolbar d-flex align-center ga-2">
-      <v-btn
-        :prepend-icon="mdiArrowLeft" variant="tonal" size="x-small"
+      <Vibe64DashboardBackButton
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
         @click="available && number && navigate({ issue: undefined })"
       >
         {{ available && number ? 'All issues' : 'Back to dashboard' }}
-      </v-btn>
+      </Vibe64DashboardBackButton>
       <v-spacer />
       <v-btn
         v-if="available"

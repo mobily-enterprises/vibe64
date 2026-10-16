@@ -1,9 +1,10 @@
 <script setup>
+import Vibe64DashboardBackButton from "./Vibe64DashboardBackButton.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { mdiArrowLeft, mdiArrowRight, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
+import { mdiArrowRight, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
   mdiSourceBranch, mdiSourceMerge, mdiSourcePull, mdiCloseCircleOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
@@ -109,13 +110,12 @@ async function actionFinished({ apiPath }) {
 <template>
   <section class="pull-requests d-flex flex-column ga-2">
     <div class="d-flex align-center flex-wrap ga-2">
-      <v-btn
-        :prepend-icon="mdiArrowLeft" variant="tonal" size="x-small"
+      <Vibe64DashboardBackButton
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
         @click="available && number && navigate({ pr: undefined })"
       >
         {{ available && number ? 'All pull requests' : 'Back to dashboard' }}
-      </v-btn>
+      </Vibe64DashboardBackButton>
       <v-spacer />
       <v-btn
         v-if="available" :prepend-icon="mdiRefresh" variant="text" size="small" height="48" :disabled="resource.isFetching.value"

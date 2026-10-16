@@ -10,6 +10,7 @@ conversation, application preview, files and engineering tools.
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
+- `src/components/studio/Vibe64DashboardBackButton.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
 
@@ -20,6 +21,11 @@ viewer access, the workspace presents the conversation and selected project tool
 Switching tools retains their mounted content while hiding inactive views and
 suspending their automatic reads. Session changes use the existing session owners
 and do not adopt another conversation's native identity or source authority.
+
+Architecture, Changes, Files, Database and the GitHub panels use one shared
+dashboard back control. It owns the arrow and text-button presentation; the
+calling view retains its existing destination or navigation handler, including
+returning to Architecture or to an issue/pull-request list.
 
 Files retains Repo, Drop Zone and Session browsing. Repo and Architecture share
 the same source viewer/editor, including language highlighting, autosave, base-hash
