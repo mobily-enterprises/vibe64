@@ -479,7 +479,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (state?.workflow === true) task.steeringRequestId = state.messageId;
         direct = true; return;
       }
-      if (input.submissionKind === "steer") throw failure("That turn has finished. Send this as a new request.", "conversation_not_steerable");
+      if (input.submissionKind === "steer") {
+        const completed = ["complete", "completed"].includes(native?.turn?.runState || native?.turn?.state || native?.turn?.status);
+        throw Object.assign(failure("That turn has finished. Send this as a new request.",
+          completed ? "conversation_steer_turn_finished" : "conversation_not_steerable"), { delivery: "not-sent" });
+      }
       if (running.has(key)) throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
       if (state?.messageId !== input.messageId && assistantRoutingRequestCanBeReplaced(state)) {
         state.stopped = true;

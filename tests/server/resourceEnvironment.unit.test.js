@@ -76,6 +76,24 @@ test("resource preparation evidence must be an explicit boolean", () => {
   });
 });
 
+test("resource identity and preservation evidence remain optional and strictly validated", () => {
+  const resources = [databaseResource()];
+  const pending = { contract: "vibe64.resource-environment.v2", prepared: false, resourceValues: [] };
+  const options = { allowUnprepared: true };
+  assert.equal(Object.hasOwn(normalizeResourceEnvironment(resources, pending, options), "resourcePreparation"), false);
+  for (const preserved of [true, false]) {
+    const resourcePreparation = { identity: "a".repeat(64), preserved };
+    assert.deepEqual(normalizeResourceEnvironment(resources, { ...pending, resourcePreparation }, options).resourcePreparation,
+      resourcePreparation);
+  }
+  for (const resourcePreparation of [null, {}, { identity: ["a".repeat(64)], preserved: true },
+    { identity: "a".repeat(64), preserved: "yes" },
+    { identity: "not-an-identity", preserved: true }, { identity: "a".repeat(64), preserved: true, password: "secret" }]) {
+    assert.throws(() => normalizeResourceEnvironment(resources, { ...pending, resourcePreparation }, options),
+      { code: "vibe64_resource_environment_contract_invalid" });
+  }
+});
+
 test("only read-only inspection accepts explicitly unprepared managed resources", () => {
   const resources = [databaseResource()];
   const pending = { contract: "vibe64.resource-environment.v2", prepared: false, resourceValues: [] };

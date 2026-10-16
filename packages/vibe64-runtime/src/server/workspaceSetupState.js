@@ -50,6 +50,8 @@ function workspaceSetupState(value = {}) {
     diagnostic: boundedText(source.diagnostic, WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH),
     finishedAt: normalizeText(source.finishedAt),
     recipeHash: boundedText(source.recipeHash, 128),
+    ...(status === "succeeded" && typeof source.resourceIdentity === "string" && /^[a-f0-9]{64}$/u.test(source.resourceIdentity)
+      ? { resourceIdentity: source.resourceIdentity } : {}),
     ...(status === "failed" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(resourceAdmissionId)
       ? { resourceAdmissionId } : {}),
     startedAt: normalizeText(source.startedAt),

@@ -137,7 +137,7 @@
   </AssistantConversationElement>
 </template>
 <script setup>
-import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
@@ -422,6 +422,17 @@ function presentationMessage(message) {
   if (!message) {
     return message;
   }
+  const goalPrefix = message.role === "user" ? "/goal "
+    : ["assistant", "commentary"].includes(message.role) ? "Goal set: " : "";
+  if (goalPrefix && message.text?.startsWith(goalPrefix)) {
+    const objective = message.text.slice(goalPrefix.length);
+    const separator = objective.indexOf("\n\n");
+    if (separator !== -1) {
+      // Match the exact application-authored envelope, never arbitrary user instructions.
+      const display = assistantGoalObjective(objective, { objective: objective.slice(separator + 2) });
+      if (display !== objective) return { ...message, text: `${goalPrefix}${display}` };
+    }
+  }
   const integrationRequest = parseIntegrationSetupRequest(message);
   return integrationRequest ? { ...message, text: integrationRequest.text, integrationRequest } : message;
 }
@@ -462,6 +473,7 @@ const adapter = computed(() => ({
         ...turn,
         assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}`,
         ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${vibe64AssistantSelectionLabel(selection)}` } } : {}),
+        user: presentationMessage(turn.user),
         ...(turn.metadata?.projectMessage ? {
           user: null,
           system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }

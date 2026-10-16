@@ -11,6 +11,8 @@ import { upgradeSessionConversations, inspectConversationUndoRetirement } from "
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
 import { upgradePlanProgress, upgradeAssistantWorkflow } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
 
+import { upgradeClaudeRejectedInput } from "@local/vibe64-terminals/server/assistantClaudeDeliveryUpgrade";
+
 import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/server/providerCredentialsUpgrade";
 
 try {
@@ -47,6 +49,7 @@ try {
     upgradeLearningPracticeHistory,
     upgradePlanProgress,
     upgradeAssistantWorkflow,
+    upgradeClaudeRejectedInput,
     upgradeIndependentProviderCredentials,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;

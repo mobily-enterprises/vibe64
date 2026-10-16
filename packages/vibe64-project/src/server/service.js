@@ -280,6 +280,7 @@ function projectEnvironmentResult(resolved, input, userRecords) {
   ]).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   return {
     environment: resolved.projectEnvironment,
+    ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
     resourceConfigurationFingerprint: resolved.environmentInspectionFailed ? null : createHash("sha256")
       .update(JSON.stringify({ values: values.sort(([left], [right]) => left.localeCompare(right)), resources }))
       .digest("hex")
@@ -575,6 +576,7 @@ function createService({
     return {
       defaultEnvironment,
       databaseToolEnvironment: contribution.databaseToolEnvironment,
+      ...(Object.hasOwn(contribution, "resourcePreparation") ? { resourcePreparation: contribution.resourcePreparation } : {}),
       effectiveEnvironment: {
         ...env,
         ...projectEnvironment
@@ -1417,6 +1419,7 @@ function createService({
         configured: Boolean(satisfiedAlternative(resource, resolved.effectiveEnvironment))
       }));
       return {
+        ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
         status: resolved.environmentInspectionFailed ? "unavailable"
           : !resolved.resourcesPrepared ? "not-prepared"
           : resources.some(({ configured }) => !configured) ? "missing-configuration"

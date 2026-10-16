@@ -251,9 +251,10 @@ function createWorkspaceSetupRunner({
     runtime,
     session,
     sourcePath,
-    startedAt
+    startedAt,
+    preparedEnvironment
   }) {
-    const environmentRecords = await loadProjectExecutionEnvRecords({
+    const environmentRecords = preparedEnvironment || await loadProjectExecutionEnvRecords({
       prepare: true,
       includeResourceConfiguration: true,
       projectService,
@@ -356,6 +357,7 @@ function createWorkspaceSetupRunner({
         diagnostic: "",
         finishedAt: stateTimestamp(clock),
         recipeHash: recipe.recipeHash,
+        resourceIdentity: environmentRecords.resourcePreparation?.identity,
         startedAt,
         status: "succeeded",
         transcript: appendWorkspaceSetupTranscript(
@@ -656,18 +658,51 @@ function createWorkspaceSetupRunner({
       }, renewal);
       return { completion: null, state };
     }
+    let preparedEnvironment;
     if (
       !migrationTranscript &&
       retry !== true &&
       stateBase.recipeHash === recipe.recipeHash &&
-      ["succeeded", "failed"].includes(stateBase.status) &&
-      (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function" ||
-        (await projectService.projectEnvironmentStatus({ sessionId, session })).status === "ready")
+      ["succeeded", "failed"].includes(stateBase.status)
     ) {
-      return {
-        completion: null,
-        state: stateBase
-      };
+      if (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function") {
+        return { completion: null, state: stateBase };
+      }
+      const environmentStatus = await projectService.projectEnvironmentStatus({ sessionId, session });
+      const sameResources = Object.hasOwn(environmentStatus, "resourcePreparation")
+        ? Boolean(stateBase.resourceIdentity && stateBase.resourceIdentity === environmentStatus.resourcePreparation?.identity)
+        : !stateBase.resourceIdentity;
+      if (environmentStatus.status === "ready" && sameResources) return { completion: null, state: stateBase };
+      if (sameResources && stateBase.resourceIdentity) {
+        // Restore host resource readiness separately. Cached application setup
+        // is reusable only when its exact resources existed before provisioning.
+        try {
+          preparedEnvironment = await loadProjectExecutionEnvRecords({
+            prepare: true, reusePrepared: true, includeResourceConfiguration: true,
+            projectService, session, target: "workspace-setup"
+          });
+          const restoredSetup = await inspect({
+            session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment()
+          });
+          if (restoredSetup?.status !== "ready" || restoredSetup.recipeHash !== recipe.recipeHash) {
+            throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
+          }
+          const restored = await projectService.projectEnvironmentStatus({ sessionId, session });
+          if (restored.status !== "ready") throw new Error("Project environment is not ready. Correct its configuration and retry preparation.");
+          if (preparedEnvironment.resourcePreparation?.preserved === true &&
+              preparedEnvironment.resourcePreparation.identity === stateBase.resourceIdentity &&
+              restored.resourcePreparation?.identity === stateBase.resourceIdentity) {
+            return { completion: null, state: stateBase };
+          }
+        } catch (error) {
+          return { completion: null, state: await failed(runtime, sessionId, {
+            currentLabel: "Prepare project environment", diagnostic: normalizeText(error?.message),
+            recipeHash: recipe.recipeHash, renewal, transcript: stateBase.transcript,
+            redactionSecrets: operationRedactionSecrets(projectExecutionEnvFromRecords(preparedEnvironment || {})),
+            resourceAdmissionId: error?.details?.admission?.id
+          }) };
+        }
+      }
     }
     const startedAt = migrationStartedAt || stateTimestamp(clock);
     const currentLabel = safeSetupLabel(recipe.steps[0].label);
@@ -712,7 +747,8 @@ function createWorkspaceSetupRunner({
             runtime,
             session,
             sourcePath,
-            startedAt
+            startedAt,
+            preparedEnvironment
           }))
         : execute({
             context,
@@ -720,7 +756,8 @@ function createWorkspaceSetupRunner({
             runtime,
             session,
             sourcePath,
-            startedAt
+            startedAt,
+            preparedEnvironment
           }),
       context
     );
@@ -771,12 +808,16 @@ function createWorkspaceSetupRunner({
       } catch {
         return false;
       }
+      const environmentStatus = typeof projectService.projectEnvironmentStatus === "function"
+        ? await projectService.projectEnvironmentStatus({ sessionId: session.sessionId, session }) : { status: "ready" };
       return setup.status === "ready" &&
         previous.status === "succeeded" &&
         Boolean(setup.recipeHash) &&
         previous.recipeHash === setup.recipeHash &&
-        (typeof projectService.projectEnvironmentStatus !== "function" ||
-          (await projectService.projectEnvironmentStatus({ sessionId: session.sessionId, session })).status === "ready");
+        environmentStatus.status === "ready" &&
+        (Object.hasOwn(environmentStatus, "resourcePreparation")
+          ? Boolean(previous.resourceIdentity && previous.resourceIdentity === environmentStatus.resourcePreparation?.identity)
+          : !previous.resourceIdentity);
     },
     isRunning(sessionId = "") {
       return activeRuns.has(workspaceSetupRunKey(normalizeText(sessionId)));

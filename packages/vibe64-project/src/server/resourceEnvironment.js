@@ -25,6 +25,7 @@ const RESOURCE_PROVIDER_RESULT_KEYS = new Set([
   "databaseToolEnvironment",
   "ok",
   "prepared",
+  "resourcePreparation",
   "requiredUnits",
   "resourceValues"
 ]);
@@ -256,6 +257,13 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
     declarationIdentity(declaration.component, declaration.resource),
     declaration
   ]));
+  const preparation = provided.resourcePreparation;
+  if (preparation !== undefined && (!objectRecord(preparation) ||
+      Object.keys(preparation).some(key => !["identity", "preserved"].includes(key)) ||
+      typeof preparation.identity !== "string" || !/^[a-f0-9]{64}$/u.test(preparation.identity) ||
+      typeof preparation.preserved !== "boolean")) {
+    throw resourceEnvironmentError("The host returned invalid resource preparation evidence.", "vibe64_resource_environment_contract_invalid");
+  }
   const entries = new Map();
   for (const providedResource of provided.resourceValues) {
     const descriptor = objectRecord(providedResource?.declaration);
@@ -382,6 +390,7 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
 
   return {
     databaseToolEnvironment,
+    ...(preparation ? { resourcePreparation: { ...preparation } } : {}),
     environment,
     secretKeys,
     sources

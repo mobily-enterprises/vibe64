@@ -1170,3 +1170,43 @@ projects' data; they never appear in the user-facing Project Backups folder.
 pin action. Absence means unpinned; existing session metadata and history are
 unchanged. No historical upgrade or startup backfill is needed. The ordinary
 alias owner validates and atomically replaces this new record.
+
+## Claude input rejected before native write
+
+`20261016-claude-rejected-input` repairs a retained Main routing request only
+when the original exact `Claude has no active turn for this message.` guard,
+interrupted native run and saved Claude binding identify the same attempted
+message and thread. No native execution may remain. The existing strict native
+history reader must find a complete transcript without that message's receipt
+on its current branch. This is an additional conflict check; the exact original
+pre-write guard and matching run/request/native IDs establish rejection, not
+history absence alone. The reader retains its existing native rewind semantics.
+Timeouts, missing history, changed identities and generic interruptions are not
+nondelivery proof. Archived and temporary chats remain unchanged.
+
+The repair retains the complete authored input, sender, history, native binding
+and account pins. Only the failed routing receipt changes to Waiting/failed and
+loses its attempted-message marker. Nothing is sent: the user must choose Retry.
+This is an operator-maintenance correction, never a live read or startup repair.
+
+Run the ordinary candidate `--check` and stopped-writer `--apply` as the original
+daemon, with the original HOME and CLAUDE_CONFIG_DIR (if configured). Stop every
+workspace/native writer through the normal host maintenance owner. There is no
+per-chat live-apply exception. The script owns verified before/after copies under
+`upgrades/backups/20261016-claude-rejected-input/`; retry rechecks native nondelivery
+against the original backed-up request, then the existing publisher validates
+immutable copies and destination bytes. New receipts, changed proof or changed
+backups refuse recovery. Keep the same backup and all writers stopped while
+resolving a refusal. Do not reset the ledger, delete the chat or resend a message
+as part of the upgrade.
+
+
+### `20261016-workspace-resource-identity`
+
+Prospective boundary for optional `resourceIdentity` on newly successful
+`workspace_setup` records. The existing setup owner writes it only after commands
+succeed. It allows verified recovery of the same managed resources without rerunning
+an unchanged recipe after daemon restart. This script neither reads nor rewrites
+historical session setup; old records lack evidence and run the full recipe once.
+Preflight reports that rule; apply records the boundary in the existing ledger,
+and retry is a no-op. No application files change, so this boundary needs no backup.

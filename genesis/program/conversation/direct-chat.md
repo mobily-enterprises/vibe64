@@ -2,6 +2,9 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+Hosted Claude cold initialization has a 90-second bound for managed startup
+probes; normal controls retain their separate deadline and failed startup still
+requires verified process cleanup.
 
 Main Claude conversations follow the workspace's current authenticated account.
 Account replacement retains native history, stops the previous owned process
@@ -4064,3 +4067,38 @@ turn, update timestamp and error. `Vibe64AutopilotView` explains interrupted
 snapshot commands, retains Technical details, and provides Dismiss. Dismissal
 changes presentation only; new failures reappear and a successful checkpoint
 removes the notice. A new Send alone does not claim a checkpoint was created.
+
+Goal-command bubbles use the existing exact routing-prompt decoder to present
+`/goal` with the person's objective, hiding the generated role envelope. This
+read-only presentation also applies to earlier messages; canonical and native
+history remain unchanged, and ordinary authored goal text is preserved.
+
+The Claude goal dialog closes only when its Set command succeeds for the same
+project, session and viewer. Pending or failed commands preserve the objective
+and open dialog; a late response cannot dismiss another conversation's dialog.
+
+A local same-identity retry remains Pending while saved routing metadata still
+contains the previous failure. The routing presentation and retry/edit guards
+use that pending state until the new attempt settles; receipt confirmation still
+wins, and a subsequent failure or uncertain result retains normal recovery.
+
+### Steering at turn completion
+
+The Main routing owner distinguishes a turn that finished before steer admission
+from general steering refusals. Shared conversation delivery can then submit the
+same queued message once as ordinary Send, preserving its message ID, text,
+attachments and application data. It retains that Send intent for explicit Retry
+if the ordinary request fails. Unknown delivery still checks its existing receipt;
+accepted messages are not replayed. Natural Claude completion qualifies for this
+specific rejection, while explicit Stop and cancellation do not restart work.
+The existing serialized queue and native/common receipt owners retain ordering
+and duplicate protection for both Claude and Codex.
+
+Claude internal command notifications retain the originating user input's receipt
+owner. JSKIT retires completed command IDs and still requires the result and
+background-work drain before settling. This avoids a stale busy turn making a
+later goal wait for an interruption of an already finished generation.
+
+The same exact-envelope goal presentation also covers Claude's native
+`Goal set: ` confirmation in assistant or commentary messages. Native history
+and command text remain intact; similar authored text is preserved.

@@ -200,3 +200,15 @@ background independently. `src/App.vue` keeps disabled actions on these surfaces
 legible through the shared semantic surface and status/alert roles. Connection recovery uses its primary tint and the same on-surface
 foreground. New notices use the theme surface/foreground pair, or a semantic
 warning/error alert; components do not introduce grey background constants.
+
+
+The numbered `20261016-claude-rejected-input` repair joins the exact original
+pre-write Claude guard to the retained Main routing attempt, interrupted agent
+run, native binding and strict native history. It changes only a proven rejected
+attempt into an explicit retryable failure; authored input, history and native
+state remain unchanged. Temporary and archived chats are outside this correction.
+The Terminals owner `assistantClaudeDeliveryUpgrade.js` uses existing session
+inventory and Core's before/after publisher. Native nondelivery is rechecked on
+backup resume. The assembled candidate CLI supplies the owner to Core; ordinary
+application paths never run the repair. All writers must remain stopped until
+candidate activation, including during interrupted-upgrade recovery.

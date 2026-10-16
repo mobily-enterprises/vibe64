@@ -42,6 +42,8 @@ async function loadProjectExecutionEnvRecords({
   });
   return {
     runtimeConfigEnv: normalizeExecutionEnvRecord(includeResourceConfiguration ? env.environment : env),
+    ...(includeResourceConfiguration && Object.hasOwn(env, "resourcePreparation")
+      ? { resourcePreparation: env.resourcePreparation } : {}),
     ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: env.resourceConfigurationFingerprint ?? null } : {})
   };
 }

@@ -46,6 +46,8 @@ async function createClaudeCodeProcess({
   try {
     const process = await startClaude({
       ...options, onStarted, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
+      // Cold startup includes managed Git probes; ordinary controls keep their 30-second deadline.
+      initializationTimeoutMs: 90_000,
       execution: {
         ...host,
         async start(input) {

@@ -262,3 +262,14 @@ blocked until its delivery is resolved. Active or unresolved server work still
 blocks continuation. Checking again reports the latest result rather than keeping
 an earlier connection error. Colleague can explain recovery; sending a new message
 or checking delivery remains your explicit action.
+
+Claude cold startup can wait up to 90 seconds for its initialization handshake
+while managed startup probes finish. **Pending** means the message has not yet
+been acknowledged. Keep the bubble in place; use its **Retry** action after a
+failure rather than sending another copy. Stop and other normal controls retain
+their existing deadlines.
+
+If Claude rejects an input before writing it to the native process, its retained
+request becomes retryable after delivery inspection. Use **Retry** on that exact
+message. An uncertain acknowledgement still uses **Retry delivery check** first;
+that action checks the existing receipt and does not submit a duplicate.

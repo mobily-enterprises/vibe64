@@ -1,6 +1,7 @@
 import { assistantRoutingStatusLabel, assistantRoutingOutcomeNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function routedChatMessage(request, local = null) {
+  if (local?.status === "pending" && local.id === request?.messageId && ["failed", "uncertain"].includes(request?.delivery)) return local;
   if (local?.status === "uncertain" && local.id === request?.messageId && request?.delivery === "failed") return local;
   if (!request || !request.input || request.stopped || request.followup || !["routing", "sending", "uncertain", "failed"].includes(request.delivery)) return null;
   return {
@@ -26,6 +27,8 @@ function chatTurnsWithDelivery(turns, request, checking) {
   const matches = (turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId;
   // Saved receipts and successful HTTP admission outrank older routing errors.
   if (turns.some((turn) => matches(turn) && ((!turn.optimistic && turn.user?.receipt !== false) || turn.optimistic?.status === "accepted"))) return turns;
+  // A same-ID retry is already pending locally before the server replaces its previous failure.
+  if (["failed", "uncertain"].includes(request.delivery) && turns.some(turn => matches(turn) && turn.optimistic?.status === "pending")) return turns;
   const message = routedChatMessage(request);
   if (!message) {
     if (request.delivery !== "accepted" && !request.followup) return turns;

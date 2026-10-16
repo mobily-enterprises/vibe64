@@ -544,6 +544,108 @@ test("unchanged setup provisions newly declared resources before reusing a succe
   });
 });
 
+test("resource identity is retained only on valid successful setup state", () => {
+  const resourceIdentity = "a".repeat(64);
+  assert.equal(workspaceSetupState({ status: "succeeded", resourceIdentity }).resourceIdentity, resourceIdentity);
+  for (const state of [{ status: "failed", resourceIdentity }, { status: "running", resourceIdentity },
+    { status: "succeeded", resourceIdentity: [resourceIdentity] }, { status: "succeeded", resourceIdentity: "unknown" }]) {
+    assert.equal(Object.hasOwn(workspaceSetupState(state), "resourceIdentity"), false);
+  }
+});
+
+for (const scenario of ["preserved", "created", "changed identity", "unknown", "legacy", "removed evidence"]) {
+  test(`resource recovery ${scenario} preserves only proven successful application setup`, async () => {
+    await withTemporaryRoot(async targetRoot => {
+      const { runtime, session } = await workspaceSession(targetRoot);
+      let prepared = true;
+      let identity = "a".repeat(64);
+      let evidence = { identity, preserved: false };
+      let preparations = 0;
+      let commands = 0;
+      let includesEvidence = true;
+      const runner = createWorkspaceSetupRunner({
+        inspect: () => readySetup(),
+        projectService: {
+          async projectEnvironmentStatus() {
+            return { status: prepared ? "ready" : "not-prepared",
+              ...(includesEvidence ? { resourcePreparation: { identity, preserved: prepared } } : {}) };
+          },
+          async projectExecutionEnvironment() {
+            preparations += 1;
+            prepared = true;
+            return { environment: {}, resourcePreparation: evidence };
+          }
+        },
+        async runCommand() { commands += 1; return { ok: true }; }
+      });
+      const initial = await (await runner.start({ runtime, session })).completion;
+      assert.equal(initial.resourceIdentity, identity);
+      let stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+      if (scenario === "legacy") {
+        const { resourceIdentity: _identity, ...legacy } = stored.workspaceSetup;
+        await runtime.store.writeMetadataValue(session.sessionId, "workspace_setup", JSON.stringify(legacy));
+        stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+      }
+      prepared = false;
+      if (scenario === "changed identity") identity = "b".repeat(64);
+      evidence = ["unknown", "removed evidence"].includes(scenario) ? null : { identity, preserved: scenario !== "created" };
+      if (scenario === "removed evidence") { includesEvidence = false; prepared = true; }
+      assert.equal(await runner.isPrepared({ runtime, session: stored }), false);
+      const result = await runner.start({ runtime, session: stored });
+      const final = result.completion ? await result.completion : result.state;
+      assert.equal(final.status, "succeeded");
+      assert.equal(commands, scenario === "preserved" ? 1 : 2);
+      assert.equal(preparations, 2, "Resource recovery must not provision twice before executing the full recipe.");
+      assert.equal(final.resourceIdentity, evidence?.identity);
+      if (scenario === "preserved") {
+        assert.equal(result.completion, null);
+        assert.equal(final.finishedAt, initial.finishedAt, "Recovery retains the actual application setup receipt.");
+        assert.equal(await runner.isPrepared({ runtime, session: stored }), true);
+        const retry = await runner.start({ runtime, session: stored, retry: true });
+        assert.equal((await retry.completion).status, "succeeded");
+        assert.equal(commands, 2, "Explicit preparation still reruns the complete recipe.");
+      }
+    });
+  });
+}
+
+for (const failure of ["provisioning failed", "still unprepared", "recipe changed"]) {
+  test(`resource recovery refuses cached success when ${failure}`, async () => {
+    await withTemporaryRoot(async targetRoot => {
+      const { runtime, session } = await workspaceSession(targetRoot);
+      const resourcePreparation = { identity: "a".repeat(64), preserved: true };
+      let prepared = true;
+      let recovering = false;
+      let recipeHash = "sha256:recipe";
+      let commands = 0;
+      const runner = createWorkspaceSetupRunner({
+        inspect: () => readySetup({ recipeHash }),
+        projectService: {
+          async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared", resourcePreparation }; },
+          async projectExecutionEnvironment() {
+            if (recovering && failure === "provisioning failed") throw new Error("Database unavailable.");
+            prepared = !recovering || failure !== "still unprepared";
+            if (recovering && failure === "recipe changed") recipeHash = "sha256:changed";
+            return { environment: {}, resourcePreparation };
+          }
+        },
+        async runCommand() { commands += 1; return { ok: true }; }
+      });
+      await (await runner.start({ runtime, session })).completion;
+      prepared = false;
+      recovering = true;
+      const result = await runner.start({ runtime,
+        session: await runtime.getSession(session.sessionId, { inspectSource: false }) });
+      assert.equal(result.completion, null);
+      assert.equal(result.state.status, "failed");
+      assert.equal(result.state.resourceIdentity, undefined);
+      assert.equal(commands, 1);
+      assert.match(result.state.diagnostic, failure === "provisioning failed" ? /Database unavailable/u
+        : failure === "still unprepared" ? /environment is not ready/u : /setup changed/u);
+    });
+  });
+}
+
 test("workspace preparation treats a missing Genesis Stack as unconfigured", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);

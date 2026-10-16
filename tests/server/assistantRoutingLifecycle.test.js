@@ -987,14 +987,14 @@ test("Deslop with uncertain admission retains its task and checks the receipt wi
   assert.equal(f.state().status, "working");
 });
 
-test("a finished turn rejects steering before admission and only an explicit new request starts work", async t => {
+test("a finished turn identifies steering rejected before admission for same-message send recovery", async t => {
   const f = await fixture(t, { mode: "junior", review: false });
-  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.agent.sessionState = async () => ({ turn: { active: false, state: "completed" } });
   const input = { ...request, messageId: "finished-turn-steer", submissionKind: "steer" };
   const originalInput = structuredClone(input);
   const originalMetadata = structuredClone(f.metadata);
   await assert.rejects(f.service.send("session-1", input, f.context), {
-    code: "conversation_not_steerable", statusCode: 409,
+    code: "conversation_steer_turn_finished", statusCode: 409, delivery: "not-sent",
     message: "That turn has finished. Send this as a new request."
   });
   assert.deepEqual(input, originalInput);
@@ -1002,9 +1002,21 @@ test("a finished turn rejects steering before admission and only an explicit new
   assert.equal(f.sends.length, 0);
   assert.equal(f.helperCalls(), 0);
   assert.equal(await f.service.inspectDelivery("session-1", { messageId: input.messageId }, f.context), null);
-  await f.service.send("session-1", { ...input, messageId: "explicit-new-request", submissionKind: "send" }, f.context);
+  await f.service.send("session-1", { ...input, submissionKind: "send" }, f.context);
   assert.equal(f.sends.length, 1);
-  assert.equal(f.sends[0].input.messageId, "explicit-new-request");
+  assert.equal(f.sends[0].input.messageId, input.messageId);
+});
+
+test("stopped or unverified inactive turns do not authorize automatic steering recovery", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  for (const state of ["cancelled", "interrupted", "failed", undefined]) {
+    f.agent.sessionState = async () => ({ turn: { active: false, state } });
+    await assert.rejects(f.service.send("session-1", { ...request, submissionKind: "steer" }, f.context), {
+      code: "conversation_not_steerable", delivery: "not-sent"
+    });
+  }
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
 });
 
 test("a member cannot steer an active personal turn even when a shared fallback exists", async (t) => {

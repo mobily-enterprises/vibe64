@@ -53,6 +53,12 @@ For a Claude goal, **Pause goal** stops the current work and keeps the goal.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
+Internal task notifications do not keep a finished Claude turn artificially busy.
+You can set the next goal after the turn finishes as well as while it is working.
+The goal dialog closes after the command succeeds. While acknowledgement is
+pending, or if delivery fails or remains uncertain, it stays open with your
+objective intact. Switching chats prevents a late reply from closing the new
+chat's goal dialog.
 An existing unfinished goal must be cancelled before setting a different one.
 **Resume goal** continues it in the same conversation. **Cancel goal** stops the
 work and clears the goal. If the goal changed while you were looking at it,
@@ -60,6 +66,9 @@ refresh its status before trying the action again. If a model change or context
 renewal asks you to deliver the conversation briefing first, send an ordinary
 chat message before starting or resuming the goal.
 **Stop** remains available while Claude is waiting to acknowledge a goal command.
+The chat shows `/goal` followed by your objective. Internal role instructions
+are hidden from that bubble and Claude's **Goal set:** confirmation, including
+when reopening earlier goal messages.
 
 For a Codex goal, **Pause goal** stops automatic scheduling and the current
 conversation turn while preserving the goal. To use a different model sooner,

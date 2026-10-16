@@ -2,7 +2,7 @@ import { createSSRApp, defineComponent, h } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
-import { chatTurnsWithRouting } from "../../src/lib/vibe64ChatDelivery.js";
+import { chatTurnsWithRouting, routedChatMessage } from "../../src/lib/vibe64ChatDelivery.js";
 
 vi.mock("vuetify/components/VBtn", () => ({
   VBtn: defineComponent({ setup: (_props, { attrs, slots }) => () => h("button", attrs, slots.default?.()) })
@@ -12,6 +12,27 @@ import ConversationStatus from "../../src/components/studio/vibe64-session/Vibe6
 const request = { schemaVersion: 5, messageId: "message-1", status: "working", delivery: "sending", stage: "implementation", input: { message: "Hello" }, assignments: {} };
 
 describe("routed chat delivery presentation", () => {
+  it.each(["failed", "uncertain"])("shows a same-ID retry as Pending while the server still reports %s", async status => {
+    const delivery = createAssistantMessageDelivery();
+    const oldRoute = { ...request, delivery: status, error: "Previous send failed." };
+    await delivery.send({ message: "Hello" }, { messageId: request.messageId, deliver: async () => false });
+    const pending = Promise.withResolvers();
+    const retry = delivery.send({ message: "Hello" }, {
+      messageId: request.messageId, deliver: () => pending.promise
+    });
+    const [turn] = chatTurnsWithRouting(delivery.turns([]), oldRoute);
+    expect(turn.optimistic).toMatchObject({ status: "pending", error: "" });
+    expect(turn.system).toBeUndefined();
+    expect(routedChatMessage(oldRoute, delivery.find(request.messageId)).status).toBe("pending");
+
+    pending.resolve({ ok: false, error: "New attempt failed." });
+    await retry;
+    const newRoute = { ...oldRoute, delivery: "failed", error: "New attempt failed." };
+    expect(chatTurnsWithRouting(delivery.turns([]), newRoute)[0].optimistic)
+      .toMatchObject({ status: "failed", error: "New attempt failed." });
+    expect(routedChatMessage(newRoute, delivery.find(request.messageId)).status).toBe("failed");
+  });
+
   it("keeps ordinary sends pending, including after a local transport error", async () => {
     const delivery = createAssistantMessageDelivery();
     await delivery.send({ message: "Hello" }, { messageId: request.messageId, deliver: async () => false });

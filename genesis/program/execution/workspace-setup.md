@@ -172,3 +172,16 @@ not treated as permission to retry. A repair that changed nothing simply
 returns to the same authoritative setup failure. If the assistant needs human
 input, that question remains in the temporary conversation instead of being
 mistaken for a completed repair.
+
+
+Successful setup may record the resource provider's opaque identity in its existing
+`workspace_setup` metadata. Only the completed command recipe establishes that
+identity; failed or historical states do not. After a daemon restart, an unchanged
+successful recipe can use the existing project environment preparation owner to
+restore readiness. Reuse requires matching recorded/current/prepared identities,
+verified preservation of existing databases, and fresh unchanged recipe/readiness
+checks. Created, changed or unknown resources run the full recipe using the already
+prepared environment. Missing historical identity runs setup once; explicit Retry
+always runs it. Providers without this optional evidence retain ordinary readiness
+checks and gain no cold-recovery reuse. The prospective numbered state upgrade
+records this new-write boundary without inferring any historical resource identity.

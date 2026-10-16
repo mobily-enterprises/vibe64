@@ -74,6 +74,7 @@ test("Codex message preparation reuses only current resources and Env files", as
     let ready = false;
     let provisions = 0;
     let password = "first-secret";
+    const resourcePreparation = { identity: "a".repeat(64), preserved: true };
     let failure;
     const service = createService({
       env: {},
@@ -85,7 +86,7 @@ test("Codex message preparation reuses only current resources and Env files", as
     });
     const resourceEnvironment = () => {
       const writer = { host: "127.0.0.1", port: 3306, database: "chat", username: "writer", password };
-      return { contract: "vibe64.resource-environment.v2", ok: true, prepared: ready,
+      return { contract: "vibe64.resource-environment.v2", ok: true, prepared: ready, resourcePreparation,
         databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "mysql",
           write: writer, read: { ...writer, username: "reader", password: "reader-secret" } },
         resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values: writer }] };
@@ -111,6 +112,10 @@ test("Codex message preparation reuses only current resources and Env files", as
 
     assert.equal((await sendEnvironment()).DB_PASSWORD, password);
     assert.equal(provisions, 1, "A missing environment is still prepared.");
+    assert.deepEqual((await service.projectEnvironmentStatus({ sessionId, session })).resourcePreparation, resourcePreparation);
+    assert.deepEqual((await loadProjectExecutionEnvRecords({ projectService: service, session,
+      includeResourceConfiguration: true })).resourcePreparation, resourcePreparation);
+    assert.equal(Object.hasOwn(await loadProjectExecutionEnvRecords({ projectService: service, session }), "resourcePreparation"), false);
     assert.equal((await sendEnvironment()).DB_PASSWORD, password);
     assert.equal(provisions, 1, "A second send does not provision the same resources again.");
     await rm(envPath);

@@ -365,6 +365,50 @@ it("shows Claude allowance and native goal controls without an unsupported token
   mocks.goal = null;
 });
 
+it.each(["accepted", "failed", "uncertain", "changed-scope"])("Claude goal dialog closes only after same-scope admission: %s", async outcome => {
+  const { createRenderer, reactive, nextTick, ssrContextKey } = await import("vue");
+  mocks.resource = { data: ref(null), loadError: ref(""), reload: vi.fn() };
+  const props = reactive({ active: true, session: { sessionId: "one", assistantSelection: { engineId: "claude" } },
+    sessionsApiPath: "/api/projects/fixture/sessions" });
+  let finish;
+  const runtime = { goalView: ref({ status: "available", goal: null }),
+    goalState: ref({ enabled: true, pending: false, error: "" }), goalLoadError: ref(""),
+    changeGoal: vi.fn(() => new Promise(resolve => { finish = resolve; })) };
+  const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {},
+    parentNode() {}, nextSibling() {} });
+  const component = { ...PlanUsage, render: () => h("div") };
+  const app = renderer.createApp({ render: () => h(component, { ...props, conversationRuntime: runtime }) });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "owner" });
+  app.provide(ssrContextKey, { modules: new Set() });
+  app.mount({});
+  try {
+    const state = app._instance.subTree.component.setupState;
+    state.claudeGoalOpen = true;
+    state.claudeObjective = "Finish the approved work";
+    await nextTick();
+    const pending = state.changeGoal("set", { objective: state.claudeObjective });
+    expect(runtime.changeGoal).toHaveBeenCalledWith("set", { objective: "Finish the approved work" });
+    expect(state.claudeGoalOpen).toBe(true);
+    expect(state.claudeObjective).toBe("Finish the approved work");
+    if (outcome === "changed-scope") {
+      props.session = { sessionId: "two", assistantSelection: { engineId: "claude" } };
+      await nextTick();
+      state.claudeGoalOpen = true;
+      state.claudeObjective = "New conversation objective";
+      await nextTick();
+    }
+    if (["failed", "uncertain"].includes(outcome)) runtime.goalState.value.error = "Goal was not confirmed.";
+    finish(outcome === "failed" ? { ok: false } : outcome === "uncertain" ? false : { ok: true });
+    await pending;
+    await nextTick();
+    expect(state.claudeGoalOpen).toBe(outcome !== "accepted");
+    expect(state.claudeObjective).toBe(outcome === "accepted" ? "" : outcome === "changed-scope"
+      ? "New conversation objective" : "Finish the approved work");
+    if (["failed", "uncertain"].includes(outcome)) expect(runtime.goalState.value.error).toBe("Goal was not confirmed.");
+  } finally { app.unmount(); }
+});
+
 it("preserves the displayed native goal identity through the actual shared control and HTTP request", async () => {
   const { createHash } = await import("node:crypto");
   const { createRenderer, reactive, nextTick } = await import("vue");

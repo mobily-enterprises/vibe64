@@ -54,6 +54,7 @@ import Vibe64ConversationAttachments from "../../src/components/studio/vibe64-se
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { chatTurnsWithRouting } from "../../src/lib/vibe64ChatDelivery.js";
+import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "../../src/components/studio/vibe64-session/Vibe64ProjectMessage.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
@@ -352,6 +353,49 @@ describe("Vibe64 conversation scroll following", () => {
       delete globalThis.window;
     }
     vi.useRealTimers();
+  });
+
+  it("shows a goal objective without generated role instructions while retaining authored text and history", async () => {
+    for (const mode of ["custom", "senior", "junior"]) {
+      const objective = "Finish the remaining checks.\n\nKeep the results in the report.";
+      const nativeText = `/goal ${assistantModePrompt(mode, objective)}`;
+      const turn = userTurn("goal", nativeText);
+      const mounted = mountConversation({ turns: [turn] });
+      await nextTick();
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).toContain("Finish the remaining checks.");
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).not.toContain("Vibe64 role:");
+      expect(turn.user.text).toBe(nativeText);
+
+      const authored = "/goal [Vibe64 role: Junior]\n\nKeep this example verbatim.";
+      mounted.state.turns.value = [userTurn("authored", authored)];
+      await nextTick();
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).toContain("Vibe64 role: Junior");
+      expect(JSON.stringify(renderedUserPromptBlocks(mounted.container))).toContain("Keep this example verbatim.");
+      mounted.app.unmount();
+    }
+  });
+
+  it("hides exact generated role instructions in native goal confirmations without changing history", async () => {
+    for (const mode of ["custom", "senior", "junior"]) {
+      for (const role of ["assistant", "commentary"]) {
+        const objective = "Finish the remaining checks.";
+        const nativeText = `Goal set: ${assistantModePrompt(mode, objective)}`;
+        const message = { messageId: "goal-confirmation", role, text: nativeText, complete: true };
+        const mounted = mountConversation({ turns: [{ turnId: "goal-confirmation", messages: [message] }] });
+        await nextTick();
+        const blocks = () => findNode(mounted.container, node => Array.isArray(node.props?.blocks))?.props.blocks;
+        expect(JSON.stringify(blocks())).toContain(`Goal set: ${objective}`);
+        expect(JSON.stringify(blocks())).not.toContain("Vibe64 role:");
+        expect(message.text).toBe(nativeText);
+
+        const authored = "Goal set: [Vibe64 role: Junior]\n\nKeep this example verbatim.";
+        mounted.state.turns.value = [{ turnId: "authored", messages: [{ ...message, text: authored }] }];
+        await nextTick();
+        expect(JSON.stringify(blocks())).toContain("Vibe64 role: Junior");
+        expect(JSON.stringify(blocks())).toContain("Keep this example verbatim.");
+        mounted.app.unmount();
+      }
+    }
   });
 
   async function flushScrollWork() {

@@ -85,7 +85,10 @@ async function changeGoal(action, input = {}) {
   if (["set", "resume"].includes(action) && !goalExplicitMode.value) return false;
   const targetScope = scopeKey.value;
   const result = await props.conversationRuntime.changeGoal(action, input);
-  if (result !== false && targetScope === scopeKey.value && action === "set") claudeObjective.value = "";
+  if (result && result.ok !== false && targetScope === scopeKey.value && action === "set") {
+    claudeObjective.value = "";
+    claudeGoalOpen.value = false;
+  }
   return result;
 }
 const currentUsage = computed(() => {

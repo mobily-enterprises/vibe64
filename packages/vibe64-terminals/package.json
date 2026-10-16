@@ -17,6 +17,7 @@
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
     "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
     "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js",
+    "./server/assistantClaudeDeliveryUpgrade": "./src/server/assistantClaudeDeliveryUpgrade.js",
     "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js"
   },
   "jskit": {
