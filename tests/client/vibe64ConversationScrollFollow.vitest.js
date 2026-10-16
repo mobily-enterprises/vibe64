@@ -414,9 +414,13 @@ describe("Vibe64 conversation scroll following", () => {
   });
 
   it("keeps ordinary assistant goal prose and authored examples while hiding proven native command outputs", async () => {
-    const native = { engineId: "claude", type: "system", subtype: "local_command_output" };
+    const protocols = [
+      { engineId: "claude", type: "system", subtype: "local_command_output" },
+      { engineId: "claude", type: "assistant", command: "goal", output: "stdout" },
+      { engineId: "claude", type: "result", command: "goal", output: "stdout" }
+    ];
     const prose = "Goal set: smash every remaining item. I will work in order.";
-    for (const text of ["Goal set: Finish checks", "Goal cleared: Finish checks", "Goal active: Finish checks (1 turn)", "No goal set"]) {
+    for (const native of protocols) for (const text of ["Goal set: Finish checks", "Goal cleared: Finish checks", "Goal active: Finish checks (1 turn)", "No goal set"]) {
       const turn = { ...userTurn("normal", "Explain how /goal clear works."), metadata: { engineId: "claude", upstreamMessageId: "native-user" },
         messages: [{ role: "commentary", text, messageId: "native-output", data: { native } },
           { role: "assistant", text: prose, messageId: "genuine-reply" }] };

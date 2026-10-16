@@ -4107,9 +4107,13 @@ owner. JSKIT retires completed command IDs and still requires the result and
 background-work drain before settling. This avoids a stale busy turn making a
 later goal wait for an interruption of an already finished generation.
 
-The same exact-envelope goal presentation also covers Claude's native
-`Goal set: ` confirmation in assistant or commentary messages. Native history
-and command text remain intact; similar authored text is preserved.
+Goal presentation uses explicit Claude command provenance for synthetic assistant
+and successful result-only confirmations, including set, clear and status output.
+Only goal-command stdout is hidden; stderr and other commands remain visible.
+The earlier exact generated-envelope projection still applies to records it can
+identify. Ordinary replies with the same wording stay visible. Native history
+and command text remain intact. Older records without provenance require separate
+verified historical repair; new writes do not silently backfill them.
 
 A failed pre-write Claude interruption preserves definite non-delivery only after
 the retained process cleanup succeeds; cleanup refusal keeps execution custody.

@@ -380,6 +380,10 @@ function assistantGoalManagementMessage(message, turn = {}) {
     return Boolean(turn.metadata?.upstreamMessageId || message.receipt === true) && /^\/goal(?:\s|$)/u.test(text);
   }
   if (!["assistant", "commentary"].includes(message.role)) return false;
+  if (native?.command) {
+    return native.engineId === "claude" && ["assistant", "result"].includes(native.type) &&
+      native.command === "goal" && native.output === "stdout";
+  }
   const prefix = ["Goal set: ", "Goal cleared: ", "Goal active: "].find(value => text.startsWith(value));
   if (prefix) {
     const objective = text.slice(prefix.length);

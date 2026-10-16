@@ -74,7 +74,10 @@ unconfirmed process stop still requires recovery before a new attempt.
 Use the goal control to inspect the objective and its current state. Delivered
 Claude goal commands and native management confirmations stay out of ordinary
 chat, including earlier generated **Goal set:** and **Goal cleared:** records
-when you reopen it. Actual assistant work and explanations remain visible.
+when you reopen it. New confirmations such as **No goal set** are also omitted;
+command errors remain visible. Older confirmations whose command origin was not
+saved may still appear until historical repair is applied. Actual assistant work
+and explanations remain visible.
 Failed, pending or uncertain goal instructions keep their recovery controls and
 show your objective without internal role instructions. Nothing is deleted from
 native history, and quoted command examples remain readable.

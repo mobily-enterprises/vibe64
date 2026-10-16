@@ -53,6 +53,19 @@ test("goal management presentation requires native admission or exact generated 
   assert.equal(assistantGoalManagementMessage({ role: "assistant", text: "The goal is paused; the work is saved." }, turn), false);
 });
 
+test("synthetic goal presentation uses native command/output identity and preserves errors and other commands", () => {
+  for (const type of ["assistant", "result"]) {
+    const native = { engineId: "claude", type, command: "goal", output: "stdout" };
+    const message = { role: "assistant", text: "Completed condition: all checks passed", data: { native } };
+    assert.equal(assistantGoalManagementMessage(message), true);
+    for (const changed of [{ output: "stderr" }, { command: "status" }, { engineId: "codex" }, { output: undefined }]) {
+      assert.equal(assistantGoalManagementMessage({ ...message, data: { native: { ...native, ...changed } } }), false);
+    }
+    assert.equal(assistantGoalManagementMessage({ ...message, data: undefined }), false);
+    assert.equal(assistantGoalManagementMessage(message, { optimistic: { status: "failed" } }), false);
+  }
+});
+
 test("Codex recommendations prefer native OpenAI for every role when DeepSeek and GLM are connected", () => {
   for (const providers of [["openai"], ["openai", "zai-coding-plan"],
     ["openai", "deepseek"], ["openai", "zai-coding-plan", "deepseek"]]) {

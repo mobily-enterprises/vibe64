@@ -351,6 +351,22 @@ test("Claude local command provenance survives the public writer and reload", as
   assert.equal(assistantGoalManagementMessage(confirmation, turns.find(turn => turn.messages.includes(confirmation))), true);
 });
 
+test("actual synthetic Claude goal confirmation survives the public writer and hides only management output", async t => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "/goal clear", messageId: "synthetic-clear" });
+  await f.processes[0].options.onEvent({ type: "assistant", uuid: "synthetic-confirmation",
+    local_command_run: { command: "goal", args: "clear" },
+    local_command_source: "<local-command-stdout>No goal set</local-command-stdout>",
+    message: { id: "synthetic-api", model: "<synthetic>", stop_reason: "end_turn",
+      content: [{ type: "text", text: "No goal set" }] } });
+  const turns = await f.context.runtime.store.readConversationLog("test");
+  const confirmation = turns.flatMap(turn => turn.messages).find(message => message.messageId === "claude_synthetic-confirmation_0");
+  assert.deepEqual(confirmation.data, { native: { engineId: "claude", type: "assistant", command: "goal", output: "stdout" } });
+  assert.equal(assistantGoalManagementMessage(confirmation, turns.find(turn => turn.messages.includes(confirmation))), true);
+  assert.equal(assistantGoalManagementMessage({ ...confirmation, data: undefined }), false,
+    "An ordinary assistant reply with identical text has no command provenance");
+});
+
 test("Claude compaction status is scoped to the active conversation and clears after completion or Stop", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Work", messageId: "compact-work" });
