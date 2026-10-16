@@ -63,6 +63,11 @@ recovery cannot undo it.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
+On Claude versions supporting targeted **Send now**, setting or resuming a goal
+while work is active preserves its background agents and background tasks.
+Foreground work may be interrupted so Claude can read the new instruction.
+Older Claude versions retain their previous interruption behavior. **Stop** and
+**Pause goal** still stop work; use those controls when cancellation is intended.
 Internal task notifications do not keep a finished Claude turn artificially busy.
 You can set the next goal after the turn finishes as well as while it is working.
 If the previous reply is still saving, the goal waits for that save before it is sent;
