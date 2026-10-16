@@ -4107,3 +4107,8 @@ A failed pre-write Claude interruption preserves definite non-delivery only afte
 the retained process cleanup succeeds; cleanup refusal keeps execution custody.
 The native interrupt deadline has a recoverable error code instead of a generic
 HTTP500. No automatic resend follows unknown delivery or failed stop proof.
+
+The Public Claude process wrapper records one slow-success startup warning after
+five seconds, splitting managed stream readiness from subsequent native
+initialization. These content-free durations reuse its existing startup event;
+normal starts remain informational and failure cleanup retains its original owner.

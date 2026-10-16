@@ -30,16 +30,22 @@ async function createClaudeCodeProcess({
   let secrets = [];
   let stderr = "";
   let executionId;
+  let streamReadyMs;
   const startedAt = Date.now();
   function diagnostic(stage, failure) {
     try {
-      logOperationalEvent(logger, failure ? "warn" : "info", {
+      const durationMs = Date.now() - startedAt;
+      if (stage === "stream_ready") streamReadyMs = durationMs;
+      const slow = stage === "initialized" && durationMs > 5_000;
+      logOperationalEvent(logger, failure || slow ? "warn" : "info", {
         component: "vibe64.claude", event: "vibe64.claude.startup", stage,
-        conversationId: options.sessionId, executionId, durationMs: Date.now() - startedAt,
+        conversationId: options.sessionId, executionId, durationMs,
+        ...(streamReadyMs !== undefined ? { streamReadyMs,
+          ...(stage === "initialized" ? { initializationMs: durationMs - streamReadyMs } : {}) } : {}),
         code: failure?.code, error: failure ? sanitizeOperationText(failure.message, secrets) : undefined,
         scopeEmpty: failure?.stopProof?.scopeEmpty,
         nativeStartupStderr: failure ? stderr : undefined
-      }, failure ? "Claude startup failed." : "Claude startup progress.");
+      }, failure ? "Claude startup failed." : slow ? "Claude startup was slow." : "Claude startup progress.");
     } catch { /* Diagnostics must not prevent startup or verified cleanup. */ }
   }
   diagnostic("starting");

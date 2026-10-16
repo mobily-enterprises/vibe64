@@ -269,6 +269,13 @@ been acknowledged. Keep the bubble in place; use its **Retry** action after a
 failure rather than sending another copy. Stop and other normal controls retain
 their existing deadlines.
 
+For a slow Claude start, an operator can inspect the private startup diagnostic.
+A successful start taking over five seconds records one warning with total time,
+time until the managed process stream was ready, and time spent initializing
+Claude afterward. This separates process launch from native initialization;
+the timing record contains no prompt, credentials or native output. A warning
+does not mean delivery failed: the message's acknowledgement remains authoritative.
+
 If Claude rejects an input before writing it to the native process, its retained
 request becomes retryable after delivery inspection. Use **Retry** on that exact
 message. An uncertain acknowledgement still uses **Retry delivery check** first;

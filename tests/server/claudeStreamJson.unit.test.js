@@ -2841,6 +2841,53 @@ test("Claude native cleanup cannot leave the saved run active when learning chec
   }
 });
 
+test("Claude successful startup diagnostics distinguish launch from initialization and warn only when slow", async (t) => {
+  const { runVibe64Command } = await import("@local/vibe64-execution/server");
+  for (const elapsed of [5_000, 5_001]) await t.test(`${elapsed}ms`, async t => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-startup-timing-"));
+    const command = path.join(root, "claude-fixture");
+    await writeFile(command, `#!/usr/bin/env node
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+  const frame = JSON.parse(line);
+  if (frame.type !== 'control_request') return;
+  process.stderr.write('private startup output\\n');
+  process.stdout.write(JSON.stringify({ type: 'control_response', response: {
+    subtype: 'success', request_id: frame.request_id, response: { privateValue: 'private response' }
+  } }) + '\\n');
+});
+`, { mode: 0o700 });
+    let clock = 100_000;
+    t.mock.method(Date, "now", () => clock);
+    const diagnostics = [];
+    let native;
+    t.after(async () => {
+      await native?.stop();
+      await rm(root, { recursive: true, force: true });
+    });
+    native = await createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+      env: { ...process.env, ANTHROPIC_API_KEY: "private-credential" },
+      async commandRunner(input) {
+        const result = await runVibe64Command(input);
+        clock += 2_000;
+        return result;
+      },
+      logger: Object.fromEntries(["info", "warn"].map(level => [level, fields => {
+        diagnostics.push({ level, ...fields });
+        if (fields.stage === "stream_ready") clock += elapsed - 2_000;
+      }]))
+    });
+    assert.deepEqual(diagnostics.map(event => event.stage), ["starting", "stream_ready", "initialized"]);
+    const completed = diagnostics.at(-1);
+    assert.equal(completed.durationMs, elapsed);
+    assert.equal(completed.streamReadyMs, 2_000);
+    assert.equal(completed.initializationMs, elapsed - 2_000);
+    assert.equal(completed.executionId, native.executionId);
+    assert.equal(completed.level, elapsed > 5_000 ? "warn" : "info");
+    assert.equal(diagnostics.filter(event => event.level === "warn").length, elapsed > 5_000 ? 1 : 0);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /private startup output|private response|private-credential/);
+  });
+});
+
 test("Claude startup failure preserves bounded redacted stderr before verified cleanup", async (t) => {
   const { runVibe64Command, stopVibe64Execution } = await import("@local/vibe64-execution/server");
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-startup-stderr-"));
