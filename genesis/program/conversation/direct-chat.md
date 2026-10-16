@@ -2,6 +2,12 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+Codex's application result adapter preserves the native run state separately
+from its idle/active presentation. A steer rejected before delivery after a
+successful completion can become a normal Send with the same message identity;
+cancelled, interrupted, failed, timed-out and unknown endings cannot. This uses
+the existing routing rejection and shared browser recovery, without interpreting
+assistant text or changing saved history.
 Hosted Claude cold initialization has a 90-second bound for managed startup
 probes; normal controls retain their separate deadline and failed startup still
 requires verified process cleanup.

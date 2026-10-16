@@ -209,6 +209,7 @@ function normalizeCodexTurn(result = {}) {
     error: normalizeText(turn?.error),
     id,
     phase: active ? normalizeText(turn?.phase) : "",
+    runState: normalizeText(turn?.runState),
     startedAt: normalizeText(turn?.startedAt),
     state: normalizeText(turn?.state),
     status: normalizeText(turn?.status || turn?.state),

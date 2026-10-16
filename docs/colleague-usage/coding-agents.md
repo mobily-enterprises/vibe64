@@ -154,9 +154,14 @@ the operator or a coding agent with authorized access.
 Clicking twice during a pending retry does not submit again; your separate
 composer draft stays intact.
 **Edit** and **Cancel** remain unavailable while delivery is uncertain.
-A rejected **Steer** returns to the composer; **Retry** retains its request ID
-and any newer draft text. Steering arriving after a finished turn never becomes
-new work automatically. Use **Cancel** or **Edit** before sending new work.
+If a turn finishes successfully just before **Steer** arrives, Vibe64 sends that
+same message as a new request after confirming it was not delivered. You do not
+need to send it again. This applies to Codex and Claude on desktop and mobile.
+Stopped, cancelled, failed or unverified turns do not authorize this recovery.
+Other rejected **Steer** messages return to the composer; **Retry** retains the
+request ID and any newer draft text. Use **Cancel** or **Edit** before changing
+the request. Colleague can explain the status; browser recovery controls require
+your interaction.
 After changing the signed-in person or AI connection, resolve that change before
 checking the original request; a different account cannot confirm it was not sent.
 If OpenCode cannot confirm delivery, checking its status does not send the request

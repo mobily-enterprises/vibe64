@@ -13,6 +13,7 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
+import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 
@@ -1018,6 +1019,30 @@ test("stopped or unverified inactive turns do not authorize automatic steering r
   }
   assert.equal(f.sends.length, 0);
   assert.equal(f.helperCalls(), 0);
+});
+
+test("Codex result projection preserves the completion reason for steering recovery", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  const provider = createCodexSessionAgentProvider({ controller: {} });
+  for (const runState of ["completed", "cancelled", "interrupted", "failed", "timed_out", ""]) {
+    // Native Codex uses idle for every terminal state. Only runState proves
+    // successful completion; a retained provider status must not override Stop.
+    f.agent.sessionState = () => provider.projectConversationResult("sessionState", async () => ({
+      ok: true,
+      codexAgentTurn: { active: false, turnId: "turn-1", threadId: "thread-1",
+        state: "idle", status: "completed", runState }
+    }));
+    const input = { ...request, messageId: `codex-terminal-${runState || "unknown"}`, submissionKind: "steer" };
+    await assert.rejects(f.service.send("session-1", input, f.context), {
+      code: runState === "completed" ? "conversation_steer_turn_finished" : "conversation_not_steerable",
+      delivery: "not-sent"
+    });
+    assert.equal(f.sends.length, 0);
+    assert.equal(await f.service.inspectDelivery("session-1", { messageId: input.messageId }, f.context), null);
+  }
+  await f.service.send("session-1", { ...request, messageId: "codex-terminal-completed" }, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.sends[0].input.messageId, "codex-terminal-completed");
 });
 
 test("a member cannot steer an active personal turn even when a shared fallback exists", async (t) => {
