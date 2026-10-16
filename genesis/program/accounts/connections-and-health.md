@@ -205,6 +205,10 @@ when a managed chat process is running; runtime output limits and defaults must
 not invalidate a verified provider connection. Pages are combined only at one revision, including models
 outside the default provider page. A catalogue failure stays visible and does
 not erase saved choices. Neither reading nor previewing persists configuration.
+Lightweight workflow inspection checks current access to saved pairs and backups.
+It checks the full recommendation candidates only when a successfully read
+catalogue has an unconfigured Senior or Junior role. Explicit empty roles are
+configured choices; access results are reused only within that inspection.
 Successful native sign-in, API-key setup and explicit new-session creation
 initialize missing roles for usable orchestrators from the same recommendations.
 The read-only setup preview shows exactly those proposed assignments. First

@@ -115,6 +115,10 @@ The displayed routing form can also offer **Review recommendations**,
 required review, then Save routing. On mobile, scroll the same dialog to its controls.
 Disabled models are unavailable or incompatible; they must not be invented.
 
+The workflow picker checks access to your saved Senior, Junior and shared backup
+choices. It offers recommendations for roles that have not been configured;
+opening the picker does not replace saved choices or deliberately empty roles.
+
 Recommendations prefer **Claude → Codex/OpenAI → DeepSeek → GLM** among models
 connected and permitted for each role. Within the chosen provider, Senior uses
 Opus/Astra, Junior uses Sonnet/Sol, and Helper/Router use Haiku/Luna when offered.

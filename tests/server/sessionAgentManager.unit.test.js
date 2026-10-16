@@ -270,6 +270,24 @@ test("workflow choices read saved pairs without model discovery and preserve col
   assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
 });
 
+test("configured workflow choices do not check unused recommendation models", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.backup };
+  const before = structuredClone(f.configuration);
+  const result = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+  assert.deepEqual(f.configuration, before);
+  assert.ok(result.workflows.every(workflow => workflow.available));
+  const checked = f.calls.filter(call => call.type === "access").map(call => call.assistantSelection.modelId);
+  assert.deepEqual(checked.sort(), [f.senior.modelId, f.junior.modelId, f.backup.modelId].sort(),
+    "the picker checks saved pair/backup access once each, not unused Helper or recommendation candidates");
+  f.calls.length = 0;
+  f.facts.get(f.backup.modelId).available = false;
+  const changed = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+  assert.equal(changed.workflows.find(workflow => workflow.engineId === "codex").available, false,
+    "a later read rechecks access, including the collaborator's shared backup");
+  assert.equal(f.calls.filter(call => call.type === "access").length, 3);
+});
+
 test("workflow choices distinguish connected models from retained routing assignments", async () => {
   for (const options of [{ disconnected: ["codex"] }, { withoutModels: ["codex"] }]) {
     const f = routingManagerFixture(options);

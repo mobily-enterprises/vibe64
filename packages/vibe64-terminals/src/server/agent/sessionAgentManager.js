@@ -928,7 +928,9 @@ function createSessionAgentManager({
       try { return await providerCapabilities(provider, { configuredOnly: "true" }, options); }
       catch (cause) { errors.set(provider.id, cause.message); return null; }
     }))).filter(Boolean);
-    const defaultAccess = await Promise.all(catalogs.flatMap((catalog) => routingModelChoices(catalog)).map(readAccess));
+    const defaultAccess = catalogs.some(({ engineId }) => needsSetup(engineId))
+      ? await Promise.all(catalogs.flatMap((catalog) => routingModelChoices(catalog)).map(readAccess))
+      : [];
     const workflows = await Promise.all([...providerById.values()].map(async (provider) => {
       const saved = configuration.orchestrators[provider.id] || {};
       const assignments = { ...saved };
