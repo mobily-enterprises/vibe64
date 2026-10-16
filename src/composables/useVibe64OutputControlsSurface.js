@@ -682,6 +682,7 @@ function useVibe64OutputControlsSurface(props) {
     outputTargets.value.length < 1
   ));
   const previewFrame = ref(null);
+  const previewSuspended = ref(false);
   const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
   let orientation = null;
   const previewBridgeVersion = ref(0);
@@ -694,6 +695,7 @@ function useVibe64OutputControlsSurface(props) {
   const previewResourceNoticeText = ref("");
   const previewResourceNoticeVisible = ref(false);
   let previewIdentityAutomaticAttempt = "";
+  let previewIdentityResumeSelection = null;
   let previewIdentityLifecycle = "";
   let previewIdentityReloadRequestId = 0;
   let previewResourceRetryCount = 0;
@@ -974,7 +976,7 @@ function useVibe64OutputControlsSurface(props) {
     !loadError.value
   ));
   const previewBrowserControlsVisible = computed(() => Boolean(
-    loading.value || loadError.value || previewUrl.value ||
+    previewSuspended.value || loading.value || loadError.value || previewUrl.value ||
     outputTargets.value.some((target) => target.presentation?.kind === "web")
   ));
   const previewStarting = computed(() => Boolean(
@@ -1390,7 +1392,7 @@ function useVibe64OutputControlsSurface(props) {
     src = "",
     visitedUrl = previewVisitedUrl.value
   } = {}) {
-    if (!previewReadyForIframe.value) {
+    if (previewSuspended.value || !previewReadyForIframe.value) {
       return false;
     }
     const nextSrc = String(src || "").trim() || launchPreviewFrameUrl({
@@ -1425,7 +1427,29 @@ function useVibe64OutputControlsSurface(props) {
     return true;
   }
 
+  function suspendPreview() {
+    previewIdentityResumeSelection = previewIdentityRequested.value;
+    previewSuspended.value = true;
+    resetPreviewResourceRecovery(previewIdentityLifecycleKey.value);
+    clearPreviewFrame("suspended");
+    completePreviewIdentityTransition();
+  }
+
+  async function resumePreview() {
+    const frameRequestId = previewFrameRequestId.value;
+    const project = projectSlug.value;
+    const sessionId = props.session?.sessionId;
+    await refreshOutputs();
+    await nextTick();
+    if (project !== projectSlug.value || sessionId !== props.session?.sessionId ||
+        frameRequestId !== previewFrameRequestId.value || !previewSuspended.value) return false;
+    previewSuspended.value = false;
+    if (previewIdentityResumeSelection) previewIdentityAutomaticAttempt = "";
+    return requestPreviewFrame({ force: true, reason: "resumed" });
+  }
+
   async function reloadPreview() {
+    if (previewSuspended.value) return false;
     resetPreviewResourceRecovery(previewIdentityLifecycleKey.value);
     const requestIdBeforeRefresh = previewFrameRequestId.value;
     await refreshOutputs();
@@ -1722,6 +1746,8 @@ function useVibe64OutputControlsSurface(props) {
     ) {
       return false;
     }
+    const frameRequestId = previewFrameRequestId.value;
+    const current = () => !previewSuspended.value && frameRequestId === previewFrameRequestId.value;
     const mode = String(selection.mode || "identity").trim();
     const identityName = String(selection.identityName || "").trim().toLowerCase();
     const requested = mode === "identity"
@@ -1735,8 +1761,14 @@ function useVibe64OutputControlsSurface(props) {
     previewIdentityBusy.value = true;
     previewIdentityError.value = "";
     previewIdentityRequested.value = requested;
+    let pendingSelection = previewIdentityRequested.value;
+    function retireSelection() {
+      if (previewIdentityRequested.value === pendingSelection) completePreviewIdentityTransition();
+      return false;
+    }
     try {
       const grantResult = await requestPreviewIdentityGrant(requested);
+      if (!current()) return retireSelection();
       const grant = String(grantResult?.grant || "").trim();
       if (!grant || grantResult?.ok === false) {
         throw new Error(
@@ -1745,11 +1777,14 @@ function useVibe64OutputControlsSurface(props) {
       }
       const requestedIdentity = grantResult.requestedIdentity || requested;
       previewIdentityRequested.value = requestedIdentity;
+      pendingSelection = previewIdentityRequested.value;
       const exchangeResult = await requestPreviewIdentityExchange(grant);
+      if (!current()) return retireSelection();
       previewIdentityCurrent.value = previewIdentityFromExchange(exchangeResult, requestedIdentity);
       reloadPreviewForIdentity("identity-selected");
       return true;
     } catch (error) {
+      if (!current()) return retireSelection();
       const message = String(error?.message || error || "Preview identity exchange failed.");
       previewIdentityError.value = message;
       if (error?.signedOut === true) {
@@ -1794,9 +1829,11 @@ function useVibe64OutputControlsSurface(props) {
       return false;
     }
     previewIdentityAutomaticAttempt = lifecycle;
-    void selectPreviewIdentity(defaultPreviewIdentitySelection({
+    const selection = previewIdentityResumeSelection || defaultPreviewIdentitySelection({
       capability: previewIdentityCapability.value
-    }));
+    });
+    previewIdentityResumeSelection = null;
+    void selectPreviewIdentity(selection);
     return true;
   }
 
@@ -1996,6 +2033,7 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function handlePreviewBridgeMessage(event) {
+    if (previewSuspended.value) return;
     const orientationAvailable = event?.data?.type === "orientation-available";
     if (!orientationAvailable && !isPreviewBridgeMessage(event?.data)) {
       return;
@@ -2087,6 +2125,7 @@ function useVibe64OutputControlsSurface(props) {
     closeOrientation();
     previewIdentityLifecycle = lifecycle;
     previewIdentityAutomaticAttempt = "";
+    previewIdentityResumeSelection = null;
     resetPreviewResourceRecovery(lifecycle);
     resetPreviewIdentityState();
     previewBridgeRequests.rejectAll("The active application preview changed.");
@@ -2151,10 +2190,10 @@ function useVibe64OutputControlsSurface(props) {
     immediate: true
   });
 
-  watch(() => String(props.session?.sessionId || ""), (sessionId, previousSessionId) => {
-    if (previousSessionId && sessionId !== previousSessionId) {
-      clearPreviewFrame("session-changed");
-    }
+  watch([projectSlug, () => String(props.session?.sessionId || "")], () => {
+    previewSuspended.value = false;
+    cancelPreviewResourceRetry();
+    clearPreviewFrame("session-changed");
   }, {
     flush: "sync"
   });
@@ -2310,6 +2349,9 @@ function useVibe64OutputControlsSurface(props) {
     recoverEmbeddedPreview,
     recheckResourceAdmission,
     reloadPreview,
+    previewSuspended,
+    suspendPreview,
+    resumePreview,
     retryLaunchStatus,
     requestPreviewDiagnostics,
     resetPreviewAddressDraft,

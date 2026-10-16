@@ -511,3 +511,13 @@ Project authority is rechecked and the existing session is read without preparin
 or starting it. The server removes URL credentials, queries and fragments and
 limits records per daemon/minute. This is diagnostic logging, not a second
 Preview lifecycle or application-state store.
+
+
+Preview suspension belongs to the displayed output surface. It clears its frame
+request (therefore removing the iframe), resource retry timer and pending bridge
+requests, while retaining the route and established app identity. Frame admission
+stays blocked until explicit Resume; Dashboard visibility and background status
+updates cannot reopen it. Resume refreshes through the existing output owner and
+rejects a changed project/session before admitting a new frame. Session changes
+clear the local suspension choice. Backend launch, agents and other displayed
+surfaces retain their own lifecycles.

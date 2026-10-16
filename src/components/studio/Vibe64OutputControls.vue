@@ -151,10 +151,20 @@
             <v-btn
               :icon="mdiRefresh"
               size="small"
+              :disabled="previewSuspended"
               title="Reload preview"
               type="button"
               variant="text"
               @click="reloadPreview"
+            />
+            <v-btn
+              :aria-label="previewSuspended ? 'Resume preview' : 'Suspend preview'"
+              :icon="previewSuspended ? mdiPlayCircleOutline : mdiPauseCircleOutline"
+              size="small"
+              :title="previewSuspended ? 'Resume preview' : 'Suspend preview — unload this page; unsaved page changes may be lost'"
+              type="button"
+              variant="text"
+              @click="previewSuspended ? resumePreview() : suspendPreview()"
             />
             <v-btn
               :disabled="!previewDisplayedAddress"
@@ -555,7 +565,16 @@
         <span>{{ previewInFlightText || "Opening preview." }}</span>
       </div>
       <div
-        v-if="previewNoticeVisible"
+        v-if="previewSuspended"
+        class="vibe64-launch-controls__preview-empty"
+        role="status"
+      >
+        <strong>Preview suspended</strong>
+        <span>This page is unloaded. App servers and agents are unaffected. Unsaved page changes may be lost.</span>
+        <v-btn :prepend-icon="mdiPlayCircleOutline" variant="tonal" @click="resumePreview">Resume preview</v-btn>
+      </div>
+      <div
+        v-else-if="previewNoticeVisible"
         class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-diagnostic"
       >
         <v-icon
@@ -822,6 +841,7 @@ import {
   mdiDotsHorizontal,
   mdiDownloadOutline,
   mdiOpenInNew,
+  mdiPauseCircleOutline,
   mdiPlayCircleOutline,
   mdiPowerCycle,
   mdiRefresh,
@@ -1024,6 +1044,9 @@ const {
   recoverEmbeddedPreview,
   recheckResourceAdmission,
   reloadPreview,
+  previewSuspended,
+  suspendPreview,
+  resumePreview,
   retryLaunchStatus,
   requestPreviewDiagnostics,
   resetPreviewAddressDraft,

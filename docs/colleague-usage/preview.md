@@ -28,6 +28,16 @@ restoration failed: ask the coding agent to recover the managed browser run
 before using Preview. Colleague can inspect output status and explain recovery;
 it must not claim the normal app is restored from a test exit code alone.
 
+Use **Suspend preview**, beside the circular **Reload preview** button, to unload
+only this displayed page and reduce browser CPU use. Unsaved changes inside the
+page may be lost. The app server, coding agents and goals continue running;
+other Preview windows are unaffected. **Resume preview** reopens the saved route
+with the existing app identity. The suspended page also shows a Resume button.
+Switching to **Dashboard** and back keeps it suspended. This choice belongs to
+this Preview instance; it does not suspend a different session. Suspending an outer Preview also unloads any
+nested pages inside it. Colleague can explain the control; the person operates
+it in their browser.
+
 Open the project's **Preview** tab. On mobile, use **Show project** from chat,
 then **Show preview controls** to expand the toolbar. If the selected output needs settings,
 choose **Preview options**, fill the required fields and choose **Run**.

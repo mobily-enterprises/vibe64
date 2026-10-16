@@ -756,7 +756,7 @@ function mountOrientationSurface({ createOwner = null } = {}) {
   Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
     previewTestNotice: ref(null), resourceAdmissionId: ref(""), testApproval: ref(null), run: vi.fn(async () => ({ ok: true })),
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
-    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), publishPreviewDiagnostic: vi.fn(async () => true), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
+    launchActions: ref([{ href: "https://preview.example.test/" }]), requestPreviewIdentityGrant: vi.fn(), publishPreviewState: vi.fn(), publishPreviewDiagnostic: vi.fn(async () => true), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
   surfaceHost.projectSlug = ref("practice");
   const windowListeners = new Map();
@@ -817,6 +817,8 @@ function mountOrientationSurface({ createOwner = null } = {}) {
     },
     setRect(value) { rect = value; },
     dispose() {
+      vi.stubGlobal("window", windowObject);
+      vi.stubGlobal("document", documentObject);
       app.unmount();
       for (const post of posts) for (const port of post.ports) port.close();
       expect(windowListeners.size).toBe(0);
@@ -1000,4 +1002,103 @@ it("opt-in Preview diagnostics capture each failed module and retry without acce
   await vi.advanceTimersByTimeAsync(5_000);
   expect(f.outputs.publishPreviewDiagnostic.mock.calls.some(([entry]) => entry.event === "resource.retry")).toBe(true);
   vi.useRealTimers();
+});
+
+
+it("suspends only its own frame, cancels retries and resumes the same route and app identity", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = mountOrientationSurface();
+    const other = mountOrientationSurface();
+    f.load();
+    f.state.previewIdentityCurrent.value = { mode: "identity", name: "operator" };
+    f.state.previewAddressDraft.value = "/jobs?status=open#today";
+    f.state.submitPreviewAddress();
+    const route = f.state.previewUrl.value;
+    const otherUrl = other.state.previewUrl.value;
+    f.announce({ type: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE, kind: "script", href: "/app.js" });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    f.state.suspendPreview();
+    expect(f.state.previewSuspended.value).toBe(true);
+    expect(f.state.previewUrl.value).toBe("");
+    expect(f.state.previewLoadingOverlayVisible.value).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    f.props.previewDisplayed = false; // Dashboard does not reset the person's choice.
+    f.outputs.previewState.value = "starting";
+    f.outputs.previewState.value = "ready";
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(f.state.previewUrl.value).toBe("");
+    f.props.previewDisplayed = true;
+    await nextTick();
+    expect(f.state.previewUrl.value).toBe("");
+    expect(await f.state.reloadPreview()).toBe(false);
+    expect(other.state.previewUrl.value).toBe(otherUrl);
+    expect(other.state.previewSuspended.value).toBe(false);
+    expect(f.outputs.run).not.toHaveBeenCalled();
+    expect(f.outputs.restartTerminal).not.toHaveBeenCalled();
+    expect(await f.state.resumePreview()).toBe(true);
+    expect(f.state.previewUrl.value).toBe(route);
+    expect(f.state.previewIdentityCurrent.value).toEqual({ mode: "identity", name: "operator" });
+    expect(f.state.previewSuspended.value).toBe(false);
+  } finally { vi.useRealTimers(); }
+});
+
+it("does not resurrect a suspended frame from nested or retired bridge messages", () => {
+  const f = mountOrientationSurface();
+  f.load();
+  f.state.suspendPreview();
+  const frameId = f.state.previewFrameRequestId.value;
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION }, {});
+  f.announce({ type: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE, kind: "script", href: "/old.js" });
+  f.load();
+  expect(f.state.previewFrameRequestId.value).toBe(frameId);
+  expect(f.state.previewUrl.value).toBe("");
+  expect(f.state.previewFrameLoaded.value).toBe(false);
+});
+
+it("rejects an old Resume result after the selected session changes", async () => {
+  const f = mountOrientationSurface();
+  f.state.suspendPreview();
+  let release;
+  f.outputs.refresh.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const resumed = f.state.resumePreview();
+  f.props.session = { sessionId: "session-b" };
+  release();
+  expect(await resumed).toBe(false);
+  expect(f.state.previewSuspended.value).toBe(false);
+  expect(f.state.previewUrl.value).toBe("");
+});
+
+
+it("retires an in-flight identity grant when the displayed preview is suspended", async () => {
+  const f = mountOrientationSurface();
+  let grant;
+  f.outputs.requestPreviewIdentityGrant.mockImplementation(() => new Promise(resolve => { grant = resolve; }));
+  f.outputs.previewIdentity.value = { available: true, identities: [{ name: "operator" }], defaultIdentity: "operator" };
+  f.load();
+  await nextTick();
+  expect(f.outputs.requestPreviewIdentityGrant).toHaveBeenCalledTimes(1);
+  f.state.suspendPreview();
+  grant({ ok: true, grant: "unused-grant" });
+  await nextTick(); await nextTick();
+  expect(f.state.previewUrl.value).toBe("");
+  expect(f.state.previewIdentityBusy.value).toBe(false);
+  expect(f.state.previewIdentityError.value).toBe("");
+  expect(f.posts.some(post => post.data.grant === "unused-grant")).toBe(false);
+});
+
+
+it("keeps ordinary Reload recoverable when it retires a pending identity grant", async () => {
+  const f = mountOrientationSurface();
+  let grant;
+  f.outputs.requestPreviewIdentityGrant.mockImplementation(() => new Promise(resolve => { grant = resolve; }));
+  f.outputs.previewIdentity.value = { available: true, identities: [{ name: "operator" }] };
+  f.load();
+  await nextTick();
+  await f.state.reloadPreview();
+  grant({ ok: true, grant: "retired-grant" });
+  await nextTick(); await nextTick();
+  expect(f.state.previewIdentityBusy.value).toBe(false);
+  expect(f.state.previewIdentityError.value).toBe("");
+  expect(f.posts.some(post => post.data.grant === "retired-grant")).toBe(false);
 });

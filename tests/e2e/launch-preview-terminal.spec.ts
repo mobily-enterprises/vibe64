@@ -866,6 +866,47 @@ async function openSessionDashboardTool(page: Page, label: string) {
   }).click();
 }
 
+for (const width of [390, 1440]) {
+  test(`@preview-suspend unloads only the displayed page and resumes its route at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockLaunchTerminalSocket(page);
+    await mockLaunchSession(page);
+    const outputWrites: string[] = [];
+    page.on("request", request => {
+      if (request.method() !== "GET" && /\/output-runs(?:\/|$)/u.test(new URL(request.url()).pathname)) {
+        outputWrites.push(request.url());
+      }
+    });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    if (width < 600) {
+      await page.getByRole("button", { name: "Show project", exact: true }).click();
+      await page.getByRole("button", { name: "Show preview controls", exact: true }).click();
+    }
+    const frame = page.locator(".vibe64-launch-controls__preview-frame");
+    await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
+    const original = await (await frame.elementHandle())!.contentFrame();
+    await original!.evaluate(() => {
+      history.pushState({}, "", "/jobs?status=open#today");
+      const nested = document.createElement("iframe");
+      nested.srcdoc = "<p>Nested preview</p>";
+      document.body.append(nested);
+    });
+    await expect(page.getByLabel("Preview URL")).toHaveValue("/jobs?status=open#today");
+    const suspend = page.getByRole("button", { name: "Suspend preview", exact: true });
+    await expect(suspend).toBeInViewport();
+    await suspend.click();
+    await expect(frame).toHaveCount(0);
+    expect(original!.isDetached()).toBe(true);
+    await expect(page.getByText("Preview suspended", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Unsaved page changes may be lost/u)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("preview-suspended.png") });
+    await page.getByRole("button", { name: "Resume preview", exact: true }).first().click();
+    await expect(frame).toHaveAttribute("src", /\/jobs\?status=open#today$/u);
+    await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
+    expect(outputWrites).toEqual([]);
+  });
+}
+
 test("@preview-lifecycle renders through the proxy and displays the target URL", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
