@@ -3664,6 +3664,11 @@ matching session watcher does not request a duplicate reload; the common
 subscription still owns read coalescing, live output, saved
 history and error recovery. Neither path creates another transcript cache
 or sends model work.
+The server's filtered runtime environment explicitly carries the daemon's
+`JSKIT_REALTIME_DEBUG` setting into the shared assistant subscription owner.
+An absent value remains absent so runtime configuration can supply its default;
+an explicit disabled value remains disabled. The flag enables existing private
+subscription diagnostics, not a new retry or conversation lifecycle.
 Delivery failures and retry controls appear on the unsent bubble once; the lower
 notice remains for follow-up recovery and unresolved cancellation cleanup.
 

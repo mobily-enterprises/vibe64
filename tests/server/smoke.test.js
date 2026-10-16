@@ -43,6 +43,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
   const keys = [
     "HOST",
     "PORT",
+    "JSKIT_REALTIME_DEBUG",
     VIBE64_RUNTIME_NAMESPACE_ENV,
     VIBE64_PROJECTS_ROOT_ENV,
     VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
@@ -66,7 +67,8 @@ test("runtime env files load broadly while runtime config stays explicit", async
       "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock"
     ].join("\n"), "utf8");
     await writeFile(hostEnvFile, [
-      `${VIBE64_SYSTEM_ROOT_ENV}=/tmp/vibe64-file-system-root`
+      `${VIBE64_SYSTEM_ROOT_ENV}=/tmp/vibe64-file-system-root`,
+      "JSKIT_REALTIME_DEBUG=1"
     ].join("\n"), "utf8");
 
     loadRuntimeEnvFiles({
@@ -86,6 +88,11 @@ test("runtime env files load broadly while runtime config stays explicit", async
     assert.equal(runtimeEnv[VIBE64_PROJECTS_ROOT_ENV], "/tmp/vibe64-file-projects-root");
     assert.equal(runtimeEnv[VIBE64_SYSTEM_ROOT_ENV], undefined);
     assert.equal(runtimeEnv.VIBE64_LISTEN_SOCKET, undefined);
+    assert.equal(runtimeEnv.JSKIT_REALTIME_DEBUG, "1");
+    process.env.JSKIT_REALTIME_DEBUG = "0";
+    assert.equal(resolveRuntimeEnv().JSKIT_REALTIME_DEBUG, "0");
+    delete process.env.JSKIT_REALTIME_DEBUG;
+    assert.equal(resolveRuntimeEnv().JSKIT_REALTIME_DEBUG, undefined);
 
     process.env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV] = "1";
     const selfTargetRuntimeEnv = resolveRuntimeEnv();

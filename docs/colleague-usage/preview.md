@@ -259,7 +259,10 @@ of the current iframe's console/network history.
 
 For a **Chat updates could not reconnect** investigation, the operator can enable
 existing `JSKIT_REALTIME_DEBUG=1` on the workspace daemon (or `realtime.debug` in
-its runtime configuration). Subscription diagnostics then record the pending
+its runtime configuration), then restart the daemon at a safe maintenance boundary
+to apply it. Vibe64 passes this flag to the shared chat runtime; setting it in a
+project's Preview environment does not enable chat diagnostics. Subscription
+diagnostics then record the pending
 server stage at the 10-second acknowledgement budget and the stage/reason when
 that observer is released. They contain no chat text or credentials. This does
 not change the deadline, start a model, resend a message or retry a subscription;

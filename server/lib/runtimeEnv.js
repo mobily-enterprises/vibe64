@@ -75,6 +75,7 @@ function resolveRuntimeEnv() {
     [VIBE64_SERVICE_DATA_ROOT_ENV]: String(process.env[VIBE64_SERVICE_DATA_ROOT_ENV] || "").trim(),
     [VIBE64_SYSTEM_ROOT_ENV]: selfTargetSystemRoot || undefined,
     SERVER_SURFACE: serverSurface,
+    JSKIT_REALTIME_DEBUG: process.env.JSKIT_REALTIME_DEBUG,
     PORT: rawPort ? toPort(rawPort, 3000) : null,
     PORT_CONFIGURED: Boolean(rawPort),
     HOST: String(process.env.HOST || "").trim() || "127.0.0.1"
