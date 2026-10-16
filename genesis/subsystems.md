@@ -671,7 +671,9 @@ Terminal closure retains its distinct
 host contract. These staged moves do not finish the entire lifecycle.
 
 
-Owns running project applications, their preview identities and declared
+Owns shared or session-scoped warm supporting services through the existing managed
+execution owner, including exact-session and project cleanup. Also owns running
+project applications, their preview identities and declared
 project services shared across sessions. Project Close drains those services
 through the existing execution owner after stopping individual outputs.
 Output lifecycle, status, logs and result access share canonical terminal

@@ -1912,6 +1912,7 @@ function createRestartedController({
 
 async function withAgentMessageController(operation, {
   actions = null,
+  projectServices = null,
   throughTerminalService = false,
   bindConversation = false,
   runtimeFactory = null,
@@ -2251,6 +2252,7 @@ async function withAgentMessageController(operation, {
   const createService = () => {
     const service = createTerminalService({
       actions,
+      projectServices,
       codexTerminalController: controllerOptions,
       env: controllerOptions.env,
       publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
@@ -2304,6 +2306,23 @@ test("cold terminal cleanup honors an idle session's saved OpenCode selection", 
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(captures.providerOptions.length, 0, "cleanup must not prepare Codex");
   }, { throughTerminalService: true });
+});
+
+test("session terminal cleanup drains its supporting services through the existing project owner", { timeout: 15_000 }, async () => {
+  const calls = [];
+  const projectServices = {
+    async closeSession(context, sessionId) { calls.push({ context, sessionId }); return { ok: true }; },
+    async closeAll() {}
+  };
+  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
+    const project = await projectService.readCurrentProject();
+    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
+      assert.equal((await terminalService.closeSessionTerminals(sessionId)).ok, true);
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].sessionId, sessionId);
+    assert.equal(calls[0].context.projectContextRoot, project.path);
+  }, { throughTerminalService: true, projectServices });
 });
 
 test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {

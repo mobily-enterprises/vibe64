@@ -456,6 +456,16 @@ Preview Stop drains only the output. Project Close first stops session work, the
 all project-owned services, and clears its open state only after successful cleanup.
 Dormant close and project deletion use that same owner. Managed exact-owner stop
 can clean a predecessor server’s service without its original source directory.
+A `per session` declaration uses the same service owner and serialized launch path,
+with session identity in its execution selector and map key. It launches from that
+session's source using the session environment, reuses its live handle across
+output/test target changes, and does not attach to another session's instance.
+Session terminal cleanup calls the same owner's `closeSession`, selecting the
+project owner plus exact session ID; project-wide services remain running. Failed
+session cleanup prevents its relaunch until cleanup succeeds. Project shutdown
+drains both scopes. Endpoints/readiness remain application-owned; project Env is
+not a per-session value store.
+
 Standalone services use their executor-owned process handles. Orderly editor
 shutdown drains owned services. Service SIGTERM handlers own external cleanup;
 commands must not detach untracked workers.

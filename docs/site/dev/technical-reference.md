@@ -233,12 +233,13 @@ process. Outputs remain pending until the current setup recipe has succeeded;
 a Stack with no setup recipe is simply unconfigured rather than failed.
 Component conflicts are reported instead of interleaving competing commands.
 
-Projects may also declare foreground services shared by their sessions:
+Projects may also declare foreground services shared by their sessions, or one instance per session:
 
 ```markdown
 ## Project services
 
 - Start `worker` with `nodejs` in `tools`: `npm` `run` `worker`
+- Start `reference` per session with `nodejs`: `npm` `run` `reference:service`
 ```
 
 The optional section accepts unique lowercase service IDs, one or more runtimes,
@@ -250,7 +251,7 @@ resource allowance. The service must stay in the foreground and handle SIGTERM
 by releasing its owned resources; spawning untracked background work is not a
 supported lifecycle. Output readiness remains the application's responsibility.
 
-Concurrent sessions share the service owner. A running service declaration cannot
+Without `per session`, concurrent sessions share the service owner. A running service declaration cannot
 be changed by another branch: Close and reopen the project to adopt it. Archiving
 the source session does not terminate the service; its runtime assets must remain
 usable independently of that source directory. Project Close, inactivity shutdown
@@ -258,6 +259,22 @@ and orderly editor shutdown stop the services and wait for process-exit proof.
 A hosted editor can also find and stop an exact owner from an earlier server
 process. Failed cleanup remains an error and the project is not reported closed.
 Reading project or Preview status never starts these services.
+
+`per session` retains a separate process in each session's source directory and
+session execution environment. Repeated output launches and test target switches
+reuse that session's running instance; finishing a test or stopping Preview does
+not stop it. Closing/archiving/renewing that session drains only its instances.
+Project Close and editor shutdown drain all instances. A later output launch may
+start an exited instance again; this is not process survival across a host restart.
+
+Vibe64 owns process lifetime and cleanup, not the service's network protocol. The
+project command must allocate a distinct endpoint (for example bind port0 and
+record the resulting loopback address in that session's ignored runtime folder),
+and tests must read/check their own instance's readiness and identity. Do not use
+a shared fixed port or assume a responding listener belongs to this session.
+Development Env is project-wide, not a per-session port assignment. Foreground
+service commands must retain and clean their own children on SIGTERM.
+
 
 An output target can declare named text parameters. Its executable remains fixed;
 `{parameter:id}` can appear in Prepare, Build, or Run arguments. For example:

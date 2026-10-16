@@ -52,6 +52,17 @@ starting; the session's other work must finish first.
 Colleague can inspect preparation and retry it through its existing session
 actions when asked; it does not run these shell helpers itself.
 
+For a reference application that must remain warm between tests, ask the coding
+agent to declare a **per-session supporting service** in the project's Stack.
+Starting that session's declared output starts its service; later test runs reuse
+it. Each session needs its own endpoint and readiness check. **Stop preview**
+stops the displayed app, not these supporting services. Archiving/closing the
+session stops its supporting instances, and closing the project stops all of them.
+The project command remains responsible for endpoint selection and clean shutdown.
+Development Env values are shared across the project, so setting a port there does
+not give different sessions different ports. Colleague can explain this and offer
+to ask the coding agent to configure it; it cannot run a shell command itself.
+
 Long-running processes retain their startup values. After changing credentials, ask the
 coding agent to close its managed browser with `vibe64-helper preview browser
 close` before retrying; its next browser command starts a fresh process with the

@@ -23,11 +23,103 @@ function fixture(overrides = {}) {
 
 test("project services strictly parse argv, runtime and workdir", () => {
   assert.deepEqual(parseVibe64ProjectServicesLines(['- Start `worker` with `nodejs` in `tools`: `npm` `run` `worker`']), [{ ...service, workdir: "tools" }]);
+  assert.deepEqual(parseVibe64ProjectServicesLines(['- Start `worker` per session with `nodejs`: `npm` `run` `worker`']), [{ ...service, scope: "session" }]);
   assert.deepEqual(parseVibe64ProjectServicesLines(["- Nothing."]), []);
   for (const lines of [[], ['- Start `worker` with `nodejs` in `../elsewhere`: `npm`'], ['- Start `worker` with `nodejs`: npm run worker'],
     ['- Start `worker` with `nodejs`: `npm`', '- Start `worker` with `nodejs`: `npm`']]) {
     assert.throws(() => parseVibe64ProjectServicesLines(lines), { code: "VIBE64_PROJECT_SERVICES_INVALID" });
   }
+});
+
+const sessionContext = (sessionId) => ({
+  ...context("/projects/a", `/projects/a/${sessionId}/source`),
+  session: { sessionId, sourcePath: `/projects/a/${sessionId}/source` }
+});
+
+test("session services stay warm across output launches without sharing another session's process", async () => {
+  const { manager, calls } = fixture({ inspect: async () => ({ services: [{ ...service, scope: "session" }] }) });
+  await Promise.all([manager.ensure(sessionContext("a")), manager.ensure(sessionContext("b"))]);
+  await manager.ensure(sessionContext("a"));
+  await manager.ensure(sessionContext("b"));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map(({ execution }) => execution.sessionId), ["a", "b"]);
+  assert.deepEqual(calls.map(({ cwd }) => cwd), ["/projects/a/a/source", "/projects/a/b/source"]);
+  assert.equal(calls[0].execution.ownerId, calls[1].execution.ownerId);
+  assert.equal(calls[0].session.sessionId, "a");
+  assert.equal(calls[0].envPolicy, "session");
+  assert.equal(calls[0].execution.lifecycle, "service");
+  assert.equal(calls[0].timeout, undefined);
+  await manager.closeSession(context(), "a");
+  assert.deepEqual(calls[2].stop, { ownerId: calls[0].execution.ownerId, sessionId: "a" });
+  await manager.ensure(sessionContext("b"));
+  assert.equal(calls.length, 3, "closing a must not restart warm b");
+  await manager.ensure(sessionContext("a"));
+  assert.equal(calls.length, 4, "a may start again through ordinary session admission");
+});
+
+test("session cleanup retains shared services and cleans the exact owner after daemon replacement", async () => {
+  const inspect = async () => ({ services: [service, { ...service, id: "reference", scope: "session" }] });
+  const first = fixture({ inspect });
+  await first.manager.ensure(sessionContext("a"));
+  await first.manager.ensure(sessionContext("b"));
+  assert.equal(first.calls.length, 3);
+  const second = fixture({ inspect });
+  await second.manager.closeSession(context(), "a");
+  assert.deepEqual(second.calls[0].stop, { ownerId: first.calls[0].execution.ownerId, sessionId: "a" });
+  await first.manager.closeSession(context(), "a");
+  await first.manager.ensure(sessionContext("b"));
+  assert.equal(first.calls.length, 4, "neither shared service nor b was restarted");
+});
+
+test("session service cannot start or clean up without session identity", async () => {
+  const { manager, calls } = fixture({ inspect: async () => ({ services: [{ ...service, scope: "session" }] }) });
+  await assert.rejects(manager.ensure(context()), /exact session identity/);
+  await assert.rejects(manager.closeSession(context(), ""), /exact session identity/);
+  assert.equal(calls.length, 0);
+});
+
+test("one session's declaration does not remove another's warm service, but scope changes are refused", async () => {
+  let services = [{ ...service, scope: "session" }];
+  const { manager, calls } = fixture({ inspect: async () => ({ services }) });
+  await manager.ensure(sessionContext("a"));
+  services = [];
+  await manager.ensure(sessionContext("b"));
+  await assert.rejects(manager.ensure(sessionContext("a")), /was removed/);
+  services = [service];
+  await assert.rejects(manager.ensure(sessionContext("b")), /changed scope/);
+  assert.equal(calls.length, 1);
+});
+
+test("session close drains a racing start and blocks that session on failed cleanup", async () => {
+  let release, started;
+  const starting = new Promise(resolve => { started = resolve; });
+  const { manager, calls } = fixture({
+    inspect: async () => ({ services: [{ ...service, scope: "session" }] }),
+    runCommand: async () => { started(); await new Promise(resolve => { release = resolve; }); return { ok: true, execution: { id: "racing" } }; },
+    stopOwned: async selector => { calls.push({ stop: selector }); return { supported: true, scopeEmpty: false, error: "still running" }; }
+  });
+  const launch = manager.ensure(sessionContext("a"));
+  await starting;
+  const closing = manager.closeSession(context(), "a");
+  const queued = manager.ensure(sessionContext("a"));
+  const closeCheck = assert.rejects(closing, /still running/);
+  const queuedCheck = assert.rejects(queued, /session is closing/);
+  release();
+  await Promise.all([launch, closeCheck, queuedCheck]);
+  assert.equal(calls[0].stop.sessionId, "a");
+});
+
+test("standalone session close stops only that session's owned handles", async () => {
+  const stopped = [];
+  const { manager } = fixture({ inspect: async () => ({ services: [service, { ...service, id: "reference", scope: "session" }] }),
+    stopOwned: async () => ({ supported: false, scopeEmpty: true }),
+    stopExecution: async id => { stopped.push(id); return { scopeEmpty: true }; } });
+  await manager.ensure(sessionContext("a"));
+  await manager.ensure(sessionContext("b"));
+  await manager.closeSession(context(), "a");
+  assert.deepEqual(stopped, ["execution-2"]);
+  await manager.close(context());
+  assert.deepEqual(stopped.sort(), ["execution-1", "execution-2", "execution-3"]);
 });
 
 test("concurrent sessions share one service; another project gets its own", async () => {

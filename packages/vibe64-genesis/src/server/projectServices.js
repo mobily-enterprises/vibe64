@@ -16,16 +16,17 @@ function parseVibe64ProjectServicesLines(lines) {
     const source = text.trim();
     if (!source) continue;
     const line = index + 1;
-    const match = source.match(/^- Start `([a-z][a-z0-9-]{0,63})` with (.+?): (.+)$/u);
+    const match = source.match(/^- Start `([a-z][a-z0-9-]{0,63})`( per session)? with (.+?): (.+)$/u);
     if (!match) invalidStackOperation(CODE, LOCATION,
-      "Use: - Start `service-id` with `runtime` [in `workdir`]: `command` `argument`...", line);
+      "Use: - Start `service-id` [per session] with `runtime` [in `workdir`]: `command` `argument`...", line);
     if (services.some(({ id }) => id === match[1])) invalidStackOperation(CODE, LOCATION, "Duplicate project service id.", line);
-    const workdir = match[2].match(/^(.*?) in `([^`\r\n]+)`$/u);
+    const workdir = match[3].match(/^(.*?) in `([^`\r\n]+)`$/u);
     services.push({
       id: match[1],
-      runtimeRequirements: runtimeArguments(workdir ? workdir[1] : match[2], CODE, LOCATION, "Service runtimes", line),
+      ...(match[2] ? { scope: "session" } : {}),
+      runtimeRequirements: runtimeArguments(workdir ? workdir[1] : match[3], CODE, LOCATION, "Service runtimes", line),
       workdir: projectPath(workdir?.[2] || ".", CODE, LOCATION, "Service workdir", line),
-      argv: processArguments(match[3], CODE, LOCATION, "Service command", line)
+      argv: processArguments(match[4], CODE, LOCATION, "Service command", line)
     });
   }
   if (!services.length) invalidStackOperation(CODE, LOCATION, "Declare a service or exactly `- Nothing.`.");

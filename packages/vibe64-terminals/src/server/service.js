@@ -2387,6 +2387,8 @@ function createService({
         { controller: { closeAllForSession: (id) => sourceEditorProvider?.closeExplanationsForSession(id) },
           label: "Source explanations" },
         { controller: outputTarget, label: "outputTarget" },
+        { controller: { closeAllForSession: (id) => projectServices.closeSession(projectRuntimeContext(), id) },
+          label: "sessionServices" },
         ...(!controllerOptions.renewalCleanup && (controllerOptions.session?.sourceReady !== false || learningNativeAvailable) ? [{
           controller: { closeAllForSession: async (id, options) =>
             sessionAgent.interruptTurn(id, {}, await assistantSessionOptions(id, options)) },

@@ -1950,3 +1950,8 @@ pending label and withhold other actions until submission settles.
 Senior can reconcile checklist ticks and record evidence during Auto review,
 then complete and archive the same agreed plan without those progress updates
 being mistaken for a change of scope.
+
+Declared supporting services can stay warm independently of Preview and individual
+test runs. A project can choose one shared instance or one per session. Separate
+session instances do not replace each other; ending a session cleans up only its
+instances, while closing the project cleans up all of them.
