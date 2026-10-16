@@ -76,6 +76,12 @@ The goal dialog closes after the command succeeds. While acknowledgement is
 pending, or if delivery fails or remains uncertain, it stays open with your
 objective intact. Switching chats prevents a late reply from closing the new
 chat's goal dialog.
+If Claude rejects the goal condition before sending it, the attempt is failed,
+not delivery-uncertain. Close the goal popover, choose **Cancel** beside that
+failed attempt, then reopen **Goal** and enter the corrected objective. A word
+such as `clear` is a command, not a goal condition. Cancelling this failed attempt
+does not clear the previous goal or stop newer work. A genuinely uncertain send
+still needs **Retry** to check its original delivery receipt first.
 An existing unfinished goal must be cancelled before setting a different one.
 **Resume goal** continues it in the same conversation. **Cancel goal** stops the
 work and clears the goal, including a blocked goal that Claude has already

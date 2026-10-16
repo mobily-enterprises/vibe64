@@ -2178,6 +2178,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       catch (error) { if (error.code === "ENOENT") return []; throw error; }
     };
     assert.equal((await trace()).some(row => row.args?.includes("--print")), false, "inspection does not start native inference");
+    await assert.rejects(goalFacade.updateGoal({ action: "set", objective: "clear", messageId: "invalid-goal-condition",
+      expectedSegmentId: emptyGoalRead.target.segmentId }), {
+      code: "conversation_invalid_goal", statusCode: 400, delivery: "not-sent"
+    });
+    assert.notEqual(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent || "null")?.active, true,
+      "pre-dispatch validation cannot leave an active continuation intent behind");
+    assert.equal((await trace()).some(row => row.frame?.type === "user"), false);
     const request = { message: "Work", messageId: "service-main" };
     const sent = await service.sendAgentMessage("test", request, options);
     assert.equal(sent.delivered, true);
