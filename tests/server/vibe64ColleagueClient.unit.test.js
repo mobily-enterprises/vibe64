@@ -2500,7 +2500,7 @@ test("window focus and clicks never refresh Colleague while explicit refresh sti
   assert.ok(requests.length > before);
 });
 
-for (const scenario of ["stable", "route", "replace-during-effect", "retire-main"]) test(`Main visual open preserves actual navigation lifetime: ${scenario}`, async t => {
+for (const scenario of ["stable", "route", "replace-during-effect", "retire-main", "focus-inflight"]) test(`Main visual open preserves actual navigation lifetime: ${scenario}`, async t => {
   const replacesPreviewOnRoute = scenario !== "stable";
   const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
   const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
@@ -2531,18 +2531,55 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
   const data = vue.shallowRef({ generation: 0, value: { navigation: command } });
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const navigationKey = hostKeys.VIBE64_BROWSER_NAVIGATION_KEY;
+  // Exercise the original command busy gate, not a stub that accepts every ACK.
+  const coreUrl = new URL("./runtime/useCommandCore.js", import.meta.resolve("@jskit-ai/http-web/client/composables/useCommand"));
+  const { code: coreCode } = await transform(await readFile(coreUrl, "utf8"), { format: "cjs" });
+  const { validateOperationInput } = await import(new URL("./operationValidationHelpers.js", coreUrl));
+  const coreModule = { exports: {} };
+  new Function("require", "module", "exports", coreCode)(name => ({
+    "@tanstack/vue-query": { useQueryClient: () => ({}) },
+    "@jskit-ai/http-runtime/client": { resolveFieldErrors: () => ({}) },
+    "./operationValidationHelpers.js": { validateOperationInput }
+  })[name], coreModule, coreModule.exports);
+  const commandRuns = [];
+  let releaseFocus, focusInFlight = false;
+  const focusPending = new Promise(resolve => { releaseFocus = resolve; });
+  t.after(releaseFocus);
   const imports = {
     vue,
     "@jskit-ai/http-web/client/composables/useEndpointResource": { useEndpointResource: () => ({ data,
       query: { error: vue.ref(null), refetch: async () => data.value } }) },
-    "@jskit-ai/http-web/client/composables/useCommand": { useCommand: () => ({ async run({ path, body }) {
-      if (!path.endsWith("/ack")) return { ok: true };
-      receipts.push(structuredClone(body));
-      try { validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, ...body }); }
-      catch (error) { validationErrors.push(error.message); throw error; }
-      const result = coordination.acknowledge(connection, body, { conversationId: mainConversationId(identity), generation: 0 });
-      serverResults.push(result); return result;
-    } }) },
+    "@jskit-ai/http-web/client/composables/useCommand": { useCommand: options => {
+      async function send({ path, body }) {
+        if (!path.endsWith("/ack")) {
+          if (scenario === "focus-inflight" && previewMounts >= 2) {
+            focusInFlight = true;
+            await focusPending;
+            focusInFlight = false;
+          }
+          return { ok: true };
+        }
+        receipts.push(structuredClone(body));
+        try { validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, ...body }); }
+        catch (error) { validationErrors.push(error.message); throw error; }
+        const result = coordination.acknowledge(connection, body, { conversationId: mainConversationId(identity), generation: 0 });
+        serverResults.push(result); return result;
+      }
+      if (scenario !== "focus-inflight") return { run: send };
+      const isSaving = vue.ref(false), canRun = vue.ref(true);
+      const original = coreModule.exports.useCommandCore({ ...options, canRun,
+        resource: { isSaving, async save(body, request) {
+          isSaving.value = true;
+          try { return await send({ path: request.path, body }); }
+          finally { isSaving.value = false; }
+        } } });
+      return { async run(context) {
+        const operands = { path: context.path, canRun: canRun.value, running: isSaving.value };
+        const result = await original.run(context);
+        commandRuns.push({ ...operands, result });
+        return result;
+      } };
+    } },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
     "@jskit-ai/kernel/shared/support/visibility": { ROUTE_VISIBILITY_PUBLIC: "public" },
     "@local/vibe64-sessions/shared/conversation": { mainConversationId },
@@ -2619,6 +2656,11 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
     assert.equal(current.value, false);
     assert.equal(receipts.length, 0, "a retired Main cannot acknowledge even a finished visual");
     return;
+  }
+  if (scenario === "focus-inflight") {
+    t.diagnostic(JSON.stringify({ commandRuns, error: owner.error.value, previewMounts, mainDisposals }));
+    assert.equal(focusInFlight, true, "focus remains in flight while ACK is delivered");
+    assert.ok(commandRuns.some(run => run.path.endsWith("/ack") && run.canRun), "ACK permission remains admitted");
   }
   assert.equal(receipts.length, 1, "one authoritative ACK, no retry");
   assert.equal(current.value, true);

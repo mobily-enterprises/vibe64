@@ -152,6 +152,8 @@ message remains saved; read its result and your saved lesson progress before
 asking it to continue. Do not resend that completed message to recover navigation.
 Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
+When Main opens a diagram in the practice project, wait for its confirmation;
+you do not need to request the diagram again while the view changes.
 Wait for Main to confirm that the diagram is ready before continuing its
 illustrated steps.
 

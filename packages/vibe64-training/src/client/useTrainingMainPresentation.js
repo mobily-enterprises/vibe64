@@ -46,11 +46,15 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
     return alive() && status !== 401 && status !== 403 && resource.data.value?.generation === generation
       ? resource.data.value.value : null;
   });
-  const command = useCommand({ ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: "app", access: "never",
+  const commandOptions = { ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: "app", access: "never",
     apiSuffix: "/vibe64/training", placementSource: "vibe64.training.main-presentation",
     suppressSuccessMessage: true, buildRawPayload: (_model, { context }) => context.body,
     buildCommandOptions: (_model, { context }) => ({ path: context.path, method: "POST" }),
-    fallbackRunError: "The lesson presentation receipt was not confirmed. Read its current status before continuing." });
+    fallbackRunError: "The lesson presentation receipt was not confirmed. Read its current status before continuing." };
+  // Focus reporting and ACK delivery are independent writes. A route remount
+  // can report focus while its visual is ready to acknowledge.
+  const command = useCommand(commandOptions);
+  const focusCommand = useCommand(commandOptions);
   async function acknowledge(body) {
     if (!alive()) throw new Error("This Main lesson browser is no longer selected.");
     const expected = generation;
@@ -101,7 +105,7 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
     if (!alive() || !ready.value) return;
     const expected = generation;
     try {
-      const result = await command.run({ path: `${base}/focus`, body: { clientId,
+      const result = await focusCommand.run({ path: `${base}/focus`, body: { clientId,
         focus: { pane: selectedPreview() ? "preview" : "session",
           ...(identity.noExercise === false ? { projectSlug: identity.sourceProjectSlug } : {}) } } });
       if (!alive() || expected !== generation) return;
