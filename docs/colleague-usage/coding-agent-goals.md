@@ -1,5 +1,12 @@
 # Goals and model changes
 
+Claude cannot create a goal through its application tools. When you ask it to
+create one, it explains the UI steps and can draft the objective for you:
+choose **Set goal**, enter the objective, then choose **Start goal**.
+For an existing unfinished goal, use **Resume goal** to continue it or
+**Cancel goal** before setting a different one. These steps apply on desktop
+and mobile; an objective written in chat alone does not create a goal.
+
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use
 the selected local project's access checks and do not require a hosted login.

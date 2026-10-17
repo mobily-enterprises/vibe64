@@ -4272,6 +4272,11 @@ input is admitted. Ordinary chat and application restart therefore preserve Paus
 Resume and Cancel update the retained goal only after their exact native receipt.
 
 
+Main Claude's instructions direct explicit goal-creation requests to the chat's
+Set goal / Start goal controls and offer a pasteable objective. Its application
+tools do not create goals. Existing unfinished goals use Resume or Cancel before
+a replacement, through the same UI owner.
+
 Main Claude may report an external prerequisite through the bound structured
 `vibe64.terminals.main-goal.block` action. The original shared native goal owner
 retains the goal and reason, stops execution and disarms its checker before
