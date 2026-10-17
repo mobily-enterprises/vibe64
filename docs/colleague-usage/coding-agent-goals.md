@@ -54,9 +54,12 @@ is not offered based on the previous conversation. A failed read shows
 unavailable status does not mean the goal was cleared. A pending goal command
 temporarily disables other goal commands and names that action; it does not mean
 the coding turn has stopped.
-If a goal command shows **Retry**, use it before retrying;
-reconnecting does not resend the command. These controls work the same on desktop
-and mobile.
+If Claude fails while preparing a goal command, close the goal popup and choose
+**Retry** on the failed command in the conversation. A confirmed failure before
+delivery keeps the previous goal and permits that same command to be retried;
+it does not leave a new goal waiting to resume after restart. If delivery is
+uncertain, use the offered delivery check before resending. Reconnecting alone
+does not resend the command. These controls work the same on desktop and mobile.
 
 OpenCode does not provide native goal controls. Its chat and live updates remain
 available without a goal; choose a goal-capable assistant when you need to create
