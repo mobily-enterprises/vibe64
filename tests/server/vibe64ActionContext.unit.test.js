@@ -616,7 +616,16 @@ test("conversation authority diagnostics separate slow phases without retaining 
     env, logger: { warn(record) { logs.push(record); } },
     resolveUser() { lookups++; clock += slow ? 20 : 0; return user; },
     authorizeProject() { clock += slow ? 30 : 0; if (!allowed) throw new Error("private-project-error"); },
-    resolveLearningContext() { clock += 70; throw new Error("private-attempt-error"); },
+    resolveLearningContext(input) {
+      if (env.JSKIT_REALTIME_DEBUG === "0") assert.equal(input.onContextTiming, undefined);
+      input.onContextTiming?.("scope-selection", 20);
+      input.onContextTiming?.("exercise-validation", 30);
+      input.onContextTiming?.("practice-capture", 20);
+      input.onContextTiming?.("private-untrusted-phase", 100);
+      input.onContextTiming?.("practice-capture", NaN);
+      clock += 70;
+      throw new Error("private-attempt-error");
+    },
     projectContext: { projectsRoot: "/test/projects", readWorkspaceProject({ slug }) {
       clock += slow ? 60 : 0; return { project: { path: `/test/projects/${slug}` } };
     } }
@@ -639,7 +648,8 @@ test("conversation authority diagnostics separate slow phases without retaining 
   assert.deepEqual(logs.at(-1).timings, { user: 20, "project-access": 30 });
   assert.equal(logs.at(-1).completed, false);
   await assert.rejects(execute({ sessionId: "session-1", learningAttemptId: "00000000-0000-4000-8000-000000000001" }), /private-attempt-error/u);
-  assert.deepEqual(logs.at(-1).timings, { user: 20, "saved-attempt": 70 });
+  assert.deepEqual(logs.at(-1).timings, { user: 20, "saved-attempt.scope-selection": 20,
+    "saved-attempt.exercise-validation": 30, "saved-attempt.practice-capture": 20, "saved-attempt": 70 });
   assert.equal(logs.at(-1).completed, false);
   assert.doesNotMatch(JSON.stringify(logs), /private-|cookie|username|00000000-0000/u);
   const count = logs.length;
@@ -654,5 +664,6 @@ test("conversation authority diagnostics separate slow phases without retaining 
   await execute();
   allowed = false;
   await assert.rejects(execute(), /private-project-error/u);
+  await assert.rejects(execute({ sessionId: "session-1", learningAttemptId: "00000000-0000-4000-8000-000000000001" }), /private-attempt-error/u);
   assert.equal(logs.length, count, "Disabled diagnostics remain silent on success and failure");
 });

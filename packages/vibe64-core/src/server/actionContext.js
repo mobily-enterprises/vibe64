@@ -188,7 +188,14 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
           learning = await measure("saved-attempt", () => context.trainingMain
             ? context.trainingMain.requireAttempt(learningAttemptId, input.sessionId)
             : resolveLearningContext({ actor: user, attemptId: learningAttemptId,
-              sessionId: input.sessionId, access: scope.learningAccess }));
+              sessionId: input.sessionId, access: scope.learningAccess,
+              ...(diagnostic ? { onContextTiming(phase, durationMs) {
+                if (["scope-selection", "exercise-validation", "practice-capture"].includes(phase) &&
+                    Number.isFinite(durationMs) && durationMs >= 0) {
+                  const key = `saved-attempt.${phase}`;
+                  timings[key] = (timings[key] || 0) + durationMs;
+                }
+              } } : {}) }));
           if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
               learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
             throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");

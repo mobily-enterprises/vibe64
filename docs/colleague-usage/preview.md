@@ -290,3 +290,9 @@ These records identify the session and operation, without chat text, request
 details, account credentials or error contents. This does
 not change the deadline, start a model, resend a message or retry a subscription;
 use **Reload chat** after correcting the cause.
+
+With the same option, saved learning-attempt timings separately report normal or
+preview scope selection, saved exercise validation and practice-context capture.
+These are nested durations within saved-attempt time; do not add them to that
+parent duration. Failed stages retain their timing without exposing their error
+contents, and no completed authorization result is cached.

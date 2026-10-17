@@ -179,9 +179,18 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     }, true, false));
   }
 
-  async function resolveBoundPracticeContext({ actor, attemptId, sessionId, access = "observe" }) {
+  async function resolveBoundPracticeContext({ actor, attemptId, sessionId, access = "observe", onContextTiming }) {
     if (!["observe", "control", "write", "create"].includes(access)) throw new TypeError("Use an explicit learning operation scope.");
-    const saved = await learners.readExerciseProjectScope({ actor, attemptId, access });
+    const diagnostic = typeof onContextTiming === "function";
+    let started = diagnostic ? performance.now() : 0;
+    let saved;
+    try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access }); }
+    finally {
+      if (diagnostic) {
+        try { onContextTiming("exercise-validation", performance.now() - started); }
+        catch { /* Diagnostics cannot change admission. */ }
+      }
+    }
     if (!saved.initialSessionId) {
       throw learningError("VIBE64_TRAINING_SESSION_REQUIRED", "Prepare this saved practice session before opening it.");
     }
@@ -192,8 +201,16 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       throw learningError("VIBE64_TRAINING_SESSION_REQUIRED", "Use the exact saved learning conversation.");
     }
     let captured;
-    await runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access: "control" },
-      () => { captured = captureProjectRequestContext(); }, true, false, access === "observe" && !sessionId, saved);
+    started = diagnostic ? performance.now() : 0;
+    try {
+      await runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access: "control" },
+        () => { captured = captureProjectRequestContext(); }, true, false, access === "observe" && !sessionId, saved);
+    } finally {
+      if (diagnostic) {
+        try { onContextTiming("practice-capture", performance.now() - started); }
+        catch { /* Diagnostics cannot change admission. */ }
+      }
+    }
     return Object.freeze({ ...captured, trainingLearners: learners,
       ...(access === "create" ? { createLearningSession: input => openSession({ actor, attemptId, input }) } : {}),
       runLearningOperation(operation) {

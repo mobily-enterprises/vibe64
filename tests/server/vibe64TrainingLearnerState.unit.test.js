@@ -3540,14 +3540,20 @@ test("exact saved practice context avoids an immediate duplicate read while late
   const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active),
     source: await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")) };
   assert.equal(input.sessionId, `training-${input.attemptId}`);
-  const first = await learning.resolveContext(input);
+  const timings = [];
+  const onContextTiming = (phase, durationMs) => { timings.push({ phase, durationMs }); };
+  const first = await learning.resolveContext({ ...input, onContextTiming });
+  assert.deepEqual(timings.map(value => value.phase), ["exercise-validation", "practice-capture"]);
+  assert.ok(timings.every(value => Number.isFinite(value.durationMs) && value.durationMs >= 0));
   assert.deepEqual(first.learningScope, f.saved.scope);
   assert.deepEqual(calls, ["exercise:observe"]);
-  const second = await learning.resolveContext(input);
+  const second = await learning.resolveContext({ ...input, onContextTiming() { throw new Error("diagnostic failure"); } });
   assert.deepEqual(second.learningScope, first.learningScope);
   assert.deepEqual(calls, ["exercise:observe", "exercise:observe"]);
   const writable = await learning.resolveContext({ ...input, access: "write" });
-  await assert.rejects(learning.resolveContext({ ...input, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  timings.length = 0;
+  await assert.rejects(learning.resolveContext({ ...input, onContextTiming, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.deepEqual(timings.map(value => value.phase), ["exercise-validation"]);
   await assert.rejects(learning.resolveContext({ ...input, sessionId: "foreign" }), { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
   const forgedAttempt = randomUUID();
   await assert.rejects(learning.resolveContext({ ...input, attemptId: forgedAttempt, sessionId: `training-${forgedAttempt}` }),
