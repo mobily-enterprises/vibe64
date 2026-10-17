@@ -3617,9 +3617,11 @@ test("exact saved practice context avoids an immediate duplicate read while late
     { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   await fs.writeFile(path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
     "files/training/exercises/app/server.mjs"), "changed installed source");
-  await assert.rejects(learning.resolveContext(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-  await assert.rejects(first.runLearningOperation(() => assert.fail("an old observation cannot bypass current content verification")),
-    { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  // As in the ended-history scope case (532b38e2): damaged exercise bytes do not
+  // hide historical chat identity, and consuming that exercise still fails closed.
+  assert.deepEqual((await learning.resolveContext(input)).learningScope, first.learningScope);
+  await assert.rejects(() => createInstalledTrainingContent({ systemRoot: f.systemRoot }).readExercise({ ...f.pin.topic,
+    lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
 });
 
 test("normal source-less dispatch is unchanged and a practice-shaped hint cannot grant a practice namespace", async t => {
