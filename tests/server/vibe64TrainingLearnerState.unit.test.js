@@ -3523,7 +3523,7 @@ test("explicit saved practice open awaits its original runtime owner and refuses
 });
 
 
-test("exact saved practice session dispatch skips only the source-less probe and retains both fresh scope admissions", async t => {
+test("exact saved practice context avoids an immediate duplicate read while later admissions remain fresh", async t => {
   const f = await historicalPracticeFixture(t);
   await f.run(true);
   const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
@@ -3542,10 +3542,11 @@ test("exact saved practice session dispatch skips only the source-less probe and
   assert.equal(input.sessionId, `training-${input.attemptId}`);
   const first = await learning.resolveContext(input);
   assert.deepEqual(first.learningScope, f.saved.scope);
-  assert.deepEqual(calls, ["exercise:observe", "exercise:control"]);
+  assert.deepEqual(calls, ["exercise:observe"]);
   const second = await learning.resolveContext(input);
   assert.deepEqual(second.learningScope, first.learningScope);
-  assert.deepEqual(calls, ["exercise:observe", "exercise:control", "exercise:observe", "exercise:control"]);
+  assert.deepEqual(calls, ["exercise:observe", "exercise:observe"]);
+  const writable = await learning.resolveContext({ ...input, access: "write" });
   await assert.rejects(learning.resolveContext({ ...input, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   await assert.rejects(learning.resolveContext({ ...input, sessionId: "foreign" }), { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
   const forgedAttempt = randomUUID();
@@ -3559,9 +3560,13 @@ test("exact saved practice session dispatch skips only the source-less probe and
     requestId: "hot-session-ended", reason: "discard" });
   assert.deepEqual((await learning.resolveContext(input)).learningScope, first.learningScope, "ended history retains its original observation admission");
   await assert.rejects(learning.resolveContext({ ...input, access: "write" }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  await assert.rejects(writable.runLearningOperation(() => assert.fail("an ended lesson cannot reuse its earlier write admission")),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   await fs.writeFile(path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
     "files/training/exercises/app/server.mjs"), "changed installed source");
   await assert.rejects(learning.resolveContext(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  await assert.rejects(first.runLearningOperation(() => assert.fail("an old observation cannot bypass current content verification")),
+    { code: "VIBE64_TRAINING_CONTENT_INVALID" });
 });
 
 test("normal source-less dispatch is unchanged and a practice-shaped hint cannot grant a practice namespace", async t => {

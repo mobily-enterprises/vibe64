@@ -193,7 +193,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     }
     let captured;
     await runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access: "control" },
-      () => { captured = captureProjectRequestContext(); }, true, false, access === "observe" && !sessionId);
+      () => { captured = captureProjectRequestContext(); }, true, false, access === "observe" && !sessionId, saved);
     return Object.freeze({ ...captured, trainingLearners: learners,
       ...(access === "create" ? { createLearningSession: input => openSession({ actor, attemptId, input }) } : {}),
       runLearningOperation(operation) {
@@ -227,15 +227,19 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     return runPracticeOperation(input, operation, false, false);
   }
 
-  async function runPracticeOperation({ actor, attemptId, sessionId, access = "observe" } = {}, operation, bindLearning, barrierHeld, allowMissingSession = false) {
+  async function runPracticeOperation({ actor, attemptId, sessionId, access = "observe" } = {}, operation, bindLearning, barrierHeld, allowMissingSession = false, initialScope = null) {
     if (typeof operation !== "function" || typeof learners.readExerciseProjectScope !== "function" ||
         typeof projectContext?.runWithPracticeProjectScope !== "function") {
       throw new TypeError("Practice admission requires its saved learner, original Project context and owning callback.");
     }
     const ownsBarrier = !barrierHeld && (access === "create" || access === "write");
+    if (initialScope && access !== "control") throw new TypeError("Only immediate context capture can reuse its just-read scope.");
     const completion = ownsBarrier ? Promise.withResolvers() : null;
     const run = async () => {
-      const saved = await learners.readExerciseProjectScope({ actor, attemptId, access });
+      // resolveBoundPracticeContext has just read this scope, with only
+      // synchronous identity checks in between. Later operations never retain
+      // this admission: they still re-read current state under their own gate.
+      const saved = initialScope || await learners.readExerciseProjectScope({ actor, attemptId, access });
       if (sessionId && sessionId !== saved.initialSessionId) {
         throw learningError("VIBE64_TRAINING_SESSION_MISMATCH", "Use this saved practice attempt's exact initial session.");
       }

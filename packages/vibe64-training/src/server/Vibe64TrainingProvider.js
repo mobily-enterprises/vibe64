@@ -29,11 +29,11 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
-  requires: { http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
+  requires: { env: "runtime.env", logger: "runtime.logger", http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
   optional: { trainingHost: "vibe64.training.host" },
   provides: { training: "vibe64.training" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ http, project, sessions, terminals, trainingHost }, { actionCatalogue }) {
+  setup({ env, logger, http, project, sessions, terminals, trainingHost }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingMainPresentationRoutes(http);
     registerTrainingVisualResourceRoutes(http);
@@ -56,6 +56,8 @@ const Vibe64TrainingProvider = defineFeature({
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
       learningSessions });
     registerVibe64ActionContext(actionCatalogue, {
+      env,
+      logger,
       admissionScope: "learning-only",
       projectContext,
       resolveUser({ request }) {

@@ -4,6 +4,8 @@ import { execFileSync } from "node:child_process";
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
@@ -162,6 +164,35 @@ test("bundle metadata must preserve full ordered inventories and exact manifests
     await f.write("bundle.json", altered, snapshotRoot);
     await assert.rejects(() => f.reader.readTopic(pin), /incomplete, reordered, unsupported or changed/u);
   }
+});
+
+test("concurrent pinned reads share only pending verification and preserve isolation and fresh tamper checks", async t => {
+  const f = await fixture(t);
+  const { pin, snapshotRoot } = f.installed;
+  const originalReadFile = fs.readFile;
+  let bundleReads = 0;
+  t.mock.method(fs, "readFile", async (...args) => {
+    if (args[0] === path.join(snapshotRoot, "bundle.json")) bundleReads += 1;
+    return originalReadFile(...args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+
+  const [first, second] = await Promise.all([f.reader.readTopic(pin), f.reader.readTopic({ ...pin }),
+    assert.rejects(f.reader.readTopic({ ...pin, topicHash: "f".repeat(64) }), /trusted course or attempt pin/u)]);
+  assert.equal(bundleReads, 1, "overlapping callers perform one full snapshot verification");
+  assert.deepEqual(first, second);
+  first.bundles[0].lesson.title = "Caller-local edit";
+  assert.notEqual(second.bundles[0].lesson.title, first.bundles[0].lesson.title);
+
+  await f.write("files/training/lessons/LESSON-01/lesson.md", `${f.teachingText}\nTampered.\n`, snapshotRoot);
+  await Promise.all([assert.rejects(f.reader.readTopic(pin), { code: "VIBE64_TRAINING_CONTENT_INVALID" }),
+    assert.rejects(f.reader.readTopic(pin), { code: "VIBE64_TRAINING_CONTENT_INVALID" })]);
+  assert.equal(bundleReads, 2, "settled success is not cached and concurrent failure is shared");
+  await f.write("files/training/lessons/LESSON-01/lesson.md", f.teachingText, snapshotRoot);
+  const recovered = await f.reader.readTopic(pin);
+  assert.equal(bundleReads, 3, "failed verification is not cached");
+  assert.deepEqual(recovered, second);
 });
 
 test("changed declared bytes and unrecorded snapshot files cannot be accepted", async t => {

@@ -7,6 +7,7 @@ import {
 } from "./projectRequestContext.js";
 import { getStudioProjectContext, normalizeProjectSlug } from "./studioProjectContext.js";
 import { isLocalStudioRequest } from "./localStudioRequest.js";
+import { logOperationalEvent } from "./logging.js";
 
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -138,7 +139,7 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
 // Hosts supply authentication and project access through JSKIT's existing
 // context contributor. Both callers are re-authorized for every execution.
 function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject, resolveLearningContext,
-  admissionScope = "all" } = {}) {
+  admissionScope = "all", env = {}, logger = null } = {}) {
   if (!["all", "learning-only"].includes(admissionScope)) {
     throw new TypeError("Vibe64 action context admissionScope must be all or learning-only.");
   }
@@ -158,63 +159,84 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
       if (Object.hasOwn(context, "vibe64Action")) {
         throw actionContextError("vibe64_action_context_reserved", "Operation authority is resolved by the host.");
       }
-      const user = await resolveUser({ request: context.requestMeta?.request || null, context });
-      if (!user) throw actionContextError("vibe64_auth_required", "Log in to Vibe64.", 401);
-      if (scope.ownerRequired && user.role !== "owner") {
-        throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
-      }
-      let project = null;
-      let learning = null;
-      const learningAttemptId = actionLearningAttemptId(input, context);
-      if (learningAttemptId) {
-        if (!scope.learningAccess || typeof resolveLearningContext !== "function") {
-          throw actionContextError("vibe64_learning_unavailable", "This operation cannot access learning sessions.");
-        }
-        // An admitted Main coordinator rechecks its server-owned session and
-        // native turn. Optional tool IDs may constrain that target, not select it.
-        learning = context.trainingMain
-          ? await context.trainingMain.requireAttempt(learningAttemptId, input.sessionId)
-          : await resolveLearningContext({ actor: user, attemptId: learningAttemptId,
-            sessionId: input.sessionId, access: scope.learningAccess });
-        if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
-            learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
-          throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
-        }
-        if (learning.learningScope.noExercise === false) {
-          if (!learning.slug || !learning.targetRoot || !learning.projectRuntimeRoot || !learning.projectSessionSourceRoot ||
-              learning.sourceRoot || typeof learning.runLearningOperation !== "function" ||
-              scope.learningAccess === "create" && typeof learning.createLearningSession !== "function") {
-            throw actionContextError("vibe64_learning_scope_mismatch", "The authorized practice context does not match its actual Project owner.");
-          }
-          const practice = await runWithProjectRequestContext(learning, () => projectContext?.currentPracticeProjectScope?.());
-          if (!practice || practice.access !== "control" || practice.slug !== learning.slug ||
-              practice.training.attemptId !== learningAttemptId || !isDeepStrictEqual(practice.training.pin, learning.learningScope.pin) ||
-              practice.training.learnerKey !== Buffer.from(String(user.uid ?? user.username)).toString("base64url") ||
-              ["targetRoot", "projectRuntimeRoot", "projectSessionSourceRoot", "projectRecordPath", "systemRoot", "projectsRoot"]
-                .some(name => practice[name] !== learning[name])) {
-            throw actionContextError("vibe64_learning_scope_mismatch", "Practice admission requires its original captured Project control identity.");
-          }
-          // Hosted projects retain their original fresh access gate. Standalone
-          // Learning is admitted by its original closed saved-practice owner;
-          // it still cannot authorize ordinary Working projects.
-          if (projectContext?.projectCatalogEnabled) {
-            await authorizeProject({ slug: learning.slug, user, definition, input, context });
-          }
-        } else if (learning.slug || learning.targetRoot || learning.sourceRoot || learning.projectSessionSourceRoot) {
-          throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
-        }
-      } else if (scope.projectScoped) {
-        const slug = actionProjectSlug(input, context);
-        await authorizeProject({ slug, user, definition, input, context });
-        project = await resolveProjectRequestContext({
-          projectContext,
-          request: { params: { slug }, vibe64User: user, allowDeleting: scope.allowDeleting === true }
-        });
-      }
-      return {
-        actor: { id: String(user.uid ?? user.username) },
-        vibe64Action: Object.freeze({ user, project, ...(learning ? { learning } : {}) })
+      const diagnostic = definition.id === "vibe64.sessions.conversation.context.read" &&
+        ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase());
+      const started = diagnostic ? performance.now() : 0;
+      const timings = {};
+      let completed = false;
+      const measure = async (phase, operation) => {
+        if (!diagnostic) return operation();
+        const phaseStarted = performance.now();
+        try { return await operation(); }
+        finally { timings[phase] = (timings[phase] || 0) + performance.now() - phaseStarted; }
       };
+      try {
+        const user = await measure("user", () => resolveUser({ request: context.requestMeta?.request || null, context }));
+        if (!user) throw actionContextError("vibe64_auth_required", "Log in to Vibe64.", 401);
+        if (scope.ownerRequired && user.role !== "owner") {
+          throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
+        }
+        let project = null;
+        let learning = null;
+        const learningAttemptId = actionLearningAttemptId(input, context);
+        if (learningAttemptId) {
+          if (!scope.learningAccess || typeof resolveLearningContext !== "function") {
+            throw actionContextError("vibe64_learning_unavailable", "This operation cannot access learning sessions.");
+          }
+          // An admitted Main coordinator rechecks its server-owned session and
+          // native turn. Optional tool IDs may constrain that target, not select it.
+          learning = await measure("saved-attempt", () => context.trainingMain
+            ? context.trainingMain.requireAttempt(learningAttemptId, input.sessionId)
+            : resolveLearningContext({ actor: user, attemptId: learningAttemptId,
+              sessionId: input.sessionId, access: scope.learningAccess }));
+          if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
+              learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
+            throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
+          }
+          if (learning.learningScope.noExercise === false) {
+            if (!learning.slug || !learning.targetRoot || !learning.projectRuntimeRoot || !learning.projectSessionSourceRoot ||
+                learning.sourceRoot || typeof learning.runLearningOperation !== "function" ||
+                scope.learningAccess === "create" && typeof learning.createLearningSession !== "function") {
+              throw actionContextError("vibe64_learning_scope_mismatch", "The authorized practice context does not match its actual Project owner.");
+            }
+            const practice = await measure("practice-scope", () => runWithProjectRequestContext(learning, () => projectContext?.currentPracticeProjectScope?.()));
+            if (!practice || practice.access !== "control" || practice.slug !== learning.slug ||
+                practice.training.attemptId !== learningAttemptId || !isDeepStrictEqual(practice.training.pin, learning.learningScope.pin) ||
+                practice.training.learnerKey !== Buffer.from(String(user.uid ?? user.username)).toString("base64url") ||
+                ["targetRoot", "projectRuntimeRoot", "projectSessionSourceRoot", "projectRecordPath", "systemRoot", "projectsRoot"]
+                  .some(name => practice[name] !== learning[name])) {
+              throw actionContextError("vibe64_learning_scope_mismatch", "Practice admission requires its original captured Project control identity.");
+            }
+            // Hosted projects retain their original fresh access gate. Standalone
+            // Learning is admitted by its original closed saved-practice owner;
+            // it still cannot authorize ordinary Working projects.
+            if (projectContext?.projectCatalogEnabled) {
+              await measure("project-access", () => authorizeProject({ slug: learning.slug, user, definition, input, context }));
+            }
+          } else if (learning.slug || learning.targetRoot || learning.sourceRoot || learning.projectSessionSourceRoot) {
+            throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
+          }
+        } else if (scope.projectScoped) {
+          const slug = actionProjectSlug(input, context);
+          await measure("project-access", () => authorizeProject({ slug, user, definition, input, context }));
+          project = await measure("project-context", () => resolveProjectRequestContext({
+            projectContext,
+            request: { params: { slug }, vibe64User: user, allowDeleting: scope.allowDeleting === true }
+          }));
+        }
+        completed = true;
+        return {
+          actor: { id: String(user.uid ?? user.username) },
+          vibe64Action: Object.freeze({ user, project, ...(learning ? { learning } : {}) })
+        };
+      } finally {
+        const durationMs = diagnostic ? performance.now() - started : 0;
+        if (diagnostic && (!completed || durationMs >= 100)) {
+          logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
+            phase: "authorization-detail", sessionId: input.sessionId, completed, durationMs, timings },
+          "Browser conversation authorization stages.");
+        }
+      }
     }
   });
 }

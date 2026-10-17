@@ -601,3 +601,58 @@ test("the internal practice conversation identity grant stays fresh without dupl
   assert.equal(calls.filter(value => value === "operation-admission").length, 1);
   assert.equal(calls.filter(value => value === "data-read").length, 1);
 });
+
+test("conversation authority diagnostics separate slow phases without retaining request contents or changing admission", async t => {
+  let clock = 0;
+  t.mock.method(performance, "now", () => clock);
+  const logs = [];
+  const user = { uid: 42, username: "private-account" };
+  let lookups = 0;
+  let allowed = true;
+  let slow = true;
+  let contributor;
+  const env = { JSKIT_REALTIME_DEBUG: "1" };
+  registerVibe64ActionContext({ registerContextContributor(value) { contributor = value; } }, {
+    env, logger: { warn(record) { logs.push(record); } },
+    resolveUser() { lookups++; clock += slow ? 20 : 0; return user; },
+    authorizeProject() { clock += slow ? 30 : 0; if (!allowed) throw new Error("private-project-error"); },
+    resolveLearningContext() { clock += 70; throw new Error("private-attempt-error"); },
+    projectContext: { projectsRoot: "/test/projects", readWorkspaceProject({ slug }) {
+      clock += slow ? 60 : 0; return { project: { path: `/test/projects/${slug}` } };
+    } }
+  });
+  const definition = { id: "vibe64.sessions.conversation.context.read",
+    extensions: { vibe64: { projectScoped: true, learningAccess: "observe" } } };
+  const input = { projectSlug: "alpha", sessionId: "session-1", text: "private-message" };
+  const context = { requestMeta: { request: { headers: { cookie: "private-cookie" } } } };
+  const execute = (value = input, selected = definition) => contributor.contribute({ definition: selected, input: value, context });
+  assert.equal((await execute()).actor.id, "42");
+  assert.equal((await execute()).actor.id, "42");
+  assert.equal(lookups, 2, "Every repeated snapshot/stream grant still rechecks the current user");
+  assert.equal(logs.length, 2);
+  assert.deepEqual(logs[0].timings, { user: 20, "project-access": 30, "project-context": 60 });
+  assert.equal(logs[0].durationMs, 110);
+  assert.equal(logs[0].completed, true);
+  assert.equal(logs[0].phase, "authorization-detail");
+  allowed = false;
+  await assert.rejects(execute(), /private-project-error/u);
+  assert.deepEqual(logs.at(-1).timings, { user: 20, "project-access": 30 });
+  assert.equal(logs.at(-1).completed, false);
+  await assert.rejects(execute({ sessionId: "session-1", learningAttemptId: "00000000-0000-4000-8000-000000000001" }), /private-attempt-error/u);
+  assert.deepEqual(logs.at(-1).timings, { user: 20, "saved-attempt": 70 });
+  assert.equal(logs.at(-1).completed, false);
+  assert.doesNotMatch(JSON.stringify(logs), /private-|cookie|username|00000000-0000/u);
+  const count = logs.length;
+  allowed = true;
+  slow = false;
+  await execute();
+  assert.equal(logs.length, count, "Fast healthy streaming checks remain quiet");
+  slow = true;
+  await execute(input, { ...definition, id: "vibe64.other.action" });
+  assert.equal(logs.length, count, "Other actions do not acquire conversation diagnostics");
+  env.JSKIT_REALTIME_DEBUG = "0";
+  await execute();
+  allowed = false;
+  await assert.rejects(execute(), /private-project-error/u);
+  assert.equal(logs.length, count, "Disabled diagnostics remain silent on success and failure");
+});

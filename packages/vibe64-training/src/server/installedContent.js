@@ -81,6 +81,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   if (typeof allowDraftLessons !== "boolean") {
     throw new TypeError("Draft lesson reads require a trusted server construction choice.");
   }
+  const pendingTopics = new Map();
 
   async function readTopic({ topicId, commit, topicHash } = {}) {
     if (typeof topicId !== "string" || typeof commit !== "string" || !idPattern.test(topicId) || !commitPattern.test(commit)) {
@@ -89,6 +90,18 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     if (typeof topicHash !== "string" || !hashPattern.test(topicHash)) {
       throw new Error("Provide the trusted 64-character topic hash from the course or saved attempt.");
     }
+    const key = JSON.stringify([topicId, commit, topicHash]);
+    let pending = pendingTopics.get(key);
+    if (!pending) {
+      // Overlapping readers verify the same immutable pin together. Settled
+      // results are never retained: subsequent reads must detect changed files.
+      pending = verifyTopic({ topicId, commit, topicHash }).finally(() => pendingTopics.delete(key));
+      pendingTopics.set(key, pending);
+    }
+    return structuredClone(await pending);
+  }
+
+  async function verifyTopic({ topicId, commit, topicHash }) {
     try {
       const trainingRoot = path.join(root, "training");
       const contentRoot = path.join(trainingRoot, "content");

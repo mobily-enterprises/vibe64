@@ -277,6 +277,15 @@ enabled, `vibe64.conversation.browser_timing` also separates Main's session load
 native conversation opening and fresh authorization, including failed boundaries.
 Repeated subscription authorization is recorded only when denied or taking at
 least 100 milliseconds, to avoid a diagnostic log entry for every healthy token.
+The same diagnostic record family separates slow conversation access checks into
+fresh user lookup, saved learning-attempt validation, practice scope, project
+access and project-context resolution. It records the elapsed phases even when
+access fails; repeated checks keep their existing authorization behavior.
+These access timings also apply to standalone Learning conversations.
+Concurrent Learning readers share verification of the same pinned course files
+while that verification is running. Completed results are not cached: later
+reads still reject missing or changed installed files, with the same reinstall
+guidance. Each reader retains its own result and fresh access checks.
 These records identify the session and operation, without chat text, request
 details, account credentials or error contents. This does
 not change the deadline, start a model, resend a message or retry a subscription;
