@@ -1186,6 +1186,13 @@ function registerWorkspaceConversation(f) {
 }
 const workspaceWatch = { ...watchInput, source: "workspace-repair", projectSlug: "", sessionId: "", conversationId: "repair-1" };
 
+async function focusLearningBrowser(f, input, context = f.context) {
+  f.learningBrowserOwners ||= new Map();
+  if (!f.learningBrowserOwners.has(input.clientId)) f.learningBrowserOwners.set(input.clientId, { connected: true });
+  const owner = f.learningBrowserOwners.get(input.clientId);
+  return f.service.focus(input, context, { browserBinding: { owner, current: () => owner.connected, onRelease() {} } });
+}
+
 test("learning-task polling guides Main once after meaningful evidence and retains explicit pause resume stop", async t => {
   const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
   const attemptId = "11111111-1111-4111-8111-111111111111";
@@ -1210,7 +1217,7 @@ test("learning-task polling guides Main once after meaningful evidence and retai
   });
   const focus = { projectSlug: "alpha", sessionId: "learning-1", conversationId: "", pane: "lessons",
     learningAttemptId: attemptId, learningView: "learning" };
-  await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus }, f.context);
   const input = { watchId: "learning-watch-1", browserClientId: "browser-learning", learningClientId: "main-learning",
     attemptId, targetProjectSlug: "alpha", sessionId: "learning-1", conversationId: "learning-main",
     criterion: "Open Preview and explain the result." };
@@ -1221,7 +1228,7 @@ test("learning-task polling guides Main once after meaningful evidence and retai
   const event = { watchId: input.watchId, learningClientId: input.learningClientId, eventId: "gesture-1", outcome: "confirmed",
     control: "preview-select", workspace: { projectSlug: "alpha", sessionId: "learning-1", pane: "preview",
       ready: true, learningView: "learning" } };
-  await f.service.focus({ clientId: "browser-learning", focus: { ...focus, pane: "preview" } }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus: { ...focus, pane: "preview" } }, f.context);
   const observed = await watchAction(f, "learning-watch.observe", event);
   assert.equal(observed.duplicate, false);
   await until(() => guidance.length === 2);
@@ -1263,7 +1270,7 @@ test("Colleague starts and controls the current browser Learning watch through t
     learningAttemptId: attemptId, learningView: "learning" };
   const learningTask = { attemptId, projectSlug: "alpha", sessionId: "learning-3",
     conversationId: "learning-main", learningClientId: "learning-client" };
-  await f.service.focus({ clientId: "browser-learning", focus, learningTask }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus, learningTask }, f.context);
   const assistantContext = { ...f.context, colleague: { clientId: "browser-learning" } };
   const startDefinition = createColleagueActions(f.service)
     .find(action => action.id === "vibe64.colleague.learning-watch.start");
@@ -1307,14 +1314,14 @@ test("learning-task watches pause when their browser leaves or the server restar
   });
   const focus = { projectSlug: "", sessionId: "learning-2", pane: "lessons",
     learningAttemptId: attemptId, learningView: "learning" };
-  await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus }, f.context);
   await f.service.startLearningWatch({ watchId: "learning-watch-2", browserClientId: "browser-learning",
     learningClientId: "main-learning", attemptId, projectSlug: "", sessionId: "learning-2",
     conversationId: "learning-main", criterion: "Explain the current lesson." }, f.context);
-  await f.service.focus({ clientId: "browser-learning", focus: { projectSlug: "other", sessionId: "session-3", pane: "preview" } }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus: { projectSlug: "other", sessionId: "session-3", pane: "preview" } }, f.context);
   assert.equal((await f.service.read({}, f.context)).watches[0].status, "paused");
   assert.match((await f.service.read({}, f.context)).watches[0].error, /left this Learning task/);
-  await f.service.focus({ clientId: "browser-learning-2", focus }, f.context);
+  await focusLearningBrowser(f, { clientId: "browser-learning-2", focus }, f.context);
   await f.service.resumeWatch({ watchId: "learning-watch-2", browserClientId: "browser-learning-2",
     learningClientId: "main-learning-2" }, f.context);
   await f.service.close();
@@ -1477,18 +1484,18 @@ test("learning-task descriptor replacement retires the old watch while retained 
     const learningTask = { attemptId, projectSlug: "alpha", sessionId: focus.sessionId,
       conversationId: "learning-main", learningClientId: "learning-client" };
     const input = { clientId: "browser-learning", focus, learningTask };
-    await f.service.focus(input, f.context);
+    await focusLearningBrowser(f, input, f.context);
     await f.service.startLearningWatch({ watchId: "descriptor-watch", ...learningTask,
       browserClientId: input.clientId, criterion: "Observe this exact task." }, f.context);
-    await f.service.focus({ ...input, focus: { ...focus, learningView: "learning", pane: "lessons" } }, f.context);
+    await focusLearningBrowser(f, { ...input, focus: { ...focus, learningView: "learning", pane: "lessons" } }, f.context);
     assert.equal((await f.service.read({}, f.context)).watches[0].status, "active",
       "covering Workspace with the same Learning pane does not retire the task");
-    await f.service.focus(input, f.context);
+    await focusLearningBrowser(f, input, f.context);
     const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
     assert.ok(JSON.parse(await readFile(savedPath, "utf8")).watches[0].pendingGuidance);
     const replacement = change === "removed" ? null : { ...learningTask,
       ...(change === "conversation" ? { conversationId: "replacement-main" } : { learningClientId: "replacement-client" }) };
-    await f.service.focus({ ...input, learningTask: replacement }, f.context);
+    await focusLearningBrowser(f, { ...input, learningTask: replacement }, f.context);
     const paused = (await f.service.read({}, f.context)).watches[0];
     assert.equal(paused.status, "paused");
     assert.match(paused.error, /left this Learning task/);
@@ -1513,7 +1520,7 @@ test("learning-task saved assessment evidence supports only the matching referen
     });
     const focus = { projectSlug: "alpha", sessionId: "learning-evidence", pane: "preview",
       learningAttemptId: attemptId, learningView: "workspace" };
-    await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+    await focusLearningBrowser(f, { clientId: "browser-learning", focus }, f.context);
     const result = await f.service.startLearningWatch({ watchId: "evidence-watch", attemptId,
       browserClientId: "browser-learning", learningClientId: "main-learning", projectSlug: "alpha",
       sessionId: focus.sessionId, conversationId: "learning-main", criterion: "Explain the observed app behavior.",
@@ -1523,6 +1530,43 @@ test("learning-task saved assessment evidence supports only the matching referen
       assessmentId: latestId, outcome, recordedAt: "2026-10-17T00:00:00.000Z" });
     assert.equal(f.observations.starts.length, 0, "status projection neither grades nor wakes a model");
   });
+});
+
+test("learning-task watch admission requires its live browser rather than saved HTTP focus", async t => {
+  const f = await fixture(t, [], { watching: true });
+  const attemptId = "99999999-9999-4999-8999-999999999999";
+  let reads = 0;
+  f.service.registerConversationSource("learning-task", async watch => {
+    reads += 1;
+    watch.learningTask = { ...watch.learningTask, progress: { revision: 1 } };
+    return { status: "working", runId: attemptId, revision: "1", messages: [] };
+  });
+  const focus = { projectSlug: "alpha", sessionId: "learning-admission", pane: "preview",
+    learningAttemptId: attemptId, learningView: "workspace" };
+  const input = { watchId: "admitted-watch", browserClientId: "browser-learning", learningClientId: "main-learning",
+    attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main", criterion: "Observe the current task." };
+  await f.service.focus({ clientId: input.browserClientId, focus }, f.context);
+  await assert.rejects(f.service.startLearningWatch(input, f.context), /initiating browser/);
+  assert.equal((await f.service.read({}, f.context)).watches.length, 0, "unbound Start installs no watch");
+  assert.equal(reads, 0);
+  await focusLearningBrowser(f, { clientId: input.browserClientId, focus });
+  assert.equal((await f.service.startLearningWatch(input, f.context)).watch.status, "active");
+  await f.service.pauseWatch({ watchId: input.watchId }, f.context);
+  const owner = f.learningBrowserOwners.get(input.browserClientId);
+  owner.connected = false;
+  await assert.rejects(f.service.resumeWatch(input, f.context), /before resuming/);
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "paused", "unbound Resume retains the paused watch");
+  owner.connected = true;
+  await f.service.resumeWatch(input, f.context);
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "active");
+  assert.equal((await f.service.read({}, f.context)).watches.length, 1, "explicit Resume never installs a second watch");
+  owner.connected = false;
+  const beforeObserve = reads;
+  await assert.rejects(f.service.observeLearningTask({ watchId: input.watchId, learningClientId: input.learningClientId,
+    eventId: "detached-observation", control: "preview-select", workspace: { projectSlug: "alpha", sessionId: focus.sessionId,
+      pane: "preview", ready: true, learningView: "workspace" } }, f.context), /before recording an observation/);
+  assert.equal(reads, beforeObserve);
+  assert.equal(f.observations.starts.length, 0);
 });
 
 test("learning-task source failure retires deferred help before an explicit Resume", async t => {
@@ -1550,7 +1594,7 @@ test("learning-task source failure retires deferred help before an explicit Resu
   const input = { watchId: "learning-access", browserClientId: "browser-learning", learningClientId: "main-learning",
     attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main",
     criterion: "Explain the visible result." };
-  await f.service.focus({ clientId: input.browserClientId, focus }, f.context);
+  await focusLearningBrowser(f, { clientId: input.browserClientId, focus }, f.context);
   await f.service.startLearningWatch(input, f.context);
   await f.service.observeLearningTask({ watchId: input.watchId, learningClientId: input.learningClientId,
     eventId: "before-revocation", control: "preview-select", workspace: {
@@ -1600,7 +1644,7 @@ test("learning-task watch commands reject a browser departure during source read
       const input = { watchId: "learning-race", browserClientId: "browser-learning", learningClientId: "main-learning",
         attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main",
         criterion: "Explain the visible result." };
-      await f.service.focus({ clientId: input.browserClientId, focus }, f.context);
+      await focusLearningBrowser(f, { clientId: input.browserClientId, focus }, f.context);
       if (operation !== "start") await f.service.startLearningWatch(input, f.context);
       if (operation === "resume") await f.service.pauseWatch({ watchId: input.watchId }, f.context);
       readsUntilBlocked = operation === "observe-final-read" ? 2 : 1;
@@ -1613,7 +1657,7 @@ test("learning-task watch commands reject a browser departure during source read
       const rejected = assert.rejects(pending, /Learning task changed/);
       await entered.promise;
       try {
-        await f.service.focus({ clientId: input.browserClientId,
+        await focusLearningBrowser(f, { clientId: input.browserClientId,
           focus: { projectSlug: "other", sessionId: "other-session", pane: "preview" } }, f.context);
       } finally { release.resolve(); }
       await rejected;

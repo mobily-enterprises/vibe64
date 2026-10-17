@@ -328,6 +328,9 @@ Replacing/removing Main's task descriptor retires the old watch even when its
 attempt/project/session focus remains selected. The existing binding comparison
 checks the conversation and Learning client too; retained pane switches keep the
 same binding and continue observation.
+Start, Resume and observation require that binding's live socket owner. A saved
+HTTP focus without a connected browser cannot install or resume a watch; an
+explicit retry after connection uses the existing admission path.
 The public status claims saved assessment support only for a passed result whose
 assessment ID matches the watched task's existing question reference. Unrelated
 passes and free-text criteria retain visible saved outcomes without inferred

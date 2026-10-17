@@ -20,6 +20,7 @@ function learningFocusMatches(watch, focus) {
 
 function learningBindingMatches(watch, connection, learningClientId) {
   const task = connection?.learningTask;
+  if (connection?.browserBinding?.owner?.connected !== true) return false;
   if (!learningFocusMatches(watch, connection?.focus)) return false;
   if (!task) return Boolean(learningClientId);
   return task.attemptId === watch.learningTask?.attemptId && (task.projectSlug || "") === (watch.projectSlug || "") &&
@@ -214,7 +215,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     const connection = state.connections.get(request.browserClientId);
     const provisional = { learningTask: { attemptId: request.attemptId }, projectSlug: request.projectSlug,
       sessionId: request.sessionId };
-    if (!connection || !learningFocusMatches(provisional, connection.focus)) {
+    if (connection?.browserBinding?.owner?.connected !== true || !learningFocusMatches(provisional, connection.focus)) {
       throw failure("Open this exact Learning task in the initiating browser before starting its watch.");
     }
     if (!request.reference && !String(request.criterion || "").trim()) {
@@ -247,7 +248,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     if (!isLearningWatch(watch)) throw failure("This learning-task watch is unavailable.", "conversation_forbidden", 403);
     if (watch.status !== "active") throw failure("This learning-task watch is not active.");
     const connection = state.connections.get(watch.browserClientId);
-    if (!connection || !learningFocusMatches(watch, connection.focus)) {
+    if (!learningBindingMatches(watch, connection, watch.learningClientId)) {
       throw failure("Return to this exact Learning task before recording an observation.");
     }
     if ((input.workspace.projectSlug || "") !== (connection.focus.projectSlug || "") ||

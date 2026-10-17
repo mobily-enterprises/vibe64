@@ -10,6 +10,7 @@ function registerColleagueFocus({ realtime, actions }) {
     function release(clientId) {
       const binding = bindings.get(clientId);
       bindings.delete(clientId);
+      if (binding) binding.owner.connected = false;
       if (binding?.release) void binding.release().catch(error => {
         console.error("Colleague browser focus cleanup failed.", error);
       });
@@ -20,7 +21,7 @@ function registerColleagueFocus({ realtime, actions }) {
         if (typeof input?.clientId !== "string" || !input.clientId || input.clientId.length > 200) {
           throw Object.assign(new Error("A browser client identity is required."), { statusCode: 400 });
         }
-        const binding = bindings.get(input.clientId) || { owner: {}, revision: 0 };
+        const binding = bindings.get(input.clientId) || { owner: { connected: true }, revision: 0 };
         bindings.set(input.clientId, binding);
         const revision = ++binding.revision;
         const current = () => !closed && socket.connected && bindings.get(input.clientId) === binding && binding.revision === revision;

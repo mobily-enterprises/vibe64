@@ -66,6 +66,9 @@ task and choose **Resume**. Minimizing Colleague keeps the same connected task.
 Replacing or closing the watched Main conversation also pauses its old watch,
 even when the project and lesson remain selected. Switching only between that
 task's Workspace and Learning panes keeps polling active.
+Start and Resume require the initiating browser's live connection. If it has not
+connected yet, wait for it to reconnect and then choose the control again; saved
+focus alone cannot start a detached watcher.
 The saved assessment outcome supports the watched outcome only when it is a pass
 for that task's referenced assessment. A pass from another assessment does not
 complete your task. A task you describe in your own words has no automatic
