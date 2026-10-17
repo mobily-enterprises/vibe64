@@ -403,14 +403,13 @@ function useVibe64AppPage() {
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
     }
-    if (pane === "dashboard") {
-      void router.push(dashboardReturnPath({
-        dashboardBasePath: dashboardBasePath.value,
-        lastDashboardRoutePath: lastDashboardRoutePath.value
-      }));
-      return;
-    }
-    void router.push(developmentBasePath.value);
+    const path = pane === "dashboard" ? dashboardReturnPath({
+      dashboardBasePath: dashboardBasePath.value,
+      lastDashboardRoutePath: lastDashboardRoutePath.value
+    }) : developmentBasePath.value;
+    void router.push(route.query.mode === "learning"
+      ? { path, query: { ...route.query } }
+      : path);
     if (ticket) void owner.finish(ticket);
   }
 

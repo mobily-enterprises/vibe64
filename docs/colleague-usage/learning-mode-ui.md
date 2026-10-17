@@ -42,7 +42,9 @@ opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a
 lesson or reloading the page. The right side gains **Workspace** and **Learning**
 tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs and all
-applicable Dashboard tools; **Learning** reveals the existing **Lessons** and
+applicable Dashboard tools. Switching between Preview and Dashboard keeps Learning
+on and retains the same selected teacher session; it does not switch to your last
+Working session. **Learning** reveals the existing **Lessons** and
 **Presentation** controls. Returning from Workspace keeps the selected Lessons
 or Presentation content visible without requiring another click. A supervised
 project opens in Workspace by default. On reopening, Workspace waits for the

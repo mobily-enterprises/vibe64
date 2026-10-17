@@ -123,6 +123,22 @@ describe("Vibe64 app page", () => {
     expect(source).toContain('@click="selectProjectPane(mobileProjectAction.pane, $event)"');
   });
 
+  it.each([true, false])("retains Learning route identity through Dashboard and Preview (mobile=%s)", async mobile => {
+    const { page, event } = mountAppPage({ mobile, mode: "learning" });
+    Object.assign(pageFixture.route.query, { learningView: "workspace", session: "saved-learning-session" });
+    const query = { ...pageFixture.route.query };
+    page.selectProjectPane("dashboard", event);
+    expect(pageFixture.router.push).toHaveBeenLastCalledWith({ path: "/app/project/practice/dashboard/env", query });
+    pageFixture.route.path = "/app/project/practice/dashboard/files";
+    await nextTick();
+    page.selectProjectPane("preview", event);
+    expect(pageFixture.router.push).toHaveBeenLastCalledWith({ path: "/app/project/practice", query });
+    pageFixture.route.path = "/app/project/practice";
+    await nextTick();
+    page.selectProjectPane("dashboard", event);
+    expect(pageFixture.router.push).toHaveBeenLastCalledWith({ path: "/app/project/practice/dashboard/files", query });
+  });
+
   it("shows only open projects in the project switcher", () => {
     const projects = [
       { runtime: { open: false }, slug: "closed" },

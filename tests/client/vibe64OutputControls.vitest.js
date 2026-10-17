@@ -1071,3 +1071,150 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
   }
 });
+
+it("retains the captured LM25 ready preview through the exact saved practice binding", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  // Captured /outputs and mounted binding, 2026-10-17T12:33:23Z. Only the
+  // ephemeral proxy credential is replaced. Unrelated terminal log/owner fields are omitted.
+  const capturedStatus = {
+  "ok": true,
+  "outputTargets": [
+    {
+      "available": true,
+      "default": true,
+      "disabledReason": "",
+      "downloads": [],
+      "id": "app",
+      "label": "Orientation application",
+      "mode": "interactive",
+      "presentation": {
+        "kind": "web"
+      }
+    }
+  ],
+  "output": {
+    "error": null,
+    "mode": "interactive",
+    "presentationKind": "web",
+    "state": "ready",
+    "targetId": "app"
+  },
+  "preview": {
+    "canRestart": true,
+    "canShowLog": true,
+    "canStart": false,
+    "href": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token",
+    "message": "Preview is ready.",
+    "reason": "",
+    "recovery": null,
+    "state": "ready",
+    "targetHref": "http://127.0.0.1:8080/",
+    "terminalId": "1e84c15e-062e-465c-bf32-88e31a575bc1"
+  },
+  "previewTarget": {
+    "available": true,
+    "disabledReason": "",
+    "href": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token",
+    "kind": "url",
+    "label": "Preview",
+    "targetHref": "http://127.0.0.1:8080/"
+  },
+  "openTarget": {
+    "available": true,
+    "disabledReason": "",
+    "href": "http://127.0.0.1:8080/",
+    "kind": "url",
+    "label": "Open browser",
+    "previewHref": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token"
+  },
+  "activeTerminal": {
+    "id": "1e84c15e-062e-465c-bf32-88e31a575bc1",
+    "status": "running",
+    "running": true,
+    "metadata": {
+      "actions": [
+        {
+          "href": "http://127.0.0.1:8080/",
+          "id": "url-0bc3c2f13ccd",
+          "kind": "url",
+          "label": "127.0.0.1:8080",
+          "previewHref": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token"
+        }
+      ],
+      "outputTargetId": "app",
+      "launchReady": true,
+      "port": 8080,
+      "targetUrl": "http://127.0.0.1:8080/",
+      "previewAuth": "",
+      "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
+      "projectScope": "learning:[\"1000\",\"9490f94a-c614-4581-9111-0debb2339ca8\"]"
+    }
+  }
+};
+  const capturedBinding = {
+  "actorKey": "[\"learning\",\"local\",\"1000\",\"9490f94a-c614-4581-9111-0debb2339ca8\"]",
+  "learnerId": "1000",
+  "learningAttemptId": "9490f94a-c614-4581-9111-0debb2339ca8",
+  "noExercise": false,
+  "projectSlug": "",
+  "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
+  "sessionsApiPath": "/api/learning/9490f94a-c614-4581-9111-0debb2339ca8/vibe64/sessions",
+  "sourceProjectSlug": "training-9490f94ac614458191110debb2339ca8",
+  "viewerActorKey": "local"
+};
+  const requests = [];
+  class ControlledSocket {
+    static OPEN = 1; static CLOSED = 3; static CLOSING = 2;
+    readyState = 1;
+    addEventListener() {} send() {} close() { this.readyState = 3; }
+  }
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:3107/app/project/vibe64-learning-ui-corrected-topic-20261017?mode=learning&learningView=workspace"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal("WebSocket", ControlledSocket);
+  configureHttpWebClient({ request(url, options) {
+    requests.push({ url, options });
+    return Promise.resolve(capturedStatus);
+  } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    // Session fields captured in browser; authority metadata read from retained files
+    // last modified at07:31:40, before this capture.
+    controls = useVibe64OutputControls({ session: Vue.ref({
+  "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
+  "sessionRoot": "/tmp/vibe64-learning-public-corrected-e2e-20261017/state/projects/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8",
+  "source": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source",
+  "sourcePath": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source",
+  "sourceReady": true,
+  "status": "active",
+  "metadata": {
+    "source_kind": "session_clone",
+    "source_path_authority": "managed_session_source",
+    "source_path": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source"
+  }
+}),
+      learningBinding: Vue.ref(capturedBinding), embeddedPreview: () => true });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  // Evaluate the declared viewer identity. This is not a capture of live injected viewer state.
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: capturedBinding.viewerActorKey }));
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    expect(requests[0].url).toBe(`${capturedBinding.sessionsApiPath}/${capturedBinding.sessionId}/outputs`);
+    expect(controls.practiceBindingCurrent.value).toBe(true);
+    expect(controls.previewState.value).toBe("ready");
+    expect(controls.previewHref.value).toBe(capturedStatus.preview.href);
+    expect(controls.launchActions.value[0].previewHref).toBe(capturedStatus.preview.href);
+    expect(resolveLaunchPreviewDestination(controls.launchActions.value).embedHref).toBe(capturedStatus.preview.href);
+    expect(requests.every(request => request.options.method !== "POST")).toBe(true);
+  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+});
