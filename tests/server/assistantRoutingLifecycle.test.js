@@ -1245,6 +1245,33 @@ test("original routing retains admitted Learning data through uncertain receipt 
   }
 });
 
+test("a paused goal retains its orchestrator when a different one is deferred", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false, workflowEngineId: "claude" });
+  const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
+    objective: "Finish validation", status: "paused" };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  f.agent.readGoal = async () => ({ status: "available", goal: pinned });
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.sends[0].selection.engineId, "codex");
+  assert.equal(JSON.parse(f.metadata.assistant_routing).workflowEngineId, "claude");
+});
+
+test("a paused goal can inspect a rejected message with another orchestrator deferred", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false, workflowEngineId: "claude" });
+  const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
+    objective: "Finish validation", status: "paused" };
+  f.metadata.assistant_routing_goal = JSON.stringify(pinned);
+  f.agent.readGoal = async () => ({ status: "available", goal: pinned });
+  let stateReads = 0;
+  f.agent.sessionState = async () => ({ turn: { active: ++stateReads > 1 } });
+  await assert.rejects(f.service.send("session-1", request, f.context), /current turn to finish/);
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  const receipt = await f.service.inspectDelivery("session-1", { messageId: request.messageId }, f.context);
+  assert.equal(receipt.status, "not-sent");
+  assert.equal(f.sends.length, 0, "inspection never dispatches the rejected message");
+});
+
 test("a paused goal is explicitly repinned to a direct mode without native goal or selection writes", async (t) => {
   const f = await fixture(t, { mode: "senior", review: false });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,

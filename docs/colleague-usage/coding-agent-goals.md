@@ -36,7 +36,7 @@ including automatic goal continuations. The current turn keeps its settings;
 the goal keeps its objective, budget and progress. You do not need **Pause goal**,
 **Cancel goal** or a reload to save settings.
 Choosing another **Orchestrator** or **Auto** saves the preference for after the
-goal finishes; it does not transfer or cancel the current goal. These steps apply
+goal finishes; it does not transfer or cancel the current goal. Ordinary messages still use the current goal’s orchestrator while that preference is deferred. If a message is rejected before sending, its delivery check also uses the current goal’s orchestrator. These steps apply
 on desktop and mobile, including goals created by the assistant. Colleague can
 explain or offer a supported change and needs your request before performing it.
 

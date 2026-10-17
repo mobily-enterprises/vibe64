@@ -324,7 +324,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     await validateDecision(context, state, followup);
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.deliverySelection : state.observedSelection;
-    const workflow = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
+    const { goal, pinned } = await currentGoal(sessionId, context);
+    const workflow = (activeGoal(goal) && pinned?.workflowEngineId) ||
+      assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
     if ((workflow && workflow !== state.workflowEngineId) ||
         !sameSelection(currentSelection, expected) && !sameSelection(currentSelection, state.deliverySelection)) {
       throw failure("The orchestrator changed while this request was being prepared. Cancel it and send a new request.");
@@ -673,7 +675,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // Standalone has no hosted actor. The original decision still rechecks
         // access below; a hosted resolver must reject an unavailable actor.
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-        const workflow = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
+        const { goal, pinned } = await currentGoal(sessionId, context);
+        const workflow = (activeGoal(goal) && pinned?.workflowEngineId) ||
+          assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
         if (workflow && workflow !== state.workflowEngineId ||
             !sameSelection(selection, state.observedSelection) && !sameSelection(selection, state.deliverySelection)) return null;
         await validateDecision(context, state);

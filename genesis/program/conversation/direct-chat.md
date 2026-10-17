@@ -4299,3 +4299,8 @@ project/model access without requiring a separate chat message first.
 Goal Set/Resume retains the original action request metadata for hosted session
 reauthorization and uses the host action identity (uid where present). A copied
 user record alone is not browser authentication.
+
+For an unfinished pinned goal, message dispatch and definite-rejection receipt
+inspection compare the current pinned orchestrator, matching request preparation.
+A deferred preference for the next goal does not invalidate this goal’s messages;
+selection, actor, access and native activity checks still apply.
