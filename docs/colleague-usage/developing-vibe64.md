@@ -74,6 +74,14 @@ discovery and chat. Open **AI Accounts** and use **Refresh** to confirm the
 connection. A Claude website login alone does not sign in the CLI. Without an
 explicit command, the installed managed-runtime command remains the default.
 
+To hear read-aloud and use **Talk** in a local example, run a speech service (for
+example `jskit-assistant-voice serve`, which listens on `127.0.0.1:3092`) and
+launch with `VIBE64_VOICE_ENDPOINT=ws://127.0.0.1:3092/v1/voice` and
+`VIBE64_VOICE_ACCESS_TOKEN_FILE=/absolute/path/to/token` set in your shell. The
+launcher preserves these two settings like the Claude command; set both or
+neither. Without them, voice controls report that speaking voices could not load
+and text chat keeps working.
+
 Each example keeps its frontend dependency cache under its own state directory.
 Keep that directory between runs so normal restarts can reuse the prepared cache.
 When a host supplies Preview routing, the example uses the host’s Preview socket

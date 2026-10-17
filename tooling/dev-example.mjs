@@ -69,11 +69,13 @@ async function main() {
   resolveRuntimeEnv();
   const hostedStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
     ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
+  // An optional local speech service is a shared host tool, like the Claude command.
   const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
     "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
     "VIBE64_PUBLIC_USER_DOMAIN", "VIBE64_PUBLIC_PROTOCOL",
     "VIBE64_PREVIEW_PUBLIC_DOMAIN", "VIBE64_PREVIEW_PUBLIC_PROTOCOL",
-    "VIBE64_PREVIEW_PUBLIC_NAMESPACE", "VIBE64_PREVIEW_PROXY_SOCKET_DIR"]);
+    "VIBE64_PREVIEW_PUBLIC_NAMESPACE", "VIBE64_PREVIEW_PROXY_SOCKET_DIR",
+    "VIBE64_VOICE_ENDPOINT", "VIBE64_VOICE_ACCESS_TOKEN_FILE"]);
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("VIBE64_") && !sharedTools.has(key)) delete process.env[key];
   }
