@@ -23,6 +23,7 @@ describe("Vibe64LocalAppIndex", () => {
 // Actual app-index and launcher setup/templates; only saved native sessions and
 // presentation widgets are bounded fixtures. No teacher/runtime is fabricated.
 import * as Vue from "vue";
+import * as mdi from "@mdi/js";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
@@ -101,7 +102,7 @@ async function mountLearningIndex({ gestures = null, practiceChoices = [], autho
   const gate = { props: { forcePicker: Boolean, navigateOnSelect: Boolean }, setup(props) { calls.gateProps = props; return () => Vue.h("aside"); } };
   const component = compiledUi(path.resolve("src/components/studio/Vibe64LocalAppIndex.vue"), {
     vue: Vue,
-    "./Vibe64LearningPracticeProjectSelector.vue": { default: compiledUi(path.resolve("src/components/studio/Vibe64LearningPracticeProjectSelector.vue"), { vue: Vue }) },
+    "./Vibe64LearningPracticeProjectSelector.vue": { default: compiledUi(path.resolve("src/components/studio/Vibe64LearningPracticeProjectSelector.vue"), { vue: Vue, "@mdi/js": mdi }) },
     "@/lib/vibe64AssistantHost.js": HostKeys,
     "@/components/StudioAppShellLayout.vue": { default: shell },
     "@/components/studio/ProjectSelectionGate.vue": { default: gate },

@@ -1,7 +1,11 @@
 # Choosing lessons and Learning conversations
 
 Use the yellow **L** plate in the app header to switch between Working and
-Learning. Its pressed state and highlighted header indicate Learning. On the
+Learning. Its pressed state and highlighted header indicate Learning. It is the
+first keyboard stop in the header: Enter or Space switches mode, and its tooltip
+names the mode it will switch to. In a lesson with saved practice projects, the
+**Practice project** menu sits beside it; on a phone it shrinks to its ▾ arrow so
+the **Workspace**/**Learning** switch stays visible. On the
 projectless app page, Working shows the original project picker; Learning shows
 installed lessons without asking you to invent or choose a project. In a project
 view, the same control changes the existing session panel's purpose filter.
