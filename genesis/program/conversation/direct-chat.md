@@ -589,6 +589,16 @@ the command. Pause stops the work and retains the goal; Cancel stops the work an
 then clears the native goal. Set and Resume can steer an active Claude turn in
 the same process; only an existing unfinished goal blocks setting another goal.
 Stale goal revisions cannot apply to a newer goal.
+Ordinary Claude Main exposes a narrow structured self-pause application action.
+The existing SDK MCP transport validates the admitted top-level native tool use;
+the Main binding rechecks its authored request, actor, project and assistant
+access, then derives the native goal identity on the server. It invokes the same
+native Pause and inactive-intent writer as the explicit control. The common
+runtime retains the application receipt after native cleanup. Colleague,
+temporary chats, Learning and child agents do not acquire this capability.
+Goal startup installs the same discovery protocol as ordinary Main requests, so
+an admitted pause does not require changing a running process's tool settings.
+Assistant prose never changes goal intent; blocked prerequisites remain distinct.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,

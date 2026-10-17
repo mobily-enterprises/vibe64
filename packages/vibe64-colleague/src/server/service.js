@@ -149,7 +149,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
-  const toolPolicy = ({ actionId, kind, context }) => !isTrainingTeacherAction(actionId) &&
+  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" && !isTrainingTeacherAction(actionId) &&
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));
   const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });

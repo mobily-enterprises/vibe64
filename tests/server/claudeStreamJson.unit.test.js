@@ -2099,13 +2099,26 @@ const conversationId = args[args.indexOf(flag) + 1];
 const directory = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/gu, '-'));
 mkdirSync(directory, { recursive: true });
 const record = value => appendFileSync(path.join(directory, conversationId + '.jsonl'), JSON.stringify(value) + '\\n');
+const pauseTool = (name, id, input) => {
+  emit({ type: 'assistant', uuid: id + '-message', message: { content: [
+    { type: 'tool_use', id, name: 'mcp__application__' + name, input }
+  ] } });
+  emit({ type: 'control_request', request_id: id, request: { subtype: 'mcp_message', server_name: 'application',
+    message: { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: input, _meta: { 'claudecode/toolUseId': id } } }
+  } });
+};
 createInterface({ input: process.stdin }).on('line', async line => {
   const frame = JSON.parse(line);
   trace({ frame });
   if (frame.type === 'control_request') {
+    if (frame.request.subtype === 'initialize') emit({ type: 'system', subtype: 'init', capabilities: ['interrupt_send_now_v1'] });
     emit({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id,
       response: { models: [{ value: 'sonnet', supportedEffortLevels: ['high'] }] } } });
     if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
+    return;
+  }
+  if (frame.type === 'control_response' && frame.response.request_id === 'self-pause-contract') {
+    pauseTool('assistant_action_execute', 'self-pause-execute', { actionId: 'vibe64.terminals.main-goal.pause', version: 1, input: {} });
     return;
   }
   if (frame.type !== 'user') return;
@@ -2125,6 +2138,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     return;
   }
   emit(frame);
+  if (text.includes('Pause through the admitted application tool.')) {
+    pauseTool('assistant_action_contract', 'self-pause-contract', { actionId: 'vibe64.terminals.main-goal.pause', version: 1 });
+    return;
+  }
   emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
   emit({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Service progress' } } });
@@ -2640,6 +2657,50 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(rows.filter(turn => turn.user?.messageId === canonicalCommand.messageId).length, 1);
     assert.equal(rows.some(turn => turn.metadata.runtime), false);
     assert.equal((await store.readSession("test")).metadata.runtime, undefined);
+    if (!busyGoal) {
+      await store.writeMetadataValue("test", "assistant_selection", JSON.stringify(routedSelection));
+      const retainedGoal = await service.readAgentGoal("test", options);
+      const currentGoal = await service.updateAgentGoal("test", { ...options, action: "resume",
+        threadId: retainedGoal.threadId, createdAt: retainedGoal.goal.createdAt, objective: retainedGoal.goal.objective });
+      assert.equal(currentGoal.goal.status, "active");
+      await assert.rejects(actions.execute({ actionId: "vibe64.terminals.main-goal.pause",
+        input: { projectSlug: "claude-main-fixture" }, context: { channel: "automation", surface: "app" } }), {
+        code: "vibe64_main_goal_control_required"
+      });
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+        "Knowing the action ID is not authority to pause a Main goal");
+      const currentBrowser = await service.openBrowserConversation("test", { ...options, browserAuthority });
+      const prose = await currentBrowser.send({ messageId: "service-pause-prose", text: "I am paused.", steer: true });
+      assert.equal(prose.status, "accepted");
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+        "Ordinary prose never substitutes for the structured Pause operation");
+      const pauseReceipt = await currentBrowser.send({ messageId: "service-self-pause", text: "Pause through the admitted application tool.", steer: true });
+      assert.equal(pauseReceipt.status, "accepted");
+      const pauseDeadline = Date.now() + 5000;
+      let pauseCall;
+      while (!pauseCall || pauseCall.status === "running") {
+        const log = await store.readConversationLog("test");
+        pauseCall = log.flatMap(turn => turn.metadata.applicationTools || []).find(call => call.id.endsWith("self-pause-execute"));
+        assert.ok(Date.now() < pauseDeadline, JSON.stringify({ pauseCall, frames: (await trace()).slice(-4) }));
+        if (!pauseCall || pauseCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(pauseCall.status, "complete");
+      assert.equal(pauseCall.result.ok, true, JSON.stringify(pauseCall.result));
+      assert.equal(pauseCall.result.result.result.status, "paused");
+      const afterPause = await service.readAgentGoal("test", options);
+      assert.equal(afterPause.goal.status, "paused");
+      assert.equal(afterPause.goal.objective, currentGoal.goal.objective);
+      assert.equal(afterPause.goal.createdAt, currentGoal.goal.createdAt);
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
+      const selfPausePid = (await trace()).findLast(row => row.args?.includes("--print")).pid;
+      assert.throws(() => process.kill(selfPausePid, 0), { code: "ESRCH" });
+      const framesBeforeRestart = (await trace()).filter(row => row.frame?.type === "user").length;
+      await service.close();
+      service = createService();
+      assert.equal((await service.recoverActiveGoals()).results[0].skipped, true);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesBeforeRestart);
+    }
   });
 });
 

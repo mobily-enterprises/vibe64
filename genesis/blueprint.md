@@ -1656,8 +1656,11 @@ compaction. Background calls stay with the selected provider, and returning to
 Claude restores native model and context settings. The native terminal uses the
 same selected provider as chat. Native Claude goals
 appear in the chat toolbar: Pause stops the current turn and preserves the goal,
-Resume continues it, and Cancel clears it. Claude goals have no token-budget
-field. Tool-free helpers use the workflow's independent Helper role. New tasks
+Resume continues it, and Cancel clears it. A human can ask Main Claude to pause
+after a safe checkpoint; Claude uses the same application's structured Pause
+control after draining its work. A prose acknowledgement alone does not change
+the goal, and explicit pause intent survives server restarts.
+Claude goals have no token-budget field. Tool-free helpers use the workflow's independent Helper role. New tasks
 capture that choice without changing main chat or tasks already running.
 
 Changing or reconnecting an AI account must not strand an unfinished goal.

@@ -1,4 +1,5 @@
 import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
+import { ACTION_PAUSE_MAIN_GOAL } from "./assistantContracts.js";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationConfiguration } from "./conversationConfiguration.js";
@@ -1227,11 +1228,18 @@ function createService({
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
     // Training keeps complete results within 128 KiB; discovery adds an identity envelope.
     maxToolResultBytes: 128 * 1024 + 1024,
-    isActionAvailable: ({ actionId, context }) => Boolean(context.runtime?.learningScope &&
-      context.runtime.learningTeaching?.actionIds.includes(actionId))
+    isActionAvailable: ({ actionId, context }) => actionId === ACTION_PAUSE_MAIN_GOAL
+      ? Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
+        (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
+        !context.assistantScope && !context.scopedConversationId)
+      : Boolean(context.runtime?.learningScope && context.runtime.learningTeaching?.actionIds.includes(actionId))
   }) : null;
-  function learningToolManifest(context) {
-    if (!context.runtime?.learningScope || !context.runtime.learningTeaching || !mainToolCatalog) return context;
+  function applicationToolManifest(context) {
+    const selection = context.assistantSelection || vibe64AssistantSelectionFromMetadata(context.session?.metadata);
+    const teaching = context.runtime?.learningScope && context.runtime.learningTeaching;
+    const mainClaude = selection.engineId === "claude" && !context.runtime?.learningScope &&
+      !context.assistantScope && !context.temporaryConversationId && !context.scopedConversationId;
+    if (!mainToolCatalog || !teaching && !mainClaude) return context;
     const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });
     return { ...context, applicationTools: { schemas: toolSet.tools.map(mainToolCatalog.toOpenAiToolSchema) } };
   }
@@ -1337,7 +1345,7 @@ function createService({
             return prepareSessionConversationRenewal(provider, id, context, input);
           }
           if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
-          if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, learningToolManifest(context));
+          if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, applicationToolManifest(context));
           if (operation === "updateSettings") return prepareSessionConversationSettings(provider, id, context);
           if (operation === "dispose") {
             const runtime = context.runtime;
@@ -1350,11 +1358,48 @@ function createService({
           // opening its existing handle must not hydrate a project session.
           if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
           const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
-          return createSessionConversationBinding(provider, id, {
+          const binding = await createSessionConversationBinding(provider, id, {
             ...context, runtime,
             ...(runtime.learningScope && runtime.learningTeaching ? { teachingTerminals: service, teachingActions: actions } : {}),
             prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
           });
+          if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.temporaryConversationId && actions) {
+            binding.applicationTools = {
+              storage: runtime.store.conversationStorage,
+              async prepareContext(current, admitted) {
+                const authority = current.browserAuthority;
+                if (!authority || authority.sessionId !== id || admitted.conversationId !== id ||
+                    admitted.origin !== "user" || !admitted.nativeThreadId || !admitted.nativeTurnId) {
+                  throw Object.assign(new Error("Goal control requires the current admitted Main request."), {
+                    code: "vibe64_main_goal_control_required", statusCode: 403
+                  });
+                }
+                const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
+                  input: { projectSlug: authority.projectSlug, sessionId: id }, context: authority.requestContext });
+                if (grant.actor.id !== authority.actorId) throw new Error("The Main conversation's acting user changed.");
+                await service.requireAssistantSelectionAccess(current.assistantSelection, { vibe64User: grant.user });
+                admitted.assertCurrent();
+                return { ...authority.requestContext, runtime, assistantSelection: current.assistantSelection,
+                  projectSlug: authority.projectSlug,
+                  mainGoalControl: { async pause() {
+                    const options = { runtime, vibe64User: grant.user };
+                    const observed = await service.readAgentGoal(id, options);
+                    if (observed.threadId !== admitted.nativeThreadId || !observed.goal || observed.goal.status !== "active") {
+                      throw new Error("This admitted Main turn no longer owns an active goal.");
+                    }
+                    admitted.assertCurrent();
+                    const result = await service.updateAgentGoal(id, { ...options, action: "pause",
+                      threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+                    if (result?.ok === false || result?.goal?.status !== "paused") {
+                      throw new Error(result?.error || "The goal pause could not be verified.");
+                    }
+                    return { status: "paused" };
+                  } }
+                };
+              }
+            };
+          }
+          return binding;
         })();
       }
     }
@@ -1613,7 +1658,7 @@ function createService({
     const session = options.session || await runtime.getSession(sessionId, {
       inspectSource: false
     });
-    return { ...options, runtime, session };
+    return applicationToolManifest({ ...options, runtime, session });
   }
 
   function readGoalIntent(session) {
@@ -4255,7 +4300,7 @@ function createService({
               return result;
             };
             dispatched = true;
-            const result = await sessionAgent.updateGoal(sessionId, prepared.input, { ...prepared.context, canonicalGoal: canonical,
+            const result = await sessionAgent.updateGoal(sessionId, prepared.input, { ...applicationToolManifest(prepared.context), canonicalGoal: canonical,
               signal: admission?.signal, ...(canonical ? { onGoalResult: completeResult } : {}) });
             return canonical ? result : await completeResult(result);
           } catch (error) {
@@ -4341,7 +4386,7 @@ function createService({
             !context.session.metadata.agent_identity_conversation_id)) {
           await sessionAgent.prepareSelection(sessionId, selection, context);
         }
-        const result = await sessionAgent.ensureSession(sessionId, ["codex", "opencode"].includes(selection.engineId) ? learningToolManifest(context) : context);
+        const result = await sessionAgent.ensureSession(sessionId, ["codex", "opencode"].includes(selection.engineId) ? applicationToolManifest(context) : context);
         if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
         if (result?.ok === false) {
           logFailure({

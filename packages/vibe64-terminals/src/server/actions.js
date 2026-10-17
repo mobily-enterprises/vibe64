@@ -1,5 +1,5 @@
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { temporaryConversationTool, workPlanTool } from "./assistantContracts.js";
+import { ACTION_PAUSE_MAIN_GOAL, mainGoalPauseTool, temporaryConversationTool, workPlanTool } from "./assistantContracts.js";
 import { outputStatusTool, outputTerminalTool } from "./outputAssistantContracts.js";
 import { terminalKeyInput, terminalSessionContainsText, terminalSessionControlSnapshot } from "@local/vibe64-execution/server/terminalSessions";
 import {
@@ -118,6 +118,17 @@ function createTerminalActions({ terminals } = {}) {
       execute: (input) => terminals.readAgentGoal(input.sessionId, { vibe64User: input.vibe64User || null }) }),
     action({ id: "vibe64.terminals.agent-goal.update", input: agentGoalInputValidator, idempotency: "none",
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input) }),
+    action({ id: ACTION_PAUSE_MAIN_GOAL, channels: ["automation"], input: emptyInputValidator, idempotency: "none",
+      assistant: mainGoalPauseTool,
+      execute: (_input, context) => {
+        if (typeof context.mainGoalControl?.pause !== "function" ||
+            context.vibe64Action?.project?.slug !== context.projectSlug) {
+          throw Object.assign(new Error("Only this goal's admitted Main conversation can request this pause."), {
+            code: "vibe64_main_goal_control_required", statusCode: 403
+          });
+        }
+        return context.mainGoalControl.pause();
+      } }),
     action({ id: ACTION_READ_CANONICAL_AGENT_GOAL, channels: ["internal"], input: sessionInputValidator, kind: "query", idempotency: "none",
       execute: (input) => terminals.readAgentGoal(input.sessionId, { vibe64User: input.vibe64User || null }, { canonical: true }) }),
     action({ id: ACTION_UPDATE_CANONICAL_AGENT_GOAL, channels: ["internal"], input: canonicalAgentGoalInputValidator, idempotency: "none",

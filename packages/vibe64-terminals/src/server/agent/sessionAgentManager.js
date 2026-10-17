@@ -1245,6 +1245,7 @@ function createSessionAgentManager({
         code: "conversation_unsupported"
       });
       return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
+        ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
         ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
         assistantSelection: sessionAssistantSelection(options), vibe64User: assistantUser(options) });
     },
@@ -1287,6 +1288,7 @@ function createSessionAgentManager({
         code: "conversation_unsupported"
       });
       return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session, signal: options.signal,
+        ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
         ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
         assistantSelection: sessionAssistantSelection(options), vibe64User: authorization ? authorization.vibe64User : assistantUser(options) }, input);
     },

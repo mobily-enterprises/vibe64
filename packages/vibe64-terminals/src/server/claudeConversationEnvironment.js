@@ -69,7 +69,13 @@ function createClaudeConversationEnvironment({
     const configuration = claudeModelConfiguration({ providerId: selection.modelProviderId, model: profile?.model || selection.modelId }, external);
     const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
       effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
-    const applicationTools = Boolean(entry.command?.tools);
+    // Goal Set/Resume can prepare the native process before an authored turn.
+    // Retain the same discovery protocol; execution still requires that turn's
+    // admitted native tool identity and freshly authorized action catalogue.
+    const schemas = entry.command?.tools?.schemas || (entry.main && !profile && !entry.context.assistantScope
+      ? entry.context.applicationTools?.schemas : undefined);
+    const applicationTools = Boolean(schemas);
+    if (applicationTools) entry.toolSchemas = schemas;
     const identity = JSON.stringify(applicationTools
       ? [selection, profile, input.outputSchema, entry.accountIdentity, entry.toolSchemas]
       : [selection, profile, input.outputSchema, entry.accountIdentity]);
@@ -80,6 +86,9 @@ function createClaudeConversationEnvironment({
       : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
     if (!profile && !entry.context.assistantScope && entry.context.runtime.learningScope?.noExercise === false) {
       systemPrompt += `\n\n${await entry.context.runtime.getLearningInstructions(entry.context.sessionId)}`;
+    }
+    if (applicationTools && entry.main && !entry.context.runtime.learningScope && !profile && !entry.context.assistantScope) {
+      systemPrompt += "\n\nWhen the human explicitly asks to pause the goal, finish any requested checkpoint and drain delegated work, then use the application action vibe64.terminals.main-goal.pause through the application tools. Saying paused does not pause the goal. Do not invoke Pause merely because work is unfinished, delegated work is running, or prerequisites are missing.";
     }
     return {
       systemPrompt, contextIdentity: identity, settings: flagSettings, model: configuration.model,

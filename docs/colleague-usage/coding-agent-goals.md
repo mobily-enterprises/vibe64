@@ -57,9 +57,13 @@ unfinished objective remains available. A server restart does not automatically
 resume that blocked goal. Resolve the reported prerequisite, then open **Goal**
 and choose **Resume goal**; use **Cancel goal** to clear it instead. These controls
 work on desktop and mobile. Colleague can explain the reason and recovery steps.
-An assistant reply saying “paused” alone is not confirmation that **Pause goal**
-ran: check the goal control. The explicit control records your pause so restart
-recovery cannot undo it.
+You can also ask Claude in Main chat to pause, including after a safe checkpoint.
+After draining its work, Claude must invoke the application's structured Pause
+action. That uses the same goal control and records stopped continuation intent;
+a server restart must not resume it. An assistant reply saying “paused” alone is
+not confirmation: check that the goal control shows **paused**. If it does not,
+use **Pause goal**. Temporary chats, child agents and Colleague cannot invoke
+Main's self-pause action; Colleague can explain these steps.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
