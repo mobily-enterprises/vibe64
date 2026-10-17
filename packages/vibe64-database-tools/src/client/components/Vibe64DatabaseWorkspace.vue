@@ -94,7 +94,7 @@
             :database="connection.database" :running="running" @select-table="selectTable"
           >
             <template #table-actions>
-              <v-btn :prepend-icon="mdiPlus" size="x-small" title="Insert a row into this table" variant="text" @click="openInsertDialog">Add row</v-btn>
+              <v-btn v-if="state?.writeAccess?.available !== false" :prepend-icon="mdiPlus" size="x-small" title="Insert a row into this table" variant="text" @click="openInsertDialog">Add row</v-btn>
             </template>
           </DatabaseTableList>
           <div v-else-if="navigatorTab === 'saved'" class="database-workspace__nav-scroll">

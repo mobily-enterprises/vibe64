@@ -1379,6 +1379,15 @@ test("database members can browse, run SQL and use a shared assistant through th
   const lessonState = await runWithProjectRequestContext(lessonContext, () => service.readState({
     sessionId: "service-session", vibe64User: { role: "member", username: "member" } }));
   assert.equal(lessonState.writeAccess.available, false);
+  const lessonRead = await runWithProjectRequestContext(lessonContext, () => service.runQuery({
+    queryId: "lesson-read",
+    readOnly: true,
+    sessionId: "service-session",
+    sql: "SELECT * FROM public.books;",
+    vibe64User: { role: "member", username: "member" }
+  }));
+  assert.equal(lessonRead.ok, true);
+  assert.equal(lessonRead.readOnly, true);
 
   const write = await service.runQuery({
     confirmationDatabase: "catalogue",
