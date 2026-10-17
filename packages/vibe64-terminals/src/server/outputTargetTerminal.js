@@ -39,7 +39,9 @@ import {
   normalizeHostName
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
-  currentProjectRequestContext
+  captureProjectRequestContext,
+  currentProjectRequestContext,
+  runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -2881,6 +2883,12 @@ function createOutputTargetTerminalController({
                   code: "VIBE64_STACK_CHANGED"
                 });
               }
+              // The running process outlives this admitted request. Its callbacks
+              // observe and control that accepted work through the captured
+              // control projection, as practice lessons expire the request grant.
+              const callbackContext = captureProjectRequestContext();
+              const inCallbackContext = handler => (...args) =>
+                runWithProjectRequestContext(callbackContext || {}, () => handler(...args));
               terminalSession = await runCommand({
                 actor: "daemon",
                 allowedRoots: commandAllowedRoots,
@@ -2915,7 +2923,7 @@ function createOutputTargetTerminalController({
                   },
                   namespace,
                   namespaceLimitPrefix: namespace,
-                  onClose: async (event) => {
+                  onClose: inCallbackContext(async (event) => {
                     try {
                       if (event.reason === "exit" && event.exitCode === 0) {
                         await captureOutputResults({
@@ -2957,8 +2965,8 @@ function createOutputTargetTerminalController({
                         defer: true
                       });
                     }
-                  },
-                  onStop: async (event) => {
+                  }),
+                  onStop: inCallbackContext(async (event) => {
                     await writePreviewDiagnostic(context.session, {
                       ...diagnosticBase,
                       commandPreview,
@@ -2980,8 +2988,8 @@ function createOutputTargetTerminalController({
                     if (typeof spec.onStop === "function") {
                       await spec.onStop(event);
                     }
-                  },
-                  onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
+                  }),
+                  onOutput: (event) => void inCallbackContext(({ output, session: runningTerminalSession, updateMetadata }) => {
                     const actions = launchActionsFromOutput(output);
                     if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
                       updateMetadata({
@@ -3037,7 +3045,15 @@ function createOutputTargetTerminalController({
                         level: "warn"
                       });
                     });
-                  },
+                  })(event).catch((error) => {
+                    // The PTY hook only reports synchronous failures.
+                    vibe64SessionDebugLog("server.outputTargetTerminal.output.error", {
+                      error: vibe64SessionDebugError(error),
+                      sessionId
+                    }, {
+                      level: "warn"
+                    });
+                  }),
                   reuseRunning: false
                 }
               });
