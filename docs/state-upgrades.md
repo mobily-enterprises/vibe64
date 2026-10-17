@@ -1267,3 +1267,11 @@ Cancel removes it. Startup recovery skips blocked goals without converting them
 into human Pause. No historical prose or inactivity is interpreted, no existing
 record is rewritten, and no application-file backup is necessary. Record the
 boundary through the ordinary stopped-service upgrade before activating writes.
+
+## Shared database session override
+
+The optional project metadata boolean `allowSharedDatabaseSessions` is written
+only by an explicit settings save. Absence retains the existing one-session
+restriction for project database scope. Existing records and application data
+need no transformation or request-time backfill. Disabling the override changes
+future admission only; it never archives sessions or migrates database contents.

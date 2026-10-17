@@ -25,10 +25,10 @@ function blockingSessionsDescription(openSessions = []) {
     : `all ${openSessions.length} open sessions`;
 }
 
-function scopeOptionPolicy(scope = "", openSessions = []) {
+function scopeOptionPolicy(scope = "", openSessions = [], allowSharedDatabaseSessions = false) {
   const openSessionCount = openSessions.length;
   const blockingSessions = blockingSessionsDescription(openSessions);
-  const projectAvailable = openSessionCount <= 1;
+  const projectAvailable = openSessionCount <= 1 || scope === "project" && allowSharedDatabaseSessions;
   return {
     project: {
       available: projectAvailable,
@@ -49,7 +49,8 @@ function scopeOptionPolicy(scope = "", openSessions = []) {
 function developmentDatabasePolicy({
   managed = false,
   openSessions = [],
-  scope = "session"
+  scope = "session",
+  allowSharedDatabaseSessions = false
 } = {}) {
   const normalizedSessions = normalizedOpenSessions(openSessions);
   const openSessionCount = normalizedSessions.length;
@@ -57,7 +58,7 @@ function developmentDatabasePolicy({
     ? normalizeDevelopmentDatabaseScope(scope)
     : "external";
   const shared = managed && normalizedScope === "project";
-  const maxOpenSessions = shared ? 1 : DEFAULT_MAX_OPEN_SESSIONS;
+  const maxOpenSessions = shared && allowSharedDatabaseSessions !== true ? 1 : DEFAULT_MAX_OPEN_SESSIONS;
   const canCreate = openSessionCount < maxOpenSessions;
   const creation = {
     canCreate,
@@ -90,6 +91,7 @@ function developmentDatabasePolicy({
   return {
     creation,
     developmentDatabase: {
+      allowSharedDatabaseSessions: allowSharedDatabaseSessions === true,
       canChange: openSessionCount === 0,
       ...(openSessionCount > 0
         ? {
@@ -98,7 +100,7 @@ function developmentDatabasePolicy({
         : {}),
       managed: true,
       openSessionCount,
-      options: scopeOptionPolicy(normalizedScope, normalizedSessions),
+      options: scopeOptionPolicy(normalizedScope, normalizedSessions, allowSharedDatabaseSessions === true),
       scope: normalizedScope
     },
     limits

@@ -139,6 +139,7 @@ async function requireAgentWrite(runtime, sessionId, operation) {
 }
 
 function sessionCreationPolicyHarness({
+  allowSharedDatabaseSessions = false,
   beforeCreate = async () => {},
   initialSessions = [],
   initializeModelRouting = async () => ({ ok: true }),
@@ -200,6 +201,7 @@ function sessionCreationPolicyHarness({
     async developmentDatabasePolicy({ openSessions: currentSessions = [] } = {}) {
       return developmentDatabasePolicy({
         managed,
+        allowSharedDatabaseSessions,
         openSessions: currentSessions,
         scope
       });
@@ -3346,6 +3348,25 @@ test("session responses enforce the ordinary three-session policy on the server"
       openSessionCount: 3
     });
     assert.equal(vibe64StatusCode(rejected), 409);
+    assert.equal(harness.creationInputs.length, 1);
+    assert.equal(harness.openSessions.length, 3);
+  });
+});
+
+test("shared database override admits the third session and rejects a fourth on the server", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const harness = sessionCreationPolicyHarness({
+      initialSessions: [{ sessionId: "session-1" }, { sessionId: "session-2" }],
+      managed: true, scope: "project", allowSharedDatabaseSessions: true,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    assert.equal((await harness.service.listSessions()).creation.canCreate, true);
+    const third = await harness.service.createSession();
+    assert.equal(third.ok, true, JSON.stringify(third));
+    assert.equal(third.limits.maxOpenSessions, 3);
+    const fourth = await harness.service.createSession();
+    assert.equal(fourth.ok, false);
+    assert.equal(fourth.code, "vibe64_session_creation_limit");
     assert.equal(harness.creationInputs.length, 1);
     assert.equal(harness.openSessions.length, 3);
   });

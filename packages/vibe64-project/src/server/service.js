@@ -136,6 +136,7 @@ function publicProject(project = {}, {
   const slug = context?.slug || project.slug || project.name || path.basename(projectRoot);
   return {
     canonicalRepositoryPath: project.canonicalRepositoryPath || "",
+    allowSharedDatabaseSessions: project.allowSharedDatabaseSessions === true,
     developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
       project.developmentDatabaseScope
     ),
@@ -995,7 +996,8 @@ function createService({
     return resolveDevelopmentDatabasePolicy({
       managed: managedDevelopmentDatabaseAvailable(),
       openSessions,
-      scope: await currentDevelopmentDatabaseScope()
+      scope: await currentDevelopmentDatabaseScope(),
+      allowSharedDatabaseSessions: (await currentProjectState())?.allowSharedDatabaseSessions === true
     });
   }
 
@@ -1014,14 +1016,14 @@ function createService({
       selectedProjectRuntimeRoot(),
       async () => {
         const policy = await currentDevelopmentDatabasePolicy();
-        if (!policy.developmentDatabase.canChange) {
+        const scope = normalizeDevelopmentDatabaseScope(input.scope);
+        if (scope !== policy.developmentDatabase.scope && !policy.developmentDatabase.canChange) {
           throw vibe64Error(
             policy.developmentDatabase.disabledReason,
             "vibe64_development_database_scope_busy"
           );
         }
         const slug = path.basename(requireSelectedTargetRoot());
-        const scope = normalizeDevelopmentDatabaseScope(input.scope);
         const currentProject = await currentProjectState();
         let developmentDatabaseName = normalizeDevelopmentDatabaseName(
           currentProject?.developmentDatabaseName
@@ -1050,10 +1052,12 @@ function createService({
         await studioProjectContext.updateWorkspaceProjectMetadata({
           ...(developmentDatabaseName ? { developmentDatabaseName } : {}),
           developmentDatabaseScope: scope,
+          ...(Object.hasOwn(input, "allowSharedDatabaseSessions")
+            ? { allowSharedDatabaseSessions: input.allowSharedDatabaseSessions } : {}),
           slug
         });
         return {
-          ...(await currentDevelopmentDatabasePolicy({ openSessions: [] })).developmentDatabase,
+          ...(await currentDevelopmentDatabasePolicy()).developmentDatabase,
           ok: true
         };
       },

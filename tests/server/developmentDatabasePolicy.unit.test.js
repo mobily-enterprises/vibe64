@@ -115,3 +115,22 @@ test("settings distinguish option eligibility from live scope mutability", () =>
   assert.equal(invalidLegacyState.options.project.available, false);
   assert.match(invalidLegacyState.options.project.disabledReason, /has 2/u);
 });
+
+
+test("the explicit shared-database override uses the ordinary cap without removing sessions", () => {
+  const openSessions = sessions(2);
+  const enabled = developmentDatabasePolicy({ managed: true, scope: "project", openSessions,
+    allowSharedDatabaseSessions: true });
+  assert.equal(enabled.creation.canCreate, true);
+  assert.equal(enabled.limits.maxOpenSessions, DEFAULT_MAX_OPEN_SESSIONS);
+  assert.equal(enabled.developmentDatabase.canChange, false, "scope remains locked");
+  assert.equal(enabled.developmentDatabase.options.project.available, true);
+  const full = developmentDatabasePolicy({ managed: true, scope: "project", openSessions: sessions(3),
+    allowSharedDatabaseSessions: true });
+  assert.equal(full.creation.canCreate, false);
+  const disabled = developmentDatabasePolicy({ managed: true, scope: "project", openSessions,
+    allowSharedDatabaseSessions: false });
+  assert.equal(disabled.creation.canCreate, false);
+  assert.equal(disabled.limits.openSessionCount, 2);
+  assert.deepEqual(openSessions, sessions(2));
+});

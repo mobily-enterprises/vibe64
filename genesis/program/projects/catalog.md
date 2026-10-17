@@ -259,3 +259,11 @@ Genesis inspection and environment-read owner under fresh saved-attempt access.
 No template, Env write, project selection or source operation is registered in
 that route surface. The same onboarding component suppresses those ordinary
 project affordances for Learning and keeps setup-read recovery explicit.
+
+Project metadata optionally stores `allowSharedDatabaseSessions`, defaulting to
+false without rewriting old records. The existing locked database settings action
+may change this override with open sessions while retaining the scope-change guard.
+The shared session-admission policy uses the normal three-session limit when it
+is enabled; disabling preserves sessions and blocks additional creation under
+project scope. Settings shows the checkbox and shared-data warning only for
+project scope. Colleague uses the same action and reports the saved override.

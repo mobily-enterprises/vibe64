@@ -1969,3 +1969,8 @@ visible discussion up to the destination's available normal context. Original
 text and attribution carry across without reasoning or a generated summary.
 Oversized transfers omit older complete messages while saved history stays intact;
 the destination retains working space without enabling extended context settings.
+
+People using a managed shared development database can explicitly allow multiple
+open sessions up to the ordinary session limit. Settings warns that all sessions
+share the same database. They can disable this permission while work remains
+open: existing sessions and data stay intact, while additional creation is blocked.

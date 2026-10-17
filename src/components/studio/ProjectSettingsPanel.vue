@@ -132,6 +132,16 @@
             </div>
           </v-radio-group>
 
+          <div v-if="scopeDraft === 'project'" class="project-settings__action text-body-small">
+            <v-checkbox
+              v-model="sharedSessionsDraft"
+              label="Allow multiple sessions with this shared database"
+              :disabled="databaseSaving"
+              hide-details
+            />
+            <p>All sessions will share the same database.</p>
+          </div>
+
           <div class="project-settings__action text-body-small">
             <p v-if="disabledReason">{{ disabledReason }}</p>
             <p v-else-if="scopeDraft === 'project'">
@@ -139,7 +149,7 @@
               after a session is archived.
             </p>
             <v-btn
-              :disabled="!databaseChanged || !canChange || !scopeDraftAvailable || databaseSaving"
+              :disabled="!databaseChanged || !databaseSaveAllowed || databaseSaving"
               :color="databaseChanged ? 'primary' : undefined"
               height="48"
               type="button"
@@ -363,6 +373,7 @@ const projectSlug = useVibe64ProjectSlug();
 const route = useRoute();
 const router = useRouter();
 const scopeDraft = ref("session");
+const sharedSessionsDraft = ref(false);
 const collaborationDraft = ref(normalizeCollaborationDraft());
 const savedCollaboration = ref(normalizeCollaborationDraft());
 const promptHintsDraft = ref(true);
@@ -416,7 +427,8 @@ const databaseSaveCommand = useCommand({
     path: DEVELOPMENT_DATABASE_ENDPOINT
   }),
   buildRawPayload: (_model, { context }) => ({
-    scope: context.scope
+    scope: context.scope,
+    allowSharedDatabaseSessions: context.allowSharedDatabaseSessions
   }),
   fallbackRunError: "Development database choice could not be saved.",
   messages: {
@@ -588,8 +600,11 @@ const collaborationSaving = ref(false);
 const promptHintsSaving = computed(() => promptHintsSaveCommand.isRunning === true);
 const engineeringSaving = ref(false);
 const databaseChanged = computed(() => (
-  managed.value && scopeDraft.value !== developmentDatabase.value.scope
+  managed.value && (scopeDraft.value !== developmentDatabase.value.scope ||
+    sharedSessionsDraft.value !== (developmentDatabase.value.allowSharedDatabaseSessions === true))
 ));
+const databaseSaveAllowed = computed(() => scopeDraft.value === developmentDatabase.value.scope ||
+  canChange.value && scopeDraftAvailable.value);
 const collaborationChanged = computed(() => (
   JSON.stringify(collaborationDraft.value) !== JSON.stringify(savedCollaboration.value)
 ));
@@ -599,6 +614,9 @@ const engineeringChanged = computed(() => (
   Boolean(engineeringProfileDraft.value) &&
   engineeringProfileDraft.value !== savedEngineeringProfile.value
 ));
+watch(() => developmentDatabase.value.allowSharedDatabaseSessions, value => {
+  sharedSessionsDraft.value = value === true;
+}, { immediate: true });
 watch(() => developmentDatabase.value.scope, (scope) => {
   if (["project", "session"].includes(scope)) {
     scopeDraft.value = scope;
@@ -700,14 +718,14 @@ function normalizeCollaborationDraft(value = {}) {
 async function saveDatabase() {
   if (
     !databaseChanged.value ||
-    !canChange.value ||
-    !scopeDraftAvailable.value ||
+    !databaseSaveAllowed.value ||
     databaseSaving.value
   ) {
     return;
   }
   await databaseSaveCommand.run({
-    scope: scopeDraft.value
+    scope: scopeDraft.value,
+    allowSharedDatabaseSessions: sharedSessionsDraft.value
   });
   await resource.reload();
 }

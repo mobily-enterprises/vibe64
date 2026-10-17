@@ -133,6 +133,8 @@ vi.mock("vuetify/components/VBtn", () => ({
   VBtn: passthroughComponent("button")
 }));
 
+vi.mock("vuetify/components/VCheckbox", () => ({ VCheckbox: passthroughComponent("input") }));
+
 vi.mock("vuetify/components/VRadio", () => ({
   VRadio: passthroughComponent("input")
 }));
@@ -446,6 +448,7 @@ function mountPanel({ liveQueries = false, liveCommands = false } = {}) {
     : ProjectSettingsPanel;
   const app = testRenderer().createApp(root);
   app.component("VBtn", passthroughComponent("button"));
+  app.component("VCheckbox", passthroughComponent("input"));
   app.component("VRadio", passthroughComponent("input"));
   app.component("VRadioGroup", passthroughComponent("fieldset"));
   app.component("VSelect", passthroughComponent("select"));
@@ -1380,6 +1383,34 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     expect(findButton(container, "Save database choice").props.disabled).toBe(true);
 
     app.unmount();
+  });
+
+  it("saves the shared database override with open sessions and hides it for session scope", async () => {
+    projectSettingsMocks.resource = createResource({ developmentDatabase: {
+      scope: "project", canChange: false, openSessionCount: 2,
+      allowSharedDatabaseSessions: true,
+      options: { project: { available: true }, session: { available: true } }
+    } });
+    const { app, container } = mountPanel();
+    try {
+      const checkbox = findField(container, "Allow multiple sessions with this shared database");
+      expect(checkbox.props.modelValue).toBe(true);
+      expect(checkbox.props.disabled).toBe(false);
+      expect(nodeText(container)).toContain("All sessions will share the same database.");
+      checkbox.props["onUpdate:modelValue"](false);
+      await nextTick();
+      const save = findButton(container, "Save database choice");
+      expect(save.props.disabled).toBe(false);
+      await save.props.onClick();
+      expect(projectSettingsMocks.commands[0].run).toHaveBeenCalledWith({
+        scope: "project", allowSharedDatabaseSessions: false
+      });
+      findRadioGroup(container).props["onUpdate:modelValue"]("session");
+      await nextTick();
+      expect(findField(container, "Allow multiple sessions with this shared database")).toBeNull();
+      expect(nodeText(container)).not.toContain("All sessions will share the same database.");
+      expect(findButton(container, "Save database choice").props.disabled).toBe(true);
+    } finally { app.unmount(); }
   });
 
   it("guards the database command when the selected scope is unavailable", async () => {

@@ -320,6 +320,7 @@ function workspaceProjectRecord({
           projectRuntimeRoot
         })
       : "",
+    allowSharedDatabaseSessions: metadata.allowSharedDatabaseSessions === true,
     developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
       metadata.developmentDatabaseScope
     ),
@@ -428,12 +429,19 @@ function projectMetadataFromInput(input = {}, {
   defaultRepositoryBranch = "",
   defaultRepositoryMode = ""
 } = {}) {
+  if (Object.hasOwn(input, "allowSharedDatabaseSessions") && typeof input.allowSharedDatabaseSessions !== "boolean") {
+    const error = new Error("Shared database session override must be a boolean.");
+    error.code = "vibe64_project_metadata_invalid";
+    throw error;
+  }
   const repositoryMetadata = projectRepositoryMetadataFromInput(input, {
     defaultBranch: defaultRepositoryBranch,
     defaultMode: defaultRepositoryMode
   });
   return {
     ...repositoryMetadata,
+    ...(Object.hasOwn(input, "allowSharedDatabaseSessions")
+      ? { allowSharedDatabaseSessions: input.allowSharedDatabaseSessions } : {}),
     ...(Object.hasOwn(input, "training") ? { training: normalizeProjectTraining(input.training) } : {}),
     ...(Object.hasOwn(input, "developmentDatabaseScope")
       ? {
@@ -488,6 +496,7 @@ function normalizeProjectMetadata(metadata = {}) {
       "deletion",
       "developmentDatabaseName",
       "developmentDatabaseScope",
+      "allowSharedDatabaseSessions",
       "repository",
       "training"
     ].includes(field));

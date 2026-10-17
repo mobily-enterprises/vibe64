@@ -76,6 +76,7 @@ async function withSettingsTools(run) {
         record("development-database.scope.save", input);
         if (!state.developmentDatabase.canChange) return { ok: false, errors: [{ code: "vibe64_development_database_scope_busy", message: state.developmentDatabase.disabledReason }] };
         state.developmentDatabase.scope = input.scope;
+        if (Object.hasOwn(input, "allowSharedDatabaseSessions")) state.developmentDatabase.allowSharedDatabaseSessions = input.allowSharedDatabaseSessions;
         return { ok: true, ...state.developmentDatabase };
       },
       async readPreviewApplicationIdentities(input) {
@@ -410,5 +411,18 @@ test("connection tools preserve source/revision and expose no private binding st
     assert.deepEqual(saved.result.connectedProjects.projects, []);
     assert.equal(calls.at(-1).input.sessionId, "session-a");
     assert.equal(calls.at(-1).input.revision, "");
+  });
+});
+
+
+test("database policy action carries the explicit boolean override and rejects strings", async () => {
+  await withSettingsTools(async ({ calls, execute, state }) => {
+    state.developmentDatabase.canChange = true;
+    const saved = await execute("development-database.scope.save", { scope: "project", allowSharedDatabaseSessions: true });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.equal(saved.result.developmentDatabase.allowSharedDatabaseSessions, true);
+    const before = calls.length;
+    assert.equal((await execute("development-database.scope.save", { scope: "project", allowSharedDatabaseSessions: "true" })).ok, false);
+    assert.equal(calls.length, before, "invalid override never reaches the owner");
   });
 });

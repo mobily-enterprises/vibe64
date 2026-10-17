@@ -199,6 +199,7 @@ const projectEnvUserValuesInputValidator = inputSchema({
 });
 
 const projectDevelopmentDatabaseScopeInputValidator = inputSchema({
+  allowSharedDatabaseSessions: { type: "boolean", strictBoolean: true },
   scope: {
     type: "string",
     enum: ["project", "session"],

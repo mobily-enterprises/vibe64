@@ -25,6 +25,16 @@ commits/pushes or requires pull requests. GitHub still enforces your repository
 permissions and branch rules. A hosted development database scope change requires
 the owner and no open sessions; it does not merge or restore database contents.
 
+With **One database shared by this project** selected, you can check **Allow
+multiple sessions with this shared database**, then choose **Save database choice**.
+The warning reads **All sessions will share the same database.** The checkbox and
+warning appear only for that choice, on desktop and mobile. The override permits
+the normal maximum of three open sessions. You can change it while sessions are
+open. Turning it off preserves every existing session and its data; it blocks
+additional sessions while one or more remain open. Changing the database scope
+itself still requires closed sessions. Colleague can explain or, when requested,
+save this override through the same authorized settings action.
+
 If a load or save fails, read its error, retry the read and inspect the saved state
 before sending the change again. Disabled controls may reflect missing authority
 or active work; changing pages does not bypass those restrictions.

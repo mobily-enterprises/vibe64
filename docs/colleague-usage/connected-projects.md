@@ -28,11 +28,13 @@ Opening Settings and preparing a workspace do not create or import this file.
 For concurrent hosted tasks, configure each receiving project's **Project settings
 → Development database → A separate database for each session** before opening
 its sessions. **One database shared by this project** permits only one open
-session, including connected contributions, even for a library that uses no
-database. An existing open session therefore blocks another contribution.
-Preserve that work; change the policy only when all sessions are closed, then
-use workspace preparation **Retry**. Preparation never archives existing work
-or changes the receiving project's database policy for you.
+session unless **Allow multiple sessions with this shared database** is enabled,
+including connected contributions and libraries with no database. With project
+scope already selected, enable the override and choose **Save database choice**
+without closing work; all sessions share data and the ordinary three-session cap
+still applies. Then use workspace preparation **Retry**. Disabling the override
+preserves existing sessions but blocks additional creation. Preparation never
+archives existing work or changes this preference for you.
 
 For each entry, provide a **Name**, a **GitHub repository URL**, and a
 **Relationship**: Dependency for a library or tool; Composition for source

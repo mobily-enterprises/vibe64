@@ -453,6 +453,7 @@ test("managed development database scope is project state and changes only witho
 
     const initial = await service.readSettings();
     assert.deepEqual(initial.developmentDatabase, {
+      allowSharedDatabaseSessions: false,
       canChange: true,
       managed: true,
       openSessionCount: 0,
@@ -484,6 +485,7 @@ test("managed development database scope is project state and changes only witho
       sessionId: "ghost-session"
     });
     assert.deepEqual((await service.readSettings()).developmentDatabase, {
+      allowSharedDatabaseSessions: false,
       canChange: true,
       managed: true,
       openSessionCount: 0,
@@ -544,11 +546,28 @@ test("managed development database scope is project state and changes only witho
     assert.equal(blocked.ok, false);
     assert.equal(blocked.errors[0].code, "vibe64_development_database_scope_busy");
 
+    const enabled = await service.saveDevelopmentDatabaseScope({
+      scope: "project", allowSharedDatabaseSessions: true
+    });
+    assert.equal(enabled.ok, true);
+    assert.equal(enabled.allowSharedDatabaseSessions, true);
+    assert.equal(enabled.openSessionCount, 2);
+    assert.equal((await service.developmentDatabasePolicy()).creation.canCreate, true);
+    assert.equal((await projectContext.readWorkspaceProject({ slug: "shared-catalogue" })).project.allowSharedDatabaseSessions, true);
+    const disabled = await service.saveDevelopmentDatabaseScope({
+      scope: "project", allowSharedDatabaseSessions: false
+    });
+    assert.equal(disabled.ok, true);
+    assert.equal(disabled.allowSharedDatabaseSessions, false);
+    assert.equal(disabled.openSessionCount, 2, "disabling the override preserves both open sessions");
+    assert.equal((await service.developmentDatabasePolicy()).creation.canCreate, false);
+
     await store.writeStatus("open-session", "archived");
     await store.publishSessionArchive("open-session");
     await store.writeStatus("second-open-session", "archived");
     await store.publishSessionArchive("second-open-session");
     assert.deepEqual((await service.readSettings()).developmentDatabase, {
+      allowSharedDatabaseSessions: false,
       canChange: true,
       managed: true,
       openSessionCount: 0,
@@ -621,6 +640,7 @@ test("scope saving and session creation share one project policy boundary", asyn
       }
     };
     const sessionsService = createSessionsService({
+      readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
       initializeModelRouting: async () => ({ ok: true }),
       project: {
         async createRuntime() {
