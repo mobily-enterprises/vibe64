@@ -22,7 +22,7 @@ import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/sr
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
-import { Vibe64ColleagueProvider } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";
+import { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";
 import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
@@ -3766,7 +3766,6 @@ test("native observation API excludes assistant/automation and accepts only boun
     { workspace: { ...input.workspace, sourcePath: "/secret" } }]) await assert.rejects(f.observe({ ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
   const app = testRouteApp();
   const outputs = await Vibe64ColleagueProvider.setup({ accounts: {}, terminals: f.terminals, events: createEventRuntime(), http: app.http,
-    realtime: { onConnection() { return () => {}; } },
     actionCatalogue: createActionCatalogue() }, {});
   t.after(() => outputs.colleague.close());
   const route = app.registeredRoutes.find(item => item.method === "POST" && item.path === "/api/vibe64/colleague/training/observations");
@@ -6837,4 +6836,19 @@ test("native completed Claude StructuredOutput remains a valid Colleague reply c
   assert.equal(final.status, "ready", final.error);
   assert.equal(final.messages.at(-1).text, "Hello.");
   assert.equal(completedColleagueClaudeInputs(await f.native.trace()).length, 1);
+});
+
+
+test("learning-task browser focus adapter owns its subscription independently of Colleague service", async () => {
+  let attached = 0;
+  let released = 0;
+  const outputs = await Vibe64ColleagueFocusProvider.setup({
+    colleague: {},
+    realtime: { onConnection(listener) { assert.equal(typeof listener, "function"); attached += 1; return () => { released += 1; }; } },
+    actionCatalogue: { register() {} }
+  }, {});
+  assert.equal(attached, 1);
+  assert.equal(Vibe64ColleagueProvider.requires.realtime, undefined);
+  await Vibe64ColleagueFocusProvider.shutdown({}, { outputs });
+  assert.equal(released, 1);
 });

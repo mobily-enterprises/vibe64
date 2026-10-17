@@ -1256,3 +1256,9 @@ Window focus does not refresh Colleague. Initial mounting, relevant realtime
 events, reconnects and explicit product operations retain their existing refresh
 paths. A ready conversation permits a different message after an unknown receipt;
 the unconfirmed message remains inspection-only and is never replayed implicitly.
+
+
+The browser focus adapter is a separate provider, composed after the Colleague
+service and authenticated realtime. Hosted authentication can depend on Colleague
+without a dependency cycle. Adapter shutdown releases its subscriptions before
+the service and realtime owners shut down.

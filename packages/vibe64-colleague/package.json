@@ -14,7 +14,8 @@
     "kind": "runtime",
     "capabilities": {
       "provides": [
-        "vibe64.colleague"
+        "vibe64.colleague",
+        "vibe64.colleague.browser-focus"
       ],
       "requires": [
         "runtime.actions",
@@ -31,10 +32,15 @@
           {
             "entrypoint": "src/server/Vibe64ColleagueProvider.js",
             "export": "Vibe64ColleagueProvider"
+          },
+          {
+            "entrypoint": "src/server/Vibe64ColleagueProvider.js",
+            "export": "Vibe64ColleagueFocusProvider"
           }
         ],
         "capabilities": [
-          "vibe64.colleague"
+          "vibe64.colleague",
+          "vibe64.colleague.browser-focus"
         ]
       },
       "client": {

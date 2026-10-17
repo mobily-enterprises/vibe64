@@ -8,12 +8,11 @@ import { createTrainingLearningWatchSource } from "@local/vibe64-training/server
 
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
-  requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events", realtime: "runtime.realtime" },
+  requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
   provides: { colleague: "vibe64.colleague" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ accounts, http, terminals, events, realtime }, { actionCatalogue }) {
+  setup({ accounts, http, terminals, events }, { actionCatalogue }) {
     const colleague = createColleagueService({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
-    const releaseFocus = registerColleagueFocus({ realtime, actions: actionCatalogue });
     colleague.registerConversationSource("learning-task", createTrainingLearningWatchSource(actionCatalogue));
     const routes = createVibe64FeatureRoutes(http, {
       projectScoped: false, routeRelativePath: "vibe64/colleague", routeSurface: "app", tags: ["vibe64-colleague"]
@@ -35,7 +34,6 @@ const Vibe64ColleagueProvider = defineFeature({
       });
     }
     return { colleague: { ...colleague,
-      async close() { releaseFocus(); await colleague.close(); },
       browserConversations: { ...colleague.browserConversations,
         conversationDataSchema: colleagueConversationDataSchema,
         conversationSelectionSchema: colleagueConversationSelectionSchema }
@@ -45,4 +43,16 @@ const Vibe64ColleagueProvider = defineFeature({
   shutdown(_deps, { outputs }) { return outputs.colleague.close(); }
 });
 
-export { Vibe64ColleagueProvider };
+// Hosted authentication consumes Colleague, so the service cannot itself depend
+// on authenticated realtime. This adapter attaches only after both owners exist.
+const Vibe64ColleagueFocusProvider = defineFeature({
+  id: "vibe64.colleague.browser-focus",
+  requires: { colleague: "vibe64.colleague", realtime: "runtime.realtime" },
+  provides: { browserFocus: "vibe64.colleague.browser-focus" },
+  setup({ realtime }, { actionCatalogue }) {
+    return { browserFocus: { close: registerColleagueFocus({ realtime, actions: actionCatalogue }) } };
+  },
+  shutdown(_deps, { outputs }) { outputs.browserFocus.close(); }
+});
+
+export { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider };
