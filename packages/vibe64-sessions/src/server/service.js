@@ -2219,7 +2219,7 @@ function createService({
           messageId,
           message: request
         }, {
-          ...(runtime.learningScope && options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
+          ...(options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
           runtime,
           vibe64User: input.vibe64User || null
         });

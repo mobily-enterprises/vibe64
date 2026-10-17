@@ -535,9 +535,10 @@ function createSessionActions({ sessions } = {}) {
       input: agentMessageActionInputValidator,
       execute(input, context) {
         const learning = context.vibe64Action?.learning;
-        if (!learning) return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input));
         return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input), {
-          browserAuthority: { sessionId: input.sessionId, learningAttemptId: learning.learningScope.attemptId,
+          browserAuthority: { sessionId: input.sessionId,
+            ...(learning ? { learningAttemptId: learning.learningScope.attemptId }
+              : { projectSlug: context.vibe64Action.project.slug }),
             actorId: context.actor.id, requestContext: mainConversationRequestContext(context) }
         });
       }

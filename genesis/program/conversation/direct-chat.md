@@ -590,6 +590,10 @@ then clears the native goal. Set and Resume can steer an active Claude turn in
 the same process; only an existing unfinished goal blocks setting another goal.
 Stale goal revisions cannot apply to a newer goal.
 Ordinary Claude Main exposes a narrow structured self-pause application action.
+The authorized Send action retains its resolved actor/project authority through
+Sessions and the agent manager for both new messages and steering. Tool execution
+rechecks that authority; entering through the browser action route must behave
+like the inner conversation, without trusting authority supplied in message data.
 The existing SDK MCP transport validates the admitted top-level native tool use;
 the Main binding rechecks its authored request, actor, project and assistant
 access, then derives the native goal identity on the server. It invokes the same

@@ -58,6 +58,7 @@ resume that blocked goal. Resolve the reported prerequisite, then open **Goal**
 and choose **Resume goal**; use **Cancel goal** to clear it instead. These controls
 work on desktop and mobile. Colleague can explain the reason and recovery steps.
 You can also ask Claude in Main chat to pause, including after a safe checkpoint.
+You can send that request as a new message or steer it into the running turn.
 After draining its work, Claude must invoke the application's structured Pause
 action. That uses the same goal control and records stopped continuation intent;
 a server restart must not resume it. An assistant reply saying “paused” alone is

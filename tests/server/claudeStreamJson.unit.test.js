@@ -2177,9 +2177,11 @@ createInterface({ input: process.stdin }).on('line', async line => {
     resolveUser: async () => actor,
     authorizeProject: async ({ slug }) => assert.equal(slug, "claude-main-fixture")
   });
-  const sessions = createSessionService({ actions, project: projectService, terminals: service });
+  // Daemon recreation below must leave the browser facade using the current owner.
+  const terminals = new Proxy({}, { get: (_target, key) => service[key] });
+  const sessions = createSessionService({ actions, project: projectService, terminals });
   actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
-    actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals: service })]
+    actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
       .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   const goalFacade = await sessions.browserConversations.open({
     id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app" }
@@ -2669,14 +2671,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       });
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
         "Knowing the action ID is not authority to pause a Main goal");
-      const currentBrowser = await service.openBrowserConversation("test", { ...options, browserAuthority });
-      const prose = await currentBrowser.send({ messageId: "service-pause-prose", text: "I am paused.", steer: true });
-      assert.equal(prose.status, "accepted");
+      const prose = await goalFacade.send({ messageId: "service-pause-prose", text: "I am paused.", steer: true });
+      assert.equal(prose.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
         "Ordinary prose never substitutes for the structured Pause operation");
-      const pauseReceipt = await currentBrowser.send({ messageId: "service-self-pause", text: "Pause through the admitted application tool.", steer: true });
-      assert.equal(pauseReceipt.status, "accepted");
+      const pauseReceipt = await goalFacade.send({ messageId: "service-self-pause", text: "Pause through the admitted application tool.", steer: true });
+      assert.equal(pauseReceipt.delivered, true);
       const pauseDeadline = Date.now() + 5000;
       let pauseCall;
       while (!pauseCall || pauseCall.status === "running") {

@@ -171,7 +171,20 @@ test("conversation HTTP handlers and automation execute the same authorized acti
         assert.equal(fromHttp.args[1].expectedRevision, "a".repeat(64));
       }
       await actions.execute({ actionId, input: { ...actionInput, projectSlug: slug }, context: { channel: "automation", surface: "app" } });
-      assert.deepEqual(calls.at(-1), fromHttp);
+      const fromAutomation = calls.at(-1);
+      if (serviceMethod === "sendAgentMessage") {
+        for (const call of [fromHttp, fromAutomation]) {
+          const authority = call.args[2].browserAuthority;
+          assert.equal(authority.sessionId, "session-1");
+          assert.equal(authority.projectSlug, slug);
+          assert.equal(authority.actorId, user.username);
+          assert.equal(authority.requestContext.channel, "internal");
+          assert.equal(authority.requestContext.vibe64Action, undefined, "Cached grants are not retained");
+        }
+        assert.equal(fromHttp.args[2].browserAuthority.requestContext.requestMeta.request.vibe64User, user);
+        assert.deepEqual({ ...fromAutomation, args: fromAutomation.args.slice(0, 2) },
+          { ...fromHttp, args: fromHttp.args.slice(0, 2) });
+      } else assert.deepEqual(fromAutomation, fromHttp);
       if (serviceMethod === "broadcastSessionPreviewState") assert.equal(fromHttp.args[1].projectSlug, slug);
 
       const count = calls.length;
