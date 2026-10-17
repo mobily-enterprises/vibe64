@@ -1168,6 +1168,56 @@ it("captures the shell navigator before the retained Learning application is cre
 });
 
 
+it.each([["VIBE64_TRAINING_PREPARATION_BUSY", 2], ["VIBE64_TRAINING_MAIN_UNADMITTED", 1]])(
+  "resends an identical presentation receipt only after a preparation-busy refusal (%s)", async (code, sends) => {
+  const { provide, shallowRef } = await import("vue");
+  const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
+  const attempt = "9490f94a-c614-4581-9111-0debb2339ca8";
+  const sourceProjectSlug = "training-9490f94ac614458191110debb2339ca8";
+  const sessionId = `training-${attempt}`;
+  const preview = shallowRef(null), receipts = [];
+  const visual = { state: {}, retireCue() {}, open: vi.fn(async () => ({ ok: true, attemptId: attempt,
+    visualId: "client-server", playerInstanceId: "busy-player", phase: "ready" })) };
+  const navigate = vi.fn(async command => ({ focus: { projectSlug: sourceProjectSlug, sessionId,
+    pane: "preview", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attempt },
+    presentation: await visual.open(command.presentation) }));
+  const f = fixture({ projectSlug: "", sessionId, learningAttemptId: attempt, learnerId: "1000",
+    noExercise: false, sourceProjectSlug, sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    provideShell() { provide(VIBE64_BROWSER_NAVIGATION_KEY, shallowRef(navigate)); provide(VIBE64_COLLEAGUE_PREVIEW_KEY, preview); } });
+  const runtime = f.runtime.value;
+  preview.value = { projectSlug: sourceProjectSlug, sessionId, learningAttemptId: attempt, learnerId: "1000", presentation: visual };
+  await vi.waitFor(() => expect(runtime.available.value).toBe(true));
+  const command = { id: "busy-main-open", status: "pending", projectSlug: sourceProjectSlug, sessionId,
+    pane: "preview", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attempt,
+    presentation: { operation: "open", attemptId: attempt, visualId: "client-server" } };
+  const coordination = createTrainingPresentationCoordination({ changed() {} });
+  const connection = {}, authority = { conversationId: mainConversationId(runtime.identity), generation: 0 };
+  const pending = coordination.begin(connection, command, authority);
+  mocks.presentation.mockImplementation(async (url, options = {}) => {
+    if (url.endsWith("/ack")) {
+      receipts.push(structuredClone(options.body));
+      // The live Preview/output owner held the attempt barrier during this ACK.
+      if (receipts.length === 1) throw Object.assign(new Error("Refused before any receipt effect."), { status: 409, code });
+      return coordination.acknowledge(connection, options.body, authority);
+    }
+    if (options.method === "POST") return { ok: true };
+    return { ok: true, navigation: command, cue: null };
+  });
+  try {
+    await runtime.presentation.refresh();
+    await vi.waitFor(() => expect(receipts).toHaveLength(sends));
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(receipts).toHaveLength(sends);
+    expect(visual.open).toHaveBeenCalledTimes(1);
+    if (sends === 2) {
+      expect(receipts[1]).toEqual(receipts[0]);
+      expect(await pending).toMatchObject({ ok: true, presentation: { playerInstanceId: "busy-player" } });
+    } else {
+      expect(connection.acknowledge).toEqual(expect.any(Function));
+    }
+  } finally { connection.acknowledge?.({ ok: false }); await pending; }
+});
+
 it.each([false, true])("keeps a visual transaction through the routed reader replacement without voice (actor changes: %s)", async actorChanges => {
   const { provide, shallowRef } = await import("vue");
   const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
