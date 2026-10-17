@@ -433,3 +433,13 @@ returns the original practice grant's captured control-only projection. Fresh
 effects still require lesson admission. Unscoped (Working) session-store listings,
 renewal reads and the current-session alias omit a genuine lesson binding, which its
 Learning store owns; direct reads and malformed bindings still refuse.
+
+## Practice Dashboard database
+
+In a practice lesson the Learning Dashboard pane mounts only the existing
+`Vibe64DatabaseWorkspace` with the saved attempt (`learningDatabaseAvailable` in
+`Vibe64AutopilotView.vue`). Its client uses `/api/learning/<attempt>/vibe64/database`.
+Database tools register lesson-scoped routes for state read, schema refresh, query
+run/cancel and lookup search only; those actions declare `learningAccess`, so the
+original Learning admission resolves the practice session. Under a lesson scope the
+service refuses non-read-only queries and reports write access unavailable.

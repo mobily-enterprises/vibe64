@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectRequestContext, currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
@@ -412,7 +412,7 @@ function createService({
           schema,
           workspace,
           writeAccess: {
-            available: true,
+            available: !currentProjectRequestContext()?.learningScope,
             confirmationDatabase: context.writeConnection.database,
             unlocked: false
           }
@@ -462,6 +462,10 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const readOnly = input.readOnly !== false;
+        if (!readOnly && currentProjectRequestContext()?.learningScope) {
+          throw databaseError("Learning shows this lesson's data read-only. Change data in a Working session.",
+            "vibe64_database_learning_read_only");
+        }
         const automaticDefault = input.automatic === true && schema.tables.some((table) => (
           String(input.sql || "").trim() === defaultQuery(table, schema.engine)
         ));

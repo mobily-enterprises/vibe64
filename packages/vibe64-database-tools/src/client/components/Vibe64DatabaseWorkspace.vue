@@ -600,6 +600,10 @@ const props = defineProps({
     default: "",
     type: String
   },
+  learningAttemptId: {
+    default: "",
+    type: String
+  },
   sessionId: {
     default: "",
     type: String
@@ -629,6 +633,7 @@ function requestOverviewAssistant({ abstraction = "balanced", scope = "all", tab
 
 const database = useVibe64DatabaseTools({
   active: computed(() => props.active),
+  learningAttemptId: computed(() => props.learningAttemptId),
   projectSlug: computed(() => props.projectSlug),
   sessionId: computed(() => props.sessionId)
 });
