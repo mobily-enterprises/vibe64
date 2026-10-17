@@ -2175,11 +2175,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
   service = createService();
   const actor = { username: "service-owner", role: "owner" };
   const options = { runtime, vibe64User: actor };
+  const originalGoalRequest = { headers: { cookie: "fixture-session" } };
+  let requireGoalRequest = false;
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
       return { project: { projectRoot: f.root, projectRuntimeRoot: runtime.stateRoot } };
     } },
-    resolveUser: async () => actor,
+    resolveUser: async ({ request }) => !requireGoalRequest || request?.headers?.cookie === originalGoalRequest.headers.cookie ? actor : null,
     authorizeProject: async ({ slug }) => assert.equal(slug, "claude-main-fixture")
   });
   // Daemon recreation below must leave the browser facade using the current owner.
@@ -2189,7 +2191,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
       .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   const goalFacade = await sessions.browserConversations.open({
-    id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app" }
+    id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app", requestMeta: { request: originalGoalRequest } }
   });
   const goalProject = (await actions.execute({ actionId: ACTION_READ_CONVERSATION_CONTEXT,
     input: { projectSlug: "claude-main-fixture", sessionId: "test" }, context: { channel: "internal", surface: "app" } })).project;
@@ -2753,6 +2755,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       const resumedBlocked = await goalFacade.readGoal();
       await goalFacade.updateGoal({ action: "cancel", expectedSegmentId: resumedBlocked.target.segmentId,
         expectedGoalId: resumedBlocked.goal.id, messageId: "before-block-on-goal" });
+      requireGoalRequest = true;
       await startGoal({ action: "set", objective: "BLOCK_ON_GOAL", messageId: "block-on-goal",
         expectedSegmentId: resumedBlocked.target.segmentId }, { canonical: true });
       const goalToolDeadline = Date.now() + 5000;

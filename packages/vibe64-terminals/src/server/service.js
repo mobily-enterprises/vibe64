@@ -248,6 +248,7 @@ import {
 import {
   assertProjectEffectAdmission,
   captureProjectRequestContext,
+  currentProjectActionRequestMeta,
   currentProjectRequestContext,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -4277,7 +4278,7 @@ function createService({
               if (actor && !prepared.context.browserAuthority) {
                 prepared.context.browserAuthority = { sessionId, projectSlug: projectRuntimeContext().projectSlug,
                   actorId: actor.username, requestContext: { surface: "app", channel: "internal",
-                    requestMeta: { request: { vibe64User: actor } } } };
+                    requestMeta: currentProjectActionRequestMeta() || { request: { vibe64User: actor } } } };
               }
               await changeGoalIntent(sessionId, context, latest => {
                 if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");

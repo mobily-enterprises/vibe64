@@ -4256,3 +4256,6 @@ Set and Resume preserve the same trusted actor CONTROL context as ordinary Send,
 including automatic recovery's freshly authorized actor. The manager forwards it
 to the admitted native request, allowing its later goal tools to recheck current
 project/model access without requiring a separate chat message first.
+
+Goal Set/Resume retains the original action request metadata for hosted session
+reauthorization; a copied user record alone is not browser authentication.
