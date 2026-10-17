@@ -3,15 +3,17 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "./actions.js";
 import { createColleagueService } from "./service.js";
+import { registerColleagueFocus } from "./registerColleagueFocus.js";
 import { createTrainingLearningWatchSource } from "@local/vibe64-training/server/learning-watch";
 
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
-  requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
+  requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events", realtime: "runtime.realtime" },
   provides: { colleague: "vibe64.colleague" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ accounts, http, terminals, events }, { actionCatalogue }) {
+  setup({ accounts, http, terminals, events, realtime }, { actionCatalogue }) {
     const colleague = createColleagueService({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
+    const releaseFocus = registerColleagueFocus({ realtime, actions: actionCatalogue });
     colleague.registerConversationSource("learning-task", createTrainingLearningWatchSource(actionCatalogue));
     const routes = createVibe64FeatureRoutes(http, {
       projectScoped: false, routeRelativePath: "vibe64/colleague", routeSurface: "app", tags: ["vibe64-colleague"]
@@ -33,6 +35,7 @@ const Vibe64ColleagueProvider = defineFeature({
       });
     }
     return { colleague: { ...colleague,
+      async close() { releaseFocus(); await colleague.close(); },
       browserConversations: { ...colleague.browserConversations,
         conversationDataSchema: colleagueConversationDataSchema,
         conversationSelectionSchema: colleagueConversationSelectionSchema }

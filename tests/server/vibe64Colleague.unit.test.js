@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { promises as fs } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -22,6 +23,9 @@ import { createTerminalActions } from "../../packages/vibe64-terminals/src/serve
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { Vibe64ColleagueProvider } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";
+import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
+import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
+import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import { testRouteApp, testReply } from "./vibe64RouteTestHelpers.js";
 import { createControlledColleagueNativeCommands } from "../fixtures/colleagueNativeCommands.js";
 
@@ -1332,6 +1336,132 @@ test("learning-task watches pause when their browser leaves or the server restar
   assert.equal(restored.observations.starts.length, 0, "a retained pending observation cannot survive restart");
   assert.equal(JSON.stringify(JSON.parse(await readFile(savedPath, "utf8"))).includes("learning-guidance-retained"), false,
     "a retained pending Main notification cannot survive restart");
+});
+
+test("learning-task browser connection retirement pauses only its own watch and fences an old socket", async t => {
+  const releases = [];
+  t.after(() => { for (const release of releases) release(); });
+  const f = await fixture(t, [], { watching: true });
+  const attemptId = "66666666-6666-4666-8666-666666666666";
+  f.service.registerConversationSource("learning-task", { async read(watch) {
+    watch.learningTask = { ...watch.learningTask, progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: [] } };
+    return { status: "working", runId: attemptId, revision: "1", messages: [] };
+  }, async notify() { return { ok: true, status: "deferred" }; } });
+  let connect;
+  registerColleagueFocus({ actions: f.actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  function browser() {
+    const socket = new EventEmitter();
+    socket.connected = true;
+    const release = connect({ socket, readRequest: async () => ({ ...f.context.requestMeta.request }) });
+    releases.push(release);
+    return { socket, leave() { socket.connected = false; release(); },
+      update: input => new Promise(resolve => socket.emit(COLLEAGUE_FOCUS_UPDATE, input, resolve)) };
+  }
+  const first = browser(), second = browser();
+  const focus = { projectSlug: "alpha", sessionId: "learning-sockets", pane: "preview",
+    learningAttemptId: attemptId, learningView: "workspace" };
+  for (const [name, tab] of [["first", first], ["second", second]]) {
+    const result = await tab.update({ clientId: name, focus });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    await f.service.startLearningWatch({ watchId: name, browserClientId: name, learningClientId: `main-${name}`,
+      attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main", criterion: "Observe this task." }, f.context);
+  }
+  await f.service.observeLearningTask({ watchId: "first", learningClientId: "main-first", eventId: "departing-browser",
+    control: "preview-select", workspace: { projectSlug: "alpha", sessionId: focus.sessionId, pane: "preview", ready: true, learningView: "workspace" } }, f.context);
+  const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
+  assert.ok(JSON.parse(await readFile(savedPath, "utf8")).watches.find(watch => watch.watchId === "first").pendingGuidance);
+  first.leave();
+  await until(async () => JSON.parse(await readFile(savedPath, "utf8")).watches.find(watch => watch.watchId === "first").status === "paused");
+  assert.equal(JSON.parse(await readFile(savedPath, "utf8")).watches.find(watch => watch.watchId === "first").pendingGuidance, undefined);
+  assert.equal((await f.service.read({}, f.context)).watches.find(watch => watch.watchId === "second").status, "active");
+  const replacement = browser();
+  assert.equal((await replacement.update({ clientId: "first", focus })).ok, true);
+  assert.equal((await f.service.read({}, f.context)).watches.find(watch => watch.watchId === "first").status, "paused",
+    "reconnection never resumes the paused watch");
+  await f.service.resumeWatch({ watchId: "first", browserClientId: "first", learningClientId: "main-first" }, f.context);
+  const latest = browser();
+  assert.equal((await latest.update({ clientId: "first", focus })).ok, true);
+  replacement.leave();
+  assert.equal((await f.service.read({}, f.context)).watches.find(watch => watch.watchId === "first").status, "active",
+    "an old socket cannot retire the replacement binding");
+  latest.socket.emit(COLLEAGUE_FOCUS_RELEASE, { clientId: "second" });
+  assert.equal((await f.service.read({}, f.context)).watches.find(watch => watch.watchId === "second").status, "active",
+    "one socket cannot release another socket's tab");
+  latest.socket.emit(COLLEAGUE_FOCUS_RELEASE, { clientId: "first" });
+  await until(async () => (await f.service.read({}, f.context)).watches.find(watch => watch.watchId === "first").status === "paused");
+  assert.equal(f.observations.starts.length, 0);
+});
+
+test("learning-task socket focus preserves the original action authorization and input checks", async t => {
+  let release;
+  t.after(() => release?.());
+  const f = await fixture(t, [], { watching: true });
+  let connect;
+  registerColleagueFocus({ actions: f.actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  const socket = new EventEmitter();
+  socket.connected = true;
+  release = connect({ socket, readRequest: async () => ({ ...f.context.requestMeta.request }) });
+  const update = input => new Promise(resolve => socket.emit(COLLEAGUE_FOCUS_UPDATE, input, resolve));
+  const input = { clientId: "protected", focus: { projectSlug: "alpha", sessionId: "learning-protected" } };
+  f.observations.allow = false;
+  assert.equal((await update(input)).ok, false);
+  f.observations.allow = true;
+  assert.deepEqual((await f.service.context({}, { ...f.context, colleague: { clientId: input.clientId } })).focus, {});
+  assert.equal((await update({ ...input, focus: { ...input.focus, privatePath: "/untrusted" } })).ok, false);
+  assert.equal((await update(input)).ok, true);
+});
+
+test("learning-task socket focus cannot return after disconnect during authorization", async t => {
+  const f = await fixture(t, [], { watching: true });
+  let connect;
+  registerColleagueFocus({ actions: f.actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  const socket = new EventEmitter();
+  socket.connected = true;
+  const gate = Promise.withResolvers(), entered = Promise.withResolvers();
+  const release = connect({ socket, async readRequest() { entered.resolve(); await gate.promise; return { ...f.context.requestMeta.request }; } });
+  t.after(release);
+  let acknowledged = false;
+  socket.emit(COLLEAGUE_FOCUS_UPDATE, { clientId: "gone", focus: { projectSlug: "alpha", sessionId: "learning-gone" } }, () => { acknowledged = true; });
+  await entered.promise;
+  socket.connected = false;
+  release();
+  gate.resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(acknowledged, false);
+  assert.deepEqual((await f.service.context({}, { ...f.context, colleague: { clientId: "gone" } })).focus, {});
+});
+
+test("learning-task browser focus uses the shared socket and retires stale acknowledgements", () => {
+  const socket = new EventEmitter();
+  socket.connected = true;
+  const sent = [], released = [], errors = [];
+  let focus = { clientId: "same-tab", focus: { pane: "preview" } };
+  socket.timeout = () => ({ emit(event, input, acknowledge) { sent.push({ event, input, acknowledge }); } });
+  socket.on(COLLEAGUE_FOCUS_RELEASE, input => released.push(input));
+  const binding = createColleagueFocusBinding({ socket, readFocus: () => focus, onError: message => errors.push(message) });
+  binding.update();
+  assert.equal(sent[0].event, COLLEAGUE_FOCUS_UPDATE);
+  focus = { ...focus, focus: { pane: "chat" } };
+  binding.update();
+  sent[0].acknowledge(new Error("old request"));
+  assert.deepEqual(errors, []);
+  socket.connected = false;
+  socket.emit("disconnect");
+  sent[1].acknowledge(new Error("disconnected request"));
+  binding.update();
+  assert.equal(sent.length, 2, "disconnected focus is not queued for stale replay");
+  socket.connected = true;
+  socket.emit("connect");
+  assert.deepEqual(sent[2].input, focus, "reconnect registers only the current focus");
+  sent[2].acknowledge(null, { ok: false, error: "Access changed." });
+  assert.deepEqual(errors, ["Access changed."]);
+  binding.release();
+  binding.close();
+  socket.emit("connect");
+  assert.equal(sent.length, 3);
+  assert.deepEqual(released, [{ clientId: "same-tab" }, { clientId: "same-tab" }]);
+  assert.equal(socket.listenerCount("connect"), 0);
+  assert.equal(socket.listenerCount("disconnect"), 0);
 });
 
 test("learning-task source failure retires deferred help before an explicit Resume", async t => {
@@ -3531,6 +3661,7 @@ test("native observation API excludes assistant/automation and accepts only boun
     { workspace: { ...input.workspace, sourcePath: "/secret" } }]) await assert.rejects(f.observe({ ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
   const app = testRouteApp();
   const outputs = await Vibe64ColleagueProvider.setup({ accounts: {}, terminals: f.terminals, events: createEventRuntime(), http: app.http,
+    realtime: { onConnection() { return () => {}; } },
     actionCatalogue: createActionCatalogue() }, {});
   t.after(() => outputs.colleague.close());
   const route = app.registeredRoutes.find(item => item.method === "POST" && item.path === "/api/vibe64/colleague/training/observations");

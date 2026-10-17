@@ -1624,8 +1624,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       return { ...result, ...await practicalObservations.read({ connection, context, authorizationContext, requireCurrent
       }) };
     },
-    async focus(input, context) {
+    async focus(input, context, { browserBinding } = {}) {
       const state = await stateFor(context);
+      if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
       const previousFocus = connection.focus;
       const demonstration = connection.navigation?.status === "pending";
@@ -1633,6 +1634,23 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       connection.focus = input.focus;
       connection.learningTask = input.learningTask ? structuredClone(input.learningTask) : null;
       state.connections.set(input.clientId, connection);
+      if (browserBinding) {
+        if (connection.browserBinding?.owner !== browserBinding.owner) {
+          const owner = browserBinding.owner;
+          connection.browserBinding = { owner, async release() {
+            const current = state.connections.get(input.clientId);
+            if (current?.browserBinding?.owner !== owner) return;
+            state.connections.delete(input.clientId);
+            state.presentation.retireCue(current);
+            current.acknowledge?.({ ok: false, error: "The initiating browser disconnected." });
+            const previous = current.focus;
+            current.focus = null;
+            current.learningTask = null;
+            await learningWatches.focusChanged(state, current, previous, false);
+          } };
+        }
+        browserBinding.onRelease(connection.browserBinding.release);
+      }
       state.requestContext = context;
       await learningWatches.focusChanged(state, connection, previousFocus, demonstration);
       return { ok: true, focus: connection.focus };

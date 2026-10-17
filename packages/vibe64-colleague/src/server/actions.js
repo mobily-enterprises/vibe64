@@ -168,7 +168,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       limit: { type: "integer", min: 1, max: 100, required: false }
     }, (input, context) => colleague.readHistoryPage(input, context)),
     definition("focus.update", { clientId, focus: { ...focusField, required: true }, learningTask: learningPollingTask },
-      (input, context) => colleague.focus(input, context)),
+      (input, context, deps) => colleague.focus(input, context, deps)),
     definition("message.send", {
       clientId, focus: focusField, trainingQuestion: trainingQuestionField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,

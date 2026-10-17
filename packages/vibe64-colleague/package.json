@@ -20,6 +20,7 @@
         "runtime.actions",
         "runtime.http",
         "runtime.events",
+        "runtime.realtime",
         "vibe64.accounts",
         "vibe64.terminals"
       ]

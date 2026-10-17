@@ -59,6 +59,10 @@ starting or resuming; repeat a step only after its watch is active.
 If the lesson can no longer be read or access is lost, polling becomes
 **unavailable** and discards help that has not been delivered. After resolving
 the problem, **Resume** watches fresh steps; it does not replay that discarded help.
+Closing the initiating tab or losing its live connection pauses that tab's watch
+and discards pending help. Watches in other tabs keep their own state. Reconnecting
+registers your current view but leaves the watch paused: return to the intended
+task and choose **Resume**. Minimizing Colleague keeps the same connected task.
 You do not need to keep the dialog open.
 
 Polling reports only named Vibe64 controls, settled Workspace/Learning view and

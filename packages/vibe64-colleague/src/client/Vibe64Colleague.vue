@@ -17,6 +17,7 @@ import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
+import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
@@ -699,12 +700,13 @@ watch(actorKey, () => {
   voiceTranscript.value = null;
   void refresh();
 }, { flush: "sync" });
-watch([actorKey, () => props.focus, learningTask], ([, focus, task]) => {
-  const expectedActor = actorKey.value;
-  void requestColleague("/focus", { method: "POST", body: { clientId, focus,
-    ...(task ? { learningTask: task } : {}) } }).catch(error => {
-    if (mounted && expectedActor === actorKey.value) productError.value = error.message;
-  });
+const focusBinding = createColleagueFocusBinding({ socket: realtimeSocket,
+  readFocus: () => ({ clientId, focus: props.focus, ...(learningTask.value ? { learningTask: learningTask.value } : {}) }),
+  onError: message => { if (mounted) productError.value = message; }
+});
+watch([actorKey, () => props.focus, learningTask], ([actor], [previousActor]) => {
+  if (previousActor !== undefined && actor !== previousActor) focusBinding.release();
+  focusBinding.update();
 }, { deep: true, immediate: true });
 watch(() => learnerGestures?.value, owner => {
   if (mounted && learnerGestures && !owner) learnerGestures.value = nativeGestureOwner;
@@ -720,6 +722,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (voice?.launcher.value === launcher.value?.$el) voice.launcher.value = null;
   realtimeSocket.off("connect", refresh);
+  focusBinding.close();
   presentationCue.retire("Colleague left this browser view.");
   if (learnerGestures?.value === nativeGestureOwner) learnerGestures.value = null;
   if (colleagueBody?.value === bodyOwner) colleagueBody.value = null;

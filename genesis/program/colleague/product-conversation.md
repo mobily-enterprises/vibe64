@@ -29,9 +29,18 @@ the same dispatch evidence for status, pending delivery and its displayed error.
 Attempted and inspection-only requests retain their receipt-inspection controls;
 no saved request or application operation is replayed merely by reopening.
 
+Browser focus uses the existing realtime connection and original `focus.update`
+action authorization. Its transient binding releases on socket disconnect or
+component unmount, retires presentation and delegates Learning watch retirement
+to Training's existing focus-change owner. The release is fenced against a
+newer connection for the same client; one tab cannot release another. Reconnect
+registers current focus only, without replaying stale focus or resuming watches.
+
 ## Sources
 
 - `packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js`
+- `packages/vibe64-colleague/src/server/registerColleagueFocus.js`
+- `packages/vibe64-colleague/src/client/colleagueFocusBinding.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
 - `packages/vibe64-colleague/src/server/actions.js`
 - Main: `packages/vibe64-colleague/src/server/service.js`
