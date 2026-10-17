@@ -136,6 +136,12 @@
     </template>
   </AssistantConversationElement>
 </template>
+<script>
+// Learning narration opens at most once per lesson conversation and page, so a
+// learner who ends voice is not reconnected when Main remounts.
+const autoOpenedLearningVoice = new Set();
+</script>
+
 <script setup>
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
@@ -503,6 +509,23 @@ const adapter = computed(() => ({
     }
   }
 }));
+// Lessons are spoken by default: with read-aloud on and no other voice owner,
+// open the visible Learning teacher's narration once. Capture stays off until
+// Talk; Working conversations keep opt-in voice.
+watch(() => {
+  const binding = voiceBinding.value;
+  const state = voice?.controller.state;
+  const narration = binding?.narration;
+  // Narration readiness covers chat access and the loaded conversation that
+  // the Learning voice gate requires.
+  return binding && props.voiceRuntime?.identity?.learningAttemptId !== undefined && narration?.eligible &&
+    !narration.loading && !state.session && !state.busy && voice.readAloudFor(binding) &&
+    !autoOpenedLearningVoice.has(binding.id) ? binding : null;
+}, binding => {
+  if (!binding) return;
+  autoOpenedLearningVoice.add(binding.id);
+  void openVoice();
+}, { immediate: true });
 </script>
 
 <style scoped>
