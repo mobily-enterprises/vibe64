@@ -405,3 +405,5 @@ without keeping that runtime alive. Returning to
 Working calls the original project Open through fresh access and readiness
 checks, without restarting its former work. Ordinary Working, explicit Close,
 deletion, missing markers and foreign-project events keep their existing policy.
+
+Exact watch reads use the action host’s attempt-scoped learner reader when supplied, with the existing attempt ID. Ordinary progress keeps its normal reader. Hosted composition supplies the existing normal/author scope selector, including current owner admission for preview attempts. Guidance keeps its original `guideTask` WRITE admission; polling does not acquire a second generic WRITE barrier around that owner.

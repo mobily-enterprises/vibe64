@@ -133,6 +133,11 @@ function boundedResult(result) {
 }
 
 function operationError(cause) {
+  if (cause.code === "VIBE64_TRAINING_PREPARATION_BUSY") {
+    return Object.assign(new Error("This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt."), {
+      code: cause.code, statusCode: 409, cause
+    });
+  }
   const unconfirmed = String(cause.code || "").includes("SAVE_UNCONFIRMED");
   return Object.assign(new Error(unconfirmed
     ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."
@@ -218,7 +223,7 @@ const prepared = result => {
 
 // Composition supplies the original readers and one exercise preparation owner.
 // This factory registers neither a teacher loop nor a standalone provisioner.
-function createTrainingActions({ catalogue, learners, teachingBrief, exercises = null, learningSessions = null } = {}) {
+function createTrainingActions({ catalogue, learners, attemptLearners = learners, teachingBrief, exercises = null, learningSessions = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function" || typeof teachingBrief?.readBrief !== "function") {
     throw new TypeError("Training actions require the installed catalogue, learner state and teaching brief owners.");
   }
@@ -265,8 +270,8 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       if (!actor) throw Object.assign(new Error("Log in before observing a learning task."), { code: "vibe64_auth_required", statusCode: 401 });
       try {
         const learning = context.vibe64Action?.learning;
-        const owner = learning?.trainingLearners || learners;
-        const state = await owner.readState({ actor, includeCompletion: true });
+        const owner = learning?.trainingLearners || attemptLearners;
+        const state = await owner.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
         const brief = await teachingBrief.readBrief({ actor, attemptId: input.attemptId });
         const sessions = learningSessions ? await learningSessions.readSessions({ actor }) : [];
         return { ok: true, task: pollingTaskSnapshot({ input, state, brief, sessions }) };
@@ -307,8 +312,8 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       }
       try {
         const learning = context.vibe64Action?.learning;
-        const owner = learning?.trainingLearners || learners;
-        const state = await owner.readState({ actor, includeCompletion: true });
+        const owner = learning?.trainingLearners || attemptLearners;
+        const state = await owner.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
         const currentBrief = await teachingBrief.readBrief({ actor, attemptId: input.attemptId });
         const sessions = await learningSessions.readSessions({ actor });
         const task = pollingTaskSnapshot({ input, state, brief: currentBrief, sessions });

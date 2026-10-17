@@ -540,3 +540,5 @@ This component does not attach a Learning mode, API route, Main conversation,
 Preview tab or player. The host's original retained Preview/session owners must
 supply authenticated captured data and effects; native/browser/device acceptance
 remains separate. Existing App/SVG presentation and motion owners are untouched.
+
+Pinned source proof reads committed blobs through the original managed command owner in bounded NUL-framed `git cat-file --batch -Z` captures. Each original proof still checks root, HEAD, cleanliness, package identity, every manifest byte length/SHA256, and final HEAD/cleanliness. Binary/newline paths remain valid; malformed, truncated or trailing batch data fail closed. Installer proof boundaries before/inside its lock and after bundling remain unchanged.

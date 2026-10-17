@@ -6,11 +6,11 @@ import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js"
 
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);
-  const git = async (args, outputEncoding = "utf8") => {
+  const git = async (args, outputEncoding = "utf8", { input, maxBuffer = 1024 * 1024 } = {}) => {
     const result = await runVibe64Command({
       actor: "daemon", allowedRoots: [root], args: ["-C", root, ...args],
       command: "git", cwd: root, envPolicy: "project", gitSafeDirectories: [root],
-      maxBuffer: 1024 * 1024, mode: "capture", outputEncoding,
+      input, maxBuffer, mode: "capture", outputEncoding,
       purpose: "source", runtimes: ["git"], timeout: 60_000
     });
     if (result.ok !== true) throw Object.assign(new Error(result.error || "Git could not read the pinned topic."), { code: result.code });
@@ -26,9 +26,33 @@ async function readPinnedTopic(directory) {
   const repository = String(metadata.repository?.url || "").match(/^https:\/\/github\.com\/([a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+)\.git$/u)?.[1];
   if (!repository) throw new Error("Topic package needs its canonical https://github.com/<owner>/learn-<topic>.git repository URL.");
   // Prove every hashed input is from the pinned commit, including transient worktree edits.
-  for (const file of bundleFiles([result.topicManifest, ...result.bundles.map(bundle => bundle.manifest)])) {
-    const stdout = await git(["show", `${commit}:${file.path}`], "base64");
-    if (createHash("sha256").update(stdout).digest("hex") !== file.sha256 || stdout.length !== file.bytes) throw new Error(`Topic input differs from its pinned commit: ${file.path}.`);
+  const files = bundleFiles([result.topicManifest, ...result.bundles.map(bundle => bundle.manifest)]);
+  for (let first = 0; first < files.length;) {
+    let last = first, bytes = 0;
+    do {
+      bytes += files[last].bytes + Buffer.byteLength(files[last].path) + 128;
+      last += 1;
+    } while (last < files.length && bytes + files[last].bytes + Buffer.byteLength(files[last].path) + 128 <= 1024 * 1024);
+    const batch = files.slice(first, last);
+    // NUL framing preserves valid newline paths and arbitrary binary blobs.
+    // Each file retains the original 1 MiB limit; batches bound capture memory.
+    const stdout = await git(["cat-file", "--batch", "-Z"], "base64", {
+      input: batch.map(file => `${commit}:${file.path}\0`).join(""), maxBuffer: 2 * 1024 * 1024
+    });
+    let offset = 0;
+    for (const file of batch) {
+      const headerEnd = stdout.indexOf(0, offset);
+      const header = headerEnd < 0 ? null : /^(?:[a-f0-9]{40}|[a-f0-9]{64}) blob (0|[1-9][0-9]*)$/u.exec(stdout.subarray(offset, headerEnd).toString("ascii"));
+      const size = header ? Number(header[1]) : -1;
+      const end = headerEnd + 1 + size;
+      if (size !== file.bytes || stdout[end] !== 0 ||
+          createHash("sha256").update(stdout.subarray(headerEnd + 1, end)).digest("hex") !== file.sha256) {
+        throw new Error(`Topic input differs from its pinned commit: ${file.path}.`);
+      }
+      offset = end + 1;
+    }
+    if (offset !== stdout.length) throw new Error("Unexpected trailing data while reading the pinned topic.");
+    first = last;
   }
   if (await git(["rev-parse", "HEAD"]) !== commit || await git(["status", "--porcelain", "--untracked-files=all"])) throw new Error("Topic changed during manifest generation. Commit and retry.");
   return {

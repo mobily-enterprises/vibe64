@@ -6,6 +6,7 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 import { bundleFiles, validateTopic } from "../../packages/vibe64-training/src/server/content.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
+import { installVibe64ManagedExecutionProvider, runCaptureCommand } from "../../packages/vibe64-execution/src/server/index.js";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 
 async function fixture(t) {
@@ -246,6 +247,62 @@ test("pinned topic reads require the repository root and committed exact inputs"
   await f.write("training/checks/response.mjs", "// Changed check\n");
   await assert.rejects(() => readPinnedTopic(f.root), /Commit the topic/u);
   assert.equal(git("rev-parse", "HEAD"), commit);
+});
+
+test("pinned blob batches retain binary/newline identity, bounded execution and every corruption refusal", async t => {
+  const f = await fixture(t);
+  await f.write("package.json", { name: "learn-test-topic", version: "0.1.0",
+    repository: { url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  await writeFile(path.join(f.root, "training/exercises/app/binary\nasset.bin"), Buffer.from([0, 255, 10, 13, 128]));
+  const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8" }).trim();
+  git("init", "--initial-branch=main"); git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Pinned binary inputs");
+  const requests = [];
+  let corrupt = null;
+  const release = installVibe64ManagedExecutionProvider({
+    async runCommand(request, context) {
+      requests.push(request);
+      const result = await runCaptureCommand(context.localPath || request.command, request.args,
+        { ...request, cwd: context.cwd, env: context.env });
+      if (corrupt && request.args.includes("--batch")) {
+        result.stdout = corrupt(Buffer.from(result.stdout, "base64")).toString("base64");
+      }
+      return result;
+    }, async stopExecution() { return { ok: true }; }
+  });
+  t.after(release);
+  const pinned = await readPinnedTopic(f.root);
+  assert.equal(pinned.topicHash, (await validateTopic(f.root)).topicHash);
+  assert.equal(requests.length, 7, "one original proof uses one blob batch and retains all six surrounding Git reads");
+  const batch = requests.find(request => request.args.includes("--batch"));
+  assert.ok(batch.input.includes("binary\nasset.bin\0"));
+  assert.equal(batch.outputEncoding, "base64");
+  assert.equal(batch.maxBuffer, 2 * 1024 * 1024);
+  assert.deepEqual(batch.allowedRoots, [f.root]);
+  for (const change of [
+    () => Buffer.from("missing\0"),
+    bytes => bytes.subarray(0, bytes.length - 1),
+    bytes => Buffer.concat([bytes, Buffer.from("trailing")]),
+    bytes => { bytes[bytes.indexOf(0) + 1] ^= 1; return bytes; },
+    bytes => Buffer.from(bytes.toString("latin1").replace(" blob ", " tree "), "latin1")
+  ]) {
+    corrupt = change;
+    await assert.rejects(() => readPinnedTopic(f.root), /pinned commit|trailing data/u);
+  }
+  corrupt = null;
+  git("update-index", "--assume-unchanged", "training/checks/response.mjs");
+  await f.write("training/checks/response.mjs", "// A transient edit hidden from status\n");
+  assert.equal(git("status", "--porcelain"), "");
+  await assert.rejects(() => readPinnedTopic(f.root), /differs from its pinned commit/u);
+  git("update-index", "--no-assume-unchanged", "training/checks/response.mjs");
+  git("restore", "training/checks/response.mjs");
+  await writeFile(path.join(f.root, "training/exercises/app/large.bin"), Buffer.alloc(1024 * 1024, 255));
+  git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Maximum valid input");
+  requests.length = 0;
+  await readPinnedTopic(f.root);
+  assert.ok(requests.filter(request => request.args.includes("--batch")).length > 1);
+  assert.ok(requests.every(request => request.maxBuffer <= 2 * 1024 * 1024));
 });
 
 test("publish-manifest writes a pinned whole-topic lock without changing source or publishing remotely", async t => {

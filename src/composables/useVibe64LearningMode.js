@@ -59,6 +59,12 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   const learningResource = readResource("learning");
   const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
   const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", authorPreviewEnabled);
+  // Colleague may admit an author trial while this route stays mounted in
+  // Working. Entering Learning must reread the saved attempt, not reuse that
+  // earlier empty picker result. This remains the existing authorized query.
+  watch(learningMode, (active, previous) => {
+    if (active && !previous) void refresh();
+  });
   const savedAuthorPreview = computed(() => {
     const result = authorPreviewResource?.data.value;
     return result?.ok === true && result.available === true && result.authorPreview === true && !result.active?.ended

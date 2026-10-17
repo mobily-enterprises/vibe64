@@ -202,3 +202,5 @@ move an answer or a diagram checkpoint into another lesson's progress. The
 saved trial control uses the original snapshot admission and explicit refresh
 operations described above. Edited source requires a deliberately ended old trial
 and a newly admitted committed snapshot; Resume keeps the existing pin.
+
+Pinned source admission verifies committed file bytes in bounded Git batches, including binary assets and filenames containing line breaks. It retains the clean-source and repeated commit checks; a source change still requires committing and retrying the same authorized operation. This does not publish or change a course pin.

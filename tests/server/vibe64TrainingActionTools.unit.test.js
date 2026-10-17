@@ -8,6 +8,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { createTrainingLearningWatchSource } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingPresentationActions } from "../../packages/vibe64-training/src/server/presentationActions.js";
 import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
@@ -171,6 +172,50 @@ test("learning polling reads one exact active pinned task and sends bounded guid
   await assert.rejects(c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
     conversationId, criterion: "Wrong target", guidanceId: "guide-wrong", evidence }), /project or conversation changed/);
   assert.equal(guidance.length, 1, "a stale target cannot reach Main");
+});
+
+test("learning watch polling reads its exact attempt owner without replacing ordinary progress or reentering practice admission", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  const sessionId = `learning-${attemptId}`;
+  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
+  const ordinary = createTrainingLearnerState({ systemRoot: path.join(f.root, "ordinary") });
+  const reads = [], guidance = [];
+  let allowed = true;
+  const c = f.register(null, { learners: ordinary, attemptLearners: {
+    async readState(input) {
+      reads.push(input);
+      assert.equal(input.actor, f.auth.user);
+      assert.equal(input.attemptId, attemptId, "the existing scope selector receives the exact saved attempt");
+      if (!allowed) throw Object.assign(new Error("Owner authority was revoked"), { code: "vibe64_owner_required", statusCode: 403 });
+      return f.learners.readState(input);
+    }
+  }, learningSessions: {
+    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
+    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
+  } });
+  const source = createTrainingLearningWatchSource(c.actions);
+  const watch = { projectSlug, sessionId, conversationId,
+    learningTask: { attemptId, sessionId, conversationId, criterion: "Open the saved exercise." } };
+  const context = { channel: "automation", surface: "app", projectSlug };
+  assert.equal((await c.execute("learning.read")).active, null, "normal progress remains in its own store");
+  const result = await source.read(watch, context);
+  assert.equal(result.runId, attemptId);
+  assert.equal(result.details.task.progress.revision, reserved.revision);
+  assert.equal(reads.length, 1);
+  const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
+    failure: "workspace-settle-failed", workspace: { projectSlug, sessionId, pane: "preview", ready: false, learningView: "learning" } };
+  assert.deepEqual(await source.notify(watch, { guidanceId: "same-task-guide", evidence }, context), { ok: true, status: "accepted" });
+  assert.equal(reads.length, 2);
+  assert.equal(guidance.length, 1);
+  assert.equal(guidance[0].attemptId, attemptId);
+  allowed = false;
+  await assert.rejects(source.read(watch, context), { code: "vibe64_owner_required" });
+  await assert.rejects(source.notify(watch, { guidanceId: "revoked-guide", evidence }, context), { code: "vibe64_owner_required" });
+  assert.equal(guidance.length, 1, "revoked scope cannot reach Main");
+  assert.equal((await c.execute("learning.read")).active, null);
 });
 
 test("answer evaluation shares the native API/tool contract and projects only the saved result", async t => {
@@ -486,6 +531,21 @@ test("oversized projections and native failures remain bounded, truthful and sou
   const resumed = await failure.tool("lesson.resume", { attemptId: saved.attempt.attemptId });
   assert.equal(resumed.ok, false);
   assert.doesNotMatch(JSON.stringify(resumed), excluded);
+});
+
+test("known preparation contention retains the same attempt and gives a safe specific retry instruction", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const c = f.register({ async prepareLesson() {
+    throw Object.assign(new Error("busy /PRIVATE_SOURCE"), { code: "VIBE64_TRAINING_PREPARATION_BUSY", statusCode: 409 });
+  } });
+  await assert.rejects(() => c.execute("lesson.resume", { attemptId: saved.attempt.attemptId }), error => {
+    assert.equal(error.code, "VIBE64_TRAINING_PREPARATION_BUSY");
+    assert.equal(error.statusCode, 409);
+    assert.match(error.message, /retry the same attempt/u);
+    assert.doesNotMatch(error.message, excluded);
+    return true;
+  });
 });
 
 test("lesson presentation tools use exact pinned commands and native browser receipts with fresh project authority", async t => {

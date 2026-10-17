@@ -11,6 +11,9 @@ and the authenticated person's saved progress. Choose **Start** for an available
 lesson or **Resume** for the exact saved attempt. Disabled, unavailable, loading
 and error states are shown by the original lesson picker. Choosing a release is
 not permission to install or enable it. Refresh rereads catalogue and progress.
+Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
+If Resume reports that the saved exercise is busy preparing or finishing a command, wait for that operation to settle and retry the same attempt. Do not create a replacement.
+
 A course labelled **Preview course** is not available through ordinary Start,
 even when its individual lessons are published. It needs an authorized author
 trial or a released, enabled course; changing views does not bypass that rule.
@@ -83,6 +86,7 @@ If you leave the task while **Start polling**, **Resume**, or an observed step
 is being checked, that request reports the changed task instead of activating
 the departed watch or queuing help for it. Return to the intended task before
 starting or resuming; repeat a step only after its watch is active.
+Polling follows the exact saved attempt, including an authorized author trial; it does not substitute the ordinary course progress for that task.
 If the lesson can no longer be read or access is lost, polling becomes
 **unavailable** and discards help that has not been delivered. After resolving
 the problem, **Resume** watches fresh steps; it does not replay that discarded help.

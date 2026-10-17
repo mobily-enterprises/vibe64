@@ -260,3 +260,19 @@ it("preserves uncertain author Create for exact Resume retry and refuses selecti
   expect(harness.command.mock.calls[3]).toEqual(harness.command.mock.calls[1]);
   expect(mode.savedAuthorPreview.value).toBeNull(); expect(opened).not.toHaveBeenCalled();
 });
+
+
+it("refreshes a newly admitted author trial when returning from Working without reload", async () => {
+  await mountSavedAuthorTrial();
+  await mode.setLearningMode(false); await flush();
+  read.mockImplementation(async path => path.endsWith("/author-preview")
+    ? { ok: true, available: true, authorPreview: true, revision: 8, active: { attemptId: A } }
+    : path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] });
+  read.mockClear();
+  await mode.setLearningMode(true); await flush();
+  expect(mode.savedAuthorPreview.value.attemptId).toBe(A);
+  expect(read.mock.calls.filter(([path]) => path.endsWith("/author-preview"))).toHaveLength(1);
+  expect(harness.command).not.toHaveBeenCalled();
+  await mode.setLearningView("learning"); await flush();
+  expect(read.mock.calls.filter(([path]) => path.endsWith("/author-preview"))).toHaveLength(1);
+});
