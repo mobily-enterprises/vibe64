@@ -318,3 +318,5 @@ export {
   temporaryConversationStopActionInputValidator,
   temporaryConversationTurnActionInputValidator
 };
+
+export const mainGoalBlockInputValidator = validator({ reason: { ...requiredText, maxLength: 1000 } });

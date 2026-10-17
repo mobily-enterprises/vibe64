@@ -1264,7 +1264,7 @@ function createSessionAgentManager({
       return operation.call(provider, { ...options, sessionId }, binding);
     },
     async updateGoal(sessionId, input = {}, options = {}) {
-      const stopping = ["pause", "cancel"].includes(input.action);
+      const stopping = ["pause", "block", "cancel"].includes(input.action);
       if (!stopping) requireCompletedNativeConversationReplacement(options.session, { requireBriefing: true });
       if (stopping) options = goalOptions(options);
       const provider = stopping

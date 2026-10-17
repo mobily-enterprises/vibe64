@@ -2118,8 +2118,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
     return;
   }
-  if (frame.type === 'control_response' && frame.response.request_id === 'self-pause-contract') {
-    pauseTool('assistant_action_execute', 'self-pause-execute', { actionId: 'vibe64.terminals.main-goal.pause', version: 1, input: {} });
+  if (frame.type === 'control_response' && ['self-pause-contract', 'self-block-contract'].includes(frame.response.request_id)) {
+    const action = frame.response.request_id === 'self-block-contract' ? 'block' : 'pause';
+    pauseTool('assistant_action_execute', 'self-' + action + '-execute', { actionId: 'vibe64.terminals.main-goal.' + action, version: 1,
+      input: action === 'block' ? { reason: 'The human must supply the missing approval code.' } : {} });
     return;
   }
   if (frame.type !== 'user') return;
@@ -2139,8 +2141,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     return;
   }
   emit(frame);
-  if (text.includes('Pause through the admitted application tool.')) {
-    pauseTool('assistant_action_contract', 'self-pause-contract', { actionId: 'vibe64.terminals.main-goal.pause', version: 1 });
+  if (text.includes('Pause through the admitted application tool.') || text.includes('Block through the admitted application tool.')) {
+    const action = text.includes('Block through') ? 'block' : 'pause';
+    pauseTool('assistant_action_contract', 'self-' + action + '-contract', { actionId: 'vibe64.terminals.main-goal.' + action, version: 1 });
     return;
   }
   emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
@@ -2709,6 +2712,44 @@ createInterface({ input: process.stdin }).on('line', async line => {
       const nativeInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
       assert.equal(nativeInputs[0].frame.message.content, "/goal clear");
       assert.match(nativeInputs[1].frame.message.content, /An ordinary message while the goal stays paused/);
+      const beforeBlock = await service.readAgentGoal("test", options);
+      await service.updateAgentGoal("test", { ...options, ...beforeBlock.goal, action: "resume", threadId: beforeBlock.threadId });
+      await assert.rejects(actions.execute({ actionId: "vibe64.terminals.main-goal.block",
+        input: { projectSlug: "claude-main-fixture", reason: "Missing approval code" },
+        context: { channel: "automation", surface: "app" } }), { code: "vibe64_main_goal_control_required" });
+      const blockReceipt = await goalFacade.send({ messageId: "service-self-block", text: "Block through the admitted application tool.", steer: true });
+      assert.equal(blockReceipt.delivered, true);
+      const blockDeadline = Date.now() + 5000;
+      let blockCall;
+      while (!blockCall || blockCall.status === "running") {
+        const log = await store.readConversationLog("test");
+        blockCall = log.flatMap(turn => turn.metadata.applicationTools || []).find(call => call.id.endsWith("self-block-execute"));
+        assert.ok(Date.now() < blockDeadline, JSON.stringify({ blockCall, frames: (await trace()).slice(-4) }));
+        if (!blockCall || blockCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blockCall.status, "complete");
+      assert.equal(blockCall.result.ok, true, JSON.stringify(blockCall.result));
+      assert.equal(blockCall.result.result.result.status, "blocked");
+      const blocked = await service.readAgentGoal("test", options);
+      assert.equal(blocked.goal.status, "blocked");
+      assert.equal(blocked.goal.reason, "The human must supply the missing approval code.");
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+        "A model-reported external blocker does not manufacture a human Pause");
+      const blockedFrames = (await trace()).filter(row => row.frame?.type === "user").length;
+      await service.close();
+      service = createService();
+      assert.equal((await service.recoverActiveGoals()).results[0].blocked, true);
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").length, blockedFrames,
+        "Restart retains the blocker without invoking Claude again");
+      const blockedOrdinary = await goalFacade.send({ messageId: "service-blocked-ordinary", text: "Explain the blocker without resuming." });
+      assert.equal(blockedOrdinary.delivered, true);
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked");
+      const blockedInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
+      assert.equal(blockedInputs[0].frame.message.content, "/goal clear");
+      assert.match(blockedInputs[1].frame.message.content, /Explain the blocker without resuming/);
+      await service.updateAgentGoal("test", { ...options, ...blocked.goal, threadId: blocked.threadId, action: "resume" });
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
+
     }
   });
 });

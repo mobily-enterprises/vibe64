@@ -1254,3 +1254,16 @@ Resume reinstalls the retained objective, and Cancel removes it. Older records
 remain byte-for-byte unchanged: process inactivity alone does not establish Pause.
 There is no historical conversion or backup. The ordinary stopped-service upgrade
 must record this boundary before activating the new writer.
+
+
+## Retained Claude Block
+
+`20261017-claude-blocked-goal` records the new-write boundary for optional
+`blockedGoal` in existing Claude conversation records. Only an admitted Main
+structured Block action saves the exact goal and a bounded external-blocker
+reason; it is mutually exclusive with retained Pause. Ordinary chat disarms the
+native checker and keeps this state, while Resume reinstalls the objective and
+Cancel removes it. Startup recovery skips blocked goals without converting them
+into human Pause. No historical prose or inactivity is interpreted, no existing
+record is rewritten, and no application-file backup is necessary. Record the
+boundary through the ordinary stopped-service upgrade before activating writes.

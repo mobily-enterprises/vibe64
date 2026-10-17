@@ -1,5 +1,5 @@
 import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
-import { ACTION_PAUSE_MAIN_GOAL } from "./assistantContracts.js";
+import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContracts.js";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationConfiguration } from "./conversationConfiguration.js";
@@ -1228,7 +1228,7 @@ function createService({
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
     // Training keeps complete results within 128 KiB; discovery adds an identity envelope.
     maxToolResultBytes: 128 * 1024 + 1024,
-    isActionAvailable: ({ actionId, context }) => actionId === ACTION_PAUSE_MAIN_GOAL
+    isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId)
       ? Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
         (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
         !context.assistantScope && !context.scopedConversationId)
@@ -1379,22 +1379,27 @@ function createService({
                 if (grant.actor.id !== authority.actorId) throw new Error("The Main conversation's acting user changed.");
                 await service.requireAssistantSelectionAccess(current.assistantSelection, { vibe64User: grant.user });
                 admitted.assertCurrent();
+                async function retainGoal(action, reason) {
+                  const options = { runtime, vibe64User: grant.user };
+                  const observed = await service.readAgentGoal(id, options);
+                  if (observed.threadId !== admitted.nativeThreadId || !observed.goal || observed.goal.status !== "active") {
+                    throw new Error("This admitted Main turn no longer owns an active goal.");
+                  }
+                  admitted.assertCurrent();
+                  const result = await service.updateAgentGoal(id, { ...options, action, reason,
+                    threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+                  const status = action === "block" ? "blocked" : "paused";
+                  if (result?.ok === false || result?.goal?.status !== status) {
+                    throw new Error(result?.error || `The goal ${action} could not be verified.`);
+                  }
+                  return { status };
+                }
                 return { ...authority.requestContext, runtime, assistantSelection: current.assistantSelection,
                   projectSlug: authority.projectSlug,
-                  mainGoalControl: { async pause() {
-                    const options = { runtime, vibe64User: grant.user };
-                    const observed = await service.readAgentGoal(id, options);
-                    if (observed.threadId !== admitted.nativeThreadId || !observed.goal || observed.goal.status !== "active") {
-                      throw new Error("This admitted Main turn no longer owns an active goal.");
-                    }
-                    admitted.assertCurrent();
-                    const result = await service.updateAgentGoal(id, { ...options, action: "pause",
-                      threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
-                    if (result?.ok === false || result?.goal?.status !== "paused") {
-                      throw new Error(result?.error || "The goal pause could not be verified.");
-                    }
-                    return { status: "paused" };
-                  } }
+                  mainGoalControl: {
+                    pause: () => retainGoal("pause"),
+                    block: ({ reason }) => retainGoal("block", reason)
+                  }
                 };
               }
             };

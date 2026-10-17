@@ -65,6 +65,7 @@ function createClaudeConversationStorage({ createError: error }) {
       executionId: entry.process?.executionId || entry.executionId || "",
       accountIdentity: entry.accountIdentity, accountIdentities: entry.accountIdentities, sent: entry.sent, state: entry.turn?.state || "ready", turnId: entry.turn?.id || "",
       pausedGoal: entry.pausedGoal || null,
+      blockedGoal: entry.blockedGoal || null,
       lastMessageId: entry.lastMessageId || "", main: entry.main, persistent: entry.persistent === true, nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
     };
     if (!entry.context.assistantScope) {

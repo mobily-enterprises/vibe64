@@ -7,6 +7,11 @@ export const mainGoalPauseTool = Object.freeze({
   description: "Pause this Main conversation's current goal only when the human explicitly requests Pause, including pausing at a safe checkpoint. Finish the requested checkpoint and drain delegated work first. Invoke this operation instead of merely saying the goal is paused. It stops this turn and retains the unfinished goal; automatic restart recovery will not resume it. Do not use it for ordinary background work, missing prerequisites or an unfinished goal without a human pause request. The application supplies the exact current session and goal; do not supply another target.",
   output: { mode: "replace", schema: createSchema({ status: { type: "string", required: true, enum: ["paused"] } }) }
 });
+export const ACTION_BLOCK_MAIN_GOAL = "vibe64.terminals.main-goal.block";
+export const mainGoalBlockTool = Object.freeze({
+  description: "Mark this Main conversation's active goal blocked only when a concrete external prerequisite (such as missing human input, credentials or access) prevents all further useful work. Supply a short reason explaining what must change before Resume. Do not use this for unfinished work, slow checks, or delegated/background agents that are still working: wait for their results. This stops automatic continuation and retains the goal and reason for explicit Resume; it is distinct from the human's Pause. The application supplies the exact current session and goal.",
+  output: { mode: "replace", schema: createSchema({ status: { type: "string", required: true, enum: ["blocked"] } }) }
+});
 const messageSchema = createSchema({
   id: shortText,
   role: shortText,

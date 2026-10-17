@@ -4242,3 +4242,12 @@ existing conversation storage before process interruption. The shared native own
 removes the restored checker with a verified local clear command before ordinary
 input is admitted. Ordinary chat and application restart therefore preserve Pause;
 Resume and Cancel update the retained goal only after their exact native receipt.
+
+
+Main Claude may report an external prerequisite through the bound structured
+`vibe64.terminals.main-goal.block` action. The original shared native goal owner
+retains the goal and reason, stops execution and disarms its checker before
+ordinary chat. Block is distinct from human Pause; active continuation intent
+remains recorded but startup recovery skips the blocked goal. Explicit Resume
+reinstalls the objective. Running delegated work is not an external blocker.
+No prose interpretation or second scheduler participates in this control.

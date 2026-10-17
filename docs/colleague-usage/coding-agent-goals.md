@@ -57,6 +57,14 @@ unfinished objective remains available. A server restart does not automatically
 resume that blocked goal. Resolve the reported prerequisite, then open **Goal**
 and choose **Resume goal**; use **Cancel goal** to clear it instead. These controls
 work on desktop and mobile. Colleague can explain the reason and recovery steps.
+Claude in Main can also report a concrete external blocker through the structured
+Block action. It retains a short reason and the objective, stops continuation,
+and shows **Goal · blocked** without repeatedly asking Claude to continue.
+Ordinary messages and reconnecting do not resume that goal. Supply the missing
+input or resolve the prerequisite, then choose **Goal** → **Resume goal**.
+Running background agents or checks are work in progress, not an external blocker.
+The model's structured action changes status; merely saying “blocked” does not.
+
 You can also ask Claude in Main chat to pause, including after a safe checkpoint.
 You can send that request as a new message or steer it into the running turn.
 After draining its work, Claude must invoke the application's structured Pause
