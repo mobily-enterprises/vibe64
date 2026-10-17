@@ -74,6 +74,12 @@ a server restart must not resume it. An assistant reply saying “paused” alon
 not confirmation: check that the goal control shows **paused**. If it does not,
 use **Pause goal**. Temporary chats, child agents and Colleague cannot invoke
 Main's self-pause action; Colleague can explain these steps.
+When Claude invokes Pause or Block itself, its successful action response is
+delivered before its process is stopped. No further application actions are
+accepted during that handoff. If Claude does not acknowledge the response within
+30 seconds, its process is stopped and the acknowledgement timeout is reported;
+the paused or blocked goal remains saved. **Pause goal** and **Stop** remain
+available during that wait. Use **Resume goal** when you want work to continue.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
