@@ -356,7 +356,9 @@ already-mounted original Working page reclaims its original layout.
 
 Practice project lists actual loaded own-learner saved rows and delegates to the
 same original session selector. It captures a person click before selection and
-settles only a confirmed selection. Automatic Start/Resume callbacks supply no
+settles only a confirmed selection. Like the Working project selector, its label
+shrinks to an ellipsis and chevron on narrow app bars instead of overlapping the
+Workspace/Learning switch. Automatic Start/Resume callbacks supply no
 gesture. Saved Main session and App choices forward their native event, while the original
 App observer retains server instance, interaction, player/frame and request IDs.
 Main and general Colleague remain different conversations: only the real drawer's
