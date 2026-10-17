@@ -39,7 +39,7 @@ const temporaryAiFixActionPath = path.resolve(
 
 // Match the original Colleague client renderer: compile the actual SFC setup,
 // use the real Vue instance and moved launcher, and stub presentation only.
-function mountMainConversationLog({ render = false } = {}) {
+function mountMainConversationLog({ render = false, speech = { voices: [{ id: "cori" }], defaultVoice: "cori" } } = {}) {
   const filename = path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue");
   const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
   const script = compileScript(descriptor, { id: "main-voice-client" });
@@ -72,6 +72,12 @@ function mountMainConversationLog({ render = false } = {}) {
   const imports = {
     vue, "@mdi/js": mdi,
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice, createProjectVoiceBinding },
+    // The one catalogue read that decides whether a lesson may speak unprompted.
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: vi.fn(async url => {
+      expect(url).toBe("/api/vibe64/voice/voices");
+      if (!speech) throw Object.assign(new Error("Speaking voices could not load."), { status: 503, code: "voice_unavailable" });
+      return speech;
+    }) }) },
     "@jskit-ai/assistant-voice/client": { VoiceAvatar: {}, VoiceConversationControls: {}, VoiceConversationHost: {}, VoiceConversationSettings: {}, useVoiceLauncher: launcher.exports.useVoiceLauncher },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {} },
     "@local/vibe64-runtime/shared/assistantRouting": { assistantModeLabel },
@@ -344,8 +350,8 @@ describe("Vibe64 direct session view", () => {
     } finally { if (!unmounted) main.app.unmount(); vi.unstubAllGlobals(); }
   });
 
-  it.each([true, false])("opens Learning Main narration once by itself only with read-aloud on (%s) and never Working voice", async readAloud => {
-    const main = mountMainConversationLog();
+  it.each([[true, true], [false, true], [true, false]])("opens Learning Main narration once by itself only with read-aloud on (%s) and a configured speech service (%s), never Working voice", async (readAloud, configured) => {
+    const main = mountMainConversationLog(configured ? {} : { speech: null });
     try {
       main.voice.readAloudFor.mockImplementation(() => readAloud);
       await vue.nextTick();
@@ -360,8 +366,8 @@ describe("Vibe64 direct session view", () => {
       // The Learning voice gate requires the loaded conversation first.
       expect(main.voice.open).not.toHaveBeenCalled();
       learning.conversationLog.loading = false;
-      await vue.nextTick(); await vue.nextTick();
-      if (!readAloud) { expect(main.voice.open).not.toHaveBeenCalled(); return; }
+      await vue.nextTick(); await new Promise(resolve => setTimeout(resolve, 0)); await vue.nextTick();
+      if (!readAloud || !configured) { expect(main.voice.open).not.toHaveBeenCalled(); return; }
       expect(main.voice.open).toHaveBeenCalledTimes(1);
       expect(main.voice.open.mock.calls[0][0].conversationId).toBe(main.state.voiceBinding.value.conversationId);
       const session = main.voice.controller.state.session;

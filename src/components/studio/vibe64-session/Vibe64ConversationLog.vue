@@ -137,9 +137,19 @@
   </AssistantConversationElement>
 </template>
 <script>
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+
 // Learning narration opens at most once per lesson conversation and page, so a
 // learner who ends voice is not reconnected when Main remounts.
 const autoOpenedLearningVoice = new Set();
+// Lessons speak unprompted only where a speech service is configured; one
+// catalogue read per page keeps speechless installs as quiet text lessons.
+let speechCatalogue = null;
+function speechServiceConfigured() {
+  speechCatalogue ||= getHttpWebClient().request("/api/vibe64/voice/voices", { method: "GET" })
+    .then(result => Array.isArray(result?.voices) && result.voices.length > 0, () => false);
+  return speechCatalogue;
+}
 </script>
 
 <script setup>
@@ -521,10 +531,10 @@ watch(() => {
   return binding && props.voiceRuntime?.identity?.learningAttemptId !== undefined && narration?.eligible &&
     !narration.loading && !state.session && !state.busy && voice.readAloudFor(binding) &&
     !autoOpenedLearningVoice.has(binding.id) ? binding : null;
-}, binding => {
+}, async binding => {
   if (!binding) return;
   autoOpenedLearningVoice.add(binding.id);
-  void openVoice();
+  if (await speechServiceConfigured() && voiceBinding.value === binding && !voice.controller.state.session) void openVoice();
 }, { immediate: true });
 </script>
 
