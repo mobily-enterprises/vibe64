@@ -344,6 +344,36 @@ describe("Vibe64 direct session view", () => {
     } finally { if (!unmounted) main.app.unmount(); vi.unstubAllGlobals(); }
   });
 
+  it.each([true, false])("opens Learning Main narration once by itself only with read-aloud on (%s) and never Working voice", async readAloud => {
+    const main = mountMainConversationLog();
+    try {
+      main.voice.readAloudFor.mockImplementation(() => readAloud);
+      await vue.nextTick();
+      expect(main.voice.open).not.toHaveBeenCalled();
+      const attempt = "9490f94a-c614-4581-9111-0debb2339ca8";
+      const learning = { ...main.runtime("", `training-${attempt}`), prepareVoice: vi.fn(async () => {}),
+        conversationLog: vue.reactive({ turns: [], loading: true }),
+        identity: { actorKey: "learner", projectSlug: "", sessionId: `training-${attempt}`, learningAttemptId: attempt,
+          learnerId: "1000", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions` } };
+      main.props.voiceRuntime = learning;
+      await vue.nextTick();
+      // The Learning voice gate requires the loaded conversation first.
+      expect(main.voice.open).not.toHaveBeenCalled();
+      learning.conversationLog.loading = false;
+      await vue.nextTick(); await vue.nextTick();
+      if (!readAloud) { expect(main.voice.open).not.toHaveBeenCalled(); return; }
+      expect(main.voice.open).toHaveBeenCalledTimes(1);
+      expect(main.voice.open.mock.calls[0][0].conversationId).toBe(main.state.voiceBinding.value.conversationId);
+      const session = main.voice.controller.state.session;
+      for (const capture of ["toggleHandsFree", "startPushToTalk"]) expect(session[capture]).not.toHaveBeenCalled();
+      // Ending voice is respected for this lesson conversation and page.
+      main.voice.controller.state.session = null;
+      main.voice.controller.state.binding = null;
+      await vue.nextTick(); await vue.nextTick();
+      expect(main.voice.open).toHaveBeenCalledTimes(1);
+    } finally { main.app.unmount(); }
+  });
+
   it("edits Main's unsent speech in its bubble without changing its native draft and gates uncertain admission", async () => {
     const main = mountMainConversationLog();
     try {
