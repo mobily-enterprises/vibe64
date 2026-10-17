@@ -93,7 +93,7 @@ test("terminals feature declares only named AI-first capabilities", () => {
   assert.equal(Object.hasOwn(Vibe64TerminalsProvider, "register"), false);
 });
 
-test("terminals provider overlays only live preview routing values", () => {
+test("terminals provider overlays only declared live host values", () => {
   assert.deepEqual(terminalsProviderEnv({
     [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "stale.example.test",
     KEEP_ME: "runtime",
@@ -104,6 +104,7 @@ test("terminals provider overlays only live preview routing values", () => {
     [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
+    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
     SECRET_VALUE: "live-secret"
   }), {
     [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
@@ -111,6 +112,7 @@ test("terminals provider overlays only live preview routing values", () => {
     [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
+    VIBE64_CLAUDE_COMMAND: "/local/bin/claude",
     KEEP_ME: "runtime",
     SECRET_VALUE: "runtime-secret"
   });

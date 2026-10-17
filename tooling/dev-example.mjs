@@ -68,7 +68,7 @@ async function main() {
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
   const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
-    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES"]);
+    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND"]);
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("VIBE64_") && !sharedTools.has(key)) delete process.env[key];
   }
@@ -105,6 +105,7 @@ async function main() {
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({
       root: appRoot,
+      cacheDir: path.join(developmentRoot, "vite-cache"),
       plugins: [{
         name: "vibe64-example-backend",
         async closeServer({ reason }) {

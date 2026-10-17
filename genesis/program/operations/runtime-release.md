@@ -106,6 +106,10 @@ working copy is never overwritten. The child editor uses standalone execution
 inside the enclosing preview process, with its own state, source roots, attachments
 and runtime namespace. It does not inherit the hosting editor's private control
 configuration. Frontend edits use Vite updates; backend edits require a restart.
+The example preserves an explicit `VIBE64_CLAUDE_COMMAND` through its launcher
+and terminal-provider environment filter, so account discovery and native chat
+use the same operator-selected CLI. Vite's dependency cache lives under that
+example's state directory and survives restarts without competing with other apps.
 The Codex runtime directory retains this namespace even for the scope-free local
 account server. Conversations share that account server within the example;
 different example state directories cannot replace one another's runtime.

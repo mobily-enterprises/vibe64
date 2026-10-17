@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -65,11 +65,15 @@ test("Vibe64 declares native installation tools and its complete example preview
 test("the development preview serves its own backend, frontend and project", { timeout: 90_000 }, async () => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-example-preview-"));
   const port = await getPort();
+  const claudeCommand = path.join(root, "claude.cjs");
+  await writeFile(claudeCommand, `#!${process.execPath}\nif (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(["auth", "status", "--json"])) process.exit(2);\nconsole.log(JSON.stringify({ loggedIn: true, email: "local-cli@example.test", authMethod: "claude.ai", subscriptionType: "pro" }));\n`);
+  await chmod(claudeCommand, 0o700);
   let logs = "";
   const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
     cwd: path.resolve(import.meta.dirname, "../.."),
     env: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
-      VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project" },
+      VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project",
+      VIBE64_CLAUDE_COMMAND: claudeCommand },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
@@ -102,6 +106,10 @@ test("the development preview serves its own backend, frontend and project", { t
     assert.ok(aiState.connections.some((connection) => connection.id === "opencode" && connection.connected));
     const nativeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=codex`)).json();
     assert.equal(nativeAccounts.accounts.find((account) => account.id === "codex").connected, false);
+    const claudeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=claude`)).json();
+    const claudeAccount = claudeAccounts.accounts.find((account) => account.id === "claude");
+    assert.equal(claudeAccount.connected, true);
+    assert.equal(claudeAccount.username, "local-cli@example.test");
     const realtime = await fetch(`${origin}/socket.io/?EIO=4&transport=polling`);
     assert.equal(realtime.status, 200);
     assert.match(await realtime.text(), /^0\{"sid"/u);

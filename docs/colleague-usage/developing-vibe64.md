@@ -67,6 +67,16 @@ After changing a project's pin, use **Restart preview** so the next launch
 resolves the new selection. The log reports the resolved source roots and selected
 local packages. No npm publication is needed for these edits.
 
+For a personally installed Claude CLI, sign in using `claude auth login`, then
+launch the example with `VIBE64_CLAUDE_COMMAND=/absolute/path/to/claude` set in
+your shell. The launcher preserves this explicit tool selection for account
+discovery and chat. Open **AI Accounts** and use **Refresh** to confirm the
+connection. A Claude website login alone does not sign in the CLI. Without an
+explicit command, the installed managed-runtime command remains the default.
+
+Each example keeps its frontend dependency cache under its own state directory.
+Keep that directory between runs so normal restarts can reuse the prepared cache.
+
 Focused checks also use the selected sources:
 
 - Server: `npm test -- tests/server/<name>.test.js`.
