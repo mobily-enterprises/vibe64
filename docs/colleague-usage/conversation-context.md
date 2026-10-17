@@ -24,6 +24,12 @@ model unless you deliberately want to change them. If the context error returns,
 report the session and exact error to the operator rather than deleting history
 or repeatedly submitting more work. Never paste API keys into chat.
 
+Claude may show **Pending** while starting its native process after a restart.
+Keep the same conversation open and let that submission settle; a long saved
+history is not a reason to create a replacement chat. If startup fails, use the
+failed message's **Retry** after the reported problem is resolved. Colleague can
+explain the status and recovery controls on desktop and phone.
+
 Project guidance can change while Codex is working. The current turn keeps its
 installed instructions; the next idle admission reads the latest guidance without
 interrupting healthy work. Preparing that guidance does not consume the separate
