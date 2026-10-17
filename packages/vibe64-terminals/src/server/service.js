@@ -1070,6 +1070,10 @@ function createService({
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
     resolveAssistantUser: async (user) => user || currentProjectRequestContext()?.vibe64User || null,
+    createActionContext: (actor) => {
+      if (env.VIBE64_INSTANCE) throw new Error("The hosted assistant action context is unavailable.");
+      return { surface: "app", channel: "internal", requestMeta: { request: { vibe64User: actor } } };
+    },
     authorizeProjectMessage: async (actor) => {
       if (env.VIBE64_INSTANCE) throw new Error("The hosted project message access check is unavailable.");
       return actor;
@@ -2819,6 +2823,7 @@ function createService({
         "listConnections",
         "readAssistantAccess",
         "resolveAssistantUser",
+        "createActionContext",
         "authorizeProjectMessage",
         "resolveConnection",
         "updateModelAccess"
@@ -4276,9 +4281,11 @@ function createService({
               // Set/Resume are admitted user requests too. Retain only CONTROL
               // identity, so each later goal tool rechecks current project access.
               if (actor && !prepared.context.browserAuthority) {
+                const requestMeta = currentProjectActionRequestMeta();
                 prepared.context.browserAuthority = { sessionId, projectSlug: projectRuntimeContext().projectSlug,
-                  actorId: String(actor.uid ?? actor.username), requestContext: { surface: "app", channel: "internal",
-                    requestMeta: currentProjectActionRequestMeta() || { request: { vibe64User: actor } } } };
+                  actorId: String(actor.uid ?? actor.username), requestContext: requestMeta
+                    ? { surface: "app", channel: "internal", requestMeta }
+                    : await assistantRuntime.createActionContext(actor) };
               }
               await changeGoalIntent(sessionId, context, latest => {
                 if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");

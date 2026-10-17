@@ -2083,6 +2083,7 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
   const tracePath = path.join(f.root, "service-claude-trace.jsonl");
   const goalAcknowledgementGate = path.join(f.root, "hold-goal-acknowledgement");
   const goalAttachmentGate = path.join(f.root, "hold-goal-attachment");
+  const recoveryToolProbe = path.join(f.root, "probe-recovery-tool-authority");
   await writeFile(command, `#!${process.execPath}
 const { createInterface } = require('node:readline');
 const { appendFileSync, existsSync, mkdirSync } = require('node:fs');
@@ -2124,6 +2125,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       input: action === 'block' ? { reason: 'The human must supply the missing approval code.' } : {} });
     return;
   }
+  if (frame.type === 'control_response' && frame.response.request_id.endsWith('-execute')) {
+    const receipt = { type: 'user', message: { content: [{ type: 'tool_result',
+      tool_use_id: frame.response.request_id, content: JSON.stringify(frame.response.response) }] } };
+    record(receipt);
+    emit(receipt);
+    return;
+  }
   if (frame.type !== 'user') return;
   record(frame);
   const text = frame.message.content;
@@ -2139,6 +2147,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     record({ ...frame, parentUuid: marker.uuid });
     if (condition === 'clear') emit({ type: 'result', subtype: 'success', local_command: 'goal', user_message_uuid: frame.uuid, result: '' });
     if (condition === 'BLOCK_ON_GOAL') setTimeout(() => pauseTool('assistant_action_contract', 'self-block-goal-contract', { actionId: 'vibe64.terminals.main-goal.block', version: 1 }), 50);
+    if (condition !== 'clear' && existsSync(${JSON.stringify(recoveryToolProbe)})) setTimeout(() => pauseTool('assistant_action_contract', 'recovery-authority-contract', { actionId: 'vibe64.terminals.main-goal.pause', version: 1 }), 50);
     return;
   }
   emit(frame);
@@ -2162,6 +2171,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   };
   const actions = createActionCatalogue();
   const actor = { username: "service-owner", uid: 73, role: "owner" };
+  let recoveredActorReads = 0;
   const createService = () => {
     const value = createTerminalService({ projectService, actions,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
@@ -2176,6 +2186,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
   });
     value.configureAssistantRuntime({
       resolveAssistantUser: async user => user?.username === actor.username ? actor : user,
+      createActionContext(user) {
+        assert.equal(user.username, actor.username);
+        return { channel: "internal", surface: "app", resolveAssistantUser: async () => {
+          recoveredActorReads++; return actor;
+        } };
+      },
       authorizeProjectMessage: async user => user?.username === actor.username ? actor : user
     });
     return value;
@@ -2188,7 +2204,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     projectContext: { projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
       return { project: { projectRoot: f.root, projectRuntimeRoot: runtime.stateRoot } };
     } },
-    resolveUser: async ({ request }) => !requireGoalRequest || request?.headers?.cookie === originalGoalRequest.headers.cookie ? actor : null,
+    resolveUser: async ({ request, context }) => typeof context.resolveAssistantUser === "function"
+      ? context.resolveAssistantUser()
+      : !requireGoalRequest || request?.headers?.cookie === originalGoalRequest.headers.cookie ? actor : null,
     authorizeProject: async ({ slug }) => assert.equal(slug, "claude-main-fixture")
   });
   // Daemon recreation below must leave the browser facade using the current owner.
@@ -2593,6 +2611,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
     }, { operation: "prepare-workspace" });
     await prepareEntered.promise;
     await writeFile(goalAttachmentGate, "hold");
+    requireGoalRequest = true;
+    await writeFile(recoveryToolProbe, "probe");
     const recovering = service.recoverActiveGoals();
     try {
       const contention = await recoveryLockContended.promise;
@@ -2613,6 +2633,19 @@ createInterface({ input: process.stdin }).on('line', async line => {
     const recovery = await recovering;
     assert.equal(recovery.ok, busyGoal, JSON.stringify(recovery));
     assert.equal(recovery.results.at(-1).resumed, true, "one removed session cannot suppress the next goal's recovery");
+    const probeDeadline = Date.now() + 5000;
+    let probe;
+    while (!probe) {
+      probe = (await trace()).findLast(row => row.frame?.type === "control_response" &&
+        row.frame.response?.request_id === "recovery-authority-contract");
+      assert.ok(Date.now() < probeDeadline, "Recovered native goal can discover its application control contract");
+      if (!probe) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(probe.frame.response.subtype, "success", JSON.stringify(probe));
+    assert.doesNotMatch(JSON.stringify(probe), /Log in to Vibe64|vibe64_auth_required/);
+    assert.ok(recoveredActorReads > 0, "Recovered tools use host-issued fresh authority without a browser request");
+    await rm(recoveryToolProbe);
+    requireGoalRequest = false;
     if (!busyGoal) assert.equal(recovery.results[0].ok, false);
     runtime.listSessions = async () => [await store.readSession("test")];
     const framesAfterRecovery = (await trace()).filter(row => row.frame?.type === "user").length;
@@ -2709,6 +2742,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(afterPause.goal.createdAt, currentGoal.goal.createdAt);
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
       const selfPausePid = (await trace()).findLast(row => row.args?.includes("--print")).pid;
+      const pauseExitDeadline = Date.now() + 3000;
+      for (;;) {
+        try { process.kill(selfPausePid, 0); }
+        catch (error) { if (error.code === "ESRCH") break; throw error; }
+        assert.ok(Date.now() < pauseExitDeadline, "Self-Pause drains after its native tool receipt");
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
       assert.throws(() => process.kill(selfPausePid, 0), { code: "ESRCH" });
       const framesBeforeRestart = (await trace()).filter(row => row.frame?.type === "user").length;
       await service.close();

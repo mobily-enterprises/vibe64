@@ -603,6 +603,12 @@ temporary chats, Learning and child agents do not acquire this capability.
 Goal startup installs the same discovery protocol as ordinary Main requests, so
 an admitted pause does not require changing a running process's tool settings.
 Assistant prose never changes goal intent; blocked prerequisites remain distinct.
+Goal recovery without an HTTP request obtains its action context from the
+configured assistant host. Hosted Vibe64 supplies an executable fresh-user
+resolver; standalone Vibe64 retains its ordinary local actor context. The
+original action contributor still checks project access on every tool call,
+and Main verifies the exact actor/session/native turn. Recovery never fabricates
+a browser session or treats serialized user metadata as hosted authority.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,
