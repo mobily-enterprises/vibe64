@@ -2682,3 +2682,62 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
   assert.equal(receipts[0].focus.pane, focus.pane, "Main must not reuse pre-open Lessons focus after the player opens");
   assert.deepEqual(serverResults, [{ ok: true }], owner.error.value);
 });
+
+test("the local browser navigator returns plain settled focus for an ordinary Learning workspace view", async t => {
+  const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
+  const { createTrainingMainPresentationActions, TRAINING_MAIN_PRESENTATION_ACK_ACTION } = await import("../../packages/vibe64-training/src/server/mainPresentationActions.js");
+  const ackAction = createTrainingMainPresentationActions({ project: { createRuntime() {} }, actions: { execute() {} } })
+    .find(action => action.id === TRAINING_MAIN_PRESENTATION_ACK_ACTION);
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const attemptId = "9490f94a-c614-4581-9111-0debb2339ca8";
+  const identity = { actorKey: "learning-local", learnerId: "1000", learningAttemptId: attemptId,
+    sourceProjectSlug: "training-9490f94ac614458191110debb2339ca8", sessionId: `training-${attemptId}`,
+    sessionsApiPath: `/api/learning/${attemptId}/vibe64/sessions`, noExercise: false };
+  const route = vue.reactive({ path: `/app/project/${identity.sourceProjectSlug}`, query: { mode: "learning", learningView: "learning" } });
+  const view = vue.ref({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId, ready: true,
+    pane: "lessons", learningView: "learning", learningBinding: identity });
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "c78-workspace-view" }).content, { format: "cjs" });
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
+    "@local/vibe64-training/client/presentation-operation": operations,
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
+      projectSlugFromRoute: () => identity.sourceProjectSlug },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => false },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const navigation = vue.shallowRef(null);
+  const host = renderer.createApp({ ...module.exports.default, render: () => null });
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: identity.actorKey });
+  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, view);
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: identity.sourceProjectSlug,
+    projectVisible: true, showProject() {}, showChat() {} }));
+  // The retained Learning owner applies the workspace view, as vibe64.training.view.open does.
+  host.provide(hostKeys.VIBE64_LEARNING_NAVIGATION_KEY, vue.ref(async command => {
+    view.value = { ...view.value, pane: command.pane, learningView: command.learningView };
+  }));
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  const result = await navigation.value({ id: "workspace-preview", status: "pending", projectSlug: identity.sourceProjectSlug,
+    sessionId: identity.sessionId, pane: "preview", learningMode: true, learningView: "workspace", learningAttemptId: attemptId });
+  assert.equal(Object.hasOwn(result, "focus"), false, "only presentation operations wrap their focus");
+  assert.equal(result.pane, "preview");
+  assert.equal(result.learningView, "workspace");
+  // Main's acknowledgement keeps only display-report fields; the server requires focus.pane.
+  const focus = Object.fromEntries(["projectSlug", "sessionId", "pane", "learningMode", "learningView", "learningContent",
+    "learningAttemptId"].filter(key => Object.hasOwn(result, key)).map(key => [key, result[key]]));
+  validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, clientId: "3c85e5a4-2990-43ed-b56e-d4ea63286c79",
+    commandId: "ed44616a-14ac-4235-9e0b-acf13032f5bf", ok: true, focus });
+});
