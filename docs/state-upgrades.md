@@ -1242,3 +1242,15 @@ The existing publisher keeps immutable before/after files and archive replacemen
 under `upgrades/backups/20261016-claude-command-messages/`, verifies every destination
 and resumes prepared bytes after interruption. Restore only through an assessed,
 consistent backup recovery; never delete the ledger to rerun an applied entry.
+
+
+## Retained Claude Pause
+
+`20261017-claude-paused-goal` records the new-write boundary for optional
+`pausedGoal` in existing Claude conversation records. Explicit Pause saves the
+exact objective and native identity before stopping execution. New input first
+clears Claude's native checker through its local command and verifies that receipt;
+Resume reinstalls the retained objective, and Cancel removes it. Older records
+remain byte-for-byte unchanged: process inactivity alone does not establish Pause.
+There is no historical conversion or backup. The ordinary stopped-service upgrade
+must record this boundary before activating the new writer.

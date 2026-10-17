@@ -1187,7 +1187,7 @@ test("Claude goals use native commands, preserve the goal on pause and reject st
     await mkdir(directory, { recursive: true });
     const condition = message.slice(6);
     await writeFile(path.join(directory, `${native.options.sessionId}.jsonl`), nativeGoalFrames(native, condition, timestamp++).map(JSON.stringify).join("\n") + "\n");
-    if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", result: "" });
+    if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", local_command: "goal", user_message_uuid: native.lastInput.messageId, result: "" });
   };
   const started = await f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
   assert.equal(f.processes[0].lastInput.message, "/goal Tests pass");
@@ -1786,7 +1786,7 @@ test("main Claude raw goals retain original commands and stale identities", { ti
   f.behavior.afterSend = async (native, message) => {
     const condition = message.slice(6);
     await writeHistory(f, native.options.sessionId, nativeGoalFrames(native, condition, timestamp++));
-    if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", result: "" });
+    if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", local_command: "goal", user_message_uuid: native.lastInput.messageId, result: "" });
   };
   const started = await f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
   assert.equal(started.status, "available");
@@ -1849,7 +1849,8 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
       goalWritten.resolve();
       if (condition !== "clear") return;
     }
-    await native.options.onEvent({ type: "result", subtype: "success", result: "" });
+    await native.options.onEvent({ type: "result", subtype: "success", result: "",
+      ...(message === "/goal clear" ? { local_command: "goal", user_message_uuid: native.lastInput.messageId } : {}) });
   };
   const first = await canonical.updateGoal({ action: "set", expectedSegmentId: null,
     objective: "Tests pass", messageId: "first-goal" });
@@ -1881,7 +1882,7 @@ test("main Claude canonical goals adopt original receipts and keep literal comma
   assert.equal(cleared.status, "accepted");
   await canonical.wait();
   assert.equal(await canonical.readGoal(), null);
-  assert.deepEqual(sent, ["/goal Tests pass", "/goal Tests pass", "/goal clear"]);
+  assert.deepEqual(sent, ["/goal Tests pass", "/goal clear", "/goal Tests pass", "/goal clear"]);
 
   await f.provider.sendMessage(f.context, { message: "Ordinary chat", messageId: "chat-before-goal" });
   await canonical.wait();
@@ -2134,7 +2135,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     } };
     record(marker);
     record({ ...frame, parentUuid: marker.uuid });
-    if (condition === 'clear') emit({ type: 'result', subtype: 'success', result: '' });
+    if (condition === 'clear') emit({ type: 'result', subtype: 'success', local_command: 'goal', user_message_uuid: frame.uuid, result: '' });
     return;
   }
   emit(frame);
@@ -2701,6 +2702,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       service = createService();
       assert.equal((await service.recoverActiveGoals()).results[0].skipped, true);
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesBeforeRestart);
+      const ordinary = await goalFacade.send({ messageId: "service-after-paused-restart", text: "An ordinary message while the goal stays paused." });
+      assert.equal(ordinary.delivered, true);
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "paused");
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
+      const nativeInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
+      assert.equal(nativeInputs[0].frame.message.content, "/goal clear");
+      assert.match(nativeInputs[1].frame.message.content, /An ordinary message while the goal stays paused/);
     }
   });
 });

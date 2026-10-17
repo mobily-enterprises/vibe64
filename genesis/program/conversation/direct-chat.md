@@ -4235,3 +4235,10 @@ next to its writer. Both renewal advice and budget admission use that reader via
 return unavailable instead of being interpreted as zero. Original provenance
 assertions remain in `sessionRenewalAdvisory.unit.test.js`; the Main provider and
 native-owner tests cover exact thread selection and shared process/thread reuse.
+
+
+Explicit Claude Pause retains the native goal objective and identity in the
+existing conversation storage before process interruption. The shared native owner
+removes the restored checker with a verified local clear command before ordinary
+input is admitted. Ordinary chat and application restart therefore preserve Pause;
+Resume and Cancel update the retained goal only after their exact native receipt.

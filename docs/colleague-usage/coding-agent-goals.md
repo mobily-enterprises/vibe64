@@ -179,3 +179,11 @@ goals. Restart continuation applies to supported Main native goals; temporary
 logical and scoped conversations do not expose native goal controls or receipts.
 Colleague can explain these controls and offer the supported action, but needs
 your request before changing a goal.
+
+
+A paused Claude goal stays paused while you send ordinary messages in the same
+chat, including after reloading or restarting the application. The objective
+stays available in the goal control. Choose **Resume goal** to continue it;
+**Cancel goal** removes it. If Claude cannot confirm that its checker has been
+suspended, the next message is not sent and the error remains available for
+recovery. Do not treat that error as a delivered message.
