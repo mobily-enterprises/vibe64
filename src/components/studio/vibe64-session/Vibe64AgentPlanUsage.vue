@@ -27,8 +27,6 @@ const engineId = computed(() => props.session?.assistantSelection?.engineId || "
 const modelProviderId = computed(() => props.session?.assistantSelection?.modelProviderId || "");
 const keyUsage = computed(() => ["deepseek", "zai", "zai-coding-plan"].includes(modelProviderId.value));
 const engineLabel = computed(() => engineId.value === "claude" ? "Claude" : "Codex");
-const claudeObjective = ref("");
-const claudeGoalOpen = ref(false);
 const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
 const enabled = computed(() => goalEnabled.value && (["codex", "claude"].includes(engineId.value) || keyUsage.value));
 const scopeKey = computed(() => JSON.stringify([projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]));
@@ -74,22 +72,12 @@ watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = fal
 const goalExplicitMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode !== "auto");
 const changingGoal = computed(() => suppliedGoal.value?.pending === true);
 const goalError = computed(() => suppliedGoal.value?.error || "");
-watch(scopeKey, () => {
-  claudeObjective.value = "";
-  claudeGoalOpen.value = false;
-}, { flush: "sync" });
 async function changeGoal(action, input = {}) {
   if (changingGoal.value || !goalAvailable.value) {
-    return;
+    return false;
   }
   if (["set", "resume"].includes(action) && !goalExplicitMode.value) return false;
-  const targetScope = scopeKey.value;
-  const result = await props.conversationRuntime.changeGoal(action, input);
-  if (result && result.ok !== false && targetScope === scopeKey.value && action === "set") {
-    claudeObjective.value = "";
-    claudeGoalOpen.value = false;
-  }
-  return result;
+  return props.conversationRuntime.changeGoal(action, input);
 }
 const currentUsage = computed(() => {
   const value = usage.data.value;
@@ -164,40 +152,12 @@ const goalState = computed(() => ({
 </script>
 
 <template>
-  <AssistantGoalControl v-if="goalEngineId === 'codex'" :state="goalState">
+  <AssistantGoalControl v-if="['codex', 'claude'].includes(goalEngineId)" :key="scopeKey" :state="goalState">
     <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior or Junior before starting or resuming a goal.</p>
     <v-btn v-if="goal?.objective && goalPreview !== goal.objective" class="mt-2" size="small" variant="text" @click="fullGoalOpen = true">
       View full goal
     </v-btn>
   </AssistantGoalControl>
-  <v-menu v-if="goalEngineId === 'claude' && goalState.enabled" v-model="claudeGoalOpen" location="top" :close-on-content-click="false">
-    <template #activator="{ props: menuProps }">
-      <v-btn v-bind="menuProps" size="small" variant="text" :aria-label="goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? `Goal ${goal.status}` : 'Set goal'">
-        {{ goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? 'Goal' : 'Set goal' }}
-        <span v-if="goal" class="ml-1 text-medium-emphasis">· {{ goal.status }}</span>
-      </v-btn>
-    </template>
-    <v-card class="pa-3" max-width="360">
-      <strong role="status">{{ goalState.loading ? 'Loading goal…' : goalState.available === false ? 'Goal unavailable' : goal ? `Goal ${goal.status}` : 'Set a Claude goal' }}</strong>
-      <p v-if="goal" class="my-2 agent-plan-usage__goal-text">{{ goalPreview }}</p>
-      <p v-if="goal?.reason" class="text-body-small my-2">{{ goal.reason }}</p>
-      <v-btn v-if="goal?.status === 'active'" size="small" :disabled="changingGoal" @click="changeGoal('pause')">
-        {{ goalState.action === 'pause' ? 'Pausing…' : 'Pause goal' }}
-      </v-btn>
-      <v-btn v-if="['paused', 'blocked'].includes(goal?.status) && goalExplicitMode" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
-        {{ goalState.action === 'resume' ? 'Resuming…' : 'Resume goal' }}
-      </v-btn>
-      <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">{{ goalState.action === 'cancel' ? 'Cancelling…' : 'Cancel goal' }}</v-btn>
-      <p v-if="goal && goal.status !== 'complete'" class="text-body-small mt-2">Pause stops the current turn and keeps the goal for later. Cancel also clears the goal.</p>
-      <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior or Junior before starting or resuming a goal.</p>
-      <form v-if="goalAvailable && goalExplicitMode && (!goal || goal.status === 'complete')" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
-        <v-textarea v-model="claudeObjective" label="Goal objective" placeholder="Describe the result Claude should work toward" rows="3" auto-grow maxlength="4000" :disabled="changingGoal" hide-details />
-        <v-btn type="submit" class="align-self-start" size="small" :disabled="changingGoal || !claudeObjective.trim()">{{ goalState.action === 'set' ? 'Starting…' : 'Start goal' }}</v-btn>
-      </form>
-      <v-btn v-if="goal?.objective && goalPreview !== goal.objective" size="small" variant="text" @click="fullGoalOpen = true">View full goal</v-btn>
-      <p v-if="goalError" role="alert" class="text-error text-body-small mt-2">{{ goalError }}</p>
-    </v-card>
-  </v-menu>
   <v-dialog v-if="fullGoalOpen" v-model="fullGoalOpen" max-width="640" scrollable aria-label="Full goal">
     <v-card>
       <v-card-title>Full goal</v-card-title>

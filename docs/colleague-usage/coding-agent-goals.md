@@ -147,6 +147,16 @@ An unavailable status does not mean the goal was cleared.
 Open **Goal** to find these controls. For a long objective, use **View full goal**
 to read it, then **Close** to return to the controls. This works on desktop and mobile.
 
+Claude and Codex use the same **Goal** control and status light. An active goal
+has a red light; it blinks only while the conversation reports work in progress
+and becomes steady between turns. Paused goals use a steady orange light.
+The control shows native **Running time** when available. Claude currently supplies
+only creation and status timestamps, so its timer is labelled **Elapsed since
+goal started (including pauses)**; this is not measured active runtime. On narrow
+panes, open **Goal** to see the timer. Pause, Resume and Cancel appear before long
+objectives or blocker explanations, so recovery does not require scrolling
+through the explanation.
+
 Failed Main-chat messages offer **Retry** and **Cancel** on desktop and mobile.
 **Retry** checks an uncertain attempt's original message ID first. If it was
 already delivered, the failure controls disappear without another send.

@@ -56,6 +56,7 @@ vi.mock("vuetify/components/VTextField", async () => {
   return { VTextField: { setup: (_, { attrs }) => () => h("input", { "aria-label": attrs.label }) } };
 });
 import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
+import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 
 async function render(data, props = {}, viewer = { actorKey: "local" }, goalState = {}) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
@@ -63,7 +64,10 @@ async function render(data, props = {}, viewer = { actorKey: "local" }, goalStat
   mocks.goalView = ref(mocks.goal);
   mocks.goalController = {
     goalView: mocks.goalView, goalLoadError: ref(""),
-    goalState: computed(() => ({ enabled: Boolean(mocks.goalView.value), pending: false, error: "", ...goalState,
+    goalState: computed(() => ({ enabled: Boolean(mocks.goalView.value), pending: false, error: "",
+      tokenBudgetSupported: props.session?.assistantSelection?.engineId !== "claude",
+      pauseInterruptsTurn: props.session?.assistantSelection?.engineId === "claude",
+      cancelInterruptsTurn: props.session?.assistantSelection?.engineId === "claude", ...goalState,
       cancel: () => mocks.goalController.changeGoal("cancel", {}) })),
     changeGoal: vi.fn().mockResolvedValue({ ok: true })
   };
@@ -369,7 +373,7 @@ it("shows Claude allowance and native goal controls without an unsupported token
   expect(html).toContain("Weekly Claude allowance remaining: 61%");
   expect(html).toContain("5h allowance remaining: 20%");
   expect(html).toContain("opus: 5% weekly remaining");
-  expect(html).toContain("Set a Claude goal");
+  expect(html).toContain("Set goal");
   expect(html).not.toContain("Token budget");
   mocks.goal = { status: "available", goal: { status: "active", objective: "Make tests pass" } };
   const running = await render(null, props);
@@ -378,7 +382,7 @@ it("shows Claude allowance and native goal controls without an unsupported token
   mocks.goal = null;
 });
 
-it.each(["accepted", "failed", "uncertain", "changed-scope"])("Claude goal dialog closes only after same-scope admission: %s", async outcome => {
+it.each(["accepted", "failed", "uncertain", "changed-scope"])("shared Claude goal draft clears only after same-scope admission: %s", async outcome => {
   const { createRenderer, reactive, nextTick, ssrContextKey } = await import("vue");
   mocks.resource = { data: ref(null), loadError: ref(""), reload: vi.fn() };
   const props = reactive({ active: true, session: { sessionId: "one", assistantSelection: { engineId: "claude" } },
@@ -390,33 +394,38 @@ it.each(["accepted", "failed", "uncertain", "changed-scope"])("Claude goal dialo
   const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
     setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {},
     parentNode() {}, nextSibling() {} });
-  const component = { ...PlanUsage, render: () => h("div") };
+  const component = { ...PlanUsage, render() {
+    const state = this.$.setupState;
+    return h(AssistantGoalControl, { key: state.scopeKey, state: state.goalState });
+  } };
   const app = renderer.createApp({ render: () => h(component, { ...props, conversationRuntime: runtime }) });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "owner" });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   try {
-    const state = app._instance.subTree.component.setupState;
-    state.claudeGoalOpen = true;
-    state.claudeObjective = "Finish the approved work";
+    const control = () => app._instance.subTree.component.subTree.component.setupState;
+    const state = control();
+    state.open = true;
+    state.objective = "Finish the approved work";
     await nextTick();
-    const pending = state.changeGoal("set", { objective: state.claudeObjective });
+    const pending = state.setGoal();
     expect(runtime.changeGoal).toHaveBeenCalledWith("set", { objective: "Finish the approved work" });
-    expect(state.claudeGoalOpen).toBe(true);
-    expect(state.claudeObjective).toBe("Finish the approved work");
+    expect(state.open).toBe(true);
+    expect(state.objective).toBe("Finish the approved work");
     if (outcome === "changed-scope") {
       props.session = { sessionId: "two", assistantSelection: { engineId: "claude" } };
       await nextTick();
-      state.claudeGoalOpen = true;
-      state.claudeObjective = "New conversation objective";
+      expect(control()).not.toBe(state);
+      control().open = true;
+      control().objective = "New conversation objective";
       await nextTick();
     }
     if (["failed", "uncertain"].includes(outcome)) runtime.goalState.value.error = "Goal was not confirmed.";
     finish(outcome === "failed" ? { ok: false } : outcome === "uncertain" ? false : { ok: true });
     await pending;
     await nextTick();
-    expect(state.claudeGoalOpen).toBe(outcome !== "accepted");
-    expect(state.claudeObjective).toBe(outcome === "accepted" ? "" : outcome === "changed-scope"
+    expect(control().open).toBe(true);
+    expect(control().objective).toBe(outcome === "accepted" ? "" : outcome === "changed-scope"
       ? "New conversation objective" : "Finish the approved work");
     if (["failed", "uncertain"].includes(outcome)) expect(runtime.goalState.value.error).toBe("Goal was not confirmed.");
   } finally { app.unmount(); }
@@ -476,6 +485,11 @@ it("preserves the displayed native goal identity through the actual shared contr
   try {
     await vi.waitFor(() => expect(binding.runtime.value.goalView.value).toEqual(views.get("goal-ui-one")));
     const original = binding.runtime.value;
+    expect(original.goalState.value.working).toBe(true);
+    original.snapshot.value = { ...original.snapshot.value, status: "ready" };
+    await nextTick();
+    expect(original.goalState.value.working).toBe(false);
+    original.snapshot.value = { ...original.snapshot.value, status: "working" };
     for (const [action, status, label] of [["pause", "active", "Pause goal"], ["resume", "paused", "Resume goal"],
       ["cancel", "blocked", "Cancel goal"]]) {
       views.get("goal-ui-one").goal.status = status;
@@ -567,3 +581,39 @@ for (const engineId of ["codex", "claude"]) {
     mocks.goal = null;
   });
 }
+
+
+it.each(["codex", "claude"])("%s shares elapsed time, actual activity and reachable recovery controls", async engineId => {
+  const props = { session: { sessionId: "one", assistantSelection: { engineId } } };
+  mocks.goal = { status: "available", goal: { status: "active", objective: "Finish the work", timeUsedSeconds: 65 } };
+  for (const working of [false, true]) {
+    const html = await render(null, props, undefined, { working });
+    expect(html).toContain("assistant-goal__light--running");
+    expect(html.includes("assistant-goal__light--working")).toBe(working);
+    expect(html).toContain("Running time: 1:05");
+    expect(html).toContain("Pause goal");
+  }
+  mocks.goal = { status: "available", goal: { status: "blocked", objective: "Finish the work",
+    timeUsedSeconds: 65, reason: "A long blocker explanation. ".repeat(100) } };
+  const html = await render(null, props, undefined, { working: true });
+  expect(html).not.toContain("assistant-goal__light--working");
+  expect(html.indexOf("Resume goal")).toBeLessThan(html.indexOf("A long blocker explanation."));
+  expect(html.indexOf("Cancel goal")).toBeLessThan(html.indexOf("A long blocker explanation."));
+  expect(html).toContain(engineId === "claude" ? "Cancel stops the current turn and clears the goal."
+    : "Cancel removes this goal. Use Stop to interrupt a turn already running.");
+  mocks.goal = null;
+});
+
+
+it("labels Claude elapsed age honestly when native running-time usage is unavailable", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-17T12:05:00Z"));
+  try {
+    mocks.goal = { status: "available", goal: { status: "blocked", objective: "Finish the work",
+      createdAt: "2026-10-17T12:00:00Z", updatedAt: "2026-10-17T12:02:00Z" } };
+    const html = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
+    expect(html).toContain("Elapsed since goal started (including pauses): 5:00");
+    expect(html).not.toContain("Running time:");
+    expect(html).not.toContain("assistant-goal__light--working");
+  } finally { mocks.goal = null; vi.useRealTimers(); }
+});

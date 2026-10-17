@@ -964,8 +964,13 @@ cannot select a native result representation or provide native goal tuples.
 The mounted goal panel uses the retained binding's goal read and command owner.
 Its canonical read includes the exact same-read target and declared capabilities,
 plus Vibe64's plain objective and pinned selection. The panel retains Auto policy,
-engine-specific presentation and full-objective preview without a separate goal
-cache, poll or POST. Standalone common goal delivery is unchanged.
+capability-driven controls and full-objective preview without a separate goal
+cache, poll or POST. Claude and Codex share JSKIT's goal control, keyed to the
+existing project/session/actor scope so late admission cannot clear a new draft.
+Its activity light follows canonical working state, while elapsed display uses
+native running-time usage when supplied or explicitly labelled wall elapsed time
+including pauses from the native creation timestamp. Recovery controls precede
+long objective and blocker text. Standalone common goal delivery is unchanged.
 A native-history duplicate with no authored application row retains its exact
 native result; canonical callers receive an explicit missing-receipt error instead
 of an invented transcript row. Main's supplied browser binding consumes the same
