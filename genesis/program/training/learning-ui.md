@@ -258,6 +258,9 @@ no other voice owner is active. It opens narration only; capture still needs Tal
 An ended session is not reopened on remount, and Working keeps opt-in voice. The
 original session primes on existing history, so nothing earlier is replayed, and
 its blocked-playback control handles browser autoplay refusal.
+Main also invites speech when it sends a new request, as Colleague does, so a
+failed, hidden or muted reply that stopped the session's speech does not silence
+later teacher replies. Only Main's own bound voice session is invited.
 
 
 ## Original navigation client ownership
