@@ -1397,6 +1397,26 @@ test("preparation exclusion uses a persistent cross-process lock without seriali
   assert.equal((await fs.lstat(lock)).ino, inode);
 });
 
+test("preparation exclusion waits for a short holder instead of refusing a concurrent browser receipt", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
+  const entered = Promise.withResolvers();
+  const order = [];
+  // A Preview output start holds the barrier briefly while a presentation ACK arrives.
+  const holder = f.state.runPreparationExclusive(input, async () => {
+    entered.resolve();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    order.push("holder");
+  });
+  await entered.promise;
+  const started = Date.now();
+  assert.equal(await f.state.runPreparationExclusive(input, () => { order.push("receipt"); return "receipt"; }), "receipt");
+  await holder;
+  assert.deepEqual(order, ["holder", "receipt"]);
+  assert.ok(Date.now() - started < 5000);
+});
+
 test("preparation exclusion preserves callback results and errors and releases after nested or short-state contention", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();
