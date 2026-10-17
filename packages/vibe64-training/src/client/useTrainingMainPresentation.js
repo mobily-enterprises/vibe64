@@ -9,11 +9,6 @@ import { useTrainingPresentationCue } from "./useTrainingPresentationCue.js";
 import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "./presentationOperation.js";
 import { VIBE64_BROWSER_NAVIGATION_KEY } from "/src/lib/vibe64AssistantHost.js";
 
-function preparationBusy(error) {
-  return [error?.code, error?.response?.code, error?.response?.errors?.[0]?.code]
-    .includes("VIBE64_TRAINING_PREPARATION_BUSY");
-}
-
 // A captured Main application owns only product read/commands and the original
 // shared browser transaction. It creates no subscriber, player or speech queue.
 export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready, retain,
@@ -69,20 +64,7 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
       "projectSlug", "sessionId", "pane", "learningMode", "learningView", "learningContent", "learningAttemptId",
       "databaseScreen", "databaseView", "previewScreen"
     ].filter(key => Object.hasOwn(body.focus, key)).map(key => [key, body.focus[key]])) } : body;
-    let result;
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        result = await command.run({ path: `${base}/ack`, body: payload });
-        break;
-      } catch (cause) {
-        // Practice Preview/output work shares the saved attempt's preparation
-        // barrier. Its busy refusal precedes any receipt effect, so resend this
-        // same receipt briefly, well inside the server's navigation deadline.
-        if (!preparationBusy(cause) || attempt >= 8 || !alive() || expected !== generation) throw cause;
-        await new Promise(resolve => setTimeout(resolve, 250 * attempt));
-        if (!alive() || expected !== generation) throw cause;
-      }
-    }
+    const result = await command.run({ path: `${base}/ack`, body: payload });
     if (!alive() || expected !== generation) return result;
     if (result?.ok !== true) throw new Error(result?.error || "The lesson presentation receipt was not confirmed.");
     return result;
