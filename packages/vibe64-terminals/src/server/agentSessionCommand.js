@@ -608,7 +608,7 @@ function createAgentSessionCommandService({
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation, access = "write") {
+  async function runInSessionProject(sessionId = "", operation, access = "write", admission = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const binding = sessionBindings.get(normalizedSessionId);
     if (!binding?.projectSlug) {
@@ -657,7 +657,7 @@ function createAgentSessionCommandService({
       });
     });
     return binding.learning
-      ? binding.runLearningOperation(run, access)
+      ? binding.runLearningOperation(run, access, admission)
       : runWithProjectRequestContext(binding.projectContext || {}, run);
   }
 
@@ -750,6 +750,7 @@ function createAgentSessionCommandService({
   }
 
   async function execute(input = {}, context = {}) {
+    input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
     if (!command) {
       return responseError(
@@ -785,6 +786,7 @@ function createAgentSessionCommandService({
       [VIBE64_AGENT_SESSION_RUN_RESULT_ENV]: resultPath
     };
     const projectSlug = context.binding.projectSlug;
+    input.signal?.throwIfAborted();
     const started = await runCommand({
       actor: "app",
       allowedRoots: [context.sourceRoot],
@@ -863,8 +865,9 @@ function createAgentSessionCommandService({
     const runs = sessionRuns.get(sessionId) || new Set();
     runs.add(abortController);
     sessionRuns.set(sessionId, runs);
-    const abort = () => abortController.abort();
+    const abort = () => abortController.abort(input.signal?.reason);
     input.signal?.addEventListener?.("abort", abort, { once: true });
+    if (input.signal?.aborted) abort();
     let result;
     try {
       if (!sessionId) {
@@ -878,7 +881,7 @@ function createAgentSessionCommandService({
         (context) => execute({
           ...input,
           signal: abortController.signal
-        }, context)
+        }, context), "write", { signal: abortController.signal, waitForAdmission: true }
       );
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {

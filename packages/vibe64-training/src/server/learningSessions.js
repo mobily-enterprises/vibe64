@@ -1,3 +1,4 @@
+import { addAbortListener } from "node:events";
 import { lstat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -126,7 +127,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     }
   }
 
-  function boundPracticeContext(saved, actor, sessionId) {
+  function boundPracticeContext(saved, actor, sessionId, admissionFinished = null) {
     const current = currentProjectRequestContext();
     if (!current || current.slug !== saved.projectSlug || !current.targetRoot || !current.projectSessionSourceRoot ||
         !current.projectRuntimeRoot || sessionId !== saved.initialSessionId) {
@@ -136,9 +137,10 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       learningScope: Object.freeze(structuredClone(saved.scope)), vibe64User: actor,
       trainingLearners: learners,
       ...(learningTeaching ? { learningTeaching } : {}),
-      runLearningOperation(operation, access = "write") {
+      runLearningOperation(operation, access = "write", { signal, waitForAdmission = false } = {}) {
         if (!["observe", "control", "write"].includes(access)) throw new TypeError("Use a saved practice command scope.");
-        return runBoundPracticeOperation(saved, actor, sessionId, access, operation);
+        return runBoundPracticeOperation(saved, actor, sessionId, access, operation,
+          waitForAdmission ? admissionFinished : null, signal);
       },
       async learningInstructions(currentSessionId) {
         if (currentSessionId !== sessionId) {
@@ -149,8 +151,23 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     });
   }
 
-  function runBoundPracticeOperation(saved, actor, sessionId, access, operation) {
+  async function runBoundPracticeOperation(saved, actor, sessionId, access, operation, admissionFinished = null, signal) {
     if (typeof operation !== "function") throw new TypeError("Learning execution requires its owning callback.");
+    signal?.throwIfAborted();
+    if (admissionFinished) {
+      // Native tools can arrive before Send finishes saving its receipt. Join
+      // that original owner's release, not a retry or a second preparation lock.
+      let abort;
+      try {
+        const error = await (signal ? Promise.race([admissionFinished, new Promise((_, reject) => {
+          abort = addAbortListener(signal, () => reject(signal.reason));
+        })]) : admissionFinished);
+        signal?.throwIfAborted();
+        if (error) throw error;
+      } finally {
+        abort?.[Symbol.dispose]();
+      }
+    }
     // A managed helper can outlive the request that created its socket. Start
     // from the saved identity, never that request's expired practice grant.
     return runWithProjectRequestContext({}, () => runPracticeOperation({ actor,
@@ -215,6 +232,8 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
         typeof projectContext?.runWithPracticeProjectScope !== "function") {
       throw new TypeError("Practice admission requires its saved learner, original Project context and owning callback.");
     }
+    const ownsBarrier = !barrierHeld && (access === "create" || access === "write");
+    const completion = ownsBarrier ? Promise.withResolvers() : null;
     const run = async () => {
       const saved = await learners.readExerciseProjectScope({ actor, attemptId, access });
       if (sessionId && sessionId !== saved.initialSessionId) {
@@ -224,7 +243,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
         if (bindLearning) {
           if (!saved.initialSessionId) throw learningError("VIBE64_TRAINING_SESSION_REQUIRED", "Prepare this saved practice session before opening it.");
           return project.runInProjectContext(saved.projectSlug, () => runWithProjectRequestContext(
-            boundPracticeContext(saved, actor, saved.initialSessionId), async () => {
+            boundPracticeContext(saved, actor, saved.initialSessionId, completion?.promise), async () => {
               const runtime = await project.createRuntime({ inspectSource: false });
               try { await runtime.store.readSessionNativeDescriptor(saved.initialSessionId); }
               catch (error) {
@@ -249,9 +268,17 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access }, run);
     };
     // End and fresh practice writes use the original preparation barrier.
-    return !barrierHeld && (access === "create" || access === "write")
-      ? learners.runPreparationExclusive({ actor, attemptId }, run)
-      : run();
+    let failure;
+    try {
+      return await (ownsBarrier ? learners.runPreparationExclusive({ actor, attemptId }, run) : run());
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      // Settle only after the original owner releases its lock, including
+      // receipt/source failures and release failures. Waiting tools fail closed.
+      completion?.resolve(failure);
+    }
   }
   async function readSessions({ actor } = {}) {
     const state = await learners.readState({ actor });

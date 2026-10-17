@@ -1219,7 +1219,12 @@ practice preparation barrier spans the native turn. Managed shell-command
 environment callbacks use the same saved practice owner's fresh operation
 admission. Their Unix server can outlive its creating request; its bound callback
 re-enters the exact learner/attempt/pin/session owner instead of inheriting the
-expired request scope. Shell and rename effects use WRITE, status and plan reads
+expired request scope. A native shell that arrives while its creating Send still
+owns WRITE joins that exact admission completion, including lock release, before
+reading fresh authority. Cancellation stops that wait; receipt/source or release
+failure refuses the command. This wait is explicit for the managed shell boundary;
+ordinary nested calls retain the non-reentrant refusal. The command keeps WRITE
+through its full execution, so End cannot overtake it. Shell and rename effects use WRITE, status and plan reads
 use OBSERVE, and an ended attempt refuses new effects while retaining historical
 reads. Ordinary session commands retain their captured Project context. The
 original helper token, generation, project/source binding and execution cleanup

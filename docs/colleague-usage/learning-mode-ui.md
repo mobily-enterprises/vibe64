@@ -168,7 +168,10 @@ teaching does not require voice, and private key entry remains your action.
 
 An exercise's Main coding assistant can perform an explicitly requested setup
 repair in that same practice session. Its commands recheck the saved lesson each
-time, including after the opening request has finished. Ending the lesson prevents
+time, including after the opening request has finished. If the assistant starts a
+command before **Send** finishes saving its receipt, that command waits for the
+same send to finish, then checks the lesson again. **Stop** cancels a waiting
+command. A failed send does not allow its waiting command to proceed. Ending the lesson prevents
 new commands; retained status remains readable. If Workspace setup failed, inspect
 the concrete diagnostic before **Retry**; a repair or successful setup is not a
 learner answer or passed assessment. Colleague can explain and coordinate this

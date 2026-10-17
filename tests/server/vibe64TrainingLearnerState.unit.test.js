@@ -2812,12 +2812,15 @@ test("configured practice Learning binds the saved actual initial Main session a
   const { createAgentSessionCommandService, prepareAgentSessionCommand } = await import(
     "../../packages/vibe64-terminals/src/server/agentSessionCommand.js");
   let commandCalls = 0;
+  const earlyStarted = Promise.withResolvers();
+  const earlyFinish = Promise.withResolvers();
   const commandService = createAgentSessionCommandService({ projectService: project,
     async runCommand(request) {
       assert.doesNotThrow(assertProjectEffectAdmission);
       assert.equal(core.currentPracticeProjectScope().access, "write");
       assert.equal(request.cwd, created.sourcePath);
       commandCalls++;
+      if (commandCalls === 2) { earlyStarted.resolve(); await earlyFinish.promise; }
       await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "fresh practice command\n");
       await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, "0\n");
       return { ok: true, execution: { id: `practice-command-${commandCalls}` } };
@@ -2835,6 +2838,64 @@ test("configured practice Learning binds the saved actual initial Main session a
   });
   assert.equal((await runPracticeCommand()).stdout, "fresh practice command\n");
   assert.equal(commandCalls, 1, "the helper re-enters the exact saved practice owner after request expiry");
+  // Native Bash may arrive before its owning Send has saved its receipt and
+  // released preparation.lock. It joins that exact release, then re-admits.
+  const commandInput = { sessionId: created.sessionId, cwd: created.sourcePath,
+    commandBase64: Buffer.from("printf practice").toString("base64") };
+  const bindCommand = () => prepareAgentSessionCommand({ commandService, sessionId: created.sessionId,
+    wrapperHostDir: path.join(f.root, "practice-command-wrappers") });
+  let earlyCommand;
+  await context.runLearningOperation(async () => {
+    await bindCommand();
+    earlyCommand = commandService.run(commandInput);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(commandCalls, 1, "the tool cannot execute while its Send owns WRITE");
+    await assert.rejects(context.runLearningOperation(() => assert.fail("no nested writer")),
+      { code: "VIBE64_TRAINING_PREPARATION_BUSY" }, "ordinary nested calls still refuse rather than self-wait");
+  });
+  await earlyStarted.promise;
+  try {
+    await assert.rejects(f.state.runPreparationExclusive({ actor: f.actor, attemptId },
+      () => assert.fail("End cannot enter while the managed command is running")),
+    { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+  } finally {
+    earlyFinish.resolve();
+  }
+  assert.equal((await earlyCommand).ok, true);
+  assert.equal(commandCalls, 2, "the command launches only after the exact owner's lock release");
+
+  await context.runLearningOperation(async () => {
+    await bindCommand();
+    const controller = new AbortController();
+    const cancelled = commandService.run({ ...commandInput, signal: controller.signal });
+    controller.abort(Object.assign(new Error("Cancelled while Send owns admission"), { code: "TEST_CANCELLED" }));
+    assert.equal((await cancelled).code, "TEST_CANCELLED", "cancellation does not wait for Send to finish");
+    assert.equal(commandCalls, 2);
+  });
+
+  for (const failurePoint of ["receipt", "release"]) {
+    const failure = Object.assign(new Error(`Original ${failurePoint} failed`), { code: `TEST_${failurePoint.toUpperCase()}_FAILED` });
+    const originalExclusive = f.state.runPreparationExclusive;
+    if (failurePoint === "release") f.state.runPreparationExclusive = async (...args) => {
+      await originalExclusive(...args);
+      throw failure; // Original lock release completed, but reported failure.
+    };
+    let refusedCommand;
+    try {
+      await assert.rejects(context.runLearningOperation(async () => {
+        await bindCommand();
+        refusedCommand = commandService.run(commandInput);
+        await new Promise(resolve => setImmediate(resolve));
+        if (failurePoint === "receipt") throw failure;
+      }), { code: failure.code });
+      assert.equal((await refusedCommand).code, failure.code, "waiting tools fail closed on their original owner's failure");
+      assert.equal(commandCalls, 2);
+    } finally {
+      f.state.runPreparationExclusive = originalExclusive;
+    }
+  }
+  // Refresh this helper's binding after the intentionally failed request.
+  await context.runLearningOperation(bindCommand);
   // Exercise the real preparation.lock through the original action wrapper.
   // Native admission is controlled here; the Teaching file proves its guard.
   const { withVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
@@ -2930,9 +2991,28 @@ test("configured practice Learning binds the saved actual initial Main session a
   await assert.rejects(() => learning.resolveContext({ actor: f.actor, attemptId, sessionId: "other-practice" }),
     { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
   const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
-  await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision, requestId: "end-bound-practice", reason: "restart" });
+  const originalExclusive = f.state.runPreparationExclusive;
+  let endedCommand;
+  f.state.runPreparationExclusive = async (...args) => {
+    const result = await originalExclusive(...args);
+    // End wins immediately after the old owner releases. The waiting command
+    // must read current authority rather than retain the old WRITE grant.
+    await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision,
+      requestId: "end-bound-practice", reason: "restart" });
+    return result;
+  };
+  try {
+    await context.runLearningOperation(async () => {
+      await bindCommand();
+      endedCommand = commandService.run(commandInput);
+      await new Promise(resolve => setImmediate(resolve));
+    });
+  } finally {
+    f.state.runPreparationExclusive = originalExclusive;
+  }
+  assert.equal((await endedCommand).code, "VIBE64_TRAINING_ATTEMPT_MISSING");
   await assert.rejects(runPracticeCommand(), error => error.code === 1 && /no matching active reservation/u.test(error.stderr));
-  assert.equal(commandCalls, 1, "ending the attempt denies subsequent effects from the still-live helper");
+  assert.equal(commandCalls, 2, "ending the attempt denies subsequent effects from the still-live helper");
   const history = await commandService.sessionStatus(created.sessionId);
   assert.equal(history.sessionId, created.sessionId, "ended practice remains observable through fresh read admission");
   await assert.rejects(readGrant(), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
