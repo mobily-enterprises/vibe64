@@ -48,6 +48,7 @@ import {
 import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
+  VIBE64_RUNTIME_NAMESPACE_ENV,
   runtimeNamespace
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -157,7 +158,7 @@ function codexAppServerRuntimeScope({
 
 function codexAppServerRuntimeIdentityScope(options = {}) {
   const scope = codexAppServerRuntimeScope(options);
-  if (!scope && !options.modelProviderId) {
+  if (!scope && !options.modelProviderId && !normalizeAgentText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
     return "";
   }
   const namespace = runtimeNamespace();

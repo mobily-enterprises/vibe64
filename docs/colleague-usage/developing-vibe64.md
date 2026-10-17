@@ -54,6 +54,11 @@ the prepared map or explicitly selected manual sources and composes a disposable
 and release lockfile remain unchanged. The example project's source and state
 remain in the original development location, outside that disposable app.
 
+To run two local examples at once, give each a different `--state-dir` and
+`--port`. Each state directory supplies its own runtime namespace, so starting
+Codex in one example does not replace the other's shared Codex server.
+Conversations within the same example continue sharing their account's server.
+
 Source changes restart the composed development app after its previous process
 exits. The initial scan, including existing skill symlinks, does not restart it.
 Each restart logs its triggering path. Dependency directories and generated state

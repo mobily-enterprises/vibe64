@@ -820,6 +820,23 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
   assert.notEqual(namespaceBDir, namespaceADir);
 });
 
+test("scope-free Codex runtimes share within a namespace and isolate separate applications", async () => {
+  const env = { VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime" };
+  const first = await withRuntimeNamespace("example-first", () => codexAppServerRuntimeDir({
+    env, session: { sessionId: "first-conversation" }
+  }));
+  const sameApplication = await withRuntimeNamespace("example-first", () => codexAppServerRuntimeDir({
+    env, session: { sessionId: "second-conversation" }
+  }));
+  const otherApplication = await withRuntimeNamespace("example-second", () => codexAppServerRuntimeDir({ env }));
+  const legacy = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({ env }));
+
+  assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.equal(sameApplication, first, "conversations retain one shared application runtime");
+  assert.notEqual(otherApplication, first, "another application cannot replace this runtime");
+  assert.equal(legacy, "/tmp/vibe64-agent-runtime/codex-app-server");
+});
+
 test("codex provider fallback runtime base stays outside the target root when XDG runtime is unavailable", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
