@@ -13972,3 +13972,42 @@ test("Main Codex active goal continues once after service restart and explicit P
     assert.deepEqual(writes.map(([action]) => action), ["set", "active", "paused"]);
   }, { throughTerminalService: true });
 });
+
+
+test("Main Codex switching uses its prepared shared runtime to transfer more than 30 whole messages", { timeout: 30_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    const prepared = await controller.ensureThread(sessionId);
+    assert.equal(prepared.ok, true, prepared.error);
+    const { runtimeDir } = await captures.provider.currentRuntimeInfo();
+    await mkdir(runtimeDir, { recursive: true });
+    await writeFile(path.join(runtimeDir, "models.json"), JSON.stringify({ models: [
+      { slug: "gpt-5.5", context_window: 272000, effective_context_window_percent: 95, max_context_window: 872000 }
+    ] }));
+    captures.threadSnapshotTurns = [];
+    for (let index = 0; index < 40; index++) {
+      await store.writeConversationUserMessage(sessionId, { messageId: `previous-user-${index}`, text: `Earlier question ${index}` });
+      await store.writeConversationAssistantMessage(sessionId, { messageId: `previous-answer-${index}`, text: `Earlier answer ${index}` });
+    }
+    await store.writeConversationThinkingMessage(sessionId, { messageId: "private-thought", text: "REASONING MUST NOT TRANSFER" });
+    await store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify({ lastEngine: "claude", engines: { claude: { seen: {} } } }));
+    const common = createConversationRuntime({ authorize: async () => true,
+      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+        ? prepareSessionConversationDisposal(controller.conversationProvider, id, context, input)
+        : createSessionConversationBinding(controller.conversationProvider, id, { ...context, prepareInput: async input => input }) } });
+    try {
+      const conversation = await common.open({ id: sessionId, context: { runtime, sessionId } });
+      const result = await conversation.send({ messageId: "switch-to-codex", text: "Continue this work." });
+      assert.equal(result.status, "accepted");
+      assert.equal(captures.threadStarts.length, 1, "Budget preparation and dispatch retain the same native thread");
+      assert.equal(captures.turns.length, 1);
+      const prompt = captures.turns[0].input.map(item => typeof item === "string" ? item : item.text || "").join("\n");
+      const historyLine = prompt.split("\n").find(line => line.startsWith('{"messages":['));
+      assert.ok(historyLine, prompt.slice(0, 500));
+      const history = JSON.parse(historyLine);
+      assert.equal(history.messages.length, 80);
+      assert.equal(history.messages[0].text, "Earlier question 0");
+      assert.equal(history.messages.at(-1).text, "Earlier answer 39");
+      assert.equal(prompt.includes("REASONING MUST NOT TRANSFER"), false);
+    } finally { await common.close(); }
+  });
+});

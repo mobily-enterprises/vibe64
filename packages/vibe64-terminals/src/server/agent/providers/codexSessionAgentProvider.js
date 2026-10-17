@@ -1,3 +1,4 @@
+import { sessionContextUsageFromMetadata } from "../../codexContextRenewalSignals.js";
 import { codexAppServerControlDisabledResult } from "../../codexConversationPreparation.js";
 import { renewalArchivedPredecessorContext, renewalSuccessorProcessExitProofReleaseContext } from "../../sessionRenewalHandover.js";
 import { beginTerminalNamespaceOperation } from "@local/vibe64-execution/server/terminalSessions";
@@ -5,7 +6,8 @@ import {
   codexCatalogRows as nativeCodexCatalogRows,
   codexCatalogReasoningEfforts,
   codexCatalogModels,
-  codexConfiguredModelCatalog
+  codexConfiguredModelCatalog,
+  readCodexModelContextWindow
 } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { withCodexState } from "../../codexConversationStorage.js";
 import { prepareCodexModelRouting } from "../../nativeConversationRetirement.js";
@@ -591,6 +593,32 @@ function createCodexSessionAgentProvider({
           messageEnvironment: env,
           publish: publishSessionChanged, checkpoint: checkpointCodexAppServerTurn,
           state: codexConversationStorage.state(sessionId),
+          async readContextUsage({ input, signal }) {
+            signal?.throwIfAborted();
+            const ready = await codexConversationPreparation.threadReadiness(sessionId,
+              { agentSettings: input.agentSettings }, codexAppServerRunOwner.ensureThreadReady);
+            if (ready.ok === false) throw new Error(ready.error || "Codex context could not be prepared.");
+            signal?.throwIfAborted();
+            const current = await codexAppServerRunOwner.conversationContext(sessionId, input, {});
+            if (current.ok === false) throw new Error(current.error || "Codex context is unavailable.");
+            const target = codexConversationPreparation.goalContext(sessionId, current);
+            const model = input.agentSettings?.model || target.resumeOptions.model;
+            const limit = await readCodexModelContextWindow({ runtimeDir: (await current.provider.currentRuntimeInfo()).runtimeDir, model });
+            const usage = sessionContextUsageFromMetadata(current.session.metadata, { expectedThreadId: target.threadId });
+            if (usage?.providerId === "codex") {
+              return { model, usedTokens: usage.usedTokens,
+                windowTokens: Math.min(limit.effectiveWindowTokens, usage.windowTokens) };
+            }
+            // Missing usage is zero only for a natively verified empty thread.
+            // An existing thread without its receipt must never get a full budget.
+            const turns = await current.provider.listThreadTurns(target.threadId,
+              { limit: 1, sortDirection: "desc", itemsView: "summary" });
+            signal?.throwIfAborted();
+            if (!Array.isArray(turns.data) || turns.data.length || turns.nextCursor) {
+              throw new Error("Codex's current context usage is unavailable. Restore its usage before transferring more history.");
+            }
+            return { model, usedTokens: 0, windowTokens: limit.effectiveWindowTokens };
+          },
           native: {
             runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
             admission: () => beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId)),

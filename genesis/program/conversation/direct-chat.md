@@ -4191,3 +4191,33 @@ evidence; unproven records stay intact and conflicting evidence refuses repair.
 retaining every other record field. The existing offline publisher backs up
 original records/archives and resumes frozen replacements after interruption.
 This is an operator upgrade, never a history-read or startup side effect.
+
+
+### Bounded Main history on provider switching
+
+`mainConversationBinding.js` supplies the existing JSKIT changeover owner with a
+lazy byte allowance for ordinary Claude/Codex Main chat. It selects the complete
+visible history, excluding reasoning through the original transcript projection.
+Whole oldest messages are removed from the transfer only when necessary. The
+shared cursor and exact pending prompt keep their original retry/reload semantics.
+Learning's admitted tool configuration and temporary/Colleague policies are separate.
+
+Claude's existing native owner reports current usage and the auto-compaction
+threshold. Codex uses its existing thread readiness/shared runtime, exact current
+thread usage metadata and the runtime catalogue's normal effective model window;
+it never substitutes the extended maximum. Without a valid usage receipt, only a
+natively verified empty thread may use zero. Missing facts stop dispatch.
+
+The policy reserves the larger of 32,768 tokens or 20% of the usable window for
+instructions/tools and continued work, plus current request/handover UTF-8 bytes
+and 4,096 bytes for the envelope. The remaining count is a conservative UTF-8 byte
+ceiling, not a token estimate. It adds no tokenizer, process owner or persistence.
+Native preparation occurs only for new catch-up, not ordinary input or exact retries.
+
+`sessionContextUsageFromMetadata` moved unchanged in purpose from Sessions'
+`sessionRenewalAdvisory.js` to Terminals' existing `codexContextRenewalSignals.js`,
+next to its writer. Both renewal advice and budget admission use that reader via
+`@local/vibe64-terminals/server/context-usage`. Malformed or missing counts now
+return unavailable instead of being interpreted as zero. Original provenance
+assertions remain in `sessionRenewalAdvisory.unit.test.js`; the Main provider and
+native-owner tests cover exact thread selection and shared process/thread reuse.

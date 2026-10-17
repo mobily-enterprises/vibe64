@@ -1,3 +1,5 @@
+import { sessionContextUsageFromMetadata } from "@local/vibe64-terminals/server/context-usage";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SESSION_RENEWAL_THRESHOLDS = Object.freeze({
@@ -36,34 +38,6 @@ function contextUsageSignal(value = null) {
   };
 }
 
-function sessionContextUsageFromMetadata(metadata = {}, {
-  expectedThreadId = ""
-} = {}) {
-  const providerId = String(metadata?.agent_context_usage_provider || "").trim();
-  const threadId = String(metadata?.agent_context_usage_thread_id || "").trim();
-  const currentThreadId = String(expectedThreadId || "").trim();
-  const updatedAt = String(metadata?.agent_context_usage_updated_at || "").trim();
-  const usedTokens = finiteNonNegativeInteger(metadata?.agent_context_used_tokens);
-  const windowTokens = finitePositiveInteger(metadata?.agent_context_window_tokens);
-  if (
-    !providerId ||
-    !threadId ||
-    !currentThreadId ||
-    threadId !== currentThreadId ||
-    !updatedAt ||
-    !windowTokens
-  ) {
-    return null;
-  }
-  return {
-    exact: true,
-    providerId,
-    threadId,
-    updatedAt,
-    usedTokens,
-    windowTokens
-  };
-}
 
 function sessionAgeDays(session = {}, now = new Date()) {
   const createdAt = Date.parse(String(session?.manifest?.createdAt || ""));

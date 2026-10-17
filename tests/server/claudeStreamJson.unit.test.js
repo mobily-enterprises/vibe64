@@ -239,7 +239,11 @@ async function fixture(t, { scopedConversations = false } = {}) {
       const native = { options, executionId: `test-${processes.length}`, stopped: false, stopAllowed: true,
         initialization: { models: [{ value: "sonnet", supportedEffortLevels: ["low", "high"] }, { value: "haiku", supportedEffortLevels: [] }] },
         async stop() { this.stopped = this.stopAllowed; return { exited: this.stopped, scopeEmpty: this.stopped }; },
-        client: { async request(request) { (native.requests ||= []).push(request); return {}; }, interrupt: async () => {
+        client: { async request(request) {
+          (native.requests ||= []).push(request);
+          return request.subtype === "get_context_usage"
+            ? (behavior.contextUsage || { totalTokens: 1000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "sonnet" }) : {};
+        }, interrupt: async () => {
           await options.onEvent({ type: "result", subtype: "success", terminal_reason: "aborted_streaming", result: "" });
           return {};
         }, async send(message, input) {
@@ -1333,7 +1337,8 @@ test("temporary Claude accepts active-turn steering in its existing native conve
   assert.equal(forwarded[1].message.outputId, forwarded[0].message.id);
   assert.equal(forwarded[1].message.complete, true);
   const observed = await f.provider.readConversation(f.context, { conversationId, persistent: true });
-  assert.deepEqual(observed.messages.find(message => message.id === forwarded[1].message.id), forwarded[1].message);
+  assert.deepEqual(observed.messages.find(message => message.id === forwarded[1].message.id),
+    { ...forwarded[1].message, requestMessageId: "" }); // No canonical Main request owns this native temporary frame.
   assert.equal(f.written.length, 0, "temporary steering stays out of main History");
   await f.provider.stopConversation(f.context, { conversationId, persistent: true });
 });
@@ -3456,4 +3461,52 @@ test("actual Claude Main separate-final completion uses only a settled native re
     assert.equal(entry.process, process);
     assert.equal(f.processes.length, 1, "completion does not replace the original process");
   });
+});
+
+
+test("Main transfer budget uses Claude's current context and reserves the request and working space", async t => {
+  const f = await fixture(t);
+  const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
+  const signal = new AbortController().signal;
+  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal };
+  const before = await binding.maximumHistoryBytes(options);
+  assert.equal(before, 967_000 - 1000 - 193_400 - 8 - 2 - 4096);
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].lastInput, undefined, "Budget inspection must not submit a request");
+  f.behavior.contextUsage = { totalTokens: 20_000, maxTokens: 200_000, autoCompactThreshold: 167_000, model: "haiku" };
+  const after = await binding.maximumHistoryBytes(options);
+  assert.equal(after, 167_000 - 20_000 - 33_400 - 8 - 2 - 4096);
+  assert.equal(f.processes.length, 1, "Repeated inspection reuses the original native owner");
+  assert.ok(after < before);
+  f.behavior.contextUsage.totalTokens = 166_000;
+  await assert.rejects(binding.maximumHistoryBytes(options), /too little context/u);
+  assert.equal(f.processes[0].lastInput, undefined);
+});
+
+
+for (const smallWindow of [false, true]) test(`Main Claude switching retains complete visible history within its actual budget, smallWindow=${smallWindow}`, async t => {
+  const f = await fixture(t);
+  if (smallWindow) f.behavior.contextUsage = { totalTokens: 1000, maxTokens: 200_000, autoCompactThreshold: 167_000, model: "haiku" };
+  const store = f.context.runtime.store;
+  const texts = [];
+  for (let index = 0; index < 40; index++) {
+    const user = `Question ${index}: ` + "x".repeat(2400);
+    const answer = `Answer ${index}: ` + "y".repeat(2400);
+    texts.push(user, answer);
+    await store.writeConversationUserMessage("test", { messageId: `previous-user-${index}`, text: user });
+    await store.writeConversationThinkingMessage("test", { messageId: `private-thinking-${index}`, text: "REASONING MUST NOT TRANSFER" });
+    await store.writeConversationAssistantMessage("test", { messageId: `previous-answer-${index}`, text: answer });
+  }
+  await store.writeMetadataValue("test", "assistant_changeover", JSON.stringify({ lastEngine: "codex", engines: { codex: { seen: {} } } }));
+  const before = await store.readConversationLog("test");
+  const sent = await f.provider.sendMessage(f.context, { messageId: "switch-to-claude", message: "Continue this work." });
+  assert.equal(sent.ok, true, sent.error);
+  const prompt = f.processes[0].lastInput.message;
+  const history = JSON.parse(prompt.split("\n").find(line => line.startsWith('{"messages":[')));
+  assert.equal(prompt.includes("REASONING MUST NOT TRANSFER"), false);
+  assert.equal(history.messages.length > 30, true);
+  assert.deepEqual(history.messages.map(message => message.text), texts.slice(-history.messages.length));
+  assert.equal(history.messages.length === 80, !smallWindow);
+  assert.deepEqual((await store.readConversationLog("test")).slice(0, before.length), before, "The original saved conversation is unchanged");
+  assert.equal(f.processes.length, 1);
 });

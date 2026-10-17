@@ -130,3 +130,14 @@ test("persisted provider usage is accepted only with its exact provenance", () =
     windowTokens: 258400
   });
 });
+
+
+test("persisted context usage never converts missing or malformed token counts to an empty context", () => {
+  const metadata = { agent_context_usage_provider: "codex", agent_context_usage_thread_id: "thread",
+    agent_context_usage_updated_at: NOW, agent_context_used_tokens: "120", agent_context_window_tokens: "258400" };
+  for (const value of [undefined, null, "", "120junk", "-1", "1.5", "Infinity"]) {
+    assert.equal(sessionContextUsageFromMetadata({ ...metadata, agent_context_used_tokens: value }, { expectedThreadId: "thread" }), null);
+    assert.equal(sessionContextUsageFromMetadata({ ...metadata, agent_context_window_tokens: value }, { expectedThreadId: "thread" }), null);
+  }
+  assert.equal(sessionContextUsageFromMetadata({ ...metadata, agent_context_used_tokens: "0" }, { expectedThreadId: "thread" }).usedTokens, 0);
+});

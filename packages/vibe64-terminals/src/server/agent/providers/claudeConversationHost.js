@@ -267,6 +267,11 @@ function createClaudeConversationHost({
         const { runtime } = context;
         return {
           context, namespace: claudeTerminalNamespace(sessionId), publish: publishSessionChanged,
+          async readContextUsage({ context: current, input, signal }) {
+            signal?.throwIfAborted();
+            const entry = await conversations.acquire({ ...current, sessionId });
+            return conversations.readContextUsage(entry, { ...input, signal });
+          },
           state: {
             async read(current, representation, nativeState) {
               if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };

@@ -1956,3 +1956,10 @@ Declared supporting services can stay warm independently of Preview and individu
 test runs. A project can choose one shared instance or one per session. Separate
 session instances do not replace each other; ending a session cleans up only its
 instances, while closing the project cleans up all of them.
+
+
+When switching ordinary Main chat between Claude and Codex, people keep the
+visible discussion up to the destination's available normal context. Original
+text and attribution carry across without reasoning or a generated summary.
+Oversized transfers omit older complete messages while saved history stays intact;
+the destination retains working space without enabling extended context settings.

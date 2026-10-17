@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -1524,4 +1527,51 @@ test("Restored detached: Codex adapter publishes the resolved audit profile befo
   assert.equal(events[0].executionProfile.model, "gpt-5.6-luna");
   assert.equal(events[0].executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
   assert.deepEqual(result.executionProfile, events[0].executionProfile);
+});
+
+
+test("Main Codex history budget uses the selected normal limit and exact thread usage", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-codex-budget-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "models.json"), JSON.stringify({ models: [
+    { slug: "chosen", context_window: 272000, effective_context_window_percent: 95, max_context_window: 872000 },
+    { slug: "saved", context_window: 500000, effective_context_window_percent: 95, max_context_window: 872000 }
+  ] }));
+  const session = { metadata: { agent_context_usage_provider: "codex", agent_context_usage_thread_id: "current-thread",
+    agent_context_usage_updated_at: "2026-10-17T00:00:00Z", agent_context_used_tokens: "12000", agent_context_window_tokens: "872000" } };
+  const reads = [];
+  let turns = { data: [] };
+  const native = { async currentRuntimeInfo() { return { runtimeDir: root }; }, async listThreadTurns(threadId, options) {
+    reads.push([threadId, options]); return turns;
+  } };
+  let readiness = 0;
+  const runOwner = { ensureThreadReady() {}, async conversationContext(id, input) {
+    assert.equal(id, "session"); assert.equal(input.agentSettings.model, "chosen"); return { session, provider: native };
+  } };
+  const provider = createCodexSessionAgentProvider({ controller: {}, runOwner,
+    storage: { state: () => ({}) }, conversationPreparation: {
+      message: () => ({}),
+      async threadReadiness(id, options, operation) {
+        readiness++; assert.equal(id, "session"); assert.deepEqual(options.agentSettings, { model: "chosen" });
+        assert.equal(operation, runOwner.ensureThreadReady); return { ok: true };
+      },
+      goalContext: (_id, current) => ({ ...current, threadId: "current-thread", resumeOptions: { model: "saved" } })
+    } });
+  const host = await provider.prepareConversationHost("session", { runtime: {}, session }, "main");
+  const input = { agentSettings: { model: "chosen" } };
+  const signal = new AbortController().signal;
+  assert.deepEqual(await host.readContextUsage({ input, signal }), { model: "chosen", usedTokens: 12000, windowTokens: 258400 });
+  assert.equal(reads.length, 0, "An exact usage receipt needs no native history scan");
+  session.metadata.agent_context_usage_thread_id = "older-thread";
+  turns = { data: [{ id: "retained-turn" }] };
+  await assert.rejects(host.readContextUsage({ input, signal }), /context usage is unavailable/u);
+  turns = { data: [], nextCursor: "another-page" };
+  await assert.rejects(host.readContextUsage({ input, signal }), /context usage is unavailable/u);
+  turns = { data: [] };
+  assert.deepEqual(await host.readContextUsage({ input, signal }), { model: "chosen", usedTokens: 0, windowTokens: 258400 });
+  assert.deepEqual(reads.at(-1), ["current-thread", { limit: 1, sortDirection: "desc", itemsView: "summary" }]);
+  const cancelled = new AbortController(); cancelled.abort(new Error("cancelled before readiness"));
+  const before = readiness;
+  await assert.rejects(host.readContextUsage({ input, signal: cancelled.signal }), /cancelled before readiness/u);
+  assert.equal(readiness, before);
 });

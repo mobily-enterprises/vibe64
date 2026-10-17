@@ -444,6 +444,25 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       return engine === "codex" && typeof prepareInput === "function"
         ? { ...prepared, actorContext: prepared.vibe64User || null } : prepared;
     } : prepareInput,
+    ...(!teachingAvailable && host.readContextUsage ? {
+      async maximumHistoryBytes({ context, signal, input, handover }) {
+        const { usedTokens, windowTokens } = await host.readContextUsage({ context, signal, input });
+        if (!Number.isSafeInteger(usedTokens) || usedTokens < 0 ||
+            !Number.isSafeInteger(windowTokens) || windowTokens < 1) {
+          throw new Error("The selected assistant's context usage is unavailable. Retry after reconnecting it.");
+        }
+        // Count UTF-8 bytes conservatively instead of assuming English text's
+        // usual characters/token ratio. Keep normal model settings unchanged.
+        const reserve = Math.max(32_768, Math.ceil(windowTokens * 0.2));
+        const requestBytes = Buffer.byteLength(String(input.message || "")) +
+          Buffer.byteLength(JSON.stringify(handover || ""));
+        const bytes = windowTokens - usedTokens - reserve - requestBytes - 4096;
+        if (bytes < 1024) {
+          throw new Error("The selected assistant has too little context left to receive this conversation. Free space in its native context before retrying; the saved chat is unchanged.");
+        }
+        return bytes;
+      }
+    } : {}),
     ...(engine === "codex" ? { selection } : {}),
     async admission(current) {
       if (engine !== "codex") return requireMainConversationAdmission(runtime, sessionId, current);

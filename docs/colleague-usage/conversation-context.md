@@ -39,3 +39,29 @@ file remains marked as failed so you can remove it and choose a smaller file.
 For a directory, upload an archive through Files → Session Dropzone. Uploading
 does not itself send a message. Colleague can explain these steps; choosing a
 file from the person's computer requires their interaction.
+
+
+## Change AI while keeping the discussion
+
+In Main chat, select the intended AI with the existing assistant controls, then
+send your next message. Ordinary Claude and Codex conversations receive the
+visible discussion up to the selected destination's available normal context.
+Reasoning is excluded. This transfer keeps original message text and attribution;
+it does not create a summary or change the saved chat.
+
+If the history is too large, the oldest complete transferred messages are omitted
+first. Returning to an existing AI sends missed or corrected messages within the
+remaining allowance. The transfer reserves working space and does not enable an
+extended context window or change model settings. Carrying more history can still
+increase input usage and cost.
+
+An unavailable usage reading or insufficient remaining context stops delivery
+before sending. Keep the message and saved history; ask the operator to inspect
+the selected native conversation's context and recover it before retrying. If a
+message instead reports uncertain delivery, use its existing **Retry**, which
+checks the original receipt without rebuilding or duplicating the request.
+These steps are the same on desktop and phone. Colleague can explain recovery;
+it cannot repair native provider state through this usage guide.
+
+This policy concerns ordinary Main chat. Learning's tool-bound context, temporary
+chat context copying and Colleague's own history policy are separate.

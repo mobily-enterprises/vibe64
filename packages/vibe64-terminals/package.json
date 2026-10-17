@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./server/context-usage": "./src/server/codexContextRenewalSignals.js",
     "./server/claudeConversationAccounts": "./src/server/claudeConversationAccounts.js",
     "./server/conversationConfiguration": "./src/server/conversationConfiguration.js",
     "./server/projectStackInspection": "./src/server/projectStackInspection.js",

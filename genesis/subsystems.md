@@ -619,6 +619,12 @@ of regular Z.AI saved setup facts. Account writes and paid consent remain exclud
 
 ## `packages-vibe64-terminals` Terminals & outputs
 
+Owns the Main cross-provider history allowance and the shared reader/writer of
+native Codex context-usage metadata. Sessions' renewal advice consumes that same
+reader; persisted session metadata remains in Session runtime. Native usage comes
+from JSKIT's existing provider owners. The transfer changes neither saved history
+nor process sharing and allocates no new persistence.
+
 Owns direct conversations and temporary assistance with connected coding agents,
 including retained text/voice admission and bindings to the shared JSKIT voice host.
 Preserves the three native interactive terminals alongside chat: their authorized

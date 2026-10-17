@@ -26,6 +26,36 @@ function nonNegativeInteger(value) {
   return Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
+export function sessionContextUsageFromMetadata(metadata = {}, {
+  expectedThreadId = ""
+} = {}) {
+  const providerId = normalizeText(metadata?.agent_context_usage_provider);
+  const threadId = normalizeText(metadata?.agent_context_usage_thread_id);
+  const currentThreadId = normalizeText(expectedThreadId);
+  const updatedAt = normalizeText(metadata?.agent_context_usage_updated_at);
+  const usedTokens = nonNegativeInteger(metadata?.agent_context_used_tokens);
+  const windowTokens = nonNegativeInteger(metadata?.agent_context_window_tokens);
+  if (
+    !providerId ||
+    !threadId ||
+    !currentThreadId ||
+    threadId !== currentThreadId ||
+    !updatedAt ||
+    !windowTokens ||
+    usedTokens === null
+  ) {
+    return null;
+  }
+  return {
+    exact: true,
+    providerId,
+    threadId,
+    updatedAt,
+    usedTokens,
+    windowTokens
+  };
+}
+
 function contextCompactionKey({
   eventId = "",
   reason = "",
