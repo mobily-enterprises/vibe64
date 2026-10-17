@@ -209,7 +209,9 @@ async function navigate(command = {}) {
   }
   await waitForNavigation(() => focusMatches(command, focus.value), isCurrent,
     "The browser did not settle on the requested view.");
-  return { focus: { ...focus.value }, ...(presentation ? { presentation } : {}) };
+  // Same contract as the hosted navigator: a presentation operation returns its
+  // focus with the player receipt; ordinary navigation returns the focus itself.
+  return presentation ? { focus: { ...focus.value }, presentation } : { ...focus.value };
 }
 
 if (browserNavigation) browserNavigation.value = navigate;
