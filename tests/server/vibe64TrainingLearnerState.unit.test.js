@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { readProjectRecordMetadata, updateProjectRecordMetadata, writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
+import { admitLocalPracticeProject } from "../../packages/vibe64-training/src/server/learningSessions.js";
 import { createTrainingContentInstaller } from "../../packages/vibe64-training/src/server/contentInstaller.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
@@ -2494,6 +2495,25 @@ test("learning scope reports ended and unconfirmed-summary state truthfully with
   assert.deepEqual(await treeState(f.systemRoot), endedBefore);
 });
 
+
+test("local practice admission maps only this learner's own saved practice slug to its exact training scope", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const slug = reserved.attempt.projectSlug;
+  const before = await treeState(f.systemRoot);
+  const admitted = await admitLocalPracticeProject({ learners: f.state, actor: f.actor, slug });
+  assert.deepEqual(admitted, { actor: f.actor, training: (await f.state.readExerciseProjectScope({
+    actor: f.actor, attemptId: reserved.attempt.attemptId })).training });
+  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: { uid: 43 }, slug }), null);
+  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: f.actor, slug: "working-app" }), null);
+  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: f.actor,
+    slug: `training-${"0".repeat(12)}4${"0".repeat(3)}8${"0".repeat(15)}` }), null);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  const withoutExercise = await fixture(t, { noExercise: true });
+  const sourceLess = await withoutExercise.reserve();
+  assert.equal(await admitLocalPracticeProject({ learners: withoutExercise.state, actor: withoutExercise.actor,
+    slug: sourceLess.attempt.projectSlug }), null);
+});
 
 test("exercise project scope reads the exact saved learner and installed exercise without writes or source-less substitution", async t => {
   const f = await fixture(t);

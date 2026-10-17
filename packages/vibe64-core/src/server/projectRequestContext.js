@@ -13,6 +13,14 @@ const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
 const practiceScopeKey = Symbol("Vibe64 server practice scope");
 const actionRequestMetaKey = Symbol("Vibe64 original action request metadata");
+let localPracticeAdmission = null;
+
+// Standalone Training supplies this. It names the learner's own saved
+// practice Project for a slug, or null; core still derives the exact scope.
+function registerLocalPracticeAdmission(admit) {
+  if (typeof admit !== "function") throw new TypeError("Local practice admission requires its Training owner.");
+  localPracticeAdmission = admit;
+}
 
 function projectSlugFromRequest(request = {}) {
   return normalizeProjectSlug(request.params?.slug);
@@ -68,6 +76,13 @@ async function resolveProjectRequestContext({
     });
   }
   if (resolvedProjectContext?.projectCatalogEnabled === false) {
+    // A local learner's own lesson Project opens through the original practice
+    // grant as a control-only projection; fresh effects re-enter lesson admission.
+    const admitted = localPracticeAdmission ? await localPracticeAdmission({ slug }) : null;
+    if (admitted) {
+      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "control" },
+        async () => captureProjectRequestContext());
+    }
     const error = new Error("Local editor mode only serves the selected project.");
     error.code = "vibe64_project_route_unavailable";
     throw error;
@@ -287,6 +302,7 @@ function projectRequestErrorStatusCode(error = {}) {
 
 export {
   VIBE64_PROJECT_ROUTE_BASE,
+  registerLocalPracticeAdmission,
   currentPracticeProjectScope,
   runWithPracticeProjectContext,
   captureProjectRequestContext,

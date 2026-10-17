@@ -426,4 +426,20 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
   return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions, guideTask, runPreparationSessionContext });
 }
 
-export { createTrainingLearningSessions };
+// Ordinary local Project pages open only this person's own saved lesson
+// Project; the slug is derived from the attempt and rechecked against it.
+async function admitLocalPracticeProject({ learners, actor, slug }) {
+  const hex = /^training-([a-f0-9]{32})$/u.exec(slug)?.[1];
+  if (!hex) return null;
+  const attemptId = [8, 12, 16, 20].reduceRight((value, at) => `${value.slice(0, at)}-${value.slice(at)}`, hex);
+  let saved;
+  try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "control" }); }
+  catch (error) {
+    if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
+        error.message === "Use the exact saved exercise attempt ID.") return null;
+    throw error;
+  }
+  return saved.projectSlug === slug ? { actor, training: saved.training } : null;
+}
+
+export { admitLocalPracticeProject, createTrainingLearningSessions };

@@ -421,3 +421,15 @@ checks, without restarting its former work. Ordinary Working, explicit Close,
 deletion, missing markers and foreign-project events keep their existing policy.
 
 Exact watch reads use the action host’s attempt-scoped learner reader when supplied, with the existing attempt ID. Ordinary progress keeps its normal reader. Hosted composition supplies the existing normal/author scope selector, including current owner admission for preview attempts. Guidance keeps its original `guideTask` WRITE admission; polling does not acquire a second generic WRITE barrier around that owner.
+
+## Local practice-project address
+
+Standalone (local) Vibe64 serves only its selected project, plus one exception:
+the current learner's own saved practice project. Training registers
+`registerLocalPracticeAdmission` (`learningSessions.js` `admitLocalPracticeProject`);
+core `resolveProjectRequestContext` derives the attempt from the
+`training-<attempt>` slug, rechecks it through `readExerciseProjectScope`, and
+returns the original practice grant's captured control-only projection. Fresh
+effects still require lesson admission. Unscoped (Working) session-store listings,
+renewal reads and the current-session alias omit a genuine lesson binding, which its
+Learning store owns; direct reads and malformed bindings still refuse.

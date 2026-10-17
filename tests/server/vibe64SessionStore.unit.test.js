@@ -2412,6 +2412,15 @@ test("ordinary and foreign learning stores refuse exact private session reads an
     }
     assert.deepEqual(await own.readSession(session.sessionId), before);
     assert.deepEqual((await own.readConversationLog(session.sessionId)).flatMap(turn => turn.messages).map(message => message.text), ["Original"]);
+    // Learning lists own the lesson session; a Working list omits only that genuine binding.
+    const working = privateLessonStore(root, null);
+    assert.deepEqual((await working.listSessionSummaries()).map(summary => summary.sessionId), []);
+    assert.deepEqual((await working.listSessions()).map(value => value.sessionId), []);
+    assert.deepEqual(await working.listSessionsForRenewal(), []);
+    await own.updateCurrentSession(session.sessionId);
+    assert.equal(await working.readCurrentSession(), null);
+    assert.equal((await own.readCurrentSession()).sessionId, session.sessionId);
+    assert.deepEqual((await own.listSessionSummaries()).map(summary => summary.sessionId), [session.sessionId]);
   });
 });
 
@@ -2425,6 +2434,7 @@ test("corrupt learning binding fails read-only and working absence is never conv
       await writeFile(file, bytes);
       await assert.rejects(() => own.readSession(session.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
       await assert.rejects(() => own.listSessionSummaries(), { code: "vibe64_learning_session_scope_mismatch" });
+      await assert.rejects(() => privateLessonStore(root, null).listSessionSummaries(), { code: "vibe64_learning_session_scope_mismatch" });
       assert.equal(await readFile(file, "utf8"), bytes);
     }
     await writeFile(file, original);
