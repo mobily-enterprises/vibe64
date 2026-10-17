@@ -15,6 +15,13 @@ A course labelled **Preview course** is not available through ordinary Start,
 even when its individual lessons are published. It needs an authorized author
 trial or a released, enabled course; changing views does not bypass that rule.
 
+When Learning first creates its teacher session, it uses the first available AI
+workflow shown by the normal session picker, then checks your current Junior
+model and account access. It does not assume OpenCode is configured. You can
+change the teacher's AI through the normal chat model controls afterward. If no
+workflow is available, connect/configure one in **AI Accounts → Model routing**,
+then resume the same saved lesson or author trial; do not start a replacement.
+
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a

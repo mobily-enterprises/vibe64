@@ -8,6 +8,12 @@ pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
 opens the new session. If creation fails, review the error and retry or dismiss
 the dialog. This works the same way on desktop and mobile.
 
+Creation through an action without an explicit AI choice uses the first available
+workflow from the same picker. An explicit choice is preserved even when it is
+unavailable: fix its account or Model routing settings before retrying. Colleague
+can read the available choices and explain recovery; it must not claim a failed
+request left no saved lesson without checking that lesson's current state.
+
 The new session appears in the session list after its source checkout is ready.
 Refreshing during creation does not report that checkout as missing. If a
 **session needs attention** notice remains after creation, use **Check again**;

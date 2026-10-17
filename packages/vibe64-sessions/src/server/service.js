@@ -214,6 +214,7 @@ function legacyCodexAssistantSelection() {
 function createService({
   actions = null,
   initializeModelRouting,
+  readModelRoutingWorkflows,
   project,
   publishSessionChanged = async () => null,
   renewalActorResolver = null,
@@ -437,8 +438,28 @@ function createService({
       ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
+    let workflowEngineId = input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId;
+    if (!workflowEngineId) {
+      if (typeof readModelRoutingWorkflows !== "function") {
+        throw new TypeError("Session creation requires the available AI workflow reader.");
+      }
+      const available = await readModelRoutingWorkflows({ vibe64User });
+      if (available?.ok !== true) {
+        throw Object.assign(new Error(available?.error || "AI workflows could not be read. Retry after checking AI Accounts."), {
+          code: available?.code || "vibe64_assistant_workflow_unavailable", statusCode: available?.statusCode || 409
+        });
+      }
+      // Match the normal workflow picker's default; the original routing and
+      // connection checks below still admit the actual model for this actor.
+      workflowEngineId = available.workflows?.find(choice => choice.available)?.engineId;
+      if (!workflowEngineId) {
+        throw Object.assign(new Error("No AI workflow is available. Connect an AI account and configure Model routing, then retry the same lesson or session."), {
+          code: "vibe64_assistant_workflow_unavailable", statusCode: 409
+        });
+      }
+    }
     const preferences = assistantRoutingPreferences({ mode, review: false,
-      workflowEngineId: input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId || "opencode",
+      workflowEngineId,
       ...(explicitSelection ? { override: explicitSelection } : {}) });
     if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {
       throw new Error(`The starting ${mode === "junior" ? "Junior" : "Senior"} model must use the chosen workflow orchestrator.`);

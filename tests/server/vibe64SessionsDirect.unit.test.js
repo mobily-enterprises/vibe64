@@ -142,6 +142,7 @@ function sessionCreationPolicyHarness({
   beforeCreate = async () => {},
   initialSessions = [],
   initializeModelRouting = async () => ({ ok: true }),
+  readModelRoutingWorkflows = async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
   managed = true,
   resolveAssistantPurpose = async (input) => ({ available: true,
     effectiveSelection: input.override?.selection || initialPlanSelection, connectionIdentity: "workspace-ai" }),
@@ -209,6 +210,7 @@ function sessionCreationPolicyHarness({
   };
   const service = createService({
     initializeModelRouting,
+    readModelRoutingWorkflows,
     project,
     publishSessionChanged,
     terminals: {
@@ -2934,6 +2936,61 @@ for (const chooseBranch of [false, true]) {
   });
 }
 
+test("implicit new-session workflow matches the available picker default and preserves explicit routing", async () => {
+  await withTemporaryRoot(async root => {
+    const actor = { username: "learner", role: "member" };
+    const selected = { ...initialPlanSelection, engineId: "claude", agentId: "claude", modelProviderId: "anthropic", modelId: "opus" };
+    for (const explicit of [false, true]) {
+      const calls = [];
+      const harness = sessionCreationPolicyHarness({
+        projectRuntimeRoot: path.join(root, explicit ? "explicit" : "implicit"),
+        readModelRoutingWorkflows: async input => {
+          assert.equal(explicit, false, "An explicit workflow must not be replaced by an available default");
+          assert.equal(input.vibe64User, actor);
+          calls.push("workflows");
+          return { ok: true, workflows: [{ engineId: "opencode", available: false },
+            { engineId: "claude", available: true }, { engineId: "codex", available: true }] };
+        },
+        resolveAssistantPurpose: async (input, options) => {
+          assert.equal(options.vibe64User, actor);
+          assert.equal(input.workflowEngineId, explicit ? "opencode" : "claude");
+          calls.push("resolve");
+          return explicit ? { available: false, reasonCode: "vibe64_assistant_routing_invalid", message: "Explicit workflow unconfigured" }
+            : { available: true, effectiveSelection: selected, connectionIdentity: "learner-claude" };
+        },
+        requireAssistantSelectionAccess: async (selection, options) => {
+          assert.deepEqual(selection, selected);
+          assert.equal(options.vibe64User, actor);
+          assert.equal(options.expectedConnectionIdentity, "learner-claude");
+          calls.push("access");
+        }
+      });
+      const result = await harness.service.createSession({ vibe64User: actor, ...(explicit ? { workflowEngineId: "opencode" } : {}) });
+      assert.equal(result.ok, !explicit, result.error);
+      assert.deepEqual(calls, explicit ? ["resolve"] : ["workflows", "resolve", "access"]);
+      assert.equal(harness.creationInputs.length, explicit ? 0 : 1);
+      if (explicit) assert.equal(result.code, "vibe64_assistant_routing_invalid");
+      else assert.equal(JSON.parse(harness.creationInputs[0].metadata.assistant_routing).workflowEngineId, "claude");
+    }
+  });
+});
+
+test("implicit workflow failures create no session and do not initialize an unavailable provider", async () => {
+  for (const view of [{ ok: true, workflows: [] }, { ok: true, workflows: [{ engineId: "opencode", available: false }] },
+    { ok: false, code: "routing_read_failed", error: "Routing unavailable" }]) {
+    const harness = sessionCreationPolicyHarness({
+      readModelRoutingWorkflows: async () => view,
+      initializeModelRouting: () => assert.fail("No admitted workflow to initialize"),
+      resolveAssistantPurpose: () => assert.fail("No admitted workflow to resolve")
+    });
+    const result = await harness.service.createSession();
+    assert.equal(result.ok, false);
+    assert.equal(result.code, view.ok ? "vibe64_assistant_workflow_unavailable" : view.code);
+    assert.equal(harness.runtimeCreations, 0);
+    assert.equal(harness.creationInputs.length, 0);
+  }
+});
+
 test("unavailable routing and failed initialization do not create a session", async () => {
   for (const failedSetup of [true, false]) {
     const harness = sessionCreationPolicyHarness({
@@ -3672,6 +3729,7 @@ test("new sessions publish running workspace preparation and its eventual result
   });
   const service = createService({
     initializeModelRouting: async () => ({ ok: true }),
+    readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
     project: {
       async createRuntime() {
         return runtime;
@@ -4175,6 +4233,10 @@ async function learningSessionCreationFixture(root, { denied = false, publishFai
     return runtime;
   };
   const service = createService({ project,
+    readModelRoutingWorkflows: async ({ vibe64User }) => {
+      assert.equal(vibe64User, actor);
+      return { ok: true, workflows: [{ engineId: "opencode", available: true }] };
+    },
     initializeModelRouting: async input => {
       assert.equal(input.vibe64User, actor);
       assert.deepEqual(input.engineIds, ["opencode"]);
@@ -4935,7 +4997,22 @@ test("source-bearing Learning creation retains the original source context, poli
         repository: "example/learn-intro", commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } } };
     const setup = [];
     const publications = [];
+    const teacher = { ...initialPlanSelection, engineId: "claude", agentId: "claude", modelProviderId: "anthropic", modelId: "opus" };
     const f = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(root),
+      readModelRoutingWorkflows: async input => {
+        assert.equal(input.vibe64User, actor);
+        return { ok: true, workflows: [{ engineId: "opencode", available: false }, { engineId: "claude", available: true }] };
+      },
+      resolveAssistantPurpose: async (input, options) => {
+        assert.deepEqual(input, { purpose: "junior", workflowEngineId: "claude" });
+        assert.equal(options.vibe64User, actor);
+        return { available: true, effectiveSelection: teacher, connectionIdentity: "learning-account" };
+      },
+      requireAssistantSelectionAccess: async (selection, options) => {
+        assert.deepEqual(selection, teacher);
+        assert.equal(options.vibe64User, actor);
+        assert.equal(options.expectedConnectionIdentity, "learning-account");
+      },
       startWorkspaceSetup: input => { setup.push(input); return { completion: null }; },
       publishSessionChanged: async (id, value) => publications.push({ id, value }) });
     // Preserve this ORIGINAL Sessions policy fixture; immutable persisted
@@ -4946,7 +5023,9 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(result.ok, true, result.error);
     assert.equal(f.creationInputs.length, 1);
     assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
-    assertInitialPlanMetadata(f.creationInputs[0].metadata, actor.username, "junior");
+    assert.equal(f.creationInputs[0].metadata.created_by, actor.username);
+    assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing), { mode: "junior", review: false, workflowEngineId: "claude" });
+    assert.deepEqual(vibe64AssistantSelectionFromMetadata(f.creationInputs[0].metadata), teacher);
     assert.equal(setup.length, 1);
     assert.equal(setup[0].runtime, f.runtime);
     assert.equal(setup[0].session.sessionId, `training-${scope.attemptId}`);

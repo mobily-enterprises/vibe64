@@ -312,6 +312,12 @@ roles as part of explicit creation. The central resolver chooses the user's
 accessible Senior destination before creating the workspace, and its credential
 identity is checked again. Native selection and the intended workflow are stored
 separately, including when a member starts on another orchestrator's Shared backup.
+Implicit creation requests use Accounts' existing ordered available-workflow
+projection, matching the normal picker default. Explicit and retained workflows
+are never substituted. The same original role resolver and connection checks
+admit the destination afterward; Learning still requests Junior. An unavailable
+workflow fails before session creation, preserving an already reserved lesson
+attempt for its existing Resume path. There is no Training-specific routing fork.
 The optional hosted branch choice is independent of that AI workflow and both
 choices survive creation. Opening a pull request as a session keeps the selected
 workflow and uses the PR head, without offering a second branch destination.
