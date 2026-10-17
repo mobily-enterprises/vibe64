@@ -637,13 +637,18 @@ assistant-visible focus. The hidden Learning client identity stays on that live
 connection. The existing `learning-watch.start` action is discoverable to
 Colleague and, for an interactive request, derives all target identity from that
 connection instead of accepting model-selected browser IDs. Human Start polling
-continues through the same action with its explicit binding. `watches.read`,
+continues through the same action with its explicit binding, mapping the task's
+project slug to the action's `targetProjectSlug` field without also forwarding
+the forbidden `projectSlug` field. `watches.read`,
 `watch.pause`, `watch.resume` and `watch.cancel` therefore operate on one retained
 watch ID for both paths. Resume requires the exact current connection and reruns
 the source read; Stop suppresses pending guidance without stopping Main, the
 lesson or its application. Public status retains goal/target, timestamped latest
 observation, last accepted/duplicate guidance receipt and saved Training progress;
 none of those fields grants mutation authority or independently proves a pass.
+The dialog summarizes the watch with its question and keeps full criteria in
+collapsed native details below the controls, so a long rubric cannot push the
+pause/resume/stop controls beyond the initial viewport.
 
 A meaningful confirmed learner event or explicit bounded failure is retained as
 one pending guidance receipt by Training's watcher. That watcher, not Colleague or

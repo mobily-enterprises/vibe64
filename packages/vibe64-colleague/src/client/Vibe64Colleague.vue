@@ -666,8 +666,9 @@ async function startLearningWatch() {
   }
   pollingBusy.value = true;
   try {
+    const { projectSlug: targetProjectSlug, ...binding } = task;
     await requestColleague("/learning-watches/start", { method: "POST", body: {
-      ...task, targetProjectSlug: task.projectSlug, browserClientId: clientId, watchId: crypto.randomUUID(), ...(criterion ? { criterion } : {})
+      ...binding, targetProjectSlug, browserClientId: clientId, watchId: crypto.randomUUID(), ...(criterion ? { criterion } : {})
     } });
     pollingCriterion.value = "";
     await refresh();
@@ -889,7 +890,7 @@ onBeforeUnmount(() => {
         <section v-if="learningTask" aria-label="Current learning task polling">
           <p class="text-title-medium">Current learning task</p>
           <template v-if="learningWatch">
-            <p><strong>{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.learningTask?.criterion }}</p>
+            <p><strong>{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.question }}</p>
             <p>{{ learningWatch.projectSlug || 'Source-less lesson' }} · {{ learningWatch.sessionId }}</p>
             <p v-if="learningWatch.latestObservation">
               Latest: {{ learningWatch.latestObservation.control }} · {{ learningWatch.latestObservation.workspace?.learningView }}
@@ -921,6 +922,10 @@ onBeforeUnmount(() => {
               </v-btn>
               <v-btn variant="text" min-height="48" @click="changeWatch(learningWatch, 'cancel')">Stop</v-btn>
             </div>
+            <details v-if="learningWatch.learningTask?.criterion" class="vibe64-colleague__watch-criteria">
+              <summary>Task criteria</summary>
+              <p>{{ learningWatch.learningTask.criterion }}</p>
+            </details>
           </template>
           <template v-else>
             <p v-if="learningTask.reference">Watch the current delivered lesson question and report meaningful progress.</p>
@@ -1064,6 +1069,8 @@ onBeforeUnmount(() => {
 .vibe64-colleague__watch-details ul { list-style: none; padding: 0; }
 .vibe64-colleague__watch-details li { padding-block: 12px; }
 .vibe64-colleague__watch-details li + li { border-top: 1px solid rgb(var(--v-theme-outline-variant)); }
+.vibe64-colleague__watch-criteria { margin-top: 12px; }
+.vibe64-colleague__watch-criteria p { white-space: pre-wrap; }
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }

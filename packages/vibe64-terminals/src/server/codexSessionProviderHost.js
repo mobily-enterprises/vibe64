@@ -119,7 +119,11 @@ function createCodexSessionProviderHost(host) {
             const binding = params.hostContext
               ? { promptContext: params.hostContext, workdir: params.cwd }
               : registry.get(threadId);
-            return binding ? vibe64ConversationInstructions(binding) : undefined;
+            const instructions = binding ? await vibe64ConversationInstructions(binding) : undefined;
+            if (learningRuntime?.learningScope?.noExercise === false) {
+              return [instructions, await learningRuntime.getLearningInstructions(sessionId)].filter(Boolean).join("\n\n");
+            }
+            return instructions;
           },
           bindThreadContext: async (threadId, hostContext, params) => {
             if (await learningSessionExecutionRoot(learningRuntime, sessionId)) return;

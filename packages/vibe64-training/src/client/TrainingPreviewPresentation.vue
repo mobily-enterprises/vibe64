@@ -11,6 +11,7 @@ import { useTrainingPreviewRegistration } from "./useTrainingPreviewRegistration
 
 const props = defineProps({
   active: Boolean,
+  agentConnectionStatus: { type: String, default: "" },
   lessonsAvailable: Boolean,
   appAvailable: { type: Boolean, default: true },
   attemptId: { type: String, default: "" },
@@ -45,7 +46,7 @@ async function showApp(event) {
       }
       appOpened.value = true;
     }
-    mode.value = "app";
+    if (!splitPaneMode.value) mode.value = "app";
     collapsed.value = false;
     if (ticket) void owner.finish(ticket);
   } catch (error) {
@@ -117,8 +118,9 @@ watch(() => props.lessonsAvailable, enabled => {
   if (!enabled && mode.value === "lessons" && props.appAvailable) mode.value = "app";
 });
 watch(() => [splitPaneMode.value, props.workspaceActive, props.active, props.sessionId,
-  props.learningBinding?.sessionId], ([split, workspace, active]) => {
+  props.learningBinding?.sessionId, props.agentConnectionStatus], ([split, workspace, active]) => {
   if (split && workspace && active && props.appAvailable && props.learningBinding?.noExercise === false &&
+      !["initializing", "reconciling"].includes(props.agentConnectionStatus) &&
       !appOpened.value && !appOpening.value) void showApp(null);
 }, { immediate: true });
 let pausing = null;

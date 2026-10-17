@@ -313,6 +313,7 @@ const response = await requestSocket({
     cwd: process.cwd(),
     generationId,
     inputBase64,
+    parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
     sessionId,
     token
   }
@@ -675,6 +676,7 @@ function createCodexGitCommandService({
   env = process.env,
   logger = null,
   projectService,
+  runSessionOperation = null,
   runGatewayCommand = runVibe64Command
 } = {}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
@@ -814,7 +816,7 @@ function createCodexGitCommandService({
       if (stage === "command") {
         commandSubmitted = true;
       }
-      return gatewayCommandRunner({ ...request, timeout });
+      return gatewayCommandRunner({ ...request, timeout, signal: input.signal });
     };
     if (!CODEX_GIT_COMMAND_WRAPPER_NAMES.includes(command)) {
       return finish(responseError("This command path exposes git, gh and vibe64-github.", "vibe64_codex_git_command_invalid"));
@@ -986,7 +988,9 @@ function createCodexGitCommandService({
 
   return {
     logger,
-    run,
+    run: input => typeof runSessionOperation === "function"
+      ? runSessionOperation(input, options => run({ ...input, ...options }))
+      : run(input),
     sessionWorkSaveContext
   };
 }

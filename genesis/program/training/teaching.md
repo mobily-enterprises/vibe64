@@ -487,7 +487,13 @@ validate the exact target; the guidance does not alter catalogue or learner stat
 original App Preview slot alongside the unchanged `TrainingVisualPlayer.vue`.
 The original Autopilot Preview tree supplies its App body. Both views remain
 mounted under `v-show`; switching and minimising do not replace an App iframe or
-stop its process. The original `Vibe64ProjectOnboarding` displayed Preview owner
+stop its process. Opening the split Workspace pane does not overwrite the
+retained Lessons/Presentation selection; returning to Learning restores that
+content. Automatic practice opening waits for the existing assistant connection
+initialization/reconciliation to settle, including failure or unavailable state,
+so those initial writes do not compete for the original preparation barrier.
+This is view sequencing, not a new admission lock or an AI-health prerequisite.
+The original `Vibe64ProjectOnboarding` displayed Preview owner
 publishes an optional live `presentation` handle, with no second owner registry.
 
 The handle opens one exact attempt/declared visual through the signed-in host's
@@ -1092,7 +1098,13 @@ Access revoked during that awaited source read cannot reuse an earlier grant.
 It does not alias the source to a private
 source-less native directory. The existing native owners retain Genesis/Env,
 source setup and Git checkpoints. The pinned teaching system instructions remain
-separate from the original source prompt.
+separate from the original source prompt. Codex's existing runtime options retain
+the authorized Learning runtime for both source-less and practice sessions. Its
+original provider instruction reader keeps Genesis guidance for a practice
+source and appends the freshly validated pinned lesson brief, matching Claude's
+existing composition. A source-less lesson still replaces source guidance. The
+source-less execution-root helper continues to govern cwd isolation only; an
+empty result for a practice source must not suppress its teaching instructions.
 
 For a practice visual, the existing Main coordinator returns transient exact
 project/session facts from the fresh original Project grant. Presentation admission
@@ -1286,3 +1298,15 @@ comparison still fence delivery. The common admitted-request `assertCurrent`
 remains unchanged and is valid before settlement resolves that request; completed
 native inactivity alone does not retire it. Only that original checkpoint may
 promote delivery; it does not grade the question or repair old history.
+
+
+The original managed session-command owner also carries its finite WRITE scope
+across authenticated nested Git calls. Its existing active-run record holds the
+execution owner's returned identity and already-admitted helper promises; the Git
+wrapper forwards that identity. A child arriving during launch joins the original
+launch completion before matching the same session and active execution. Other
+calls require fresh saved-attempt admission. The shell keeps preparation.lock
+until admitted children drain, including helpers backgrounded before Bash exits;
+its abort signal reaches the original Git gateway. Finished identities grant no
+retained authority. The real local managed Bash → Git → Genesis regression and
+original preparation barrier prove this alongside ordinary Git-wrapper tests.

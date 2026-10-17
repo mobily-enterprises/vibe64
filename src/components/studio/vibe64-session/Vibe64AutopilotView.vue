@@ -808,6 +808,7 @@
         role="tabpanel"
       >
         <TrainingPreviewPresentation
+          :agent-connection-status="props.agentConnectionStatus"
           :lessons-available="props.lessonsAvailable"
           :app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
           :attempt-id="props.learningAttemptId"

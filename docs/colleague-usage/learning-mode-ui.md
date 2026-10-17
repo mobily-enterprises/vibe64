@@ -15,6 +15,11 @@ A course labelled **Preview course** is not available through ordinary Start,
 even when its individual lessons are published. It needs an authorized author
 trial or a released, enabled course; changing views does not bypass that rule.
 
+Practice commands and their Git operations stay with the saved lesson until they
+finish. If a command is still finishing, wait before ending the lesson. After
+cancellation or End, an old command cannot restart work; resume the same saved
+attempt only when you intend to continue.
+
 When Learning first creates its teacher session, it uses the first available AI
 workflow shown by the normal session picker, then checks your current Junior
 model and account access. It does not assume OpenCode is configured. You can
@@ -22,13 +27,25 @@ change the teacher's AI through the normal chat model controls afterward. If no
 workflow is available, connect/configure one in **AI Accounts → Model routing**,
 then resume the same saved lesson or author trial; do not start a replacement.
 
+The Main teacher uses the saved lesson's exact instructions with Codex, Claude
+or OpenCode. In a practice project those instructions accompany the project's
+normal development guidance; switching AI does not turn the lesson into an
+ordinary coding task. The teacher should give the declared learner task and wait
+for your own answer or action. It must not ask you to reconstruct the installed
+lesson, invent an observation or count its own demonstration as your pass.
+
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a
 lesson or reloading the page. The right side gains **Workspace** and **Learning**
 tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs and all
 applicable Dashboard tools; **Learning** reveals the existing **Lessons** and
-**Presentation** controls. A supervised project opens in Workspace by default.
+**Presentation** controls. Returning from Workspace keeps the selected Lessons
+or Presentation content visible without requiring another click. A supervised
+project opens in Workspace by default. On reopening, Workspace waits for the
+assistant's initial connection check to settle before opening the saved practice
+runtime. It still opens if that check reports an unavailable or failed AI;
+repairing the AI connection is separate from using the practice Preview.
 A source-less lesson disables Workspace and explains that it has no project,
 instead of showing a remembered Working project. On phones and tablets, the same
 two choices remain available around the stacked chat and right-hand content.
@@ -47,11 +64,14 @@ demonstration rather than evidence that you performed an assessed step.
 
 Use Colleague's eye button to manage polling for the lesson task currently open
 in this browser. If Main has delivered a lesson question, **Start polling** uses
-that exact question and pinned lesson. Otherwise, enter one bounded task in
+that exact question and pinned lesson, including its current practice project;
+you do not need to enter the project again. Otherwise, enter one bounded task in
 **Task to watch**, then start it. The compact details dialog shows the task as
 **active**, **paused**, or **unavailable**, its exact target, and its latest
 structured observation and time, last delivered help, and any saved assessment
-outcome. You can instead tell Colleague “Watch me while I do this”; that direct
+outcome. Expand **Task criteria** below the watch controls to read the full
+criteria; long criteria stay collapsed so **Pause**, **Resume** and **Stop** remain
+easy to reach. You can instead tell Colleague “Watch me while I do this”; that direct
 request starts the same watch and the eye dialog shows the same state. Asking how
 polling works only gets an explanation. Ask Colleague to list, pause, resume or
 stop a watch when you do not want to use the buttons. **Pause** retains the cursor,

@@ -13604,6 +13604,10 @@ test("actual Codex Main retains collected practical evidence through repeated br
     const ready = await learning.runLearningOperation(() => terminalService.ensureAgentSession(sessionId, { runtime, vibe64User: f.actor }));
     assert.equal(ready.ok, true, JSON.stringify(ready));
     const nativeThreadId = ready.thread.id;
+    const readInstructions = captures.providerOptions.at(-1).readInstructions;
+    const instructions = await learning.runLearningOperation(() => readInstructions({}, nativeThreadId));
+    assert.match(instructions, /Teach only the installed pinned practical lesson/u,
+      "the original Codex instruction callback must include the practice lesson, not only Genesis guidance");
     const authority = { sessionId, learningAttemptId: f.attemptId, actorId: "42", requestContext };
     const canonical = await learning.runLearningOperation(() => terminalService.openBrowserConversation(sessionId, {
       runtime, vibe64User: f.actor, browserAuthority: authority

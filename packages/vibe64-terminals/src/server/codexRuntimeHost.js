@@ -322,7 +322,7 @@ function createCodexSessionRuntimeHost({
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
       workdir: effectiveWorkdir
-    }), ...(learningRoot ? { learningRuntime: effectiveRuntime } : {}),
+    }), ...(effectiveRuntime.learningScope ? { learningRuntime: effectiveRuntime } : {}),
       routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
       ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && normalizeText(metadata.renewal_id)
         ? { renewalId: normalizeText(metadata.renewal_id) } : {}) };

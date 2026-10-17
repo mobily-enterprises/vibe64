@@ -12,6 +12,10 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
 import { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
+import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
+import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
+import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
 // barrels need only presentation placeholders; all JavaScript stays installed.
@@ -714,6 +718,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const notices = [];
   const events = [];
   const requests = [];
+  const focusUpdates = [];
   const listeners = new Map();
   const subscriptions = new Map();
   let canonical = conversationSnapshot();
@@ -729,11 +734,17 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     },
     off(event, listener) { listeners.get(event)?.delete(listener); },
     emit(event, input) {
+      if (event === COLLEAGUE_FOCUS_RELEASE) return;
       assert.equal(event, ASSISTANT_CONVERSATION_UNSUBSCRIBE);
       subscriptions.delete(input.subscriptionId);
     },
     timeout() {
       return { emit(event, input, acknowledge) {
+        if (event === COLLEAGUE_FOCUS_UPDATE) {
+          focusUpdates.push(JSON.parse(JSON.stringify(input)));
+          acknowledge(null, { ok: true });
+          return;
+        }
         assert.equal(event, ASSISTANT_CONVERSATION_SUBSCRIBE);
         const subscription = { ...input, epoch: crypto.randomUUID(), revision: 0 };
         subscriptions.set(input.subscriptionId, subscription);
@@ -797,6 +808,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   };
   const module = { exports: {} };
   const imports = {
+    "./colleagueFocusBinding.js": { createColleagueFocusBinding },
     vue,
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
@@ -868,7 +880,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
     if (previousConfig === undefined) delete globalThis.__JSKIT_CLIENT_APP_CONFIG__; else globalThis.__JSKIT_CLIENT_APP_CONFIG__ = previousConfig;
   });
-  return { state, notices, events, requests, socket, subscriptions, publish, setConversation, display: element.conversation,
+  return { state, notices, events, requests, focusUpdates, socket, subscriptions, publish, setConversation, display: element.conversation,
     reconnect() {
       socket.connected = false;
       dispatch("disconnect");
@@ -2228,21 +2240,25 @@ test("Learning polling publishes its exact private browser binding and uses the 
   const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], watches: [], status: "ready" }),
     props, vue.ref({ actorKey: "person-a" }), null, null, gestureChannel);
   await flush();
-  const focusRequest = view.requests.find(({ url }) => url.endsWith("/focus"));
-  assert.deepEqual(focusRequest.options.body.focus, props.focus);
-  assert.deepEqual(focusRequest.options.body.learningTask, task);
-  assert.equal(Object.hasOwn(focusRequest.options.body.focus, "learningClientId"), false,
+  const focusRequest = view.focusUpdates.at(-1);
+  assert.deepEqual(focusRequest.focus, props.focus);
+  assert.deepEqual(focusRequest.learningTask, task);
+  assert.equal(Object.hasOwn(focusRequest.focus, "learningClientId"), false,
     "the assistant-visible focus does not receive the transient Learning client identity");
   view.state.pollingCriterion.value = "Explain the visible result.";
   assert.equal(await view.state.startLearningWatch(), true);
   const startRequest = view.requests.find(({ url }) => url.endsWith("/learning-watches/start"));
-  assert.deepEqual(startRequest.options.body, { ...task, targetProjectSlug: "practice",
+  const action = createColleagueActions({}).find(item => item.id === "vibe64.colleague.learning-watch.start");
+  assert.doesNotThrow(() => validateSchemaPayload(action.input, startRequest.options.body),
+    "the actual browser payload must pass the original action's strict input contract");
+  const { projectSlug, ...binding } = task;
+  assert.deepEqual(startRequest.options.body, { ...binding, targetProjectSlug: projectSlug,
     browserClientId: view.state.clientId, watchId: startRequest.options.body.watchId,
     criterion: "Explain the visible result." });
   gestureChannel.value = { pollingTask: () => null, setPollingWatch() {}, clearPollingWatch() {} };
   await flush();
-  const latestFocus = view.requests.filter(({ url }) => url.endsWith("/focus")).at(-1);
-  assert.equal(Object.hasOwn(latestFocus.options.body, "learningTask"), false,
+  const latestFocus = view.focusUpdates.at(-1);
+  assert.equal(Object.hasOwn(latestFocus, "learningTask"), false,
     "leaving the task clears the private browser binding through the original focus owner");
 });
 

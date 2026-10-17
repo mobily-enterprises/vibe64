@@ -749,7 +749,27 @@ function createAgentSessionCommandService({
     }, ["read", "history"].includes(input.operation) ? "observe" : "write");
   }
 
-  async function execute(input = {}, context = {}) {
+  async function runHelperOperation(input, operation) {
+    const sessionId = normalizeText(input.sessionId);
+    const binding = sessionBindings.get(sessionId);
+    if (!binding?.learning) return operation({});
+    const parent = normalizeText(input.parentExecutionId);
+    // The execution owner allocates its identity during launch. A fast child
+    // may reach this socket before runCommand has returned that identity.
+    if (parent) await Promise.all([...(sessionRuns.get(sessionId) || [])].map(value => value.launch?.promise));
+    const run = parent && [...(sessionRuns.get(sessionId) || [])].find(value => value.executionId === parent);
+    if (!run) return runInSessionProject(sessionId, () => operation({}), "write", { waitForAdmission: true });
+    run.abortController.signal.throwIfAborted();
+    if (!run.acceptingHelpers) {
+      throw vibe64Error("The owning session command has finished.", "vibe64_agent_session_command_finished");
+    }
+    const child = Promise.resolve().then(() => runWithProjectRequestContext(run.projectContext,
+      () => operation({ signal: run.abortController.signal })));
+    run.helpers.add(child);
+    try { return await child; } finally { run.helpers.delete(child); }
+  }
+
+  async function execute(input = {}, context = {}, run) {
     input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
     if (!command) {
@@ -822,6 +842,8 @@ function createAgentSessionCommandService({
       timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
     });
     const executionId = normalizeText(started?.execution?.id);
+    run.executionId = executionId;
+    run.launch.resolve();
     if (started?.ok !== true || !executionId) {
       await rm(runRoot, { force: true, recursive: true }).catch(() => null);
       return responseError(
@@ -863,7 +885,8 @@ function createAgentSessionCommandService({
     const sessionId = normalizeText(input.sessionId);
     const abortController = new AbortController();
     const runs = sessionRuns.get(sessionId) || new Set();
-    runs.add(abortController);
+    const activeRun = { abortController, executionId: "", projectContext: null, acceptingHelpers: false, helpers: new Set() };
+    runs.add(activeRun);
     sessionRuns.set(sessionId, runs);
     const abort = () => abortController.abort(input.signal?.reason);
     input.signal?.addEventListener?.("abort", abort, { once: true });
@@ -878,10 +901,20 @@ function createAgentSessionCommandService({
       }
       result = await runInSessionProject(
         sessionId,
-        (context) => execute({
-          ...input,
-          signal: abortController.signal
-        }, context), "write", { signal: abortController.signal, waitForAdmission: true }
+        async (context) => {
+          activeRun.launch = Promise.withResolvers();
+          activeRun.projectContext = currentProjectRequestContext();
+          activeRun.acceptingHelpers = true;
+          try {
+            return await execute({ ...input, signal: abortController.signal }, context, activeRun);
+          } finally {
+            // End cannot acquire WRITE until this command's admitted children drain.
+            activeRun.acceptingHelpers = false;
+            activeRun.launch.resolve();
+            await Promise.allSettled([...activeRun.helpers]);
+            activeRun.projectContext = null;
+          }
+        }, "write", { signal: abortController.signal, waitForAdmission: true }
       );
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {
@@ -891,7 +924,7 @@ function createAgentSessionCommandService({
       result = responseError(payload.error, payload.code);
     } finally {
       input.signal?.removeEventListener?.("abort", abort);
-      runs.delete(abortController);
+      runs.delete(activeRun);
       if (sessionRuns.get(sessionId) === runs && runs.size === 0) {
         sessionRuns.delete(sessionId);
       }
@@ -913,8 +946,8 @@ function createAgentSessionCommandService({
     const normalizedSessionId = normalizeText(sessionId);
     const binding = sessionBindings.get(normalizedSessionId);
     sessionBindings.delete(normalizedSessionId);
-    for (const abortController of sessionRuns.get(normalizedSessionId) || []) {
-      abortController.abort();
+    for (const run of sessionRuns.get(normalizedSessionId) || []) {
+      run.abortController.abort();
     }
     sessionRuns.delete(normalizedSessionId);
     const executions = [...(sessionExecutions.get(normalizedSessionId) || [])];
@@ -956,6 +989,7 @@ function createAgentSessionCommandService({
   return Object.freeze({
     logger,
     bindSession,
+    runHelperOperation,
     closeAllForSession,
     renameSession,
     messageProject,

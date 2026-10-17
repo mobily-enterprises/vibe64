@@ -1140,6 +1140,7 @@ function createService({
     authorizeActorAccess: authorizeCodexGitActorAccess,
     env,
     logger,
+    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation),
     projectService
   });
   let agentPreviewCommand;

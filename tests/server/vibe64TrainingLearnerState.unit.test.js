@@ -2811,6 +2811,30 @@ test("configured practice Learning binds the saved actual initial Main session a
   // called after that original scope expires (the hosted author-trial failure).
   const { createAgentSessionCommandService, prepareAgentSessionCommand } = await import(
     "../../packages/vibe64-terminals/src/server/agentSessionCommand.js");
+  // Use the original native runner and Git socket, not a mock process, for
+  // Genesis's nested Git access after the creating request has completed.
+  const { createCodexGitCommandService, prepareCodexGitCommand } = await import(
+    "../../packages/vibe64-terminals/src/server/codexGitCommand.js");
+  const actualCommands = createAgentSessionCommandService({ projectService: project });
+  t.after(() => actualCommands.closeAllForSession(created.sessionId));
+  let actualGit, actualShell;
+  await context.runLearningOperation(async () => {
+    actualGit = await prepareCodexGitCommand({
+      commandService: createCodexGitCommandService({ projectService: project,
+        runSessionOperation: actualCommands.runHelperOperation }),
+      env: { ...process.env, VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(f.root, "attachments") },
+      sessionId: created.sessionId, stateRoot: path.join(f.root, "actual-git")
+    });
+    actualShell = await prepareAgentSessionCommand({ commandService: actualCommands,
+      sessionId: created.sessionId, wrapperHostDir: actualGit.hostWrapperDir });
+  });
+  const actualCommand = command => actualCommands.run({ sessionId: created.sessionId,
+    cwd: created.sourcePath, commandBase64: Buffer.from(command).toString("base64url"),
+    env: { ...actualGit.env, ...actualShell.env } });
+  const actualGitResult = await actualCommand("git rev-parse --show-toplevel");
+  const actualGenesisResult = await actualCommand("genesis stack add nodejs --json");
+  assert.equal(actualGitResult.ok, true, actualGitResult.output || actualGitResult.error);
+  assert.equal(actualGenesisResult.ok, true, actualGenesisResult.output || actualGenesisResult.error);
   let commandCalls = 0;
   const earlyStarted = Promise.withResolvers();
   const earlyFinish = Promise.withResolvers();
@@ -2820,9 +2844,14 @@ test("configured practice Learning binds the saved actual initial Main session a
       assert.equal(core.currentPracticeProjectScope().access, "write");
       assert.equal(request.cwd, created.sourcePath);
       commandCalls++;
-      if (commandCalls === 2) { earlyStarted.resolve(); await earlyFinish.promise; }
-      await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "fresh practice command\n");
-      await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, "0\n");
+      const finish = async () => {
+        await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "fresh practice command\n");
+        await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, "0\n");
+      };
+      if (commandCalls === 2) {
+        earlyStarted.resolve(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH);
+        void earlyFinish.promise.then(finish);
+      } else await finish();
       return { ok: true, execution: { id: `practice-command-${commandCalls}` } };
     },
     async stopOwnedExecutions() { return { supported: true, processExitProofs: [] }; }
@@ -2853,13 +2882,29 @@ test("configured practice Learning binds the saved actual initial Main session a
     await assert.rejects(context.runLearningOperation(() => assert.fail("no nested writer")),
       { code: "VIBE64_TRAINING_PREPARATION_BUSY" }, "ordinary nested calls still refuse rather than self-wait");
   });
-  await earlyStarted.promise;
+  const earlyResultPath = await earlyStarted.promise;
+  const helperEntered = Promise.withResolvers();
+  const helperFinish = Promise.withResolvers();
+  const helper = commandService.runHelperOperation({ sessionId: created.sessionId, parentExecutionId: "practice-command-2" }, async () => {
+    assert.doesNotThrow(assertProjectEffectAdmission);
+    helperEntered.resolve();
+    await helperFinish.promise;
+    assert.doesNotThrow(assertProjectEffectAdmission, "the original finite WRITE scope remains alive until the child drains");
+  });
+  await helperEntered.promise;
   try {
-    await assert.rejects(f.state.runPreparationExclusive({ actor: f.actor, attemptId },
-      () => assert.fail("End cannot enter while the managed command is running")),
-    { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
-  } finally {
     earlyFinish.resolve();
+    // The fake native shell publishes its actual completion file, while the
+    // independently admitted child still owns work under that same command.
+    while (!await fs.access(earlyResultPath).then(() => true, () => false)) await new Promise(resolve => setImmediate(resolve));
+    await assert.rejects(f.state.runPreparationExclusive({ actor: f.actor, attemptId },
+      () => assert.fail("End cannot enter after Bash exits but its helper is still running")),
+    { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+    await assert.rejects(commandService.runHelperOperation({ sessionId: created.sessionId, parentExecutionId: "different-execution" },
+      () => assert.fail("an unrelated execution cannot borrow active WRITE")), { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+  } finally {
+    helperFinish.resolve();
+    await helper;
   }
   assert.equal((await earlyCommand).ok, true);
   assert.equal(commandCalls, 2, "the command launches only after the exact owner's lock release");
@@ -3011,6 +3056,10 @@ test("configured practice Learning binds the saved actual initial Main session a
     f.state.runPreparationExclusive = originalExclusive;
   }
   assert.equal((await endedCommand).code, "VIBE64_TRAINING_ATTEMPT_MISSING");
+  await assert.rejects(promisify(execFile)(path.join(actualGit.hostWrapperDir, "git"), ["rev-parse", "--show-toplevel"], {
+    cwd: created.sourcePath, env: { ...process.env, ...actualGit.env, VIBE64_EXECUTION_ID: actualGitResult.execution.id,
+      VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID: String(process.pid) }
+  }), error => error.code === 1 && /no matching active reservation/u.test(error.stderr), "completed execution identity cannot revive an ended attempt");
   await assert.rejects(runPracticeCommand(), error => error.code === 1 && /no matching active reservation/u.test(error.stderr));
   assert.equal(commandCalls, 2, "ending the attempt denies subsequent effects from the still-live helper");
   const history = await commandService.sessionStatus(created.sessionId);

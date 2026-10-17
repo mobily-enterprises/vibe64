@@ -120,7 +120,7 @@ const ActualAutopilotPreview = Vue.defineComponent({
   props: { model: Object, requestTemporaryAi: Function },
   setup({ model, requestTemporaryAi }) {
     const learningPaneActive = Vue.computed(() => model.splitPaneFixture
-      ? model.lessonsAvailable && (model.learningView === "learning" || !(model.sourceWorkspaceAvailable ?? model.appAvailable))
+      ? model.lessonsAvailable && (model.learningView === "learning" || !model.appAvailable)
       : null);
     const normalWorkspaceActive = Vue.computed(() => model.splitPaneFixture
       ? !model.lessonsAvailable || !learningPaneActive.value
@@ -174,11 +174,11 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null, learningPaneActive = null, workspaceActive = null, learningView = null } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceApp = false, holdPracticeOpen = false, learnerGestureOwner = null, learningPaneActive = null, workspaceActive = null, learningView = null, splitPaneFixture = false } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null,
-    learningPaneActive, workspaceActive, learningView: learningView ?? (lessonsAvailable ? "learning" : "workspace") });
+    learningPaneActive, workspaceActive, splitPaneFixture, learningView: learningView ?? (lessonsAvailable ? "learning" : "workspace") });
   if (practiceApp) {
     props.sourceWorkspaceAvailable = false;
     props.sessionId = "saved-practice-initial";
@@ -1643,6 +1643,44 @@ it("actual practice App keeps Learning admission and Main presentation while sho
     await expect(presentation.open({ attemptId, visualId: "alternate" })).rejects.toThrow();
     expect(fixture.visualReads).toHaveLength(0);
     expect(fixture.reads).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+it.each(["connected", "failed", "unavailable"])("opens the practice workspace after assistant bootstrap settles as %s", async status => {
+  const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true, lessonsAvailable: true,
+    appAvailable: true, attemptId: "12345678-1234-4234-8234-123456789abc", splitPaneFixture: true });
+  try {
+    fixture.props.agentConnectionStatus = "initializing";
+    fixture.props.learningView = "workspace";
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(fixture.practiceOpens).toHaveLength(0);
+    fixture.props.agentConnectionStatus = "reconciling";
+    await Vue.nextTick();
+    expect(fixture.practiceOpens).toHaveLength(0);
+    fixture.props.agentConnectionStatus = status;
+    await vi.waitFor(() => expect(fixture.practiceOpens).toHaveLength(1));
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
+  } finally { fixture.close(); }
+});
+
+it("returns to the selected Lessons content after opening the split practice workspace", async () => {
+  const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true, lessonsAvailable: true,
+    appAvailable: true, attemptId: "12345678-1234-4234-8234-123456789abc", splitPaneFixture: true });
+  try {
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    const picker = findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot");
+    fixture.props.learningView = "workspace";
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
+    fixture.props.learningView = "learning";
+    await Vue.nextTick();
+    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot")).toBe(picker);
+    expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
   } finally { fixture.close(); }
 });
 
