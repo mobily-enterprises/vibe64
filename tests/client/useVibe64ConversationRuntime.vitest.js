@@ -1231,3 +1231,24 @@ it.each([false, true])("keeps a visual transaction through the routed reader rep
     expect(original.available.value).toBe(false);
   } finally { connection.acknowledge?.({ ok: false }); await pending; }
 });
+
+
+it("invites Main's own voice session to speak after a new typed request, never another conversation's", async () => {
+  const { provide } = await import("vue");
+  const { VIBE64_VOICE_KEY } = await import("../../packages/vibe64-voice/src/client/voiceHost.js");
+  const attempt = "9490f94a-c614-4581-9111-0debb2339ca8";
+  const inviteSpeech = vi.fn();
+  // A failed or hidden reply left this session silent (speechSuppressed).
+  const state = reactive({ binding: { conversationId: "another-conversation" }, session: { inviteSpeech } });
+  const f = fixture({ projectSlug: "", sessionId: "learning-session", learningAttemptId: attempt, learnerId: "1000",
+    sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    provideShell() { provide(VIBE64_VOICE_KEY, { controller: { state } }); } });
+  const runtime = f.runtime.value;
+  await runtime.send({ message: "Another conversation owns voice" }, { messageId: "not-invited" });
+  expect(inviteSpeech).not.toHaveBeenCalled();
+  state.binding = { conversationId: mainConversationId(runtime.identity) };
+  await runtime.send({ message: "Explain the server again" }, { messageId: "typed-after-failure" });
+  expect(inviteSpeech).toHaveBeenCalledTimes(1);
+  expect(inviteSpeech).toHaveBeenCalledWith("typed-after-failure");
+  expect(mocks.request).toHaveBeenCalledTimes(2);
+});
