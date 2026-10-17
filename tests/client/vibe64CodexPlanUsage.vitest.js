@@ -382,7 +382,7 @@ it("shows Claude allowance and native goal controls without an unsupported token
   mocks.goal = null;
 });
 
-it.each(["accepted", "failed", "uncertain", "changed-scope"])("shared Claude goal draft clears only after same-scope admission: %s", async outcome => {
+it.each(["accepted", "failed", "uncertain", "changed-scope"])("shared Claude goal menu closes and clears its draft only after same-scope admission: %s", async outcome => {
   const { createRenderer, reactive, nextTick, ssrContextKey } = await import("vue");
   mocks.resource = { data: ref(null), loadError: ref(""), reload: vi.fn() };
   const props = reactive({ active: true, session: { sessionId: "one", assistantSelection: { engineId: "claude" } },
@@ -420,14 +420,14 @@ it.each(["accepted", "failed", "uncertain", "changed-scope"])("shared Claude goa
       control().objective = "New conversation objective";
       await nextTick();
     }
-    if (["failed", "uncertain"].includes(outcome)) runtime.goalState.value.error = "Goal was not confirmed.";
+    if (outcome === "uncertain") runtime.goalState.value.error = "Goal was not confirmed.";
     finish(outcome === "failed" ? { ok: false } : outcome === "uncertain" ? false : { ok: true });
     await pending;
     await nextTick();
-    expect(control().open).toBe(true);
+    expect(control().open).toBe(outcome !== "accepted");
     expect(control().objective).toBe(outcome === "accepted" ? "" : outcome === "changed-scope"
       ? "New conversation objective" : "Finish the approved work");
-    if (["failed", "uncertain"].includes(outcome)) expect(runtime.goalState.value.error).toBe("Goal was not confirmed.");
+    expect(runtime.goalState.value.error).toBe(outcome === "uncertain" ? "Goal was not confirmed." : "");
   } finally { app.unmount(); }
 });
 
