@@ -66,7 +66,9 @@ If Claude fails while preparing a goal command, close the goal popup and choose
 delivery keeps the previous goal and permits that same command to be retried;
 it does not leave a new goal waiting to resume after restart. If delivery is
 uncertain, use the offered delivery check before resending. Reconnecting alone
-does not resend the command. These controls work the same on desktop and mobile.
+does not resend the command. When the delivery check confirms the goal command
+was accepted, its old error disappears without starting another goal. These
+controls work the same on desktop and mobile.
 
 OpenCode does not provide native goal controls. Its chat and live updates remain
 available without a goal; choose a goal-capable assistant when you need to create
