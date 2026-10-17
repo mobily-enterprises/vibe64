@@ -98,6 +98,22 @@ test("Colleague recovers connection status and reports failed commands without c
   assert.equal(view.notices.length, 1, "retained failures stay inside Colleague, not global page-load alerts");
 });
 
+test("a failed Colleague turn stays visible when the native conversation reports no error", async t => {
+  const error = "The application operation did not return a verified result. Inspect its target before requesting another execution.";
+  let failed = false;
+  // The first read seeds the native snapshot (no error); the later product read
+  // reports the failed turn, as a live unverified operation does.
+  const view = mount(t, async () => failed
+    ? { conversationId: "conversation", messages: [], status: "failed", error }
+    : { conversationId: "conversation", messages: [], status: "ready", error: "" });
+  await flush();
+  failed = true;
+  await view.state.refresh();
+  await flush();
+  assert.equal(view.state.conversation.runtime.value.snapshot.value.error, "");
+  assert.equal(view.state.turnError.value, error);
+});
+
 test("a saved Colleague account error remains inline without a global page-load alert", async t => {
   const error = "This conversation belongs to another Claude account. Reconnect that account or start a new session.";
   const view = mount(t, async () => ({ messages: [], status: "failed", error }));
