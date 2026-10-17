@@ -78,6 +78,9 @@ The approved learning direction gives the existing left-hand session agent the
 teacher role. Colleague remains the general supervisor for application assistance
 and coordination. New Learning conversations start with Junior; people can change
 the teacher through the existing Chat mode controls, and Resume keeps their choice.
+Opening a saved lesson chat checks the person's current access and exact lesson
+identity without requiring every teaching file to be healthy. Using teaching or
+exercise content still requires full validation of the pinned snapshot.
 A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain

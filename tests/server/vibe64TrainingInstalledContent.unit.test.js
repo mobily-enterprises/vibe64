@@ -682,6 +682,45 @@ test("author-preview readers retain original snapshot corruption refusal and req
 });
 
 
+test("conversation admission verifies selected identity while content use retains full fresh validation", async t => {
+  const f = await fixture(t);
+  const input = { ...f.installed.pin, lessonCode: "LESSON-01", lessonHash: f.installed.bundle.lessons[0].hash };
+  const original = await f.reader.readAdmissionIdentity(input);
+  assert.deepEqual(original.lesson, f.lesson);
+  await f.write("files/training/lessons/LESSON-02/lesson.md", "Damaged unrelated lesson", f.installed.snapshotRoot);
+  assert.deepEqual(await f.reader.readAdmissionIdentity(input), original);
+  await assert.rejects(() => f.reader.readLesson(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  await assert.rejects(() => f.reader.readExercise(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  await f.write("files/training/lessons/LESSON-01/lesson.json", { ...f.lesson, title: "Changed identity" }, f.installed.snapshotRoot);
+  await assert.rejects(() => f.reader.readAdmissionIdentity(input), /changed|invalid/u);
+});
+
+test("conversation admission refuses changed pins, manifests, draft selection and descriptor aliases", async t => {
+  const f = await fixture(t);
+  const input = { ...f.installed.pin, lessonCode: "LESSON-01", lessonHash: f.installed.bundle.lessons[0].hash };
+  for (const change of [{ topicHash: "f".repeat(64) }, { lessonHash: "f".repeat(64) }, { topicId: "../escape" }]) {
+    await assert.rejects(() => f.reader.readAdmissionIdentity({ ...input, ...change }));
+  }
+  await assert.rejects(() => f.reader.readAdmissionIdentity({ ...input, lessonCode: "LESSON-02",
+    lessonHash: f.installed.bundle.lessons[1].hash }), /draft/u);
+  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  assert.equal((await author.readAdmissionIdentity({ ...input, lessonCode: "LESSON-02",
+    lessonHash: f.installed.bundle.lessons[1].hash })).lesson.code, "LESSON-02");
+  const changedTopic = structuredClone(f.installed.bundle);
+  changedTopic.topicManifest.topic.title = "Changed metadata";
+  await f.write("bundle.json", changedTopic, f.installed.snapshotRoot);
+  await assert.rejects(() => f.reader.readAdmissionIdentity(input), /trusted identity/u);
+  const bundle = structuredClone(f.installed.bundle);
+  bundle.lessons[0].manifest.files[0].sha256 = "f".repeat(64);
+  await f.write("bundle.json", bundle, f.installed.snapshotRoot);
+  await assert.rejects(() => f.reader.readAdmissionIdentity(input), /hash|identity|manifest/u);
+  await f.write("bundle.json", f.installed.bundle, f.installed.snapshotRoot);
+  const descriptor = path.join(f.installed.snapshotRoot, "files/training/lessons/LESSON-01/lesson.json");
+  await rm(descriptor);
+  await symlink(path.join(f.source, "training/lessons/LESSON-01/lesson.json"), descriptor);
+  await assert.rejects(() => f.reader.readAdmissionIdentity(input), /alias|symlink/u);
+});
+
 // Readable catalogue titles reuse these same installed snapshot fixtures and
 // the original verified catalogue/action owners. Original reader tests above
 // remain unchanged.

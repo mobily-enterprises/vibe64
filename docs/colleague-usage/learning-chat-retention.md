@@ -48,6 +48,14 @@ not keep a lesson chat visible after your own lesson list no longer grants acces
 Colleague can explain the supported controls and offer authorized
 operations; an offer is not permission to start or repeat a lesson.
 
+Opening or reconnecting a lesson chat verifies your saved attempt and the exact
+pinned lesson identity. Damage to unrelated teaching files does not prevent
+reading that chat history. Teaching, grading and preparing exercise content still
+require full content validation; an open chat does not prove the installed course
+is healthy. If content validation fails, ask the owner to restore the exact pinned
+snapshot before continuing. A changed pin or selected lesson descriptor still
+prevents admission. Colleague can explain this recovery without changing your pin.
+
 When the Main teacher has delivered a question, a typed answer carries that
 question's reference through the same Send operation. Speech captures the
 reference when that recording starts. A later question cannot silently become

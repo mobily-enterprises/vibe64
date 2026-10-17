@@ -471,8 +471,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return release;
   }
 
-  async function verifyInstalled(pin) {
-    const lesson = await installed.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
+  async function verifyInstalled(pin, { admissionOnly = false } = {}) {
+    const read = admissionOnly && typeof installed.readAdmissionIdentity === "function"
+      ? installed.readAdmissionIdentity : installed.readLesson;
+    const lesson = await read.call(installed, { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
     if (canonicalJson(lesson.pin) !== canonicalJson(pin.topic)) {
       throw new Error("The installed topic differs from the admitted reservation pin.");
     }
@@ -530,7 +532,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     if (!attempt) {
       throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
     }
-    const lesson = await verifyInstalled(attempt.pin);
+    const lesson = await verifyInstalled(attempt.pin, { admissionOnly: true });
     if (lesson.lesson.exercise) {
       throw failure("VIBE64_TRAINING_EXERCISE_REQUIRED", "This lesson requires its real exercise workspace; it cannot use a source-less learning session.", 409);
     }
@@ -575,7 +577,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     let exercise;
     try {
       exercise = await installed.readExercise({ ...attempt.pin.topic,
-        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash, metadataOnly: true });
+        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash, metadataOnly: true,
+        admissionOnly: access === "observe" || access === "control" });
     } catch (error) {
       if (error?.code === "VIBE64_TRAINING_EXERCISE_MISSING") {
         await verifyInstalled(attempt.pin);

@@ -50,6 +50,15 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 
 ## Public contract
 
+Conversation admission reads the current saved learner/attempt and verifies the
+trusted topic-manifest hash, selected lesson-manifest hash and current selected
+descriptor bytes through the original installed-content owner. It retains draft
+policy and path/alias checks without reading unrelated teaching assets. This
+identity read is uncached and does not authorize content use: lesson delivery,
+assessment and exercise preparation retain full fresh snapshot validation.
+An unrelated damaged teaching file can therefore coexist with readable chat
+history, while changed selected identity still refuses admission.
+
 The release ships a copyable whole-topic template and its authoring guide. The
 template validates as one draft lesson, without exercise or visual capabilities;
 authors replace its placeholders and review learning outcomes before publication.

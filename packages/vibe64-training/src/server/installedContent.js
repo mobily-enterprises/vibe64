@@ -3,7 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
-import { validateContent } from "./contentSchemas.js";
+import { lessonSchema, validateContent } from "./contentSchemas.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -166,6 +166,49 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { path: relative, bytes };
   }
 
+  // Conversation admission reads identity, not teaching bytes. Re-read the
+  // trusted manifest and selected descriptor each time; never cache authority.
+  async function readAdmissionIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
+    if (typeof topicId !== "string" || !idPattern.test(topicId) || typeof commit !== "string" || !commitPattern.test(commit) ||
+        typeof topicHash !== "string" || !hashPattern.test(topicHash) || typeof lessonCode !== "string" || !idPattern.test(lessonCode) ||
+        typeof lessonHash !== "string" || !hashPattern.test(lessonHash)) {
+      throw new Error("Choose an exact pinned topic and lesson identity.");
+    }
+    try {
+      const trainingRoot = path.join(root, "training");
+      const contentRoot = path.join(trainingRoot, "content");
+      const topicRoot = path.join(contentRoot, topicId);
+      const snapshotRoot = path.join(topicRoot, commit);
+      for (const directory of [root, trainingRoot, contentRoot, topicRoot, snapshotRoot]) await requirePath(directory, true);
+      const pin = validateInstalledTopicPin(JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")),
+        { topicId, commit, topicHash });
+      const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
+      const topicManifest = bundle.topicManifest;
+      if (!topicManifest || sha256(canonicalJson(topicManifest)) !== topicHash ||
+          topicManifest.topic.topicId !== topicId || topicManifest.release !== pin.release) {
+        throw new Error("Installed topic manifest differs from the trusted identity.");
+      }
+      const entry = topicManifest.lessons.find(item => item.code === lessonCode);
+      const descriptor = topicManifest.topic.lessons.find(item => item.code === lessonCode);
+      const selected = bundle.lessons.find(item => item.code === lessonCode);
+      if (!entry || !descriptor || !selected || entry.hash !== lessonHash ||
+          sha256(canonicalJson(selected.manifest)) !== lessonHash) {
+        throw new Error("Installed lesson manifest differs from the trusted content hash.");
+      }
+      if (entry.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
+      const identity = { pin, manifest: selected.manifest, hash: lessonHash, descriptorPath: descriptor.descriptor };
+      const file = await lessonFile(identity, ".", descriptor.descriptor);
+      const lesson = validateContent(lessonSchema, JSON.parse(file.bytes.toString("utf8")), lessonCode);
+      if (lesson.code !== lessonCode) throw new Error("Installed lesson descriptor identity changed.");
+      return { ...identity, lesson };
+    } catch (cause) {
+      const error = new Error(`Pinned teaching identity ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to restore the exact snapshot.`, { cause });
+      error.code = ["ENOENT", "ENOTDIR"].includes(cause.code)
+        ? "VIBE64_TRAINING_CONTENT_MISSING" : "VIBE64_TRAINING_CONTENT_INVALID";
+      throw error;
+    }
+  }
+
   async function readLessonIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     if (typeof lessonCode !== "string" || typeof lessonHash !== "string" || !idPattern.test(lessonCode) || !hashPattern.test(lessonHash)) {
       throw new Error("Choose a declared lesson code and its exact 64-character lowercase content hash.");
@@ -258,10 +301,12 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     };
   }
 
-  async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash, metadataOnly = false } = {}) {
+  async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash, metadataOnly = false, admissionOnly = false } = {}) {
     // Scope admission needs the freshly verified identity, not a second copy of
     // every exercise byte. Preparation keeps the complete original result.
-    const lesson = await (metadataOnly === true ? readLessonIdentity : readLesson)({ topicId, commit, topicHash, lessonCode, lessonHash });
+    if (admissionOnly === true && metadataOnly !== true) throw new TypeError("Admission reads cannot supply exercise content.");
+    const reader = admissionOnly === true ? readAdmissionIdentity : metadataOnly === true ? readLessonIdentity : readLesson;
+    const lesson = await reader({ topicId, commit, topicHash, lessonCode, lessonHash });
     const exercise = lesson.lesson.exercise;
     if (!exercise) throw Object.assign(new Error(`Lesson ${lessonCode} has no declared bundled exercise.`), {
       code: "VIBE64_TRAINING_EXERCISE_MISSING"
@@ -281,7 +326,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { ...identity, files };
   }
 
-  return { readTopic, readLesson, readVisual, readCheck, readExercise };
+  return { readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise };
 }
 
 export { createInstalledTrainingContent, validateInstalledTopicPin };

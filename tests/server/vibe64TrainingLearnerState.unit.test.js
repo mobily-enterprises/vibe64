@@ -2421,6 +2421,19 @@ test("source-less learning scope comes from the real learner reservation and ins
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
 
+test("source-less scope admits exact chat identity without authorizing damaged teaching content", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
+  const original = await f.state.readLearningSessionScope(input);
+  const files = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit, "files");
+  await fs.writeFile(path.join(files, "training/lessons/INTRO-01/lesson.md"), "Damaged teaching content");
+  assert.deepEqual(await f.state.readLearningSessionScope(input), original);
+  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  await fs.writeFile(path.join(files, "training/lessons/INTRO-01/lesson.json"), "{}");
+  await assert.rejects(() => f.state.readLearningSessionScope(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+});
+
 test("learning scope refuses exercise lessons and aliases rather than substituting a private root", async t => {
   const exercise = await fixture(t);
   const reservedExercise = await exercise.reserve();
@@ -2513,8 +2526,16 @@ test("exercise scope keeps ended history observable but denies fresh work and in
     "files/training/exercises/app/server.mjs");
   await fs.writeFile(exerciseFile, "changed installed source");
   const invalidBefore = await treeState(f.systemRoot);
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  assert.deepEqual((await f.state.readExerciseProjectScope({ actor: f.actor, attemptId })).scope, historical.scope,
+    "damaged exercise bytes do not hide historical chat identity");
+  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  await assert.rejects(() => reader.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code,
+    lessonHash: f.pin.lesson.hash }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
   assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
+  const descriptor = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
+    "files/training/lessons/INTRO-01/lesson.json");
+  await fs.writeFile(descriptor, "{}");
+  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
 });
 
 test("actual saved exercise caller admits only its same original local Project record inside the owning callback", async t => {
