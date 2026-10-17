@@ -63,7 +63,8 @@ and shows **Goal · blocked** without repeatedly asking Claude to continue.
 Ordinary messages and reconnecting do not resume that goal. Supply the missing
 input or resolve the prerequisite, then choose **Goal** → **Resume goal**.
 Running background agents or checks are work in progress, not an external blocker.
-The model's structured action changes status; merely saying “blocked” does not.
+This works directly after **Start goal** or **Resume goal**, without a separate
+chat message. The model's structured action changes status; merely saying “blocked” does not.
 
 You can also ask Claude in Main chat to pause, including after a safe checkpoint.
 You can send that request as a new message or steer it into the running turn.

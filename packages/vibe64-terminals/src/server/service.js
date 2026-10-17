@@ -4272,6 +4272,13 @@ function createService({
             if (closing) throw new Error("The server is stopping. The goal will be available after restart.");
             if (intent) {
               const actor = await assistantRuntime.resolveAssistantUser(context.vibe64User || currentProjectRequestContext()?.vibe64User);
+              // Set/Resume are admitted user requests too. Retain only CONTROL
+              // identity, so each later goal tool rechecks current project access.
+              if (actor && !prepared.context.browserAuthority) {
+                prepared.context.browserAuthority = { sessionId, projectSlug: projectRuntimeContext().projectSlug,
+                  actorId: actor.username, requestContext: { surface: "app", channel: "internal",
+                    requestMeta: { request: { vibe64User: actor } } } };
+              }
               await changeGoalIntent(sessionId, context, latest => {
                 if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");
                 return { ...latest, actor: actor ? { username: actor.username, role: actor.role } : null,

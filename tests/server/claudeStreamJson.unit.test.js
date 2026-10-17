@@ -2118,9 +2118,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
     return;
   }
-  if (frame.type === 'control_response' && ['self-pause-contract', 'self-block-contract'].includes(frame.response.request_id)) {
-    const action = frame.response.request_id === 'self-block-contract' ? 'block' : 'pause';
-    pauseTool('assistant_action_execute', 'self-' + action + '-execute', { actionId: 'vibe64.terminals.main-goal.' + action, version: 1,
+  if (frame.type === 'control_response' && ['self-pause-contract', 'self-block-contract', 'self-block-goal-contract'].includes(frame.response.request_id)) {
+    const action = frame.response.request_id.startsWith('self-block') ? 'block' : 'pause';
+    pauseTool('assistant_action_execute', frame.response.request_id.replace('-contract', '-execute'), { actionId: 'vibe64.terminals.main-goal.' + action, version: 1,
       input: action === 'block' ? { reason: 'The human must supply the missing approval code.' } : {} });
     return;
   }
@@ -2138,6 +2138,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     record(marker);
     record({ ...frame, parentUuid: marker.uuid });
     if (condition === 'clear') emit({ type: 'result', subtype: 'success', local_command: 'goal', user_message_uuid: frame.uuid, result: '' });
+    if (condition === 'BLOCK_ON_GOAL') setTimeout(() => pauseTool('assistant_action_contract', 'self-block-goal-contract', { actionId: 'vibe64.terminals.main-goal.block', version: 1 }), 50);
     return;
   }
   emit(frame);
@@ -2749,6 +2750,22 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.match(blockedInputs[1].frame.message.content, /Explain the blocker without resuming/);
       await service.updateAgentGoal("test", { ...options, ...blocked.goal, threadId: blocked.threadId, action: "resume" });
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
+      const resumedBlocked = await goalFacade.readGoal();
+      await goalFacade.updateGoal({ action: "cancel", expectedSegmentId: resumedBlocked.target.segmentId,
+        expectedGoalId: resumedBlocked.goal.id, messageId: "before-block-on-goal" });
+      await startGoal({ action: "set", objective: "BLOCK_ON_GOAL", messageId: "block-on-goal",
+        expectedSegmentId: resumedBlocked.target.segmentId }, { canonical: true });
+      const goalToolDeadline = Date.now() + 5000;
+      let goalToolCall;
+      while (!goalToolCall || goalToolCall.status === "running") {
+        goalToolCall = (await store.readConversationLog("test")).flatMap(turn => turn.metadata.applicationTools || [])
+          .find(call => call.id.endsWith("self-block-goal-execute"));
+        assert.ok(Date.now() < goalToolDeadline, JSON.stringify({ goalToolCall, frames: (await trace()).slice(-5) }));
+        if (!goalToolCall || goalToolCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
+        "The goal command itself retains admitted authority without an intervening user message");
 
     }
   });

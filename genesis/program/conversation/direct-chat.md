@@ -4251,3 +4251,8 @@ ordinary chat. Block is distinct from human Pause; active continuation intent
 remains recorded but startup recovery skips the blocked goal. Explicit Resume
 reinstalls the objective. Running delegated work is not an external blocker.
 No prose interpretation or second scheduler participates in this control.
+
+Set and Resume preserve the same trusted actor CONTROL context as ordinary Send,
+including automatic recovery's freshly authorized actor. The manager forwards it
+to the admitted native request, allowing its later goal tools to recheck current
+project/model access without requiring a separate chat message first.
