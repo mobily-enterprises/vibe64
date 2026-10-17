@@ -88,8 +88,11 @@ while work is active preserves its background agents and background tasks.
 Foreground work may be interrupted so Claude can read the new instruction.
 Older Claude versions retain their previous interruption behavior. **Stop** and
 **Pause goal** still stop work; use those controls when cancellation is intended.
-Internal task notifications do not keep a finished Claude turn artificially busy.
-You can set the next goal after the turn finishes as well as while it is working.
+When a background task finishes, Claude stays working while it reads and handles
+the result. Its goal controls remain available during that follow-up, including
+a requested Pause after the worker's safe checkpoint. The worker finishing alone
+does not mean the main assistant has finished. You can set the next goal after
+the turn finishes as well as while it is working.
 If the previous reply is still saving, the goal waits for that save before it is sent;
 a failed save keeps the goal unsent and reports the storage error.
 The goal dialog closes after the command succeeds. While acknowledgement is
