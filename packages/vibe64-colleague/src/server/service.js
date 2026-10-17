@@ -1629,6 +1629,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
       const previousFocus = connection.focus;
+      const previousLearningTask = connection.learningTask;
       const demonstration = connection.navigation?.status === "pending";
       state.presentation.retireForFocus(connection, input.focus);
       connection.focus = input.focus;
@@ -1652,7 +1653,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         browserBinding.onRelease(connection.browserBinding.release);
       }
       state.requestContext = context;
-      await learningWatches.focusChanged(state, connection, previousFocus, demonstration);
+      await learningWatches.focusChanged(state, connection, previousFocus, demonstration, previousLearningTask);
       return { ok: true, focus: connection.focus };
     },
     async navigate(input, context) {

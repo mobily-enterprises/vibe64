@@ -324,6 +324,10 @@ Colleague binds browser focus to its existing authenticated realtime socket.
 Disconnect or component release retires only that binding through the same
 focus-change cleanup; another tab and a newer connection remain independent.
 Reconnect registers current focus without automatically resuming its watch.
+Replacing/removing Main's task descriptor retires the old watch even when its
+attempt/project/session focus remains selected. The existing binding comparison
+checks the conversation and Learning client too; retained pane switches keep the
+same binding and continue observation.
 
 Training's watcher owns the hidden guidance operation paired with that descriptor.
 It rechecks the active attempt, pin, exact Main session and current criterion before

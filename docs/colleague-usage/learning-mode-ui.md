@@ -63,6 +63,9 @@ Closing the initiating tab or losing its live connection pauses that tab's watch
 and discards pending help. Watches in other tabs keep their own state. Reconnecting
 registers your current view but leaves the watch paused: return to the intended
 task and choose **Resume**. Minimizing Colleague keeps the same connected task.
+Replacing or closing the watched Main conversation also pauses its old watch,
+even when the project and lesson remain selected. Switching only between that
+task's Workspace and Learning panes keeps polling active.
 You do not need to keep the dialog open.
 
 Polling reports only named Vibe64 controls, settled Workspace/Learning view and

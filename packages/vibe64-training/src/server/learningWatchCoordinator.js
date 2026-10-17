@@ -335,10 +335,10 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     return { ok: true };
   }
 
-  async function focusChanged(state, connection, previousFocus, demonstration) {
+  async function focusChanged(state, connection, previousFocus, demonstration, previousLearningTask = null) {
     for (const watch of watches(state).filter(item => item.browserClientId === connection.clientId &&
       ["active", "pending"].includes(item.status))) {
-      if (!learningFocusMatches(watch, connection.focus)) {
+      if (!learningBindingMatches(watch, connection, watch.learningClientId) || previousLearningTask && !connection.learningTask) {
         watch.status = "paused";
         watch.availability = "paused";
         watch.error = "Watching paused because the browser left this Learning task.";

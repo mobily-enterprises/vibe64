@@ -1464,6 +1464,39 @@ test("learning-task browser focus uses the shared socket and retires stale ackno
   assert.equal(socket.listenerCount("disconnect"), 0);
 });
 
+test("learning-task descriptor replacement retires the old watch while retained pane switches keep it active", async t => {
+  for (const change of ["conversation", "client", "removed"]) await t.test(change, async t => {
+    const f = await fixture(t, [], { watching: true });
+    const attemptId = "77777777-7777-4777-8777-777777777777";
+    f.service.registerConversationSource("learning-task", { async read(watch) {
+      watch.learningTask = { ...watch.learningTask, progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: [] } };
+      return { status: "working", runId: attemptId, revision: "1", messages: [] };
+    }, async notify() { return { ok: true, status: "deferred" }; } });
+    const focus = { projectSlug: "alpha", sessionId: "learning-descriptor", pane: "preview",
+      learningAttemptId: attemptId, learningView: "workspace" };
+    const learningTask = { attemptId, projectSlug: "alpha", sessionId: focus.sessionId,
+      conversationId: "learning-main", learningClientId: "learning-client" };
+    const input = { clientId: "browser-learning", focus, learningTask };
+    await f.service.focus(input, f.context);
+    await f.service.startLearningWatch({ watchId: "descriptor-watch", ...learningTask,
+      browserClientId: input.clientId, criterion: "Observe this exact task." }, f.context);
+    await f.service.focus({ ...input, focus: { ...focus, learningView: "learning", pane: "lessons" } }, f.context);
+    assert.equal((await f.service.read({}, f.context)).watches[0].status, "active",
+      "covering Workspace with the same Learning pane does not retire the task");
+    await f.service.focus(input, f.context);
+    const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
+    assert.ok(JSON.parse(await readFile(savedPath, "utf8")).watches[0].pendingGuidance);
+    const replacement = change === "removed" ? null : { ...learningTask,
+      ...(change === "conversation" ? { conversationId: "replacement-main" } : { learningClientId: "replacement-client" }) };
+    await f.service.focus({ ...input, learningTask: replacement }, f.context);
+    const paused = (await f.service.read({}, f.context)).watches[0];
+    assert.equal(paused.status, "paused");
+    assert.match(paused.error, /left this Learning task/);
+    assert.equal(JSON.parse(await readFile(savedPath, "utf8")).watches[0].pendingGuidance, undefined);
+    assert.equal(f.observations.starts.length, 0);
+  });
+});
+
 test("learning-task source failure retires deferred help before an explicit Resume", async t => {
   const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
   const attemptId = "55555555-5555-4555-8555-555555555555";
