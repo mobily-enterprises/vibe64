@@ -1,13 +1,13 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { computed, createRenderer, h, onScopeDispose, reactive, ref, nextTick, ssrContextKey } from "vue";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY } from "../../src/lib/vibe64AssistantHost.js";
-const mocks = vi.hoisted(() => ({ mounted: vi.fn(), log: vi.fn(), access: vi.fn(), request: vi.fn(), read: vi.fn() }));
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_BROWSER_NAVIGATION_KEY } from "../../src/lib/vibe64AssistantHost.js";
+const mocks = vi.hoisted(() => ({ mounted: vi.fn(), log: vi.fn(), access: vi.fn(), request: vi.fn(), read: vi.fn(), presentation: vi.fn() }));
 vi.mock("../../src/composables/useVibe64MountedSessionData.js", () => ({ useVibe64MountedSessionData: mocks.mounted }));
 vi.mock("../../src/composables/useVibe64ConversationLog.js", () => ({ useVibe64ConversationLog: mocks.log }));
 vi.mock("../../src/composables/useVibe64AssistantAccess.js", () => ({ useVibe64AssistantAccess: mocks.access }));
 vi.mock("../../src/composables/useVibe64AgentSettings.js", () => ({ useVibe64AgentSettings: () => ({ settings: ref({ providerId: "codex" }), requestSettings: ref(null) }) }));
-vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => url.includes("/training/presentation") ? Promise.resolve({ ok: true, navigation: null, cue: null }) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => url.includes("/training/presentation") ? (mocks.presentation(url, options) ?? Promise.resolve({ ok: true, navigation: null, cue: null })) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
 // Same feedback resource interface; original tests have no practical commands.
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
 import { useVibe64ConversationRuntime } from "../../src/composables/useVibe64ConversationRuntime.js";
@@ -19,7 +19,7 @@ import { createConversationFixtureSocket, provideConversationFixture } from "./h
 const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
 const releases = [];
-afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
+afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); mocks.presentation.mockReset(); });
 function fixture({ readGoal = () => null, status = "ready", steering = true,
   learningAttemptId, learnerId, noExercise, sourceProjectSlug, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount, provideShell } = {}) {
   const disposed = [];
@@ -1108,4 +1108,59 @@ it.each(["learning", "author-preview"])("refreshes only the owning %s progress r
   await nextTick();
   expect(reads).toEqual(workingReads);
   expect(queryClient.getQueryState(["vibe64", "training", "author-preview", "absent-actor"])).toBeUndefined();
+});
+
+
+it("captures the shell navigator before the retained Learning application is created after setup", async () => {
+  const { provide, shallowRef } = await import("vue");
+  const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
+  const attempt = "9490f94a-c614-4581-9111-0debb2339ca8";
+  const sourceProjectSlug = "training-9490f94ac614458191110debb2339ca8";
+  const sessionId = `training-${attempt}`;
+  const preview = shallowRef(null), receipts = [], results = [];
+  const visual = { state: {}, retireCue() {}, open: vi.fn(async () => ({ ok: true, attemptId: attempt,
+    visualId: "client-server", playerInstanceId: "retained-player", phase: "ready" })) };
+  // Actual browser navigation is covered in vibe64ColleagueClient.unit.test.js.
+  // Here its provided capability must survive the real delayed application factory.
+  const navigate = vi.fn(async command => ({ focus: { projectSlug: sourceProjectSlug, sessionId,
+    pane: "preview", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attempt },
+    presentation: await visual.open(command.presentation) }));
+  const f = fixture({ projectSlug: "", sessionId: "", learningAttemptId: attempt, learnerId: "1000",
+    noExercise: false, sourceProjectSlug, sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    provideShell() { provide(VIBE64_BROWSER_NAVIGATION_KEY, shallowRef(navigate)); provide(VIBE64_COLLEAGUE_PREVIEW_KEY, preview); } });
+  expect(f.runtime.value).toBeNull();
+  // The saved target appears only after setup has returned, as in the live failure.
+  f.selected.sessionId = sessionId;
+  await nextTick();
+  const runtime = f.runtime.value;
+  expect(runtime).toBeTruthy();
+  preview.value = { projectSlug: sourceProjectSlug, sessionId, learningAttemptId: attempt, learnerId: "1000", presentation: visual };
+  await vi.waitFor(() => expect(runtime.available.value).toBe(true));
+  const command = { id: "delayed-main-open", status: "pending", projectSlug: sourceProjectSlug, sessionId,
+    pane: "preview", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attempt,
+    presentation: { operation: "open", attemptId: attempt, visualId: "client-server" } };
+  const coordination = createTrainingPresentationCoordination({ changed() {} });
+  const connection = {};
+  const authority = { conversationId: mainConversationId(runtime.identity), generation: 0 };
+  const pending = coordination.begin(connection, command, authority);
+  mocks.presentation.mockImplementation(async (url, options = {}) => {
+    if (url.endsWith("/ack")) {
+      receipts.push(structuredClone(options.body));
+      const result = coordination.acknowledge(connection, options.body, authority);
+      results.push(result); return result;
+    }
+    if (options.method === "POST") return { ok: true };
+    return { ok: true, navigation: command, cue: null };
+  });
+  try {
+    await runtime.presentation.refresh();
+    await vi.waitFor(() => expect(receipts).toHaveLength(1));
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ id: command.id, presentation: command.presentation }));
+    expect(visual.open).toHaveBeenCalledTimes(1);
+    expect(receipts[0].focus).toMatchObject({ learningMode: true, learningView: "learning", learningContent: "active",
+      learningAttemptId: attempt, projectSlug: sourceProjectSlug, sessionId, pane: "preview" });
+    expect(results).toEqual([{ ok: true }]);
+    expect(await pending).toMatchObject({ ok: true });
+  } finally { connection.acknowledge?.({ ok: false }); await pending; }
 });

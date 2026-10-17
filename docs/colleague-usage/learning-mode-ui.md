@@ -60,7 +60,12 @@ active lesson, or reveal the exact lesson project's normal **Preview** or
 for its bound active lesson, and can return to that lesson's Learning pane or
 open a visual declared by its pinned content. Both use the same initiating
 browser and wait for its actual settled mode, pane, session and attempt before
-reporting success. On a phone, the request changes the same stacked panes; it
+reporting success. For a declared visual, confirmation follows the visual opening;
+the earlier Lessons view is not its success receipt. This also applies when a
+saved lesson finishes loading after the chat first appears. If the lesson or
+visual changes while opening, the request is not confirmed; return to the intended
+saved lesson before requesting its visual again. On a phone, the request changes
+the same stacked panes; it
 does not open another app or conversation. Showing **Lessons** does not start a
 lesson, leaving Learning does not end one, and any agent-opened view is a
 demonstration rather than evidence that you performed an assessed step.

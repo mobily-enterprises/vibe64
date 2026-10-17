@@ -199,8 +199,13 @@ async function navigate(command = {}) {
     await waitForNavigation(() => preview.value?.projectSlug === command.projectSlug &&
       preview.value?.sessionId === expectedSession && preview.value?.presentation, isCurrent,
     "The requested lesson presentation did not become available.");
-    presentation = trainingPresentationReceipt(await executeTrainingPresentationOperation(
-      preview.value.presentation, command.presentation));
+    const handle = preview.value;
+    const player = handle.presentation;
+    const result = await executeTrainingPresentationOperation(player, command.presentation);
+    if (!isCurrent() || preview.value !== handle || preview.value?.presentation !== player) {
+      throw new Error("The lesson presentation changed while its operation was running.");
+    }
+    presentation = trainingPresentationReceipt(result);
   }
   await waitForNavigation(() => focusMatches(command, focus.value), isCurrent,
     "The browser did not settle on the requested view.");

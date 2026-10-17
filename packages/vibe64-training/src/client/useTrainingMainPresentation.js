@@ -11,8 +11,8 @@ import { VIBE64_BROWSER_NAVIGATION_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // A captured Main application owns only product read/commands and the original
 // shared browser transaction. It creates no subscriber, player or speech queue.
-export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready }) {
-  const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null);
+export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready,
+  browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null) }) {
   const clientId = globalThis.crypto.randomUUID();
   const conversationId = mainConversationId(identity);
   const base = `${identity.sessionsApiPath}/${encodeURIComponent(identity.sessionId)}/training/presentation`;
@@ -54,7 +54,13 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
   async function acknowledge(body) {
     if (!alive()) throw new Error("This Main lesson browser is no longer selected.");
     const expected = generation;
-    const result = await command.run({ path: `${base}/ack`, body });
+    // The shared navigator also reports Working conversation/tool context. Main
+    // sends only its existing display-report contract; validation stays strict.
+    const payload = body.focus ? { ...body, focus: Object.fromEntries([
+      "projectSlug", "sessionId", "pane", "learningMode", "learningView", "learningContent", "learningAttemptId",
+      "databaseScreen", "databaseView", "previewScreen"
+    ].filter(key => Object.hasOwn(body.focus, key)).map(key => [key, body.focus[key]])) } : body;
+    const result = await command.run({ path: `${base}/ack`, body: payload });
     if (!alive() || expected !== generation) return result;
     if (result?.ok !== true) throw new Error(result?.error || "The lesson presentation receipt was not confirmed.");
     return result;
@@ -62,22 +68,28 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
   const cue = useTrainingPresentationCue({ scope, presentation: () => selectedPreview()?.presentation,
     voiceSession, acknowledge, error, holdMainReplies: true });
   const navigation = createTrainingNavigation({ scope, navigate: () => browserNavigation?.value || selectedPreview() ? async command => {
-    const browserResult = browserNavigation?.value
-      ? await browserNavigation.value({ ...command, presentation: undefined }) : null;
-    if (browserResult && !command.presentation) return browserResult;
+    const navigateBrowser = browserNavigation?.value;
+    if (!command.presentation) {
+      if (navigateBrowser) return navigateBrowser(command);
+      throw new Error("Lesson workspace navigation is unavailable in this installation.");
+    }
     const handle = selectedPreview();
-    if (!command.presentation) throw new Error("Lesson workspace navigation is unavailable in this installation.");
     if (!alive() || !handle || (command.projectSlug || "") !== (identity.sourceProjectSlug || "") || command.sessionId !== identity.sessionId || command.pane !== "preview") {
       throw new Error("Use this exact learner lesson’s existing presentation handle.");
     }
     if (command.presentation?.operation === "cue") cue.requireCueCapacity();
     const expected = generation;
-    const result = await executeTrainingPresentationOperation(handle.presentation, command.presentation);
-    if (!alive() || generation !== expected || selectedPreview() !== handle) {
+    // The routed owner executes the visual and confirms focus after it opens.
+    // Reading its focus before the operation returns the previous Lessons pane.
+    // It also fences the exact player after routing; Main retains its own lifetime.
+    const result = navigateBrowser ? await navigateBrowser(command) : {
+      focus: { projectSlug: identity.sourceProjectSlug || "", sessionId: identity.sessionId, pane: "preview" },
+      presentation: trainingPresentationReceipt(await executeTrainingPresentationOperation(handle.presentation, command.presentation))
+    };
+    if (!alive() || generation !== expected || (!navigateBrowser && selectedPreview() !== handle)) {
       throw new Error("The lesson presentation changed while its operation was running.");
     }
-    return { focus: browserResult?.focus || { projectSlug: identity.sourceProjectSlug || "", sessionId: identity.sessionId, pane: "preview" },
-      presentation: trainingPresentationReceipt(result) };
+    return result;
   } : null, beforeNavigate: () => undefined, acknowledge, error });
   async function refresh() {
     if (!alive()) return null;

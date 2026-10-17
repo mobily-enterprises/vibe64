@@ -15,7 +15,7 @@ import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_BROWSER_NAVIGATION_KEY } from "@/lib/vibe64AssistantHost.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
@@ -56,7 +56,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     return Object.freeze(projectTrainingQuestion(reference));
   });
   const presentation = identity.learningAttemptId !== undefined ? useTrainingMainPresentation({ identity,
-    current, preview: shell.preview, voice: shell.voice,
+    current, preview: shell.preview, voice: shell.voice, browserNavigation: shell.browserNavigation,
     ready: computed(() => Boolean(conversation.snapshot.value)),
     enabled: computed(() => available.value &&
       (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))
@@ -217,6 +217,7 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
   const channel = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
   const shell = {
     channel, body: inject(VIBE64_COLLEAGUE_BODY_KEY, null),
+    browserNavigation: inject(VIBE64_BROWSER_NAVIGATION_KEY, null),
     layout: inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null), view: inject(VIBE64_COLLEAGUE_VIEW_KEY, null),
     preview: inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null), voice: useVibe64Voice(),
     feedback: channel ? useShellWebErrorRuntime() : null

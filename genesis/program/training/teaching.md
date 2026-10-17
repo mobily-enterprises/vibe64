@@ -1310,3 +1310,15 @@ until admitted children drain, including helpers backgrounded before Bash exits;
 its abort signal reaches the original Git gateway. Finished identities grant no
 retained authority. The real local managed Bash → Git → Genesis regression and
 original preparation barrier prove this alongside ordinary Git-wrapper tests.
+
+### Retained Main presentation navigation
+
+The conversation application captures the existing browser navigator with its
+other shell facilities during component setup and passes that reference to the
+delayed Main factory. The navigator executes the complete visual operation and
+confirms the resulting focus. It captures the exact Preview/player after routing
+and rejects replacement during the effect. Main retains its current/generation
+checks across navigation, checks cue capacity before effects, and keeps the exact
+handle fence for direct operations without a navigator. The server still requires
+the exact Learning mode, view, lesson, session and presentation receipt.
+Main projects the shared navigator focus onto the existing Main display-report fields before sending its acknowledgment. The original action input schema and exact-focus matcher remain strict; Working conversation/tool context is not part of this receipt.

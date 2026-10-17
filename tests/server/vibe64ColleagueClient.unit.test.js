@@ -2499,3 +2499,144 @@ test("window focus and clicks never refresh Colleague while explicit refresh sti
   await view.state.refresh();
   assert.ok(requests.length > before);
 });
+
+for (const scenario of ["stable", "route", "replace-during-effect", "retire-main"]) test(`Main visual open preserves actual navigation lifetime: ${scenario}`, async t => {
+  const replacesPreviewOnRoute = scenario !== "stable";
+  const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
+  const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
+  const { createTrainingMainPresentationActions, TRAINING_MAIN_PRESENTATION_ACK_ACTION } = await import("../../packages/vibe64-training/src/server/mainPresentationActions.js");
+  const ackAction = createTrainingMainPresentationActions({ project: { createRuntime() {} }, actions: { execute() {} } })
+    .find(action => action.id === TRAINING_MAIN_PRESENTATION_ACK_ACTION);
+  const validationErrors = [];
+  const { mainConversationId } = await import("@local/vibe64-sessions/shared/conversation");
+  const source = new URL("../../packages/vibe64-training/src/client/useTrainingMainPresentation.js", import.meta.url);
+  const { code: mainCode } = await transform(await readFile(source, "utf8"), { format: "cjs" });
+  const attemptId = "9490f94a-c614-4581-9111-0debb2339ca8";
+  const identity = { actorKey: "learning-local", learnerId: "1000", learningAttemptId: attemptId,
+    sourceProjectSlug: "training-9490f94ac614458191110debb2339ca8", sessionId: `training-${attemptId}`,
+    sessionsApiPath: `/api/learning/${attemptId}/vibe64/sessions`, noExercise: false };
+  const command = { id: "lm16-open", status: "pending", projectSlug: identity.sourceProjectSlug,
+    sessionId: identity.sessionId, pane: "preview", learningMode: true, learningView: "learning",
+    learningContent: "active", learningAttemptId: attemptId,
+    presentation: { operation: "open", attemptId, visualId: "client-server" } };
+  // The original routed navigator owns focus after opening. A keyed Preview
+  // subtree may be replaced by the real Vue renderer during its route transition.
+  const focus = { projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
+    pane: "lessons", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attemptId };
+  const effects = [], receipts = [], serverResults = [];
+  const coordination = createTrainingPresentationCoordination({ changed() {} });
+  const connection = {};
+  const pending = coordination.begin(connection, command, { conversationId: mainConversationId(identity), generation: 0 });
+  t.after(async () => { connection.acknowledge?.({ ok: false }); await pending; });
+  const data = vue.shallowRef({ generation: 0, value: { navigation: command } });
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const navigationKey = hostKeys.VIBE64_BROWSER_NAVIGATION_KEY;
+  const imports = {
+    vue,
+    "@jskit-ai/http-web/client/composables/useEndpointResource": { useEndpointResource: () => ({ data,
+      query: { error: vue.ref(null), refetch: async () => data.value } }) },
+    "@jskit-ai/http-web/client/composables/useCommand": { useCommand: () => ({ async run({ path, body }) {
+      if (!path.endsWith("/ack")) return { ok: true };
+      receipts.push(structuredClone(body));
+      try { validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, ...body }); }
+      catch (error) { validationErrors.push(error.message); throw error; }
+      const result = coordination.acknowledge(connection, body, { conversationId: mainConversationId(identity), generation: 0 });
+      serverResults.push(result); return result;
+    } }) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@jskit-ai/kernel/shared/support/visibility": { ROUTE_VISIBILITY_PUBLIC: "public" },
+    "@local/vibe64-sessions/shared/conversation": { mainConversationId },
+    "./createTrainingNavigation.js": { createTrainingNavigation },
+    "./useTrainingPresentationCue.js": { useTrainingPresentationCue },
+    "./presentationOperation.js": operations,
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_BROWSER_NAVIGATION_KEY: navigationKey }
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", mainCode)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const view = vue.ref({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId, ready: true,
+    pane: "lessons", learningView: "learning", learningBinding: identity });
+  const presentation = { state: {}, retireCue() {}, async open(input) {
+    effects.push(input); focus.pane = "preview"; view.value.pane = "preview";
+    if (scenario === "replace-during-effect") { route.path += "/replacement"; await vue.nextTick(); }
+    if (scenario === "retire-main") { current.value = false; await vue.nextTick(); }
+    return { ok: true, attemptId, visualId: "client-server", playerInstanceId: "actual-player", phase: "ready" };
+  } };
+  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const preview = vue.shallowRef(null), current = vue.ref(true);
+  let previewMounts = 0, mainDisposals = 0;
+  const PreviewPublisher = { setup() {
+    previewMounts += 1;
+    const handle = { projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
+      learnerId: identity.learnerId, learningAttemptId: attemptId, presentation: { ...presentation } };
+    preview.value = handle;
+    vue.onScopeDispose(() => { if (preview.value === handle) preview.value = null; });
+    return () => null;
+  } };
+  let owner;
+  const app = renderer.createApp({ setup() {
+    vue.onScopeDispose(() => { mainDisposals += 1; });
+    owner = module.exports.useTrainingMainPresentation({ identity, current, enabled: vue.ref(true), ready: vue.ref(true), preview });
+    return () => null;
+  } });
+  const navigation = vue.shallowRef(null);
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor: hostDescriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code: hostCode } = await transform(compileScript(hostDescriptor, { id: "lm16-original-navigation" }).content, { format: "cjs" });
+  const route = vue.reactive({ path: `/app/project/${replacesPreviewOnRoute ? "original-course-project" : identity.sourceProjectSlug}`, query: { mode: "learning", learningView: "learning" } });
+  const hostImports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
+    "@local/vibe64-training/client/presentation-operation": operations,
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": imports["@jskit-ai/http-web/client/lib/httpClient"],
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
+      projectSlugFromRoute: () => identity.sourceProjectSlug },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => false },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const hostModule = { exports: {} };
+  new Function("require", "module", "exports", hostCode)(name => {
+    assert.ok(Object.hasOwn(hostImports, name), name); return hostImports[name];
+  }, hostModule, hostModule.exports);
+  const host = renderer.createApp({ ...hostModule.exports.default, render: () => vue.h(PreviewPublisher, { key: route.path }) });
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(navigationKey, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: identity.actorKey });
+  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, view);
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: identity.sourceProjectSlug,
+    projectVisible: true, showProject() {}, showChat() {} }));
+  host.provide(hostKeys.VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
+  host.provide(hostKeys.VIBE64_LEARNING_NAVIGATION_KEY, vue.ref(async () => { view.value.pane = "lessons"; }));
+  host.mount({}); t.after(() => host.unmount());
+  app.provide(navigationKey, navigation);
+  app.mount({}); t.after(() => app.unmount());
+  await flush();
+  assert.equal(effects.length, 1, "original player opened once");
+  if (scenario === "retire-main") {
+    assert.equal(current.value, false);
+    assert.equal(receipts.length, 0, "a retired Main cannot acknowledge even a finished visual");
+    return;
+  }
+  assert.equal(receipts.length, 1, "one authoritative ACK, no retry");
+  assert.equal(current.value, true);
+  assert.equal(mainDisposals, 0, "the admitted Main lifetime was not retired");
+  if (scenario === "replace-during-effect") {
+    assert.equal(previewMounts, 3);
+    assert.equal(receipts[0].ok, false);
+    assert.match(receipts[0].error, /presentation changed/u);
+    assert.deepEqual(serverResults, [{ ok: true }], "the server acknowledges the failure, not a visual success");
+    assert.equal((await pending).ok, false);
+    return;
+  }
+  assert.equal(previewMounts, replacesPreviewOnRoute ? 2 : 1);
+  t.diagnostic(JSON.stringify({ replacesPreviewOnRoute, previewMounts, mainDisposals, current: current.value, receipt: receipts[0] }));
+  assert.deepEqual(validationErrors, [], owner.error.value);
+  assert.equal(receipts[0].ok, true, receipts[0].error);
+  assert.equal(receipts[0].presentation.phase, "ready");
+  t.diagnostic(JSON.stringify({ returnedPane: receipts[0].focus.pane, displayedPane: focus.pane, serverResults }));
+  assert.equal(receipts[0].focus.pane, focus.pane, "Main must not reuse pre-open Lessons focus after the player opens");
+  assert.deepEqual(serverResults, [{ ok: true }], owner.error.value);
+});
