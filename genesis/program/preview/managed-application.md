@@ -481,6 +481,13 @@ the owners. Each action reenters fresh original false-scope admission; true
 source-less attempts are refused before the service body. The output namespace
 remains the original `learning:[learner,attempt]` scope, never a display slug.
 
+The running app outlives the request that admitted its launch, and a practice
+grant expires with that request. The launch's output, close and stop hooks
+therefore run in the captured control projection taken at admission (the same
+pattern as other accepted work), so readiness metadata, the `output-target-ready`
+event, the preview proxy and Stop cleanup are recorded for practice lessons.
+That projection is control-only; fresh effects still need their own admission.
+
 The same Core WebSocket loop registers only the output stream in that namespace.
 Each attachment and resize obtains the existing internal Session context grant
 and fresh practice operation; raw input is refused. Early close/error registration

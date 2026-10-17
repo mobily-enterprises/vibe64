@@ -114,6 +114,11 @@ While a response is in flight, later rows wait without native steering or Stop.
 The product drains them into the next completed response together, retaining
 cumulative authored IDs as application authority. Its internal native response
 has a distinct verified receipt; app acceptance never fabricates native user ACKs.
+Browser navigators share one result contract: a presentation operation returns
+its settled focus with the player receipt, and ordinary navigation returns the
+settled focus itself, which the shared receipt builder acknowledges unchanged.
+A failed Colleague turn shows its product error even when the native snapshot
+reports none.
 Before parsing or executing, the product settlement checks pending rows and
 discards an obsolete completed response. A late admission after final publication
 continues the same worker allowance. Public owns this pending/focus/assignment
