@@ -1797,6 +1797,10 @@ function createService({
       if (intent?.active && !intent.pending) await stopGoalIntent(sessionId, context, intent.id);
     }
     if (pinned && result.status === "available") {
+      // A new goal can become visible before Set acknowledgement saves its pin.
+      // Only accepted Set/Resume may replace or reactivate a completed pin.
+      if (result.goal && (assistantGoalObjective(result.goal.objective, pinned) !== pinned.objective ||
+          ["complete", "completed"].includes(pinned.status) && !["complete", "completed"].includes(result.goal.status))) return result;
       const status = result.goal?.status || "complete";
       if (pinned.status !== status) {
         await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
@@ -4280,12 +4284,15 @@ function createService({
               const actor = await assistantRuntime.resolveAssistantUser(context.vibe64User || currentProjectRequestContext()?.vibe64User);
               // Set/Resume are admitted user requests too. Retain only CONTROL
               // identity, so each later goal tool rechecks current project access.
-              if (actor && !prepared.context.browserAuthority) {
-                const requestMeta = currentProjectActionRequestMeta();
-                prepared.context.browserAuthority = { sessionId, projectSlug: projectRuntimeContext().projectSlug,
-                  actorId: String(actor.uid ?? actor.username), requestContext: requestMeta
-                    ? { surface: "app", channel: "internal", requestMeta }
-                    : await assistantRuntime.createActionContext(actor) };
+              const requestMeta = currentProjectActionRequestMeta();
+              if (actions && (actor || requestMeta) && !prepared.context.browserAuthority) {
+                const projectSlug = projectRuntimeContext().projectSlug;
+                const requestContext = requestMeta ? { surface: "app", channel: "internal", requestMeta }
+                  : await assistantRuntime.createActionContext(actor);
+                const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
+                  input: { projectSlug, sessionId }, context: requestContext });
+                prepared.context.browserAuthority = { sessionId, projectSlug,
+                  actorId: grant.actor.id, requestContext };
               }
               await changeGoalIntent(sessionId, context, latest => {
                 if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");

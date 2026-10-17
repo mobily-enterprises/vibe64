@@ -6,6 +6,12 @@ the selected local project's access checks and do not require a hosted login.
 After **Start goal** is accepted, the goal menu closes. A failed or uncertain
 request leaves the menu and objective available for recovery; switching sessions
 keeps the new session's draft independent.
+Long objectives scroll inside the input instead of pushing **Start goal** out of
+the panel. On short screens, scroll the goal panel to reach remaining controls.
+
+After a goal completes, starting a goal with another selected assistant replaces
+the old goal selection only when the new command is accepted. A status refresh
+does not reactivate the completed goal.
 
 After you change or reconnect an AI account in **AI Accounts**, an unfinished
 goal keeps its model, role and conversation. Once the connection is ready, send
@@ -71,7 +77,10 @@ Ordinary messages and reconnecting do not resume that goal. Supply the missing
 input or resolve the prerequisite, then choose **Goal** → **Resume goal**.
 Running background agents or checks are work in progress, not an external blocker.
 This works directly after **Start goal** or **Resume goal**, without a separate
-chat message. Hosted goal commands retain the signed-in session for the same access checks as ordinary chat. The model's structured action changes status; merely saying “blocked” does not.
+chat message. Goal commands retain the same current-access checks as ordinary
+chat: the signed-in session when hosted, or the selected local editor project
+when standalone. The model's structured action changes status; merely saying
+“blocked” does not.
 
 You can also ask Claude in Main chat to pause, including after a safe checkpoint.
 You can send that request as a new message or steer it into the running turn.

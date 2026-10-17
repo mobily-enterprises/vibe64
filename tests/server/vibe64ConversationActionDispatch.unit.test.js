@@ -28,6 +28,9 @@ test("standalone Main and temporary conversations use the selected local project
     const app = Fastify();
     const actions = createActionCatalogue();
     const sends = [];
+    actions.register({ contributorId: "local-goals", domain: "terminals", actions:
+      createTerminalActions({ terminals: {} }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
+        .map(definition => ({ surfaces: ["app"], ...definition })) });
     actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
       createSessionActions({ sessions: {
         sendAgentMessage(sessionId, input, options) {
@@ -75,6 +78,13 @@ test("standalone Main and temporary conversations use the selected local project
       assert.equal(sends[0].options.browserAuthority.actorId, "local");
       assert.equal(sends[0].options.browserAuthority.projectSlug, slug);
       assert.equal(sends[0].input.message, "Local send");
+      const localAuthority = sends[0].options.browserAuthority;
+      const pauseContext = { ...localAuthority.requestContext, channel: "automation", projectSlug: slug,
+        mainGoalControl: { pause: async () => ({ status: "paused" }) } };
+      assert.deepEqual(await actions.execute({ actionId: "vibe64.terminals.main-goal.pause", input: {}, context: pauseContext }),
+        { status: "paused" }, "Native goal controls use the same selected local project without a hosted actor");
+      await assert.rejects(actions.execute({ actionId: "vibe64.terminals.main-goal.pause", input: {},
+        context: { ...pauseContext, mainGoalControl: undefined } }), { code: "vibe64_main_goal_control_required" });
       assert.equal((await app.inject({ url: "/main", headers: { ...headers, origin: "https://foreign.example" } })).statusCode, 403);
       assert.equal((await app.inject({ url: "/main", headers, remoteAddress: "198.51.100.9" })).statusCode, 403);
       assert.notEqual((await app.inject({ url: "/main?project=another-project", headers })).statusCode, 200);

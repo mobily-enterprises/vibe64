@@ -2803,6 +2803,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       await goalFacade.updateGoal({ action: "cancel", expectedSegmentId: resumedBlocked.target.segmentId,
         expectedGoalId: resumedBlocked.goal.id, messageId: "before-block-on-goal" });
       requireGoalRequest = true;
+      service.configureAssistantRuntime({ resolveAssistantUser: async () => null });
       await startGoal({ action: "set", objective: "BLOCK_ON_GOAL", messageId: "block-on-goal",
         expectedSegmentId: resumedBlocked.target.segmentId }, { canonical: true });
       const goalToolDeadline = Date.now() + 5000;
@@ -2815,7 +2816,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       }
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
-        "The goal command itself retains admitted authority without an intervening user message");
+        "The goal command retains fresh request authority even without a hosted runtime actor or intervening user message");
 
     }
   });

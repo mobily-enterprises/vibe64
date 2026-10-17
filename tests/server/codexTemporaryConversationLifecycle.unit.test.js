@@ -12294,6 +12294,7 @@ test("Main browser delivery inspection preserves original receipts while native 
 });
 
 test("Main Codex canonical goals preserve original result policy, pinned targets and passive availability", { timeout: 15_000 }, async t => {
+  const actions = createActionCatalogue();
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
@@ -12302,7 +12303,6 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
       codex: { senior: selection, junior: selection }
     }, 0);
     await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "codex" }));
-    const actions = createActionCatalogue();
     registerVibe64ActionContext(actions, {
       projectContext: { projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
         return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };
@@ -12353,6 +12353,10 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         };
         provider.interruptTurn = async () => assert.fail("An initial goal command has no ordinary turn to interrupt");
       };
+      const completedPin = JSON.stringify({ mode: "custom", workflowEngineId: "claude", status: "complete",
+        objective: "Already finished with Claude", selection: { ...selection, engineId: "claude", agentId: "claude",
+          modelProviderId: "anthropic", modelId: "default", variantId: "" } });
+      await store.writeMetadataValue(sessionId, "assistant_routing_goal", completedPin);
       const writeMetadata = store.writeMetadataValue;
       const pinWrites = [];
       store.writeMetadataValue = async (id, name, value) => {
@@ -12384,9 +12388,17 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
           .then(value => { settled = true; return { value }; }, error => { settled = true; return { error }; });
         await waitForSessionValue(() => ({ settled, dispatched: nativeCalls.some(([kind]) => kind === "set") }),
           value => value.settled || value.dispatched, "canonical goal dispatch");
-        if (settled) assert.fail(`Canonical Set ended before native acknowledgement: ${JSON.stringify(await setting)}`);
+        if (settled) {
+          const result = await setting;
+          assert.fail(`Canonical Set ended before native acknowledgement: ${result.error?.stack || JSON.stringify(result)}`);
+        }
         assert.equal(settled, false);
-        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, undefined);
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, completedPin);
+        const awaitingAcknowledgement = await terminalService.readAgentGoal(sessionId, options);
+        assert.equal(awaitingAcknowledgement.goal.objective, "Keep the original control");
+        assert.equal(awaitingAcknowledgement.routing, undefined, "a new native goal does not inherit the previous engine's routing");
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, completedPin,
+          "reading the new native goal cannot reactivate the completed pin before Set acknowledgement");
         assert.equal((await store.readConversationLog(sessionId)).length, 0);
         assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, false,
           "the original service Set owns agent-write admission through its acknowledgement");
@@ -12488,7 +12500,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         }
       }
     });
-  }, { throughTerminalService: true });
+  }, { throughTerminalService: true, actions });
 });
 
 test("concurrent Main reconciliation retains the cached fallback until prune can finish", { timeout: 15_000 }, async (t) => {

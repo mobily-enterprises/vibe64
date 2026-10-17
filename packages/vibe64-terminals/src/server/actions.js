@@ -1,4 +1,5 @@
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL, mainGoalPauseTool, mainGoalBlockTool, temporaryConversationTool, workPlanTool } from "./assistantContracts.js";
 import { outputStatusTool, outputTerminalTool } from "./outputAssistantContracts.js";
 import { terminalKeyInput, terminalSessionContainsText, terminalSessionControlSnapshot } from "@local/vibe64-execution/server/terminalSessions";
@@ -126,7 +127,7 @@ function createTerminalActions({ terminals } = {}) {
       assistant,
       execute: (input, context) => {
         if (typeof context.mainGoalControl?.[operation] !== "function" ||
-            context.vibe64Action?.project?.slug !== context.projectSlug) {
+            (context.vibe64Action?.project || currentProjectRequestContext())?.slug !== context.projectSlug) {
           throw Object.assign(new Error("Only this goal's admitted Main conversation can request this goal control."), {
             code: "vibe64_main_goal_control_required", statusCode: 403
           });

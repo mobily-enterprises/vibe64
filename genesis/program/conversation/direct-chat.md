@@ -31,6 +31,10 @@ project request context and local-request admission, with a local actor and no
 hosted account. The internal Sessions context grant rechecks that boundary for
 reads and subscriptions. Hosted and Learning conversations retain their current
 action-contributor authority; a missing hosted grant cannot become local access.
+Goal Set/Resume resolves that same fresh context grant and retains its actor
+identity for subsequent native Pause/Block tools. Standalone's local actor does
+not require a hosted runtime user. The structured controls validate their exact
+selected project through the original action wrapper in both modes.
 
 All three native engines use JSKIT's common delivery timing observer, separating
 preparation, provider readiness, dispatch, native acknowledgement, saved receipt,
@@ -957,6 +961,9 @@ projection. Canonical Codex goals use the same per-invocation policy after the
 original namespace admission releases. They retain native control semantics,
 without authored message rows. A passive unavailable result rejects canonical
 read without clearing the saved goal pin; raw reads retain their original status.
+Status reads cannot reactivate a completed pin or attach another objective's
+status to it while a new goal awaits acknowledgement. Accepted Set/Resume owns
+replacing or reactivating that pin, including when the assistant changes.
 The Main browser facade now routes canonical goal reads and updates through
 internal terminal actions and this same service policy. Those actions use the
 shared goal input validator and resolve the actor and project afresh; callers
