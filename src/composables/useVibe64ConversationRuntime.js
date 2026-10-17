@@ -246,6 +246,8 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
     }
     return Object.freeze(target);
   });
+  const api = createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
+    resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" });
   const binding = useAssistantConversation({
     conversationId: () => {
       const target = identity.value;
@@ -270,8 +272,13 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       }
       return presentation;
     }, draftStorage: () => browserDraftStorage(identity.value),
-    api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
-      resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
+    api: { ...api, sendConversationMessage(id, input, ...options) {
+      // As for Colleague, a new request from this page lifts speech silence left
+      // by an interrupted or failed reply; history refreshes are not invitations.
+      const voice = shell.voice?.controller.state;
+      if (voice?.binding?.conversationId === id) voice.session?.inviteSpeech(input.messageId);
+      return api.sendConversationMessage(id, input, ...options);
+    } },
     application(conversation) {
       const target = mainConversationTarget(conversation.identity.conversationId);
       return createConversationApplication(conversation, { viewer, summarySession, shell,
