@@ -13,6 +13,9 @@ import { createInstalledTrainingContent, validateInstalledTopicPin } from "./ins
 const MAX_REQUEST_IDS = 64;
 const MAX_ATTEMPTS = 8;
 const MAX_RECORD_BYTES = 64 * 1024;
+// Browser receipts and Preview output starts hold the preparation barrier only
+// briefly. Wait this long before reporting a genuinely long operation as busy.
+const PREPARATION_BUSY_WAIT_MS = 5000;
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
@@ -764,7 +767,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching active reservation. Read the current learning state before preparing.", 404);
     }
     await verifyProgressLessons(before.progress);
-    const release = await tryAcquireExclusiveFileLock(paths.preparationLock);
+    let release = await tryAcquireExclusiveFileLock(paths.preparationLock);
+    for (const deadline = Date.now() + PREPARATION_BUSY_WAIT_MS; !release && Date.now() < deadline;) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      release = await tryAcquireExclusiveFileLock(paths.preparationLock);
+    }
     if (!release) {
       throw failure("VIBE64_TRAINING_PREPARATION_BUSY", "This learner's exercise is being prepared. Retry the same attempt after that operation finishes.", 409);
     }
