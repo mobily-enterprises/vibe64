@@ -1,5 +1,12 @@
 # Goals and model changes
 
+In the standalone local editor, open a session, choose a connected assistant,
+and use **Send message** and **Set goal** in the same chat. These controls use
+the selected local project's access checks and do not require a hosted login.
+After **Start goal** is accepted, the goal menu closes. A failed or uncertain
+request leaves the menu and objective available for recovery; switching sessions
+keeps the new session's draft independent.
+
 After you change or reconnect an AI account in **AI Accounts**, an unfinished
 goal keeps its model, role and conversation. Once the connection is ready, send
 your next message or choose **Goal** → **Resume goal** using the current account.

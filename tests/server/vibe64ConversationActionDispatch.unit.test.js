@@ -10,7 +10,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
-import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
@@ -27,9 +27,16 @@ test("standalone Main and temporary conversations use the selected local project
     configure(false);
     const app = Fastify();
     const actions = createActionCatalogue();
+    const sends = [];
     actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
-      createSessionActions({ sessions: {} }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)
-        .map(definition => ({ surfaces: ["app"], ...definition })) });
+      createSessionActions({ sessions: {
+        sendAgentMessage(sessionId, input, options) {
+          sends.push({ sessionId, input, options });
+          assert.equal(currentProjectRequestContext().targetRoot, targetRoot);
+          return { ok: true };
+        }
+      } }).filter(({ id }) => [ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE].includes(id))
+        .map(definition => ({ channels: ["internal"], surfaces: ["app"], ...definition })) });
     let reads = 0;
     let subscriptions = 0;
     const open = () => ({
@@ -52,6 +59,7 @@ test("standalone Main and temporary conversations use the selected local project
       retained.push(conversation);
       const release = await conversation.subscribe(() => {});
       release();
+      if (request.params.kind === "main") await conversation.send({ text: "Local send", messageId: "local-send-1" });
       return conversation.read();
     });
     const headers = { host: "localhost", origin: "http://localhost" };
@@ -63,12 +71,18 @@ test("standalone Main and temporary conversations use the selected local project
       }
       assert.equal(reads, 2);
       assert.equal(subscriptions, 2);
+      assert.equal(sends.length, 1);
+      assert.equal(sends[0].options.browserAuthority.actorId, "local");
+      assert.equal(sends[0].options.browserAuthority.projectSlug, slug);
+      assert.equal(sends[0].input.message, "Local send");
       assert.equal((await app.inject({ url: "/main", headers: { ...headers, origin: "https://foreign.example" } })).statusCode, 403);
       assert.equal((await app.inject({ url: "/main", headers, remoteAddress: "198.51.100.9" })).statusCode, 403);
       assert.notEqual((await app.inject({ url: "/main?project=another-project", headers })).statusCode, 200);
       configure(true);
       for (const conversation of retained) await assert.rejects(conversation.read(), { statusCode: 403 });
       assert.equal(reads, 2, "A hosted context without an authority contributor cannot inherit local access");
+      await assert.rejects(retained[0].send({ text: "Denied", messageId: "local-send-2" }), { statusCode: 403 });
+      assert.equal(sends.length, 1, "Lost local authority cannot dispatch another send");
     } finally {
       await app.close();
       configureStudioProjectContext();

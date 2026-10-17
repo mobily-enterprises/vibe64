@@ -534,12 +534,13 @@ function createSessionActions({ sessions } = {}) {
       kind: "command",
       input: agentMessageActionInputValidator,
       execute(input, context) {
+        const grant = conversationContextGrant(input, context);
         const learning = context.vibe64Action?.learning;
         return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input), {
           browserAuthority: { sessionId: input.sessionId,
             ...(learning ? { learningAttemptId: learning.learningScope.attemptId }
-              : { projectSlug: context.vibe64Action.project.slug }),
-            actorId: context.actor.id, requestContext: mainConversationRequestContext(context) }
+              : { projectSlug: grant.project.slug }),
+            actorId: grant.actor.id, requestContext: mainConversationRequestContext(context) }
         });
       }
     }),
