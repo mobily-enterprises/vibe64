@@ -474,12 +474,18 @@ function createService({
         }
         const startedAt = Date.now();
         try {
-          const result = await executeSessionQuery(context, {
+          const executed = await executeSessionQuery(context, {
             queryId: input.queryId,
             readOnly,
             schema,
             sql: input.sql
           });
+          // Learning shows rows only: no cell edit or row delete identities.
+          const result = currentProjectRequestContext()?.learningScope && executed.cellMeta ? {
+            ...executed,
+            cellMeta: executed.cellMeta.map(row => row.map(() => ({ editable: false, reason: "Learning shows this lesson's data read-only." }))),
+            rowMeta: executed.cellMeta.map(() => [])
+          } : executed;
           if (!automaticDefault) {
             await recordQueryHistory(
               context.store,
