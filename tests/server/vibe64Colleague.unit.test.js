@@ -1273,7 +1273,7 @@ test("Colleague starts and controls the current browser Learning watch through t
   assert.equal(started.watch.status, "active");
   assert.equal(started.watch.learningTask.attemptId, attemptId);
   assert.equal(started.watch.projectSlug, "alpha");
-  assert.deepEqual(started.watch.assessmentEvidence, { available: true, supportsRequestedOutcome: true,
+  assert.deepEqual(started.watch.assessmentEvidence, { available: true, supportsRequestedOutcome: false,
     assessmentId: "explain", outcome: "passed", recordedAt: "2026-10-12T22:00:00.000Z" });
   assert.equal(JSON.stringify(started).includes("learning-client"), false, "transient browser bindings stay private");
   await f.actions.execute({ actionId: "vibe64.colleague.watch.pause",
@@ -1494,6 +1494,34 @@ test("learning-task descriptor replacement retires the old watch while retained 
     assert.match(paused.error, /left this Learning task/);
     assert.equal(JSON.parse(await readFile(savedPath, "utf8")).watches[0].pendingGuidance, undefined);
     assert.equal(f.observations.starts.length, 0);
+  });
+});
+
+test("learning-task saved assessment evidence supports only the matching referenced outcome", async t => {
+  for (const [name, referenceId, latestId, outcome, supports] of [
+    ["matching pass", "explain", "explain", "passed", true],
+    ["different assessment pass", "explain", "earlier-step", "passed", false],
+    ["matching incomplete", "explain", "explain", "incomplete", false],
+    ["free-text task", null, "explain", "passed", false]
+  ]) await t.test(name, async t => {
+    const f = await fixture(t, [], { watching: true });
+    const attemptId = "88888888-8888-4888-8888-888888888888";
+    f.service.registerConversationSource("learning-task", async watch => {
+      watch.learningTask = { ...watch.learningTask, progress: { revision: 3,
+        latest: { assessmentId: latestId, outcome, recordedAt: "2026-10-17T00:00:00.000Z" } } };
+      return { status: "working", runId: attemptId, revision: "3", messages: [] };
+    });
+    const focus = { projectSlug: "alpha", sessionId: "learning-evidence", pane: "preview",
+      learningAttemptId: attemptId, learningView: "workspace" };
+    await f.service.focus({ clientId: "browser-learning", focus }, f.context);
+    const result = await f.service.startLearningWatch({ watchId: "evidence-watch", attemptId,
+      browserClientId: "browser-learning", learningClientId: "main-learning", projectSlug: "alpha",
+      sessionId: focus.sessionId, conversationId: "learning-main", criterion: "Explain the observed app behavior.",
+      ...(referenceId ? { reference: { attemptId, questionId: "delivered-question", assessmentId: referenceId,
+        issuedRevision: 2, topicHash: "a".repeat(64), lessonHash: "b".repeat(64) } } : {}) }, f.context);
+    assert.deepEqual(result.watch.assessmentEvidence, { available: true, supportsRequestedOutcome: supports,
+      assessmentId: latestId, outcome, recordedAt: "2026-10-17T00:00:00.000Z" });
+    assert.equal(f.observations.starts.length, 0, "status projection neither grades nor wakes a model");
   });
 });
 

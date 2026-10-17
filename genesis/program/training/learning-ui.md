@@ -328,6 +328,10 @@ Replacing/removing Main's task descriptor retires the old watch even when its
 attempt/project/session focus remains selected. The existing binding comparison
 checks the conversation and Learning client too; retained pane switches keep the
 same binding and continue observation.
+The public status claims saved assessment support only for a passed result whose
+assessment ID matches the watched task's existing question reference. Unrelated
+passes and free-text criteria retain visible saved outcomes without inferred
+completion or a new assessment writer.
 
 Training's watcher owns the hidden guidance operation paired with that descriptor.
 It rechecks the active attempt, pin, exact Main session and current criterion before

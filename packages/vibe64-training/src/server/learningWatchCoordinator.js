@@ -32,8 +32,10 @@ function isLearningWatch(watch) {
 
 function publicLearningWatch({ cursor, eventIds, browserClientId, learningClientId, pendingGuidance, lastGuidanceEvidenceKey, ...watch }) {
   const latest = watch.learningTask?.progress?.latest;
+  const assessmentId = watch.learningTask?.reference?.assessmentId;
   return { ...watch, assessmentEvidence: {
-    available: Boolean(latest), supportsRequestedOutcome: latest?.outcome === "passed",
+    available: Boolean(latest), supportsRequestedOutcome: Boolean(assessmentId &&
+      latest?.assessmentId === assessmentId && latest.outcome === "passed"),
     ...(latest ? Object.fromEntries(["assessmentId", "outcome", "recordedAt"]
       .filter(key => latest[key] !== undefined).map(key => [key, latest[key]])) : {})
   } };
