@@ -29,6 +29,11 @@ Keep the same conversation open and let that submission settle; a long saved
 history is not a reason to create a replacement chat. If startup fails, use the
 failed message's **Retry** after the reported problem is resolved. Colleague can
 explain the status and recovery controls on desktop and phone.
+For a recurring startup delay, give the operator the session and approximate
+send time. Startup diagnostics separate process launch, initialization request,
+completed input write and response arrival without recording the message body.
+Colleague can explain this recovery path; inspecting server diagnostics requires
+the operator's access.
 
 Project guidance can change while Codex is working. The current turn keeps its
 installed instructions; the next idle admission reads the latest guidance without

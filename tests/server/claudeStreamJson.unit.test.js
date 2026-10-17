@@ -3427,7 +3427,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
         if (fields.stage === "stream_ready") clock += elapsed - 2_000;
       }])) }
     });
-    assert.deepEqual(diagnostics.map(event => event.stage), ["starting", "stream_ready", "initialized"]);
+    assert.deepEqual(diagnostics.map(event => event.stage), ["starting", "stream_ready",
+      "initialize_requested", "initialize_written", "initialize_response_received", "initialized"]);
     const completed = diagnostics.at(-1);
     assert.equal(completed.durationMs, elapsed);
     assert.equal(completed.streamReadyMs, 2_000);
