@@ -358,7 +358,9 @@ const draft = computed({ get: () => adapter.value.composer.draft, set: value => 
 const voiceFeedbackTarget = ref(null);
 const sending = computed(() => conversation.runtime.value?.delivery.state.sending === true);
 const connectionError = computed(() => productError.value || conversation.runtime.value?.error.value || "");
-const turnError = computed(() => conversation.runtime.value?.snapshot.value?.error ?? product.value.error);
+// A native snapshot reports no error as an empty string; it must not hide a
+// failed Colleague turn such as an unverified application operation.
+const turnError = computed(() => conversation.runtime.value?.snapshot.value?.error || product.value.error);
 const freshConfirm = ref(false);
 const freshBusy = ref(false);
 const freshError = ref("");
