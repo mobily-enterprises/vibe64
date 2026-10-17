@@ -251,6 +251,14 @@ binding; the Voice unit saved-context/session reader is explicitly controlled.
 Actual saved-state owners retain their own original proof. Installed service,
 physical audio, browser/phone and canonical teacher narration cues remain open.
 
+Learning speaks by default. The conversation log opens the visible Learning
+Main's existing voice binding once per lesson conversation and page when its
+narration is eligible (chat access and loaded conversation), read-aloud is on and
+no other voice owner is active. It opens narration only; capture still needs Talk.
+An ended session is not reopened on remount, and Working keeps opt-in voice. The
+original session primes on existing history, so nothing earlier is replayed, and
+its blocked-playback control handles browser autoplay refusal.
+
 
 ## Original navigation client ownership
 
