@@ -67,8 +67,10 @@ async function main() {
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
+  // An optional local speech service is a shared host tool, like the Claude command.
   const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
-    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND"]);
+    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
+    "VIBE64_VOICE_ENDPOINT", "VIBE64_VOICE_ACCESS_TOKEN_FILE"]);
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("VIBE64_") && !sharedTools.has(key)) delete process.env[key];
   }
