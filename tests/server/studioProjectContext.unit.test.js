@@ -23,7 +23,12 @@ import {
   projectRepositoryView
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
-  resolveProjectRequestContext
+  assertProjectEffectAdmission,
+  currentPracticeProjectScope,
+  registerLocalPracticeAdmission,
+  resolveProjectRequestContext,
+  runWithPracticeProjectContext,
+  runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
   writeProjectRuntimeOpenState
@@ -1963,4 +1968,40 @@ test("original nested practice Project resolver retains immutable Learning facts
     }));
     assert.equal(core.targetRoot, working);
   });
+});
+
+test("local mode opens only the admitted learner practice Project through a control-only grant", async () => {
+  const owner = Object.freeze({});
+  const actor = Object.freeze({ uid: 1000, username: "learner" });
+  const training = Object.freeze({ attemptId: "9490f94a-c614-4581-9111-0debb2339ca8" });
+  const slug = "training-9490f94ac614458191110debb2339ca8";
+  const calls = [];
+  const projectContext = {
+    projectCatalogEnabled: false,
+    currentPracticeProjectScope: () => null,
+    runWithPracticeProjectScope(input, operation) {
+      calls.push(input);
+      return runWithPracticeProjectContext(owner, { training: input.training, access: input.access, slug,
+        targetRoot: "/practice/root", projectRuntimeRoot: "/practice/runtime", projectSessionSourceRoot: "/practice/source",
+        projectRecordPath: "/practice/runtime/project.json", projectsRoot: "/practice", systemRoot: "/system",
+        sourceRoot: "", sourceConfigRoot: "", vibe64User: input.actor }, operation);
+    }
+  };
+  registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
+  try {
+    const context = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
+    assert.deepEqual(calls, [{ actor, training, access: "control" }]);
+    assert.equal(context.slug, slug);
+    assert.equal(context.targetRoot, "/practice/root");
+    assert.equal(context.learningScope, undefined);
+    await runWithProjectRequestContext(context, async () => {
+      assert.equal(currentPracticeProjectScope(owner).access, "control");
+      assert.throws(() => assertProjectEffectAdmission(), { code: "vibe64_practice_effect_admission_required" });
+    });
+    await assert.rejects(() => resolveProjectRequestContext({ projectContext,
+      request: { params: { slug: "training-00000000000040008000000000000000" } } }), { code: "vibe64_project_route_unavailable" });
+    assert.equal(calls.length, 1);
+  } finally {
+    registerLocalPracticeAdmission(async () => null);
+  }
 });

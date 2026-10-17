@@ -27,6 +27,16 @@ Standalone exercise conversations in Learning, their Preview and practical
 assessment are still being integrated; prepared source alone does not make that
 complete flow available.
 
+A local installation normally serves only the project you selected. It also
+opens your own active lesson's practice project by its address (for example
+when Colleague navigates there or you open **Account settings** from it): the
+page, **Preview** and **Dashboard** load the same way as on a hosted workspace.
+That address gives viewing and Preview control only; start new coding work from
+the lesson in **Learning**. The lesson's own conversation stays in **Learning**:
+the project's ordinary (Working) session list and settings do not show it. Another person's practice project, or a practice
+address with no saved lesson behind it, still reports "Local editor mode only
+serves the selected project."
+
 Opening supported practice teaching retains the reserved initial conversation,
 source and history. An ownership or lesson-binding error needs owner inspection;
 do not create a replacement or switch it to an unrelated Working project. An

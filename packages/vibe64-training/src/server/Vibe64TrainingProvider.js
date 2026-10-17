@@ -6,6 +6,7 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { registerLocalPracticeAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { registerRoutes as registerLearningSessionRoutes } from "@local/vibe64-sessions/server/routes";
 import { createTrainingActions } from "./actions.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
@@ -14,7 +15,7 @@ import { createTrainingLearnerState } from "./learnerState.js";
 import { createTrainingTeachingBrief } from "./teachingBrief.js";
 import { createTrainingService } from "./preparation.js";
 import { createManagedProjectRepositoryService } from "@local/vibe64-project/server/managedRepository";
-import { createTrainingLearningSessions } from "./learningSessions.js";
+import { admitLocalPracticeProject, createTrainingLearningSessions } from "./learningSessions.js";
 import { createTrainingTeachingOwner } from "./teaching.js";
 import { createTrainingAnswerAssessment } from "./answerAssessment.js";
 import { createTrainingPresentationActions } from "./presentationActions.js";
@@ -73,6 +74,7 @@ const Vibe64TrainingProvider = defineFeature({
       },
       resolveLearningContext: learningSessions.resolveContext
     });
+    registerLocalPracticeAdmission(({ slug }) => admitLocalPracticeProject({ learners, actor: currentOsUser(), slug }));
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching }) };
   },

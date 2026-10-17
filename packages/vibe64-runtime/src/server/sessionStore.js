@@ -1106,6 +1106,20 @@ function learningSessionBinding(metadata, learningScope, sessionId) {
   return binding;
 }
 
+// A Working (unscoped) list leaves out a genuine lesson binding: its Learning
+// list owns that session. Malformed claims still reach the refusing reader.
+function genuineLearningBinding(raw, sessionId) {
+  let binding;
+  try { binding = JSON.parse(raw); } catch { return false; }
+  if (!isPlainObject(binding) || binding.schemaVersion !== 1 || binding.conversationId !== sessionId ||
+      Object.keys(binding).length !== 6) return false;
+  try {
+    validateLearningSessionScope({ learnerId: binding.learnerId, attemptId: binding.attemptId,
+      pin: binding.pin, noExercise: binding.noExercise });
+    return true;
+  } catch { return false; }
+}
+
 function createVibe64SessionStore({
   clock = undefined,
   logger = null,
@@ -4205,7 +4219,8 @@ function createVibe64SessionStore({
     const sessionId = await readVibe64CurrentSessionAlias({
       aliasPath: rootPaths.currentSessionAliasPath
     });
-    if (!sessionId) {
+    if (!sessionId || !admittedLearningScope && genuineLearningBinding(normalizeText(await readTextIfExists(
+      metadataFilePath(paths(assertValidVibe64SessionId(sessionId)), LEARNING_SESSION_METADATA))), sessionId)) {
       return null;
     }
     const session = await readSessionForRenewal(assertValidVibe64SessionId(sessionId));
@@ -4994,7 +5009,9 @@ function createVibe64SessionStore({
       ...activeSessionIds,
       ...closingSessionIds
     ])].sort((left, right) => left.localeCompare(right));
-    return Promise.all(sessionIds.map(async (sessionId) => ({
+    const learning = !admittedLearningScope ? await Promise.all(sessionIds.map(async sessionId => genuineLearningBinding(
+      normalizeText(await readTextIfExists(metadataFilePath(paths(sessionId), LEARNING_SESSION_METADATA))), sessionId))) : [];
+    return Promise.all(sessionIds.filter((_sessionId, index) => !learning[index]).map(async (sessionId) => ({
       sessionId,
       status: await readStatusForRenewal(sessionId)
     })));
@@ -5042,6 +5059,8 @@ function createVibe64SessionStore({
       ? (await readSessionArchiveRecords())
           .filter((record) => !unarchivedSessionIds.has(record.sessionId))
           .filter((record) => sessionStatusMatchesListOptions(record.status, listOptions))
+          .filter((record) => admittedLearningScope || !genuineLearningBinding(
+            sessionArchiveSummary(record).metadata?.[LEARNING_SESSION_METADATA], record.sessionId))
       : [];
     return {
       archivedRecords,
