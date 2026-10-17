@@ -1334,6 +1334,53 @@ test("learning-task watches pause when their browser leaves or the server restar
     "a retained pending Main notification cannot survive restart");
 });
 
+test("learning-task source failure retires deferred help before an explicit Resume", async t => {
+  const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
+  const attemptId = "55555555-5555-4555-8555-555555555555";
+  let allowed = true, reads = 0;
+  const guidance = [];
+  f.service.registerConversationSource("learning-task", {
+    async read(watch) {
+      reads += 1;
+      if (!allowed) throw new Error("Lesson access was revoked.");
+      watch.learningTask = { ...watch.learningTask, progress: { revision: 1,
+        passedAssessmentIds: [], remainingAssessmentIds: ["explain"] } };
+      return { status: "working", runId: attemptId, revision: "1",
+        messages: [{ id: "learning:1", role: "assistant", text: "Current task." }] };
+    },
+    async notify(_watch, pending) {
+      guidance.push(structuredClone(pending));
+      allowed = false;
+      return { ok: true, status: "deferred" };
+    }
+  });
+  const focus = { projectSlug: "alpha", sessionId: "learning-access", pane: "preview",
+    learningAttemptId: attemptId, learningView: "workspace" };
+  const input = { watchId: "learning-access", browserClientId: "browser-learning", learningClientId: "main-learning",
+    attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main",
+    criterion: "Explain the visible result." };
+  await f.service.focus({ clientId: input.browserClientId, focus }, f.context);
+  await f.service.startLearningWatch(input, f.context);
+  await f.service.observeLearningTask({ watchId: input.watchId, learningClientId: input.learningClientId,
+    eventId: "before-revocation", control: "preview-select", workspace: {
+      projectSlug: "alpha", sessionId: focus.sessionId, pane: "preview", ready: true, learningView: "workspace"
+    } }, f.context);
+  const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
+  await until(async () => JSON.parse(await readFile(savedPath, "utf8")).watches[0].status === "paused");
+  const paused = (await f.service.read({}, f.context)).watches[0];
+  assert.equal(paused.availability, "unavailable");
+  assert.match(paused.error, /Lesson access was revoked/);
+  assert.equal(JSON.parse(await readFile(savedPath, "utf8")).watches[0].pendingGuidance, undefined);
+  assert.equal(guidance.length, 1, "the busy teacher deferred the original help once");
+  allowed = true;
+  const beforeResume = reads;
+  await f.service.resumeWatch(input, f.context);
+  await until(() => reads >= beforeResume + 2);
+  assert.equal((await f.service.read({}, f.context)).watches[0].status, "active");
+  assert.equal(guidance.length, 1, "Resume cannot replay help retired after source access failed");
+  assert.equal(f.observations.starts.length, 0);
+});
+
 test("learning-task watch commands reject a browser departure during source reads", async t => {
   for (const operation of ["start", "resume", "observe", "observe-final-read"]) {
     await t.test(operation, async t => {

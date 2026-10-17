@@ -56,6 +56,9 @@ If you leave the task while **Start polling**, **Resume**, or an observed step
 is being checked, that request reports the changed task instead of activating
 the departed watch or queuing help for it. Return to the intended task before
 starting or resuming; repeat a step only after its watch is active.
+If the lesson can no longer be read or access is lost, polling becomes
+**unavailable** and discards help that has not been delivered. After resolving
+the problem, **Resume** watches fresh steps; it does not replay that discarded help.
 You do not need to keep the dialog open.
 
 Polling reports only named Vibe64 controls, settled Workspace/Learning view and

@@ -317,6 +317,9 @@ task after source reads. A departure during admission cannot install an active
 watch or restore guidance discarded by the existing focus-change owner. This
 uses the original watch record, cursor and control serialization; no second
 watcher or liveness timer is introduced.
+An unavailable source pauses the same watch and retires pending guidance through
+its existing pause cleanup. Explicit Resume reauthorizes the source without
+replaying undelivered help from before the failure.
 
 Training's watcher owns the hidden guidance operation paired with that descriptor.
 It rechecks the active attempt, pin, exact Main session and current criterion before

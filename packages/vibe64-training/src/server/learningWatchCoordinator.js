@@ -151,6 +151,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
           watch.status = "paused";
           watch.availability = "unavailable";
           watch.error = `Watching paused: ${error.message}`.slice(0, 512);
+          await clearPending(state, watch);
         }
       }
       await host.persist(state);
