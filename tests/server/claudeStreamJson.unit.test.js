@@ -2161,7 +2161,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     if (record.event === "vibe64.agent_message.delivery_timing" && record.stage === "first-response") firstResponseTiming.resolve();
   };
   const actions = createActionCatalogue();
-  const createService = () => createTerminalService({ projectService, actions,
+  const actor = { username: "service-owner", uid: 73, role: "owner" };
+  const createService = () => {
+    const value = createTerminalService({ projectService, actions,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
     env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command, JSKIT_REALTIME_DEBUG: "1",
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
@@ -2172,8 +2174,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.some(message => message.text === "Service progress")) streamed.resolve();
     } }
   });
+    value.configureAssistantRuntime({
+      resolveAssistantUser: async user => user?.username === actor.username ? actor : user,
+      authorizeProjectMessage: async user => user?.username === actor.username ? actor : user
+    });
+    return value;
+  };
   service = createService();
-  const actor = { username: "service-owner", role: "owner" };
   const options = { runtime, vibe64User: actor };
   const originalGoalRequest = { headers: { cookie: "fixture-session" } };
   let requireGoalRequest = false;
@@ -2202,7 +2209,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(emptyGoalRead.goal, null);
     const state = await service.agentSessionState("test", { ...options, session: await store.readSession("test") });
     assert.ok(state.thread.id);
-    const browserAuthority = { sessionId: "test", projectSlug: "claude-main-fixture", actorId: actor.username,
+    const browserAuthority = { sessionId: "test", projectSlug: "claude-main-fixture", actorId: String(actor.uid),
       requestContext: { channel: "internal", surface: "app" } };
     const browser = await service.openBrowserConversation("test", { ...options, browserAuthority });
     const releaseBrowser = await browser.subscribe(() => {});

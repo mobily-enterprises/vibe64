@@ -4277,7 +4277,7 @@ function createService({
               // identity, so each later goal tool rechecks current project access.
               if (actor && !prepared.context.browserAuthority) {
                 prepared.context.browserAuthority = { sessionId, projectSlug: projectRuntimeContext().projectSlug,
-                  actorId: actor.username, requestContext: { surface: "app", channel: "internal",
+                  actorId: String(actor.uid ?? actor.username), requestContext: { surface: "app", channel: "internal",
                     requestMeta: currentProjectActionRequestMeta() || { request: { vibe64User: actor } } } };
               }
               await changeGoalIntent(sessionId, context, latest => {

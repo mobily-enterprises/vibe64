@@ -4258,4 +4258,5 @@ to the admitted native request, allowing its later goal tools to recheck current
 project/model access without requiring a separate chat message first.
 
 Goal Set/Resume retains the original action request metadata for hosted session
-reauthorization; a copied user record alone is not browser authentication.
+reauthorization and uses the host action identity (uid where present). A copied
+user record alone is not browser authentication.
