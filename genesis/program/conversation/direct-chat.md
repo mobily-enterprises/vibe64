@@ -4167,6 +4167,10 @@ The Public Claude process wrapper records one slow-success startup warning after
 five seconds, splitting managed stream readiness from subsequent native
 initialization. These content-free durations reuse its existing startup event;
 normal starts remain informational and failure cleanup retains its original owner.
+At the existing debug log level, startup records also identify temporary account
+catalogue/usage queries. Managed Git's existing completion event adds cumulative
+phase timings, separating admission from command execution without changing
+authorization, execution budgets or retry behavior.
 
 Goal management presentation uses `assistantGoalManagementMessage` beside the
 existing exact-envelope decoder. Native-admitted Claude `/goal` user records,

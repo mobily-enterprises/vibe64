@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { createVibe64ConversationExecution, shellQuote } from "@local/vibe64-execution/server";
 import { logOperationalEvent, sanitizeOperationText, shouldRedactLogField } from "@local/vibe64-core/server/logging";
+import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 import { claudeCodeArguments as nativeClaudeArguments, claudeFlagSettings as nativeClaudeFlagSettings, createClaudeCodeProcess as startClaude } from "@jskit-ai/assistant-core/server/claude-process";
 
 const CLAUDE_CODE_VERSION = "2.1.289";
@@ -20,7 +21,7 @@ function claudeCodeArguments(options = {}) {
 }
 
 async function createClaudeCodeProcess({
-  commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, logger, ...options
+  commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, logger, accountQuery, ...options
 } = {}) {
   const host = createVibe64ConversationExecution({ commandRunner, stopExecution, credentialHome,
     execution, shimDirs, onStarted, purpose: options.toolFree ? "account" : "assistant",
@@ -40,6 +41,8 @@ async function createClaudeCodeProcess({
       logOperationalEvent(logger, failure || slow ? "warn" : "info", {
         component: "vibe64.claude", event: "vibe64.claude.startup", stage,
         conversationId: options.sessionId, executionId, durationMs,
+        ...(accountQuery && isVibe64DebugLoggingEnabled({ env: options.env, level: logger?.level })
+          ? { accountQuery } : {}),
         ...(streamReadyMs !== undefined ? { streamReadyMs,
           ...(stage === "initialized" ? { initializationMs: durationMs - streamReadyMs } : {}) } : {}),
         code: failure?.code, error: failure ? sanitizeOperationText(failure.message, secrets) : undefined,

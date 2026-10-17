@@ -42,7 +42,8 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
   createProcess, command, commandRunner, stopExecution, credentialHome, env }) {
   const accountQueries = owner.createAccountQueries({
     accountIdentity,
-    createProcess: ({ signal }) => createProcess({ command, commandRunner, stopExecution, credentialHome, env, signal,
+    createProcess: ({ signal, purpose }) => createProcess({ command, commandRunner, stopExecution, credentialHome, env, signal,
+      accountQuery: purpose,
       workdir: credentialHome.home, toolFree: true, onEvent: async () => {} })
   });
   function accountQueryFailure(failure) {

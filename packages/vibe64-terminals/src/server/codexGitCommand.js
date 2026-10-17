@@ -4,6 +4,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 
 import {
   normalizeText,
@@ -652,6 +653,7 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
     component: "vibe64.codex_git_command",
     cwd: normalizeText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
+    ...(fields.phaseElapsedMs ? { phaseElapsedMs: fields.phaseElapsedMs } : {}),
     errorCode: normalizeText(result?.errorCode || result?.code),
     executionId: normalizeText(result?.executionId),
     event: "vibe64.codex_git_command.finished",
@@ -772,6 +774,7 @@ function createCodexGitCommandService({
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const startedAt = performance.now();
+    const phaseElapsedMs = isVibe64DebugLoggingEnabled({ env, level: logger?.level }) ? {} : null;
     let stage = "session";
     let commandSubmitted = false;
     const command = normalizeText(input.command);
@@ -788,6 +791,7 @@ function createCodexGitCommandService({
         ...baseFields,
         ...fields,
         stage,
+        phaseElapsedMs,
         durationMs: Date.now() - startedAtMs
       });
       if (result.ok !== false) {
@@ -831,6 +835,7 @@ function createCodexGitCommandService({
     // sessions). Keep this hot path structurally bounded—never hide a full
     // session read here behind caching or throttling.
     const session = await readGitCommandSession(projectService, sessionId);
+    if (phaseElapsedMs) phaseElapsedMs.session = Math.round(performance.now() - startedAt);
     const actor = gitCommandActorFromSession(session, {
       command
     });
@@ -898,6 +903,7 @@ function createCodexGitCommandService({
         stdout: "Vibe64 GitHub refresh requested.\n"
       }, actor);
     }
+    if (phaseElapsedMs) phaseElapsedMs.access = Math.round(performance.now() - startedAt);
     const requiresGithubToken = actor.githubRequired !== false && commandRequiresGithubToken(command, args);
     stage = "github-account";
     const toolHome = actor.githubRequired === false || !requiresGithubToken
@@ -910,6 +916,7 @@ function createCodexGitCommandService({
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
     }
+    if (phaseElapsedMs) phaseElapsedMs.account = Math.round(performance.now() - startedAt);
     stage = "github-token";
     const githubToken = requiresGithubToken
       ? await readGithubToken({
@@ -922,11 +929,13 @@ function createCodexGitCommandService({
     if (githubToken.ok === false) {
       return finish(githubToken, actor);
     }
+    if (phaseElapsedMs) phaseElapsedMs.authentication = Math.round(performance.now() - startedAt);
     const inputBuffer = normalizeText(input.inputBase64)
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
     stage = "command";
+    if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
     const result = await runWithinBudget({
       actor: "app",
       allowedRoots: [
@@ -963,6 +972,7 @@ function createCodexGitCommandService({
       },
       userKey: gatewayUserKey
     });
+    if (phaseElapsedMs) phaseElapsedMs.commandFinished = Math.round(performance.now() - startedAt);
     let error = "";
     if (result.timedOut && commandSubmitted) {
       error = "Managed Git command timed out.";

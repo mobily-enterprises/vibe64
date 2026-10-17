@@ -477,6 +477,31 @@ test("managed Git waits past five seconds and the executor stops work at its 30-
   });
 });
 
+test("managed Git debug timings separate admission from command execution", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root, "debug-timings");
+    await mkdir(session.metadata.source_path, { recursive: true });
+    let now = 0;
+    t.mock.method(performance, "now", () => now);
+    for (const level of ["warn", "debug"]) {
+      const events = [];
+      const service = serviceForSession(session, {
+        logger: { level, info: fields => events.push(fields), warn: fields => events.push(fields) },
+        async authorizeActorAccess() { now += 10; return { ok: true }; },
+        async runGatewayCommand() { now += 30; return { ok: true, exitCode: 0, stdout: "private-success-output" }; }
+      });
+      assert.equal((await service.run({ command: "git", args: ["status"], sessionId: session.sessionId })).ok, true);
+      assert.equal(events.length, 1);
+      if (level === "debug") {
+        assert.deepEqual(events[0].phaseElapsedMs, {
+          session: 0, access: 10, account: 10, authentication: 10, commandStarted: 10, commandFinished: 40
+        });
+      } else assert.equal(Object.hasOwn(events[0], "phaseElapsedMs"), false);
+      assert.doesNotMatch(JSON.stringify(events), /private-success-output/);
+    }
+  });
+});
+
 test("GitHub credential lookup shares the budget and timeouts are not reported as missing authentication", async (t) => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root, "shared-deadline");

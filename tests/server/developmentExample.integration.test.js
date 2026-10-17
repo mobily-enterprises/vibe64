@@ -73,7 +73,7 @@ test("the development preview serves its own backend, frontend and project", { t
     cwd: path.resolve(import.meta.dirname, "../.."),
     env: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
       VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project",
-      VIBE64_CLAUDE_COMMAND: claudeCommand },
+      VIBE64_CLAUDE_COMMAND: claudeCommand, LOG_LEVEL: "debug" },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
@@ -113,6 +113,7 @@ test("the development preview serves its own backend, frontend and project", { t
     const realtime = await fetch(`${origin}/socket.io/?EIO=4&transport=polling`);
     assert.equal(realtime.status, 200);
     assert.match(await realtime.text(), /^0\{"sid"/u);
+    assert.match(logs, /"level":(?:10|20|30),/u, "the existing LOG_LEVEL setting must reach the application logger");
   } finally {
     child.kill("SIGTERM");
     const killTimer = setTimeout(() => child.kill("SIGKILL"), 8000);

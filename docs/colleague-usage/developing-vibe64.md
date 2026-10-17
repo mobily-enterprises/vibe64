@@ -77,6 +77,15 @@ explicit command, the installed managed-runtime command remains the default.
 Each example keeps its frontend dependency cache under its own state directory.
 Keep that directory between runs so normal restarts can reuse the prepared cache.
 
+For a slow agent startup, a developer can launch with `LOG_LEVEL=debug npm run
+dev:example` and retain the server log. Claude startup records identify temporary
+`catalogue` and `usage` queries. Managed Git records include `phaseElapsedMs`:
+cumulative milliseconds through session lookup, authorization, account and
+credential lookup, then command start and finish. Subtract command start from
+finish to measure execution separately from admission. These extra diagnostic
+fields are absent at the normal log level; they do not change execution or
+automatically retry a command.
+
 Focused checks also use the selected sources:
 
 - Server: `npm test -- tests/server/<name>.test.js`.

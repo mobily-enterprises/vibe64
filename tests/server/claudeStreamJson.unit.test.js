@@ -1139,6 +1139,7 @@ test("Claude configured defaults do not start a model discovery process", async 
   assert.equal(f.processes.length, 0);
   assert.equal((await f.provider.capabilities(f.context)).modelProviders[0].models.length, 2);
   assert.equal(f.processes.length, 1, "full configuration still reads the native model catalogue");
+  assert.equal(f.processes[0].options.accountQuery, "catalogue");
 });
 
 test("Claude retains failed catalog cleanup and retries it before another query or account change", async (t) => {
@@ -3393,7 +3394,7 @@ test("Claude native cleanup cannot leave the saved run active when learning chec
 
 test("Claude successful startup diagnostics distinguish launch from initialization and warn only when slow", async (t) => {
   const { runVibe64Command } = await import("@local/vibe64-execution/server");
-  for (const elapsed of [5_000, 5_001]) await t.test(`${elapsed}ms`, async t => {
+  for (const [elapsed, level] of [[5_000, "warn"], [5_001, "warn"], [5_001, "debug"]]) await t.test(`${elapsed}ms ${level}`, async t => {
     const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-startup-timing-"));
     const command = path.join(root, "claude-fixture");
     await writeFile(command, `#!/usr/bin/env node
@@ -3414,17 +3415,17 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
       await native?.stop();
       await rm(root, { recursive: true, force: true });
     });
-    native = await createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+    native = await createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root }, accountQuery: "catalogue",
       env: { ...process.env, ANTHROPIC_API_KEY: "private-credential" },
       async commandRunner(input) {
         const result = await runVibe64Command(input);
         clock += 2_000;
         return result;
       },
-      logger: Object.fromEntries(["info", "warn"].map(level => [level, fields => {
-        diagnostics.push({ level, ...fields });
+      logger: { level, ...Object.fromEntries(["info", "warn"].map(logLevel => [logLevel, fields => {
+        diagnostics.push({ level: logLevel, ...fields });
         if (fields.stage === "stream_ready") clock += elapsed - 2_000;
-      }]))
+      }])) }
     });
     assert.deepEqual(diagnostics.map(event => event.stage), ["starting", "stream_ready", "initialized"]);
     const completed = diagnostics.at(-1);
@@ -3432,6 +3433,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
     assert.equal(completed.streamReadyMs, 2_000);
     assert.equal(completed.initializationMs, elapsed - 2_000);
     assert.equal(completed.executionId, native.executionId);
+    assert.ok(diagnostics.every(event => level === "debug"
+      ? event.accountQuery === "catalogue" : !Object.hasOwn(event, "accountQuery")));
     assert.equal(completed.level, elapsed > 5_000 ? "warn" : "info");
     assert.equal(diagnostics.filter(event => event.level === "warn").length, elapsed > 5_000 ? 1 : 0);
     assert.doesNotMatch(JSON.stringify(diagnostics), /private startup output|private response|private-credential/);

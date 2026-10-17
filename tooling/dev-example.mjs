@@ -86,8 +86,7 @@ async function main() {
     ...parseStartupArgs(["--no-open", "--project", projectRoot]),
     appRoot,
     systemRoot: process.env.VIBE64_SYSTEM_ROOT,
-    managedSourceRoot: path.join(developmentRoot, "sessions"),
-    logLevel: "warn"
+    managedSourceRoot: path.join(developmentRoot, "sessions")
   });
   let vite;
   let closing = false;
