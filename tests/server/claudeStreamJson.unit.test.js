@@ -37,6 +37,10 @@ test("Claude subscription launch preserves native auth and makes helper tools un
   assert.equal(args.includes("--bare"), false);
   assert.equal(args[args.indexOf("--tools") + 1], "");
   assert.equal(args.includes("bypassPermissions"), false);
+  const mainArgs = claudeCodeArguments({ sessionId: "session", resume: true });
+  const settings = JSON.parse(mainArgs[mainArgs.indexOf("--settings") + 1]);
+  assert.equal(settings.includeGitInstructions, false);
+  assert.ok(settings.hooks.PreToolUse.length, "managed command admission remains installed");
 });
 
 test("Claude's live model and effort catalog fits the shared assistant selection contract", () => {
@@ -1536,6 +1540,7 @@ test("Claude changes provider controls before model and keeps the native convers
   assert.equal(f.processes.length, 1);
   assert.deepEqual(native.requests.slice(-2).map(({ subtype }) => subtype), ["apply_flag_settings", "set_model"]);
   const flags = native.requests.at(-2).settings;
+  assert.equal(flags.includeGitInstructions, false, "provider changes preserve the host Git workflow");
   assert.equal(flags.env.ANTHROPIC_BASE_URL, "https://api.deepseek.com/anthropic");
   assert.equal(flags.env.ANTHROPIC_AUTH_TOKEN, "fixture-deepseek-secret");
   assert.equal(flags.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, "deepseek-flash");

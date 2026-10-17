@@ -12,8 +12,9 @@ function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {})
     timeout: 30,
     command: [process.execPath, fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/agentSessionCommandHook"))].map(shellQuote).join(" ")
   };
-  return nativeClaudeFlagSettings({ effort, providerEnv,
-    ...(!toolFree ? { commandHook } : {}) });
+  // Vibe64 supplies its Git workflow; avoid the native startup status snapshot.
+  return { ...nativeClaudeFlagSettings({ effort, providerEnv,
+    ...(!toolFree ? { commandHook } : {}) }), includeGitInstructions: false };
 }
 
 function claudeCodeArguments(options = {}) {

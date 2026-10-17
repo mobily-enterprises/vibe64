@@ -34,6 +34,10 @@ send time. Startup diagnostics separate process launch, initialization request,
 completed input write and response arrival without recording the message body.
 Colleague can explain this recovery path; inspecting server diagnostics requires
 the operator's access.
+Managed Claude conversations use Vibe64's Git workflow without Claude's automatic
+startup Git snapshot or built-in commit/PR instructions. Agents can still inspect
+current changes through the ordinary managed Git tools when the task needs them;
+Save and publication keep their existing controls and permissions.
 
 Project guidance can change while Codex is working. The current turn keeps its
 installed instructions; the next idle admission reads the latest guidance without
