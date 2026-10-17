@@ -748,6 +748,22 @@
       </section>
 
       <section
+        v-if="learningDatabaseAvailable && normalWorkspaceActive && props.projectPane === 'dashboard'"
+        class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
+        role="tabpanel"
+      >
+        <Vibe64DatabaseWorkspace
+          :active="props.active"
+          :assistant-available="false"
+          assistant-unavailable-message="Ask your lesson teacher in Learning about this data."
+          class="studio-autopilot__session-tool-content"
+          :learning-attempt-id="props.learningAttemptId"
+          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
+          :session-id="selectedAssistantSessionId"
+        />
+      </section>
+
+      <section
         v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
@@ -803,7 +819,8 @@
       </section>
 
       <div
-        v-show="!props.sourceWorkspaceAvailable || learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
+        v-show="!props.sourceWorkspaceAvailable && !(learningDatabaseAvailable && normalWorkspaceActive && props.projectPane === 'dashboard') ||
+          learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
@@ -1735,6 +1752,9 @@ const learningWorkspaceAvailable = computed(() => props.outputWorkspaceAvailable
 const learningPaneActive = computed(() => props.lessonsAvailable &&
   (props.learningView === "learning" || !learningWorkspaceAvailable.value));
 const normalWorkspaceActive = computed(() => !props.lessonsAvailable || !learningPaneActive.value);
+// A practice lesson's Dashboard shows only its database, read through the saved attempt.
+const learningDatabaseAvailable = computed(() => !props.sourceWorkspaceAvailable && Boolean(props.learningAttemptId) &&
+  props.outputWorkspaceAvailable === true && props.conversationRuntime?.identity?.noExercise === false);
 const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
   props.conversationRuntime?.available?.value));
 const learningLayout = Object.freeze({

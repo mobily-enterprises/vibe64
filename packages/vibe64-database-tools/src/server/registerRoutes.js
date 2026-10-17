@@ -52,29 +52,45 @@ function databaseStatusCode(response = {}) {
   return 400;
 }
 
+// A saved lesson reads its practice database through these read operations only.
+const LEARNING_ROUTE_ACTIONS = new Set([
+  ACTION_DATABASE_STATE_READ,
+  ACTION_DATABASE_SCHEMA_REFRESH,
+  ACTION_DATABASE_QUERY_RUN,
+  ACTION_DATABASE_QUERY_CANCEL,
+  ACTION_DATABASE_LOOKUP_SEARCH
+]);
+
 function registerRoutes(http, {
   projectContext = null,
   routeRelativePath = "",
-  routeSurface = ""
+  routeSurface = "",
+  learningScoped = false
 } = {}) {
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 database routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath,
+    routeRelativePath: learningScoped ? "learning/:learningAttemptId/vibe64" : routeRelativePath,
     routeSurface,
+    projectScoped: !learningScoped,
     tags: ["studio", "vibe64-database-tools"]
   });
   const sessionRoute = "/database/sessions/:sessionId";
-  const route = (method, suffix, actionId, options, buildInput) => routes.actionRoute(
-    method,
-    `${sessionRoute}${suffix}`,
-    {
-      statusCode: databaseStatusCode,
-      ...options,
-      actionId,
-      buildInput
-    }
-  );
+  const route = (method, suffix, actionId, options, buildInput) => {
+    if (learningScoped && !LEARNING_ROUTE_ACTIONS.has(actionId)) return;
+    routes.actionRoute(
+      method,
+      `${sessionRoute}${suffix}`,
+      {
+        statusCode: databaseStatusCode,
+        ...options,
+        actionId,
+        buildInput: learningScoped
+          ? request => ({ ...buildInput(request), learningAttemptId: request.params.learningAttemptId })
+          : buildInput
+      }
+    );
+  };
 
   route("GET", "", ACTION_DATABASE_STATE_READ, {
     summary: "Read the selected session database workspace and current refreshed schema."

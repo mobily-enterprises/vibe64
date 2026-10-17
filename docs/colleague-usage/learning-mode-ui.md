@@ -45,8 +45,11 @@ After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a
 lesson or reloading the page. The right side gains **Workspace** and **Learning**
-tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs and all
-applicable Dashboard tools. Switching between Preview and Dashboard keeps Learning
+tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs. In a
+practice lesson, **Dashboard** shows the practice app's **Database** view: its ERD,
+tables and data, read-only. Running a change to data reports that Learning shows the
+data read-only; change data in a Working session. An app without a database shows
+"The session Stack does not declare a supported database." Switching between Preview and Dashboard keeps Learning
 on and retains the same selected teacher session; it does not switch to your last
 Working session. **Learning** reveals the existing **Lessons** and
 **Presentation** controls. Returning from Workspace keeps the selected Lessons

@@ -30,6 +30,16 @@ const ACTION_DATABASE_SNIPPET_SAVE = "vibe64.database.snippet.save";
 const ACTION_DATABASE_SNIPPET_DELETE = "vibe64.database.snippet.delete";
 const ACTION_DATABASE_ASSISTANT_ASK = "vibe64.database.assistant.ask";
 
+// Learning reads a practice lesson's database through its saved attempt; data
+// changes stay with ordinary Working sessions.
+const LEARNING_ACCESS = Object.freeze({
+  [ACTION_DATABASE_STATE_READ]: "observe",
+  [ACTION_DATABASE_LOOKUP_SEARCH]: "observe",
+  [ACTION_DATABASE_SCHEMA_REFRESH]: "control",
+  [ACTION_DATABASE_QUERY_RUN]: "control",
+  [ACTION_DATABASE_QUERY_CANCEL]: "control"
+});
+
 function action({ execute, id, input, kind = "command", assistant }) {
   return withVibe64ActionContext({
     audit: {
@@ -45,7 +55,7 @@ function action({ execute, id, input, kind = "command", assistant }) {
     observability: {},
     output: null,
     version: 1
-  });
+  }, LEARNING_ACCESS[id] ? { learningAccess: LEARNING_ACCESS[id] } : {});
 }
 
 function createDatabaseActions({ databaseTools } = {}) {
