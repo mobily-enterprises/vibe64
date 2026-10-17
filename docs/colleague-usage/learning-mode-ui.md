@@ -52,6 +52,10 @@ stop a watch when you do not want to use the buttons. **Pause** retains the curs
 and **Stop** removes only the watch—it does not stop the app, Main or the lesson.
 Returning to another project, lesson or account pauses the old watch;
 after a server restart, return to the same Learning task and choose **Resume**.
+If you leave the task while **Start polling**, **Resume**, or an observed step
+is being checked, that request reports the changed task instead of activating
+the departed watch or queuing help for it. Return to the intended task before
+starting or resuming; repeat a step only after its watch is active.
 You do not need to keep the dialog open.
 
 Polling reports only named Vibe64 controls, settled Workspace/Learning view and

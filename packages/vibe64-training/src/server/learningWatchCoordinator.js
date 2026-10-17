@@ -95,10 +95,13 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
   };
 
   async function read(state, watch, connection) {
+    const status = watch.status;
     const result = requireResult(await authorizedSource().read(watch, host.actionContext(state, connection)));
     const observation = conversationObservation({ ...result, replyDuringWork: true });
-    watch.cursor = watchUpdate(watch, observation).cursor;
-    watch.error = "";
+    if (watch.status === status) {
+      watch.cursor = watchUpdate(watch, observation).cursor;
+      watch.error = "";
+    }
     return observation;
   }
 
@@ -225,6 +228,10 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
       availability: "active", browserClientId: request.browserClientId,
       learningClientId: request.learningClientId, eventIds: [] };
     await read(state, watch, { clientId: "", focus: watch });
+    if (host.closed() || state.connections.get(watch.browserClientId) !== connection ||
+        !learningBindingMatches(watch, connection, watch.learningClientId)) {
+      throw failure("The Learning task changed while its watch was starting. Return to that task and start again.");
+    }
     state.record.watches = state.record.watches.filter(item => !["delivered", "cancelled"].includes(item.status)).concat(watch);
     await host.persist(state);
     schedule(state);
@@ -248,6 +255,13 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     if (input.learningClientId && input.learningClientId !== watch.learningClientId) {
       throw failure("This learning presentation no longer owns the watch.", "conversation_forbidden", 403);
     }
+    const requireCurrent = () => {
+      if (host.closed() || watch.status !== "active" || state.connections.get(watch.browserClientId) !== connection ||
+          !learningBindingMatches(watch, connection, watch.learningClientId) ||
+          input.workspace.learningView !== connection.focus.learningView || input.workspace.pane !== (connection.focus.pane || "")) {
+        throw failure("The Learning task changed before its observation was recorded. Return to that task and repeat the step.");
+      }
+    };
     const payload = { eventId: input.eventId, outcome: input.outcome || "confirmed", control: input.control,
       workspace: structuredClone(input.workspace), origin,
       ...(input.failure ? { failure: input.failure } : {}) };
@@ -257,6 +271,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
       return { ok: true, duplicate: true, watch: publicLearningWatch(watch) };
     }
     await read(state, watch, { clientId: watch.browserClientId, focus: connection.focus });
+    requireCurrent();
     watch.eventIds = [...(watch.eventIds || []).slice(-15), payload];
     watch.latestObservation = { ...payload, observedAt: new Date().toISOString() };
     const evidenceKey = JSON.stringify({ outcome: payload.outcome, control: payload.control, workspace: payload.workspace,
@@ -266,6 +281,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
         evidence: structuredClone(payload) };
     }
     await read(state, watch, { clientId: watch.browserClientId, focus: connection.focus });
+    requireCurrent();
     await host.persist(state);
     schedule(state, debounceMs);
     return { ok: true, duplicate: false, watch: publicLearningWatch(watch) };
@@ -294,8 +310,13 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     }
     watch.status = "active";
     watch.availability = "active";
-    try { await read(state, watch, { clientId: "", focus: watch }); }
-    catch (error) {
+    try {
+      await read(state, watch, { clientId: "", focus: watch });
+      if (host.closed() || watch.status !== "active" || state.connections.get(browserClientId) !== connection ||
+          !learningBindingMatches(watch, connection, learningClientId)) {
+        throw failure("The Learning task changed while its watch was resuming. Return to that task and choose Resume.");
+      }
+    } catch (error) {
       watch.status = "paused";
       watch.availability = "unavailable";
       watch.error = error.message;

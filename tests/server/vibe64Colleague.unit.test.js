@@ -1334,6 +1334,70 @@ test("learning-task watches pause when their browser leaves or the server restar
     "a retained pending Main notification cannot survive restart");
 });
 
+test("learning-task watch commands reject a browser departure during source reads", async t => {
+  for (const operation of ["start", "resume", "observe", "observe-final-read"]) {
+    await t.test(operation, async t => {
+      const f = await fixture(t, [], { watching: true });
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      t.after(() => release.resolve());
+      let readsUntilBlocked = 0;
+      const guidance = [];
+      const attemptId = "44444444-4444-4444-8444-444444444444";
+      f.service.registerConversationSource("learning-task", {
+        async read(watch) {
+          if (readsUntilBlocked && --readsUntilBlocked === 0) {
+            entered.resolve();
+            await release.promise;
+          }
+          watch.learningTask = { ...watch.learningTask, progress: { revision: 1,
+            passedAssessmentIds: [], remainingAssessmentIds: ["explain"] } };
+          return { status: "working", runId: attemptId, revision: "1",
+            messages: [{ id: "learning:1", role: "assistant", text: "Current task." }] };
+        },
+        async notify(_watch, pending) { guidance.push(pending); return { ok: true, status: "accepted" }; }
+      });
+      const focus = { projectSlug: "alpha", sessionId: "learning-race", pane: "preview",
+        learningAttemptId: attemptId, learningView: "workspace" };
+      const input = { watchId: "learning-race", browserClientId: "browser-learning", learningClientId: "main-learning",
+        attemptId, projectSlug: "alpha", sessionId: focus.sessionId, conversationId: "learning-main",
+        criterion: "Explain the visible result." };
+      await f.service.focus({ clientId: input.browserClientId, focus }, f.context);
+      if (operation !== "start") await f.service.startLearningWatch(input, f.context);
+      if (operation === "resume") await f.service.pauseWatch({ watchId: input.watchId }, f.context);
+      readsUntilBlocked = operation === "observe-final-read" ? 2 : 1;
+      const pending = operation === "start" ? f.service.startLearningWatch(input, f.context)
+        : operation === "resume" ? f.service.resumeWatch(input, f.context)
+          : f.service.observeLearningTask({ watchId: input.watchId, learningClientId: input.learningClientId,
+            eventId: "departing-gesture", control: "preview-select", workspace: {
+              projectSlug: "alpha", sessionId: focus.sessionId, pane: "preview", ready: true, learningView: "workspace"
+            } }, f.context);
+      const rejected = assert.rejects(pending, /Learning task changed/);
+      await entered.promise;
+      try {
+        await f.service.focus({ clientId: input.browserClientId,
+          focus: { projectSlug: "other", sessionId: "other-session", pane: "preview" } }, f.context);
+      } finally { release.resolve(); }
+      await rejected;
+      const result = await f.service.read({}, f.context);
+      assert.equal(result.watches.length, operation === "start" ? 0 : 1);
+      if (operation !== "start") {
+        assert.equal(result.watches[0].status, "paused");
+        assert.match(result.watches[0].error, operation === "resume" ? /changed while.*resuming/ : /left this Learning task/);
+      }
+      const savedPath = path.join(f.root, "colleague", "NDI", "conversation.json");
+      if (operation === "start") await assert.rejects(readFile(savedPath), { code: "ENOENT" });
+      else {
+        const saved = JSON.parse(await readFile(savedPath, "utf8"));
+        assert.equal(saved.watches.some(watch => watch.pendingGuidance), false,
+          "a departed task cannot restore help retired by its focus change");
+      }
+      assert.equal(guidance.length, 0);
+      assert.equal(f.observations.starts.length, 0);
+    });
+  }
+});
+
 test("a registered workspace conversation reuses code polling while the user keeps talking without any project", async (t) => {
   const f = await fixture(t, [reply("We can keep discussing your idea."), reply("A repair proposal needs your confirmation.")], { watching: true, watchPollMs: 15 });
   registerWorkspaceConversation(f);

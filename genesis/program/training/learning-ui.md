@@ -312,6 +312,11 @@ delivery failure does not invalidate it. The host focus publishes only the exact
 workspace and Learning view; source-less attempts retain their real session
 identity. Navigation performed for Colleague is labelled as a demonstration,
 while target or identity changes retire the current polling authority.
+Start, Resume and observation recheck the same browser connection and exact
+task after source reads. A departure during admission cannot install an active
+watch or restore guidance discarded by the existing focus-change owner. This
+uses the original watch record, cursor and control serialization; no second
+watcher or liveness timer is introduced.
 
 Training's watcher owns the hidden guidance operation paired with that descriptor.
 It rechecks the active attempt, pin, exact Main session and current criterion before
