@@ -123,7 +123,9 @@ reply.
 If Codex reports a failure without a final reply, Colleague checks that exact
 request's saved native history. A completed answer is recovered once. Otherwise
 Colleague reports the failure and stops the failed native turn through its
-existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing.
+existing cleanup. The failure appears in red above Colleague's message box, even
+when its turn produced no reply; an operation it could not verify also stays
+listed under **Operations** for inspection. If cleanup cannot be confirmed, use **Stop** before continuing.
 This recovery does not resend your request or use another turn's answer.
 If an admitted Codex action fails during a native goal, cleanup verifies that the
 same goal is paused before the request settles. After the native turn is confirmed

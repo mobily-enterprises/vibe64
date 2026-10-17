@@ -17,6 +17,12 @@ storage intact and ask the owner to inspect the reported error. An unrelated
 Working project cannot replace this saved attempt's practice project.
 
 Colleague can explain the error and use supported lesson controls when asked.
+
+In a practice lesson, **Workspace** shows the practice app in Preview as soon as it
+reports ready, including after the app starts while you are on the **Learning**
+pane. **Stop preview** stops the practice app cleanly and keeps it stopped, even
+after a reload, until you choose **Restart preview**. Switching between
+**Workspace** and **Learning** keeps the same running app without reloading it.
 Standalone exercise conversations in Learning, their Preview and practical
 assessment are still being integrated; prepared source alone does not make that
 complete flow available.
