@@ -291,6 +291,12 @@ details, account credentials or error contents. This does
 not change the deadline, start a model, resend a message or retry a subscription;
 use **Reload chat** after correcting the cause.
 
+Leaving a chat or releasing its failed connection stops further subscription
+setup once the current step finishes. A released connection does not start a
+new history read; an existing read may finish without updating the replacement
+view. This only releases browser observation: agent work continues. **Reload
+chat** still checks current access before restoring history and live updates.
+
 With the same option, saved learning-attempt timings separately report normal or
 preview scope selection, saved exercise validation and practice-context capture.
 These are nested durations within saved-attempt time; do not add them to that
