@@ -1104,6 +1104,41 @@ it("retires pending actual readiness on account change and keeps resource failur
 
 const cueInput = { ...visualRequest, cueId: "cue-one", commandId: "transition-one", navigationId: "navigation-one",
   conversationId: "conversation-a", turnId: "turn-a", clientId: "browser-a", name: "advance", parameters: {} };
+it("reports unopened cue rejection and arms only after the actual presentation opens", async () => {
+  const { createTrainingNavigation } = await import("../../packages/vibe64-training/src/client/createTrainingNavigation.js");
+  const { executeTrainingPresentationOperation, trainingPresentationReceipt } = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.colleaguePreview.value.presentation;
+    const receipts = [];
+    const command = { id: "unopened-cue", status: "pending", presentation: { operation: "cue", ...cueInput } };
+    const navigation = createTrainingNavigation({
+      scope: () => ({ mounted: true, actorKey: "member-42", clientId: cueInput.clientId }),
+      navigate: () => async value => ({ focus: { pane: "preview" },
+        presentation: trainingPresentationReceipt(await executeTrainingPresentationOperation(handle, value.presentation)) }),
+      beforeNavigate() {}, acknowledge: async value => { receipts.push(structuredClone(value)); }, error: Vue.ref("")
+    });
+    await navigation.handle(command);
+    expect(receipts).toEqual([{ commandId: "unopened-cue", clientId: cueInput.clientId, ok: false,
+      error: "This lesson presentation is no longer selected. Open its current attempt again." }]);
+    expect(fixture.visualReads).toHaveLength(0);
+    expect(mocks.visuals).toHaveLength(0);
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready();
+    await opening;
+    await navigation.handle({ ...command, id: "opened-cue" });
+    expect(receipts).toHaveLength(2);
+    expect(receipts[1]).toMatchObject({ commandId: "opened-cue", ok: true,
+      presentation: { cueId: cueInput.cueId, phase: "armed", playerInstanceId: "fixture-1" } });
+    expect(handle.state.cue.canonicalFinal).toBe(false);
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
 async function openCueFixture(fixture) {
   await fixture.settleRead(0);
   const handle = fixture.colleaguePreview.value.presentation;
