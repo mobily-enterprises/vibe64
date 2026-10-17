@@ -57,6 +57,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
   });
   const presentation = identity.learningAttemptId !== undefined ? useTrainingMainPresentation({ identity,
     current, preview: shell.preview, voice: shell.voice, browserNavigation: shell.browserNavigation,
+    retain: () => conversation.retain(),
     ready: computed(() => Boolean(conversation.snapshot.value)),
     enabled: computed(() => available.value &&
       (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))

@@ -1324,3 +1324,5 @@ the exact Learning mode, view, lesson, session and presentation receipt.
 Main projects the shared navigator focus onto the existing Main display-report fields before sending its acknowledgment. The original action input schema and exact-focus matcher remain strict; Working conversation/tool context is not part of this receipt.
 
 Main owns separate command instances for view-focus reporting and presentation acknowledgements. A Preview remount can report focus concurrently with an ACK; the generic single-command busy guard must not discard that independent receipt. Both instances retain the same authorization and payload mapping, and Main identity/generation and server receipt guards are unchanged.
+
+Main retains its existing exact conversation only for the navigation/ACK transaction. Routed view replacement must not retire the initiating client before its receipt; the transaction releases in `finally`, so ordinary final-reader disposal resumes immediately. Actor/current/generation fences remain active during that lease.

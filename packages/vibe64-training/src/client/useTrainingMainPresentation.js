@@ -11,7 +11,7 @@ import { VIBE64_BROWSER_NAVIGATION_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // A captured Main application owns only product read/commands and the original
 // shared browser transaction. It creates no subscriber, player or speech queue.
-export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready,
+export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready, retain,
   browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null) }) {
   const clientId = globalThis.crypto.randomUUID();
   const conversationId = mainConversationId(identity);
@@ -113,10 +113,17 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
       await refresh();
     } catch (cause) { if (alive() && expected === generation) error.value = cause.message; }
   }, { immediate: true });
+  async function handleNavigation(command) {
+    // Routing replaces Main’s view reader. Keep this exact conversation through
+    // its own navigation and ACK, then restore ordinary last-reader disposal.
+    const retained = retain?.();
+    try { await navigation.handle(command); }
+    finally { retained?.release(); }
+  }
   watch(product, value => {
     if (!value || !alive()) return;
     if (value.cue) cue.observe(value.cue);
-    if (value.navigation) void navigation.handle(value.navigation);
+    if (value.navigation) void handleNavigation(value.navigation);
   }, { flush: "sync", immediate: true });
   watch(current, valid => {
     if (valid) return;

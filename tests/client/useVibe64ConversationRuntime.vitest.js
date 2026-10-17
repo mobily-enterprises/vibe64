@@ -44,12 +44,13 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   const viewer = ref({ actorKey: "owner" });
   const selected = reactive({ sessionId, projectSlug, learningAttemptId, learnerId, noExercise, sourceProjectSlug, sessionsApiPath });
   let runtime;
+  const readerKey = ref(0);
   const reader = { setup() {
     runtime = useVibe64ConversationRuntime({ sessionId: computed(() => selected.sessionId), projectSlug: computed(() => selected.projectSlug), sessionsApiPath: computed(() => selected.sessionsApiPath),
       learningAttemptId: computed(() => selected.learningAttemptId), learnerId: computed(() => selected.learnerId), noExercise: computed(() => selected.noExercise), sourceProjectSlug: computed(() => selected.sourceProjectSlug) });
     return () => h("div");
   } };
-  const app = renderer.createApp(provideShell ? { setup() { provideShell(); return () => h(reader); } } : reader);
+  const app = renderer.createApp({ setup() { provideShell?.(); return () => h(reader, { key: readerKey.value }); } });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   provideConversationFixture(app, socket, "owner");
   if (!beforeMount) {
@@ -59,7 +60,8 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   }
   beforeMount?.(app, { socket, read, selected }); app.mount({});
   releases.push(() => app.unmount());
-  return { app, runtime, selected, viewer, owners, disposed, access, socket,
+  return { app, get runtime() { return runtime; }, selected, viewer, owners, disposed, access, socket,
+    async remountReader() { readerKey.value += 1; await nextTick(); },
     snapshot(identity, fields) {
       const id = mainConversationId(identity);
       Object.assign(read(id), fields);
@@ -1162,5 +1164,70 @@ it("captures the shell navigator before the retained Learning application is cre
       learningAttemptId: attempt, projectSlug: sourceProjectSlug, sessionId, pane: "preview" });
     expect(results).toEqual([{ ok: true }]);
     expect(await pending).toMatchObject({ ok: true });
+  } finally { connection.acknowledge?.({ ok: false }); await pending; }
+});
+
+
+it.each([false, true])("keeps a visual transaction through the routed reader replacement without voice (actor changes: %s)", async actorChanges => {
+  const { provide, shallowRef } = await import("vue");
+  const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
+  const attempt = "4fb6edf2-7dc9-471b-84a2-2d33e05cf1c9";
+  const sourceProjectSlug = "training-4fb6edf27dc9471b84a22d33e05cf1c9";
+  const sessionId = `training-${attempt}`;
+  const preview = shallowRef(null), receipts = [], observed = {};
+  let original, issued = false;
+  const navigate = vi.fn(async command => {
+    if (actorChanges) f.viewer.value = { actorKey: "another-owner" };
+    await f.remountReader();
+    observed.clientAfterRoute = f.runtime.value.presentation.clientId;
+    observed.originalDisposed = f.disposed.includes(`/${sessionId}`);
+    return { focus: { projectSlug: sourceProjectSlug, sessionId, pane: "preview", learningMode: true,
+      learningView: "learning", learningContent: "active", learningAttemptId: attempt },
+      presentation: { ok: true, attemptId: attempt, visualId: command.presentation.visualId,
+        playerInstanceId: "routed-player", phase: "ready" } };
+  });
+  const f = fixture({ projectSlug: "", sessionId, learningAttemptId: attempt, learnerId: "1000",
+    noExercise: false, sourceProjectSlug, sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    provideShell() { provide(VIBE64_BROWSER_NAVIGATION_KEY, shallowRef(navigate)); provide(VIBE64_COLLEAGUE_PREVIEW_KEY, preview); } });
+  original = f.runtime.value;
+  preview.value = { projectSlug: sourceProjectSlug, sessionId, learningAttemptId: attempt, learnerId: "1000",
+    presentation: { state: {}, retireCue() {} } };
+  await vi.waitFor(() => expect(original.available.value).toBe(true));
+  const command = { id: "routed-main-open", status: "pending", projectSlug: sourceProjectSlug, sessionId,
+    pane: "preview", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attempt,
+    presentation: { operation: "open", attemptId: attempt, visualId: "client-server" } };
+  const coordination = createTrainingPresentationCoordination({ changed() {} });
+  const connection = {}, authority = { conversationId: mainConversationId(original.identity), generation: 0 };
+  const pending = coordination.begin(connection, command, authority);
+  mocks.presentation.mockImplementation(async (url, options = {}) => {
+    if (url.endsWith("/ack")) {
+      receipts.push(structuredClone(options.body));
+      return coordination.acknowledge(connection, options.body, authority);
+    }
+    if (options.method === "POST") return { ok: true };
+    if (!issued && url.includes(original.presentation.clientId)) {
+      issued = true; return { ok: true, navigation: command, cue: null };
+    }
+    return { ok: true, navigation: null, cue: null };
+  });
+  try {
+    await original.presentation.refresh();
+    await vi.waitFor(() => expect(observed.clientAfterRoute).toBeTruthy());
+    await nextTick();
+    if (actorChanges) {
+      expect(observed.clientAfterRoute).not.toBe(original.presentation.clientId);
+      expect(receipts).toEqual([]);
+      expect(original.available.value).toBe(false);
+    } else {
+      expect({ client: observed.clientAfterRoute, disposed: observed.originalDisposed, receipts: receipts.length })
+        .toEqual({ client: original.presentation.clientId, disposed: false, receipts: 1 });
+      expect(receipts[0]).toMatchObject({ clientId: original.presentation.clientId, ok: true,
+        presentation: { playerInstanceId: "routed-player", phase: "ready" } });
+      expect(await pending).toMatchObject({ ok: true });
+    }
+    expect(navigate).toHaveBeenCalledTimes(1);
+    f.app.unmount();
+    expect(f.disposed).toContain(`/${sessionId}`);
+    expect(original.available.value).toBe(false);
   } finally { connection.acknowledge?.({ ok: false }); await pending; }
 });

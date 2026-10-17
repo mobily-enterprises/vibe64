@@ -154,6 +154,7 @@ Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
 When Main opens a diagram in the practice project, wait for its confirmation;
 you do not need to request the diagram again while the view changes.
+This also applies with read-aloud off; opening voice first is not required.
 Wait for Main to confirm that the diagram is ready before continuing its
 illustrated steps.
 
