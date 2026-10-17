@@ -212,6 +212,14 @@ If the browser reports **Sound is blocked**, choose **Enable sound**. Ending
 voice keeps it off for that lesson until you open it again or reload the page.
 Working conversations still start voice only when you choose it.
 
+If sound stops early, for example because the voice service could not be
+reached or you hid a narrated diagram, the diagram does not claim it finished.
+Choose **Continue** to go on without sound, or ask Main to repeat the
+explanation. Turning read-aloud off while it speaks stops the speech and leaves
+the diagram interrupted; turning it on again does not replay it. Your next message
+to Main is read aloud again once the voice service is available; you do not need
+to toggle read-aloud or reload.
+
 An exercise's Main coding assistant can perform an explicitly requested setup
 repair in that same practice session. Its commands recheck the saved lesson each
 time, including after the opening request has finished. If the assistant starts a
