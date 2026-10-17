@@ -274,6 +274,13 @@ its own bubble. The notice belongs to
 those exact words; it does not describe the previous assistant reply. The layout
 is the same on desktop and phones.
 
+A message rejected before sending, including text beyond the input limit, stays
+failed with its original error. Use **Edit** to shorten it or **Cancel** to remove
+that rejected attempt. Cancel does not send the message, remove accepted history,
+or bring the failed bubble back after a reload. These controls work the same in
+the standalone editor and a hosted workspace. A lost delivery acknowledgement
+still requires checking the exact request; it is not treated as a rejection.
+
 If **Retry** reports that delivery is still unknown, the old message
 remains visible. Once the conversation is ready, you can type and **Send** a
 different message. The uncertain message is not resent, and its same words remain

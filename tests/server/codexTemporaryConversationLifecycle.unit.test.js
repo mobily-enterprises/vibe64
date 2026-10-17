@@ -11951,7 +11951,7 @@ test("temporary Codex steers its exact active native conversation without starti
 test("Main browser facade uses the original native owner and action authority without Colleague", { timeout: 30_000 }, async () => {
   const actions = createActionCatalogue();
   const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
-  await withAgentMessageController(async ({ captures, projectService, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     registerVibe64ActionContext(actions, {
       projectContext: {
         projectsRoot: path.dirname(runtime.projectContextRoot),
@@ -12045,6 +12045,33 @@ test("Main browser facade uses the original native owner and action authority wi
         assert.equal(rejected.statusCode, 400, rejected.body);
       }
       assert.equal(captures.turns.length, 0);
+      await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+      await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({
+        mode: "custom", review: false, workflowEngineId: "codex",
+        override: JSON.parse(before.assistant_selection)
+      }));
+      const rejectedMessageId = "main-browser-oversized";
+      const oversizedText = "x".repeat(32_001);
+      const oversized = await request("POST", "/messages", { messageId: rejectedMessageId,
+        text: oversizedText, data: { displayMessage: oversizedText } });
+      assert.equal(oversized.statusCode, 409, oversized.body);
+      assert.match(oversized.body, /conversation_invalid_message/,
+        "routing must preserve the original definite native validation rejection");
+      assert.equal(captures.turns.length, 0);
+      assert.equal(await store.conversationMessageIdExists(sessionId, rejectedMessageId), false);
+      const rejectedRoute = JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_request);
+      assert.equal(rejectedRoute.delivery, "failed");
+      assert.equal(Object.hasOwn(rejectedRoute, "attemptedMessageId"), false);
+      const cancelledRejection = await request("POST", "/cancel", {});
+      assert.equal(cancelledRejection.statusCode, 200, cancelledRejection.body);
+      assert.equal(cancelledRejection.json().routingCancelled, true);
+      assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_request).stopped, true);
+      assert.equal(captures.turns.length, 0, "Cancel of a rejected request does not send it");
+      // Restore the original direct-chat fixture before its independent native
+      // Send/Stop checks below; that policy has no routing request of its own.
+      await store.writeMetadataValue(sessionId, "assistant_routing", before.assistant_routing || "");
+      await store.writeMetadataValue(sessionId, "assistant_routing_request", before.assistant_routing_request || "null");
+
       const input = { messageId: "main-browser-send", text: "Read the actual source", data: {
         displayMessage: "A visible request", originId: "main-browser-test"
       } };

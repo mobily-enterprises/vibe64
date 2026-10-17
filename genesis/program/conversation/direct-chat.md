@@ -8,6 +8,12 @@ successful completion can become a normal Send with the same message identity;
 cancelled, interrupted, failed, timed-out and unknown endings cannot. This uses
 the existing routing rejection and shared browser recovery, without interpreting
 assistant text or changing saved history.
+Routing retains a native send rejection's existing code, so definite input
+validation failure remains failed in the shared composer instead of becoming
+unknown delivery. Receipt inspection admits the standalone null actor through
+the same fresh purpose/access resolver; hosted identity, selected connection,
+active-work and native acceptance checks still fence the original receipt.
+Cancel removes only the rejected local attempt and preserves accepted history.
 Hosted Claude cold initialization has a 90-second bound for managed startup
 probes; normal controls retain their separate deadline and failed startup still
 requires verified process cleanup.

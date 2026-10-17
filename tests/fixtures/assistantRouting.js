@@ -144,9 +144,11 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
     return next;
   };
   let failAdmission = false;
+  let rejectedAdmission;
   const routingOptions = { systemRoot: root, agent, exclusive,
     publish: async (_id, value) => { events.push(structuredClone(value)); },
     dispatch: async (_id, input, selected) => {
+      if (rejectedAdmission) return rejectedAdmission;
       await manager.requireAssistantAccessForSelection(selected.assistantSelection || JSON.parse(selected.session.metadata.assistant_selection), selected);
       await input.onPromptSending?.({ threadId: "native-thread" });
       sends.push({ input, selection: selected.assistantSelection });
@@ -158,6 +160,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
     restart: () => createAssistantRouting(routingOptions),
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
+    rejectAdmission: result => { rejectedAdmission = result; },
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };
 }
 export { fixture, planDocument, publishPlanFixture };

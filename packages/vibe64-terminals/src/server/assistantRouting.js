@@ -384,7 +384,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         await save(context, state);
       }
     }, selectedContext);
-    if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.");
+    if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
     state.status = "working"; state.delivery = "accepted";
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
     if (state.workflow === true || state.mode === "auto" && state.stage === "planning") liveFollowupRequests.set(keyFor(sessionId, context), state.messageId);
@@ -668,8 +668,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // definite-rejection conclusion. Missing request metadata is not proof.
         if (await context.runtime.store.conversationMessageIdExists(sessionId, messageId)) return null;
         const actor = state.submittedBy;
-        if (!actor || (actor.id !== undefined ? actor.id !== context.vibe64User?.id
-          : !actor.username || actor.username !== context.vibe64User?.username)) return null;
+        if (actor ? (actor.id !== undefined ? actor.id !== context.vibe64User?.id
+          : !actor.username || actor.username !== context.vibe64User?.username) : context.vibe64User) return null;
+        // Standalone has no hosted actor. The original decision still rechecks
+        // access below; a hosted resolver must reject an unavailable actor.
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const workflow = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId;
         if (workflow && workflow !== state.workflowEngineId ||

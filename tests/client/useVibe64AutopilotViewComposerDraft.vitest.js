@@ -340,6 +340,33 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value).toEqual([]);
   });
 
+  it("discards a definite validation rejection across composer reload without replay", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const first = await createViewWithProps({ sendAgentMessage: vi.fn().mockResolvedValue({
+      ok: false, code: "conversation_invalid_message", error: "Bounded text is required."
+    }) });
+    first.view.composerDraft.value = "x".repeat(32_001);
+    await expect(first.view.submitComposerMessage()).resolves.toBe(false);
+    const messageId = first.props.sendAgentMessage.mock.calls[0][0].messageId;
+    expect(first.view.chatTurns.value[0].optimistic.status).toBe("failed");
+    first.props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId, status: "waiting", delivery: "failed", input: { message: "x".repeat(32_001) }
+    });
+    first.props.interruptAgentTurn.mockImplementation(async () => {
+      first.props.session.metadata.assistant_routing_request = JSON.stringify({
+        messageId, status: "waiting", delivery: "failed", stopped: true, helper: null
+      });
+      return true;
+    });
+    await expect(first.view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
+    expect(first.view.chatTurns.value).toEqual([]);
+    first.scope.stop();
+    const restored = await createViewWithProps({ session: first.props.session });
+    expect(restored.view.chatTurns.value).toEqual([]);
+    expect(restored.view.composerDraft.value).toBe("");
+    expect(restored.props.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
   it("hides Cancel immediately and restores the bubble when routing cancellation fails", async () => {
     const cancellation = deferredResult();
     const { view, props } = await createViewWithProps({ interruptAgentTurn: vi.fn(() => cancellation.promise) });

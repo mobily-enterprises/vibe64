@@ -1325,6 +1325,55 @@ test("delivery inspection exposes the original failed-before-admission receipt w
     "the coordinator cannot contradict an authored acceptance receipt");
 });
 
+test("routing retains the original definite native validation rejection without dispatch", async t => {
+  const f = await fixture(t, { mode: "custom", review: false, override: null });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: f.assignments.senior });
+  f.rejectAdmission({ ok: false, delivered: false, code: "conversation_invalid_message",
+    error: "Bounded text or attachment IDs and a stable messageId are required." });
+  await assert.rejects(f.service.send("session-1", { ...request, message: "x".repeat(32_001) }, f.context), {
+    code: "conversation_invalid_message"
+  });
+  assert.equal(f.state().delivery, "failed");
+  assert.equal(Object.hasOwn(f.state(), "attemptedMessageId"), false);
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
+  assert.equal(await f.context.runtime.store.conversationMessageIdExists("session-1", request.messageId), false);
+});
+
+test("standalone failed delivery inspection rechecks original access without borrowing a hosted actor", async t => {
+  let hosted = false;
+  const actors = [];
+  const f = await fixture(t, { mode: "junior", review: false }, {
+    resolveAssistantUser: async actor => {
+      actors.push(actor);
+      if (hosted && !actor) throw Object.assign(new Error("The submitting user is unavailable."), {
+        code: "vibe64_assistant_actor_unavailable"
+      });
+      return actor;
+    }
+  });
+  f.context.vibe64User = null;
+  await assert.rejects(f.service.send("session-1", request, { ...f.context,
+    onPromptSending: async () => { throw new Error("Initialize refused before query."); }
+  }), /Initialize refused/);
+  assert.equal(f.state().submittedBy, null);
+  const saved = f.metadata.assistant_routing_request;
+  const restarted = f.restart();
+  assert.deepEqual(await restarted.inspectDelivery("session-1", { messageId: request.messageId }, f.context), {
+    status: "not-sent", messageId: request.messageId, error: "Initialize refused before query."
+  });
+  assert.equal(f.metadata.assistant_routing_request, saved);
+  assert.equal(f.sends.length, 0);
+  assert.equal(await restarted.inspectDelivery("session-1", { messageId: request.messageId }, {
+    ...f.context, vibe64User: { username: "new-hosted-user", role: "owner" }
+  }), null, "a hosted caller cannot claim a request with no original actor");
+  hosted = true;
+  await assert.rejects(restarted.inspectDelivery("session-1", { messageId: request.messageId }, f.context), {
+    code: "vibe64_assistant_actor_unavailable"
+  });
+  assert.equal(actors.at(-1), null, "the original actor goes through the original fresh access resolver");
+});
+
 test("failed delivery inspection keeps unmatched, attempted, live and foreign-owner receipts unknown", async t => {
   const f = await fixture(t, { mode: "junior", review: false });
   await assert.rejects(f.service.send("session-1", request, { ...f.context,
