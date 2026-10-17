@@ -4244,6 +4244,12 @@ Whole oldest messages are removed from the transfer only when necessary. The
 shared cursor and exact pending prompt keep their original retry/reload semantics.
 Learning's admitted tool configuration and temporary/Colleague policies are separate.
 
+Claude's first provider turn reuses the existing session briefing-delivered and
+renewal-handover markers when deciding whether an opening prompt is needed.
+Previously delivered project guidance does not cause transferred conversation
+history to be re-rendered as a Genesis task request. Explicit Genesis tasks keep
+their existing rendering path.
+
 Claude's existing native owner reports current usage and the auto-compaction
 threshold. Codex uses its existing thread readiness/shared runtime, exact current
 thread usage metadata and the runtime catalogue's normal effective model window;

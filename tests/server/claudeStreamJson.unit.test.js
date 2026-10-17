@@ -3674,6 +3674,10 @@ test("Main transfer budget uses Claude's current context and reserves the reques
 
 for (const smallWindow of [false, true]) test(`Main Claude switching retains complete visible history within its actual budget, smallWindow=${smallWindow}`, async t => {
   const f = await fixture(t);
+  await f.context.runtime.store.writeMetadataValue("test", "agent_briefing_delivered", "yes");
+  f.context.runtime.renderPrompt = async () => {
+    assert.fail("Provider switching must not send transferred history through the already-delivered Genesis opening prompt");
+  };
   if (smallWindow) f.behavior.contextUsage = { totalTokens: 1000, maxTokens: 200_000, autoCompactThreshold: 167_000, model: "haiku" };
   const store = f.context.runtime.store;
   const texts = [];

@@ -692,7 +692,9 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
       if (actor?.ok === false) throw error(actor.error, actor.code);
     }
     let prompt = message;
-    if (!renewal && entry.main && !/^\/goal(?:\s|$)/u.test(message) && ((!steering && !entry.sent) || input.genesisTask)) {
+    const needsOpeningPrompt = !steering && !entry.sent && !sessionBriefingIsDelivered(ctx.session) &&
+      !text(ctx.session?.metadata?.renewal_handover_delivered_at);
+    if (!renewal && entry.main && !/^\/goal(?:\s|$)/u.test(message) && (needsOpeningPrompt || input.genesisTask)) {
       prompt = (await ctx.runtime.renderPrompt(ctx.sessionId, { input, request: message, task: input.genesisTask || "start" }))?.prompt || message;
     }
     // The attachment owner already added validated paths to the prompt.

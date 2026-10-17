@@ -90,6 +90,10 @@ the next turn. An unfinished goal keeps its orchestrator; another orchestrator
 is saved for after that goal finishes. A reported cleanup failure keeps
 the previous selection; retry after restoring the execution service.
 The session's files and saved conversation remain. Switching does not resend
+the session's already-delivered opening briefing through project setup. A first
+switch to Claude carries the bounded conversation history directly, including
+transfers larger than the project-prompt request limit.
+Switching does not resend
 the old request or confirm uncertain delivery. Use **Retry** for that
 original request before deciding to repeat it; send a new instruction when you
 want the new assistant to continue the work. After the switch, **Send** becomes
