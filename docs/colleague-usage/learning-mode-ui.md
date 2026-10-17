@@ -166,6 +166,14 @@ request. Main can use the lesson's declared diagrams in that same browser;
 Colleague remains available for general help and workspace supervision. Text
 teaching does not require voice, and private key entry remains your action.
 
+An exercise's Main coding assistant can perform an explicitly requested setup
+repair in that same practice session. Its commands recheck the saved lesson each
+time, including after the opening request has finished. Ending the lesson prevents
+new commands; retained status remains readable. If Workspace setup failed, inspect
+the concrete diagnostic before **Retry**; a repair or successful setup is not a
+learner answer or passed assessment. Colleague can explain and coordinate this
+recovery but has no source-editing or shell access.
+
 For a narrated diagram, keep the initiating browser and exact lesson conversation
 open until its operation is confirmed. Its explanation waits until Main has
 finished that turn. Stopping or interrupting an unfinished explanation prevents

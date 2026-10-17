@@ -1216,7 +1216,14 @@ account-shared execution and the original thread/client/registration checks stay
 unchanged. Main still uses the accepted request's browser authority for each fresh
 learner/session/pin/native-turn check and action admission. No WRITE grant or
 practice preparation barrier spans the native turn. Managed shell-command
-environment callbacks remain a separate authority path.
+environment callbacks use the same saved practice owner's fresh operation
+admission. Their Unix server can outlive its creating request; its bound callback
+re-enters the exact learner/attempt/pin/session owner instead of inheriting the
+expired request scope. Shell and rename effects use WRITE, status and plan reads
+use OBSERVE, and an ended attempt refuses new effects while retaining historical
+reads. Ordinary session commands retain their captured Project context. The
+original helper token, generation, project/source binding and execution cleanup
+remain in the original command service; Core's expiry fence is unchanged.
 
 The shared Codex driver captures its original notification queue's exact
 namespace while the Main binding opens under live admission. Its three delayed

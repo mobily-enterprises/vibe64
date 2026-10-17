@@ -56,7 +56,7 @@ async function fixture(t, { published = true, learning = false, noExercise = fal
   await write("training/exercises/app/package.json", { name: "state-practice-app", private: true, type: "module" });
   await write("training/exercises/app/server.mjs", 'import { createServer } from "node:http";\nconst args = process.argv.slice(2);\ncreateServer((request, response) => response.end("Practice app")).listen(Number(args[args.indexOf("--port") + 1] || 8080), args[args.indexOf("--host") + 1] || "127.0.0.1");\n');
   await write("training/exercises/app/genesis/version", "3\n");
-  await write("training/exercises/app/genesis/stack.md", '# Stack\n\n## Workspace setup\n\n- Prepare `Check syntax` with `nodejs`: `node` `--check` `server.mjs`\n\n## Outputs\n\n### Target `app`: Practice app\n\n- Default.\n- Mode: `interactive`\n- Workdir: `.`\n- Runtimes: `nodejs`\n- Run `Start`: `node` `server.mjs` `--host` `{host}` `--port` `{port}`\n\n#### Presentation\n\n- Kind: `web`\n- Preferred port: `8080`\n- URL path: `/`\n- Ready when: `GET` `/` returns `200`\n');
+  await write("training/exercises/app/genesis/stack.md", '# Stack\n\n## Components\n\n## Workspace setup\n\n- Prepare `Check syntax` with `nodejs`: `node` `--check` `server.mjs`\n\n## Outputs\n\n### Target `app`: Practice app\n\n- Default.\n- Mode: `interactive`\n- Workdir: `.`\n- Runtimes: `nodejs`\n- Run `Start`: `node` `server.mjs` `--host` `{host}` `--port` `{port}`\n\n#### Presentation\n\n- Kind: `web`\n- Preferred port: `8080`\n- URL path: `/`\n- Ready when: `GET` `/` returns `200`\n');
   execFileSync("git", ["-C", sourceRoot, "init", "-b", "main"], { stdio: "ignore" });
   execFileSync("git", ["-C", sourceRoot, "add", "."], { stdio: "ignore" });
   execFileSync("git", ["-C", sourceRoot, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Pinned introduction"], { stdio: "ignore" });
@@ -2728,6 +2728,7 @@ test("configured practice Learning binds the saved actual initial Main session a
   const selection = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
     modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   const sessions = createSessions({ project, initializeModelRouting: async () => ({ ok: true }),
+    readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
     terminals: {
       async resolveAssistantPurpose(input, options) {
         assert.equal(options.vibe64User, f.actor);
@@ -2806,6 +2807,34 @@ test("configured practice Learning binds the saved actual initial Main session a
     assert.deepEqual(runtime.learningScope, saved.scope);
     assert.equal((await runtime.store.readSession(created.sessionId)).metadata.source_kind, "session_clone");
   });
+  // The actual managed Unix helper is created during a finite request, then
+  // called after that original scope expires (the hosted author-trial failure).
+  const { createAgentSessionCommandService, prepareAgentSessionCommand } = await import(
+    "../../packages/vibe64-terminals/src/server/agentSessionCommand.js");
+  let commandCalls = 0;
+  const commandService = createAgentSessionCommandService({ projectService: project,
+    async runCommand(request) {
+      assert.doesNotThrow(assertProjectEffectAdmission);
+      assert.equal(core.currentPracticeProjectScope().access, "write");
+      assert.equal(request.cwd, created.sourcePath);
+      commandCalls++;
+      await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "fresh practice command\n");
+      await fs.writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, "0\n");
+      return { ok: true, execution: { id: `practice-command-${commandCalls}` } };
+    },
+    async stopOwnedExecutions() { return { supported: true, processExitProofs: [] }; }
+  });
+  t.after(() => commandService.closeAllForSession(created.sessionId));
+  let preparedCommand;
+  await context.runLearningOperation(async () => {
+    preparedCommand = await prepareAgentSessionCommand({ commandService, sessionId: created.sessionId,
+      wrapperHostDir: path.join(f.root, "practice-command-wrappers") });
+  });
+  const runPracticeCommand = () => promisify(execFile)(preparedCommand.hostWrapperPath, ["printf practice"], {
+    cwd: created.sourcePath, env: { ...process.env, ...preparedCommand.env }
+  });
+  assert.equal((await runPracticeCommand()).stdout, "fresh practice command\n");
+  assert.equal(commandCalls, 1, "the helper re-enters the exact saved practice owner after request expiry");
   // Exercise the real preparation.lock through the original action wrapper.
   // Native admission is controlled here; the Teaching file proves its guard.
   const { withVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
@@ -2902,6 +2931,10 @@ test("configured practice Learning binds the saved actual initial Main session a
     { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
   const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
   await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision, requestId: "end-bound-practice", reason: "restart" });
+  await assert.rejects(runPracticeCommand(), error => error.code === 1 && /no matching active reservation/u.test(error.stderr));
+  assert.equal(commandCalls, 1, "ending the attempt denies subsequent effects from the still-live helper");
+  const history = await commandService.sessionStatus(created.sessionId);
+  assert.equal(history.sessionId, created.sessionId, "ended practice remains observable through fresh read admission");
   await assert.rejects(readGrant(), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
   // The original preparation barrier refuses the now-ended reservation first.
   await assert.rejects(() => context.runLearningOperation(() => assert.fail()), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });

@@ -136,6 +136,10 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       learningScope: Object.freeze(structuredClone(saved.scope)), vibe64User: actor,
       trainingLearners: learners,
       ...(learningTeaching ? { learningTeaching } : {}),
+      runLearningOperation(operation, access = "write") {
+        if (!["observe", "control", "write"].includes(access)) throw new TypeError("Use a saved practice command scope.");
+        return runBoundPracticeOperation(saved, actor, sessionId, access, operation);
+      },
       async learningInstructions(currentSessionId) {
         if (currentSessionId !== sessionId) {
           throw learningError("VIBE64_TRAINING_SESSION_MISMATCH", "Teaching instructions belong to this exact conversation.");
@@ -143,6 +147,19 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
         return readLearningInstructions({ actor, attemptId: saved.scope.attemptId, saved, noExercise: false });
       }
     });
+  }
+
+  function runBoundPracticeOperation(saved, actor, sessionId, access, operation) {
+    if (typeof operation !== "function") throw new TypeError("Learning execution requires its owning callback.");
+    // A managed helper can outlive the request that created its socket. Start
+    // from the saved identity, never that request's expired practice grant.
+    return runWithProjectRequestContext({}, () => runPracticeOperation({ actor,
+      attemptId: saved.scope.attemptId, sessionId, access }, async () => {
+      if (!isDeepStrictEqual(currentProjectRequestContext().learningScope, saved.scope)) {
+        throw learningError("VIBE64_TRAINING_ATTEMPT_CHANGED", "Read this saved lesson's current authority before continuing.");
+      }
+      return operation();
+    }, true, false));
   }
 
   async function resolveBoundPracticeContext({ actor, attemptId, sessionId, access = "observe" }) {
@@ -163,13 +180,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     return Object.freeze({ ...captured, trainingLearners: learners,
       ...(access === "create" ? { createLearningSession: input => openSession({ actor, attemptId, input }) } : {}),
       runLearningOperation(operation) {
-        if (typeof operation !== "function") throw new TypeError("Learning execution requires its owning callback.");
-        return runPracticeOperation({ actor, attemptId, sessionId: saved.initialSessionId, access }, async () => {
-          if (!isDeepStrictEqual(currentProjectRequestContext().learningScope, saved.scope)) {
-            throw learningError("VIBE64_TRAINING_ATTEMPT_CHANGED", "Read this saved lesson's current authority before continuing.");
-          }
-          return operation();
-        }, true, false);
+        return runBoundPracticeOperation(saved, actor, saved.initialSessionId, access, operation);
       }
     });
   }

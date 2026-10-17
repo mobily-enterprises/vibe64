@@ -1,5 +1,5 @@
 import http from "node:http";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -586,9 +586,16 @@ function createAgentSessionCommandService({
         "vibe64_agent_session_command_project_required"
       );
     }
+    const requestContext = currentProjectRequestContext();
+    const learning = Boolean(requestContext?.learningScope);
+    if (learning && typeof requestContext.runLearningOperation !== "function") {
+      throw vibe64Error("Managed practice commands require the saved lesson's original admission owner.", "vibe64_agent_session_command_learning_unavailable");
+    }
     const binding = {
-      actor: currentProjectRequestContext()?.vibe64User || null,
-      learning: Boolean(currentProjectRequestContext()?.learningScope),
+      actor: requestContext?.vibe64User || null,
+      learning,
+      projectContext: captureProjectRequestContext(),
+      runLearningOperation: learning ? requestContext.runLearningOperation : null,
       projectContextRoot: normalizedProjectContextRoot(project),
       projectSlug,
       wrapperHostDir: path.resolve(normalizedWrapperHostDir)
@@ -601,7 +608,7 @@ function createAgentSessionCommandService({
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation) {
+  async function runInSessionProject(sessionId = "", operation, access = "write") {
     const normalizedSessionId = normalizeText(sessionId);
     const binding = sessionBindings.get(normalizedSessionId);
     if (!binding?.projectSlug) {
@@ -610,7 +617,7 @@ function createAgentSessionCommandService({
         "vibe64_agent_session_command_session_unbound"
       );
     }
-    return projectService.runInProjectContext(binding.projectSlug, async () => {
+    const run = () => projectService.runInProjectContext(binding.projectSlug, async () => {
       const project = await projectService.readCurrentProject();
       const currentSlug = normalizeText(project?.slug || project?.name);
       const currentProjectContextRoot = normalizedProjectContextRoot(project);
@@ -649,6 +656,9 @@ function createAgentSessionCommandService({
         sourceRoot: path.resolve(sourceRoot)
       });
     });
+    return binding.learning
+      ? binding.runLearningOperation(run, access)
+      : runWithProjectRequestContext(binding.projectContext || {}, run);
   }
 
   async function messageProject(sessionId, input) {
@@ -715,7 +725,7 @@ function createAgentSessionCommandService({
           ? "Correct the project environment declaration and retry."
           : ""
       };
-    });
+    }, "observe");
   }
 
   async function managePlan(sessionId, input) {
@@ -736,7 +746,7 @@ function createAgentSessionCommandService({
       return { ok: true, ...result, ...(input.operation === "read" ? { workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
         messageId: request.messageId, turnId: request.turnId || "", stage: request.stage, status: request.status
       } : null } : {}) };
-    });
+    }, ["read", "history"].includes(input.operation) ? "observe" : "write");
   }
 
   async function execute(input = {}, context = {}) {
