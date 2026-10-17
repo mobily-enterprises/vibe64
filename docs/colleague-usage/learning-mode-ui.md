@@ -204,13 +204,14 @@ request. Main can use the lesson's declared diagrams in that same browser;
 Colleague remains available for general help and workspace supervision. Text
 teaching does not require voice, and private key entry remains your action.
 
-Lessons speak by default. When the lesson conversation has loaded and read-aloud
-is on, Main's voice opens by itself and reads new replies aloud; earlier history
+Lessons speak by default where this installation has a speech service. When the
+lesson conversation has loaded and read-aloud is on, Main's voice opens by itself and reads new replies aloud; earlier history
 is not replayed. The microphone stays off until you press **Talk**. Use the
 read-aloud button beside the avatar to mute replies; text continues in chat.
 If the browser reports **Sound is blocked**, choose **Enable sound**. Ending
 voice keeps it off for that lesson until you open it again or reload the page.
-Working conversations still start voice only when you choose it.
+Working conversations still start voice only when you choose it. Without a speech
+service, lessons stay text-only and quiet; **Continue** paces any diagram.
 
 If sound stops early, for example because the voice service could not be
 reached or you hid a narrated diagram, the diagram does not claim it finished.
