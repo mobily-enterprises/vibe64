@@ -296,3 +296,8 @@ preview scope selection, saved exercise validation and practice-context capture.
 These are nested durations within saved-attempt time; do not add them to that
 parent duration. Failed stages retain their timing without exposing their error
 contents, and no completed authorization result is cached.
+
+Opening a saved Learning practice conversation still checks its pinned teaching
+content on each admission. That check does not load a second exercise-file payload
+for workspace preparation. Missing or changed teaching content still requires the
+owner to restore the exact verified snapshot; reloading chat does not bypass it.

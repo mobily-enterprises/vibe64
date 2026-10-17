@@ -3386,7 +3386,13 @@ test("admitted exercise scope validates once per fresh read and refuses changed 
   const calls = [];
   const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
     async readLesson(input) { calls.push("lesson"); return reader.readLesson(input); },
-    async readExercise(input) { calls.push("exercise"); return reader.readExercise(input); }
+    async readExercise(input) {
+      calls.push("exercise");
+      assert.equal(input.metadataOnly, true, "scope admission does not request preparation bytes");
+      const result = await reader.readExercise(input);
+      assert.equal(Object.hasOwn(result, "files"), false);
+      return result;
+    }
   } });
   const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" };
   const before = await treeState(f.systemRoot);

@@ -410,6 +410,37 @@ test("exercise reads return only exact declared exercise-relative bytes without 
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
 
+test("exercise metadata reads verify fresh content without hydrating unused file bytes", async t => {
+  const f = await fixture(t);
+  const { pin, bundle, snapshotRoot } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash };
+  const full = await f.reader.readExercise(request);
+  const { files, ...identity } = full;
+  const originalReadFile = fs.readFile;
+  const reads = new Map();
+  t.mock.method(fs, "readFile", async (...args) => {
+    reads.set(args[0], (reads.get(args[0]) || 0) + 1);
+    return originalReadFile(...args);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const result = await f.reader.readExercise({ ...request, metadataOnly: true });
+  assert.deepEqual(result, identity);
+  for (const relative of [...files.map(file => `${full.sourcePath}/${file.path}`),
+    "training/lessons/LESSON-01/lesson.md", "training/visuals/flow/visual.json"]) {
+    assert.equal(reads.get(path.join(snapshotRoot, "files", relative)), 1,
+      `${relative} is still validated, but not hydrated again`);
+  }
+  assert.deepEqual(await f.reader.readExercise(request), full, "preparation still receives every original byte");
+  for (const changed of [{ lessonHash: "f".repeat(64) }, { topicHash: "f".repeat(64) },
+    { lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash }]) {
+    await assert.rejects(f.reader.readExercise({ ...request, ...changed, metadataOnly: true }));
+  }
+  await writeFile(path.join(snapshotRoot, "files", full.sourcePath, "server.mjs"), "Changed after admission.");
+  await assert.rejects(f.reader.readExercise({ ...request, metadataOnly: true }),
+    { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+});
+
 test("exercise reads retain old pins, nested binary bytes and declared sequence metadata", async t => {
   const f = await fixture(t);
   const first = f.installed;

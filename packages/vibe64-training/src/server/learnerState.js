@@ -575,7 +575,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     let exercise;
     try {
       exercise = await installed.readExercise({ ...attempt.pin.topic,
-        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash, metadataOnly: true });
     } catch (error) {
       if (error?.code === "VIBE64_TRAINING_EXERCISE_MISSING") {
         await verifyInstalled(attempt.pin);

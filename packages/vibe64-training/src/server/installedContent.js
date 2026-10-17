@@ -166,7 +166,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { path: relative, bytes };
   }
 
-  async function readLesson({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
+  async function readLessonIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     if (typeof lessonCode !== "string" || typeof lessonHash !== "string" || !idPattern.test(lessonCode) || !hashPattern.test(lessonHash)) {
       throw new Error("Choose a declared lesson code and its exact 64-character lowercase content hash.");
     }
@@ -175,9 +175,15 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
     if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
+    return { pin: topic.pin, lesson: bundle.lesson, manifest: bundle.manifest,
+      hash: bundle.hash, descriptorPath: bundle.descriptorPath };
+  }
+
+  async function readLesson(input = {}) {
+    const bundle = await readLessonIdentity(input);
     const base = path.dirname(bundle.descriptorPath);
     async function lessonText(reference) {
-      const file = await lessonFile({ pin: topic.pin, manifest: bundle.manifest }, base, reference);
+      const file = await lessonFile(bundle, base, reference);
       return { path: file.path, text: file.bytes.toString("utf8") };
     }
     const document = await lessonText(bundle.lesson.document);
@@ -197,11 +203,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
     }
     return {
-      pin: topic.pin,
-      lesson: bundle.lesson,
-      manifest: bundle.manifest,
-      hash: bundle.hash,
-      descriptorPath: bundle.descriptorPath,
+      ...bundle,
       document,
       rubrics,
       visuals
@@ -256,13 +258,18 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     };
   }
 
-  async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
-    const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
+  async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash, metadataOnly = false } = {}) {
+    // Scope admission needs the freshly verified identity, not a second copy of
+    // every exercise byte. Preparation keeps the complete original result.
+    const lesson = await (metadataOnly === true ? readLessonIdentity : readLesson)({ topicId, commit, topicHash, lessonCode, lessonHash });
     const exercise = lesson.lesson.exercise;
     if (!exercise) throw Object.assign(new Error(`Lesson ${lessonCode} has no declared bundled exercise.`), {
       code: "VIBE64_TRAINING_EXERCISE_MISSING"
     });
     const sourcePath = path.posix.join(path.posix.dirname(lesson.descriptorPath), exercise.source);
+    const identity = { pin: lesson.pin, lessonCode: lesson.lesson.code,
+      lessonHash: lesson.hash, exercise, sourcePath };
+    if (metadataOnly === true) return identity;
     const prefix = sourcePath === "." ? "" : `${sourcePath}/`;
     const files = [];
     for (const record of lesson.manifest.files) {
@@ -271,14 +278,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const file = await lessonFile(lesson, sourcePath, relative);
       files.push({ path: relative, bytes: file.bytes });
     }
-    return {
-      pin: lesson.pin,
-      lessonCode: lesson.lesson.code,
-      lessonHash: lesson.hash,
-      exercise,
-      sourcePath,
-      files
-    };
+    return { ...identity, files };
   }
 
   return { readTopic, readLesson, readVisual, readCheck, readExercise };

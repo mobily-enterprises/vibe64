@@ -542,3 +542,8 @@ supply authenticated captured data and effects; native/browser/device acceptance
 remains separate. Existing App/SVG presentation and motion owners are untouched.
 
 Pinned source proof reads committed blobs through the original managed command owner in bounded NUL-framed `git cat-file --batch -Z` captures. Each original proof still checks root, HEAD, cleanliness, package identity, every manifest byte length/SHA256, and final HEAD/cleanliness. Binary/newline paths remain valid; malformed, truncated or trailing batch data fail closed. Installer proof boundaries before/inside its lock and after bundling remain unchanged.
+
+Practice scope admission asks the original installed exercise reader for metadata
+only. It still freshly validates the full pinned topic, lesson identity and saved
+attempt, but does not hydrate exercise files or teaching document/visual payloads
+that admission discards. Preparation retains the default complete exercise bytes.
