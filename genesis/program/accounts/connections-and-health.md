@@ -146,6 +146,9 @@ in one orchestrator, with independent Helper and Router choices and a shared
 Backup across connected orchestrators. Thinking choices and Personal/Workspace
 scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
 `ai-connections/routing.json`; unreadable settings are preserved for recovery.
+First-use setup reads full model catalogues only for each requested workflow and
+its already assigned destination orchestrators. Unrelated orchestrators use the
+existing configured-account overview; already complete workflows need no setup.
 The store's version-4 format keeps independent Router and shared Backup fields
 and helper-conflict evidence alongside those choices. Senior/Junior assignments
 must belong to their workflow engine. Old-format files require the explicit

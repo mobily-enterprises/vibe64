@@ -2157,13 +2157,15 @@ async function routingAccountsFixture(root) {
   const junior = selection("codex", "deepseek", "deepseek-flash");
   const pickle = selection("opencode", "opencode", "big-pickle");
   const routes = [senior, junior, pickle];
+  const catalogCalls = [];
   const unavailable = new Set();
   const store = createAssistantRoutingStore({ systemRoot: root });
   const manager = createSessionAgentManager({ readRoutingConfiguration: () => store.read(),
     readAssistantAccess: async ({ assistantSelection: value }) => ({ available: !unavailable.has(value.modelId),
       ownerOnly: value.modelProviderId === "openai", connectionIdentity: `private-identity:${value.modelId}` }),
-    providers: ["codex", "opencode"].map((engineId) => ({ id: engineId, transportId: `${engineId}_server`,
+    providers: ["codex", "opencode", "claude"].map((engineId) => ({ id: engineId, transportId: `${engineId}_server`,
       async capabilities(_context, input) {
+        catalogCalls.push({ engineId, input });
         const selected = routes.filter((row) => row.engineId === engineId && (!input.modelProviderId || row.modelProviderId === input.modelProviderId));
         return { engineId, label: engineId, transportId: `${engineId}_server`, revision: senior.catalogRevision,
           agents: [{ id: engineId, mode: "primary" }], modelProviders: [...new Set(selected.map(({ modelProviderId }) => modelProviderId))].map((id) => ({
@@ -2181,7 +2183,7 @@ async function routingAccountsFixture(root) {
   const owner = { role: "owner", username: "owner" };
   const member = { role: "member", username: "member" };
   const assignments = { senior, junior, router: junior, helper: junior, sharedBackup: pickle };
-  return { service, store, manager, owner, member, denied, events, assignments, senior, junior, pickle, unavailable };
+  return { service, store, manager, owner, member, denied, events, assignments, senior, junior, pickle, unavailable, catalogCalls };
 }
 
 test("model routing setup initializes compatible missing roles once and preserves deliberate choices", async () => {
@@ -2195,8 +2197,11 @@ test("model routing setup initializes compatible missing roles once and preserve
     assert.equal((await f.store.read()).revision, 0);
     // Internal session setup can be triggered by the first collaborator; it
     // accepts only workflow IDs and cannot replace the owner's assignments.
+    f.catalogCalls.length = 0;
     const first = await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.member });
     assert.equal(first.ok, true, first.error);
+    assert.deepEqual(f.catalogCalls.filter(({ engineId }) => engineId === "opencode").map(({ input }) => input),
+      [{ configuredOnly: "true" }], "initializing Codex must not discover unrelated OpenCode models");
     assert.equal(first.initialized.length, 5);
     const saved = await f.store.read();
     assert.equal(saved.orchestrators.codex.senior.modelId, "gpt-6-astra");
@@ -2219,6 +2224,17 @@ test("model routing setup initializes compatible missing roles once and preserve
     assert.deepEqual(current.orchestrators.codex.junior, chosen.junior);
     assert.equal(current.orchestrators.claude, undefined, "an unavailable orchestrator gets no helper-only profile");
     assert.equal(f.events.length, 2);
+  });
+});
+
+test("model routing setup still discovers an explicitly assigned cross-engine helper", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    await f.store.write({ codex: { senior: f.senior, junior: f.junior, helper: f.pickle, sharedBackup: null } }, 0);
+    const result = await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner });
+    assert.equal(result.ok, true, result.error);
+    assert.ok(f.catalogCalls.some(({ engineId, input }) => engineId === "opencode" && input.connectedOnly === "true"));
+    assert.deepEqual((await f.store.read()).orchestrators.codex.helper, f.pickle);
   });
 });
 

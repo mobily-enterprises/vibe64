@@ -2271,12 +2271,14 @@ function createService({
         throw new Error("Choose supported orchestrators to initialize model routing.");
       }
       const saved = await routingStore().read();
-      if (engineIds.every((id) => ASSISTANT_ROUTING_ASSIGNMENTS.every((role) =>
-        Object.hasOwn(saved.orchestrators[id] || {}, role)))) return { ok: true, initialized: [] };
-      const view = await routingView(saved, input);
+      const pendingEngineIds = engineIds.filter((id) => !ASSISTANT_ROUTING_ASSIGNMENTS.every((role) =>
+        Object.hasOwn(saved.orchestrators[id] || {}, role)));
+      if (!pendingEngineIds.length) return { ok: true, initialized: [] };
+      const views = await Promise.all(pendingEngineIds.map((engineId) => routingView(saved, { ...input, engineId })));
+      const engines = views.flatMap((view) => view.engines);
       const orchestrators = structuredClone(saved.orchestrators);
       const initialized = [];
-      for (const engine of view.engines) {
+      for (const engine of engines) {
         if (!engineIds.includes(engine.engineId) || engine.error) continue;
         const assignments = orchestrators[engine.engineId] || {};
         for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
@@ -2290,7 +2292,7 @@ function createService({
         await routingStore().write(orchestrators, saved.revision);
         await publishAccountChanged("codex", { reason: "model-routing-initialized" });
       }
-      const errors = view.engines.filter((engine) => engineIds.includes(engine.engineId) && engine.error);
+      const errors = engines.filter((engine) => engineIds.includes(engine.engineId) && engine.error);
       if (errors.length) return { ok: false, initialized, error: errors.map((engine) => `${engine.label}: ${engine.error}`).join(" ") };
       return { ok: true, initialized };
     });

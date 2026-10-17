@@ -118,6 +118,9 @@ Disabled models are unavailable or incompatible; they must not be invented.
 The workflow picker checks access to your saved Senior, Junior and shared backup
 choices. It offers recommendations for roles that have not been configured;
 opening the picker does not replace saved choices or deliberately empty roles.
+First-time setup loads models for the chosen workflow and any other orchestrator
+already assigned to one of its roles. Choosing Codex or Claude Code does not
+require OpenCode model discovery unless one of those saved roles uses OpenCode.
 
 Recommendations prefer **Claude → Codex/OpenAI → DeepSeek → GLM** among models
 connected and permitted for each role. Within the chosen provider, Senior uses
