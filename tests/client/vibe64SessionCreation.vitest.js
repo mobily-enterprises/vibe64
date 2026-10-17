@@ -7,6 +7,7 @@ const creationHarness = vi.hoisted(() => ({
   realtime: null,
   feedback: null,
   endpointResource: null,
+  listOptions: null,
   projectSlug: null,
   queryData: null,
   querySetData: null,
@@ -56,6 +57,9 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: (options = {}) => {
     const queryKey = options.queryKey?.value || options.queryKey || [];
+    if (String(options.path?.value || options.path || "").endsWith("/vibe64/sessions")) {
+      creationHarness.listOptions = options;
+    }
     return (
       String(options.path?.value || options.path || "").endsWith("/renewal") ||
       (Array.isArray(queryKey) && queryKey.at(-1) === "renewal")
@@ -182,6 +186,19 @@ beforeEach(() => {
 });
 
 describe("Vibe64 session creation", () => {
+  it("refreshes creation eligibility for project policy changes without crossing projects", () => {
+    const { scope } = mountSessionData();
+    try {
+      const realtime = creationHarness.listOptions.realtime;
+      expect(realtime.events).toContain("vibe64.project.changed");
+      expect(realtime.matches({ payload: { projectSlug: "project-a" } })).toBe(true);
+      expect(realtime.matches({ payload: { projectSlug: "project-b" } })).toBe(false);
+      expect(realtime.matches({ payload: { projectSlug: "project-a", learningAttemptId: "lesson" } })).toBe(false);
+    } finally {
+      scope.stop();
+    }
+  });
+
   it("shows and updates activity for a session that has never been selected or mounted", async () => {
     creationHarness.selectedId.value = "selected";
     creationHarness.queryData.value.sessions = [

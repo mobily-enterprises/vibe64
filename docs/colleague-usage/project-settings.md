@@ -31,7 +31,8 @@ The warning reads **All sessions will share the same database.** The checkbox an
 warning appear only for that choice, on desktop and mobile. The override permits
 the normal maximum of three open sessions. You can change it while sessions are
 open. Turning it off preserves every existing session and its data; it blocks
-additional sessions while one or more remain open. Changing the database scope
+additional sessions while one or more remain open. The New session control
+updates after saving without reloading the page. Changing the database scope
 itself still requires closed sessions. Colleague can explain or, when requested,
 save this override through the same authorized settings action.
 

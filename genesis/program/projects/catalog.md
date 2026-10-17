@@ -222,7 +222,7 @@ retire a different target selected while it was reading.
 
 Durable project mutations publish one shared project refresh event. Consumers
 use it only to invalidate their project list, selection, settings, repository,
-or access reads; the HTTP resources remain authoritative.
+access reads, or session creation eligibility; the HTTP resources remain authoritative.
 The routed shell and selection gate share the query for that route's scoped
 project response. The gate owns its refresh-event subscription and invalidates
 that shared query once, even while both readers are mounted. Its cache identity

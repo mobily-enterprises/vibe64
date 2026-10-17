@@ -1,4 +1,5 @@
 import { computed, onScopeDispose, proxyRefs, ref, unref, watch } from "vue";
+import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useRoute, useRouter } from "vue-router";
 import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -279,7 +280,7 @@ function useVibe64SessionData({
     },
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
-      events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
+      events: [VIBE64_SESSION_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT, "connect"],
       matches: (event) => !event?.payload?.learningAttemptId && sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
