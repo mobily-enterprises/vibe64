@@ -65,6 +65,8 @@ function databaseResult(operation) {
   });
 }
 
+const LEARNING_READ_ONLY_REASON = "Learning shows this lesson's data read-only.";
+
 function databaseError(message, code, details = {}) {
   const error = vibe64Error(message, code);
   error.details = details;
@@ -462,8 +464,9 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const readOnly = input.readOnly !== false;
-        if (!readOnly && currentProjectRequestContext()?.learningScope) {
-          throw databaseError("Learning shows this lesson's data read-only. Change data in a Working session.",
+        const learning = Boolean(currentProjectRequestContext()?.learningScope);
+        if (!readOnly && learning) {
+          throw databaseError(`${LEARNING_READ_ONLY_REASON} Change data in a Working session.`,
             "vibe64_database_learning_read_only");
         }
         const automaticDefault = input.automatic === true && schema.tables.some((table) => (
@@ -481,9 +484,9 @@ function createService({
             sql: input.sql
           });
           // Learning shows rows only: no cell edit or row delete identities.
-          const result = currentProjectRequestContext()?.learningScope && executed.cellMeta ? {
+          const result = learning && executed.cellMeta ? {
             ...executed,
-            cellMeta: executed.cellMeta.map(row => row.map(() => ({ editable: false, reason: "Learning shows this lesson's data read-only." }))),
+            cellMeta: executed.cellMeta.map(row => row.map(() => ({ editable: false, reason: LEARNING_READ_ONLY_REASON }))),
             rowMeta: executed.cellMeta.map(() => [])
           } : executed;
           if (!automaticDefault) {
