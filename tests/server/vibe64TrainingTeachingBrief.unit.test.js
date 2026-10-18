@@ -134,6 +134,19 @@ test("practice lessons brief the teacher as the learner's agent with declared-fi
   for (const line of conversationOnlyPacing.slice(0, 8)) assert.ok(result.pacing.includes(line));
 });
 
+// A lesson started before the redesign receives this brief as an injected
+// revision, but its own earlier replies still name the retired Workspace area
+// and Code tab. The brief must name the current places and retire the old ones.
+test("practice lessons name current Vibe64 places and retire earlier Workspace wording", async t => {
+  const f = await fixture(t);
+  const result = await f.brief.readBrief({ actor: f.actor, attemptId: f.reservation.attempt.attemptId });
+  const practice = result.pacing.filter(line => !conversationOnlyPacing.includes(line)).join("\n");
+  assert.match(practice, /lesson Dashboard's Files section/u);
+  assert.doesNotMatch(practice, /Dashboard's Code tab/u);
+  assert.match(practice, /There is no Workspace area or Code tab/u);
+  assert.match(practice, /Earlier messages in this conversation that name them are outdated; do not repeat them/u);
+});
+
 test("fresh brief preserves generic pinned text, rubrics and evidence without executable content or writes", async t => {
   const f = await fixture(t);
   const before = await inventory(f.systemRoot);

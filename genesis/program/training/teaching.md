@@ -423,6 +423,12 @@ attempt; `codeAuthorship.js` enforces this, with no new persisted origin or
 assistance value. It must not deploy, publish, push to real remotes, change Git
 remotes or touch other projects or directories. That last rule is instruction
 only; shell and network confinement is a later slice.
+The practice brief also names current places (header Preview, Dashboard and
+Learning options; Dashboard sections such as Files) and declares earlier
+"Workspace" and "Code tab" wording in the same conversation outdated. A lesson
+started before the redesign receives the composed brief as an injected
+instruction revision at its next idle admission, while its own earlier replies
+remain in history; this line keeps the teacher from repeating them.
 
 The serialized brief is limited to 128 KiB. Oversized content fails with author
 guidance rather than silently truncating teaching text or rubrics. Missing or

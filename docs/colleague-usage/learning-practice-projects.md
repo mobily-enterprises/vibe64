@@ -67,6 +67,11 @@ pushes to real remotes, changes Git remotes, or touches other projects or folder
 outside this practice project. Lesson 0 and other lessons without a practice
 project keep a conversation-only teacher that does no project work.
 
+A lesson you started before Learning moved onto the real Vibe64 app picks up
+the current teacher instructions with your next message. Its earlier replies may
+still say **Workspace** or **Code tab**; those are the old names for the header's
+**Preview** | **Dashboard** options and the Dashboard's **Files** section.
+
 Opening supported practice teaching retains the reserved initial conversation,
 source and history. An ownership or lesson-binding error needs owner inspection;
 do not create a replacement or switch it to an unrelated Working project. An

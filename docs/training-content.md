@@ -123,7 +123,7 @@ explanation. stderr is ignored. Use plain `node:assert`-style logic rather than
 
 Authorship: when Main prepares a code question, Vibe64 records the SHA-256 of
 each declared file in the live practice project as the question's starting
-point. Each save from the learner's lesson Code tab is recorded server-side
+point. Each save from the learner's lesson Dashboard Files section is recorded server-side
 with its base hash, intended hash and saved hash. At **Check my code** the chain
 from the starting point through those saves must reach the current bytes
 exactly; otherwise the check is not run and the question is automatically not
