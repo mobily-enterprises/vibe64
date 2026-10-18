@@ -185,6 +185,22 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     } finally { busy.value = false; }
   }
 
+  // Owner-only custom course through the original catalogue action; it admits
+  // no lesson and changes no saved progress.
+  async function createCourse({ title, topics, expectedRevision } = {}) {
+    if (busy.value) return null;
+    capture();
+    busy.value = true;
+    try {
+      const result = await command.run({ path: `${TRAINING_PATH}/courses`, body: { title, topics, expectedRevision } });
+      if (result?.ok !== true || !result.course?.courseId) {
+        throw new Error(result?.error || "The new course was not confirmed. Refresh courses before trying again.");
+      }
+      await coursesResource.reload();
+      return result;
+    } finally { busy.value = false; }
+  }
+
   async function resumeAuthorPreview(attemptId, options = {}) {
     if (busy.value) return null;
     const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
@@ -197,5 +213,5 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
 
   return Object.freeze({ learningMode, learningView, purposeFilter, setLearningMode, setLearningView,
     coursesResource, learningResource, learnerId, busy, startRetry,
-    refresh, startLesson, retryStart, resumeLesson, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
+    refresh, startLesson, retryStart, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

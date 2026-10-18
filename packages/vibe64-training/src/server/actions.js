@@ -36,6 +36,8 @@ const resultOutput = {
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: true },
     revision: { ...revision, required: false }, activeSummaryCurrent: { type: "boolean", required: false },
     courses: { type: "array", required: false, items: opaque },
+    canCreateCourses: { type: "boolean", required: false }, course: { ...opaque, required: false },
+    lessonProgress: { type: "array", required: false, items: opaque },
     sessions: { type: "array", required: false, maxLength: 16, items: learningSessionSummary },
     active: { ...opaque, required: false, nullable: true },
     attempt: { ...opaque, required: false }, history: { type: "array", required: false, items: opaque },
@@ -252,10 +254,13 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
         return result;
       } catch (cause) {
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
+        // Course creation reports the catalogue owner's own corrective message.
+        if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
         throw operationError(cause);
       }
     }
-  }, { projectScoped: false, ...(["learning.read", "teaching-brief.read"].includes(name) ? { learningAccess: "observe" } : {}) });
+  }, { projectScoped: false, ...(name === "courses.create" ? { ownerRequired: true } : {}),
+    ...(["learning.read", "teaching-brief.read"].includes(name) ? { learningAccess: "observe" } : {}) });
 
   const unavailable = (operation = "preparation") => ({ ok: false, available: false,
     error: operation === "end" ? "Lesson retirement is unavailable in this installation. Reading learning state does not end an attempt or dispose of its exercise."
@@ -330,10 +335,14 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
     }
   }, { projectScoped: false, learningAccess: "write" });
   return Object.freeze([
-    definition("courses.list", {}, "Read installed course releases and their exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics.", async () => {
+    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course.", async (_input, actor) => {
       const result = await catalogue.readCatalogue({ includeLessonTitles: true });
-      return { ok: true, available: true, revision: result.revision, courses: result.courses.map(entry => ({
+      return { ok: true, available: true, revision: result.revision,
+        canCreateCourses: actor?.role === "owner" && typeof catalogue.createCourse === "function",
+        courses: result.courses.map(entry => ({
         ...pick(entry.course, ["courseId", "release", "title", "status"]), enabled: entry.enabled,
+        topics: entry.lock.topics.map(topic => ({ topicId: topic.topicId, release: topic.release,
+          title: (entry.topicTitles || []).find(value => value.topicId === topic.topicId && value.release === topic.release)?.title || topic.topicId })),
         lessons: entry.lock.topics.flatMap(topic => topic.lessons.map(lesson => {
           const matches = (entry.lessonTitles || []).filter(value => value.topicId === topic.topicId &&
             value.topicRelease === topic.release && value.code === lesson.code && value.hash === lesson.hash);
@@ -357,7 +366,22 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
       return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
         ...(learningSessions ? { learnerId: result.progress.learnerId, sessions: await learningSessions.readSessions({ actor }) } : {}),
         active: active(result.active), completion: completion(result.completion),
+        lessonProgress: (result.lessonCompletions || []).map(value => pick(value, ["lessonCode", "lessonHash", "required", "passed", "completed", "open"])),
         history: result.progress.attempts.filter(value => value.ended).map(active) };
+    }),
+    definition("courses.create", {
+      title: { ...text, noTrim: false, maxLength: 120 },
+      topics: { type: "array", required: true, maxLength: 32, items: { type: "object", required: true, schema: createSchema({
+        topicId: { ...text, maxLength: 64 }, release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }) } },
+      expectedRevision: revision
+    }, "Create a custom course only after the workspace owner's direct request or accepted offer. Read courses.list first and use its revision; choose whole topics, in learning order, from enabled released courses. The course is pinned to those exact installed topic releases and enabled through the original catalogue owner. It never changes lesson content, starts a lesson or grades anything; saved lesson progress counts in every course containing the lesson. Only the workspace owner may create one.", async input => {
+      if (typeof catalogue.createCourse !== "function") {
+        return { ok: false, available: false, error: "Custom courses are unavailable in this installation. No course was created." };
+      }
+      const result = await catalogue.createCourse(pick(input, ["title", "topics", "expectedRevision"]));
+      return { ok: true, available: true, revision: result.revision,
+        course: { ...pick(result.entry.course, ["courseId", "release", "title", "status"]), enabled: result.entry.enabled } };
     }),
     definition("teaching-brief.read", { attemptId }, "Read the exact saved attempt's pinned teaching text, rubric, evidence contracts and current progress before teaching. Ask one short question at a time. This read neither grades nor saves a pass, starts an exercise or grants source, shell, screenshot or operation authority.", async (input, actor) => ({
       ok: true, available: true, brief: brief(await teachingBrief.readBrief({ actor, attemptId: input.attemptId }))

@@ -85,7 +85,7 @@
           },
           {
             "subpath": "./client/lesson-picker",
-            "summary": "Displays supplied installed lesson choices and saved progress, emitting explicit start or resume intent without state writes."
+            "summary": "Displays supplied installed courses with read-only lesson progress, emitting explicit start, resume or owner custom-course intent without state writes."
           },
           {
             "subpath": "./client/presentation-cue",

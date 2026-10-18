@@ -763,6 +763,7 @@ test("opt-in lesson titles use exact verified snapshots without changing default
     { topicId: "installed-topic", topicRelease: "0.1.0", code: "LESSON-01", hash: f.installed.bundle.lessons[0].hash, title: "Use an application" },
     { topicId: "installed-topic", topicRelease: "0.1.0", code: "LESSON-02", hash: f.installed.bundle.lessons[1].hash, title: "Draft" }
   ]);
+  assert.deepEqual(display.courses[0].topicTitles, [{ topicId: "installed-topic", release: "0.1.0", title: "Installed topic" }]);
   assert.deepEqual(await catalogue.readCatalogue(), saved);
   assert.deepEqual(await treeState(f.systemRoot), before);
   await catalogue.disableCourse({ courseId: course.courseId, release: course.release, expectedRevision: 1 });
@@ -771,6 +772,7 @@ test("opt-in lesson titles use exact verified snapshots without changing default
   const persisted = JSON.parse(await readFile(savedPath, "utf8"));
   assert.equal(persisted.revision, 3);
   assert.equal(Object.hasOwn(persisted.courses[0], "lessonTitles"), false);
+  assert.equal(Object.hasOwn(persisted.courses[0], "topicTitles"), false);
   assert.deepEqual(persisted.courses[0].lock, lock);
   assert.deepEqual(await catalogue.readCatalogue(), persisted);
   await assert.rejects(() => catalogue.readCatalogue({ includeLessonTitles: "true" }), /explicit Boolean/u);
@@ -788,6 +790,7 @@ test("canonical course API and native tool project bounded installed lesson titl
     { code: "LESSON-02", hash: f.installed.bundle.lessons[1].hash, status: "draft", required: true,
       title: "Draft", topicId: "installed-topic", topicRelease: "0.1.0" }
   ]);
+  assert.deepEqual(result.courses[0].topics, [{ topicId: "installed-topic", release: "0.1.0", title: "Installed topic" }]);
   const tools = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { channel: "automation", surface: "app" };
   const toolSet = tools.resolveToolSet(context);

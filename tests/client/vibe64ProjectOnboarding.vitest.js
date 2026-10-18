@@ -1280,11 +1280,11 @@ it("offers opt-in App/Lessons/Presentation in one retained original host without
     fixture.button("App").props.onClick(); await Vue.nextTick();
     await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
     await fixture.settleRead(0);
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     const output = findNode(fixture.container, node => node.type === "output");
     const picker = findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection");
     picker.props.value = "retained exact release";
-    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(fixture.button("Courses").props["aria-pressed"]).toBe(true);
     const handle = fixture.presentationHost.value.presentation;
     await expect(handle.open({ ...visualRequest, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })).rejects.toThrow("exact attempt");
     expect(fixture.visualReads).toHaveLength(0);
@@ -1294,7 +1294,7 @@ it("offers opt-in App/Lessons/Presentation in one retained original host without
     await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
     mocks.visuals[0].ready(); await opening;
     const playerId = handle.state.playerInstanceId;
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     expect(handle.state.visible).toBe(false);
     expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection")).toBe(picker);
     expect(picker.props.value).toBe("retained exact release");
@@ -1355,7 +1355,7 @@ it("shows Lessons without creating a source-less App or claiming an available pr
     await Vue.nextTick();
     expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
     expect(fixture.button("App")).toBeNull();
-    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(fixture.button("Courses").props["aria-pressed"]).toBe(true);
     expect(fixture.button("Presentation").props.disabled).toBe(true);
     expect(nodeText(fixture.container)).toContain("This lesson has no App preview. No lesson presentation is open.");
     await expect(fixture.presentationHost.value.presentation.open(visualRequest)).rejects.toThrow("exact attempt");
@@ -1458,7 +1458,7 @@ it("uses the actual compiled Autopilot choices for display, original bridge and 
     expect(fixture.outputs.controls.value.previewDisplayed).toBe(false);
     expect(fixture.outputs.controls.value.windowDisplayed).toBe(true);
     expect(fixture.outputs.controls.value.toolbarTeleportTarget).toBe("");
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     expect(fixture.colleaguePreview.value).toBe(bridge); expect(bridge.presentation.state.visible).toBe(false);
     expect(bridge.screen).toBeUndefined(); expect(Vue.toValue(mocks.query.enabled)).toBe(false);
     expect(fixture.outputs.controls.value.previewDisplayed).toBe(false);
@@ -1527,7 +1527,7 @@ it("source-less actual Autopilot Preview opens the same player from Lessons thro
     expect(fixture.checkpointWrites[0].options.body).toEqual({ requestId: expect.any(String), expectedRevision: 0,
       sessionId: fixture.props.sessionId, snapshot: { state: "arrived", paused: true, labels: {} } });
     const player = mocks.visuals[0];
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     await vi.waitFor(() => expect(player.operations).toHaveLength(2)); player.finish(1, { paused: true });
     await vi.waitFor(() => expect(fixture.checkpointWrites).toHaveLength(2));
     expect(handle.state.visible).toBe(false); expect(fixture.colleaguePreview.value).toBe(bridge);
@@ -1705,7 +1705,7 @@ it("returns to the selected Lessons content after opening the split practice wor
     appAvailable: true, attemptId: "12345678-1234-4234-8234-123456789abc", splitPaneFixture: true });
   try {
     await Vue.nextTick(); await Vue.nextTick();
-    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(fixture.button("Courses").props["aria-pressed"]).toBe(true);
     const picker = findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot");
     fixture.props.learningView = "workspace";
     await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
@@ -1713,7 +1713,7 @@ it("returns to the selected Lessons content after opening the split practice wor
     await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
     fixture.props.learningView = "learning";
     await Vue.nextTick();
-    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(fixture.button("Courses").props["aria-pressed"]).toBe(true);
     expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot")).toBe(picker);
     expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
   } finally { fixture.close(); }
@@ -1754,7 +1754,7 @@ it("the original App choice forwards only its person event before changing actua
     fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
     const displayedApp = fixture.colleaguePreview.value;
     expect(displayedApp.appVisible).toBe(true);
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     expect(effects).toHaveLength(2);
     await vi.waitFor(() => expect(displayedApp.appVisible).toBe(false));
     fixture.button("App").props.onClick({ type: "click", isTrusted: false }); await Vue.nextTick();
@@ -1823,7 +1823,7 @@ it("practice App waits for exact explicit opening before its first output mount 
     fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
     await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
     const controls = fixture.outputs.controls.value;
-    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    fixture.button("Courses").props.onClick(); await Vue.nextTick();
     expect(fixture.colleaguePreview.value.appVisible).toBe(false);
     expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
     const reopened = fixture.button("App").props.onClick();

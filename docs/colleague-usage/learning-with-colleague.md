@@ -175,17 +175,21 @@ For workspace observations, application checks and practical assessment, read
 
 ## Preview lesson choices: integration prerequisite
 
-The prepared **Lessons** picker displays the host's installed courses in their
-original order, with readable lesson titles beside the exact lesson codes,
-course/topic releases and lesson hashes. It does
-not install or enable content. Disabled courses, preview courses and draft
-lessons stay labelled and unavailable for a new start. Choose a published lesson
-from an enabled release, then use **Start selected lesson** to request that exact
-lesson. Selection alone never starts anything. A missing title reports **Lesson titles
-are unavailable**; use **Refresh lessons**. This preserves the saved attempt and
-history and does not substitute an invented title or another lesson. The host's original lesson action
+The prepared **Courses** pane displays the host's installed courses in their
+original order as cards with "N of M lessons complete" and a progress bar.
+**View course** shows each topic and its lessons in order, with readable lesson
+titles beside the exact lesson codes, course/topic releases and lesson hashes,
+and a **Completed**, **In progress** or **Not started** status read from saved
+progress. It does not install or enable content. Disabled courses, preview courses
+and draft lessons stay labelled and unavailable for a new start. **Start** on a
+card, **Start next lesson** or **Start lesson** on the course page requests that
+exact published lesson from an enabled release; opening a course alone never
+starts anything. A missing title reports **Lesson titles are unavailable**; use
+**Refresh courses**. This preserves the saved attempt and history and does not
+substitute an invented title or another lesson. The host's original lesson action
 must still authorize and admit it; unavailable support or a failed read is not a
-successful start.
+successful start. The owner's **New course** form is described in
+[Choosing lessons and Learning conversations](learning-mode-ui.md).
 
 **Resume saved lesson** requests only the displayed saved attempt. Its retained
 pin can be older than the currently enabled catalogue. This button is available
@@ -197,7 +201,7 @@ or resume support. Ended history is not marked completed without an actual
 completion result.
 
 Assessment counts come from saved results, never chat, motion or selection.
-**Saved lesson identity** shows the saved commit/hash. **Refresh lessons** rereads;
+**Saved lesson identity** shows the saved commit/hash. **Refresh courses** rereads;
 loading/errors create or repair no state. Desktop/phone share wrapping, scrollable
 controls. Colleague can explain/offer supported start/resume; only a direct request
 or accepted offer authorizes it. Main teaches with supported Preview controls;

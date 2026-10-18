@@ -517,9 +517,20 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const state = await loadState(userPaths(actor));
     if (includeCompletion !== true) return state;
     const lessons = await verifyProgressLessons(state.progress);
-    if (!state.active) return { ...state, completion: null };
+    // Read-only per-lesson summary of the same verified passes; a lesson counts
+    // in every course that contains its exact code and hash.
+    const byLesson = new Map();
+    for (const attempt of state.progress.attempts) {
+      const key = canonicalJson(attempt.pin.lesson);
+      const saved = byLesson.get(key) ||
+        { ...lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts), open: false };
+      saved.open ||= !attempt.ended;
+      byLesson.set(key, saved);
+    }
+    const lessonCompletions = [...byLesson.values()];
+    if (!state.active) return { ...state, completion: null, lessonCompletions };
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    return { ...state, completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts) };
+    return { ...state, completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts), lessonCompletions };
   }
 
   // Internal host context, never an assistant result or caller-selected path.

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
@@ -93,6 +94,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     }
     const resolved = [];
     const lessonTitles = [];
+    const topicTitles = [];
     for (const reference of references) {
       const pin = validateInstalledTopicPin({
         schemaVersion: 1,
@@ -106,6 +108,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       if (canonicalJson(topic.pin) !== canonicalJson(pin)) {
         throw new Error("Installed topic identity differs from the approved course lock.");
       }
+      topicTitles.push({ topicId: pin.topicId, release: pin.release, title: topic.topicManifest.topic.title });
       for (const bundle of topic.bundles) {
         lessonTitles.push({ topicId: pin.topicId, topicRelease: pin.release,
           code: bundle.lesson.code, hash: bundle.hash, title: bundle.lesson.title });
@@ -123,7 +126,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     if (canonicalJson(entry.lock) !== canonicalJson(expected)) {
       throw new Error("The approved course lock differs from the complete installed topic inventory. Regenerate and review its exact release.");
     }
-    return lessonTitles;
+    return { lessonTitles, topicTitles };
   }
 
   async function readCatalogue({ includeLessonTitles = false } = {}) {
@@ -155,10 +158,10 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
         seen.add(identity);
         // Disabled snapshots are retained and verified too. A missing/corrupt
         // snapshot fails catalogue admission closed, never triggers a repair.
-        const lessonTitles = await verifyEntry(entry);
+        const { lessonTitles, topicTitles } = await verifyEntry(entry);
         // Read-only display metadata is never part of the saved course/lock.
         // All writers retain the original default read result unchanged.
-        if (includeLessonTitles) entry.lessonTitles = lessonTitles;
+        if (includeLessonTitles) Object.assign(entry, { lessonTitles, topicTitles });
       }
       return catalogue;
     } catch (cause) {
@@ -267,7 +270,52 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     }
   }
 
-  return { readCatalogue, enableCourse, disableCourse };
+  // A custom course is an ordinary released catalogue entry: the owner names it
+  // and orders whole topics already pinned by enabled released courses. The
+  // original lock and enablement owners validate and save it; lessons, their
+  // content and saved progress are shared with every course containing them.
+  async function createCourse({ title, topics, expectedRevision } = {}) {
+    requireRevision(expectedRevision);
+    const name = typeof title === "string" ? title.trim() : "";
+    if (!name || name.length > 120) {
+      throw failure("VIBE64_TRAINING_COURSE_INVALID", "Name the course with 1 to 120 characters.", 400);
+    }
+    if (!Array.isArray(topics) || !topics.length || topics.length > 32 ||
+        new Set(topics.map(topic => `${topic?.topicId}@${topic?.release}`)).size !== topics.length ||
+        new Set(topics.map(topic => topic?.topicId)).size !== topics.length) {
+      throw failure("VIBE64_TRAINING_COURSE_INVALID", "Choose 1 to 32 different whole topics for the course.", 400);
+    }
+    const catalogue = await readCatalogue();
+    const available = catalogue.courses.filter(entry => entry.enabled && entry.course.status === "released")
+      .flatMap(entry => entry.lock.topics);
+    const resolved = [];
+    for (const reference of topics) {
+      const source = available.find(topic => topic.topicId === reference.topicId && topic.release === reference.release);
+      if (!source) {
+        throw failure("VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE", `Topic ${reference.topicId}@${reference.release} is not part of an enabled released course. Refresh courses and choose an installed topic.`, 404);
+      }
+      const topic = await installed.readTopic(validateInstalledTopicPin({ schemaVersion: 1, topicId: source.topicId,
+        release: source.release, repository: source.repository, commit: source.commit, topicHash: source.manifestHash }));
+      resolved.push({ topicId: topic.pin.topicId, release: topic.release, repository: topic.pin.repository,
+        commit: topic.pin.commit, topicManifest: topic.topicManifest, topicHash: topic.topicHash });
+    }
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 48).replace(/-+$/u, "");
+    const course = { schemaVersion: 1,
+      courseId: `custom-${slug || createHash("sha256").update(name).digest("hex").slice(0, 12)}`,
+      title: name, release: "1.0.0", status: "released",
+      topics: topics.map(topic => ({ topicId: topic.topicId, release: topic.release })) };
+    const existing = catalogue.courses.find(entry => entry.course.courseId === course.courseId);
+    // An identical retry reaches the original no-change/re-enable result.
+    if (existing && canonicalJson(existing.course) !== canonicalJson(course)) {
+      throw failure("VIBE64_TRAINING_COURSE_EXISTS", "A course with this name already exists. Choose another name.", 409);
+    }
+    if (!existing && catalogue.courses.length >= MAX_COURSES) {
+      throw failure("VIBE64_TRAINING_COURSE_LIMIT", `This installation already has ${MAX_COURSES} course releases. No course was created.`, 409);
+    }
+    return enableCourse({ course, lock: createCourseLock(course, resolved), expectedRevision });
+  }
+
+  return { readCatalogue, enableCourse, disableCourse, createCourse };
 }
 
 export { createInstalledTrainingCatalogue };

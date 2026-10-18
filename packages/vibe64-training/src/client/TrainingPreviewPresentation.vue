@@ -512,7 +512,7 @@ defineExpose({ presentation });
   <section class="training-preview">
     <div v-if="(selection || lessonsAvailable) && (!splitPaneMode || learningPaneActive)" class="training-preview__choices" aria-label="Learning content">
       <v-btn v-if="appAvailable && !splitPaneMode" min-height="48" :disabled="appOpening" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
-      <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Lessons</v-btn>
+      <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Courses</v-btn>
       <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
       <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
@@ -541,7 +541,7 @@ defineExpose({ presentation });
     <div v-if="appAvailable" v-show="appVisible" class="training-preview__app">
       <slot v-if="learningBinding?.noExercise !== false || appOpened" :app-visible="appVisible" :presentation="presentation" />
     </div>
-    <div v-if="lessonsAvailable" v-show="lessonsVisible" class="training-preview__lessons" aria-label="Lessons">
+    <div v-if="lessonsAvailable" v-show="lessonsVisible" class="training-preview__lessons" aria-label="Courses">
       <slot name="lessons" />
       <p v-if="!appAvailable && !selection" role="status">This lesson has no App preview. No lesson presentation is open.</p>
     </div>

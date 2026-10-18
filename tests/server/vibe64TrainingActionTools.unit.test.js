@@ -22,7 +22,7 @@ import { createTrainingLearnerState } from "../../packages/vibe64-training/src/s
 import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 
-async function fixture(t, { presentation = false } = {}) {
+async function fixture(t, { presentation = false, released = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-actions-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "system");
@@ -34,7 +34,7 @@ async function fixture(t, { presentation = false } = {}) {
     await writeFile(destination, typeof value === "string" ? value : `${JSON.stringify(value)}\n`);
   }
   await write(source, "package.json", { name: "learn-action-fixture", version: "0.1.0", repository: { type: "git", url: "https://github.com/examples/learn-action-fixture.git" },
-    vibe64Training: { schemaVersion: 1, topicId: "action-fixture", domainId: "vibe64", title: "Action fixture", status: "preview", outline: "training/outline.md", prerequisites: [],
+    vibe64Training: { schemaVersion: 1, topicId: "action-fixture", domainId: "vibe64", title: "Action fixture", status: released ? "released" : "preview", outline: "training/outline.md", prerequisites: [],
       lessons: [{ code: "USE-ONE", descriptor: "training/lessons/USE-ONE/lesson.json", status: "published", required: true }] } });
   await write(source, "training/outline.md", "# One lesson\nTry the application.\n");
   await write(source, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 1, code: "USE-ONE", title: "Try the application", document: "lesson.md", prerequisites: [], estimatedMinutes: 5,
@@ -54,7 +54,7 @@ async function fixture(t, { presentation = false } = {}) {
   await write(snapshot, "pin.json", topic);
   const content = createInstalledTrainingContent({ systemRoot });
   const installed = await content.readTopic(topic);
-  const course = { schemaVersion: 1, courseId: "introduction", title: "One introduction", release: "0.1.0", status: "preview", topics: [{ topicId: topic.topicId, release: topic.release }] };
+  const course = { schemaVersion: 1, courseId: "introduction", title: "One introduction", release: "0.1.0", status: released ? "released" : "preview", topics: [{ topicId: topic.topicId, release: topic.release }] };
   const lock = createCourseLock(course, [{ topicId: topic.topicId, release: topic.release, repository: topic.repository, commit,
     topicManifest: installed.topicManifest, topicHash: installed.topicHash }]);
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
@@ -411,7 +411,7 @@ test("unconfirmed checkpoint and unavailable teaching preserve native causes and
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const api = await c.execute(name);
@@ -504,7 +504,9 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   for (const [name, input] of Object.entries(inputs)) assert.equal((await c.tool(name, input)).ok, false);
   assert.equal(f.calls.length, 0);
   for (const definition of c.definitions) {
-    await assert.rejects(() => definition.execute({ vibe64User: { uid: 42 }, ...inputs[definition.id.replace("vibe64.training.", "")] }, { actor: { id: "42" } }), { statusCode: 401 });
+    // Owner-only creation refuses before resolving any login.
+    await assert.rejects(() => definition.execute({ vibe64User: { uid: 42 }, ...inputs[definition.id.replace("vibe64.training.", "")] }, { actor: { id: "42" } }),
+      { statusCode: definition.extensions.vibe64.ownerRequired ? 403 : 401 });
   }
 });
 
@@ -788,6 +790,8 @@ test("history and retained-pass tool projections preserve original provenance wi
   assert.equal(read.history[0].learning.submissions[0].submissionId, "answer-one");
   assert.equal(read.history[0].learning.submissions[0].evidence.attemptId, attemptId);
   assert.equal(read.completion.passed, 1);
+  assert.deepEqual(read.lessonProgress, [{ lessonCode: "USE-ONE", lessonHash: f.pin.lesson.hash, required: 1, passed: 1, completed: true, open: true }],
+    "one per-lesson summary joins the ended pass and the open successor");
   assert.equal(read.active.learning.submissions.length, 0);
   const brief = await c.tool("teaching-brief.read", { attemptId: next.active.attemptId });
   assert.equal(brief.ok, true, JSON.stringify(brief));
@@ -1192,14 +1196,14 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
   ]);
   const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
-  assert.equal(originalRoutes.length, 11);
+  assert.equal(originalRoutes.length, 12);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
     route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
   "Online retains its one existing Main route registration; Training adds only its explicit Learning visual adapter");
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   assert.deepEqual(originalRoutes.map(route => [route.method, route.url]), [
-    ["GET", "/api/vibe64/training/courses"], ["GET", "/api/vibe64/training/learning"],
+    ["GET", "/api/vibe64/training/courses"], ["POST", "/api/vibe64/training/courses"], ["GET", "/api/vibe64/training/learning"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],
@@ -1469,4 +1473,42 @@ test("Main Training reply budget preserves complete valid briefs while default a
   assert.equal(refused.ok, false);
   assert.equal(refused.error.code, "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE");
   assert.deepEqual(await inventory(f.systemRoot), before);
+});
+
+test("owner custom course pins installed released topics through the original catalogue owner", async t => {
+  const f = await fixture(t, { released: true });
+  const c = f.register();
+  const listed = await c.execute("courses.list");
+  assert.equal(listed.canCreateCourses, false);
+  assert.deepEqual(listed.courses[0].topics, [{ topicId: "action-fixture", release: "0.1.0", title: "Action fixture" }]);
+  const input = { title: " My path ", topics: [{ topicId: "action-fixture", release: "0.1.0" }], expectedRevision: listed.revision };
+  const before = await inventory(f.systemRoot);
+  await assert.rejects(c.execute("courses.create", input), { code: "vibe64_owner_required" });
+  assert.deepEqual(await inventory(f.systemRoot), before, "a member cannot change the catalogue");
+  f.auth.user = { ...f.auth.user, role: "owner" };
+  assert.equal((await c.execute("courses.list")).canCreateCourses, true);
+  const created = await c.execute("courses.create", input);
+  assert.deepEqual(created.course, { courseId: "custom-my-path", release: "1.0.0", title: "My path", status: "released", enabled: true });
+  const catalogue = await f.catalogue.readCatalogue();
+  const [original, custom] = catalogue.courses;
+  assert.equal(custom.enabled, true);
+  assert.deepEqual(custom.lock.topics, original.lock.topics, "the custom course reuses the exact installed topic pins");
+  const courses = (await c.execute("courses.list")).courses;
+  assert.deepEqual(courses[1].lessons, courses[0].lessons, "lesson identities are shared, so saved progress counts in both");
+  for (const extra of [{ vibe64User: { role: "owner" } }, { courseId: "introduction" }, { path: "/tmp/source" }]) {
+    await assert.rejects(() => c.execute("courses.create", { ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  const replay = await c.execute("courses.create", { ...input, expectedRevision: created.revision });
+  assert.equal(replay.revision, created.revision, "an identical retry changes nothing");
+  await assert.rejects(c.execute("courses.create", { ...input, title: "My path!", expectedRevision: created.revision }), { code: "VIBE64_TRAINING_COURSE_EXISTS" });
+  await assert.rejects(c.execute("courses.create", { ...input, title: "Twice", topics: [...input.topics, ...input.topics], expectedRevision: created.revision }),
+    { code: "VIBE64_TRAINING_COURSE_INVALID" });
+  await assert.rejects(c.execute("courses.create", { ...input, title: "Missing", topics: [{ topicId: "missing", release: "0.1.0" }], expectedRevision: created.revision }),
+    { code: "VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE" });
+  await assert.rejects(c.execute("courses.create", { ...input, title: "Stale", expectedRevision: 0 }), { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT" });
+  await f.catalogue.disableCourse({ courseId: "introduction", release: "0.1.0", expectedRevision: created.revision });
+  await f.catalogue.disableCourse({ courseId: "custom-my-path", release: "1.0.0", expectedRevision: created.revision + 1 });
+  await assert.rejects(c.execute("courses.create", { ...input, title: "Disabled source", expectedRevision: created.revision + 2 }),
+    { code: "VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE" }, "custom courses use only topics from enabled released courses");
+  assert.equal((await f.catalogue.readCatalogue()).courses.length, 2);
 });
