@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
 <template>
   <Vibe64Colleague
     :focus="focus"
-    :navigate="browserNavigation?.value || null"
+    :navigate="navigate"
     :request="request"
     :settle-workspace="settleWorkspace"
   />
