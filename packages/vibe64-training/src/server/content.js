@@ -110,7 +110,18 @@ async function bundleLesson(reader, entry) {
     if (assessment.kind === "answer" && assessment.evidence) throw new Error(`Answer assessment ${assessment.id} uses its admitted answer, not a practical producer.`);
     if (assessment.evidence?.check && !checks.has(assessment.evidence.check)) throw new Error(`Unknown check for ${assessment.id}.`);
     if (assessment.evidence?.producer === "exercise" && (!lesson.exercise || !assessment.evidence.check)) throw new Error(`Exercise assessment ${assessment.id} needs its declared exercise and check.`);
-    if (assessment.evidence?.check && assessment.evidence.producer !== "exercise") throw new Error(`Only exercise evidence runs a declared check: ${assessment.id}.`);
+    if (assessment.evidence?.check && !["exercise", "code"].includes(assessment.evidence.producer)) throw new Error(`Only exercise or code evidence runs a declared check: ${assessment.id}.`);
+    const checkKind = (lesson.checks || []).find(check => check.id === assessment.evidence?.check)?.kind || "response";
+    if (assessment.evidence?.producer === "code") {
+      if (!lesson.exercise || !assessment.evidence.check || checkKind !== "code" || !assessment.evidence.files?.length) {
+        throw new Error(`Code assessment ${assessment.id} needs its declared exercise, files and a code check.`);
+      }
+    } else if (assessment.evidence?.files || assessment.evidence?.check && checkKind === "code") {
+      throw new Error(`Only code evidence names edited files or runs a code check: ${assessment.id}.`);
+    }
+  }
+  for (const check of lesson.checks || []) {
+    if (check.timeoutSeconds !== undefined && check.kind !== "code") throw new Error(`Only a code check declares a timeout: ${check.id}.`);
   }
   if (!lesson.assessments.some(assessment => assessment.required)) throw new Error(`Lesson ${entry.code} needs a required assessment.`);
   uniqueIds(lesson.visuals, "id", "Visuals");
@@ -150,6 +161,21 @@ async function bundleLesson(reader, entry) {
       }
     }
     await includeDirectory(source.filename);
+    // Declared code files must be ordinary bundled exercise files; their pinned
+    // bytes are the check's base and only these paths take the learner's bytes.
+    for (const assessment of lesson.assessments) {
+      for (const file of assessment.evidence?.files || []) {
+        const parts = file.split("/");
+        if (file.includes("\\") || path.posix.isAbsolute(file) ||
+            parts.some(part => !part || part === "." || part === ".." || excludedExerciseEntries.has(part)) ||
+            !files.has(source.relative ? `${source.relative}/${file}` : file)) {
+          throw new Error(`Code assessment ${assessment.id} names a file outside its bundled exercise: ${file}.`);
+        }
+      }
+      if (new Set(assessment.evidence?.files || []).size !== (assessment.evidence?.files || []).length) {
+        throw new Error(`Code assessment ${assessment.id} repeats a declared file.`);
+      }
+    }
   }
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
   return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative };

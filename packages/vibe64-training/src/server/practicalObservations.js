@@ -47,8 +47,12 @@ function createTrainingPracticalObservations({ actions, failure }) {
       if (!isDeepStrictEqual(previous.payload, input)) throw failure("This gesture identity already retained another observation.");
       return structuredClone(previous.response);
     }
-    if (practical.observation) throw failure("This practical task already has its observation. Retry the original gesture receipt.");
     const { assessment, snapshot: question } = captured;
+    const code = assessment.evidence.producer === "code";
+    // Each "Check my code" is a new observation of the same question; the
+    // latest check replaces an earlier one, which never becomes a pass itself.
+    if (practical.observation && code) practical = { reference: structuredClone(input.reference), steps: [], observation: null };
+    if (practical.observation) throw failure("This practical task already has its observation. Retry the original gesture receipt.");
     const index = practical.steps.length;
     const workspaceControl = ["project-select", "session-select", "preview-select", "chat-show"].includes(input.control);
     let valid = false;
@@ -68,11 +72,13 @@ function createTrainingPracticalObservations({ actions, failure }) {
       } else {
         valid = input.control === "colleague-restore" && input.workspace.colleagueVisible === true;
       }
+    } else if (code) {
+      valid = index === 0 && input.control === "code-submit";
     } else if (assessment.id === "try-the-application") {
       valid = index === 0 && input.control === "exercise-response" && input.workspace.projectVisible && input.workspace.pane === "preview";
     }
     if (!valid) throw failure("Repeat this question's practical steps in their original order and visible workspace.");
-    const completed = index === 2 || assessment.id === "try-the-application";
+    const completed = index === 2 || assessment.id === "try-the-application" || code;
     const response = { ok: true, gestureId: input.gestureId, assessmentId: assessment.id,
       phase: completed ? "completed" : "collecting", acceptedSteps: index + 1 };
     if (completed) {
@@ -95,12 +101,36 @@ function createTrainingPracticalObservations({ actions, failure }) {
         await requireCurrentQuestion();
         practical.checkResult = structuredClone(checked.checkResult);
       }
+      let codeText = "";
+      let ownWork = true;
+      if (code) {
+        if (typeof context.trainingChecks?.runCodeCheck !== "function") {
+          throw failure("The installed code check is unavailable in this host.");
+        }
+        const checked = await context.trainingChecks.runCodeCheck({ actor, signal: context.signal,
+          attemptId: question.attemptId, sessionId: captured.target.sessionId, observationId });
+        if (checked?.checkResult?.check !== assessment.evidence.check || checked.checkResult.observationId !== observationId ||
+            !["passed", "not-yet-passed"].includes(checked.checkResult.outcome) || !["learner", "other"].includes(checked.authorship) ||
+            checked.authorship === "other" && checked.checkResult.outcome !== "not-yet-passed") {
+          throw failure("The declared code check did not confirm this exact native observation.");
+        }
+        await requireCurrentQuestion();
+        practical.checkResult = structuredClone(checked.checkResult);
+        practical.checkReason = checked.reason ? String(checked.reason).slice(0, 256) : undefined;
+        ownWork = checked.authorship === "learner";
+        const saved = (checked.files || []).map(file => `${file.path} (sha256 ${String(file.sha256).slice(0, 12)})`).join(", ");
+        codeText = ownWork
+          ? `Saved ${saved} through the learner's own lesson Code editor and ran declared check ${assessment.evidence.check}: ${checked.checkResult.outcome === "passed" ? "verified" : `not yet - ${practical.checkReason || "incomplete"}`}.`
+          : practical.checkReason;
+        response.checkOutcome = checked.checkResult.outcome;
+        if (practical.checkReason) response.checkReason = practical.checkReason;
+      }
       practical.observation = { kind: "observation", observationId, observedAt: new Date().toISOString(),
         learnerId: question.learnerId, attemptId: question.attemptId, questionId: question.question.id,
         ...captured.target, producer: assessment.evidence.producer, operation: assessment.evidence.operation,
         operationId: input.gestureId, assistance: question.question.assistance,
-        origin: ["demonstration", "substantial"].includes(question.question.assistance) ? "teacher" : "learner",
-        text: assessment.id === "try-the-application" ? "Pressed the App's native button and displayed its identified server response in visible Preview." :
+        origin: !ownWork || ["demonstration", "substantial"].includes(question.question.assistance) ? "teacher" : "learner",
+        text: code ? codeText : assessment.id === "try-the-application" ? "Pressed the App's native button and displayed its identified server response in visible Preview." :
           assessment.id === "workspace-navigation" ? "Selected the reserved exercise project, its Main session and its visible Preview using native controls." :
           "Minimized Colleague, used a native workspace control in the same exercise and restored the same Colleague conversation." };
       response.observationId = observationId;
@@ -115,7 +145,7 @@ function createTrainingPracticalObservations({ actions, failure }) {
     if (!practical?.steps.length) return result;
     try { requireCurrent(); } catch { return result; }
     const facts = structuredClone({ reference: practical.reference, steps: practical.steps,
-      observation: practical.observation, checkResult: practical.checkResult });
+      observation: practical.observation, checkResult: practical.checkResult, checkReason: practical.checkReason });
     try {
       const captured = await context.trainingPractical?.capturePractical({ actor: authenticatedVibe64User(context), reference: facts.reference });
       const lastWorkspace = facts.steps.at(-1).payload.workspace;
@@ -128,7 +158,8 @@ function createTrainingPracticalObservations({ actions, failure }) {
       requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: targetInput || captured.target, context: authorizationContext }));
       requireCurrent();
       if (connection.trainingPractical !== practical ||
-          !isDeepStrictEqual({ reference: practical.reference, steps: practical.steps, observation: practical.observation, checkResult: practical.checkResult }, facts)) return result;
+          !isDeepStrictEqual({ reference: practical.reference, steps: practical.steps, observation: practical.observation,
+            checkResult: practical.checkResult, checkReason: practical.checkReason }, facts)) return result;
       if (!facts.observation) {
         result.trainingPracticalProgress = { reference: facts.reference, assessmentId: captured.assessment.id,
           phase: "collecting", acceptedSteps: facts.steps.length, lastControl: facts.steps.at(-1).payload.control };
@@ -139,7 +170,8 @@ function createTrainingPracticalObservations({ actions, failure }) {
         assessmentId: captured.assessment.id, producer: observation.producer, operation: observation.operation,
         observedAt: observation.observedAt, assistance: observation.origin === "teacher" ? "demonstration" : observation.assistance,
         origin: observation.origin,
-        ...(facts.checkResult ? { checkOutcome: facts.checkResult.outcome } : {}) };
+        ...(facts.checkResult ? { checkOutcome: facts.checkResult.outcome } : {}),
+        ...(facts.checkReason ? { checkReason: facts.checkReason } : {}) };
     } catch { /* Unavailable or unauthorized practical facts never change ordinary chat context. */ }
     return result;
   }

@@ -65,7 +65,11 @@ function createTrainingAssessmentGrader({ content, helper } = {}) {
         throw new Error("Supply only this admitted observation's bounded server action description.");
       }
       if (proof.origin !== "learner" || checkResult?.outcome === "not-yet-passed") {
-        return { outcome: "not-yet-passed", explanation: "This requires the learner's own observed action and a successful declared check; a demonstration or failed check does not pass." };
+        // A code observation already states its server-side reason, such as
+        // other edits in a declared file or the check's own bounded message.
+        return { outcome: "not-yet-passed", explanation: proof.producer === "code" && observedAction?.text
+          ? `Not passed: ${observedAction.text}`.slice(0, 1024)
+          : "This requires the learner's own observed action and a successful declared check; a demonstration or failed check does not pass." };
       }
     }
     const prompt = { assessment: { id: assessment.id, kind: assessment.kind, rubric: rubric.text },

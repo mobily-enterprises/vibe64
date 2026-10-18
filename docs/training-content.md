@@ -49,13 +49,79 @@ An assessment declares `id`, `kind` (`answer` or `practical`), `required` and
 `rubric`. Use an explicit `<a id="assessment-id"></a>` line in the teaching
 document and refer to it as `lesson.md#assessment-id`. Answer assessments use
 the admitted learner answer and that rubric. Practical assessments also declare
-`evidence: {producer, operation, check?, explanationRequired?}`. Supported producers
-are `workspace`, `colleague` and `exercise`. Exercise evidence requires an exercise
-and a declared check; other producers cannot execute checks. Declare checks as
-`checks: [{id,file,assets?}]`. Declare auxiliary check inputs in `assets`, relative to the lesson descriptor.
+`evidence: {producer, operation, check?, explanationRequired?, files?}`. Supported producers
+are `workspace`, `colleague`, `exercise` and `code`. Exercise and code evidence
+require an exercise and a declared check; other producers cannot execute checks. Declare checks as
+`checks: [{id,file,assets?,kind?,timeoutSeconds?}]`. Declare auxiliary check inputs in `assets`, relative to the lesson descriptor.
 The validator includes these files but never executes them.
 The managed application execution owner will run approved pinned checks; teaching
 tools do not gain arbitrary shell access. Demonstrations cannot earn learner passes.
+
+### Authoring a code question
+
+A `code` practical asks the learner to change exercise code in the lesson
+Dashboard's **Code** tab and press **Check my code**. Declare it like this
+(the test fixture `tests/fixtures/training/code-practical/` is a complete,
+validating example):
+
+```json
+"exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },
+"checks": [{ "id": "notes-title-required", "file": "checks/notes/title.mjs",
+             "kind": "code", "timeoutSeconds": 15 }],
+"assessments": [{ "id": "require-note-title", "kind": "practical", "required": true,
+  "rubric": "lesson.md#require-note-title",
+  "evidence": { "producer": "code", "operation": "edit-and-check",
+                "check": "notes-title-required", "files": ["notes.mjs"],
+                "explanationRequired": true } }]
+```
+
+- `files` lists 1–8 exercise-relative paths the learner edits. Each must be an
+  ordinary bundled exercise file (no `..`, absolute path, `.git`,
+  `node_modules` or `.genesis` segment) and may appear once. Only `code`
+  evidence may name files.
+- The check must declare `kind: "code"`; a code check can only be named by
+  `code` evidence and an `exercise` check must not be a code check. Omitted
+  `kind` means the existing `response` kind. `timeoutSeconds` (1–60, default
+  15) is allowed only on a code check. The operation is any lesson ID.
+- `reuse:"attempt"` is the supported exercise mode; sequence-reused baselines
+  are not part of this first slice.
+- The rubric should ask for the learner's own explanation. The check alone
+  never passes: the existing tool-free grading Helper grades the explanation
+  against the rubric with the check result.
+
+The check runs with Node in the managed execution owner on a private copy laid
+out like the topic: the pinned exercise at its topic path, with only the
+declared files replaced by the learner's saved bytes, plus the pinned check and
+its assets. Its working directory is the exercise copy, its environment is
+empty, output is limited to 4 KiB and it has no dependency installation, so an
+exercise and its check must need no packages. Import learner code relative to
+the check (for example `new URL("../../app/notes.mjs", import.meta.url)`); the
+same command works in the topic checkout. The check reads one JSON object on
+stdin, `{check, filesHash, files:[{path,sha256}]}`, and prints exactly one JSON
+line echoing `check` and `filesHash`:
+
+- exit 0 and `{check, filesHash, outcome:"verified"}` — the code is correct;
+- exit 1 and `{check, filesHash, outcome:"incomplete", reason}` (reason at most
+  256 characters) — shown to the learner as "Not yet: …".
+
+A different `filesHash` or any other success-shaped output is rejected as an
+invalid check result. A check stopped by its timeout, or learner code that
+crashes the check before it prints a result, is "not yet passed" with a fixed
+explanation. stderr is ignored. Use plain `node:assert`-style logic rather than
+`node --test`, whose reporter writes to stdout.
+
+Authorship: when Main prepares a code question, Vibe64 records the SHA-256 of
+each declared file in the live practice project as the question's starting
+point. Each save from the learner's lesson Code tab is recorded server-side
+with its base hash, intended hash and saved hash. At **Check my code** the chain
+from the starting point through those saves must reach the current bytes
+exactly; otherwise the check is not run and the question is automatically not
+passed with "needs an independent attempt: other edits detected in `<file>`".
+The teaching brief instructs Main not to write declared files or send solution
+code; there is no technical write-deny for agents in this slice. Teacher chat
+is not shared with the grader. The check is learner-run code on the learner's
+own machine and has no network isolation: for hosted use, sandboxing and network
+denial of the check job are an open gap.
 
 An optional exercise uses `{kind:"bundled", source, reuse:"attempt"}`. Continued
 work uses `reuse:"sequence"`, `sequenceId` and `sequenceMode:"create"|"continue"`.

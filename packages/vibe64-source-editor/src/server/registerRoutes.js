@@ -1,6 +1,7 @@
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
+import { LEARNING_ACCESS } from "./actions.js";
 import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
@@ -98,9 +99,42 @@ function sourceInput(request, input = {}) {
   return { ...data, sessionId: request.params.sessionId };
 }
 
+// The lesson Code tab mounts only the read operations its saved attempt can observe.
+function registerLearningRoutes(http, { routeSurface = "" } = {}) {
+  const routes = createVibe64FeatureRoutes(http, {
+    localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
+    projectScoped: false, routeRelativePath: "learning/:learningAttemptId/vibe64", routeSurface,
+    tags: ["studio", "vibe64-source-editor"]
+  });
+  const learningInput = (request, input) => {
+    const { projectSlug: _project, learningAttemptId: _attempt, ...data } = sourceInput(request, input);
+    void _project; void _attempt;
+    return { ...data, learningAttemptId: request.params.learningAttemptId };
+  };
+  const query = (request) => learningInput(request, routes.requestQuery(request));
+  const route = (method, suffix, operation, summary, buildInput) => {
+    if (!LEARNING_ACCESS[`vibe64.source-editor.${operation}`]) throw new TypeError(`${operation} is not a lesson source operation.`);
+    routes.actionRoute(method, `/sessions/:sessionId/source-editor${suffix}`, {
+      actionId: `vibe64.source-editor.${operation}`, summary, buildInput,
+      ...(method === "POST" ? { bodyLimit: 32 * 1024 } : {})
+    });
+  };
+  const searched = (request) => {
+    const { q, ...rest } = routes.requestQuery(request);
+    return learningInput(request, { ...rest, ...(q !== undefined ? { query: q } : {}) });
+  };
+  route("GET", "/tree", "tree.read", "Read the lesson's source tree.", query);
+  route("GET", "/file", "file.read", "Read a lesson source file.", query);
+  route("GET", "/files", "files.find", "Find lesson source files.", searched);
+  route("GET", "/search", "search", "Search lesson source files.", searched);
+  route("POST", "/resolve-path", "path.resolve", "Resolve a lesson source path reference.",
+    (request) => learningInput(request, routes.requestBody(request)));
+}
+
 function registerRoutes(http, {
-  projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor
+  projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor, learningScoped = false
 } = {}) {
+  if (learningScoped) return registerLearningRoutes(http, { routeSurface });
   if (!sourceEditor || typeof sourceEditor.readTree !== "function") {
     throw new TypeError("registerRoutes requires the Vibe64 Source Editor API.");
   }

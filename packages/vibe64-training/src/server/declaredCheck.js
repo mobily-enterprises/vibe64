@@ -3,8 +3,10 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
+import { readDeclaredFiles, verifyAuthorship } from "./codeAuthorship.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
@@ -15,7 +17,13 @@ const inputSchema = createSchema({
   sessionId: identity, terminalId: identity, observationId: identity,
   instanceId: uuid, interactionId: uuid, requestId: uuid
 });
+const codeInputSchema = createSchema({
+  attemptId: { ...uuid, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
+  sessionId: identity, observationId: identity
+});
 const checkId = "orientation-response";
+const DEFAULT_CODE_TIMEOUT_SECONDS = 15;
+const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, extra = {}) {
   return Object.assign(new Error(message), { code, statusCode: 409, ...extra });
@@ -156,7 +164,138 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     });
   }
 
-  return { runOrientationCheck };
+  function safeRelative(file) {
+    const relative = file.split("/");
+    if (relative.some(part => !part || part === "." || part === ".." || part.includes("\\")) || path.isAbsolute(file)) {
+      throw failure("VIBE64_TRAINING_CHECK_DIRECTORY_UNSAFE", "The installed code check has an unsafe file path.");
+    }
+    return relative;
+  }
+
+  function openCodeQuestion(attempt, lesson) {
+    const question = attempt.learning?.resume?.pendingQuestion;
+    const assessment = lesson.lesson.assessments.find(value => value.id === question?.assessmentId);
+    const check = lesson.lesson.checks?.find(value => value.id === assessment?.evidence?.check);
+    if (!question?.assistance || !question.issuedRevision || assessment?.kind !== "practical" ||
+        assessment.evidence?.producer !== "code" || check?.kind !== "code" || !assessment.evidence.files?.length) {
+      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "The open question in this lesson does not declare a code check.");
+    }
+    return { question, assessment, check };
+  }
+
+  // A code check runs the pinned check on a private copy: the pinned exercise
+  // bytes, overlaid only by the learner's current bytes of the declared files.
+  // Agent edits elsewhere cannot change the result; a broken authorship chain
+  // in a declared file never runs and is an automatic not-yet-passed.
+  async function runCodeCheck({ actor, signal, ...submitted } = {}) {
+    const input = validateContent(codeInputSchema, submitted, "Native code check identities");
+    signal?.throwIfAborted();
+    const attempt = await readAttempt(actor, input);
+    const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
+    const lesson = await content.readLesson(pin);
+    const { question, assessment, check } = openCodeQuestion(attempt, lesson);
+    if (typeof learners.readCodeLedger !== "function" || typeof content.readExercise !== "function") {
+      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installation cannot verify code questions.");
+    }
+    const declared = await content.readCheck({ ...pin, checkId: check.id });
+    const exercise = await content.readExercise(pin);
+    const result = (outcome, extra = {}) => ({ checkResult: { check: check.id, observationId: input.observationId, outcome }, ...extra });
+    const sameQuestion = current => canonicalJson(current.pin) === canonicalJson(attempt.pin) && current.projectSlug === attempt.projectSlug &&
+      canonicalJson(current.learning?.resume?.pendingQuestion) === canonicalJson(question);
+    return project.runInProjectContext(attempt.projectSlug, async () => {
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const session = await runtime.getSession(input.sessionId, { inspectSource: false });
+      if (!session || session.sessionId !== input.sessionId) throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
+      const paths = runtime.store.paths(input.sessionId);
+      if (paths.sessionRoot !== session.sessionRoot) throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson session artifact identity changed.");
+      const files = await readDeclaredFiles(sessionSourcePath(session), assessment.evidence.files);
+      const checked = files.map(file => ({ path: file.path, sha256: file.sha256 }));
+      const authorship = verifyAuthorship(await learners.readCodeLedger({ actor, attemptId: input.attemptId }), question, files);
+      if (!authorship.intact) {
+        return result("not-yet-passed", { authorship: "other", files: checked,
+          reason: authorship.missingBaseline
+            ? "needs an independent attempt: this question has no recorded starting files. Ask for the question again."
+            : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
+      }
+      const filesHash = sha256(canonicalJson(checked));
+      await canonicalDirectory(paths.sessionRoot);
+      await mkdir(paths.artifactsRoot, { recursive: true, mode: 0o700 });
+      await canonicalDirectory(paths.artifactsRoot);
+      const scratch = await mkdtemp(path.join(paths.artifactsRoot, "training-code-check-"));
+      const exerciseRoot = exercise.sourcePath === "." ? "" : exercise.sourcePath;
+      const exerciseRelative = file => exerciseRoot ? `${exerciseRoot}/${file}` : file;
+      let cleanupSafe = true;
+      try {
+        const learnerBytes = new Map(files.map(file => [file.path, file.bytes]));
+        const inputs = [...exercise.files.map(file => ({ path: exerciseRelative(file.path), bytes: learnerBytes.get(file.path) ?? file.bytes })),
+          declared.file, ...declared.assets];
+        for (const file of inputs) {
+          const destination = path.join(scratch, ...safeRelative(file.path));
+          await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+          await writeFile(destination, file.bytes, { flag: "wx", mode: 0o600 });
+        }
+        signal?.throwIfAborted();
+        if (!sameQuestion(await readAttempt(actor, input))) {
+          throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson question changed before its code check ran.");
+        }
+        const timeoutSeconds = check.timeoutSeconds || DEFAULT_CODE_TIMEOUT_SECONDS;
+        const cwd = path.join(scratch, ...(exerciseRoot ? exerciseRoot.split("/") : []));
+        cleanupSafe = false;
+        const run = await runCommand({ actor: "daemon", command: "node", args: [path.join(scratch, ...safeRelative(declared.file.path))],
+          cwd, allowedRoots: [scratch], project: { slug: attempt.projectSlug }, session,
+          inheritProcessEnv: false, baseEnv: {}, envPolicy: "project", purpose: "output", runtimes: ["node26"],
+          mode: "capture", execution: { kind: "job", lifecycle: "finite", operationId: "training-code-check",
+            ownerId: input.observationId, projectSlug: attempt.projectSlug, sessionId: input.sessionId },
+          input: JSON.stringify({ check: check.id, filesHash, files: checked }),
+          timeout: timeoutSeconds * 1000, maxBuffer: 4096, signal });
+        cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(run?.execution?.id || "") &&
+          ["finished", "rejected"].includes(run.execution.state) &&
+          !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(run.code));
+        if (!cleanupSafe) throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED", "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+          { execution: run?.execution, scratch });
+        signal?.throwIfAborted();
+        if (!sameQuestion(await readAttempt(actor, input))) {
+          throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson question changed while its code check was running. Check your code again.");
+        }
+        if (run.timedOut) {
+          return result("not-yet-passed", { authorship: "learner", files: checked,
+            reason: `The check stopped after ${timeoutSeconds} seconds. Your code may never finish, for example because of an endless loop.` });
+        }
+        const stdout = String(run.stdout ?? "");
+        if (run.signal || run.code || Buffer.byteLength(stdout) > 4096) {
+          throw failure(run.code || "VIBE64_TRAINING_CHECK_FAILED", "The declared code check did not return a bounded execution result.");
+        }
+        let row = null;
+        try { row = JSON.parse(stdout.trim()); } catch { /* Learner code may crash the check before it reports. */ }
+        const keys = row && typeof row === "object" && !Array.isArray(row) ? canonicalJson(Object.keys(row).sort()) : "";
+        if (row && Object.hasOwn(row, "filesHash") && row.filesHash !== filesHash) {
+          throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The code check result does not belong to the files it was given.");
+        }
+        if (run.exitCode === 0 && run.ok === true && keys === canonicalJson(["check", "filesHash", "outcome"]) &&
+            row.check === check.id && row.outcome === "verified") {
+          return result("passed", { authorship: "learner", files: checked });
+        }
+        if (run.exitCode === 1 && keys === canonicalJson(["check", "filesHash", "outcome", "reason"]) && row.check === check.id &&
+            row.outcome === "incomplete" && typeof row.reason === "string" && row.reason.trim() && row.reason.length <= 256) {
+          return result("not-yet-passed", { authorship: "learner", files: checked, reason: row.reason });
+        }
+        if (run.exitCode !== 0 && !row) {
+          return result("not-yet-passed", { authorship: "learner", files: checked,
+            reason: "The check could not finish with your code: it stopped with an error before reporting a result." });
+        }
+        throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The code check returned an unexpected result.");
+      } catch (error) {
+        if (!cleanupSafe && error.code !== "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED") {
+          throw failure("VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED", "The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.", { cause: error, scratch });
+        }
+        throw error;
+      } finally {
+        if (cleanupSafe) await rm(scratch, { recursive: true, force: true });
+      }
+    });
+  }
+
+  return { runOrientationCheck, runCodeCheck };
 }
 
 export { createTrainingDeclaredCheckOwner };

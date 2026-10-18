@@ -107,7 +107,7 @@ function brief(value) {
       assessments: value.lesson.assessments.map(assessment => ({
         ...pick(assessment, ["id", "kind", "required"]),
         rubric: { text: assessment.rubric.text },
-        ...(assessment.evidence ? { evidence: pick(assessment.evidence, ["producer", "operation", "check", "explanationRequired"]) } : {})
+        ...(assessment.evidence ? { evidence: pick(assessment.evidence, ["producer", "operation", "check", "explanationRequired", "files"]) } : {})
       })),
       visuals: value.lesson.visuals.map(visual => ({
         ...pick(visual, ["id", "title", "description", "initialState", "states"]),

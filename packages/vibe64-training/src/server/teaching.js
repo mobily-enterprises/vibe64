@@ -52,7 +52,9 @@ function questionPreparationReady(attempt, lesson, assessmentId) {
     lesson.lesson.assessments.some(item => item.id === assessmentId && item.kind === "answer");
 }
 
-function createTrainingTeachingOwner({ learners, content } = {}) {
+// `codeBaseline` records the declared files' starting hashes when a code
+// question is saved; without it this installation cannot ask code questions.
+function createTrainingTeachingOwner({ learners, content, codeBaseline } = {}) {
   if (!learners?.readState || !learners?.saveLessonResume || !content?.readLesson) {
     throw new TypeError("Teaching requires the original learner-state and installed-content facilities.");
   }
@@ -84,9 +86,18 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     const value = validateContent(prepareSchema, input, "Question preparation");
     if (!value.text.trim()) throw new Error("Prepare a nonempty question.");
     const { state, attempt, lesson } = await activeLesson(actor, value.attemptId, value.assessmentId);
-    if (!lesson.lesson.assessments.some(item => item.id === value.assessmentId)) {
+    const declared = lesson.lesson.assessments.find(item => item.id === value.assessmentId);
+    if (!declared) {
       throw new Error("Prepare an assessment declared in this exact installed lesson.");
     }
+    const codeQuestion = declared.evidence?.producer === "code";
+    if (codeQuestion && typeof codeBaseline !== "function") {
+      throw failure("VIBE64_TRAINING_CODE_UNAVAILABLE", "This installation cannot record the starting files of a code question.");
+    }
+    const withBaseline = async prepared => {
+      if (codeQuestion) await codeBaseline({ actor, attemptId: value.attemptId, question: prepared.snapshot.question });
+      return prepared;
+    };
     const previous = attempt.learning?.resume;
     const sameIdentity = previous?.pendingQuestion?.id === value.requestId;
     const question = { id: value.requestId, assessmentId: value.assessmentId,
@@ -103,7 +114,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
       // the resume request ID. Replaying preparation must not overwrite it.
       if (previous.requestId !== value.requestId) {
         const snapshot = questionSnapshot(state, attempt);
-        return { revision: state.revision, replayed: true, snapshot, reference: questionReference(snapshot) };
+        return withBaseline({ revision: state.revision, replayed: true, snapshot, reference: questionReference(snapshot) });
       }
     }
     const saved = await learners.saveLessonResume({ actor, attemptId: value.attemptId,
@@ -114,8 +125,8 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
       throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "The saved exercise preparation changed before question admission.");
     }
     const snapshot = questionSnapshot(state, saved.attempt);
-    return { revision: saved.revision, replayed: saved.replayed,
-      snapshot, reference: questionReference(snapshot) };
+    return withBaseline({ revision: saved.revision, replayed: saved.replayed,
+      snapshot, reference: questionReference(snapshot) });
   }
 
   async function saveVisualCheckpoint({ actor, ...input } = {}, facilities) {
@@ -168,11 +179,16 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
   async function capturePractical({ actor, reference } = {}) {
     const { snapshot, attempt, lesson } = await capturedLesson(actor, reference);
     const assessment = lesson.lesson.assessments.find(item => item.id === snapshot.question.assessmentId);
-    const producer = { "workspace-navigation": "workspace", "return-to-colleague": "colleague", "try-the-application": "exercise" }[assessment?.id];
-    const checkMatches = assessment?.id === "try-the-application"
-      ? assessment.evidence?.check === "orientation-response" : !assessment?.evidence?.check;
+    // Code practicals are content-declared; the other native producers keep
+    // their original one-assessment observers.
+    const code = assessment?.evidence?.producer === "code";
+    const producer = code ? "code"
+      : { "workspace-navigation": "workspace", "return-to-colleague": "colleague", "try-the-application": "exercise" }[assessment?.id];
+    const checkMatches = code ? Boolean(assessment.evidence.check && assessment.evidence.files?.length)
+      : assessment?.id === "try-the-application"
+        ? assessment.evidence?.check === "orientation-response" : !assessment?.evidence?.check;
     if (!producer || assessment.kind !== "practical" || assessment.evidence?.producer !== producer ||
-        assessment.evidence.operation !== assessment.id || !checkMatches) {
+        !code && assessment.evidence.operation !== assessment.id || !checkMatches) {
       throw failure("VIBE64_TRAINING_PRACTICAL_UNAVAILABLE", "This question does not declare a supported native practical observation.");
     }
     return Object.freeze({ snapshot,

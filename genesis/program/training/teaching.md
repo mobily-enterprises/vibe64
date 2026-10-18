@@ -41,6 +41,10 @@
 - `packages/vibe64-training/src/server/declaredCheck.js`
 - `tests/server/vibe64TrainingDeclaredCheck.unit.test.js`
 - `tests/fixtures/training/orientation-response.mjs`
+- `packages/vibe64-training/src/server/codeAuthorship.js`
+- `packages/vibe64-training/src/server/codeEditorActions.js`
+- `tests/server/vibe64TrainingCodePracticals.unit.test.js`
+- `tests/fixtures/training/code-practical/lesson.json`
 - `packages/vibe64-training/src/shared/presentationSchemas.js`
 - `packages/vibe64-training/src/server/mainPresentationActions.js`
 - `packages/vibe64-training/src/server/mainPresentationRoutes.js`
@@ -651,6 +655,43 @@ producer), with no executable check. It preserves saved assistance and performs
 no state write, grading or execution. Colleague owns HTTP gesture admission and
 transient receipts; the existing assessment/progress owner remains responsible
 for any later outcome.
+
+### Code practicals
+
+A `code` assessment declares exercise-relative `files` and a `kind:"code"` check.
+When `prepareQuestion` saves such a question, its `codeBaseline` facility
+(`codeAuthorship.recordBaseline`) records each declared file's SHA-256 from the
+live practice source in a private `code-ledger.json` beside learner progress,
+keyed by question ID, assessment and issued revision. A replay keeps the original
+baseline; without the facility a code question is refused. The ledger is separate
+from progress so autosaves never advance the learning revision.
+
+The lesson Code tab saves through `vibe64.training.code.file.save`. It calls the
+generic source-editor save under the ledger lock and appends
+`{path, baseHash, intendedHash, savedHash, actorId, at}`; consecutive clean saves
+of one file collapse into one link. A save whose read-back bytes differ from the
+learner's text is recorded as foreign.
+
+`runCodeCheck({actor,attemptId,sessionId,observationId})` reuses the declared
+check skeleton. It reads the declared files from the live source and verifies
+the chain baseline → saves → current bytes. A broken chain returns
+`not-yet-passed` with "needs an independent attempt: other edits detected in
+<file>" without executing anything. Otherwise it copies the pinned exercise
+(declared files replaced by the learner's bytes), check and assets into private
+session artifacts, runs `node <check>` through `runVibe64Command`
+(`training-code-check`, empty env, allowed root = scratch, lesson timeout default
+15 s and at most 60 s, 4 KiB output), and accepts only a result echoing the
+computed `filesHash`. Timeout and a crash before reporting are not-yet-passed;
+uncertain cleanup retains scratch as before. It returns the unchanged
+`checkResult` shape plus `authorship`, `reason` and file hashes.
+
+The native observer admits `code-submit` for a code question; each press is a
+new observation that replaces the previous one. A broken chain gives
+observation origin `teacher`, so the grader returns not-yet-passed with the
+observation's reason; a learner chain keeps the declared assistance rule. The
+learner's explanation and the existing Helper/rubric grading and progress writer
+are still required; teacher messages are not passed to the grader.
+`capturePractical` admits content-declared code assessments with any operation ID.
 
 ### Admitted practical assessment
 

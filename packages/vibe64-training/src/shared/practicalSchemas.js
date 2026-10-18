@@ -19,7 +19,7 @@ const trainingObservationFields = {
     clientId, conversationId: clientId,
     gestureId: { ...clientId, noTrim: true, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
     control: { type: "string", required: true,
-      enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response"] },
+      enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response", "code-submit"] },
     reference: { ...trainingQuestionField, required: true },
     exercise: { type: "object", required: false, schema: createSchema({
       ...Object.fromEntries(["instanceId", "interactionId", "requestId", "playerInstanceId"].map(key => [key, {
@@ -47,11 +47,12 @@ const trainingPracticalProgressField = { type: "object", required: false, schema
 }) };
 const trainingPracticalField = { type: "object", required: false, schema: createSchema({
   reference: { ...trainingQuestionField, required: true }, observationId: clientId,
-  assessmentId: { ...clientId, maxLength: 64 }, producer: { type: "string", required: true, enum: ["workspace", "colleague", "exercise"] },
+  assessmentId: { ...clientId, maxLength: 64 }, producer: { type: "string", required: true, enum: ["workspace", "colleague", "exercise", "code"] },
   operation: { ...clientId, maxLength: 64 }, observedAt: { ...clientId, maxLength: 24 },
   assistance: { type: "string", required: true, enum: ["none", "hint", "demonstration", "substantial"] },
   origin: { type: "string", required: true, enum: ["learner", "teacher"] },
-  checkOutcome: { type: "string", required: false, enum: ["passed", "not-yet-passed"] }
+  checkOutcome: { type: "string", required: false, enum: ["passed", "not-yet-passed"] },
+  checkReason: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 256 }
 }) };
 
 export { trainingQuestionField, trainingObservationFields, trainingPracticalProgressField, trainingPracticalField };

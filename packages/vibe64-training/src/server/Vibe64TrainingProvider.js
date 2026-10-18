@@ -1,4 +1,6 @@
 import { createTrainingDeclaredCheckOwner } from "./declaredCheck.js";
+import { createTrainingCodeAuthorship } from "./codeAuthorship.js";
+import { createTrainingCodeEditorActions, registerTrainingCodeEditorRoutes } from "./codeEditorActions.js";
 import { createTrainingPracticalActions } from "./practicalActions.js";
 import { createTrainingMainPracticalActions } from "./mainPracticalActions.js";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
@@ -31,10 +33,10 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
   requires: { env: "runtime.env", logger: "runtime.logger", http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
-  optional: { trainingHost: "vibe64.training.host" },
+  optional: { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" },
   provides: { training: "vibe64.training" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ env, logger, http, project, sessions, terminals, trainingHost }, { actionCatalogue }) {
+  setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingMainPresentationRoutes(http);
     registerTrainingVisualResourceRoutes(http);
@@ -48,7 +50,8 @@ const Vibe64TrainingProvider = defineFeature({
     const learners = createTrainingLearnerState({ systemRoot, content });
     const brief = createTrainingTeachingBrief({ learners, content });
     const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
-    const teaching = createTrainingTeachingOwner({ learners, content });
+    const codeAuthorship = createTrainingCodeAuthorship({ learners, content, project });
+    const teaching = createTrainingTeachingOwner({ learners, content, codeBaseline: codeAuthorship.recordBaseline });
     const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
     const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
     const mainTeaching = createTrainingMainTeaching({ teaching, assessment, checks });
@@ -76,9 +79,11 @@ const Vibe64TrainingProvider = defineFeature({
     });
     registerLocalPracticeAdmission(({ slug }) => admitLocalPracticeProject({ learners, actor: currentOsUser(), slug }));
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
-    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching }) };
+    if (sourceEditor) registerTrainingCodeEditorRoutes(http);
+    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
+      codeAuthorship }) };
   },
-  actions({ training, trainingHost, project }, { actionCatalogue }) {
+  actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
       teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions }),
@@ -88,6 +93,7 @@ const Vibe64TrainingProvider = defineFeature({
     ...createTrainingMainPracticalActions({ project, actions: actionCatalogue }),
     ...createTrainingPracticalActions(),
     ...createTrainingAssessmentActions(),
+    ...createTrainingCodeEditorActions({ authorship: training.codeAuthorship, sourceEditor }),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
       teaching: training.teaching, actions: actionCatalogue })];
   }

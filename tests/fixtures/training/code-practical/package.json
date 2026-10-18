@@ -1,0 +1,10 @@
+{
+  "name": "learn-code-fixture",
+  "version": "0.1.0",
+  "repository": { "type": "git", "url": "https://github.com/examples/learn-code-fixture.git" },
+  "vibe64Training": {
+    "schemaVersion": 1, "topicId": "code", "domainId": "vibe64", "title": "Write a small rule",
+    "status": "preview", "outline": "outline.md", "prerequisites": [],
+    "lessons": [{ "code": "CODE-ONE", "descriptor": "lesson.json", "status": "published", "required": true }]
+  }
+}

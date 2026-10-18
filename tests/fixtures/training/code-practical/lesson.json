@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1, "code": "CODE-ONE", "title": "Refuse empty titles", "document": "lesson.md",
+  "prerequisites": [], "estimatedMinutes": 10, "visuals": [],
+  "exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },
+  "checks": [{ "id": "notes-title-required", "file": "checks/notes/title.mjs", "kind": "code", "timeoutSeconds": 15 }],
+  "assessments": [{ "id": "require-note-title", "kind": "practical", "required": true, "rubric": "lesson.md#require-note-title",
+    "evidence": { "producer": "code", "operation": "edit-and-check", "check": "notes-title-required",
+      "files": ["notes.mjs"], "explanationRequired": true } }]
+}

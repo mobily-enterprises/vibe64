@@ -1097,9 +1097,10 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
     sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected }, trainingHost: null });
-  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host" });
+  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
-  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
+  assert.equal(typeof training.checks.runCodeCheck, "function");
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
   assert.equal(typeof training.teaching.prepareQuestion, "function");
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",

@@ -27,6 +27,17 @@ const selection = {
   force: { type: "boolean", defaultTo: false, required: false }, originId: text
 };
 
+// A practice lesson's Code tab reads its project through the saved attempt.
+// Its saves use Training's ledgered save; files, uploads, integrations, stars
+// and explanations (which start an agent) stay with ordinary Working sessions.
+const LEARNING_ACCESS = Object.freeze({
+  "vibe64.source-editor.tree.read": "observe",
+  "vibe64.source-editor.file.read": "observe",
+  "vibe64.source-editor.files.find": "observe",
+  "vibe64.source-editor.search": "observe",
+  "vibe64.source-editor.path.resolve": "observe"
+});
+
 function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {
   const action = (name, fields, execute, { kind = "command", changed = null, assistant = { exclude: true } } = {}) => withVibe64ActionContext({
     id: `vibe64.source-editor.${name}`, version: 1, kind,
@@ -39,7 +50,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
       if (changed) await publishFileChanged(result, { operation: typeof changed === "function" ? changed(input) : changed });
       return result;
     }
-  });
+  }, LEARNING_ACCESS[`vibe64.source-editor.${name}`] ? { learningAccess: LEARNING_ACCESS[`vibe64.source-editor.${name}`] } : {});
   const query = { kind: "query" };
   const integration = { ...origin, baseHash: { ...text, nullable: true, required: true }, configuration: { ...object, required: true } };
   return [
@@ -88,4 +99,4 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
   ];
 }
 
-export { createSourceEditorActions };
+export { LEARNING_ACCESS, createSourceEditorActions };

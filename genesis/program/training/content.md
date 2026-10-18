@@ -99,6 +99,10 @@ push, remote release, installation or course enabling.
 
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.
+A `code` producer also requires a bundled exercise, a `kind:"code"` check and
+1–8 unique, safe exercise-relative `files` that are bundled exercise files; only
+code evidence may name files or a code check, and `timeoutSeconds` (1–60) is
+allowed only on a code check. These bytes are covered by the lesson hash.
 Application execution, learner permissions and teaching remain Vibe64 concerns,
 with no teaching semantics in JSKIT or Genesis.
 

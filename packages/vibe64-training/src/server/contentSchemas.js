@@ -13,8 +13,10 @@ const prerequisites = list(createSchema({ code: id }), 24);
 const assessment = createSchema({
   id, kind: { ...text, enum: ["answer", "practical"] }, required: { type: "boolean", required: true }, rubric: text,
   evidence: { type: "object", required: false, schema: createSchema({
-    producer: { ...text, enum: ["workspace", "colleague", "exercise"] }, operation: id,
-    check: { ...id, required: false }, explanationRequired: { type: "boolean", required: false }
+    producer: { ...text, enum: ["workspace", "colleague", "exercise", "code"] }, operation: id,
+    check: { ...id, required: false }, explanationRequired: { type: "boolean", required: false },
+    // A code practical names the exercise files the learner edits (exercise-relative).
+    files: { ...list(text, 8), required: false, minLength: 1 }
   }) }
 });
 const lessonSchema = createSchema({
@@ -26,7 +28,9 @@ const lessonSchema = createSchema({
     reuse: { ...text, enum: ["attempt", "sequence"] }, sequenceId: { ...id, required: false },
     sequenceMode: { ...text, required: false, enum: ["create", "continue"] }
   }) },
-  checks: { ...list(createSchema({ id, file: text, assets: { ...list(text, 32), required: false } }), 12), required: false },
+  checks: { ...list(createSchema({ id, file: text, assets: { ...list(text, 32), required: false },
+    kind: { ...text, required: false, enum: ["response", "code"] },
+    timeoutSeconds: { type: "integer", required: false, min: 1, max: 60 } }), 12), required: false },
   assessments: list(assessment, 32)
 });
 const topicSchema = createSchema({

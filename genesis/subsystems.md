@@ -369,6 +369,14 @@ current revision. They reuse the original installer/catalogue owners and unchang
 formats, with no browser/model paths or automatic seeding. Publication,
 installation and learner admission remain separate operations.
 
+Owns code practicals: their `code` evidence/check schema, the per-question
+starting-file baseline and the private server-side save ledger beside learner
+state, the learner-scoped ledgered save action used by the lesson Code tab, and
+the code check that runs a pinned check on a private overlay copy through the
+existing execution owner. The generic source-editor save, its baseHash check and
+the existing practical observation, Helper grading and progress writer remain
+their original owners.
+
 Release-matched lesson-authoring guidance connects existing Colleague assignments
 and same-session review to requested native Save/PR publication, while retaining
 the coding/CLI and operator boundaries. Teaching usage is split into bounded
@@ -404,6 +412,11 @@ save owner validates provider configuration under the source/revision lock and
 preserves unrequested records and extensions. The existing setup owner retains connection,
 payment and advertising authorization and revision checks. Source tools remain
 with coding conversations; Colleague delegates source investigation.
+
+A practice lesson's Code tab mounts the same editor through lesson-scoped read
+routes (tree, file, find, search, path resolve) that declare observe access for
+the saved attempt; its save is Training's ledgered action, and file areas,
+uploads, downloads, integrations, stars and explanations stay unavailable there.
 
 Provides the shared file viewer and editor used by Files and Architecture, including saved-source reads, edits, conflict checks, downloads and source references. File overviews and per-function pseudocode are generated only on request through the configured Helper. Informational answers are cached against source and guidance identity; they remain separate from authored subsystem and Program explanations. Terminal orchestration owns publishing session source through Save work.
 

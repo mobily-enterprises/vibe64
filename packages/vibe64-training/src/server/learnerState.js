@@ -45,7 +45,7 @@ const evidenceSchema = createSchema({
   messageId: { ...text, required: false, maxLength: 128 }, questionId: { ...text, required: false, maxLength: 64 },
   observationId: { ...text, required: false, maxLength: 128 }, observedAt: { ...text, required: false, maxLength: 24 },
   projectSlug: { ...text, required: false, maxLength: 48 }, sessionId: { ...text, required: false, maxLength: 128 },
-  producer: { ...text, required: false, enum: ["workspace", "colleague", "exercise"] },
+  producer: { ...text, required: false, enum: ["workspace", "colleague", "exercise", "code"] },
   operation: { ...text, required: false, maxLength: 64 }, origin: { ...text, required: false, enum: ["learner", "demonstration"] },
   check: { ...text, required: false, maxLength: 64 }
 });
@@ -100,6 +100,33 @@ const emptyActiveSchema = createSchema({
   schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
   attemptId: { ...text, nullable: true, maxLength: 36 }
 });
+
+const MAX_CODE_LEDGER_ENTRIES = 128;
+const sha256Pattern = /^[a-f0-9]{64}$/u;
+const codeFileSchema = createSchema({ path: { ...text, maxLength: 512 }, sha256: { ...text, maxLength: 64 } });
+const codeLedgerSchema = createSchema({
+  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, attemptId: { ...text, maxLength: 36 },
+  question: { type: "object", required: true, schema: createSchema({ id: { ...text, maxLength: 64 },
+    assessmentId: { ...text, maxLength: 64 }, issuedRevision: { ...revision, min: 1 } }) },
+  baseline: list(codeFileSchema, 8),
+  entries: list(createSchema({ path: { ...text, maxLength: 512 }, baseHash: { ...text, maxLength: 64 },
+    savedHash: { ...text, maxLength: 64 }, intendedHash: { ...text, maxLength: 64 },
+    actorId: { ...text, maxLength: 128 }, at: { ...text, maxLength: 24 },
+    saves: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER } }), MAX_CODE_LEDGER_ENTRIES)
+});
+
+function validateCodeLedger(value) {
+  const ledger = validateContent(codeLedgerSchema, value, "Code authorship ledger");
+  const hashes = [...ledger.baseline.map(file => file.sha256),
+    ...ledger.entries.flatMap(entry => [entry.baseHash, entry.savedHash, entry.intendedHash])];
+  if (!uuidPattern.test(ledger.attemptId) || !requestPattern.test(ledger.question.id) || !idPattern.test(ledger.question.assessmentId) ||
+      hashes.some(hash => !sha256Pattern.test(hash)) || new Set(ledger.baseline.map(file => file.path)).size !== ledger.baseline.length ||
+      ledger.entries.some(entry => !ledger.baseline.some(file => file.path === entry.path) ||
+        !Number.isFinite(Date.parse(entry.at)) || new Date(entry.at).toISOString() !== entry.at)) {
+    throw new Error("The code authorship ledger has an invalid identity, hash, file or record time.");
+  }
+  return ledger;
+}
 
 function failure(code, message, statusCode, details = {}) {
   return Object.assign(new Error(message), { code, ...(statusCode ? { statusCode } : {}), ...details });
@@ -347,7 +374,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       progress: path.join(userRoot, "progress.json"),
       active: path.join(userRoot, "active-lesson.json"),
       lock: path.join(userRoot, "state.lock"),
-      preparationLock: path.join(userRoot, "preparation.lock")
+      preparationLock: path.join(userRoot, "preparation.lock"),
+      codeLedger: path.join(userRoot, "code-ledger.json"),
+      codeLedgerLock: path.join(userRoot, "code-ledger.lock")
     };
   }
 
@@ -1036,6 +1065,51 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }, facilities);
   }
 
+  // The code-practical authorship ledger is a separate private record so that
+  // autosaves never advance the learning revision Main's writes compare against.
+  // Its owner supplies the admitted question baseline and server-side saves.
+  async function readCodeLedgerRecord(paths, attemptId) {
+    const value = await readRecord(paths.codeLedger);
+    if (!value) return null;
+    const ledger = validateCodeLedger(value);
+    if (ledger.learnerId !== paths.learner.id) throw new Error("The code authorship ledger belongs to another learner.");
+    return ledger.attemptId === attemptId ? ledger : null;
+  }
+
+  async function readCodeLedger({ actor, attemptId } = {}) {
+    const paths = userPaths(actor);
+    if (!uuidPattern.test(attemptId || "")) throw new Error("Read the code ledger of an exact saved attempt.");
+    await loadState(paths);
+    return readCodeLedgerRecord(paths, attemptId);
+  }
+
+  async function updateCodeLedger({ actor, attemptId } = {}, operation) {
+    const paths = userPaths(actor);
+    if (!uuidPattern.test(attemptId || "") || typeof operation !== "function") {
+      throw new Error("Update the code ledger of an exact saved attempt.");
+    }
+    const state = await loadState(paths);
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (state.progress.activeAttemptId !== attemptId || !attempt || attempt.ended) {
+      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "Resume this learner's saved active attempt before recording code work.", 404);
+    }
+    await inspectPath(paths.codeLedgerLock, false);
+    const release = await tryAcquireExclusiveFileLock(paths.codeLedgerLock);
+    if (!release) {
+      throw failure("VIBE64_TRAINING_CODE_LEDGER_BUSY", "Another save of this lesson's code is being recorded. Save again in a moment.", 409);
+    }
+    try {
+      const current = await readCodeLedgerRecord(paths, attemptId);
+      const result = await operation(current ? structuredClone(current) : null, { learnerId: paths.learner.id, attempt });
+      if (!result?.ledger) return { ledger: current, value: result?.value };
+      const ledger = validateCodeLedger({ ...result.ledger, schemaVersion: 1, learnerId: paths.learner.id, attemptId });
+      await writeJsonFileAtomic(paths.codeLedger, ledger, { directoryMode: 0o700, fileMode: 0o600 });
+      return { ledger, value: result.value };
+    } finally {
+      await release();
+    }
+  }
+
   async function beginPreparation({ actor, attemptId, expectedRevision } = {}) {
     return writePreparation({ actor, attemptId, expectedRevision }, "begin");
   }
@@ -1048,7 +1122,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
-  return { readState, readLearningSessionScope, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment };
+  return { readState, readLearningSessionScope, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment,
+    readCodeLedger, updateCodeLedger };
 }
 
 export { createTrainingLearnerState, evidenceSchema, passedAssessmentIds, validateSnapshot };
