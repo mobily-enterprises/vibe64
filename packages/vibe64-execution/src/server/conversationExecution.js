@@ -51,7 +51,8 @@ export function createVibe64ConversationExecution({
         }
         if (!status.running) {
           entry.running = false;
-          entry.exit.resolve({ code: status.exitCode ?? null, signal: status.signal || null });
+          entry.exit.resolve({ code: status.exitCode ?? null, signal: status.signal || null,
+            ...(status.taskLimit ? { taskLimit: status.taskLimit } : {}) });
           return;
         }
         await delay(1_000, undefined, { signal: entry.observation.signal });

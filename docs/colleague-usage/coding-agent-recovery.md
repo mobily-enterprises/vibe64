@@ -17,6 +17,14 @@ error; an installation problem requires the workspace operator.
 When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
 request. Reply text by itself does not prove that the turn completed successfully.
+If the conversation reports **Claude stopped unexpectedly**, its Claude process
+ended without anyone stopping it, and its subagents' running commands were
+cancelled. The message names the recorded cause: **process/thread limit
+reached** means the server refused Claude more processes or threads, while a
+signal or exit code is reported otherwise. The saved conversation is retained.
+Send a message, or **Resume goal** for a goal, to continue; repeated stops with a
+limit cause require the workspace operator. Colleague can explain the reported
+cause; changing limits is an operator task.
 Unconfirmed cleanup blocks replacement work, including after failed startup.
 While Claude is starting, **Stop** joins that process's existing cleanup. Its
 execution is recorded once; waiting for initialization does not disable Stop.

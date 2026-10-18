@@ -501,7 +501,9 @@ Claude's retained turn owner now also applies the original native state, verifie
 Stop, result projection and completion ordering to the same entry. Vibe64 retains
 checkpoint, metadata, transcript and goal publication at their original awaited
 sequence points. Native exit proof precedes clearing the saved execution; failed
-cleanup remains retryable. Its original provider-wide entry registry, retained
+cleanup remains retryable. The conversation execution's exit report carries the
+host's process/thread-limit evidence with the code and signal, so an unexpected
+Claude exit names its cause. Its original provider-wide entry registry, retained
 history restoration, Send/steering, reads, admission inspection and native drain
 now belong to the same shared conversation owner. Vibe64 supplies authorized
 identity storage, account/profile/prompt preparation and message publication.
