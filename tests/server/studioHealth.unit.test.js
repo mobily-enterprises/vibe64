@@ -163,3 +163,17 @@ test("Health prioritizes a failed execution's reason ahead of incidental browser
   assert.equal(check.status, "fail");
   assert.match(check.observed, /^The browser check timed out\./u);
 });
+
+test("assistants read a bounded Health summary through the same action", async () => {
+  const { createActions } = await import("../../packages/studio-health/src/server/actions.js");
+  const [action] = createActions({ studioHealth: { inspect: async () => ({}) } });
+  const assistant = action.extensions.assistant;
+  assert.equal(assistant.exclude, undefined);
+  assert.match(assistant.description, /Health checks/u);
+  const summary = assistant.transformResult({ ok: true, healthy: false, summary: { total: 1 }, updatedAt: "now",
+    checks: [{ id: "playwright", label: "Playwright", group: "Tools", status: "fail", expected: "Installed.",
+      observed: "x".repeat(5000), explanation: "Long detail stays on the Health page." }] });
+  assert.deepEqual(Object.keys(summary.checks[0]).sort(), ["expected", "group", "id", "label", "observed", "status"]);
+  assert.equal(summary.checks[0].observed.length, 300);
+  assert.deepEqual(assistant.transformResult({ ok: false, error: "Down" }), { ok: false, error: "Down" });
+});
