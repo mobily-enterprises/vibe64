@@ -367,8 +367,31 @@ function endPaneSwipe(event) {
   /* 40px touch target on phones. */
   .studio-app-shell-layout__learning-plate {
     height: 2.5rem;
-    margin-left: var(--v64-space-2);
+    margin-left: var(--v64-space-1);
     width: 2.5rem;
+  }
+
+  /* Phone bar budget: the passive realtime dot (a disabled indicator, not a
+     touch target) and the account/Colleague buttons tighten so the project
+     name keeps its readable minimum. */
+  .studio-app-shell-layout__top-right {
+    gap: 0;
+  }
+
+  .studio-app-shell-layout__top-right > :deep(button:disabled) {
+    width: 1.25rem !important;
+  }
+
+  .studio-app-shell-layout__top-right :deep(.vibe64-auth-settings) {
+    margin-inline-end: var(--v64-space-1);
+  }
+
+  .studio-app-shell-layout__top-right :deep(.vibe64-auth-settings__button),
+  .studio-app-shell-layout__top-right :deep(.vibe64-colleague-launcher-target > .v-btn) {
+    height: 2.5rem !important;
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+    width: 2.5rem !important;
   }
 }
 

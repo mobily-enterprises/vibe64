@@ -756,8 +756,8 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-heading {
     display: flex;
-    gap: 0.35rem;
-    padding-left: 0.65rem;
+    gap: var(--v64-space-1);
+    padding-left: var(--v64-space-1);
     width: 100%;
   }
 
@@ -778,10 +778,33 @@ onBeforeUnmount(() => {
     padding-left: 0;
   }
 
+  /* Keep at least the first ~8 characters of the project name readable;
+     the session and repository controls give way first. */
   .studio-home-shell-project-selector {
+    flex: 1 0 auto;
     font-size: 0.95rem;
-    max-width: calc(100vw - 16rem);
-    padding-inline: var(--v64-space-1);
+    max-width: min(11rem, calc(100vw - 15rem));
+    min-width: 5.75rem;
+    padding-inline: 0.375rem 0.125rem;
+  }
+
+  .studio-home-shell-project-selector :deep(.v-icon) {
+    margin-inline-start: 0;
+  }
+
+  .studio-home-shell-local-remotes-host :deep(.local-remotes__branch) {
+    width: 2.5rem !important;
+  }
+
+  .studio-home-shell-title-area {
+    gap: var(--v64-space-1);
+  }
+
+  .studio-home-shell-create-session-host :deep(.studio-ai-sessions__create-button) {
+    height: 2.5rem;
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+    width: 2.5rem;
   }
 
   .studio-home-shell-chat-toggle {

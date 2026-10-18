@@ -443,10 +443,13 @@ const visibleSessions = computed(() => {
   min-width: 0;
 }
 
+/* Unselected chips rest on a neutral (untinted) tone with an outline-variant
+   edge, so the selected chip's secondary container stands out clearly. */
 .studio-ai-sessions__tab-main {
+  --studio-ai-sessions-chip-rest: color-mix(in srgb, var(--v64-on-surface) 5%, var(--v64-surface));
   align-items: center;
-  background: var(--studio-control-rest-bg, #f7f7f8);
-  border: 1px solid transparent;
+  background: var(--studio-ai-sessions-chip-rest);
+  border: 1px solid var(--v64-outline-variant);
   border-radius: 999px;
   box-sizing: border-box;
   color: var(--studio-control-text, #202124);
@@ -480,6 +483,7 @@ const visibleSessions = computed(() => {
 /* M3 selected input chip: secondary container with its on-colour. */
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main {
   background: var(--studio-control-active-bg, #e7e7e7);
+  border-color: transparent;
   border-radius: 999px 0 0 999px;
   color: var(--v64-on-secondary-container);
   padding-inline-end: 0.34rem;
@@ -488,7 +492,7 @@ const visibleSessions = computed(() => {
 /* Hover and keyboard focus add the M3 state layer over the chip's own tone
    instead of flooding it with primary. */
 .studio-ai-sessions__tab:not(.studio-ai-sessions__tab--active) .studio-ai-sessions__tab-main:hover {
-  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--studio-control-rest-bg, #f7f7f8));
+  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--studio-ai-sessions-chip-rest));
 }
 
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover,
