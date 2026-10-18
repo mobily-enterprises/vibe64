@@ -176,7 +176,7 @@ For workspace observations, application checks and practical assessment, read
 ## Course and lesson choices
 
 The prepared **Courses** pane displays the host's installed courses in their
-original order as cards with "N of M lessons complete" and a progress bar.
+original order as cards with "N of M lessons complete" and a progress ring.
 **View course** shows each topic and its lessons in order, with readable lesson
 titles beside the exact lesson codes, course/topic releases and lesson hashes,
 and a **Completed**, **In progress** or **Not started** status read from saved

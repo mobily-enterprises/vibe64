@@ -28,4 +28,9 @@ function courseProgress(course, lessonProgress = [], active = null) {
 
 const statusLabels = Object.freeze({ completed: "Completed", "in-progress": "In progress", "not-started": "Not started" });
 
-export { courseProgress, lessonStatus, offered, statusLabels };
+// Display label for a course's availability for new lessons.
+function courseStatusLabel(course) {
+  return !course.enabled ? "Disabled for new lessons" : course.status === "released" ? "Enabled" : "Preview course";
+}
+
+export { courseProgress, courseStatusLabel, lessonStatus, offered, statusLabels };

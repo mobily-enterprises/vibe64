@@ -13,10 +13,13 @@ installed courses without asking you to invent or choose a project; its header
 reads **Courses**. In a project
 view, the same control changes the existing session panel's purpose filter.
 
-The **Courses** pane (called **Lessons** in earlier releases) opens on a list of
-course cards. Each card shows the course title, its ID and release, whether it is
-**Enabled**, a **Preview course** or **Disabled for new lessons**, "N of M lessons
-complete" and a progress bar. A lesson counts as complete when all of its required
+The **Courses** pane (called **Lessons** in earlier releases) opens with a
+**Courses** banner (with **Refresh courses**) and a list of course cards. Each card
+has decorative cover art (the same for a course every time; its dots mirror that
+course's lessons, ticked when complete), a chip saying whether it is **Enabled**,
+a **Preview course** or **Disabled for new lessons** (plus **Saved lesson** or
+**Course complete** when true), the title, its ID and release, topic and lesson
+counts, "N of M lessons complete" with a progress ring, and the next lesson. A lesson counts as complete when all of its required
 assessments are passed in your saved progress; only required lessons are counted,
 unless a course has none. Progress is read from what is already saved; opening a
 course grades nothing. A lesson passed in one course counts in every course that
@@ -35,7 +38,9 @@ continue it, or end it first. There is no End button; ask Colleague to end the
 lesson (see [Lesson history and resume](learning-history.md)). On a phone the cards stack in one column and the
 course page scrolls in the same pane.
 
-Choose **Resume saved lesson** on the saved lesson card for the exact saved attempt. Disabled,
+Choose **Resume saved lesson** on the saved lesson card (above the course cards,
+headed "Saved lesson · code" with the lesson title and, once reported, a ring of
+required assessments passed) for the exact saved attempt. Disabled,
 unavailable, loading and error states are shown on the same page. Choosing a
 release is not permission to install or enable it. **Refresh courses** rereads
 the catalogue and progress. A lesson without a practice project, such as local
@@ -46,8 +51,8 @@ If Resume reports that the saved exercise is busy preparing or finishing a comma
 
 ### Creating a custom course
 
-The workspace owner sees **New course** below the course cards (on local Vibe64
-you are the owner). Enter a **Course name**, tick whole topics under **Installed
+The workspace owner sees a dashed **New course** tile after the course cards (on
+local Vibe64 you are the owner). Enter a **Course name**, tick whole topics under **Installed
 topics**, put them in learning order with **Up** and **Down** under **Topic
 order**, then choose **Create course**; **Cancel** closes the form without
 changes. The new course opens straight away and stays in the list for everyone in

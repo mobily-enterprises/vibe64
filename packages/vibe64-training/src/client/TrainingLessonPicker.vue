@@ -2,7 +2,10 @@
 import { computed, ref, watch } from "vue";
 import TrainingCourseCreator from "./TrainingCourseCreator.vue";
 import TrainingCoursePage from "./TrainingCoursePage.vue";
-import { courseProgress, offered } from "./courseProgress.js";
+import TrainingCourseArt from "./TrainingCourseArt.vue";
+import TrainingProgressRing from "./TrainingProgressRing.vue";
+import { courseProgress, courseStatusLabel, offered } from "./courseProgress.js";
+import { trainingIcons as icons } from "./trainingIcons.js";
 
 const props = defineProps({
   catalogueResult: { type: Object, default: null },
@@ -125,33 +128,84 @@ async function requestCreateCourse(input) {
   creating.value = false;
   openCourseKey.value = courseKey(result.course);
 }
-</script>
 
+// Display-only lookups for the saved lesson card: the readable title of the
+// exact pinned lesson when the current catalogue still lists it.
+const savedPlace = computed(() => {
+  const pin = savedAttempt.value?.pin;
+  if (!pin) return null;
+  const course = courses.value.find(value => value.courseId === pin.course.courseId && value.release === pin.course.release);
+  const lesson = course?.lessons.find(value => value.code === pin.lesson.code && value.hash === pin.lesson.hash);
+  return { courseTitle: course?.title || "", lessonTitle: lesson?.title || "" };
+});
+const statusTone = course => !course.enabled ? "disabled" : course.status === "released" ? "enabled" : "preview";
+const statusIcon = { enabled: icons.checkCircle, preview: icons.eye, disabled: icons.cancel };
+const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+</script>
 <template>
-  <section class="training-lesson-picker" aria-label="Courses" :aria-busy="catalogueLoading || learningLoading">
-    <header class="training-lesson-picker__header">
-      <div>
+  <section class="training-lesson-picker" :class="{ 'training-lesson-picker--course-open': openCourse }" aria-label="Courses"
+    :aria-busy="catalogueLoading || learningLoading">
+    <header class="tlp-hero">
+      <svg class="tlp-hero__art" viewBox="0 0 240 160" aria-hidden="true" focusable="false">
+        <circle cx="188" cy="34" r="58" class="tlp-hero__sun" />
+        <path d="M18 132 C 62 132, 64 92, 104 92 S 150 52, 196 52" class="tlp-hero__trail" />
+        <circle cx="18" cy="132" r="9" class="tlp-hero__stop tlp-hero__stop--done" />
+        <circle cx="104" cy="92" r="9" class="tlp-hero__stop tlp-hero__stop--done" />
+        <circle cx="196" cy="52" r="11" class="tlp-hero__stop" />
+        <path d="M190 52 l4.5 4.5 l8 -9" class="tlp-hero__tick" />
+        <rect x="132" y="104" width="78" height="40" rx="12" class="tlp-hero__card" />
+        <rect x="142" y="116" width="40" height="6" rx="3" class="tlp-hero__line" />
+        <rect x="142" y="128" width="58" height="6" rx="3" class="tlp-hero__line tlp-hero__line--soft" />
+      </svg>
+      <div class="tlp-hero__text">
+        <p class="tlp-eyebrow"><v-icon :icon="icons.school" size="18" /> Learning</p>
         <h2>Courses</h2>
         <p>Choose a course to see its lessons and your progress, or resume your saved lesson.</p>
+        <p v-if="courses.length" class="tlp-hero__meta">
+          {{ plural(courses.length, 'course') }} · {{ plural(choices.length, 'lesson') }} installed
+        </p>
       </div>
-      <v-btn variant="text" min-height="48" :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')">Refresh courses</v-btn>
+      <v-btn class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
+        :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')">Refresh courses</v-btn>
     </header>
 
-    <v-skeleton-loader v-if="learningLoading && !savedAttempt" type="list-item-two-line" aria-label="Loading saved lesson" />
-    <v-alert v-if="learningError || learningInvalid" type="error" variant="tonal" role="alert">
+    <div v-if="learningLoading && !savedAttempt" class="tlp-skeleton tlp-skeleton--saved" role="status" aria-label="Loading saved lesson">
+      <span class="tlp-shimmer tlp-shimmer--ring" />
+      <span class="tlp-skeleton__lines"><span class="tlp-shimmer" style="width: 40%" /><span class="tlp-shimmer" style="width: 70%" /><span class="tlp-shimmer" style="width: 55%" /></span>
+    </div>
+    <v-alert v-if="learningError || learningInvalid" type="error" variant="tonal" rounded="lg" role="alert">
       {{ learningError || 'Saved learning could not be displayed. Refresh before requesting a lesson; no progress was changed.' }}
     </v-alert>
-    <p v-else-if="!learningLoading && (!learningResult || learningResult.ok !== true || learningResult.available !== true)" role="status">
-      {{ learningResult?.error || 'Saved learning is not available yet. No lesson has been started here.' }}
+    <p v-else-if="!learningLoading && (!learningResult || learningResult.ok !== true || learningResult.available !== true)" class="tlp-note" role="status">
+      <v-icon :icon="icons.info" size="20" />
+      <span>{{ learningResult?.error || 'Saved learning is not available yet. No lesson has been started here.' }}</span>
     </p>
-    <v-card v-if="savedAttempt" variant="outlined" class="training-lesson-picker__saved">
-      <v-card-title>Saved lesson · {{ savedAttempt.pin.lesson.code }}</v-card-title>
-      <v-card-text>
-        <p>{{ savedAttempt.pin.course.courseId }} · {{ savedAttempt.pin.course.release }}</p>
-        <p v-if="completion">{{ completion.passed }} of {{ completion.required }} required assessments passed. {{ completion.completed ? 'Required assessments complete.' : 'Continue the remaining assessments.' }}</p>
-        <p v-else>Saved attempt retained. Completion has not been reported.</p>
-        <p v-if="learningResult.activeSummaryCurrent === false">The saved summary needs reconciliation. Resume rechecks this same attempt; reading it does not repair it.</p>
-        <details>
+
+    <article v-if="savedAttempt" class="tlp-saved training-lesson-picker__saved" aria-labelledby="tlp-saved-heading">
+      <div class="tlp-saved__glow" aria-hidden="true" />
+      <TrainingProgressRing v-if="completion" class="tlp-saved__ring" :value="completion.passed" :max="completion.required" :size="96" :stroke="10"
+        :label="`${completion.passed} of ${completion.required} required assessments passed`">
+        <span class="tlp-saved__ring-value"><strong>{{ completion.passed }}</strong>/{{ completion.required }}</span>
+      </TrainingProgressRing>
+      <div v-else class="tlp-saved__badge" aria-hidden="true"><v-icon :icon="icons.bookmark" size="36" /></div>
+      <div class="tlp-saved__body">
+        <p id="tlp-saved-heading" class="tlp-eyebrow tlp-eyebrow--learning">Saved lesson · {{ savedAttempt.pin.lesson.code }}</p>
+        <h3 class="tlp-saved__title">{{ savedPlace.lessonTitle || 'Continue where you left off' }}</h3>
+        <p class="tlp-saved__meta">
+          <template v-if="savedPlace.courseTitle">{{ savedPlace.courseTitle }} · </template>{{ savedAttempt.pin.course.courseId }} · {{ savedAttempt.pin.course.release }}
+        </p>
+        <p v-if="completion" class="tlp-saved__status">
+          <v-icon v-if="completion.completed" :icon="icons.checkCircle" size="18" color="success" />
+          {{ completion.passed }} of {{ completion.required }} required assessments passed. {{ completion.completed ? 'Required assessments complete.' : 'Continue the remaining assessments.' }}
+        </p>
+        <p v-else class="tlp-saved__status">Saved attempt retained. Completion has not been reported.</p>
+        <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Resume rechecks this same attempt; reading it does not repair it.</p>
+        <p v-if="!canResume" class="tlp-note">Lesson resume is unavailable in this installation. Your saved attempt remains visible.</p>
+        <div class="tlp-saved__actions">
+          <v-btn color="primary" variant="flat" rounded="pill" size="large" min-height="48" :prepend-icon="icons.play"
+            :disabled="!resumeEnabled" @click="requestResume">Resume saved lesson</v-btn>
+        </div>
+        <details class="tlp-identity">
           <summary>Saved lesson identity</summary>
           <dl>
             <dt>Topic</dt><dd>{{ savedAttempt.pin.topic.topicId }} · {{ savedAttempt.pin.topic.release }}</dd>
@@ -160,19 +214,31 @@ async function requestCreateCourse(input) {
             <dt>Attempt</dt><dd><code>{{ savedAttempt.attemptId }}</code></dd>
           </dl>
         </details>
-        <p v-if="!canResume">Lesson resume is unavailable in this installation. Your saved attempt remains visible.</p>
-      </v-card-text>
-      <v-card-actions><v-btn variant="tonal" min-height="48" :disabled="!resumeEnabled" @click="requestResume">Resume saved lesson</v-btn></v-card-actions>
-    </v-card>
+      </div>
+    </article>
 
-    <v-skeleton-loader v-if="catalogueLoading && !courses.length" type="heading, list-item-two-line, list-item-two-line" aria-label="Loading installed courses" />
-    <v-alert v-if="catalogueError || catalogueInvalid" type="error" variant="tonal" role="alert">
+    <div v-if="catalogueLoading && !courses.length" class="tlp-grid" role="status" aria-label="Loading installed courses">
+      <div v-for="index in 3" :key="index" class="tlp-skeleton tlp-skeleton--card">
+        <span class="tlp-shimmer tlp-shimmer--art" />
+        <span class="tlp-skeleton__lines"><span class="tlp-shimmer" style="width: 65%; height: 18px" /><span class="tlp-shimmer" style="width: 45%" /><span class="tlp-shimmer" style="width: 80%" /></span>
+      </div>
+    </div>
+    <v-alert v-if="catalogueError || catalogueInvalid" type="error" variant="tonal" rounded="lg" role="alert">
       {{ catalogueError || (lessonTitlesMissing ? 'Lesson titles are unavailable. Refresh courses; your saved lesson and history remain retained.' : 'Installed courses could not be displayed. Refresh or ask the owner to restore the exact content; nothing was installed or enabled.') }}
     </v-alert>
-    <p v-else-if="!catalogueLoading && (!catalogueResult || catalogueResult.ok !== true || catalogueResult.available !== true)" role="status">
-      {{ catalogueResult?.error || 'Installed courses are not available yet.' }}
-    </p>
-    <p v-else-if="!catalogueLoading && courses.length === 0" role="status">No courses are installed. Ask the owner to install and enable a course; this page cannot install one.</p>
+    <div v-else-if="!catalogueLoading && (!catalogueResult || catalogueResult.ok !== true || catalogueResult.available !== true)" class="tlp-empty" role="status">
+      <v-icon :icon="icons.info" size="32" class="tlp-empty__icon" />
+      <p>{{ catalogueResult?.error || 'Installed courses are not available yet.' }}</p>
+    </div>
+    <div v-else-if="!catalogueLoading && courses.length === 0" class="tlp-empty" role="status">
+      <svg class="tlp-empty__art" viewBox="0 0 120 80" aria-hidden="true" focusable="false">
+        <rect x="10" y="66" width="100" height="6" rx="3" class="tlp-empty__shelf" />
+        <rect x="24" y="30" width="16" height="36" rx="3" class="tlp-empty__book" />
+        <rect x="44" y="22" width="14" height="44" rx="3" class="tlp-empty__book tlp-empty__book--alt" />
+        <rect x="70" y="40" width="16" height="26" rx="3" class="tlp-empty__book tlp-empty__book--ghost" transform="rotate(-12 78 53)" />
+      </svg>
+      <p>No courses are installed. Ask the owner to install and enable a course; this page cannot install one.</p>
+    </div>
 
     <TrainingCoursePage
       v-if="openCourse"
@@ -185,34 +251,60 @@ async function requestCreateCourse(input) {
       @resume="requestResume"
     />
     <template v-else>
-      <div v-if="courses.length" class="training-lesson-picker__courses">
-        <v-card v-for="{ course, key, progress } in summaries" :key="key" variant="outlined">
-          <v-card-title>{{ course.title }}</v-card-title>
-          <v-card-subtitle>{{ course.courseId }} · {{ course.release }} · {{ !course.enabled ? 'Disabled for new lessons' : course.status === 'released' ? 'Enabled' : 'Preview course' }}</v-card-subtitle>
-          <v-card-text>
-            <p>{{ progress.completed }} of {{ progress.total }} lessons complete</p>
-            <v-progress-linear :model-value="progress.total ? 100 * progress.completed / progress.total : 0" height="8" rounded
-              :aria-label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`" />
-          </v-card-text>
-          <v-card-actions>
-            <v-btn v-if="progress.activeHere" variant="tonal" min-height="48" :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
-            <v-btn v-else-if="progress.next" variant="tonal" min-height="48" :disabled="!startPossible" @click="startLesson(course, progress.next)">Start</v-btn>
-            <v-btn variant="text" min-height="48" @click="openCourseKey = key">View course</v-btn>
-          </v-card-actions>
-        </v-card>
+      <div v-if="courses.length" class="tlp-grid training-lesson-picker__courses">
+        <article v-for="({ course, key, progress }, index) in summaries" :key="key" class="tlp-card"
+          :class="{ 'tlp-card--active': progress.activeHere, 'tlp-card--off': statusTone(course) !== 'enabled' }"
+          :style="{ '--tlp-index': index }" :aria-label="course.title">
+          <div class="tlp-card__cover">
+            <TrainingCourseArt :course-id="course.courseId" :title="course.title" :statuses="progress.lessons.map(value => value.status)" />
+            <div class="tlp-card__chips">
+              <span v-if="progress.activeHere" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.bookmark" size="14" />Saved lesson</span>
+              <span v-else-if="progress.total && progress.completed === progress.total" class="tlp-chip tlp-chip--success"><v-icon :icon="icons.trophy" size="14" />Course complete</span>
+              <span class="tlp-chip" :class="`tlp-chip--${statusTone(course)}`"><v-icon :icon="statusIcon[statusTone(course)]" size="14" />{{ courseStatusLabel(course) }}</span>
+            </div>
+          </div>
+          <div class="tlp-card__body">
+            <h3 class="tlp-card__title">{{ course.title }}</h3>
+            <p class="tlp-card__id"><code>{{ course.courseId }} · {{ course.release }}</code></p>
+            <p class="tlp-card__facts">
+              <span><v-icon :icon="icons.layers" size="16" />{{ plural(course.topics.length, 'topic') }}</span>
+              <span><v-icon :icon="icons.book" size="16" />{{ plural(course.lessons.length, 'lesson') }}</span>
+            </p>
+            <div class="tlp-card__progress">
+              <TrainingProgressRing :value="progress.completed" :max="progress.total" :size="48" :stroke="5"
+                :label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`" />
+              <div>
+                <p class="tlp-card__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
+                <p v-if="progress.next && !progress.activeHere" class="tlp-card__next">Next: {{ progress.next.title }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="tlp-card__actions">
+            <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
+              :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
+            <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
+              :disabled="!startPossible" @click="startLesson(course, progress.next)">Start</v-btn>
+            <v-btn variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight" @click="openCourseKey = key">View course</v-btn>
+          </div>
+        </article>
+        <div v-if="canCreateCourses && !creating" class="tlp-new" :style="{ '--tlp-index': summaries.length }">
+          <span class="tlp-new__icon" aria-hidden="true"><v-icon :icon="icons.path" size="28" /></span>
+          <p>Combine installed topics into a course of your own.</p>
+          <v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn>
+        </div>
       </div>
       <TrainingCourseCreator v-if="creating && canCreateCourses" :topics="availableTopics" :busy="busy" @create="requestCreateCourse" @cancel="creating = false" />
-      <div v-else-if="canCreateCourses"><v-btn variant="text" min-height="48" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
+      <div v-else-if="canCreateCourses && !courses.length"><v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
     </template>
-    <div v-if="courses.length" class="training-lesson-picker__start">
-      <p v-if="savedAttempt">Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</p>
-      <p v-else-if="starting" role="status">Starting the selected lesson and preparing its practice project. Its teacher conversation opens when this finishes.</p>
-      <p v-else-if="startUnconfirmed">The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</p>
-      <p v-else-if="!canStart">Starting lessons is unavailable in this installation.</p>
+    <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
+      <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</span></p>
+      <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. Its teacher conversation opens when this finishes.</span></p>
+      <p v-else-if="startUnconfirmed" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
+      <p v-else-if="!canStart" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Starting lessons is unavailable in this installation.</span></p>
     </div>
 
-    <details v-if="history.length" class="training-lesson-picker__history">
-      <summary>Saved lesson history ({{ history.length }})</summary>
+    <details v-if="history.length" class="tlp-history training-lesson-picker__history">
+      <summary><v-icon :icon="icons.history" size="20" /> Saved lesson history ({{ history.length }})</summary>
       <ol>
         <li v-for="attempt in history" :key="attempt.attemptId">
           <strong>{{ attempt.pin.lesson.code }}</strong> · {{ attempt.pin.course.courseId }} · {{ attempt.pin.course.release }}
@@ -226,17 +318,211 @@ async function requestCreateCourse(input) {
 </template>
 
 <style scoped>
-.training-lesson-picker { display: flex; flex-direction: column; gap: 1rem; min-width: 0; padding: 1rem; overflow: auto; }
-.training-lesson-picker__header { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.5rem; }
-.training-lesson-picker__header h2 { font-size: 1.25rem; }
-.training-lesson-picker__header p { margin-top: 0.25rem; }
-.training-lesson-picker__courses { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
-.training-lesson-picker__courses :deep(.v-card-actions) { flex-wrap: wrap; }
-.training-lesson-picker__saved p + p { margin-top: 0.5rem; }
-.training-lesson-picker__history li + li { margin-top: 1rem; }
-.training-lesson-picker :deep(.v-card-title), .training-lesson-picker :deep(.v-card-subtitle), .training-lesson-picker p, .training-lesson-picker code, .training-lesson-picker dd { white-space: normal; overflow-wrap: anywhere; }
+.training-lesson-picker {
+  --tlp-gap: var(--v64-space-4, 16px);
+  display: flex; flex-direction: column; gap: var(--v64-space-5, 24px); min-width: 0;
+  padding: var(--v64-space-4, 16px); overflow: auto; container-type: inline-size;
+  color: var(--v64-on-surface);
+}
+.training-lesson-picker p, .training-lesson-picker code, .training-lesson-picker dd, .training-lesson-picker h3 { white-space: normal; overflow-wrap: anywhere; }
 .training-lesson-picker :deep(.v-label) { white-space: normal; overflow-wrap: anywhere; }
-.training-lesson-picker dl { margin-top: 0.5rem; }
-.training-lesson-picker dt { font-weight: 600; }
-.training-lesson-picker dd { margin-bottom: 0.5rem; }
+.training-lesson-picker :deep(.v-btn) { letter-spacing: 0.01em; text-transform: none; font-weight: 600; }
+
+/* Eyebrow labels */
+.tlp-eyebrow {
+  display: inline-flex; align-items: center; gap: var(--v64-space-1, 4px); margin: 0;
+  font: var(--v64-type-label-md); letter-spacing: 0.08em; text-transform: uppercase; color: var(--v64-on-surface-variant);
+}
+.tlp-eyebrow--learning { color: var(--v64-on-learning-container); }
+
+/* Hero */
+.tlp-hero {
+  position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: var(--v64-space-4, 16px); overflow: hidden; isolation: isolate;
+  padding: var(--v64-space-5, 24px); border-radius: var(--v64-shape-xl, 28px);
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--v64-learning-container) 0%, transparent 55%),
+    linear-gradient(135deg, var(--v64-surface-container-high) 0%, var(--v64-primary-container) 100%);
+}
+.tlp-hero__art { position: absolute; right: -8px; top: -6px; width: 260px; height: auto; z-index: -1; opacity: 0.95; }
+.tlp-hero__sun { fill: var(--v64-learning); opacity: 0.35; }
+.tlp-hero__trail { fill: none; stroke: var(--v64-on-primary-container); stroke-width: 3; stroke-dasharray: 2 8; stroke-linecap: round; opacity: 0.45; }
+.tlp-hero__stop { fill: var(--v64-surface); stroke: var(--v64-on-primary-container); stroke-width: 3; opacity: 0.9; }
+.tlp-hero__stop--done { fill: var(--v64-primary); stroke: var(--v64-primary); opacity: 0.55; }
+.tlp-hero__stop:not(.tlp-hero__stop--done) { fill: var(--v64-learning); stroke: var(--v64-on-learning); opacity: 0.85; }
+.tlp-hero__tick { fill: none; stroke: var(--v64-on-learning); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
+.tlp-hero__card { fill: var(--v64-surface); opacity: 0.75; }
+.tlp-hero__line { fill: var(--v64-primary); opacity: 0.45; }
+.tlp-hero__line--soft { opacity: 0.2; }
+.tlp-hero__text { flex: 1 1 18rem; min-width: 0; max-width: 34rem; }
+.tlp-hero__text h2 { margin: var(--v64-space-1, 4px) 0 var(--v64-space-2, 8px); font: var(--v64-type-display-sm); letter-spacing: -0.01em; }
+.tlp-hero__text p { margin: 0; font: var(--v64-type-body-lg); color: var(--v64-on-surface-variant); }
+.tlp-hero__text .tlp-eyebrow { color: var(--v64-on-learning-container); }
+.tlp-hero__text .tlp-hero__meta { margin-top: var(--v64-space-3, 12px); font: var(--v64-type-label-lg); color: var(--v64-on-primary-container); }
+.tlp-hero__refresh { flex: none; background: var(--v64-surface) !important; }
+.training-lesson-picker--course-open .tlp-hero { padding-block: var(--v64-space-4, 16px); }
+.training-lesson-picker--course-open .tlp-hero__text h2 { font: var(--v64-type-headline-sm); }
+.training-lesson-picker--course-open .tlp-hero__text > p:not(.tlp-eyebrow) { display: none; }
+
+/* Notes and banners */
+.tlp-note {
+  display: flex; align-items: flex-start; gap: var(--v64-space-3, 12px); margin: 0;
+  padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px);
+  background: var(--v64-surface-container); color: var(--v64-on-surface-variant); font: var(--v64-type-body-md);
+}
+.tlp-note :deep(.v-icon), .tlp-note :deep(.v-progress-circular) { flex: none; margin-top: 1px; }
+.tlp-note--warn { background: var(--v64-learning-container); color: var(--v64-on-learning-container); }
+.tlp-note--progress { background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
+
+/* Saved lesson hero */
+.tlp-saved {
+  position: relative; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--v64-space-5, 24px);
+  overflow: hidden; isolation: isolate; padding: var(--v64-space-5, 24px);
+  border-radius: var(--v64-shape-xl, 28px); border: 1px solid color-mix(in srgb, var(--v64-learning) 45%, transparent);
+  background: linear-gradient(120deg, var(--v64-learning-container) 0%, var(--v64-surface-container-low) 70%);
+  box-shadow: var(--v64-elevation-1);
+  animation: tlp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate) both;
+}
+.tlp-saved__glow {
+  position: absolute; z-index: -1; right: -60px; top: -80px; width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--v64-learning) 45%, transparent) 0%, transparent 70%);
+}
+.tlp-saved__ring { --training-ring-color: var(--v64-primary); --training-ring-track: color-mix(in srgb, var(--v64-primary) 16%, transparent); }
+.tlp-saved__ring-value { font: var(--v64-type-label-lg); color: var(--v64-on-surface-variant); }
+.tlp-saved__ring-value strong { font: var(--v64-type-headline-sm); color: var(--v64-on-surface); }
+.tlp-saved__badge {
+  flex: none; display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%;
+  background: var(--v64-learning); color: var(--v64-on-learning); box-shadow: var(--v64-elevation-2);
+}
+.tlp-saved__body { flex: 1 1 16rem; min-width: 0; display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); }
+.tlp-saved__title { margin: 0; font: var(--v64-type-headline-sm); }
+.tlp-saved__meta { margin: 0; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-saved__status { display: flex; align-items: center; gap: var(--v64-space-2, 8px); margin: 0; font: var(--v64-type-body-lg); }
+.tlp-saved .tlp-note { background: color-mix(in srgb, var(--v64-surface) 70%, transparent); }
+.tlp-saved__actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-2, 8px); margin-top: var(--v64-space-2, 8px); }
+
+.tlp-identity { margin-top: var(--v64-space-1, 4px); font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-identity summary, .tlp-history summary {
+  cursor: pointer; width: fit-content; min-height: 40px; display: inline-flex; align-items: center; gap: var(--v64-space-2, 8px);
+  padding: 0 var(--v64-space-3, 12px); margin-left: calc(-1 * var(--v64-space-3, 12px)); border-radius: var(--v64-shape-full, 999px);
+  font: var(--v64-type-label-lg); transition: background-color var(--v64-duration-short) var(--v64-ease-standard);
+}
+.tlp-identity summary:hover, .tlp-history summary:hover { background: rgba(var(--v-theme-on-surface), var(--v64-state-hover)); }
+.tlp-identity summary:focus-visible, .tlp-history summary:focus-visible { outline: 2px solid var(--v64-primary); outline-offset: 2px; }
+.tlp-identity dl {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--v64-space-1, 4px) var(--v64-space-3, 12px);
+  margin: var(--v64-space-2, 8px) 0 0; padding: var(--v64-space-3, 12px); border-radius: var(--v64-shape-md, 12px);
+  background: color-mix(in srgb, var(--v64-surface) 75%, transparent);
+}
+.tlp-identity dt { font-weight: 600; color: var(--v64-on-surface); }
+.tlp-identity dd { margin: 0; }
+.tlp-identity code, .tlp-history code { font-size: 0.75rem; }
+
+/* Course grid and cards */
+.tlp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: var(--tlp-gap); }
+.tlp-card {
+  position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  border-radius: var(--v64-shape-lg, 16px); background: var(--v64-surface-container-low);
+  border: 1px solid var(--v64-outline-variant); box-shadow: var(--v64-elevation-1);
+  transition: box-shadow var(--v64-duration-medium) var(--v64-ease-standard), transform var(--v64-duration-medium) var(--v64-ease-emphasized);
+  animation: tlp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate) both;
+  animation-delay: calc(min(var(--tlp-index, 0), 8) * 60ms);
+}
+.tlp-card:hover, .tlp-card:focus-within { box-shadow: var(--v64-elevation-3); transform: translateY(-2px); }
+.tlp-card--active { border-color: color-mix(in srgb, var(--v64-learning) 70%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v64-learning) 45%, transparent), var(--v64-elevation-1); }
+.tlp-card--off .tlp-card__cover { filter: saturate(0.35); }
+.tlp-card__cover { position: relative; }
+.tlp-card__chips { position: absolute; top: var(--v64-space-3, 12px); right: var(--v64-space-3, 12px); left: 72px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--v64-space-1, 4px); }
+.tlp-chip {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 2px 10px 2px 8px;
+  border-radius: var(--v64-shape-sm, 8px); font: var(--v64-type-label-md); white-space: nowrap;
+  background: var(--v64-surface); color: var(--v64-on-surface); box-shadow: var(--v64-elevation-1);
+}
+.tlp-chip--enabled :deep(.v-icon) { color: rgb(var(--v-theme-success)); }
+.tlp-chip--preview :deep(.v-icon) { color: rgb(var(--v-theme-primary)); }
+.tlp-chip--disabled { background: var(--v64-surface-container-highest); color: var(--v64-on-surface-variant); }
+.tlp-chip--learning { background: var(--v64-learning); color: var(--v64-on-learning); }
+.tlp-chip--success { background: var(--v64-success-container); color: var(--v64-on-surface); }
+.tlp-chip--success :deep(.v-icon) { color: rgb(var(--v-theme-success)); }
+.tlp-card__body { flex: 1; display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); padding: var(--v64-space-4, 16px) var(--v64-space-4, 16px) var(--v64-space-2, 8px); }
+.tlp-card__title { margin: 0; font: var(--v64-type-title-lg); }
+.tlp-card__id { margin: 0; }
+.tlp-card__id code { padding: 1px 6px; border-radius: var(--v64-shape-xs, 4px); background: var(--v64-surface-container-high); color: var(--v64-on-surface-variant); font-size: 0.75rem; }
+.tlp-card__facts { display: flex; flex-wrap: wrap; gap: var(--v64-space-4, 16px); margin: 0; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-card__facts span { display: inline-flex; align-items: center; gap: 6px; }
+.tlp-card__progress {
+  display: flex; align-items: center; gap: var(--v64-space-3, 12px); margin-top: auto;
+  padding: var(--v64-space-3, 12px); border-radius: var(--v64-shape-md, 12px); background: var(--v64-surface-container);
+}
+.tlp-card__progress :deep(.training-progress-ring__content) { font: var(--v64-type-label-md); }
+.tlp-card__count { margin: 0; font: var(--v64-type-label-lg); }
+.tlp-card__next { margin: 2px 0 0; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v64-space-2, 8px); padding: var(--v64-space-2, 8px) var(--v64-space-4, 16px) var(--v64-space-4, 16px); }
+
+.tlp-new {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--v64-space-3, 12px);
+  min-height: 14rem; padding: var(--v64-space-5, 24px); text-align: center;
+  border: 2px dashed var(--v64-outline); border-radius: var(--v64-shape-lg, 16px); color: var(--v64-on-surface-variant);
+  animation: tlp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate) both;
+  animation-delay: calc(min(var(--tlp-index, 0), 8) * 60ms);
+  transition: border-color var(--v64-duration-short) var(--v64-ease-standard), background-color var(--v64-duration-short) var(--v64-ease-standard);
+}
+.tlp-new:hover, .tlp-new:focus-within { border-color: var(--v64-primary); background: var(--v64-surface-container-low); }
+.tlp-new p { margin: 0; max-width: 16rem; font: var(--v64-type-body-md); }
+.tlp-new__icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--v64-shape-lg, 16px); background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
+
+/* Skeletons */
+.tlp-skeleton { display: flex; gap: var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); background: var(--v64-surface-container-low); border: 1px solid var(--v64-outline-variant); }
+.tlp-skeleton--saved { align-items: center; padding: var(--v64-space-5, 24px); border-radius: var(--v64-shape-xl, 28px); }
+.tlp-skeleton--card { flex-direction: column; overflow: hidden; }
+.tlp-skeleton--card .tlp-skeleton__lines { padding: 0 var(--v64-space-4, 16px) var(--v64-space-5, 24px); }
+.tlp-skeleton__lines { flex: 1; display: flex; flex-direction: column; gap: var(--v64-space-3, 12px); }
+.tlp-shimmer {
+  display: block; height: 12px; border-radius: var(--v64-shape-full, 999px);
+  background: linear-gradient(90deg, var(--v64-surface-container-high) 0%, var(--v64-surface-container-highest) 40%, var(--v64-surface-container-high) 80%);
+  background-size: 300% 100%; animation: tlp-shimmer 1.6s linear infinite;
+}
+.tlp-shimmer--ring { flex: none; width: 96px; height: 96px; border-radius: 50%; }
+.tlp-shimmer--art { height: 112px; border-radius: 0; }
+
+/* Empty states */
+.tlp-empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--v64-space-3, 12px); text-align: center;
+  padding: var(--v64-space-6, 32px) var(--v64-space-5, 24px); border-radius: var(--v64-shape-xl, 28px);
+  background: var(--v64-surface-container-low); border: 1px dashed var(--v64-outline); color: var(--v64-on-surface-variant);
+}
+.tlp-empty p { margin: 0; max-width: 28rem; font: var(--v64-type-body-lg); }
+.tlp-empty__icon { color: var(--v64-primary); }
+.tlp-empty__art { width: 132px; height: auto; }
+.tlp-empty__shelf { fill: var(--v64-outline); }
+.tlp-empty__book { fill: var(--v64-primary); opacity: 0.55; }
+.tlp-empty__book--alt { fill: var(--v64-learning); opacity: 0.85; }
+.tlp-empty__book--ghost { fill: none; stroke: var(--v64-outline); stroke-width: 2; stroke-dasharray: 3 3; }
+
+/* History */
+.tlp-history { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); border: 1px solid var(--v64-outline-variant); background: var(--v64-surface-container-lowest); }
+.tlp-history summary { margin-left: calc(-1 * var(--v64-space-2, 8px)); padding: 0 var(--v64-space-2, 8px); }
+.tlp-history ol { list-style: none; margin: var(--v64-space-3, 12px) 0 0; padding: 0 0 0 var(--v64-space-5, 24px); border-left: 2px solid var(--v64-outline-variant); }
+.tlp-history li { position: relative; font: var(--v64-type-body-md); }
+.tlp-history li::before { content: ""; position: absolute; left: calc(-1 * var(--v64-space-5, 24px) - 6px); top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--v64-outline); }
+.tlp-history li + li { margin-top: var(--v64-space-4, 16px); }
+.tlp-history li p { margin: 2px 0 0; color: var(--v64-on-surface-variant); }
+
+@keyframes tlp-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes tlp-shimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
+
+@container (max-width: 34rem) {
+  .tlp-hero { padding: var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); }
+  .tlp-hero__art { width: 170px; opacity: 0.55; }
+  .tlp-hero__text h2 { font: var(--v64-type-headline-md); }
+  .tlp-hero__refresh { width: 100%; }
+  .tlp-saved { padding: var(--v64-space-4, 16px); gap: var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); }
+  .tlp-saved__actions :deep(.v-btn) { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tlp-card, .tlp-saved, .tlp-new { animation: none; transition: none; }
+  .tlp-card:hover, .tlp-card:focus-within { transform: none; }
+  .tlp-shimmer { animation: none; }
+}
 </style>
