@@ -78,7 +78,9 @@ Each example keeps its frontend dependency cache under its own state directory.
 Keep that directory between runs so normal restarts can reuse the prepared cache.
 When a host supplies Preview routing, the example uses the host’s Preview socket
 directory, including its default when no explicit directory is configured, so its
-own project outputs remain reachable through that host.
+own project outputs remain reachable through that host. Same-user child processes
+retain the host runtime directory through the execution gateway; you do not need
+to create socket directories or change permissions manually.
 Each example has a distinct Preview namespace while keeping its session data
 isolated. Standalone runs keep sockets under their writable state directory.
 Its API and conversation connection use a consistent origin through the internal

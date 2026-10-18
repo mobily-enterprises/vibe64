@@ -69,8 +69,6 @@ async function main() {
   resolveRuntimeEnv();
   const hostedStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
     ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
-  const { previewProxySocketDir } = await import("../packages/vibe64-terminals/src/server/launchPreviewProxy.js");
-  const hostedSocketDir = hostedStudioHost ? previewProxySocketDir() : "";
   const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
     "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
     "VIBE64_PUBLIC_USER_DOMAIN", "VIBE64_PUBLIC_PROTOCOL",
@@ -85,7 +83,9 @@ async function main() {
   process.env.VIBE64_SERVICE_DATA_ROOT = path.join(developmentRoot, "state", "services");
   process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
   process.env.VIBE64_CODEX_ATTACHMENTS_ROOT = path.join(developmentRoot, "state", "attachments");
-  process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR ||= hostedSocketDir || path.join(developmentRoot, "preview-sockets");
+  if (!hostedStudioHost) {
+    process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR ||= path.join(developmentRoot, "preview-sockets");
+  }
   process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE = `${process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE || "example"}-${identity}`;
   await prepareExampleProject(projectRoot);
 

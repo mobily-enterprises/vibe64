@@ -38,6 +38,9 @@ import {
   installVibe64ManagedExecutionProvider
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 
+import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
+
 const execFileAsync = promisify(execFile);
 
 async function git(cwd, args, options = {}) {
@@ -2251,4 +2254,29 @@ test("execution gateway helper-backed pty evaluates terminal args and env factor
   assert.equal(payload.env.HOME, "/home/ada");
   assert.equal(payload.uid, actorUid);
   assert.equal(payload.gid, actorGid);
+});
+
+
+test("execution gateway retains the runtime directory only for the same OS identity", async () => {
+  const runtimeDir = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-env-"));
+  try {
+    for (const actor of ["daemon", "app"]) {
+      const result = await runVibe64Command({ actor, command: process.execPath,
+        args: ["-e", "console.log(JSON.stringify({ runtime: process.env.XDG_RUNTIME_DIR }))"],
+        baseEnv: { XDG_RUNTIME_DIR: runtimeDir }
+      });
+      assert.equal(result.ok, true, result.error || result.output);
+      assert.deepEqual(JSON.parse(result.stdout), { runtime: runtimeDir });
+    }
+    const user = currentActorUser();
+    assert.equal(resolveCommandEnv({ actor: { user: { ...user, uid: user.uid + 1 } },
+      baseEnv: { XDG_RUNTIME_DIR: runtimeDir } }).XDG_RUNTIME_DIR, undefined);
+    assert.equal(resolveCommandEnv({ actor: { user },
+      baseEnv: { XDG_RUNTIME_DIR: "relative/runtime" } }).XDG_RUNTIME_DIR, undefined);
+    assert.throws(() => resolveCommandEnv({ actor: { user },
+      baseEnv: { XDG_RUNTIME_DIR: runtimeDir }, request: { env: { XDG_RUNTIME_DIR: "/caller/override" } }
+    }), { code: "vibe64_command_env_policy_reserved" });
+  } finally {
+    await rm(runtimeDir, { recursive: true, force: true });
+  }
 });

@@ -97,9 +97,10 @@ OS-assigned port. Vite proxies API and realtime traffic to that backend.
 The proxy keeps Origin and protocol local for backend authorization. Its forwarded
 host retains the configured Studio hostname for hosted output routing.
 Hosted Preview routing and socket placement are retained from the host, with a
-per-example routing namespace. The launcher resolves the parent socket directory
-through `previewProxySocketDir` before clearing parent runtime settings, including
-the host default, so nested outputs remain reachable by the host gateway. Standalone Preview socket housekeeping uses
+per-example routing namespace. The execution gateway preserves the trusted absolute `XDG_RUNTIME_DIR` for
+children retaining the same OS identity, so the existing Preview resolver uses
+the same host default. Cross-identity children do not inherit it, and callers
+cannot override it. The launcher needs no separate host socket resolver. Standalone Preview socket housekeeping uses
 `preview-sockets` under the example's state directory.
 The listener can be reached through an authenticated hosting preview proxy.
 The browser connects realtime directly over WebSocket, which supplies the Origin

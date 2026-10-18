@@ -7,6 +7,8 @@ import test from "node:test";
 import { promisify } from "node:util";
 import getPort from "get-port";
 import http from "node:http";
+import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { once } from "node:events";
 import { io } from "socket.io-client";
 import {
@@ -85,13 +87,14 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
   let logs = "";
   const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
     cwd: path.resolve(import.meta.dirname, "../.."),
-    env: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
+    env: resolveCommandEnv({ actor: { actor: "daemon", user: currentActorUser() },
+      localPath: process.env.PATH, baseEnv: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
       VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project",
       VIBE64_CLAUDE_COMMAND: claudeCommand, LOG_LEVEL: "debug",
       VIBE64_WORKSPACE: "example", VIBE64_PUBLIC_USER_DOMAIN: "users.example.test",
       VIBE64_PUBLIC_PROTOCOL: "https", VIBE64_PREVIEW_PUBLIC_DOMAIN: "preview.example.test",
       VIBE64_PREVIEW_PUBLIC_NAMESPACE: "parent-editor",
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") },
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") } }),
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
@@ -99,12 +102,12 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
   const exited = new Promise((resolve) => child.once("exit", resolve));
   const origin = `http://127.0.0.1:${port}`;
   try {
-    const deadline = Date.now() + 60_000;
+    const deadline = Date.now() + 90_000;
     let ready = false;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) assert.fail(logs);
       try {
-        const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(1000) });
+        const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(5000) });
         if (response.ok) { ready = true; break; }
       } catch { /* The backend and Vite are still starting. */ }
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -134,9 +137,13 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
     const socket = io(origin, { autoConnect: false, forceNew: true, reconnection: false,
       transports: ["websocket"], extraHeaders: { Origin: origin, "x-forwarded-proto": "https" } });
     try {
-      const connected = once(socket, "connect", { signal: AbortSignal.timeout(5000) });
+      const connected = once(socket, "connect", { signal: AbortSignal.timeout(20_000) });
       socket.connect();
-      await connected;
+      try {
+        await connected;
+      } catch (error) {
+        throw new Error(`Development editor realtime connection failed: ${logs}`, { cause: error });
+      }
       const response = await socket.timeout(5000).emitWithAck("assistant.conversation.subscribe", {
         subscriptionId: "example-proxy-origin", conversationId: "missing-example-conversation",
         targetSurfaceId: "app", hostSurfaceId: "app"

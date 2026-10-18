@@ -64,6 +64,12 @@ failure rejects the exit wait and does not acknowledge scope cleanup.
 Startup rejects missing execution identities and retains the gateway's failure
 receipt and retryability. Native owners may supply their existing stop reason
 and termination grace period; the gateway still proves scope cleanup.
+The command environment resolver (`packages/vibe64-execution/src/server/env/resolveCommandEnv.js`)
+retains a trusted absolute host `XDG_RUNTIME_DIR` only when the resolved child
+UID/GID matches the current process. Runtime sockets therefore retain their host
+location across same-identity execution, independently of private credential HOME.
+Cross-identity execution does not receive that directory; request and project
+configuration still cannot override this policy-owned setting.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.
