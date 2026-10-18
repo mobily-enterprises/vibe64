@@ -85,7 +85,14 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", async (importOrigina
   const actual = await importOriginal();
   return {
     ...actual,
-    useCommand: (options) => mocks.live ? actual.useCommand(options) : { run: vi.fn(async () => ({ ok: true })) }
+    useCommand(options) {
+      if (!mocks.live) return { run: vi.fn(async () => ({ ok: true })) };
+      // When JSKIT is composed from source, its useCommand's own internal
+      // endpoint resource also reaches the mock above. Keep mocks.query on
+      // the component's resource rather than the command's private one.
+      const query = mocks.query;
+      try { return actual.useCommand(options); } finally { mocks.query = query; }
+    }
   };
 });
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
