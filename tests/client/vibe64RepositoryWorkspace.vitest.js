@@ -33,6 +33,7 @@ import Vibe64RepositoryWorkspace from "../../src/components/studio/repository/Vi
 import Vibe64RepositoryFileBrowser from "../../src/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
 import Vibe64RepositoryDiff from "../../src/components/studio/repository/Vibe64RepositoryDiff.vue";
 import StudioErrorNotice from "../../src/components/studio/StudioErrorNotice.vue";
+import Vibe64DashboardPageHeader from "../../src/components/studio/Vibe64DashboardPageHeader.vue";
 import RepositoryPage from "../../src/pages/app/project/[slug]/dashboard/repository/index.vue";
 import ChangesPage from "../../src/pages/app/project/[slug]/dashboard/changes/index.vue";
 
@@ -44,6 +45,7 @@ for (const [component, file] of [
   [Vibe64RepositoryFileBrowser, "src/components/studio/repository/Vibe64RepositoryFileBrowser.vue"],
   [Vibe64RepositoryDiff, "src/components/studio/repository/Vibe64RepositoryDiff.vue"],
   [StudioErrorNotice, "src/components/studio/StudioErrorNotice.vue"],
+  [Vibe64DashboardPageHeader, "src/components/studio/Vibe64DashboardPageHeader.vue"],
   [RepositoryPage, "src/pages/app/project/[slug]/dashboard/repository/index.vue"],
   [ChangesPage, "src/pages/app/project/[slug]/dashboard/changes/index.vue"]
 ]) {

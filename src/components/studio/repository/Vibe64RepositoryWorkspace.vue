@@ -3,36 +3,39 @@
     class="vibe64-repository-workspace"
     :class="{ 'vibe64-repository-workspace--changes': view === 'changes' }"
   >
-    <header class="vibe64-repository-workspace__header">
-      <div>
-        <h1 class="text-headline-small font-weight-bold ma-0">{{ pageTitle }}</h1>
-      </div>
-      <div v-if="!lessonReadOnly" class="vibe64-repository-workspace__actions">
-        <v-btn
-          :disabled="repositoryOperationBusy"
-          :loading="updates.checking"
-          :prepend-icon="mdiCloudRefreshOutline"
-          size="small"
-          type="button"
-          variant="tonal"
-          @click="checkForUpdates"
-        >
-          Check for updates
-        </v-btn>
-        <v-btn
-          v-if="view === 'history' && (repositoryStatus?.updateAvailable || updates.canonicalChangePending)"
-          :disabled="repositoryOperationBusy"
-          :loading="updates.applying"
-          :prepend-icon="mdiSourceBranchSync"
-          size="small"
-          type="button"
-          variant="tonal"
-          @click="applyUpdates"
-        >
-          {{ updates.payload?.historyReview ? "Review and reconcile session" : sessionUpdateLabel }}
-        </v-btn>
-      </div>
-    </header>
+    <Vibe64DashboardPageHeader
+      :description="pageDescription"
+      :icon="view === 'history' ? mdiSourceRepository : mdiFileCompare"
+      :title="pageTitle"
+    >
+      <template #actions>
+        <div v-if="!lessonReadOnly" class="vibe64-repository-workspace__actions">
+          <v-btn
+            :disabled="repositoryOperationBusy"
+            :loading="updates.checking"
+            :prepend-icon="mdiCloudRefreshOutline"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="checkForUpdates"
+          >
+            Check for updates
+          </v-btn>
+          <v-btn
+            v-if="view === 'history' && (repositoryStatus?.updateAvailable || updates.canonicalChangePending)"
+            :disabled="repositoryOperationBusy"
+            :loading="updates.applying"
+            :prepend-icon="mdiSourceBranchSync"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="applyUpdates"
+          >
+            {{ updates.payload?.historyReview ? "Review and reconcile session" : sessionUpdateLabel }}
+          </v-btn>
+        </div>
+      </template>
+    </Vibe64DashboardPageHeader>
     <v-dialog :model-value="Boolean(historyReview)" max-width="620" @update:model-value="!$event && (historyReview = null)">
       <v-card v-if="historyReview">
         <v-card-title>Reconcile after rewritten project history</v-card-title>
@@ -391,11 +394,14 @@ import {
   mdiClockOutline,
   mdiClose,
   mdiCloudRefreshOutline,
+  mdiFileCompare,
+  mdiSourceRepository,
   mdiSourceCommit,
   mdiSourceMerge,
   mdiSourceBranchSync
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64RepositoryFileBrowser.vue";
 import { useVibe64RepositoryWorkspace } from "@/composables/useVibe64RepositoryWorkspace.js";
@@ -460,6 +466,9 @@ const versionFileCountLabel = computed(() => {
 });
 
 const pageTitle = computed(() => view.value === "history" ? "Git log" : "Current changes");
+const pageDescription = computed(() => view.value === "history"
+  ? "The project's saved versions and their file differences."
+  : "Files this session changed since the project's saved version.");
 const repositoryStatus = computed(() => updates.payload || changes.payload || null);
 const sessionUpdateLabel = computed(() => {
   const branch = repositoryStatus.value?.branch;
@@ -724,25 +733,12 @@ function closeVersion() {
   min-width: 0;
 }
 
-.vibe64-repository-workspace__header,
 .vibe64-repository-workspace__summary,
 .vibe64-repository-workspace__actions {
   align-items: center;
   display: flex;
 }
 
-.vibe64-repository-workspace__header {
-  gap: 0.75rem;
-  justify-content: space-between;
-}
-
-.vibe64-repository-workspace__header h1,
-.vibe64-repository-workspace__header p {
-  letter-spacing: 0;
-  margin: 0;
-}
-
-.vibe64-repository-workspace__header p,
 .vibe64-repository-workspace__summary-copy span,
 .vibe64-repository-workspace__history-intro span,
 .vibe64-repository-workspace__empty span {
@@ -753,13 +749,20 @@ function closeVersion() {
 .vibe64-repository-workspace__summary {
   gap: 0.8rem;
   justify-content: space-between;
-  padding: 0.8rem;
+  padding: var(--v64-space-4, 16px);
+}
+
+.vibe64-repository-workspace__summary,
+.vibe64-repository-workspace__update-status {
+  background: var(--v64-surface-container-low) !important;
+  border-color: var(--v64-outline-variant) !important;
+  border-radius: var(--v64-shape-lg, 16px) !important;
 }
 
 .vibe64-repository-workspace__update-status {
   display: grid;
   gap: 0.18rem;
-  padding: 0.7rem 0.8rem;
+  padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
 }
 
 .vibe64-repository-workspace__update-status span {
@@ -816,8 +819,8 @@ function closeVersion() {
 }
 
 .vibe64-repository-workspace__history {
-  border: 1px solid rgba(var(--v-theme-outline), 0.18);
-  border-radius: 1rem;
+  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: var(--v64-shape-lg, 16px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
@@ -826,8 +829,8 @@ function closeVersion() {
 
 .vibe64-repository-workspace__history-intro {
   align-items: center;
-  background: rgba(var(--v-theme-surface-variant), 0.22);
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.14);
+  background: var(--v64-surface-container-low);
+  border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
   display: flex;
   gap: 1rem;
   justify-content: space-between;
@@ -1084,10 +1087,18 @@ function closeVersion() {
   width: 100vw;
 }
 
+/* M3 empty state: a quiet dashed slot, centred, where content will appear. */
 .vibe64-repository-workspace__empty {
-  border: 1px solid rgba(var(--v-theme-outline), 0.16);
-  border-radius: 0.75rem;
-  padding: 1rem;
+  background: var(--v64-surface-container-low);
+  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24));
+  border-radius: var(--v64-shape-lg, 16px);
+  justify-items: center;
+  padding: var(--v64-space-6, 32px) var(--v64-space-4, 16px);
+  text-align: center;
+}
+
+.vibe64-repository-workspace__empty strong {
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
 }
 
 @media (min-width: 781px) {
