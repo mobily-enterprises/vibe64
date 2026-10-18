@@ -41,7 +41,9 @@ another inference or repeat an unknown App effect to manufacture success.
 
 A server restart or retired connection can lose unfinished native-step collection;
 it does not undo your workspace action. Explain that clearly and repeat the
-practical only when collection is genuinely unavailable. Previously confirmed
+practical only when collection is genuinely unavailable. The delivered question
+itself is saved and stays open: missing collected facts after a restart mean
+"press or repeat again", never "issue the question again". Previously confirmed
 passes remain in the original saved progress. A new question needs its own real
 steps; an older observation cannot be reused for it. Closing a view or minimizing
 a drawer is not permission to replace the saved lesson or silently send a message.

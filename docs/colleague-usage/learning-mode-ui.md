@@ -150,9 +150,14 @@ is not a pass. **Check my code** requires this lesson's Learning conversation
 to be connected in this browser. Every press either checks your code or shows
 why it could not in the line under the button: "This lesson's Learning
 conversation is not open here" (open the lesson conversation, then press again),
-"There is no open lesson question yet" or a report that the question is not a
-code question (ask the teacher for the code question first), or "Earlier presses
-are still being handled" (wait, then press again). Colleague can explain
+"This lesson's Learning conversation is still loading its saved question" (wait
+until the Learning chat shows its messages, then press again), "There is no open
+lesson question yet" or a report that the question is not a code question (ask
+the teacher for the code question first), or "Earlier presses are still being
+handled" (wait, then press again). An asked, unanswered code question stays open
+when the server restarts or the page reloads, including the next day: open the
+lesson again and press **Check my code**; you do not need a new question, and
+your earlier saves in the **Code** tab still count. Colleague can explain
 these steps but cannot type, save or check code for you.
 
 You can ask Colleague to enter or leave Learning, show **Courses**, show the

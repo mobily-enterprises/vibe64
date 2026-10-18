@@ -185,6 +185,11 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
     }
     if (!workspace.settle) throw new Error("This lesson has no practice project to check.");
     if (nativeTickets.size >= 8) throw new Error("Earlier presses are still being handled. Wait a moment, then press Check my code again.");
+    // The question is saved server state; after a restart or reload it is
+    // absent here only until the lesson conversation has re-read it.
+    if (!reference && product.value.loaded === false) {
+      throw new Error("This lesson's Learning conversation is still loading its saved question. Wait until its messages show, then press Check my code again.");
+    }
     if (!reference) throw new Error("There is no open lesson question yet. Ask your teacher for a code question, then press Check my code.");
     const ticket = Object.freeze({ actorKey: actorKey.value, conversationId: product.value.conversationId,
       reference, gestureId: crypto.randomUUID(), control: "code-submit",

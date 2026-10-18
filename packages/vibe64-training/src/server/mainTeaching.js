@@ -305,9 +305,14 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
   // The original browser observer remains independent of an active native
   // turn. It uses the current completed question and the saved false lesson
   // target; new gesture collection is serialized in this same connection owner.
-  async function practicalContext({ runtime, sessionId, context: current, actions, clientId }) {
+  // A server restart loses only this in-memory browser registry; the question
+  // itself is the saved resume and canonical delivery receipt. A learner press
+  // under the same fresh WRITE grant re-registers its browser exactly as focus
+  // does, so an open question never needs re-preparing after a restart.
+  async function practicalContext({ runtime, sessionId, context: current, actions, clientId, admitBrowser = false }) {
     if (runtime.learningScope?.noExercise !== false) throw failure("This lesson has no prepared practical workspace.");
     const state = await presentationState({ runtime, sessionId, context: current, actions, access: "write" });
+    if (admitBrowser && state?.binding && !state.connections.has(clientId)) state.connections.set(clientId, { clientId });
     const connection = state?.connections.get(clientId);
     if (!state?.binding || !connection) throw failure("Use the original connected Main browser for this practical question.");
     const generation = state.generation, native = state.binding.native;
@@ -335,7 +340,7 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
       requireCurrent, authorizeCurrent };
   }
   async function observeTrainingPractical({ input, ...current }) {
-    const prepared = await practicalContext({ ...current, clientId: input.clientId });
+    const prepared = await practicalContext({ ...current, clientId: input.clientId, admitBrowser: true });
     const { state, connection, context, targetInput, requireCurrent, authorizeCurrent } = prepared;
     const observations = createTrainingPracticalObservations({ actions: current.actions, failure });
     const observing = state.practicalAdmission.then(() => observations.observe({ ...input,

@@ -37,6 +37,8 @@ sequence. Separate verified assessment uses the pinned rubric and your explanati
 Observation retries retain the original gesture acknowledgement/step count;
 conflicting details are rejected. Completion is an observation, not a pass.
 After server restart repeat the sequence; workspace actions were not undone.
+The question itself stays open across a restart or reload, so you repeat its
+steps (or press **Check my code** again) without asking for a new question.
 Demonstration/substantial help remains teacher-origin, not independent evidence.
 
 Practical assessment requires both your native exercise receipt and accepted

@@ -1418,6 +1418,48 @@ test("Main completed practical question discovery requires the original complete
 });
 
 
+// A server restart loses only in-memory browser registrations. The delivered
+// question is the saved resume plus the canonical delivery receipt, so a
+// recreated owner over the same state keeps it open and admits the reconnected
+// browser's next press without re-preparing the question.
+test("Main delivered practical question stays open across a server restart and the reconnected browser's press is observed", async t => {
+  const f = await mainPracticalFixture(t);
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingLearnerState } = await import("../../packages/vibe64-training/src/server/learnerState.js");
+  const { createInstalledTrainingContent } = await import("../../packages/vibe64-training/src/server/installedContent.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const first = await f.observe(f.gesture("project-select", "before-restart"));
+  assert.equal(first.phase, "collecting");
+  await f.bound.cleanup({});
+  const systemRoot = path.resolve(f.snapshotRoot, "../../../..");
+  const learners = createTrainingLearnerState({ systemRoot });
+  const content = createInstalledTrainingContent({ systemRoot });
+  const owner = createTrainingTeachingOwner({ learners, content });
+  const restarted = createTrainingMainTeaching({ teaching: owner,
+    assessment: createTrainingAnswerAssessment({ learners, content, teaching: owner }) });
+  const runtime = new Vibe64SessionRuntime({ projectContextRoot: f.runtime.projectContextRoot,
+    projectRuntimeRoot: f.runtime.stateRoot, projectSessionSourceRoot: f.runtime.projectSessionSourceRoot,
+    learningScope: f.runtime.learningScope, learningTeaching: restarted, inspectSourceByDefault: false });
+  const before = await storedFiles(f.paths);
+  const call = { ...f.call, runtime, context: { ...f.current, runtime } };
+  restarted.bindConversation({ runtime, sessionId: f.sessionId, actions: f.actions,
+    terminals: mainTeachingTerminals({ runtime, sessionId: f.sessionId, selection: f.current.assistantSelection,
+      controls: f.controls, helperCalls: f.helperCalls }), native: f.native });
+  assert.deepEqual(await restarted.readQuestion(call), f.prepared.reference, "the issued question is still open after restart");
+  // The browser kept its page; it never re-reported focus to the new process.
+  const observe = input => restarted.observeTrainingPractical({ ...call, input });
+  let result;
+  for (const [i, control] of ["project-select", "session-select", "preview-select"].entries()) {
+    result = await observe(f.gesture(control, `after-restart-${i}`));
+  }
+  assert.equal(result.phase, "completed", "lost in-memory steps are simply repeated in the same question");
+  assert.ok(result.observationId);
+  assert.deepEqual(await storedFiles(f.paths), before, "neither restart nor the observation re-prepares or rewrites the question");
+  await assert.rejects(observe(f.gesture("project-select", "stale-reference", {
+    reference: { ...f.prepared.reference, questionId: "replaced-question" } })),
+  /Repeat the practical task|question/u, "a restarted owner still refuses an undelivered question");
+});
+
 test("Main practical HTTP adapter preserves strict original gesture schema and captures only its saved Learning URL target", async t => {
   const f = await mainPracticalFixture(t);
   const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");

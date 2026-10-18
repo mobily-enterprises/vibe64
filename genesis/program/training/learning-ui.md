@@ -476,6 +476,10 @@ revalidation and baseHash conflict remain. **Check my code** calls the selected
 Main gesture owner's `submitCode`, which posts a `code-submit` observation for
 the current delivered question to the Main practical route. The server decides
 whether that question is a code practical; the tab shows its outcome and reason.
+Main's gesture product carries `loaded` (the conversation snapshot exists). Until
+the reopened conversation has re-read its saved question after a reload or
+server restart, a press reports that the lesson conversation is still loading
+rather than that no question is open.
 
 ## Practice Dashboard database
 

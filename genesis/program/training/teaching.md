@@ -1197,7 +1197,15 @@ Training shared schema. The old Colleague action and route keep their original
 fields, scopes and API-only exclusion.
 
 Main adds its own already-existing connection lifetime to this same collector.
-Only a saved false lesson can use the Learning observations URL. The original
+That connection registry is in-memory; the open question is not. The delivered
+question is the saved resume `pendingQuestion` plus the canonical
+`trainingQuestionDelivery` receipt in the Main conversation log, so a restarted
+server reads the same question. Because a browser that kept its page never
+re-reports focus to the new process, a learner observation (not the teacher's
+`practical.read`) registers a missing browser connection after the same fresh
+WRITE grant that `practicalContext` already requires, exactly as focus would.
+Unfinished collected steps are lost and repeated; the question is never
+re-prepared for that reason. Only a saved false lesson can use the Learning observations URL. The original
 route owner overrides attempt/session from the URL; the conversation identity is
 derived by the original typed Main selector. Workspace display facts must still
 match the original captured physical project/initial session. Sessions inspection

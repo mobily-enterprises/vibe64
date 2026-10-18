@@ -76,7 +76,8 @@ function createConversationApplication(conversation, { identity, viewer, summary
     const workspace = identity.noExercise === false ? useTrainingWorkspaceObservation({ actor: rawActor,
       layout: layout || ref(null), view: matchingView, focus,
       selection: { projectSlug: ref(""), restoring: ref(false), error: computed(() => mounted.detailState.value?.error || "") } }) : null;
-    const product = computed(() => ({ conversationId: mainConversationId(identity), trainingQuestion: trainingQuestion.value }));
+    const product = computed(() => ({ conversationId: mainConversationId(identity), trainingQuestion: trainingQuestion.value,
+      loaded: Boolean(conversation.snapshot.value) }));
     const drawer = { owner: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value : null),
       conversationId: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value.conversationId : ""),
       bodyVisible: computed(() => body?.value?.actorKey === identity.viewerActorKey && body.value.visible === true),
