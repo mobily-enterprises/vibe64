@@ -5044,7 +5044,7 @@ test("actual Learning Main Send forwards only its resolved request authority for
   });
 });
 
-test("ordinary Working Send retains its original two-argument service call without teaching authority", async () => {
+test("ordinary Working Send retains its original message input and carries only project browser authority", async () => {
   const calls = [];
   const actor = { uid: "42", username: "ada", role: "member" };
   const definition = createSessionActions({ sessions: { sendAgentMessage(...args) { calls.push(args); return { ok: true }; } } })
@@ -5053,9 +5053,16 @@ test("ordinary Working Send retains its original two-argument service call witho
   await definition.execute(input, { actor: { id: actor.uid }, vibe64Action: { user: actor,
     project: { slug: input.projectSlug, targetRoot: "/already-authorized/working-project" } } });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].length, 2);
+  assert.equal(calls[0].length, 3);
   assert.equal(calls[0][0], input.sessionId);
   assert.deepEqual(calls[0][1], { message: input.message, messageId: input.messageId, vibe64User: actor });
+  // Since 6787f569 ordinary sends carry the admitted project's Main authority;
+  // they never gain a Learning attempt or teaching authority.
+  const { requestContext, ...authority } = calls[0][2].browserAuthority;
+  assert.deepEqual(Object.keys(calls[0][2]), ["browserAuthority"]);
+  assert.deepEqual(authority, { sessionId: input.sessionId, projectSlug: input.projectSlug, actorId: actor.uid });
+  assert.equal(requestContext.channel, "internal");
+  assert.equal(requestContext.vibe64Action, undefined);
   for (const key of ["browserAuthority", "teachingAuthority", "requestContext"]) {
     assert.equal(definition.input.schema.patch({ ...input, [key]: {} }).errors[key].code, "FIELD_NOT_ALLOWED", key);
   }
