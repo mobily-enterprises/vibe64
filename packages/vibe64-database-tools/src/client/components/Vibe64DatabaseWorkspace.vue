@@ -721,13 +721,15 @@ const databaseScopeLabel = computed(() => (
       : "Resolved database"
 ));
 const assistantConfigured = computed(() => Boolean(state.value?.assistant?.available));
-const assistantCanRun = computed(() => assistantConfigured.value);
+// A lesson has no Copilot route; its teacher answers database questions instead.
+const assistantCanRun = computed(() => assistantConfigured.value && !props.learningAttemptId);
 const assistantStatusLabel = computed(() => {
   const assistant = state.value?.assistant;
-  if (!assistantConfigured.value) return "Unavailable";
+  if (!assistantCanRun.value) return "Unavailable";
   return `${vibe64AssistantSelectionLabel({ engineId: assistant.engineId, modelId: assistant.model, variantId: assistant.variantId })}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
 const assistantUnavailableCopy = computed(() => {
+  if (props.learningAttemptId && props.assistantUnavailableMessage) return props.assistantUnavailableMessage;
   return state.value?.assistant?.message || "Ask the owner to configure Helper in Model routing. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);

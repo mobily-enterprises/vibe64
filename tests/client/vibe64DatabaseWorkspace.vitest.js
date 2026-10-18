@@ -285,6 +285,21 @@ describe("Database Workspace automatic table admission", () => {
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
     } finally { await fixture.close(); }
   });
+
+  it("keeps Copilot off in a lesson even when Helper is configured", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: { available: true, engineId: "opencode", model: "deepseek-flash" } } });
+    try {
+      fixture.props.learningAttemptId = "attempt-1";
+      fixture.props.assistantUnavailableMessage = "Ask your lesson teacher in Learning about this data.";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.assistantCanRun).toBe(false);
+      expect(fixture.workspace.assistantStatusLabel).toBe("Unavailable");
+      expect(fixture.workspace.assistantUnavailableCopy).toBe("Ask your lesson teacher in Learning about this data.");
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
+      await fixture.workspace.assistantBinding.runtime.value.submit();
+      expect(mocks.database.askAssistant).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+  });
   it("opens a subsystem table in the ERD without admitting a record query", async () => {
     const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
     try {
