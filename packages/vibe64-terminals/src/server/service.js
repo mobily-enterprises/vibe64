@@ -1664,14 +1664,18 @@ function createService({
     }
   }
 
-  async function assistantSessionOptions(sessionId = "", options = {}) {
+  async function readAssistantSession(sessionId = "", options = {}) {
     const runtime = options.runtime || await projectService.createRuntime({
       inspectSource: false
     });
     const session = options.session || await runtime.getSession(sessionId, {
       inspectSource: false
     });
-    return applicationToolManifest({ ...options, runtime, session });
+    return { ...options, runtime, session };
+  }
+
+  async function assistantSessionOptions(sessionId = "", options = {}) {
+    return applicationToolManifest(await readAssistantSession(sessionId, options));
   }
 
   function readGoalIntent(session) {
@@ -4561,11 +4565,13 @@ function createService({
       let started = performance.now();
       let completed = false;
       try {
-        const context = await assistantSessionOptions(sessionId, options);
+        const saved = await readAssistantSession(sessionId, options);
         if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
           sessionId, phase, completed: true, durationMs: performance.now() - started }, "Browser conversation opening timing.");
         phase = "native-open";
         started = performance.now();
+        // The tool manifest resolves the saved selection, so it belongs to opening.
+        const context = applicationToolManifest(saved);
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         if (!["codex", "claude", "opencode"].includes(selection.engineId)) {
           throw Object.assign(new Error("This Main conversation's engine is not connected to the browser facade yet."), {
