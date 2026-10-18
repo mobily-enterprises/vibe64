@@ -140,8 +140,12 @@ question and write the change yourself. The teacher is instructed not to edit
 those files or send solution code; it can give hints and point to lines.
 Checking never saves progress by itself, and a check without your explanation
 is not a pass. **Check my code** requires this lesson's Learning conversation
-to be connected in this browser; if it reports that the question is not a code
-question, ask the teacher for the code question first. Colleague can explain
+to be connected in this browser. Every press either checks your code or shows
+why it could not in the line under the button: "This lesson's Learning
+conversation is not open here" (open the lesson conversation, then press again),
+"There is no open lesson question yet" or a report that the question is not a
+code question (ask the teacher for the code question first), or "Earlier presses
+are still being handled" (wait, then press again). Colleague can explain
 these steps but cannot type, save or check code for you.
 
 You can ask Colleague to enter or leave Learning, show **Courses**, show the

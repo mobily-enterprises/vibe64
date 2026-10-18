@@ -1,4 +1,4 @@
-import { onBeforeUnmount, watch } from "vue";
+import { onScopeDispose, watch } from "vue";
 
 // Moved original Colleague collector: the browser records genuine person
 // effects only. The original server observer owns evidence and grading.
@@ -179,8 +179,12 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
   // runs its check; the browser only reports this person's genuine press.
   async function submitCode(event) {
     const reference = questionReference();
-    if (!mounted || (scope.current && !scope.current()) || !event?.isTrusted || event.type !== "click" ||
-        !actorKey.value || !product.value.conversationId || !workspace.settle || nativeTickets.size >= 8) return null;
+    if (!event?.isTrusted || event.type !== "click") throw new Error("Press Check my code yourself to submit your code.");
+    if (!mounted || (scope.current && !scope.current()) || !actorKey.value || !product.value.conversationId) {
+      throw new Error("This lesson's Learning conversation is not open here. Open it, then press Check my code again.");
+    }
+    if (!workspace.settle) throw new Error("This lesson has no practice project to check.");
+    if (nativeTickets.size >= 8) throw new Error("Earlier presses are still being handled. Wait a moment, then press Check my code again.");
     if (!reference) throw new Error("There is no open lesson question yet. Ask your teacher for a code question, then press Check my code.");
     const ticket = Object.freeze({ actorKey: actorKey.value, conversationId: product.value.conversationId,
       reference, gestureId: crypto.randomUUID(), control: "code-submit",
@@ -229,6 +233,9 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
       }
     }, { flush: "sync" });
   }
-  onBeforeUnmount(() => { nativeTickets.clear(); mounted = false; });
+  // Main builds this owner inside its retained conversation scope, which can
+  // outlive the component whose setup first created it; the owner ends with
+  // its own scope, not with whichever component happened to be mounting.
+  onScopeDispose(() => { nativeTickets.clear(); mounted = false; });
   return nativeGestureOwner;
 }

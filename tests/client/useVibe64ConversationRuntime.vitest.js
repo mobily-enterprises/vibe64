@@ -891,6 +891,48 @@ it("actual retained Main snapshot/client feeds the same original three-control c
   expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(3);
 });
 
+it("a retained Main lesson owner still submits a genuine code press after the component that created it remounts", async () => {
+  const attempt = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const channel = ref(null), layout = ref(null), view = ref(null);
+  const body = ref({ actorKey: "owner", conversationId: "real-general", visible: false, compact: false });
+  const query = new QueryClient({ defaultOptions: { queries: { retry: false } } }); releases.push(() => query.clear());
+  const f = fixture({ learningAttemptId: attempt, learnerId: "own", noExercise: false, sourceProjectSlug: "practice",
+    projectSlug: "", sessionId: "saved-initial", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    beforeMount(app) { app.use(VueQueryPlugin, { queryClient: query });
+      for (const [key, value] of [[VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel], [VIBE64_COLLEAGUE_BODY_KEY, body],
+        [VIBE64_COLLEAGUE_VIEW_KEY, view], [VIBE64_COLLEAGUE_LAYOUT_KEY, layout]]) app.provide(key, value); } });
+  await vi.waitFor(() => expect(f.runtime.value).toBeTruthy());
+  const runtime = f.runtime.value, identity = runtime.identity;
+  // Another reader (voice, presentation) keeps the same retained conversation
+  // while the view that first created it is replaced, as when the learner
+  // switches the lesson to its Workspace view.
+  const retained = runtime.retain(); releases.push(() => retained.release());
+  await f.remountReader();
+  expect(f.runtime.value).toBe(runtime);
+  view.value = { learningBinding: identity, sessionId: "saved-initial", ready: true, conversationId: "",
+    temporarySelected: false, hostConversationSelected: false, pane: "dashboard" };
+  layout.value = { projectSlug: "practice", learningAttemptId: attempt, learnerId: "own", ready: true,
+    chatVisible: true, projectVisible: true };
+  const question = { attemptId: attempt, questionId: "notes-title", assessmentId: "code-notes-title",
+    issuedRevision: 2, topicHash: "c".repeat(64), lessonHash: "d".repeat(64) };
+  f.snapshot(identity, { trainingQuestion: question });
+  await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
+  const owner = channel.value;
+  expect(owner.matchesLearning(identity)).toBe(true);
+  mocks.request.mockResolvedValueOnce({ ok: true, checkOutcome: "passed" });
+  await expect(owner.submitCode({ type: "click", isTrusted: true })).resolves.toEqual({ ok: true, checkOutcome: "passed" });
+  const observations = mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"));
+  expect(observations).toHaveLength(1);
+  expect(observations[0][0]).toBe(`/api/learning/${attempt}/vibe64/sessions/saved-initial/training/observations`);
+  expect(observations[0][1].body).toMatchObject({ control: "code-submit", reference: question,
+    workspace: { projectSlug: "practice", sessionId: "saved-initial", pane: "dashboard", ready: true } });
+  // Every refusal is a visible reason, never a silent no-op.
+  await expect(owner.submitCode({ type: "click", isTrusted: false })).rejects.toThrow(/Check my code/u);
+  f.viewer.value = { actorKey: "another" };
+  await expect(owner.submitCode({ type: "click", isTrusted: true })).rejects.toThrow(/Check my code/u);
+  expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(1);
+});
+
 it("source-less Learning Main exposes its exact polling task without inventing a workspace collector", async () => {
   const attempt = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
   const channel = ref(null), layout = ref(null), view = ref(null);

@@ -326,7 +326,7 @@ test("Check my code sends one genuine code-submit press for the current delivere
     return () => null;
   } });
   app.mount({}); t.after(() => app.unmount());
-  assert.equal(await gestures.submitCode({ isTrusted: false, type: "click" }), null, "a synthetic press is not the learner's");
+  await assert.rejects(gestures.submitCode({ isTrusted: false, type: "click" }), /Press Check my code yourself/u, "a synthetic press is not the learner's");
   assert.equal((await gestures.submitCode({ isTrusted: true, type: "click" })).checkOutcome, "passed");
   const { extra: _extra, ...reference } = question;
   assert.equal(requests.length, 1);

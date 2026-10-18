@@ -1830,14 +1830,16 @@ watch(learningDatabaseAvailable, available => {
 async function checkLearningCode(event) {
   const owner = learningGestures?.value;
   if (learningCodeChecking.value) return;
-  if (!owner?.submitCode) {
+  // Only Main's owner for this exact lesson carries its code question; the
+  // Colleague owner that fills an empty channel must not take the press.
+  if (!owner?.submitCode || owner.matchesLearning?.(props.conversationRuntime?.identity) !== true) {
     learningCodeResult.value = { error: true, message: "Open this lesson's Learning conversation, then press Check my code again." };
     return;
   }
   learningCodeChecking.value = true;
   try {
     const response = await owner.submitCode(event);
-    if (!response) return;
+    if (!response) throw new Error("Your code could not be checked. Press Check my code again.");
     learningCodeResult.value = response.checkOutcome === "passed"
       ? { message: "Your code passed the check. Now tell your teacher in Learning, in your own words, what you changed and why." }
       : { message: `Not yet: ${response.checkReason || "the check did not pass."}` };
