@@ -117,6 +117,33 @@ describe("teacher guide overlay", () => {
     expect(await showTrainingGuide(erd)).toEqual({ shown: true, step: "database-erd" });
   });
 
+  it("on a phone with no path step visible, rings the header pane switch with the whole path's caption", async () => {
+    mountOverlay();
+    document.controls[0].hidden = true; // the phone header hides the Dashboard tab
+    const chatToggle = control({ "data-vibe64-guide": "pane-switch" }, { top: 8, left: 8, width: 40, height: 40 });
+    const nextPane = control({ "data-vibe64-guide": "pane-switch" }, { top: 8, left: 300, width: 80, height: 40 });
+    document.controls.push(chatToggle, nextPane);
+    expect(await showTrainingGuide(erd)).toEqual({ shown: true, step: "pane-switch" });
+    await Vue.nextTick();
+    const node = overlay();
+    expect(node.props["data-guide-step"]).toBe("pane-switch");
+    expect(text(node).trim()).toBe("Dashboard → Database → ERD");
+    const ring = find(node, child => child.props.class === "training-guide-overlay__ring")[0];
+    expect(ring.props.style).toMatchObject({ left: "294px", width: "92px" });
+
+    // The same clearing rules apply: the first learner click clears it.
+    document.listeners.get("pointerdown")({ type: "pointerdown" });
+    await Vue.nextTick();
+    expect(overlay()).toBeUndefined();
+
+    // A visible path step always wins over the switch; no switch stays honest.
+    document.controls[0].hidden = false;
+    expect(await showTrainingGuide(erd)).toEqual({ shown: true, step: "dashboard" });
+    document.controls[0].hidden = true;
+    chatToggle.hidden = nextPane.hidden = true;
+    expect(await showTrainingGuide(erd)).toEqual({ shown: false, reason: "target-hidden" });
+  });
+
   it("clears after its time limit", async () => {
     mountOverlay();
     await showTrainingGuide(erd);
