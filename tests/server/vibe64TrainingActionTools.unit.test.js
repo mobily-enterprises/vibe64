@@ -151,6 +151,10 @@ test("learning polling reads one exact active pinned task and sends bounded guid
   assert.equal(result.task.attemptId, attemptId);
   assert.equal(result.task.conversationId, conversationId);
   assert.equal(result.task.criterion, "Open the lesson and explain the saved request flow.");
+  // A watched criterion is a whole installed rubric section, which can be several thousand characters.
+  const longCriterion = "Explain the title rule and why it protects the saved notes. ".repeat(60);
+  assert.equal((await c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
+    criterion: longCriterion })).task.criterion, longCriterion.trim());
   assert.equal(result.task.pin.topicHash, f.pin.topic.topicHash);
   assert.equal(result.task.pin.lessonHash, f.pin.lesson.hash);
   assert.equal(result.task.progress.revision, reserved.revision);

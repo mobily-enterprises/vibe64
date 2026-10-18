@@ -80,7 +80,7 @@ const learningWatchFields = {
   topicHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
   lessonHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
   reference: trainingQuestionField,
-  criterion: { ...text, maxLength: 2000 }
+  criterion: { ...text, maxLength: 16000 }
 };
 const learningObservationFields = {
   watchId: clientId, learningClientId: clientId, eventId: clientId,

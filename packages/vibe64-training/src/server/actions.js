@@ -19,7 +19,7 @@ const pollingFields = {
   topicHash: { ...text, required: false, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
   lessonHash: { ...text, required: false, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
   reference: trainingQuestionField,
-  criterion: { type: "string", required: false, noTrim: false, minLength: 1, maxLength: 2000 }
+  criterion: { type: "string", required: false, noTrim: false, minLength: 1, maxLength: 16000 }
 };
 const learningSessionSummary = { type: "object", required: true, schema: createSchema({
   sessionId: id, sessionName: { ...text, minLength: 0, maxLength: 1024 },
