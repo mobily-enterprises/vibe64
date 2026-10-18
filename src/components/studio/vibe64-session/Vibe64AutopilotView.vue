@@ -837,6 +837,8 @@
           :session-id="selectedAssistantSessionId"
         >
           <template #lessons>
+            <slot name="learning" :dashboard-context="dashboardContext" />
+            <!-- Check my code docks at the bottom of the Learning pane so the pane opens on the Courses hero. -->
             <div v-if="practiceLesson" class="studio-autopilot__learning-code-check" :class="`is-${learningCodeState}`">
               <span class="studio-autopilot__learning-code-badge" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path :d="learningCodeIcons[learningCodeState]" /></svg>
@@ -844,7 +846,7 @@
               <div class="studio-autopilot__learning-code-status" role="status" aria-live="polite">
                 <p class="studio-autopilot__learning-code-title">{{ learningCodeTitles[learningCodeState] }}</p>
                 <p class="studio-autopilot__learning-code-message">
-                  {{ learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
+                  {{ learningCodeChecking ? "Running this lesson's check on your saved files…" : learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
                 </p>
               </div>
               <v-btn
@@ -861,7 +863,6 @@
               </v-btn>
               <v-progress-linear v-if="learningCodeChecking" class="studio-autopilot__learning-code-progress" color="primary" indeterminate rounded />
             </div>
-            <slot name="learning" :dashboard-context="dashboardContext" />
           </template>
           <template #default="{ appVisible, presentation }">
             <Vibe64ProjectOnboarding
@@ -2233,21 +2234,26 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* Check my code: a compact "run check" card whose tone follows the real result. */
+/* Check my code: a compact "run check" bar docked at the bottom of the Learning
+   pane (like a code-school Run bar); its tone follows the real result. */
 .studio-autopilot__learning-code-check {
   --code-check-tone: rgb(var(--v-theme-primary));
-  --code-check-container: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05));
+  --code-check-container: color-mix(in srgb, var(--v64-surface-container-high, rgb(var(--v-theme-surface))) 92%, transparent);
   align-items: center;
+  backdrop-filter: blur(8px);
   background: var(--code-check-container);
   border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
   border-radius: var(--v64-shape-lg, 16px);
+  bottom: var(--v64-space-3, 12px);
+  box-shadow: var(--v64-elevation-3, 0 4px 12px rgba(0, 0, 0, 0.16));
   display: flex;
   flex-wrap: wrap;
-  gap: var(--v64-space-3, 12px);
-  margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  gap: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  margin: var(--v64-space-2, 8px) var(--v64-space-4, 16px) var(--v64-space-3, 12px);
   overflow: hidden;
-  padding: var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-3, 12px);
-  position: relative;
+  padding: var(--v64-space-2, 8px) var(--v64-space-2, 8px) var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  position: sticky;
+  z-index: 2;
   transition: background-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease),
     border-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease);
 }
@@ -2274,15 +2280,15 @@ onBeforeUnmount(() => {
   color: rgb(var(--v-theme-surface));
   display: grid;
   flex: 0 0 auto;
-  height: 40px;
+  height: 36px;
   place-items: center;
-  width: 40px;
+  width: 36px;
 }
 .studio-autopilot__learning-code-check.is-not-yet .studio-autopilot__learning-code-badge {
   background: var(--v64-learning, #f5c518);
   color: var(--v64-on-learning, #2b2100);
 }
-.studio-autopilot__learning-code-badge svg { fill: currentColor; height: 22px; width: 22px; }
+.studio-autopilot__learning-code-badge svg { fill: currentColor; height: 20px; width: 20px; }
 .studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-badge svg {
   animation: studio-autopilot-code-spin 1.2s linear infinite;
 }
@@ -2297,14 +2303,16 @@ onBeforeUnmount(() => {
 }
 .studio-autopilot__learning-code-status p { margin: 0; overflow-wrap: anywhere; }
 .studio-autopilot__learning-code-title {
-  color: var(--code-check-tone);
-  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
+  color: color-mix(in srgb, var(--code-check-tone) 62%, rgb(var(--v-theme-on-surface)));
+  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
+  font-weight: 600;
 }
 .studio-autopilot__learning-code-check.is-idle .studio-autopilot__learning-code-title,
 .studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-title { color: inherit; }
 .studio-autopilot__learning-code-message {
   color: var(--v64-on-surface-variant, rgba(var(--v-theme-on-surface), 0.72));
-  font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
+  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
+  font-weight: 400;
 }
 .studio-autopilot__learning-code-check:not(.is-idle):not(.is-checking) .studio-autopilot__learning-code-message { color: rgb(var(--v-theme-on-surface)); }
 .studio-autopilot__learning-code-button { letter-spacing: 0; padding-inline: 20px; text-transform: none; }
@@ -2313,7 +2321,19 @@ onBeforeUnmount(() => {
 @keyframes studio-autopilot-code-spin { to { transform: rotate(360deg); } }
 @keyframes studio-autopilot-code-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
 @media (max-width: 599px) {
-  .studio-autopilot__learning-code-button { flex: 1 1 100%; }
+  /* Phone: one compact row; an idle hint is clamped, real results are shown in full. */
+  .studio-autopilot__learning-code-check {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    margin-inline: var(--v64-space-2, 8px);
+  }
+  .studio-autopilot__learning-code-button { padding-inline: 14px; }
+  .studio-autopilot__learning-code-check.is-idle .studio-autopilot__learning-code-message {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .studio-autopilot__learning-code-check,

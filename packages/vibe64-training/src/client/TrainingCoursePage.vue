@@ -1,6 +1,8 @@
 <script setup>
 import { computed } from "vue";
-import { offered, statusLabels } from "./courseProgress.js";
+import { courseStatusLabel, offered, statusLabels } from "./courseProgress.js";
+import TrainingCourseArt from "./TrainingCourseArt.vue";
+import TrainingProgressRing from "./TrainingProgressRing.vue";
 
 // Presentational course page. The parent picker owns every start/resume gate
 // and emits only the original start and resume intents. Every mastery state,
@@ -13,10 +15,8 @@ const props = defineProps({
 });
 const emit = defineEmits(["back", "start", "resume"]);
 
-const percent = computed(() => props.progress.total ? Math.round(100 * props.progress.completed / props.progress.total) : 0);
 const complete = computed(() => Boolean(props.progress.total && props.progress.completed === props.progress.total));
-const availability = computed(() => !props.course.enabled ? "Disabled for new lessons"
-  : props.course.status === "released" ? "Enabled" : "Preview course");
+const availability = computed(() => courseStatusLabel(props.course));
 const isNext = lesson => Boolean(props.progress.next && props.progress.next.code === lesson.code && props.progress.next.hash === lesson.hash);
 // One running step number across topics so the path reads as one journey.
 const path = computed(() => {
@@ -40,30 +40,23 @@ const path = computed(() => {
     </div>
 
     <header class="training-course-page__hero" :class="{ 'is-complete': complete }">
-      <svg class="training-course-page__hero-art" viewBox="0 0 240 120" aria-hidden="true" focusable="false">
-        <circle cx="206" cy="18" r="44" class="art-a" />
-        <circle cx="236" cy="104" r="30" class="art-b" />
-        <path d="M120 112c26-28 54-18 74-44s40-30 64-26" class="art-line" />
-        <circle cx="194" cy="68" r="5" class="art-dot" />
-        <circle cx="160" cy="92" r="4" class="art-dot" />
-      </svg>
-      <div class="training-course-page__hero-text">
-        <p class="training-course-page__eyebrow">Course</p>
-        <h3 class="training-course-page__title">{{ course.title }}</h3>
-        <div class="training-course-page__meta">
-          <span class="training-course-page__chip">{{ course.courseId }}</span>
-          <span class="training-course-page__chip">{{ course.release }}</span>
-          <span class="training-course-page__chip" :class="{ 'is-muted': !course.enabled || course.status !== 'released' }">{{ availability }}</span>
+      <TrainingCourseArt class="training-course-page__cover" :course-id="course.courseId" :title="course.title"
+        :statuses="progress.lessons.map(value => value.status)" />
+      <div class="training-course-page__hero-body">
+        <div class="training-course-page__hero-text">
+          <p class="training-course-page__eyebrow">Course</p>
+          <h3 class="training-course-page__title">{{ course.title }}</h3>
+          <div class="training-course-page__meta">
+            <span class="training-course-page__chip"><code>{{ course.courseId }} · {{ course.release }}</code></span>
+            <span class="training-course-page__chip" :class="{ 'is-muted': !course.enabled || course.status !== 'released' }">{{ availability }}</span>
+            <span class="training-course-page__chip">{{ progress.topics.length }} {{ progress.topics.length === 1 ? 'topic' : 'topics' }}</span>
+          </div>
+          <p class="training-course-page__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
         </div>
-        <p class="training-course-page__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
-      </div>
-      <div class="training-course-page__ring">
-        <v-progress-circular
-          :model-value="percent" :size="88" :width="8" color="primary" bg-color="surface-variant"
-          role="progressbar" :aria-label="`${progress.completed} of ${progress.total} lessons complete`"
-        >
-          <span class="training-course-page__ring-value" aria-hidden="true">{{ percent }}<small>%</small></span>
-        </v-progress-circular>
+        <TrainingProgressRing class="training-course-page__ring" :value="progress.completed" :max="progress.total" :size="88" :stroke="9"
+          :label="`${progress.completed} of ${progress.total} lessons complete`">
+          <span class="training-course-page__ring-value"><strong>{{ progress.completed }}</strong>/{{ progress.total }}</span>
+        </TrainingProgressRing>
       </div>
     </header>
 
@@ -154,32 +147,31 @@ const path = computed(() => {
 .training-course-page__back-btn { letter-spacing: 0; text-transform: none; }
 .training-course-page__back-icon { width: 20px; height: 20px; margin-inline-end: 4px; fill: currentColor; }
 
-/* Hero */
+/* Hero: the shared course cover above a tonal summary, matching the course cards. */
 .training-course-page__hero {
   position: relative;
+  border-radius: var(--v64-shape-xl, 28px);
+  background: var(--v64-surface-container-low, rgb(var(--v-theme-surface)));
+  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
+  color: var(--v64-on-surface, rgb(var(--v-theme-on-surface)));
+  overflow: hidden;
+  animation: tcp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out) both;
+}
+.training-course-page__cover { height: 120px; }
+.training-course-page__hero-body {
   display: flex;
   align-items: center;
   gap: var(--v64-space-4, 16px);
-  padding: var(--v64-space-5, 24px);
-  border-radius: var(--v64-shape-xl, 28px);
-  background: linear-gradient(135deg, var(--v64-learning-container, rgba(245, 197, 24, 0.22)), var(--v64-surface-container-high, rgba(var(--v-theme-primary), 0.08)));
-  color: var(--v64-on-surface, rgb(var(--v-theme-on-surface)));
-  overflow: hidden;
-  isolation: isolate;
-  animation: tcp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out) both;
+  padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px) var(--v64-space-5, 24px);
 }
-.training-course-page__hero-art { position: absolute; inset: 0 0 auto auto; width: 240px; height: 120px; z-index: -1; opacity: 0.9; }
-.training-course-page__hero-art .art-a { fill: rgba(var(--v-theme-primary), 0.1); }
-.training-course-page__hero-art .art-b { fill: rgba(245, 197, 24, 0.28); }
-.training-course-page__hero-art .art-line { fill: none; stroke: rgba(var(--v-theme-primary), 0.28); stroke-width: 3; stroke-dasharray: 2 8; stroke-linecap: round; }
-.training-course-page__hero-art .art-dot { fill: rgba(var(--v-theme-primary), 0.4); }
 .training-course-page__hero-text { flex: 1 1 auto; min-width: 0; }
 .training-course-page__eyebrow {
   margin: 0;
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--v64-on-learning-container, inherit);
+  color: var(--v64-on-surface-variant, inherit);
 }
 .training-course-page__title { margin: 2px 0 var(--v64-space-2, 8px); font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif); }
 .training-course-page__meta { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -190,15 +182,15 @@ const path = computed(() => {
   padding: 0 10px;
   border: 1px solid var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
   border-radius: var(--v64-shape-sm, 8px);
-  background: rgba(var(--v-theme-surface), 0.6);
   font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
 }
+.training-course-page__chip code { font: inherit; background: none; padding: 0; }
 .training-course-page__chip.is-muted { color: var(--v64-on-surface-variant, inherit); border-style: dashed; }
 .training-course-page__count { margin: var(--v64-space-3, 12px) 0 0; font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
-.training-course-page__ring { flex: 0 0 auto; }
-.training-course-page__ring-value { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); }
-.training-course-page__ring-value small { font-size: 0.7em; opacity: 0.7; }
-.training-course-page__ring :deep(.v-progress-circular__overlay) { stroke-linecap: round; transition: stroke-dashoffset var(--v64-duration-long, 500ms) var(--v64-ease-emphasized, ease); }
+.training-course-page__ring { --training-ring-color: var(--v64-primary); --training-ring-track: color-mix(in srgb, var(--v64-primary, #6750a4) 16%, transparent); }
+.is-complete .training-course-page__ring { --training-ring-color: rgb(var(--v-theme-success)); }
+.training-course-page__ring-value { font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant, inherit); }
+.training-course-page__ring-value strong { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); color: var(--v64-on-surface, inherit); }
 
 /* Up next */
 .training-course-page__next {
@@ -337,9 +329,11 @@ const path = computed(() => {
 @keyframes tcp-pulse { 0% { transform: scale(0.92); opacity: 0.9; } 70% { transform: scale(1.18); opacity: 0; } 100% { opacity: 0; } }
 
 @media (max-width: 599px) {
-  .training-course-page__hero { padding: var(--v64-space-4, 16px); align-items: flex-start; }
-  .training-course-page__ring :deep(.v-progress-circular) { width: 64px !important; height: 64px !important; }
-  .training-course-page__ring-value { font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif); }
+  .training-course-page__hero-body { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px) var(--v64-space-4, 16px); align-items: flex-start; }
+  .training-course-page__cover { height: 96px; }
+  .training-course-page__ring { width: 64px !important; height: 64px !important; }
+  .training-course-page__ring-value strong { font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
+  .training-course-page__title { margin-bottom: var(--v64-space-1, 4px); }
   .training-course-page__title { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); }
   .training-course-page__next { padding-inline-start: var(--v64-space-4, 16px); }
   .training-course-page__next .v-btn { flex: 1 1 100%; }
