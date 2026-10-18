@@ -1258,6 +1258,11 @@ function saveDiagramLayout(layout) {
   const previousLayout = erdLayout.value;
   const pending = JSON.parse(JSON.stringify(layout));
   pending.revision = previousLayout.revision || 0;
+  // Learning shows the lesson database read-only: arrange the diagram locally.
+  if (props.learningAttemptId) {
+    erdLayout.value = pending;
+    return diagramSaveQueue;
+  }
   diagramSavesPending.value += 1;
   erdLayout.value = pending;
   diagramSaveQueue = diagramSaveQueue.catch(() => null).then(async () => {
