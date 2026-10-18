@@ -351,14 +351,15 @@ onBeforeUnmount(() => {
 :global(body.studio-home-shell-active) {
   --studio-home-chat-column-width: 32rem;
   --studio-home-project-gap: 0.75rem;
-  --studio-control-bg: #ffffff;
-  --studio-control-rest-bg: #f7f7f8;
-  --studio-control-active-bg: #e7e7e7;
-  --studio-control-border: rgba(17, 24, 39, 0.12);
-  --studio-control-border-strong: rgba(17, 24, 39, 0.18);
-  --studio-control-text: #202124;
-  --studio-control-muted-text: #5f6368;
-  --studio-control-radius: 7px;
+  /* Shared studio control roles, mapped onto the Material 3 tokens. */
+  --studio-control-bg: var(--v64-surface);
+  --studio-control-rest-bg: var(--v64-surface-container-high);
+  --studio-control-active-bg: var(--v64-secondary-container);
+  --studio-control-border: var(--v64-outline-variant);
+  --studio-control-border-strong: var(--v64-outline);
+  --studio-control-text: var(--v64-on-surface);
+  --studio-control-muted-text: var(--v64-on-surface-variant);
+  --studio-control-radius: var(--v64-shape-md);
 }
 
 .generated-ui-screen {
@@ -422,18 +423,22 @@ onBeforeUnmount(() => {
 }
 
 .studio-home-shell-project-selector {
-  border-radius: 6px;
-  color: rgb(var(--v-theme-on-surface)) !important;
+  border-radius: var(--v64-shape-full);
+  color: var(--v64-on-surface) !important;
   flex: 0 1 auto;
-  font-size: 1rem;
-  font-weight: 720;
+  font: var(--v64-type-title-md);
+  font-size: 1.0625rem;
   justify-content: start;
-  letter-spacing: 0;
-  line-height: 1.2;
+  letter-spacing: -0.005em;
   max-width: 100%;
   min-width: 0;
-  padding-inline: 0.45rem;
+  padding-inline: var(--v64-space-3) var(--v64-space-2);
   text-transform: none;
+}
+
+.studio-home-shell-project-selector :deep(.v-icon) {
+  color: var(--v64-on-surface-variant);
+  margin-inline-start: var(--v64-space-1);
 }
 
 .studio-home-shell-project-selector :deep(.v-btn__content) {
@@ -523,59 +528,128 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+/* M3 tonal icon button: circular, surface-container tone, state layer on
+   hover/press. */
 .studio-home-shell-chat-toggle {
-  flex: 0 0 auto;
-  background: var(--studio-control-rest-bg) !important;
-  border: 1px solid transparent;
+  background: var(--v64-surface-container-high) !important;
+  border: 0;
+  border-radius: var(--v64-shape-full);
   box-shadow: none;
-  color: var(--studio-control-text) !important;
-  height: 2rem;
-  min-height: 2rem;
-  min-width: 2rem;
-  width: 2rem;
+  color: var(--v64-on-surface-variant) !important;
+  flex: 0 0 auto;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  min-width: 2.25rem;
+  transition: background-color var(--v64-duration-short) var(--v64-ease-standard);
+  width: 2.25rem;
 }
 
 .studio-home-shell-chat-toggle:hover {
-  background: var(--studio-control-active-bg) !important;
+  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--v64-surface-container-high)) !important;
 }
 
+/* M3 segmented button: an outlined pill of equal-width segments split by
+   hairlines. The selected segment fills with the secondary container and
+   gains a check that slides in; the graduation cap is a full, equal segment
+   whose selected state is the warm Learning container. */
 .studio-home-shell-project-tabs {
-  align-items: center;
-  background: var(--studio-control-rest-bg);
-  border: 1px solid var(--studio-control-border);
-  border-radius: var(--studio-control-radius);
-  display: inline-flex;
+  border: 1px solid var(--v64-outline);
+  border-radius: var(--v64-shape-full);
+  display: inline-grid;
   flex: 0 0 auto;
-  gap: 0.08rem;
+  grid-auto-columns: minmax(5.25rem, 1fr);
+  grid-auto-flow: column;
   min-width: 0;
-  padding: 0.1rem;
+  overflow: hidden;
 }
 
 .studio-home-shell-project-tab {
+  align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 5px;
-  color: var(--studio-control-muted-text);
+  border-inline-start: 1px solid var(--v64-outline);
+  color: var(--v64-on-surface);
   cursor: pointer;
-  flex: 0 0 auto;
-  font: inherit;
-  font-size: 0.92rem;
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 1.15;
-  min-height: 1.75rem;
-  padding: 0.24rem 0.78rem;
+  display: inline-flex;
+  font: var(--v64-type-label-lg);
+  gap: var(--v64-space-1);
+  height: 2.25rem;
+  justify-content: center;
+  letter-spacing: 0.01em;
+  min-width: 0;
+  padding: 0 var(--v64-space-3);
+  position: relative;
+  transition:
+    background-color var(--v64-duration-short) var(--v64-ease-standard),
+    color var(--v64-duration-short) var(--v64-ease-standard);
+  white-space: nowrap;
 }
 
-.studio-home-shell-project-tab:hover {
-  color: var(--studio-control-text);
+.studio-home-shell-project-tab:first-child {
+  border-inline-start: 0;
+}
+
+.studio-home-shell-project-tab::after {
+  background: currentColor;
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--v64-duration-short) var(--v64-ease-standard);
+}
+
+.studio-home-shell-project-tab:hover:not(:disabled)::after {
+  opacity: var(--v64-state-hover);
+}
+
+.studio-home-shell-project-tab:active:not(:disabled)::after {
+  opacity: var(--v64-state-pressed);
+}
+
+.studio-home-shell-project-tab:focus-visible {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: -4px;
 }
 
 .studio-home-shell-project-tab--active {
-  background: var(--studio-control-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-  color: var(--studio-control-text);
-  font-weight: 590;
+  background: var(--v64-secondary-container);
+  color: var(--v64-on-secondary-container);
+  font-weight: 600;
+}
+
+.studio-home-shell-project-tab--active::before {
+  animation: studio-home-shell-check-in var(--v64-duration-medium) var(--v64-ease-emphasized-decelerate);
+  background: currentColor;
+  content: "";
+  flex: 0 0 auto;
+  height: 1.125rem;
+  -webkit-mask: var(--studio-home-shell-check) center / contain no-repeat;
+  mask: var(--studio-home-shell-check) center / contain no-repeat;
+  width: 1.125rem;
+}
+
+.studio-home-shell-project-tabs {
+  --studio-home-shell-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+}
+
+.studio-home-shell-project-tab[data-vibe64-guide="learning"] {
+  color: var(--v64-on-learning-container);
+}
+
+.studio-home-shell-project-tab--active[data-vibe64-guide="learning"] {
+  background: var(--v64-learning-container);
+  box-shadow: inset 0 -2px 0 var(--v64-learning-strong);
+}
+
+.studio-home-shell-project-tab:disabled {
+  color: color-mix(in srgb, var(--v64-on-surface) 38%, transparent);
+  cursor: not-allowed;
+}
+
+@keyframes studio-home-shell-check-in {
+  from { opacity: 0; width: 0; }
+  to { opacity: 1; width: 1.125rem; }
 }
 
 .studio-home-shell-preview-toolbar-host {
@@ -591,30 +665,47 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+/* Phone "next pane" control: an M3 tonal pill button with a 40px target;
+   heading to Learning it takes the warm Learning container. */
 .studio-home-shell-project-mobile-action {
   align-items: center;
-  background: var(--studio-control-rest-bg);
-  border: 1px solid var(--studio-control-border);
-  border-radius: var(--studio-control-radius);
-  color: var(--studio-control-text);
+  background: var(--v64-secondary-container);
+  border: 0;
+  border-radius: var(--v64-shape-full);
+  color: var(--v64-on-secondary-container);
   cursor: pointer;
   display: none;
   flex: 0 0 auto;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 590;
-  gap: 0.2rem;
+  font: var(--v64-type-label-lg);
+  gap: var(--v64-space-1);
   justify-content: center;
-  letter-spacing: 0;
-  line-height: 1.15;
-  min-height: 2rem;
-  min-width: 4.25rem;
-  padding: 0.28rem 0.62rem;
+  letter-spacing: 0.01em;
+  min-height: 2.5rem;
+  min-width: 4.5rem;
+  padding: 0 var(--v64-space-2) 0 var(--v64-space-4);
+  position: relative;
+  transition: background-color var(--v64-duration-short) var(--v64-ease-standard);
   white-space: nowrap;
 }
 
 .studio-home-shell-project-mobile-action:hover {
-  background: var(--studio-control-active-bg);
+  background: color-mix(in srgb, var(--v64-on-secondary-container) 8%, var(--v64-secondary-container));
+}
+
+.studio-home-shell-project-mobile-action:focus-visible {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: var(--v64-focus-ring-offset);
+}
+
+.studio-home-shell-project-mobile-action[aria-label="Go to learning"] {
+  background: var(--v64-learning-container);
+  color: var(--v64-on-learning-container);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-home-shell-project-tab--active::before {
+    animation: none;
+  }
 }
 
 @media (min-width: 981px) {
@@ -650,10 +741,6 @@ onBeforeUnmount(() => {
     max-width: min(26rem, 42vw);
   }
 
-  .studio-home-shell-project-tab {
-    font-size: 0.86rem;
-    padding-inline: 0.58rem;
-  }
 }
 
 @media (max-width: 600px) {
@@ -682,17 +769,9 @@ onBeforeUnmount(() => {
     max-width: min(12rem, 32vw);
   }
 
-  .studio-home-shell-project-tab {
-    font-size: 0.78rem;
-    min-height: 1.65rem;
-    padding: 0.2rem 0.38rem;
-  }
-
   .studio-home-shell-project-mobile-action {
-    font-size: 0.82rem;
-    min-height: 1.85rem;
-    min-width: 3.85rem;
-    padding: 0.22rem 0.5rem;
+    min-width: 4rem;
+    padding-inline: var(--v64-space-3) var(--v64-space-1);
   }
 
   .studio-home-shell-title-area {
@@ -702,6 +781,14 @@ onBeforeUnmount(() => {
   .studio-home-shell-project-selector {
     font-size: 0.95rem;
     max-width: calc(100vw - 16rem);
+    padding-inline: var(--v64-space-1);
+  }
+
+  .studio-home-shell-chat-toggle {
+    height: 2.5rem;
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+    width: 2.5rem;
   }
 
   .studio-home-shell-project-controls {

@@ -52,6 +52,19 @@
   --v64-type-label-lg: 500 0.875rem/1.25rem system-ui, sans-serif;
   --v64-type-label-md: 500 0.75rem/1rem system-ui, sans-serif;
 
+  /* Focus ring shared by custom (non-Vuetify) controls */
+  --v64-focus-ring-width: 2px;
+  --v64-focus-ring-offset: 2px;
+
+  /* Top app bar */
+  --v64-app-bar-height: 56px;
+}
+
+/* Colour roles are declared on every Vuetify theme scope as well as :root so a
+   nested light/dark theme resolves them against its own palette. */
+:root,
+.v-theme--light,
+.v-theme--dark {
   /* Surface container tiers derived from the theme surface and primary */
   --v64-surface: rgb(var(--v-theme-surface));
   --v64-on-surface: rgb(var(--v-theme-on-surface));
@@ -78,6 +91,39 @@
   --v64-learning-container: color-mix(in srgb, #f5c518 22%, rgb(var(--v-theme-surface)));
   --v64-on-learning-container: color-mix(in srgb, #6b5000 85%, rgb(var(--v-theme-on-surface)));
   --v64-learning-tint: color-mix(in srgb, #f5c518 7%, rgb(var(--v-theme-surface)));
+
+  /* Secondary (selected-state) roles used by segmented buttons, navigation
+     items and selected chips */
+  --v64-secondary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 15%, rgb(var(--v-theme-surface)));
+  --v64-on-secondary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 45%, rgb(var(--v-theme-on-surface)));
+  --v64-focus-ring-color: rgb(var(--v-theme-primary));
+
+  /* Learning mode chrome: a deeper amber for strokes, a soft glow and the
+     warm wash behind the top app bar */
+  --v64-learning-strong: #c99a00;
+  --v64-learning-glow: color-mix(in srgb, #f5c518 42%, transparent);
+  --v64-learning-app-bar: linear-gradient(90deg,
+    color-mix(in srgb, #f5c518 26%, rgb(var(--v-theme-surface))) 0%,
+    color-mix(in srgb, #f5c518 12%, rgb(var(--v-theme-surface))) 38%,
+    color-mix(in srgb, #f5c518 7%, rgb(var(--v-theme-surface))) 100%);
+}
+
+/* Dark: lighter on-containers and a gentler warm wash keep AA contrast. */
+.v-theme--dark {
+  --v64-on-primary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 35%, rgb(var(--v-theme-on-surface)));
+  --v64-on-secondary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 25%, rgb(var(--v-theme-on-surface)));
+  --v64-secondary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 24%, rgb(var(--v-theme-surface)));
+  --v64-learning-container: color-mix(in srgb, #f5c518 20%, rgb(var(--v-theme-surface)));
+  --v64-on-learning-container: color-mix(in srgb, #f5c518 40%, #ffffff);
+  --v64-learning-tint: color-mix(in srgb, #f5c518 5%, rgb(var(--v-theme-surface)));
+  --v64-learning-strong: #f5c518;
+  --v64-learning-app-bar: linear-gradient(90deg,
+    color-mix(in srgb, #f5c518 16%, rgb(var(--v-theme-surface))) 0%,
+    color-mix(in srgb, #f5c518 7%, rgb(var(--v-theme-surface))) 45%,
+    color-mix(in srgb, #f5c518 4%, rgb(var(--v-theme-surface))) 100%);
+  --v64-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.2);
+  --v64-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 6px 2px rgba(0, 0, 0, 0.24);
+  --v64-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.24), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {
