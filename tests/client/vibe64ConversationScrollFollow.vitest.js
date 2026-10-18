@@ -635,6 +635,35 @@ describe("Vibe64 conversation scroll following", () => {
     mounted.app.unmount();
   });
 
+  it("shows a delivered Learning watch observation as a short status line, never its teacher prompt", async () => {
+    const evidence = { outcome: "confirmed", control: "view-change", origin: "view",
+      workspace: { projectSlug: "training-1", sessionId: "training-1", pane: "preview", ready: true, learningView: "workspace" } };
+    const prompt = [
+      "A supervised Learning observation is available for this exact pinned lesson.",
+      "Current lesson outcome or criterion: Watch me while I do my lesson's practice task.",
+      `Observed application fact: ${JSON.stringify({ evidence, progress: { revision: 9 } })}`,
+      "Treat this as application-origin context, not as the learner's authored answer and not as assessment evidence."
+    ].join("\n");
+    const user = { at: "2026-10-18T05:28:24.577Z", messageId: "learning-guidance-edf2b224", role: "user", text: prompt };
+    const reply = { at: "2026-10-18T05:28:34.516Z", messageId: "guidance-reply", role: "assistant",
+      text: "You're in Preview and it's ready. Go ahead and add your note." };
+    const forged = { ...userTurn("own"), user: { ...userTurn("own").user, messageId: "learning-guidance-own", text: "My own words." } };
+    const mounted = mountConversation({ turns: [{ turnId: "000002", user, messages: [user, reply] }, forged] });
+    await nextTick();
+    // Rendered words live in text nodes, Markdown blocks and status-message props.
+    const rendered = node => [node.text || "", JSON.stringify(node.props?.blocks || ""), String(node.props?.message?.text || ""),
+      ...(node.children || []).map(rendered)].join("");
+    const text = rendered(mounted.container);
+    expect(text).toContain("Go ahead and add your note.");
+    expect(text).not.toContain("supervised Learning observation");
+    expect(text).not.toContain("Observed application fact");
+    expect(text).not.toContain("view-change");
+    expect(text).toContain("Watching: you are in Workspace → Preview.");
+    // Only the exact delivered guidance format is summarised; the learner's own words stay a user bubble.
+    expect(renderedUserPromptBlocks(mounted.container).some(block => block.text === "My own words.")).toBe(true);
+    mounted.app.unmount();
+  });
+
   it("expands agent Markdown without resetting on receipt updates", async () => {
     const body = "**Checks passed.**\n\n- Preview stopped automatically.\n- Registration remains usable.\n\n" + "Retained evidence. ".repeat(25) + "\n\n`final-proof.log`";
     const details = { sourceProject: "vibe64", sourceSession: "source", projectSlug: "online", sessionId: "destination", body, direction: "sent", status: "accepted" };

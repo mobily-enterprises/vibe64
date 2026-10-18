@@ -47,7 +47,8 @@
     "./server/presentation-coordination": "./src/server/presentationCoordination.js",
     "./server/learning-watch": "./src/server/learningWatchCoordinator.js",
     "./client/presentation-operation": "./src/client/presentationOperation.js",
-    "./shared/presentation-schemas": "./src/shared/presentationSchemas.js"
+    "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
+    "./shared/learning-guidance": "./src/shared/learningGuidance.js"
   },
   "jskit": {
     "kind": "runtime",

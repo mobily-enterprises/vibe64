@@ -166,6 +166,7 @@ import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
 
 const props = defineProps({
   voiceRuntime: { type: Object, default: null },
@@ -491,6 +492,11 @@ const adapter = computed(() => ({
         ...(turn.metadata?.projectMessage ? {
           user: null,
           system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
+        } : {}),
+        // A Learning watch wake is application-origin: show its short status, not the teacher prompt.
+        ...(learningGuidancePresentation(turn.user) ? {
+          user: null,
+          system: { ...turn.user, role: "system", text: learningGuidancePresentation(turn.user).text }
         } : {}),
         assistant: presentationMessage(turn.assistant, turn),
         thinking: turn.thinking?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),

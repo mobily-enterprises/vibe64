@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { LEARNING_GUIDANCE_MESSAGE_PREFIX } from "../shared/learningGuidance.js";
 import { conversationObservation, watchUpdate } from "@local/vibe64-core/server/watch-observations";
 
 const LEARNING_WATCH_SOURCE = "learning-task";
@@ -283,7 +284,7 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     const evidenceKey = JSON.stringify({ outcome: payload.outcome, control: payload.control, workspace: payload.workspace,
       failure: payload.failure || "", progressRevision: watch.learningTask?.progress?.revision });
     if (watch.lastGuidanceEvidenceKey !== evidenceKey && watch.pendingGuidance?.evidenceKey !== evidenceKey) {
-      watch.pendingGuidance = { guidanceId: `learning-guidance-${randomUUID()}`, evidenceKey,
+      watch.pendingGuidance = { guidanceId: `${LEARNING_GUIDANCE_MESSAGE_PREFIX}${randomUUID()}`, evidenceKey,
         evidence: structuredClone(payload) };
     }
     await read(state, watch, { clientId: watch.browserClientId, focus: connection.focus });

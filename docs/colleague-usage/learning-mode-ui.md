@@ -204,6 +204,11 @@ for that task's referenced assessment. A pass from another assessment does not
 complete your task. A task you describe in your own words has no automatic
 assessment match; polling and help do not grade it.
 You do not need to keep the dialog open.
+When a watched step reaches the lesson teacher, Main's chat shows a short status
+line such as “Watching: you are in Workspace → Preview.” followed by the teacher's
+reply. The teacher still receives the full observation; its internal prompt is
+not shown as a chat message. A failed step shows “Watching: that step did not
+finish.”; returning to the lesson shows “Watching: you are back in the lesson.”
 
 Polling reports only named Vibe64 controls, settled Workspace/Learning view and
 saved lesson progress. It never sends typed text, arbitrary page content,

@@ -363,6 +363,12 @@ authored answer or pass, and reuses its stable receipt on retry. Confirmed event
 may be related to the criterion; explicit settle/response failures may receive one
 hint. No inactivity event, second goal format or assessment write is added; the
 watcher's timer performs code-only reconciliation and never asks Main to observe.
+The wake's saved text is the teacher's full prompt and stays unchanged in
+history. Main's transcript presents a turn as that guidance only when its
+server-owned `learning-guidance-` message ID and exact heading both match the
+shared `learningGuidance` module that writes it; it then renders a short
+system status line instead of a learner bubble, as application-origin and
+project messages already do. Saved history needs no upgrade.
 
 The shared root provides the original companion refs and one actual Colleague
 body handle. Online keeps its authenticated AuthGate viewer and original host;

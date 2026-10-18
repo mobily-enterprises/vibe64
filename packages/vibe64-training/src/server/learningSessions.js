@@ -1,6 +1,7 @@
 import { addAbortListener } from "node:events";
 import { lstat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
+import { learningGuidanceText } from "../shared/learningGuidance.js";
 import { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 function learningError(code, message, statusCode = 409) {
@@ -11,17 +12,6 @@ const deferredGuidanceCodes = new Set([
   "conversation_busy", "conversation_not_steerable", "vibe64_opencode_conversation_busy",
   "vibe64_codex_app_server_runtime_busy", "vibe64_agent_write_mode_busy"
 ]);
-
-function guidanceText(task, evidence) {
-  return [
-    "A supervised Learning observation is available for this exact pinned lesson.",
-    `Current lesson outcome or criterion: ${task.criterion}`,
-    `Observed application fact: ${JSON.stringify({ evidence, progress: task.progress })}`,
-    "Treat this as application-origin context, not as the learner's authored answer and not as assessment evidence.",
-    "If the observation confirms meaningful progress, briefly connect it to the current criterion. If it reports a failure, explain only the supported failure and offer at most one useful hint. If it is insufficient, say so rather than inventing progress.",
-    "Do not mark an assessment passed, answer a pending question for the learner, create a second goal, or start an idle follow-up loop."
-  ].join("\n");
-}
 
 // Training derives authority and instructions from the saved reservation. Main's
 // original Project/Session/Runtime owners retain storage, routing and execution.
@@ -444,7 +434,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       const current = await conversation.read({ limit: "1" });
       if (current.status !== "ready") return { status: "deferred" };
       try {
-        const receipt = await conversation.wake({ messageId: guidanceId, text: guidanceText(task, evidence),
+        const receipt = await conversation.wake({ messageId: guidanceId, text: learningGuidanceText(task, evidence),
           data: { learningGuidance: { attemptId, sessionId, pin: task.pin, evidence,
             progress: task.progress, criterion: task.criterion } } });
         return { status: receipt?.duplicate === true ? "duplicate" : "accepted" };

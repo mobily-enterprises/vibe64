@@ -758,6 +758,11 @@ test("supervised learning guidance defers to an active learner turn and wakes th
   assert.match(wakes[0].text, /not as the learner's authored answer/u);
   assert.match(wakes[0].text, /Do not mark an assessment passed/u);
   assert.deepEqual(wakes[0].data.learningGuidance.evidence, evidence);
+  // The transcript shows the learner this delivered prompt only as a short status line.
+  const { learningGuidancePresentation } = await import("../../packages/vibe64-training/src/shared/learningGuidance.js");
+  assert.deepEqual(learningGuidancePresentation({ role: "user", messageId: wakes[0].messageId, text: wakes[0].text }),
+    { text: "Watching: that step did not finish." });
+  assert.equal(learningGuidancePresentation({ role: "user", messageId: "learner-own", text: wakes[0].text }), null);
   assert.equal(openings.every(value => value.sessionId === f.sessionId &&
     value.options.browserAuthority.learningAttemptId === f.attemptId &&
     value.options.browserAuthority.actorId === "42"), true);
