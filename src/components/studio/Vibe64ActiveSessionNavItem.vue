@@ -81,7 +81,8 @@ function selectTool() {
     aria-label="Active session navigation"
   >
     <v-divider class="vibe64-active-session-nav-item__divider" />
-    <div class="vibe64-active-session-nav-item__heading">
+    <span class="vibe64-dashboard-nav-group-label">Session</span>
+    <div class="vibe64-active-session-nav-item__heading" :title="sessionNav.label">
       <span
         class="vibe64-active-session-nav-item__status"
         :class="statusClass"
@@ -105,39 +106,53 @@ function selectTool() {
 
 <style scoped>
 .vibe64-active-session-nav-item--heading {
+  display: grid;
+  gap: var(--v64-space-1, 4px);
   min-width: 0;
 }
 
 .vibe64-active-session-nav-item__divider {
-  margin: 0.35rem 0 0.4rem;
+  border-color: var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px) var(--v64-space-1, 4px);
+  opacity: 1;
+}
+
+.vibe64-dashboard-nav-group-label {
+  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.72));
+  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
+  letter-spacing: 0.06em;
+  padding: var(--v64-space-1, 4px) var(--v64-space-4, 16px) 0;
+  text-transform: uppercase;
 }
 
 .vibe64-active-session-nav-item__heading {
   align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.68);
+  background: var(--v64-surface-container-high, rgba(0, 0, 0, 0.06));
+  border-radius: var(--v64-shape-full, 999px);
+  color: var(--v64-on-surface, inherit);
   display: flex;
-  font-size: 0.78rem;
-  font-weight: 720;
-  gap: 0.45rem;
-  line-height: 1.2;
+  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
+  font-weight: 650;
+  gap: var(--v64-space-2, 8px);
+  margin: 0 var(--v64-space-1, 4px) var(--v64-space-1, 4px);
   min-width: 0;
-  padding: 0.3rem 0.65rem 0.25rem;
+  padding: 6px var(--v64-space-3, 12px);
 }
 
 .vibe64-active-session-nav-item__status {
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
-  box-shadow: 0 0 0 0.22rem rgba(var(--v-theme-primary), 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.16);
   flex: 0 0 auto;
-  height: 0.45rem;
-  width: 0.45rem;
+  height: 0.5rem;
+  width: 0.5rem;
 }
 
 .vibe64-active-session-nav-item__status--failed,
 .vibe64-active-session-nav-item__status--blocked,
 .vibe64-active-session-nav-item__status--archived {
   background: rgb(var(--v-theme-error));
-  box-shadow: 0 0 0 0.22rem rgba(var(--v-theme-error), 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-error), 0.16);
 }
 
 .vibe64-active-session-nav-item__label {

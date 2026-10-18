@@ -54,6 +54,7 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
 <template>
   <SectionContainerShell :mobile-section-links="mobileDashboardSectionLinks" :navigation-collapsed="githubBrowserOpen">
     <template #tabs>
+      <span v-if="dashboardSectionLinks.length" class="vibe64-dashboard-nav-group-label">Project</span>
       <ShellOutlet target="app-dashboard:primary-menu" :context="dashboardContext" />
       <ShellOutlet
         target="app-dashboard:active-session-menu"
@@ -64,3 +65,13 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
     <slot />
   </SectionContainerShell>
 </template>
+
+<style scoped>
+.vibe64-dashboard-nav-group-label {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-label-md);
+  letter-spacing: 0.06em;
+  padding: var(--v64-space-1) var(--v64-space-4) var(--v64-space-1);
+  text-transform: uppercase;
+}
+</style>

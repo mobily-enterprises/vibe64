@@ -137,16 +137,20 @@ function recordEditable(record = {}) {
 }
 
 .runtime-config-records__heading h2 {
-  font-size: 0.98rem;
-  font-weight: 700;
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
   letter-spacing: 0;
   margin: 0;
 }
 
+/* An M3-style empty state: a quiet dashed slot where values will appear. */
 .runtime-config-records__empty {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.86rem;
+  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24));
+  border-radius: var(--v64-shape-lg, 16px);
+  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
+  font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
   margin: 0;
+  padding: var(--v64-space-5, 24px) var(--v64-space-4, 16px);
+  text-align: center;
 }
 
 .runtime-config-records__system-title {
