@@ -6852,3 +6852,38 @@ test("learning-task browser focus adapter owns its subscription independently of
   await Vibe64ColleagueFocusProvider.shutdown({}, { outputs });
   assert.equal(released, 1);
 });
+
+test("learning-task watches observe a Workspace pane switch once as a view fact", async t => {
+  const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
+  const attemptId = "44444444-4444-4444-8444-444444444444";
+  const guidance = [];
+  f.service.registerConversationSource("learning-task", {
+    async read(watch) {
+      watch.learningTask = { ...watch.learningTask, pin: { topicHash: "a".repeat(64), lessonHash: "b".repeat(64) },
+        progress: { revision: 1, passedAssessmentIds: [], remainingAssessmentIds: ["read-the-erd"] } };
+      const latest = watch.latestObservation || null;
+      const revision = `1:${latest?.eventId || ""}`;
+      return { status: "working", runId: attemptId, revision,
+        messages: [{ id: `learning:${revision}`, role: "assistant", text: "Task." }],
+        details: { task: watch.learningTask, latestObservation: latest } };
+    },
+    async notify(_watch, pending) { guidance.push(structuredClone(pending)); return { ok: true, status: "accepted" }; }
+  });
+  const focus = { projectSlug: "notes", sessionId: "learning-4", conversationId: "", pane: "preview",
+    learningAttemptId: attemptId, learningView: "workspace" };
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus }, f.context);
+  await watchAction(f, "learning-watch.start", { watchId: "learning-watch-4", browserClientId: "browser-learning",
+    learningClientId: "main-learning", attemptId, targetProjectSlug: "notes", sessionId: "learning-4",
+    conversationId: "learning-main", criterion: "Open the database diagram." });
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus: { ...focus, pane: "database" } }, f.context);
+  await until(() => guidance.length === 1);
+  const watched = (await f.service.read({}, f.context)).watches[0];
+  assert.equal(watched.latestObservation.control, "view-change");
+  assert.equal(watched.latestObservation.origin, "view");
+  assert.equal(watched.latestObservation.workspace.pane, "database");
+  assert.equal(guidance[0].evidence.workspace.pane, "database");
+  await focusLearningBrowser(f, { clientId: "browser-learning", focus: { ...focus, pane: "database" } }, f.context);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(guidance.length, 1, "an unchanged pane adds no observation or Main notice");
+  assert.equal(f.observations.starts.length, 0, "view facts never wake Colleague's own model");
+});

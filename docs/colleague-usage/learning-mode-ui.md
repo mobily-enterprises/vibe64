@@ -86,7 +86,9 @@ you do not need to enter the project again. Otherwise, enter one bounded task in
 **Task to watch**, then start it. The compact details dialog shows the task as
 **active**, **paused**, or **unavailable**, its exact target, and its latest
 structured observation and time, last delivered help, and any saved assessment
-outcome. Expand **Task criteria** below the watch controls to read the full
+outcome. Observations include switching between **Workspace** and **Learning** and
+between Workspace panes such as **Preview** and **Dashboard** (the lesson's database);
+a view opened by Main or Colleague is recorded as their demonstration, not your step. Expand **Task criteria** below the watch controls to read the full
 criteria; long criteria stay collapsed so **Pause**, **Resume** and **Stop** remain
 easy to reach. You can instead tell Colleague “Watch me while I do this”; that direct
 request starts the same watch and the eye dialog shows the same state. Asking how
