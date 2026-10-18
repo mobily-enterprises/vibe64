@@ -222,6 +222,7 @@ onBeforeUnmount(() => {
         <div class="studio-home-shell-project-controls">
           <v-btn
             class="studio-home-shell-chat-toggle"
+            data-vibe64-guide="pane-switch"
             density="comfortable"
             :icon="chatToggleIcon"
             size="small"
@@ -266,6 +267,7 @@ onBeforeUnmount(() => {
           <button
             v-if="mobileProjectActionVisible && mobileHeaderAction"
             class="studio-home-shell-project-mobile-action"
+            data-vibe64-guide="pane-switch"
             type="button"
             :aria-label="mobileHeaderAction.ariaLabel"
             @click="selectHeaderTab(mobileHeaderAction.pane, $event)"

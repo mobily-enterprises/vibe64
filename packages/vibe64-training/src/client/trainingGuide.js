@@ -45,6 +45,16 @@ function findTrainingGuideStep(steps = [], root = globalThis.document) {
   return null;
 }
 
+// On a phone the chat and each pane fill the screen, so no step on the path may
+// be visible. The header's pane switch is then the next real control to click;
+// the caption still names the whole path. Prefer the last visible switch: the
+// next-pane button follows the chat toggle in the header.
+const PANE_SWITCH = "pane-switch";
+function findPaneSwitch(root = globalThis.document) {
+  if (!root) return null;
+  return [...root.querySelectorAll(`[data-vibe64-guide="${PANE_SWITCH}"]`)].filter(guideElementVisible).at(-1) || null;
+}
+
 function clearTrainingGuide(id) {
   if (!id || trainingGuide.value?.id === id) trainingGuide.value = null;
 }
@@ -59,6 +69,10 @@ async function showTrainingGuide(guide, { settleMs = 0, durationMs = TRAINING_GU
   while (!found?.final && Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, 50));
     found = findTrainingGuideStep(guide.steps);
+  }
+  if (!found) {
+    const element = findPaneSwitch();
+    if (element) found = { step: { id: PANE_SWITCH }, element };
   }
   if (!found) return { shown: false, reason: "target-hidden" };
   if (overlays === 0) return { shown: false, reason: "overlay-unavailable" };

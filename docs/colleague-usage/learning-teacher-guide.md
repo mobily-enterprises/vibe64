@@ -7,8 +7,9 @@ You then click it yourself.
 
 ## What you see
 
-- A coloured ring with a gentle pulse around one real tab, Dashboard section or
-  button, and a caption with the whole path.
+- The rest of the screen dims slightly, and a ring with a gentle ripple sits on
+  one real tab, Dashboard section or button. A caption with the whole path points
+  at it; a thin bar on the caption shows the time left.
 - The ring is on the next step from where you are. On **Preview**, a path to the
   ERD rings the **Dashboard** tab; once you are in **Dashboard → Database**, it
   rings the **ERD** button.
@@ -22,11 +23,20 @@ You then click it yourself.
 **Session info**, **Architecture**, and the graduation-cap (Learning) option beside Preview and Dashboard. A Dashboard section
 the lesson does not show cannot be ringed.
 
+## On a phone
+
+A phone shows the chat or one pane at a time, so the next tab is often hidden.
+The ring then sits on the header's pane switch: the arrow button that shows the
+project panes from the chat, or the next-pane button (for example **Dashboard ›**)
+that steps **Preview → Dashboard → Learning**. The caption still shows the whole
+path. Tap the switch; when the next step becomes visible, the teacher can ring it
+directly.
+
 ## When nothing is ringed
 
-If the control is not visible (for example on a phone layout where that tab is
-hidden), nothing is drawn. The teacher is told so and gives you the path in words
-instead; follow it with the visible controls.
+If neither a step on the path nor the pane switch is visible, nothing is drawn.
+The teacher is told so and gives you the path in words instead; follow it with the
+visible controls.
 
 ## "Show me"
 
