@@ -115,8 +115,9 @@ refuse an empty title". To answer:
    **Database**). It is the ordinary source editor for this lesson's practice
    project, showing code only. Downloads, new files, file uploads, file areas,
    integrations, stars and **Explain** are not available here; ask your teacher
-   in Learning instead. On a phone, use the files button to show or hide the
-   file list.
+   in Learning instead. A file's **⋮** actions menu in the file list offers only
+   **Copy path**. On a phone, use the files button to show or hide the file
+   list.
 2. Open the file the teacher named and edit it. Your changes save automatically
    a moment after you stop typing; the editor shows when a save has finished.
 3. Press **Check my code**. The lesson's declared check runs on a private copy of

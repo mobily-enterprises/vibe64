@@ -451,7 +451,9 @@ Learning store owns; direct reads and malformed bindings still refuse.
 The same Learning Dashboard pane has **Database** and **Code** tabs for every
 practice lesson. **Code** mounts the existing `Vibe64SessionSourceEditor` with
 `lesson-scoped` and `sessions-api-path="/api/learning/<attempt>/vibe64/sessions"`.
-`lessonScoped` keeps the code view and hides downloads, new files and explanations,
+`lessonScoped` keeps the code view and hides downloads, new files and explanations
+(including the file tree's Star, Download and New file menu items, via
+`Vibe64SourceFileTree`'s `lessonScoped` prop),
 and skips the architecture reader. Source-editor reads use its lesson routes;
 `PUT .../source-editor/file` is Training's `vibe64.training.code.file.save`
 (learning `control`), which wraps the generic save and records the authorship

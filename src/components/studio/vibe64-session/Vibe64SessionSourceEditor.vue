@@ -413,6 +413,7 @@
             :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
             :ask-codex-available="askCodexAvailable"
+            :lesson-scoped="lessonScoped"
             @ask-codex="askCodexAboutPath"
             @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
