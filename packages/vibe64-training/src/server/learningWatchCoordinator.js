@@ -348,7 +348,11 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
         await clearPending(state, watch);
         continue;
       }
-      if (watch.status === "active" && previousFocus?.learningView && previousFocus.learningView !== connection.focus.learningView) {
+      // A Workspace pane switch (Preview, Dashboard → Database) is a visible view fact like a Learning switch.
+      const paneChanged = previousFocus?.learningView === "workspace" && connection.focus.learningView === "workspace" &&
+        (previousFocus.pane || "") !== (connection.focus.pane || "");
+      if (watch.status === "active" && previousFocus?.learningView &&
+          (previousFocus.learningView !== connection.focus.learningView || paneChanged)) {
         await observe(state, {
           watchId: watch.watchId, eventId: randomUUID(), control: "view-change",
           workspace: { projectSlug: connection.focus.projectSlug || "", sessionId: connection.focus.sessionId,
