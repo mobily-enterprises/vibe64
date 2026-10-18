@@ -4304,3 +4304,8 @@ For an unfinished pinned goal, message dispatch and definite-rejection receipt
 inspection compare the current pinned orchestrator, matching request preparation.
 A deferred preference for the next goal does not invalidate this goal’s messages;
 selection, actor, access and native activity checks still apply.
+
+
+Blocked Claude goals expose Pause as well as Resume in the shared Goal control.
+Explicit Pause uses the retained native goal owner and disables automatic
+scheduling while preserving the objective. Model prose does not change this state.

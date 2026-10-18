@@ -165,6 +165,10 @@ For a Codex goal, **Pause goal** stops automatic scheduling and the current
 conversation turn while preserving the goal. To use a different model sooner,
 choose **Pause goal**, wait for the turn to stop, change the model in **Chat mode**,
 then choose **Resume goal**. The same sequence works for Claude.
+For a blocked Claude goal, **Pause goal** is also available: it preserves the
+objective and stops automatic goal scheduling until you explicitly resume. An
+assistant message saying it is paused does not itself change the goal state;
+check the **Goal** control for the paused state.
 If interruption cannot be confirmed, resolve the reported stop failure before
 resuming; a paused goal alone does not confirm that the current turn stopped.
 **Cancel goal** clears an unfinished goal without interrupting the
