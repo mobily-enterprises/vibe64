@@ -2041,7 +2041,7 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   return path.join(socketDir, `${match[1]}--${match[2]}${portSuffix}.sock`);
 }
 
-function previewProxySocketDir(env = process.env) {
+export function previewProxySocketDir(env = process.env) {
   const configured = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || "").trim();
   if (configured) {
     return configured;

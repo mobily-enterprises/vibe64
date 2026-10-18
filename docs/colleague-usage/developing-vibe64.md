@@ -76,8 +76,9 @@ explicit command, the installed managed-runtime command remains the default.
 
 Each example keeps its frontend dependency cache under its own state directory.
 Keep that directory between runs so normal restarts can reuse the prepared cache.
-When a host supplies Preview routing and a socket directory, the example retains
-those facilities so its own project outputs remain reachable through that host.
+When a host supplies Preview routing, the example uses the host’s Preview socket
+directory, including its default when no explicit directory is configured, so its
+own project outputs remain reachable through that host.
 Each example has a distinct Preview namespace while keeping its session data
 isolated. Standalone runs keep sockets under their writable state directory.
 Its API and conversation connection use a consistent origin through the internal

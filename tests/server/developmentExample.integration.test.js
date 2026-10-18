@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import getPort from "get-port";
+import http from "node:http";
 import { once } from "node:events";
 import { io } from "socket.io-client";
 import {
@@ -64,11 +65,22 @@ test("Vibe64 declares native installation tools and its complete example preview
   assert.equal(output.targets[0].presentation.urlPath, "/app");
 });
 
-test("the development preview serves its own backend, frontend and project", { timeout: 90_000 }, async () => {
+test("the development preview serves its own backend, frontend and project", { timeout: 180_000 }, async () => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-example-preview-"));
   const port = await getPort();
   const claudeCommand = path.join(root, "claude.cjs");
-  await writeFile(claudeCommand, `#!${process.execPath}\nif (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(["auth", "status", "--json"])) process.exit(2);\nconsole.log(JSON.stringify({ loggedIn: true, email: "local-cli@example.test", authMethod: "claude.ai", subscriptionType: "pro" }));\n`);
+  await writeFile(claudeCommand, `#!${process.execPath}
+if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", "--json"])) {
+  console.log(JSON.stringify({ loggedIn: true, email: "local-cli@example.test", authMethod: "claude.ai", subscriptionType: "pro" }));
+} else {
+  require("node:readline").createInterface({ input: process.stdin }).on("line", line => {
+    const frame = JSON.parse(line);
+    if (frame.type === "control_request") console.log(JSON.stringify({ type: "control_response",
+      response: { subtype: "success", request_id: frame.request_id,
+        response: { models: [{ value: "sonnet", supportedEffortLevels: ["high"] }] } } }));
+  });
+}
+`);
   await chmod(claudeCommand, 0o700);
   let logs = "";
   const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
@@ -79,7 +91,7 @@ test("the development preview serves its own backend, frontend and project", { t
       VIBE64_WORKSPACE: "example", VIBE64_PUBLIC_USER_DOMAIN: "users.example.test",
       VIBE64_PUBLIC_PROTOCOL: "https", VIBE64_PREVIEW_PUBLIC_DOMAIN: "preview.example.test",
       VIBE64_PREVIEW_PUBLIC_NAMESPACE: "parent-editor",
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: path.join(root, "host-sockets") },
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
@@ -135,6 +147,47 @@ test("the development preview serves its own backend, frontend and project", { t
     } finally {
       socket.disconnect();
     }
+    const opened = await fetch(`${origin}/api/app/hello-node/vibe64/project-runtime/open`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: "project-open" })
+    });
+    assert.ok(opened.ok, await opened.text());
+    const createdResponse = await fetch(`${origin}/api/app/hello-node/vibe64/sessions`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workflowEngineId: "claude" })
+    });
+    assert.equal(createdResponse.status, 200, await createdResponse.clone().text());
+    const created = await createdResponse.json();
+    assert.ok(created.sessionId);
+    const sessionApi = `${origin}/api/app/hello-node/vibe64/sessions/${created.sessionId}`;
+    const started = await fetch(`${sessionApi}/output-runs`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ outputTargetId: "app" })
+    });
+    assert.ok(started.ok, await started.text());
+    let output;
+    const outputDeadline = Date.now() + 45_000;
+    while (Date.now() < outputDeadline) {
+      output = await (await fetch(`${sessionApi}/outputs`)).json();
+      if (["ready", "failed", "project_closed"].includes(output.preview?.state)) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    assert.equal(output.preview?.state, "ready", JSON.stringify(output));
+    const preview = new URL(output.previewTarget.href);
+    const socketPath = path.join(root, "runtime", "vibe64", "apps", `${preview.hostname.split(".")[0]}.sock`);
+    const nestedPage = await new Promise((resolve, reject) => {
+      const request = http.get({ socketPath, path: preview.pathname + preview.search,
+        headers: { host: preview.host } }, response => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", chunk => { body += chunk; });
+        response.on("end", () => resolve({ status: response.statusCode, body }));
+      });
+      request.on("error", reject);
+      request.setTimeout(5000, () => request.destroy(new Error("Nested Preview request timed out")));
+    });
+    assert.equal(nestedPage.status, 200);
+    assert.match(nestedPage.body, /Hello, Node\./u);
     assert.match(logs, /"level":(?:10|20|30),/u, "the existing LOG_LEVEL setting must reach the application logger");
   } finally {
     child.kill("SIGTERM");
