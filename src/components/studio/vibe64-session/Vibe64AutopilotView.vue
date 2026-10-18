@@ -748,12 +748,13 @@
       </section>
 
       <section
-        v-if="learningDatabaseAvailable && normalWorkspaceActive && props.projectPane === 'dashboard'"
+        v-if="learningDatabaseMounted"
+        v-show="learningDatabaseActive"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
         <Vibe64DatabaseWorkspace
-          :active="props.active"
+          :active="props.active && learningDatabaseActive"
           :assistant-available="false"
           assistant-unavailable-message="Ask your lesson teacher in Learning about this data."
           class="studio-autopilot__session-tool-content"
@@ -819,7 +820,7 @@
       </section>
 
       <div
-        v-show="!props.sourceWorkspaceAvailable && !(learningDatabaseAvailable && normalWorkspaceActive && props.projectPane === 'dashboard') ||
+        v-show="!props.sourceWorkspaceAvailable && !learningDatabaseActive ||
           learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
@@ -1755,6 +1756,13 @@ const normalWorkspaceActive = computed(() => !props.lessonsAvailable || !learnin
 // A practice lesson's Dashboard shows only its database, read through the saved attempt.
 const learningDatabaseAvailable = computed(() => !props.sourceWorkspaceAvailable && Boolean(props.learningAttemptId) &&
   props.outputWorkspaceAvailable === true && props.conversationRuntime?.identity?.noExercise === false);
+const learningDatabaseActive = computed(() => learningDatabaseAvailable.value && normalWorkspaceActive.value &&
+  props.projectPane === "dashboard");
+// Mounted on first use and then retained, like Working Dashboard tools, so a
+// Learning/Workspace switch keeps the SQL draft and selected database view.
+const learningDatabaseMounted = ref(false);
+watch(learningDatabaseActive, active => { if (active) learningDatabaseMounted.value = true; }, { immediate: true });
+watch(learningDatabaseAvailable, available => { if (!available) learningDatabaseMounted.value = false; });
 const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
   props.conversationRuntime?.available?.value));
 const learningLayout = Object.freeze({
