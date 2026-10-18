@@ -2347,9 +2347,15 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__session-tool-header {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
-  min-height: 2.7rem;
-  padding: 0.42rem 0.7rem;
+  background: var(--v64-surface-container-low);
+  border-bottom: 1px solid var(--v64-outline-variant);
+  min-height: 3rem;
+  padding: var(--v64-space-1) var(--v64-space-2);
+}
+
+/* Current changes renders a Dashboard page inside the tool pane: give it the page gutter. */
+.studio-autopilot__session-tool-pane > .studio-autopilot__right-pane-page {
+  padding: var(--v64-space-3) var(--v64-space-4) var(--v64-space-4);
 }
 
 .studio-autopilot__session-tool-content {

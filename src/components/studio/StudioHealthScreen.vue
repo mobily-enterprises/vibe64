@@ -1,24 +1,24 @@
 <template>
-  <v-card class="studio-health" rounded="lg" variant="outlined">
-    <div class="studio-health__header">
-      <div>
-        <p class="studio-health__eyebrow">Vibe64</p>
-        <h1 class="text-headline-small font-weight-bold ma-0">Studio Health</h1>
-        <p class="studio-health__intro">
-          Read-only checks for the editor, credentials, Genesis, and pinned runtimes.
-        </p>
-      </div>
-      <v-btn
-        :disabled="isFetching"
-        :loading="isFetching"
-        :prepend-icon="mdiRefresh"
-        type="button"
-        variant="tonal"
-        @click="reload"
-      >
-        Refresh
-      </v-btn>
-    </div>
+  <section class="studio-health">
+    <Vibe64DashboardPageHeader
+      description="Read-only checks for the editor, credentials, Genesis, and pinned runtimes."
+      :icon="mdiHeartPulse"
+      title="Studio Health"
+    >
+      <template #actions>
+        <v-btn
+          :disabled="isFetching"
+          :loading="isFetching"
+          :prepend-icon="mdiRefresh"
+          rounded="pill"
+          type="button"
+          variant="tonal"
+          @click="reload"
+        >
+          Refresh
+        </v-btn>
+      </template>
+    </Vibe64DashboardPageHeader>
 
     <v-alert
       v-if="loadError"
@@ -65,7 +65,7 @@
         </article>
       </div>
     </template>
-  </v-card>
+  </section>
 </template>
 
 <script setup>
@@ -75,8 +75,10 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import {
   mdiAlertCircleOutline,
   mdiCheckCircleOutline,
+  mdiHeartPulse,
   mdiRefresh
 } from "@mdi/js";
+import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import {
   STUDIO_HEALTH_ENDPOINT,
   studioHealthQueryKey
@@ -119,34 +121,24 @@ const summaryText = computed(() => {
 
 <style scoped>
 .studio-health {
+  align-content: start;
   display: grid;
-  gap: 1rem;
+  gap: var(--v64-space-4, 16px);
   margin-inline: auto;
   max-width: 64rem;
-  padding: 1.25rem;
   width: 100%;
 }
 
-.studio-health__header,
 .studio-health__check,
 .studio-health__check-heading {
   display: flex;
 }
 
-.studio-health__header {
-  align-items: start;
-  gap: 1rem;
-  justify-content: space-between;
-}
-
-.studio-health__eyebrow,
-.studio-health__intro,
 .studio-health__check-copy p,
 .studio-health__check-copy small {
   margin: 0;
 }
 
-.studio-health__eyebrow,
 .studio-health__check-heading span {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.75rem;
@@ -159,18 +151,21 @@ const summaryText = computed(() => {
   gap: 0.75rem;
 }
 
+/* M3 filled cards for each check. */
 .studio-health__check {
   align-items: start;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 0.65rem;
-  gap: 0.75rem;
-  padding: 0.9rem;
+  background: var(--v64-surface-container-low);
+  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: var(--v64-shape-lg, 16px);
+  gap: var(--v64-space-3, 12px);
+  padding: var(--v64-space-4, 16px);
 }
 
 .studio-health__check-copy {
   display: grid;
   gap: 0.3rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-health__check-heading {

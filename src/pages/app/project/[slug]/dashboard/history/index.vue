@@ -4,13 +4,21 @@
       empty-text="Archived chats will appear here after their active workspaces are removed."
       empty-title="No archived chats"
     >
-      <template #title><h1 class="text-headline-small font-weight-bold ma-0">Session history</h1></template>
+      <template #title>
+        <Vibe64DashboardPageHeader
+          description="Archived chats and their conversations."
+          :icon="mdiHistory"
+          title="Session history"
+        />
+      </template>
     </ArchivedVibe64Sessions>
   </section>
 </template>
 
 <script setup>
+import { mdiHistory } from "@mdi/js";
 import ArchivedVibe64Sessions from "@/components/studio/ArchivedVibe64Sessions.vue";
+import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 </script>
 
 <style scoped>

@@ -4,6 +4,10 @@ Open a project and select **Dashboard** beside **Preview**. The Dashboard provid
 the available session and project tools, including Files, Changes, Database,
 Architecture, AI Terminal, Project settings, Git log, Env, App access, Integrations, Issues
 and Pull requests. Availability depends on the selected session, host and permissions.
+On desktop the section list is grouped: tools under the **Project** label come first,
+then a **Session** label with the selected session's name and its tools. The
+highlighted pill marks the open section, and each page's header repeats that
+section's icon and title with a one-line description and its actions.
 
 On mobile, **Show project** reveals the project from chat. Use **Dashboard section**
 to choose a tool and **Back to dashboard** to return from its detail. **Show chat**

@@ -159,6 +159,7 @@ defineExpose({
 }
 
 .studio-archived-sessions__copy {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -167,8 +168,18 @@ defineExpose({
   min-width: 8.5rem;
 }
 
+/* M3 empty state: a quiet dashed slot, centred, where archived chats will appear. */
 .studio-archived-sessions__empty {
-  padding: 1rem;
+  background: var(--v64-surface-container-low) !important;
+  border: 1px dashed var(--v64-outline, rgba(0, 0, 0, 0.24)) !important;
+  border-radius: var(--v64-shape-lg, 16px) !important;
+  padding: var(--v64-space-6, 32px) var(--v64-space-4, 16px);
+  text-align: center;
+}
+
+.studio-archived-sessions__empty h2 {
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
+  letter-spacing: 0;
 }
 
 .studio-archived-sessions__grid {
