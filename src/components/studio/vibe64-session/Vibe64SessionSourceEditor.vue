@@ -31,7 +31,7 @@
           {{ selectedFileName }}
         </h2>
       </div>
-      <v-btn v-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
+      <v-btn v-if="editor.selectedPath.value && !lessonScoped" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
       <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
         <v-btn
           :disabled="!editor.dirty.value || editor.saving.value"
@@ -58,6 +58,7 @@
               @click="fileBookmarks.toggle(displayedPath)"
             />
             <v-list-item
+              v-if="!lessonScoped"
               title="Download file"
               :prepend-icon="mdiDownload"
               :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
@@ -76,7 +77,7 @@
               @click="runEditorCommand('redo')"
             />
             <v-list-item
-              v-if="!singleFile"
+              v-if="!singleFile && !lessonScoped"
               title="Explain file or selection"
               :prepend-icon="mdiRobotOutline"
               :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
@@ -104,6 +105,7 @@
           @click="fileBookmarks.toggle(displayedPath)"
         />
         <v-btn
+          v-if="!lessonScoped"
           aria-label="Download file"
           :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
           :icon="mdiDownload"
@@ -148,7 +150,7 @@
           @click="editor.saveNow"
         />
         <v-btn
-          v-if="!singleFile"
+          v-if="!singleFile && !lessonScoped"
           class="vibe64-source-editor__explain-button"
           :aria-busy="editor.explanationBusy.value || editor.explanationClosing.value ? 'true' : 'false'"
           color="primary"
@@ -285,6 +287,7 @@
             <span>Files</span>
             <div class="vibe64-source-editor__tree-actions">
               <v-btn
+                v-if="!lessonScoped"
                 aria-label="New file at source root"
                 :disabled="editor.creatingFile.value || !editor.tree.value"
                 :icon="mdiFilePlusOutline"
@@ -783,6 +786,12 @@ const props = defineProps({
   sourcePathClickWithoutModifier: {
     default: false,
     type: Boolean
+  },
+  // A lesson Code tab: code view only, no downloads, new files, explanations
+  // or architecture reads; its routes expose only reads and the ledgered save.
+  lessonScoped: {
+    default: false,
+    type: Boolean
   }
 });
 const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location", "open-program"]);
@@ -802,12 +811,12 @@ const editor = useVibe64SourceEditor({
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
-const filePresentation = ref('interface');
+const filePresentation = ref(props.lessonScoped ? 'code' : 'interface');
 const interfaceSymbolId = ref('');
 const symbolPresentation = ref('description');
 // Architecture supplies its existing snapshot at mount. Only
 // standalone file browsing owns another graph reader.
-const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
+const interfaceGraph = props.architectureFacts || props.lessonScoped ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
 const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
 const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
 const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);
@@ -851,7 +860,7 @@ function presentInterfaceSymbol(presentation, force = false) {
   if (!force && currentInterpretation('selection', symbol.id, presentation)) return;
   void editor.explainSelection({ scope: 'selection', symbolId: symbol.id, presentation, force, expectedHash: editor.savedHash.value, startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column });
 }
-watch(editor.selectedPath, () => { filePresentation.value = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value ? 'code' : 'interface'; interfaceSymbolId.value = ''; symbolPresentation.value = 'description'; });
+watch(editor.selectedPath, () => { filePresentation.value = props.codeFocusMode || props.lessonScoped || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value ? 'code' : 'interface'; interfaceSymbolId.value = ''; symbolPresentation.value = 'description'; });
 watch([interfaceSymbols, interfaceCurrent, () => props.openRequest], () => {
   if (props.openRequest?.path !== editor.selectedPath.value || !interfaceCurrent.value) return;
   const requested = interfaceSymbols.value.find(symbol => symbol.id === props.openRequest.symbolId || (props.openRequest.symbol && (symbol.qualifiedName === props.openRequest.symbol || symbol.name === props.openRequest.symbol)));

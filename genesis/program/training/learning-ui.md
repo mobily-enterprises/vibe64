@@ -440,6 +440,21 @@ effects still require lesson admission. Unscoped (Working) session-store listing
 renewal reads and the current-session alias omit a genuine lesson binding, which its
 Learning store owns; direct reads and malformed bindings still refuse.
 
+## Practice Dashboard code
+
+The same Learning Dashboard pane has **Database** and **Code** tabs for every
+practice lesson. **Code** mounts the existing `Vibe64SessionSourceEditor` with
+`lesson-scoped` and `sessions-api-path="/api/learning/<attempt>/vibe64/sessions"`.
+`lessonScoped` keeps the code view and hides downloads, new files and explanations,
+and skips the architecture reader. Source-editor reads use its lesson routes;
+`PUT .../source-editor/file` is Training's `vibe64.training.code.file.save`
+(learning `control`), which wraps the generic save and records the authorship
+ledger. The live change stream is not mounted in lesson scope; the editor's
+revalidation and baseHash conflict remain. **Check my code** calls the selected
+Main gesture owner's `submitCode`, which posts a `code-submit` observation for
+the current delivered question to the Main practical route. The server decides
+whether that question is a code practical; the tab shows its outcome and reason.
+
 ## Practice Dashboard database
 
 In a practice lesson the Learning Dashboard pane mounts only the existing

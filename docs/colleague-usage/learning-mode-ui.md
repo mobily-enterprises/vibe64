@@ -90,7 +90,9 @@ tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs. In a
 practice lesson, **Dashboard** shows the practice app's **Database** view: its ERD,
 tables and data, read-only. Running a change to data reports that Learning shows the
 data read-only; change data in a Working session. An app without a database shows
-"The session Stack does not declare a supported database." Switching between Preview and Dashboard keeps Learning
+"The session Stack does not declare a supported database." A practice lesson's
+**Dashboard** also has a **Code** tab next to **Database**; see "Answering a code
+question" below. Switching between Preview and Dashboard keeps Learning
 on and retains the same selected teacher session; it does not switch to your last
 Working session. **Learning** reveals the existing **Courses** and
 **Presentation** controls. Returning from Workspace keeps the selected Courses
@@ -103,6 +105,44 @@ A source-less lesson disables Workspace and explains that it has no project,
 instead of showing a remembered Working project. On phones and tablets, the same
 two choices remain available around the stacked chat and right-hand content.
 Learning has no chat-collapse or pane-swipe control.
+
+### Answering a code question
+
+Some practice lessons ask you to change code, for example "make `notes.mjs`
+refuse an empty title". To answer:
+
+1. Choose **Workspace**, then **Dashboard**, then the **Code** tab (beside
+   **Database**). It is the ordinary source editor for this lesson's practice
+   project, showing code only. Downloads, new files, file uploads, file areas,
+   integrations, stars and **Explain** are not available here; ask your teacher
+   in Learning instead. On a phone, use the files button to show or hide the
+   file list.
+2. Open the file the teacher named and edit it. Your changes save automatically
+   a moment after you stop typing; the editor shows when a save has finished.
+3. Press **Check my code**. The lesson's declared check runs on a private copy of
+   the pinned exercise with your saved version of the named files. The result
+   appears next to the button: either "Your code passed the check…" or
+   "Not yet: …" with the check's reason (for example "Empty or blank titles are
+   still accepted", or that the check stopped after its time limit because the
+   code never finished). Fix the code and press **Check my code** again as often
+   as you like; only your latest check counts.
+4. After a passing check, explain to your teacher in Learning, in your own
+   words, what you changed and why. The teacher submits that explanation with the
+   check for grading. A pass is saved only when the check passed **and** the
+   explanation meets the lesson's rubric.
+
+What counts: only edits you saved yourself in this **Code** tab since the
+teacher asked the question. If anything else changed a named file in the
+meantime—the teacher or another assistant, a terminal command, Git, or another
+editor—the check does not run and reports "needs an independent attempt: other
+edits detected in `<file>`". That question cannot pass; ask the teacher for a new
+question and write the change yourself. The teacher is instructed not to edit
+those files or send solution code; it can give hints and point to lines.
+Checking never saves progress by itself, and a check without your explanation
+is not a pass. **Check my code** requires this lesson's Learning conversation
+to be connected in this browser; if it reports that the question is not a code
+question, ask the teacher for the code question first. Colleague can explain
+these steps but cannot type, save or check code for you.
 
 You can ask Colleague to enter or leave Learning, show **Courses**, show the
 active lesson, or reveal the exact lesson project's normal **Preview** or

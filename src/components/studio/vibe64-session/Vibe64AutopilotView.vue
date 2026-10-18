@@ -753,8 +753,21 @@
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
+        <header class="studio-autopilot__session-tool-header">
+          <v-btn-toggle
+            v-model="learningDashboardTab"
+            aria-label="Lesson dashboard tools"
+            density="compact"
+            mandatory
+            variant="outlined"
+          >
+            <v-btn value="database">Database</v-btn>
+            <v-btn value="code">Code</v-btn>
+          </v-btn-toggle>
+        </header>
         <Vibe64DatabaseWorkspace
-          :active="props.active && learningDatabaseActive"
+          v-show="learningDashboardTab === 'database'"
+          :active="props.active && learningDatabaseActive && learningDashboardTab === 'database'"
           :assistant-available="false"
           assistant-unavailable-message="Ask your lesson teacher in Learning about this data."
           class="studio-autopilot__session-tool-content"
@@ -762,6 +775,42 @@
           :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
           :session-id="selectedAssistantSessionId"
         />
+        <div
+          v-if="learningCodeMounted"
+          v-show="learningDashboardTab === 'code'"
+          class="studio-autopilot__learning-code"
+        >
+          <div class="studio-autopilot__learning-code-check">
+            <v-btn
+              color="primary"
+              :disabled="learningCodeChecking"
+              :loading="learningCodeChecking"
+              variant="flat"
+              @click="checkLearningCode"
+            >
+              Check my code
+            </v-btn>
+            <p
+              class="studio-autopilot__learning-code-status"
+              :class="{ 'text-error': learningCodeResult?.error }"
+              role="status"
+              aria-live="polite"
+            >
+              {{ learningCodeResult?.message || "Edit the files your teacher names, then press Check my code. Only your own edits here count." }}
+            </p>
+          </div>
+          <Vibe64SessionSourceEditor
+            lesson-scoped
+            :active="props.active && learningDatabaseActive && learningDashboardTab === 'code'"
+            :agent-active="agentActive"
+            :assistant-available="false"
+            assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
+            class="studio-autopilot__session-tool-content"
+            :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
+            :session-id="selectedAssistantSessionId"
+            :sessions-api-path="learningSessionsApiPath"
+          />
+        </div>
       </section>
 
       <section
@@ -971,7 +1020,7 @@ import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reac
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -1763,6 +1812,41 @@ const learningDatabaseActive = computed(() => learningDatabaseAvailable.value &&
 const learningDatabaseMounted = ref(false);
 watch(learningDatabaseActive, active => { if (active) learningDatabaseMounted.value = true; }, { immediate: true });
 watch(learningDatabaseAvailable, available => { if (!available) learningDatabaseMounted.value = false; });
+// The Code tab edits this lesson's practice project through the saved attempt.
+// Its saves are the only edits that count for a code question.
+const learningDashboardTab = ref("database");
+const learningCodeMounted = ref(false);
+const learningCodeChecking = ref(false);
+const learningCodeResult = ref(null);
+const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+const learningSessionsApiPath = computed(() => props.learningAttemptId
+  ? `/api/learning/${encodeURIComponent(props.learningAttemptId)}/vibe64/sessions` : "");
+watch(() => learningDatabaseActive.value && learningDashboardTab.value === "code", active => {
+  if (active) learningCodeMounted.value = true;
+}, { immediate: true });
+watch(learningDatabaseAvailable, available => {
+  if (!available) { learningCodeMounted.value = false; learningCodeResult.value = null; learningDashboardTab.value = "database"; }
+});
+async function checkLearningCode(event) {
+  const owner = learningGestures?.value;
+  if (learningCodeChecking.value) return;
+  if (!owner?.submitCode) {
+    learningCodeResult.value = { error: true, message: "Open this lesson's Learning conversation, then press Check my code again." };
+    return;
+  }
+  learningCodeChecking.value = true;
+  try {
+    const response = await owner.submitCode(event);
+    if (!response) return;
+    learningCodeResult.value = response.checkOutcome === "passed"
+      ? { message: "Your code passed the check. Now tell your teacher in Learning, in your own words, what you changed and why." }
+      : { message: `Not yet: ${response.checkReason || "the check did not pass."}` };
+  } catch (error) {
+    learningCodeResult.value = { error: true, message: String(error?.message || error || "Your code could not be checked.") };
+  } finally {
+    learningCodeChecking.value = false;
+  }
+}
 const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
   props.conversationRuntime?.available?.value));
 const learningLayout = Object.freeze({
@@ -2158,6 +2242,27 @@ onBeforeUnmount(() => {
 .studio-autopilot__session-tool-pane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-autopilot__learning-code {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.studio-autopilot__learning-code-check {
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.42rem 0.7rem;
+}
+
+.studio-autopilot__learning-code-status {
+  flex: 1 1 14rem;
+  margin: 0;
+  min-width: 0;
 }
 
 .studio-autopilot__architecture-pane {

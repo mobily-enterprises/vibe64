@@ -16,11 +16,15 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
       (!drawerRetired && drawer.owner.value === drawerOwner && drawer.conversationId.value === drawerConversation);
   }
   const nativeControls = ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore"];
+  function questionReference() {
+    const question = product.value.trainingQuestion;
+    return question ? Object.freeze(Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
+      .map(key => [key, question[key]]))) : null;
+  }
   function nativeQuestion() {
     const question = product.value.trainingQuestion;
     if (!question || !["workspace-navigation", "return-to-colleague", "try-the-application"].includes(question.assessmentId)) return null;
-    return Object.freeze(Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
-      .map(key => [key, question[key]])));
+    return questionReference();
   }
   function pollingTask() {
     const binding = scope.learningBinding;
@@ -170,7 +174,33 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
       nativeTickets.delete(ticket);
     }
   }
-  const nativeGestureOwner = { begin: beginNativeGesture, finish: finishNativeGesture, beginExercise, finishExercise,
+  // The lesson Code tab's "Check my code" press. Code questions are declared by
+  // content, so the server decides whether the delivered question is one and
+  // runs its check; the browser only reports this person's genuine press.
+  async function submitCode(event) {
+    const reference = questionReference();
+    if (!mounted || (scope.current && !scope.current()) || !event?.isTrusted || event.type !== "click" ||
+        !actorKey.value || !product.value.conversationId || !workspace.settle || nativeTickets.size >= 8) return null;
+    if (!reference) throw new Error("There is no open lesson question yet. Ask your teacher for a code question, then press Check my code.");
+    const ticket = Object.freeze({ actorKey: actorKey.value, conversationId: product.value.conversationId,
+      reference, gestureId: crypto.randomUUID(), control: "code-submit",
+      target: Object.freeze({ projectSlug: workspace.focus.projectSlug, sessionId: workspace.focus.sessionId }) });
+    nativeTickets.set(ticket, true);
+    const current = () => mounted && (!scope.current || scope.current()) && nativeTickets.has(ticket) &&
+      actorKey.value === ticket.actorKey && product.value.conversationId === ticket.conversationId &&
+      JSON.stringify(questionReference()) === JSON.stringify(reference);
+    try {
+      const settled = await workspace.settle({ control: ticket.control, ...ticket.target }, current);
+      if (!current()) throw new Error("The lesson question changed. Press Check my code again.");
+      return await observe({ method: "POST", body: {
+        clientId, conversationId: ticket.conversationId, gestureId: ticket.gestureId, control: ticket.control,
+        reference, workspace: { ...settled, colleagueVisible: bodyVisible.value }
+      } });
+    } finally {
+      nativeTickets.delete(ticket);
+    }
+  }
+  const nativeGestureOwner = { begin: beginNativeGesture, finish: finishNativeGesture, beginExercise, finishExercise, submitCode,
     pollingTask,
     setPollingWatch(value) { polling = value?.watchId && typeof value.observe === "function" ? value : null; },
     clearPollingWatch(watchId) { if (!watchId || polling?.watchId === watchId) polling = null; },
