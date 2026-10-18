@@ -119,6 +119,7 @@ test("project and sessions register routes and captured actions during setup", a
   assert.equal(projectActions[0].contributorId, "vibe64.project");
   assert.deepEqual(projectActions[0].actions.map(({ id }) => id).sort(), [
     "vibe64.project.collaboration.save",
+    "vibe64.project.connections.save",
     "vibe64.project.development-database.scope.save",
     "vibe64.project.engineering.profile.save",
     "vibe64.project.engineering.read",
@@ -141,9 +142,13 @@ test("project and sessions register routes and captured actions during setup", a
     ...["list", "read", "create", "edit", "comment", "edit-comment", "state", "labels", "create-label", "set-labels", "mentions"].map((operation) => `vibe64.project.issues.${operation}`),
     ...["list", "read", "ready", "update-branch", "merge"].map((operation) => `vibe64.project.pull-requests.${operation}`)
   ].sort());
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 1);
-  assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")).map(([method, route]) => [method, route]), [
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding"]
+  assert.equal(projectRoutes.filter(([, route]) => !route.startsWith("/api/learning/")).length, projectActions[0].actions.length);
+  // A practice lesson's Dashboard reads onboarding and Env and saves user Env
+  // values; settings, remotes, issues, pull requests and projects stay off lessons.
+  assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")).map(([method, route]) => [method, route]).sort(), [
+    ["GET", "/api/learning/:learningAttemptId/vibe64/env"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding"],
+    ["PUT", "/api/learning/:learningAttemptId/vibe64/env/user-values"]
   ]);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
@@ -428,7 +433,16 @@ test("learning HTTP routes reuse original session adapters and only canonical le
     seen.add(calls[0].actionId);
   }
   assert.deepEqual([...seen].sort(), [...allowed].filter(id => id !== "vibe64.sessions.conversation.context.read").sort());
-  assert.equal(learning.some(([, url]) => /repository|setup|renewal|pull-request|\/work\b/u.test(url)), false);
+  // The Dashboard's Git log and current changes are read-only lesson routes;
+  // setup, renewal, saving, updates and pull requests have no lesson URL.
+  assert.deepEqual(learning.map(([method, url]) => [method, url]).filter(([, url]) => /repository|changes/u.test(url)).sort(), [
+    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history/:commit/diff"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history/:commit/files"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/changes"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/changes/diff"]
+  ]);
+  assert.equal(learning.some(([, url]) => /setup|renewal|pull-request|updates|\/work\b/u.test(url)), false);
 });
 
 test("learning route admission rejects missing attempt URL and non-local transport before executing any action", async () => {

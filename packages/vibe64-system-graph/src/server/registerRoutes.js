@@ -1,11 +1,13 @@
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { createSystemGraphActions } from "./actions.js";
 
 function registerRoutes(
   http,
   {
     projectContext = null,
     routeSurface = "",
-    routeRelativePath = ""
+    routeRelativePath = "",
+    learningScoped = false
   } = {}
 ) {
   const routes = createVibe64FeatureRoutes(http, {
@@ -13,6 +15,7 @@ function registerRoutes(
     projectContext,
     routeRelativePath,
     routeSurface,
+    learningActions: learningScoped ? createSystemGraphActions({ systemGraph: {} }) : null,
     tags: ["studio", "vibe64-system-graph"]
   });
   const sessionRoute = "/system-graph/sessions/:sessionId";

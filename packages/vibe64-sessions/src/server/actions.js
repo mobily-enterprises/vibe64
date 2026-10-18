@@ -86,8 +86,8 @@ const ACTION_INSPECT_REPOSITORY_HISTORY = "vibe64.repository.history.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILES = "vibe64.repository.history.files.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.diff.inspect";
 
-// Only existing source-independent Main operations may enter a learning scope.
-// Repository, setup, renewal and project operations retain project authority.
+// Only these declared operations may enter a learning scope. Setup, renewal,
+// saving and project operations retain project authority.
 const learningAccess = {
   [ACTION_CREATE_SESSION]: "create",
   [ACTION_UPDATE_CURRENT_SESSION]: "control",
@@ -103,8 +103,18 @@ const learningAccess = {
   [ACTION_UPDATE_ASSISTANT_SELECTION]: "write",
   [ACTION_RENAME_SESSION]: "write",
   [ACTION_INTERRUPT_AGENT_TURN]: "control",
-  [ACTION_UPDATE_SESSION_PRESENCE]: "control"
+  [ACTION_UPDATE_SESSION_PRESENCE]: "control",
+  // A practice lesson's Dashboard reads its Git log and current changes.
+  // Save, update, pull-request and setup operations keep no lesson URL.
+  [ACTION_INSPECT_REPOSITORY_HISTORY]: "observe",
+  [ACTION_INSPECT_REPOSITORY_VERSION_FILES]: "observe",
+  [ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF]: "observe",
+  [ACTION_INSPECT_SESSION_CHANGES]: "observe",
+  [ACTION_INSPECT_SESSION_CHANGE_DIFF]: "observe"
 };
+// Source operations need the lesson's actual practice project, never a fallback.
+const practiceOnlyLearning = new Set([ACTION_INSPECT_REPOSITORY_HISTORY, ACTION_INSPECT_REPOSITORY_VERSION_FILES,
+  ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF, ACTION_INSPECT_SESSION_CHANGES, ACTION_INSPECT_SESSION_CHANGE_DIFF]);
 
 function action({
   assistant,
@@ -131,7 +141,15 @@ function action({
     },
     observability: {},
     events,
-    execute
+    execute: practiceOnlyLearning.has(id) ? (input, context, deps) => {
+      const learning = context?.vibe64Action?.learning;
+      if (learning && learning.learningScope.noExercise !== false) {
+        throw Object.assign(new Error("This lesson has no practice project."), {
+          code: "vibe64_learning_source_required", statusCode: 409
+        });
+      }
+      return execute(input, context, deps);
+    } : execute
   }, { projectScoped, learningAccess: learningAccess[id] || false });
 }
 

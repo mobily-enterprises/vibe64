@@ -158,6 +158,15 @@ function createVibe64ProjectChangedPublisher({ events = null } = {}) {
   };
 }
 
+// A practice lesson's Dashboard reads its project's onboarding and Env and saves
+// its user-owned Env values. Settings, remotes, issues, pull requests and
+// projects keep no lesson URL.
+const practiceLearningAccess = Object.freeze({
+  [ACTION_READ_ONBOARDING]: "observe",
+  [ACTION_READ_ENV]: "observe",
+  [ACTION_SAVE_ENV_USER_VALUES]: "write"
+});
+
 function action({ assistant, events = [], execute, id, input, kind, ownerRequired = false }) {
   return withVibe64ActionContext({
     id,
@@ -172,7 +181,7 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
     },
     observability: {},
     events,
-    execute: id === ACTION_READ_ONBOARDING ? (input, context, deps) => {
+    execute: practiceLearningAccess[id] ? (input, context, deps) => {
       if (context?.vibe64Action?.learning && context.vibe64Action.learning.learningScope.noExercise !== false) {
         throw Object.assign(new Error("Project setup requires the saved lesson’s prepared practice workspace."), {
           code: "vibe64_learning_source_required", statusCode: 409
@@ -180,7 +189,7 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
       }
       return execute(input, context, deps);
     } : execute
-  }, { ownerRequired, ...(id === ACTION_READ_ONBOARDING ? { learningAccess: "observe" } : {}) });
+  }, { ownerRequired, ...(practiceLearningAccess[id] ? { learningAccess: practiceLearningAccess[id] } : {}) });
 }
 
 function createProjectActions({ project } = {}) {

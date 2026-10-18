@@ -122,10 +122,13 @@ test("Learning onboarding reuses only the original read with URL-bound identity"
   const { testRouteApp, testReply, withLocalRequestBypass } = await import("./vibe64RouteTestHelpers.js");
   const app = testRouteApp();
   registerProjectRoutes(app.http, { learningScoped: true, routeSurface: "app" });
-  assert.equal(app.registeredRoutes.length, 1);
-  const route = app.registeredRoutes[0];
-  assert.equal(route.method, "GET");
-  assert.equal(route.path, "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding");
+  // Onboarding and the lesson Dashboard's Env read/save are the project's only lesson routes.
+  assert.deepEqual(app.registeredRoutes.map(value => `${value.method} ${value.path}`).sort(), [
+    "GET /api/learning/:learningAttemptId/vibe64/env",
+    "GET /api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding",
+    "PUT /api/learning/:learningAttemptId/vibe64/env/user-values"
+  ]);
+  const route = app.registeredRoutes.find(value => value.path.endsWith("/onboarding"));
   assert.equal(route.options.query, undefined, "URL session identity is validated by the original action, not a required query session");
   const attemptId = "12345678-1234-4234-8234-123456789abc";
   const calls = [];
