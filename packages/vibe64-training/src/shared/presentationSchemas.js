@@ -25,6 +25,12 @@ const presentationCueReceipt = { type: "object", required: false, schema: create
         visualPhase: { type: "string", required: true, enum: ["ready", "pending", "accepted", "completed", "interrupted", "failed"] },
         state: { ...text, maxLength: 64 }, description: { ...text, maxLength: 2000 }, error: { ...text, maxLength: 2000 }
       }) };
+// What the teacher guide overlay actually drew; shown=false always names why.
+const guideReceipt = { type: "object", required: false, schema: createSchema({
+  shown: { type: "boolean", required: true },
+  reason: { type: "string", required: false, enum: ["highlight-off", "target-hidden", "overlay-unavailable"] },
+  step: { ...text, maxLength: 64 }
+}) };
 const presentationClientId = { ...text, minLength: 1, maxLength: 128, required: true };
 
-export { presentationReceipt, presentationCueReceipt, presentationClientId };
+export { guideReceipt, presentationReceipt, presentationCueReceipt, presentationClientId };

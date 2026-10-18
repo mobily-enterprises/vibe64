@@ -75,6 +75,14 @@ function createTrainingPresentationCoordination({ changed }) {
     if (input.ok && !learningFocusMatches(connection.navigation, input.focus)) {
       return { ok: false, error: "The browser has not confirmed this exact Learning mode, view and lesson selection." };
     }
+    // A guide receipt reports only what the overlay actually drew.
+    const guide = connection.navigation.guide;
+    const guideReceipt = guide && input.guide ? { shown: input.guide.shown === true,
+      ...(input.guide.reason ? { reason: input.guide.reason } : {}), ...(input.guide.step ? { step: input.guide.step } : {}) } : null;
+    if (input.ok && guide && (typeof input.guide?.shown !== "boolean" || guideReceipt.shown && (!guide.highlight || !guideReceipt.step) ||
+        !guideReceipt.shown && !guideReceipt.reason)) {
+      return { ok: false, error: "The browser has not confirmed whether this guide highlight was drawn." };
+    }
     if (input.ok && expected) {
       const result = input.presentation;
       if (!result || result.attemptId !== expected.attemptId || result.visualId !== expected.visualId || !result.playerInstanceId ||
@@ -89,7 +97,7 @@ function createTrainingPresentationCoordination({ changed }) {
       }
     }
     connection.acknowledge({ ok: input.ok, ...(input.error ? { error: input.error } : {}), ...(input.focus ? { focus: input.focus } : {}),
-      ...(expected && input.presentation ? { presentation: input.presentation } : {}) });
+      ...(expected && input.presentation ? { presentation: input.presentation } : {}), ...(guideReceipt ? { guide: guideReceipt } : {}) });
     return { ok: true };
   }
   function admitCue(connection, input, identity) {

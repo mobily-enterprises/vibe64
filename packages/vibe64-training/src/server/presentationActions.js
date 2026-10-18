@@ -3,6 +3,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { operationError } from "./actions.js";
 import { requireTrainingMainTeacher } from "./teachingRole.js";
+import { TRAINING_GUIDE_TARGETS, trainingGuideRequest } from "../shared/guideTargets.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 64, pattern: "^[a-zA-Z0-9-]{1,64}$" };
 const fields = {
@@ -82,14 +83,19 @@ function createTrainingPresentationActions({ learners, content } = {}) {
   const view = withVibe64ActionContext({
     id: "vibe64.training.view.open", version: 1, kind: "command", idempotency: "none",
     input: { mode: "create", schema: createSchema({ attemptId: fields.attemptId,
-      target: { type: "string", required: true, enum: ["workspace-preview", "workspace-erd", "learning"] } }) },
+      target: { type: "string", required: true, enum: TRAINING_GUIDE_TARGETS },
+      filePath: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 512 },
+      navigate: { type: "boolean", required: false },
+      highlight: { type: "boolean", required: false } }) },
     output: null,
     extensions: { assistant: { output,
-      description: "As the bound Main teacher, reveal this learner's exact retained lesson workspace or Learning pane. workspace-preview shows the normal app Preview, workspace-erd shows Dashboard → Database → ERD, and learning returns to this active lesson's existing content/player. Supply only the bound attemptId; Vibe64 derives its project/session and initiating browser. This does not start, resume, end or grade a lesson, and its acknowledged navigation is demonstration rather than learner evidence. A source-less lesson can only show learning. Wait for the actual settled receipt before describing a view as visible." } },
+      description: "As the bound Main teacher, guide this learner to a real place in their lesson's Vibe64 workspace: preview (app Preview tab), dashboard (Dashboard tab), database-erd (Dashboard → Database → ERD), database-data (Dashboard → Database → Data), files (Dashboard → Files; optional filePath opens one practice-project file, relative, no '..'), changes (Current changes), git-log (Git log), session-info (Session info), architecture (Architecture), or learning (the Learning pane with this lesson). Default is point only (navigate=false, highlight=true): Vibe64 rings the next control the learner must click, with a short caption such as \"Dashboard → Database → ERD\", for about 8 seconds or until they click; the learner then navigates themselves, which Watch me can observe. Prefer pointing so the learner learns where things are. navigate=true is \"show me\": you open the view yourself; its acknowledgement is demonstration, not learner evidence, and dashboard cannot be opened (open a section instead). workspace-preview and workspace-erd are older names that open preview/database-erd. Supply only the bound attemptId; Vibe64 derives its project/session and initiating browser. The receipt's guide.shown is true only when the highlight was actually drawn; shown=false with a reason (for example target-hidden on a phone layout) means nothing was highlighted, so tell the learner the path in words instead. A source-less lesson can only use learning. This does not start, resume, end or grade a lesson. Wait for the actual settled receipt before describing a view or highlight as visible." } },
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Sign in before navigating a lesson workspace."), { statusCode: 401, code: "vibe64_auth_required" });
       const coordinator = requireTrainingMainTeacher(context, ["requirePresentationAttempt", "navigateLearningView"]);
+      // A closed product place, validated before any browser effect; its message tells the teacher what to change.
+      const request = trainingGuideRequest(input);
       try {
         const mainScope = await coordinator.requirePresentationAttempt(input.attemptId);
         const saved = await learners.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
@@ -102,12 +108,12 @@ function createTrainingPresentationActions({ learners, content } = {}) {
             code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH", statusCode: 409
           });
         }
-        if (mainScope.noExercise && input.target !== "learning") {
+        if (mainScope.noExercise && request.target !== "learning") {
           throw Object.assign(new Error("This source-less lesson has no project workspace to display."), {
             code: "VIBE64_TRAINING_WORKSPACE_UNAVAILABLE", statusCode: 409
           });
         }
-        const result = await coordinator.navigateLearningView(input.target, context);
+        const result = await coordinator.navigateLearningView(request, context);
         if (Buffer.byteLength(JSON.stringify(result)) > 16 * 1024) {
           throw Object.assign(new Error("The navigation receipt exceeds its limit; no state was silently omitted."), {
             code: "VIBE64_TRAINING_PRESENTATION_RESULT_TOO_LARGE"

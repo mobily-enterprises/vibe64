@@ -2,6 +2,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createTrainingPresentationCoordination, publicCue } from "./presentationCoordination.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../shared/guideTargets.js";
 import { isDeepStrictEqual } from "node:util";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { createRetainedConversationHelper } from "@local/vibe64-terminals/server/retainedConversationHelper";
@@ -451,7 +452,7 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           }
           return helperState.presentation.begin(connection, command, { get generation() { return helperState.generation; } });
         },
-        async navigateLearningView(target, execution) {
+        async navigateLearningView(input, execution) {
           const captured = { ...current, signal: execution.signal };
           const { grant, message } = await requireCurrent(captured, admitted);
           const connection = helperState.connections.get(message.data?.clientId);
@@ -459,20 +460,15 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
             return { ok: false, error: "The initiating Main browser is no longer connected." };
           }
           if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
-          if (!["workspace-preview", "workspace-erd", "learning"].includes(target)) {
-            return { ok: false, error: "This lesson workspace view is unavailable." };
-          }
-          if (scope.noExercise && target !== "learning") {
+          let request;
+          try { request = trainingGuideRequest(input); }
+          catch { return { ok: false, error: "This lesson workspace view is unavailable." }; }
+          if (scope.noExercise && request.target !== "learning") {
             return { ok: false, error: "This source-less lesson has no project workspace to display." };
           }
           await requireCurrent(captured, admitted);
-          const learning = target === "learning";
-          const command = { id: randomUUID(), projectSlug: scope.noExercise ? "" : grant.project.slug,
-            sessionId, conversationId: "", pane: learning || target === "workspace-preview" ? "preview" : "database",
-            ...(target === "workspace-erd" ? { databaseView: "erd" } : {}),
-            learningMode: true, learningView: learning ? "learning" : "workspace",
-            ...(learning ? { learningContent: "active" } : {}), learningAttemptId: scope.attemptId,
-            status: "pending" };
+          const command = trainingGuideCommand(request, { id: randomUUID(),
+            projectSlug: scope.noExercise ? "" : grant.project.slug, sessionId, attemptId: scope.attemptId });
           return helperState.presentation.begin(connection, command, { get generation() { return helperState.generation; } });
         },
         async readPresentationCue(input, execution) {

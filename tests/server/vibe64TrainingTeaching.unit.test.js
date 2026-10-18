@@ -929,7 +929,7 @@ test("Main teaching definitions retain original scopes and cannot borrow a model
 test("Main workspace navigation uses its bound browser command and rejects a changed Learning acknowledgement", async t => {
   const f = await mainCueFinalFixture(t);
   const clientId = "actual-browser";
-  const pending = f.mapped.trainingMain.navigateLearningView("learning", f.mapped);
+  const pending = f.mapped.trainingMain.navigateLearningView({ target: "learning", navigate: true, highlight: false }, f.mapped);
   let command;
   for (let count = 0; count < 100; count += 1) {
     command = (await f.main.readPresentation({ ...f.call, input: { clientId } })).navigation;
@@ -946,6 +946,45 @@ test("Main workspace navigation uses its bound browser command and rejects a cha
   assert.equal((await f.main.acknowledgePresentation({ ...f.call, input: { clientId, commandId: command.id,
     ok: true, focus: exact } })).ok, true);
   assert.deepEqual(await pending, { ok: true, focus: exact });
+});
+
+test("Main guide points at a real control without navigating and reports only the highlight actually drawn", async t => {
+  const f = await mainCueFinalFixture(t);
+  const clientId = "actual-browser";
+  async function pendingCommand() {
+    let command;
+    for (let count = 0; count < 100; count += 1) {
+      command = (await f.main.readPresentation({ ...f.call, input: { clientId } })).navigation;
+      if (command?.status === "pending") return command;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    return command;
+  }
+  assert.deepEqual(await f.mapped.trainingMain.navigateLearningView({ target: "database-erd" }, f.mapped),
+    { ok: false, error: "This source-less lesson has no project workspace to display." });
+  assert.deepEqual(await f.mapped.trainingMain.navigateLearningView({ target: "dashboard", navigate: true }, f.mapped),
+    { ok: false, error: "This lesson workspace view is unavailable." });
+  const pointed = f.mapped.trainingMain.navigateLearningView({ target: "learning" }, f.mapped);
+  const command = await pendingCommand();
+  assert.equal(command.learningMode, undefined, "point-only changes no view");
+  assert.equal(command.pane, undefined);
+  assert.deepEqual(command.guide, { target: "learning", navigate: false, highlight: true,
+    steps: [{ id: "learning", label: "Learning" }], caption: "Learning" });
+  const ack = input => f.main.acknowledgePresentation({ ...f.call, input: { clientId, commandId: command.id, ok: true, ...input } });
+  assert.equal((await ack({})).ok, false, "a guide receipt is required");
+  assert.equal((await ack({ guide: { shown: true } })).ok, false, "a drawn highlight names its real step");
+  assert.equal((await ack({ guide: { shown: false } })).ok, false, "an undrawn highlight names why");
+  assert.equal((await ack({ guide: { shown: false, reason: "target-hidden" } })).ok, true);
+  assert.deepEqual(await pointed, { ok: true, guide: { shown: false, reason: "target-hidden" } });
+  const shown = f.mapped.trainingMain.navigateLearningView({ target: "learning", navigate: true }, f.mapped);
+  const opened = await pendingCommand();
+  assert.equal(opened.learningView, "learning");
+  assert.equal(opened.guide.navigate, true);
+  const focus = { projectSlug: "", sessionId: f.sessionId, pane: "lessons",
+    learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: f.attemptId };
+  assert.equal((await f.main.acknowledgePresentation({ ...f.call, input: { clientId, commandId: opened.id, ok: true, focus,
+    guide: { shown: true, step: "learning" } } })).ok, true);
+  assert.deepEqual(await shown, { ok: true, focus, guide: { shown: true, step: "learning" } });
 });
 
 // Append to the SAME existing Teaching file after root review. These use its

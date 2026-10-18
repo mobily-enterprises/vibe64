@@ -11,6 +11,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createTrainingLearningWatchSource } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingPresentationActions } from "../../packages/vibe64-training/src/server/presentationActions.js";
+import { trainingGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
 import { createTrainingAssessmentActions } from "../../packages/vibe64-training/src/server/assessmentActions.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
@@ -608,6 +609,7 @@ test("lesson presentation tools use exact pinned commands and native browser rec
     const command = input.presentation;
     if (command) assert.equal(context.vibe64Action.project.slug, saved.attempt.projectSlug);
     else assert.equal(context.vibe64Action.project, null, "bound Main view derives the project instead of accepting it from the model");
+    if (input.guide && !input.guide.navigate) return { ok: true, guide: { shown: true, step: input.guide.steps[0].id } };
     if (!command) return { ok: true, focus: { ...input, pane: input.learningView === "learning" ? "lessons" : input.pane,
       databaseScreen: input.databaseView ? "workspace" : undefined } };
     return { ok: true, focus: { projectSlug: input.projectSlug, sessionId: input.sessionId, pane: "preview" },
@@ -651,14 +653,9 @@ test("lesson presentation tools use exact pinned commands and native browser rec
         return colleague.navigate({ projectSlug: saved.attempt.projectSlug,
           sessionId: saved.attempt.preparation.initialSessionId, pane: "preview", presentation }, context);
       },
-      navigateLearningView(target, context) {
-        const learning = target === "learning";
-        return colleague.navigate({ projectSlug: saved.attempt.projectSlug,
-          sessionId: saved.attempt.preparation.initialSessionId,
-          pane: learning || target === "workspace-preview" ? "preview" : "database",
-          ...(target === "workspace-erd" ? { databaseView: "erd" } : {}),
-          learningMode: true, learningView: learning ? "learning" : "workspace",
-          ...(learning ? { learningContent: "active" } : {}), learningAttemptId: attemptId }, context);
+      navigateLearningView(request, context) {
+        return colleague.navigate(trainingGuideCommand(request, { id: "guide-command", projectSlug: saved.attempt.projectSlug,
+          sessionId: saved.attempt.preparation.initialSessionId, attemptId }), context);
       },
       readPresentationCue(input) { return colleague.readCue(input); }
     } };
@@ -682,14 +679,41 @@ test("lesson presentation tools use exact pinned commands and native browser rec
     assert.equal(calls.at(-1).sessionId, saved.attempt.preparation.initialSessionId);
     assert.equal(calls.at(-1).pane, "preview");
   }
-  for (const [target, pane] of [["workspace-preview", "preview"], ["workspace-erd", "database"], ["learning", "lessons"]]) {
-    const result = await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target }, context });
+  // Older names keep opening their view; every real place can be opened ("show me").
+  for (const [target, pane, databaseView, navigate] of [["workspace-preview", "preview"], ["workspace-erd", "database", "erd"],
+    ["learning", "lessons", undefined, true], ["preview", "preview", undefined, true], ["database-erd", "database", "erd", true],
+    ["database-data", "database", "data", true], ["files", "files", undefined, true], ["changes", "changes", undefined, true],
+    ["git-log", "repository", undefined, true], ["session-info", "session", undefined, true], ["architecture", "system", undefined, true]]) {
+    const result = await actions.execute({ actionId: "vibe64.training.view.open",
+      input: { attemptId, target, ...(navigate ? { navigate } : {}) }, context });
     assert.equal(result.ok, true);
     assert.equal(result.focus.pane, pane);
     assert.equal(result.focus.learningAttemptId, attemptId);
     assert.equal(result.focus.learningView, target === "learning" ? "learning" : "workspace");
-    assert.equal(result.focus.databaseView, target === "workspace-erd" ? "erd" : undefined);
+    assert.equal(result.focus.databaseView, databaseView);
+    assert.equal(calls.at(-1).guide.navigate, true);
   }
+  const viewTool = toolSet.tools.find(item => item.actionId === "vibe64.training.view.open");
+  assert.doesNotThrow(() => tools.toOpenAiToolSchema(viewTool));
+  assert.match(viewTool.description, /point only \(navigate=false, highlight=true\)/u);
+  // The default points at the real control without moving the learner's view.
+  const pointed = await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "database-erd" }, context });
+  assert.deepEqual(pointed, { ok: true, guide: { shown: true, step: "dashboard" } });
+  assert.deepEqual(calls.at(-1), { id: "guide-command", learningAttemptId: attemptId, status: "pending", guide: {
+    target: "database-erd", navigate: false, highlight: true, caption: "Dashboard → Database → ERD",
+    steps: [{ id: "dashboard", label: "Dashboard" }, { id: "database", label: "Database" }, { id: "database-erd", label: "ERD" }] } });
+  await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "files", filePath: "src/server/app.js" }, context });
+  assert.equal(calls.at(-1).guide.caption, "Dashboard → Files → src/server/app.js");
+  assert.deepEqual(calls.at(-1).guide.steps.at(-1), { id: "file", path: "src/server/app.js", label: "src/server/app.js" });
+  const guided = calls.length;
+  for (const input of [{ target: "dashboard", navigate: true }, { target: "preview", navigate: false, highlight: false },
+    { target: "preview", filePath: "src/app.js" }, { target: "files", filePath: "../outside.js" },
+    { target: "files", filePath: "/etc/passwd" }, { target: "files", filePath: "src/../../x.js" }]) {
+    await assert.rejects(() => actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, ...input }, context }),
+      { code: "VIBE64_TRAINING_GUIDE_INVALID", statusCode: 422 });
+  }
+  await assert.rejects(() => actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "#erd" }, context }));
+  assert.equal(calls.length, guided, "invalid guide requests never reach the browser");
   assert.deepEqual(await inventory(f.systemRoot), before);
   const called = calls.length;
   for (const input of [{ name: "eval", parameters: {} }, { name: "show", parameters: {} },

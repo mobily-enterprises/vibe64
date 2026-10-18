@@ -1,7 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "@local/vibe64-sessions/server/main-conversation-authority";
-import { presentationClientId, presentationReceipt, presentationCueReceipt } from "../shared/presentationSchemas.js";
+import { guideReceipt, presentationClientId, presentationReceipt, presentationCueReceipt } from "../shared/presentationSchemas.js";
 
 const TRAINING_MAIN_PRESENTATION_ACTION = "vibe64.training.presentation.read";
 const TRAINING_MAIN_PRESENTATION_FOCUS_ACTION = "vibe64.training.presentation.focus.update";
@@ -11,7 +11,7 @@ const sessionId = { type: "string", required: true, noTrim: true, minLength: 1, 
 const focus = { type: "object", required: false, schema: createSchema({
   projectSlug: { type: "string", required: false, noTrim: true, maxLength: 128, pattern: "^[a-zA-Z0-9_-]*$" },
   sessionId: { ...sessionId, required: false },
-  pane: { type: "string", required: true, enum: ["session", "preview", "database", "lessons"] },
+  pane: { type: "string", required: true, enum: ["session", "preview", "database", "lessons", "files", "changes", "repository", "system"] },
   learningMode: { type: "boolean", required: false },
   learningView: { type: "string", required: false, enum: ["workspace", "learning"] },
   learningContent: { type: "string", required: false, enum: ["picker", "active"] },
@@ -65,7 +65,7 @@ function createTrainingMainPresentationActions({ project, actions } = {}) {
     definition(TRAINING_MAIN_PRESENTATION_ACK_ACTION, "ack", {
       commandId: presentationClientId, ok: { type: "boolean", required: true },
       error: { type: "string", required: false, maxLength: 2000 }, focus,
-      presentation: presentationReceipt, cue: presentationCueReceipt
+      presentation: presentationReceipt, cue: presentationCueReceipt, guide: guideReceipt
     }, "write")];
 }
 
