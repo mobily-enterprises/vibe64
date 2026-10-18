@@ -2662,6 +2662,8 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
   const route = vue.reactive({ path: `/app/project/${replacesPreviewOnRoute ? "original-course-project" : identity.sourceProjectSlug}`, query: { mode: "learning", learningView: "learning" } });
   const hostImports = {
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
     "@local/vibe64-training/client/presentation-operation": operations,
     "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
@@ -2739,6 +2741,8 @@ test("the local browser navigator returns plain settled focus for an ordinary Le
   const { code } = await transform(compileScript(descriptor, { id: "c78-workspace-view" }).content, { format: "cjs" });
   const imports = {
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
     "@local/vibe64-training/client/presentation-operation": operations,
     "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
@@ -2789,6 +2793,8 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   const route = vue.reactive({ path: "/app/project/demo", query: {} });
   const imports = {
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
@@ -2827,6 +2833,8 @@ test("the local Colleague host reports a project-less lesson's own session inste
   const route = vue.reactive({ path: "/app/project/editor-project", query: { mode: "learning", learningView: "learning" } });
   const imports = {
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },

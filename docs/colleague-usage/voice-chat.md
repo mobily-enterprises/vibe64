@@ -136,8 +136,26 @@ separately cancels the agent's work. The top-right **Close voice chat** X stops 
 releases the microphone and closes the session without stopping agent work.
 Closing discards unsent speech; your typed draft and saved messages remain.
 
-Open this assistant's **Voice settings** cog beside the microphone and speaker
-controls, below its face when expanded, then choose **Speaking voice**.
+## Choose the assistant's face
+
+Colleague and the project agent show an illustrated face that blinks, moves and
+animates its mouth while listening, thinking and speaking. Colleague starts with
+**Merc · male**; project agents, including the Learning teacher, start with
+**Yu · female**. To change one, open that assistant's **Voice settings** cog
+beside the microphone and speaker controls (below its face when expanded) and
+choose **Avatar**. Colleague and project agents keep separate choices. A project
+agent's cog works without starting voice; Colleague shows its cog once its voice
+controls are active (tap **Talk**). The face changes immediately, in the header
+button, chat and voice window. On a phone the cog sits in the same row below
+the face. Colleague can explain this but cannot choose for you: pick the
+avatar yourself. In standalone Vibe64 the choice is saved in this browser only
+(**Saved in this browser for this assistant type.**); another browser, a private
+window or cleared site data starts again from the defaults. If browser storage
+is blocked, the choice lasts until the page reloads.
+
+## Choose a speaking voice
+
+Open the same **Voice settings** cog and choose **Speaking voice**.
 Opening settings loads the installed choices without recording. The
 change applies to the next spoken reply. In standalone Vibe64 it lasts for the
 current voice session; a host with saved speech preferences can replace this

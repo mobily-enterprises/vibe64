@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Vibe64 conversation bindings and authorized speech connections.",
+  "description": "Vibe64 conversation bindings, authorized speech connections and assistant avatar artwork.",
   "exports": {
     "./client": "./src/client/index.js",
+    "./shared/avatars": "./src/shared/avatars.js",
     "./server": "./src/server/Vibe64VoiceProvider.js"
   },
   "jskit": {

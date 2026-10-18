@@ -2,6 +2,8 @@
 import { useRoute, useRouter } from "vue-router";
 import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
 import { Vibe64Colleague } from "@local/vibe64-colleague/client";
+import { Vibe64ColleagueAvatar } from "@local/vibe64-voice/client";
+import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAvatarPreferences.js";
 import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "@local/vibe64-training/client/presentation-operation";
 import { useTrainingWorkspaceObservation } from "@local/vibe64-training/client/workspace-observation";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -32,6 +34,8 @@ const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
 const actor = computed(() => viewer?.actorKey || "");
 const route = useRoute();
 const router = useRouter();
+const { avatars } = useVibe64LocalAvatarPreferences();
+const voiceVisual = ref(null);
 
 const focus = computed(() => {
   const learningMode = route.query.mode === "learning";
@@ -229,5 +233,10 @@ onBeforeUnmount(() => {
     :navigate="navigate"
     :request="request"
     :settle-workspace="settleWorkspace"
-  />
+    @voice-visual="voiceVisual = $event"
+  >
+    <template #avatar="{ state }">
+      <Vibe64ColleagueAvatar v-bind="voiceVisual || { state }" :avatar="avatars.colleague" />
+    </template>
+  </Vibe64Colleague>
 </template>

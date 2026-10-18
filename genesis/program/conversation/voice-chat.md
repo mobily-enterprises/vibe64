@@ -7,6 +7,14 @@ runtime while retaining its own identity, authorization and conversation history
 
 - `packages/vibe64-voice/src/client/Vibe64VoiceHost.vue`
 - `packages/vibe64-voice/src/client/Vibe64ProjectVoiceLauncher.vue`
+- `packages/vibe64-voice/src/client/MercAvatar.vue`
+- `packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue`
+- `packages/vibe64-voice/src/client/MercIllustratedAvatar.vue`
+- `packages/vibe64-voice/src/client/Vibe64AvatarSetting.vue`
+- `packages/vibe64-voice/src/shared/avatars.js`
+- `src/components/Vibe64LocalVoiceHost.vue`
+- `src/components/Vibe64LocalVoiceSettings.vue`
+- `src/composables/useVibe64LocalAvatarPreferences.js`
 - Main: `packages/vibe64-voice/src/client/projectVoiceBinding.js`
 - `packages/vibe64-voice/src/server/Vibe64VoiceProvider.js`
 - `src/composables/useVibe64ConversationRuntime.js`
@@ -27,6 +35,19 @@ when absent. A saved explicit boolean wins over the binding default. The binding
 supplies its label. A host may replace the settings slot with its own authorized
 preference control. Reactive voice changes reach subsequent replies through the
 JSKIT binding without replacing the conversation.
+The voice package owns the assistant avatar artwork: `Vibe64ColleagueAvatar`
+selects Merc (blond illustrated) or Yu (blue-haired manga) and animates blink,
+gestures, expressions and mouth from the host's mouthLevel/mouthPose/state.
+Its catalogue (`shared/avatars`) supplies the saved IDs, chooser labels and the
+per-target defaults: Merc for Colleague, Yu for project agents and Learning.
+`Vibe64AvatarSetting` is the single Avatar chooser; a host supplies its value,
+hint and save. The standalone root mounts `Vibe64LocalVoiceHost`, which fills
+the artwork and settings slots, remembers each target's choice in browser local
+storage, and passes the speech service's own speaking-voice selector after the
+chooser. The local Colleague host fills Colleague's launcher/conversation avatar
+from the same choice. A host with account preferences supplies its own map and
+renders the same artwork and chooser. The generic JSKIT avatar remains only the
+fallback when a host fills no artwork slot.
 The approved tap/hold gestures remain unchanged; historical talking-mode choices
 are not forwarded. An explicitly saved edit-before-send choice maps to the
 runtime's existing captured reviewBeforeSend policy.
