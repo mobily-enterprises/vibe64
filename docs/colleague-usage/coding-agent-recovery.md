@@ -17,6 +17,14 @@ error; an installation problem requires the workspace operator.
 When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
 request. Reply text by itself does not prove that the turn completed successfully.
+If the conversation reports **Claude stopped unexpectedly**, its Claude process
+ended without anyone stopping it, and its subagents' running commands were
+cancelled. The message names the recorded cause: **process/thread limit
+reached** means the server refused Claude more processes or threads, while a
+signal or exit code is reported otherwise. The saved conversation is retained.
+Send a message, or **Resume goal** for a goal, to continue; repeated stops with a
+limit cause require the workspace operator. Colleague can explain the reported
+cause; changing limits is an operator task.
 Unconfirmed cleanup blocks replacement work, including after failed startup.
 While Claude is starting, **Stop** joins that process's existing cleanup. Its
 execution is recorded once; waiting for initialization does not disable Stop.
@@ -33,6 +41,12 @@ Colleague can explain and recheck readiness; installation repair requires the
 operator. Only an actual signed-out status asks you to sign in again.
 Reconnecting cancels older model-list and usage checks. If one reports that it
 was cancelled for reconnection, refresh after reconnection completes.
+While Claude is working, automatic status checks keep its current instructions.
+Changed project guidance applies when it is idle; checking status does not require
+stopping a turn. If a connection error remains after the operator repairs it,
+select **Retry connection**, then check delivery before retrying your message.
+Colleague can explain this recovery on desktop and mobile.
+
 Claude can continue automatically when a background task reports back. The
 working indicator and **Stop** remain available for that work, even after an
 earlier answer. Sending guidance while only background work remains starts the

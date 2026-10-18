@@ -501,7 +501,9 @@ Claude's retained turn owner now also applies the original native state, verifie
 Stop, result projection and completion ordering to the same entry. Vibe64 retains
 checkpoint, metadata, transcript and goal publication at their original awaited
 sequence points. Native exit proof precedes clearing the saved execution; failed
-cleanup remains retryable. Its original provider-wide entry registry, retained
+cleanup remains retryable. The conversation execution's exit report carries the
+host's process/thread-limit evidence with the code and signal, so an unexpected
+Claude exit names its cause. Its original provider-wide entry registry, retained
 history restoration, Send/steering, reads, admission inspection and native drain
 now belong to the same shared conversation owner. Vibe64 supplies authorized
 identity storage, account/profile/prompt preparation and message publication.
@@ -4304,3 +4306,8 @@ For an unfinished pinned goal, message dispatch and definite-rejection receipt
 inspection compare the current pinned orchestrator, matching request preparation.
 A deferred preference for the next goal does not invalidate this goal’s messages;
 selection, actor, access and native activity checks still apply.
+
+
+Blocked Claude goals expose Pause as well as Resume in the shared Goal control.
+Explicit Pause uses the retained native goal owner and disables automatic
+scheduling while preserving the objective. Model prose does not change this state.

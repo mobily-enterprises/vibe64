@@ -92,6 +92,17 @@ test("conversation execution observes a server failure without calling it a succ
   assert.equal(native.running, false);
 });
 
+test("conversation execution exit carries recorded process/thread-limit evidence", async t => {
+  const taskLimit = { source: "cgroup-pids-events", count: 2 };
+  const f = await fixture(t, {
+    commandRunner: async () => ({ ok: true, execution: { id: "task-limit-exit" } }),
+    inspectExecution: async () => ({ ok: true, running: false, exitCode: 1, taskLimit }),
+    stopExecution: async () => ({ scopeEmpty: true })
+  });
+  const native = await f.start();
+  assert.deepEqual(await native.exited, { code: 1, signal: null, taskLimit });
+});
+
 test("managed execution exposes bounded native startup logs and its observed process id", async t => {
   let request;
   const f = await fixture(t, {

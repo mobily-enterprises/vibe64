@@ -145,6 +145,7 @@ const goalState = computed(() => ({
   pending: changingGoal.value,
   error: goalError.value,
   set: goalExplicitMode.value ? (input) => changeGoal("set", input) : null,
+  pauseBlocked: goalEngineId.value === "claude",
   pause: () => changeGoal("pause"),
   resume: goalExplicitMode.value ? () => changeGoal("resume") : null,
   cancel: () => changeGoal("cancel")

@@ -42,7 +42,9 @@ round minus button at the end of that controls row tucks them away (accessible l
 **Minimise avatar**). There is no size menu. In Colleague's narrow drawer and
 full-screen phone view, this row stays above the scrolling transcript so it does
 not cover messages. A short container temporarily compresses the artwork and
-restores it when space returns.
+restores it when space returns. The animated face keeps its reserved artwork
+area while you type or scroll; its animation does not change the size of the
+message controls.
 
 Main's microphone and speaker controls sit with the expanded face, outside the
 original message buttons. Before speech is connected, the speaker button opens
