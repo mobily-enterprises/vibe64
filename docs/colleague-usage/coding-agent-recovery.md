@@ -33,6 +33,12 @@ Colleague can explain and recheck readiness; installation repair requires the
 operator. Only an actual signed-out status asks you to sign in again.
 Reconnecting cancels older model-list and usage checks. If one reports that it
 was cancelled for reconnection, refresh after reconnection completes.
+While Claude is working, automatic status checks keep its current instructions.
+Changed project guidance applies when it is idle; checking status does not require
+stopping a turn. If a connection error remains after the operator repairs it,
+select **Retry connection**, then check delivery before retrying your message.
+Colleague can explain this recovery on desktop and mobile.
+
 Claude can continue automatically when a background task reports back. The
 working indicator and **Stop** remain available for that work, even after an
 earlier answer. Sending guidance while only background work remains starts the
