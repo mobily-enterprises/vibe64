@@ -155,7 +155,8 @@ function pollingTaskSnapshot({ input, state, brief, sessions }) {
     });
   }
   const session = sessions.find(value => value.learningAttemptId === attempt.attemptId && value.archived !== true);
-  const projectSlug = attempt.projectSlug || "";
+  // Every attempt reserves a practice slug; a lesson without an exercise has no project to watch.
+  const projectSlug = brief.lesson?.exerciseRequired === false ? "" : attempt.projectSlug || "";
   const sessionId = session?.sessionId || attempt.preparation?.initialSessionId || "";
   const conversationId = sessionId ? mainConversationId({ learningAttemptId: attempt.attemptId, sessionId }) : "";
   if (!sessionId || input.targetProjectSlug !== projectSlug || input.sessionId !== sessionId || input.conversationId !== conversationId) {
@@ -293,7 +294,8 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
         failure: { type: "string", required: false,
           enum: ["workspace-settle-failed", "exercise-observation-failed"] },
         workspace: { type: "object", required: true, schema: createSchema({
-          projectSlug: { ...text, required: true, maxLength: 128 },
+          // A lesson without an exercise has no project.
+          projectSlug: { ...text, required: true, minLength: 0, maxLength: 128 },
           sessionId: { ...text, required: true, maxLength: 128 },
           pane: { ...text, required: true, maxLength: 64 },
           ready: { type: "boolean", required: true },

@@ -36,7 +36,9 @@ const router = useRouter();
 const focus = computed(() => {
   const learningMode = route.query.mode === "learning";
   const learning = learningMode ? view.value?.learningBinding : null;
-  const projectSlug = learning?.noExercise === false ? learning.sourceProjectSlug : projectSlugFromRoute(route);
+  // A Learning lesson owns the focus: a project-less lesson has no project,
+  // not the editor page's selected project.
+  const projectSlug = learning ? learning.noExercise === false ? learning.sourceProjectSlug : "" : projectSlugFromRoute(route);
   const current = view.value?.projectSlug === projectSlug ? view.value : null;
   const pane = layout.value?.ready && layout.value.projectSlug === projectSlug
     ? layout.value.projectVisible

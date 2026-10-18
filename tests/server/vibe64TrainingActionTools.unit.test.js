@@ -133,7 +133,8 @@ test("learning polling reads one exact active pinned task and sends bounded guid
   const f = await fixture(t);
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  // USE-ONE declares no exercise: its task has no project, although the attempt reserved a practice slug.
+  const projectSlug = "";
   const sessionId = `learning-${attemptId}`;
   const guidance = [];
   const learningSessions = {
@@ -172,13 +173,15 @@ test("learning polling reads one exact active pinned task and sends bounded guid
   await assert.rejects(c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
     conversationId, criterion: "Wrong target", guidanceId: "guide-wrong", evidence }), /project or conversation changed/);
   assert.equal(guidance.length, 1, "a stale target cannot reach Main");
+  await assert.rejects(c.execute("polling.read", { attemptId, targetProjectSlug: reserved.attempt.projectSlug, sessionId,
+    conversationId, criterion: "Reserved slug" }), /project or conversation changed/, "an exercise-less lesson has no project to watch");
 });
 
 test("learning watch polling reads its exact attempt owner without replacing ordinary progress or reentering practice admission", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  const projectSlug = ""; // USE-ONE declares no exercise, so its watched task has no project.
   const sessionId = `learning-${attemptId}`;
   const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
   const ordinary = createTrainingLearnerState({ systemRoot: path.join(f.root, "ordinary") });

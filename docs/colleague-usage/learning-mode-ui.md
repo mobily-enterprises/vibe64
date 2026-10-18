@@ -83,7 +83,8 @@ Use Colleague's eye button to manage polling for the lesson task currently open
 in this browser. If Main has delivered a lesson question, **Start polling** uses
 that exact question and pinned lesson, including its current practice project;
 you do not need to enter the project again. Otherwise, enter one bounded task in
-**Task to watch**, then start it. The compact details dialog shows the task as
+**Task to watch**, then start it. This also works for a lesson without a practice
+project, such as Lesson 0; its target then shows as a source-less lesson. The compact details dialog shows the task as
 **active**, **paused**, or **unavailable**, its exact target, and its latest
 structured observation and time, last delivered help, and any saved assessment
 outcome. Observations include switching between **Workspace** and **Learning** and

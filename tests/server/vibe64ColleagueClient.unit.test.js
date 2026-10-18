@@ -2794,3 +2794,43 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   assert.equal(received.navigate, navigation.value);
   assert.deepEqual(Object.keys(await received.navigate({ managementView: "accounts" })), ["route"]);
 });
+
+test("the local Colleague host reports a project-less lesson's own session instead of the page project", async t => {
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "colleague-sourceless-focus", inlineTemplate: true }).content, { format: "cjs" });
+  let received = null;
+  const attemptId = "8813ab97-f478-4d43-a492-7e7961fc0090";
+  const route = vue.reactive({ path: "/app/project/editor-project", query: { mode: "learning", learningView: "learning" } });
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+      setup(props) { received = props; return () => null; } } },
+    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "editor-project" },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const host = renderer.createApp(module.exports.default);
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, vue.ref({ projectSlug: "", sessionId: `learning-${attemptId}`, ready: true,
+    pane: "lessons", learningView: "learning", learningBinding: { noExercise: true, learningAttemptId: attemptId, sourceProjectSlug: "" } }));
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: "", projectVisible: true }));
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  assert.equal(received.focus.projectSlug, "");
+  assert.equal(received.focus.sessionId, `learning-${attemptId}`);
+  assert.equal(received.focus.learningAttemptId, attemptId);
+  assert.equal(received.focus.pane, "lessons");
+});
