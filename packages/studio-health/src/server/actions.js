@@ -15,7 +15,7 @@ function createActions({ studioHealth } = {}) {
     input: studioHealthQueryInputValidator,
     output: null,
     extensions: { assistant: {
-      description: "Read this installation's Health checks: workspace services, AI and GitHub sign-in, and the local tools Vibe64 uses (Node.js, Git, GitHub CLI, ripgrep, Codex, Genesis, Playwright). Each check reports pass or fail with what was expected and a short observed result. Use it to tell the person which setup step is missing on this machine and how to fix it; it changes nothing and repairs nothing. Dashboard → Health shows the same checks.",
+      description: "Read this installation's Health checks: workspace services, AI and GitHub sign-in, and the local tools Vibe64 uses (Node.js, Git, GitHub CLI, ripgrep, Codex, Genesis, Playwright). Each check reports pass or fail with what was expected and a short observed result. Use it to tell the person which setup step is missing on this machine and how to fix it; it changes nothing and repairs nothing. Playwright runtime and Pinned browser are only needed for automated browser tests, so their failure does not block other work. GitHub sign-in is not a Health check: Account settings → GitHub shows it. Dashboard → Health shows the same checks.",
       output: { mode: "replace", schema: createSchema({
         ok: { type: "boolean", required: true },
         healthy: { type: "boolean", required: false },
