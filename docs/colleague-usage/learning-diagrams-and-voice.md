@@ -30,6 +30,12 @@ you do not need to request the diagram again while the view changes.
 This also applies with read-aloud off; opening voice first is not required.
 Wait for Main to confirm that the diagram is ready before continuing its
 illustrated steps.
+The whole diagram is scaled to fit its frame, centred, with its title above and
+the current step's caption below. **Minimise presentation**, the pill at the
+right of **Courses** | **Presentation** (below them on a phone), folds the
+diagram away; **Restore presentation** brings it back. After a page reload,
+**Presentation** stays unavailable until the teacher opens the diagram again,
+unless the diagram had already run a step or been paused (see below).
 
 Source-less Learning conversations select the graduation-cap option and disable Preview and Dashboard. A supported declared
 diagram can use the same Presentation player only in your exact saved lesson

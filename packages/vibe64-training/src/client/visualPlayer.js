@@ -135,7 +135,7 @@ function frameDocument(payload) {
     '<!doctype html><html><head><meta charset="utf-8">',
     `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
     '<meta name="referrer" content="no-referrer">',
-    '<style>html,body{margin:0}svg{display:block;width:100%;height:auto}</style></head><body>',
+    '<style>html,body{margin:0;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style></head><body>',
     `<script nonce="${nonce}">(${bootstrap.toString()})(${JSON.stringify(payload)}, url => import(url));</script>`,
     "</body></html>"
   ].join("");

@@ -522,8 +522,8 @@ defineExpose({ presentation });
           <svg v-if="visible" class="training-preview__segment-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}
         </v-btn>
       </div>
-      <v-btn v-if="mode === 'presentation'" class="training-preview__collapse" min-height="40" rounded="pill" variant="text" @click="collapsed = !collapsed">
-        {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
+      <v-btn v-if="mode === 'presentation'" class="training-preview__collapse" min-height="40" rounded="pill" variant="tonal" @click="collapsed = !collapsed">
+        <svg class="training-preview__collapse-icon" viewBox="0 0 24 24" aria-hidden="true"><path :d="collapsed ? 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z' : 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'" /></svg>{{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
     </div>
     <div v-if="appError" class="training-preview__notice is-error" role="alert">
@@ -620,7 +620,8 @@ defineExpose({ presentation });
   color: var(--v64-on-learning-container, rgb(var(--v-theme-on-surface)));
 }
 .training-preview__segment-check { width: 18px; height: 18px; margin-inline-end: 6px; fill: currentColor; animation: training-preview-pop var(--v64-duration-medium, 300ms) var(--v64-ease-emphasized-decelerate, ease-out); }
-.training-preview__collapse { letter-spacing: 0; text-transform: none; }
+.training-preview__collapse { margin-inline-start: auto; letter-spacing: 0; text-transform: none; }
+.training-preview__collapse-icon { width: 18px; height: 18px; margin-inline-end: var(--v64-space-1, 4px); fill: currentColor; }
 
 .training-preview__note {
   margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
