@@ -837,24 +837,29 @@
           :session-id="selectedAssistantSessionId"
         >
           <template #lessons>
-            <div v-if="practiceLesson" class="studio-autopilot__learning-code-check">
+            <div v-if="practiceLesson" class="studio-autopilot__learning-code-check" :class="`is-${learningCodeState}`">
+              <span class="studio-autopilot__learning-code-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path :d="learningCodeIcons[learningCodeState]" /></svg>
+              </span>
+              <div class="studio-autopilot__learning-code-status" role="status" aria-live="polite">
+                <p class="studio-autopilot__learning-code-title">{{ learningCodeTitles[learningCodeState] }}</p>
+                <p class="studio-autopilot__learning-code-message">
+                  {{ learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
+                </p>
+              </div>
               <v-btn
+                class="studio-autopilot__learning-code-button"
                 color="primary"
                 :disabled="learningCodeChecking"
                 :loading="learningCodeChecking"
-                variant="flat"
+                min-height="44"
+                rounded="pill"
+                :variant="learningCodeState === 'passed' ? 'tonal' : 'flat'"
                 @click="checkLearningCode"
               >
                 Check my code
               </v-btn>
-              <p
-                class="studio-autopilot__learning-code-status"
-                :class="{ 'text-error': learningCodeResult?.error }"
-                role="status"
-                aria-live="polite"
-              >
-                {{ learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
-              </p>
+              <v-progress-linear v-if="learningCodeChecking" class="studio-autopilot__learning-code-progress" color="primary" indeterminate rounded />
             </div>
             <slot name="learning" :dashboard-context="dashboardContext" />
           </template>
@@ -1772,6 +1777,18 @@ provide(VIBE64_LESSON_DASHBOARD_KEY, computed(() => practiceLesson.value
   ? lessonDashboardScope(props.learningAttemptId, sessionId.value) : null));
 const learningCodeChecking = ref(false);
 const learningCodeResult = ref(null);
+// Display state of the last real check: idle, checking, passed, not-yet or blocked.
+const learningCodeState = computed(() => learningCodeChecking.value ? "checking"
+  : learningCodeResult.value?.outcome || (learningCodeResult.value?.error ? "blocked" : "idle"));
+const learningCodeTitles = Object.freeze({ idle: "Code check", checking: "Checking your code…", passed: "Check passed",
+  "not-yet": "Not yet", blocked: "Could not check" });
+const learningCodeIcons = Object.freeze({
+  idle: "M8 3a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2H3v2h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2v-2H8v-5a2 2 0 0 0-2-2 2 2 0 0 0 2-2V5h2V3m6 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5h-2V3h2Z",
+  checking: "M12 4V1L8 5l4 4V6a6 6 0 0 1 6 6c0 1-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12a8 8 0 0 0-8-8m0 14a6 6 0 0 1-6-6c0-1 .25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12a8 8 0 0 0 8 8v3l4-4-4-4v3Z",
+  passed: "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17Z",
+  "not-yet": "M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2 1 21Z",
+  blocked: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59Z"
+});
 watch(practiceLesson, available => { if (!available) learningCodeResult.value = null; });
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
@@ -1807,8 +1824,8 @@ async function checkLearningCode(event) {
     const response = await owner.submitCode(event);
     if (!response) throw new Error("Your code could not be checked. Press Check my code again.");
     learningCodeResult.value = response.checkOutcome === "passed"
-      ? { message: "Your code passed the check. Now tell your teacher in Learning, in your own words, what you changed and why." }
-      : { message: `Not yet: ${response.checkReason || "the check did not pass."}` };
+      ? { outcome: "passed", message: "Your code passed the check. Now tell your teacher in Learning, in your own words, what you changed and why." }
+      : { outcome: "not-yet", message: response.checkReason || "The check did not pass." };
   } catch (error) {
     learningCodeResult.value = { error: true, message: String(error?.message || error || "Your code could not be checked.") };
   } finally {
@@ -2216,19 +2233,92 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* Check my code: a compact "run check" card whose tone follows the real result. */
 .studio-autopilot__learning-code-check {
+  --code-check-tone: rgb(var(--v-theme-primary));
+  --code-check-container: var(--v64-surface-container, rgba(var(--v-theme-primary), 0.05));
   align-items: center;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
+  background: var(--code-check-container);
+  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
+  border-radius: var(--v64-shape-lg, 16px);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.42rem 0.7rem;
+  gap: var(--v64-space-3, 12px);
+  margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  overflow: hidden;
+  padding: var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-3, 12px);
+  position: relative;
+  transition: background-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease),
+    border-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease);
+}
+.studio-autopilot__learning-code-check.is-checking { --code-check-container: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.14)); }
+.studio-autopilot__learning-code-check.is-passed {
+  --code-check-tone: rgb(var(--v-theme-success));
+  --code-check-container: var(--v64-success-container, rgba(var(--v-theme-success), 0.14));
+  border-color: rgba(var(--v-theme-success), 0.45);
+}
+.studio-autopilot__learning-code-check.is-not-yet {
+  --code-check-tone: var(--v64-on-learning-container, #6b5000);
+  --code-check-container: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
+  border-color: rgba(245, 197, 24, 0.6);
+}
+.studio-autopilot__learning-code-check.is-blocked {
+  --code-check-tone: rgb(var(--v-theme-error));
+  --code-check-container: var(--v64-error-container, rgba(var(--v-theme-error), 0.12));
+  border-color: rgba(var(--v-theme-error), 0.4);
+}
+
+.studio-autopilot__learning-code-badge {
+  background: var(--code-check-tone);
+  border-radius: var(--v64-shape-md, 12px);
+  color: rgb(var(--v-theme-surface));
+  display: grid;
+  flex: 0 0 auto;
+  height: 40px;
+  place-items: center;
+  width: 40px;
+}
+.studio-autopilot__learning-code-check.is-not-yet .studio-autopilot__learning-code-badge {
+  background: var(--v64-learning, #f5c518);
+  color: var(--v64-on-learning, #2b2100);
+}
+.studio-autopilot__learning-code-badge svg { fill: currentColor; height: 22px; width: 22px; }
+.studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-badge svg {
+  animation: studio-autopilot-code-spin 1.2s linear infinite;
+}
+.studio-autopilot__learning-code-check.is-passed .studio-autopilot__learning-code-badge {
+  animation: studio-autopilot-code-pop var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out);
 }
 
 .studio-autopilot__learning-code-status {
   flex: 1 1 14rem;
   margin: 0;
   min-width: 0;
+}
+.studio-autopilot__learning-code-status p { margin: 0; overflow-wrap: anywhere; }
+.studio-autopilot__learning-code-title {
+  color: var(--code-check-tone);
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
+}
+.studio-autopilot__learning-code-check.is-idle .studio-autopilot__learning-code-title,
+.studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-title { color: inherit; }
+.studio-autopilot__learning-code-message {
+  color: var(--v64-on-surface-variant, rgba(var(--v-theme-on-surface), 0.72));
+  font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
+}
+.studio-autopilot__learning-code-check:not(.is-idle):not(.is-checking) .studio-autopilot__learning-code-message { color: rgb(var(--v-theme-on-surface)); }
+.studio-autopilot__learning-code-button { letter-spacing: 0; padding-inline: 20px; text-transform: none; }
+.studio-autopilot__learning-code-progress { bottom: 0; left: 0; position: absolute !important; right: 0; }
+
+@keyframes studio-autopilot-code-spin { to { transform: rotate(360deg); } }
+@keyframes studio-autopilot-code-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+@media (max-width: 599px) {
+  .studio-autopilot__learning-code-button { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-autopilot__learning-code-check,
+  .studio-autopilot__learning-code-check .studio-autopilot__learning-code-badge,
+  .studio-autopilot__learning-code-check .studio-autopilot__learning-code-badge svg { animation: none !important; transition: none; }
 }
 
 .studio-autopilot__architecture-pane {

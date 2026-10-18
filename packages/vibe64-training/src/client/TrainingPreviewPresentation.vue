@@ -511,30 +511,43 @@ defineExpose({ presentation });
 <template>
   <section class="training-preview">
     <div v-if="(selection || lessonsAvailable) && (!splitPaneMode || learningPaneActive)" class="training-preview__choices" aria-label="Learning content">
-      <v-btn v-if="appAvailable && !splitPaneMode" min-height="48" :disabled="appOpening" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
-      <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Courses</v-btn>
-      <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
-      <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">
+      <div class="training-preview__segmented" role="group" aria-label="Learning view">
+        <v-btn v-if="appAvailable && !splitPaneMode" class="training-preview__segment" :class="{ 'is-selected': appVisible }" min-height="40" :disabled="appOpening" variant="text" :aria-pressed="appVisible" @click="showApp($event)">
+          <svg v-if="appVisible" class="training-preview__segment-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>{{ lessonsAvailable ? 'App' : 'App preview' }}
+        </v-btn>
+        <v-btn v-if="lessonsAvailable" class="training-preview__segment" :class="{ 'is-selected': lessonsVisible }" min-height="40" variant="text" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">
+          <svg v-if="lessonsVisible" class="training-preview__segment-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>Courses
+        </v-btn>
+        <v-btn class="training-preview__segment" :class="{ 'is-selected': visible }" min-height="40" :disabled="!selection" variant="text" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">
+          <svg v-if="visible" class="training-preview__segment-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}
+        </v-btn>
+      </div>
+      <v-btn v-if="mode === 'presentation'" class="training-preview__collapse" min-height="40" rounded="pill" variant="text" @click="collapsed = !collapsed">
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
     </div>
-    <div v-if="appError" role="alert">
+    <div v-if="appError" class="training-preview__notice is-error" role="alert">
+      <svg class="training-preview__notice-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 13h-2V7h2m0 10h-2v-2h2M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /></svg>
       <p>{{ appError }}</p>
-      <v-btn v-if="splitPaneMode && workspaceActive" min-height="48" variant="tonal" @click="showApp($event)">Retry workspace</v-btn>
+      <v-btn v-if="splitPaneMode && workspaceActive" min-height="48" rounded="pill" variant="tonal" @click="showApp($event)">Retry workspace</v-btn>
     </div>
-    <p v-if="!appAvailable && learningBinding?.noExercise === false" role="status">
+    <p v-if="!appAvailable && learningBinding?.noExercise === false" class="training-preview__note" role="status">
       The practice App controls are unavailable in this installation. Keep this lesson and its saved workspace; lesson diagrams use Presentation.
     </p>
-    <p v-else-if="!appAvailable && lessonsAvailable" role="status">
+    <p v-else-if="!appAvailable && lessonsAvailable" class="training-preview__note" role="status">
       This lesson has no project workspace. Use Learning for its lesson content and presentation.
     </p>
-    <div v-if="cue && ['awaiting-audio', 'awaiting-continue'].includes(cue.phase)" class="training-preview__choices">
+    <div v-if="cue && ['awaiting-audio', 'awaiting-continue'].includes(cue.phase)" class="training-preview__choices training-preview__cue" :class="{ 'is-error': cue.error }">
+      <span class="training-preview__cue-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path :d="cue.phase === 'awaiting-audio' ? 'M3 9v6h4l5 5V4L7 9H3m13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4Z' : 'M8 5.14v14l11-7-11-7Z'" /></svg>
+      </span>
       <p role="status">{{ cue.error || 'The explanation is ready. Continue when you are ready to watch.' }}</p>
-      <v-btn min-height="48" variant="tonal" @click="continueCue">{{ cue.phase === 'awaiting-audio' ? 'Play diagram without sound' : 'Continue' }}</v-btn>
+      <v-btn min-height="48" rounded="pill" color="primary" variant="flat" @click="continueCue">{{ cue.phase === 'awaiting-audio' ? 'Play diagram without sound' : 'Continue' }}</v-btn>
     </div>
-    <div v-if="checkpointError" role="alert">
+    <div v-if="checkpointError" class="training-preview__notice is-error" role="alert">
+      <svg class="training-preview__notice-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 13h-2V7h2m0 10h-2v-2h2M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /></svg>
       <p>{{ checkpointError }}</p>
-      <v-btn min-height="48" variant="tonal" @click="retryCheckpoint().catch(() => {})">
+      <v-btn min-height="48" rounded="pill" variant="tonal" @click="retryCheckpoint().catch(() => {})">
         {{ checkpointOperation ? 'Retry diagram checkpoint' : 'Save current diagram' }}
       </v-btn>
     </div>
@@ -543,14 +556,22 @@ defineExpose({ presentation });
     </div>
     <div v-if="lessonsAvailable" v-show="lessonsVisible" class="training-preview__lessons" aria-label="Courses">
       <slot name="lessons" />
-      <p v-if="!appAvailable && !selection" role="status">This lesson has no App preview. No lesson presentation is open.</p>
+      <div v-if="!appAvailable && !selection" class="training-preview__empty">
+        <svg class="training-preview__empty-art" viewBox="0 0 120 80" aria-hidden="true" focusable="false">
+          <rect x="14" y="10" width="92" height="56" rx="10" class="frame" />
+          <path d="M30 50l14-16 12 10 10-8 18 14" class="line" />
+          <circle cx="86" cy="26" r="6" class="sun" />
+        </svg>
+        <p role="status">This lesson has no App preview. No lesson presentation is open.</p>
+      </div>
     </div>
     <div v-show="lessonsAvailable ? visible : !appVisible" class="training-preview__presentation">
       <TrainingVisualPlayer v-if="resource" ref="player" :resource="resource" :attempt-id="selection.attemptId" :snapshot="resource.snapshot" @state="observedState" @error="observedError" />
-      <v-skeleton-loader v-else-if="display.phase === 'loading'" type="image" aria-label="Loading lesson presentation" />
-      <div v-if="!resource && display.error">
+      <v-skeleton-loader v-else-if="display.phase === 'loading'" class="training-preview__loading" type="image, paragraph" aria-label="Loading lesson presentation" />
+      <div v-if="!resource && display.error" class="training-preview__notice is-error">
+        <svg class="training-preview__notice-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 13h-2V7h2m0 10h-2v-2h2M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" /></svg>
         <p role="alert">{{ display.error }}</p>
-        <v-btn min-height="48" variant="tonal" @click="open(selection).catch(() => {})">Reload presentation</v-btn>
+        <v-btn min-height="48" rounded="pill" variant="tonal" @click="open(selection).catch(() => {})">Reload presentation</v-btn>
       </div>
     </div>
   </section>
@@ -568,8 +589,90 @@ defineExpose({ presentation });
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: var(--v64-space-2, 8px);
 }
+.training-preview > .training-preview__choices:first-child { padding: var(--v64-space-3, 12px) var(--v64-space-3, 12px) var(--v64-space-1, 4px); }
+
+/* Material 3 segmented button: one outlined pill, selected segment tonal with a check. */
+.training-preview__segmented {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
+  border-radius: var(--v64-shape-full, 999px);
+  overflow: hidden;
+}
+.training-preview__segmented > .training-preview__segment {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: 0;
+  padding-inline: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
+  color: var(--v64-on-surface, rgb(var(--v-theme-on-surface)));
+  transition: background-color var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
+}
+.training-preview__segmented > .training-preview__segment + .training-preview__segment { border-inline-start: 1px solid var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24)); }
+.training-preview__segmented > .training-preview__segment.is-selected {
+  background: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
+  color: var(--v64-on-learning-container, rgb(var(--v-theme-on-surface)));
+}
+.training-preview__segment-check { width: 18px; height: 18px; margin-inline-end: 6px; fill: currentColor; animation: training-preview-pop var(--v64-duration-medium, 300ms) var(--v64-ease-emphasized-decelerate, ease-out); }
+.training-preview__collapse { letter-spacing: 0; text-transform: none; }
+
+.training-preview__note {
+  margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
+  border-radius: var(--v64-shape-md, 12px);
+  background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), 0.06));
+  color: var(--v64-on-surface-variant, inherit);
+  font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
+}
+.training-preview__notice,
+.training-preview__cue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--v64-space-3, 12px);
+  margin: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
+  padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
+  border-radius: var(--v64-shape-lg, 16px);
+  animation: training-preview-rise var(--v64-duration-medium, 300ms) var(--v64-ease-emphasized-decelerate, ease-out);
+}
+.training-preview__notice p, .training-preview__cue p { flex: 1 1 12rem; min-width: 0; margin: 0; overflow-wrap: anywhere; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); }
+.training-preview__notice.is-error { background: var(--v64-error-container, rgba(var(--v-theme-error), 0.12)); color: rgb(var(--v-theme-on-surface)); }
+.training-preview__notice-icon { flex: 0 0 auto; width: 24px; height: 24px; fill: rgb(var(--v-theme-error)); }
+.training-preview__cue {
+  background: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.14));
+  border: 1px solid rgba(var(--v-theme-primary), 0.3);
+  box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
+}
+.training-preview__cue.is-error { background: var(--v64-learning-container, rgba(245, 197, 24, 0.22)); border-color: rgba(245, 197, 24, 0.6); }
+.training-preview__cue p { font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }
+.training-preview__cue-icon {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+.training-preview__cue-icon::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--v-theme-primary), 0.4);
+  animation: training-preview-pulse 2.2s var(--v64-ease-standard, ease) infinite;
+}
+.training-preview__cue-icon svg { width: 24px; height: 24px; fill: currentColor; }
+.training-preview__notice .v-btn, .training-preview__cue .v-btn { letter-spacing: 0; text-transform: none; padding-inline: 20px; }
+
 .training-preview__app {
   flex: 1;
   min-width: 0;
@@ -582,8 +685,38 @@ defineExpose({ presentation });
   min-height: 0;
   overflow: auto;
 }
+.training-preview__presentation { padding: var(--v64-space-2, 8px) var(--v64-space-3, 12px) var(--v64-space-3, 12px); }
 .training-preview__presentation p {
-  margin: 8px;
   overflow-wrap: anywhere;
+}
+.training-preview__loading { border-radius: var(--v64-shape-lg, 16px); overflow: hidden; }
+.training-preview__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--v64-space-3, 12px);
+  margin: var(--v64-space-4, 16px);
+  padding: var(--v64-space-6, 32px) var(--v64-space-4, 16px);
+  border: 1px dashed var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
+  border-radius: var(--v64-shape-xl, 28px);
+  text-align: center;
+  color: var(--v64-on-surface-variant, inherit);
+}
+.training-preview__empty p { margin: 0; max-width: 28rem; font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif); }
+.training-preview__empty-art { width: 120px; height: 80px; }
+.training-preview__empty-art .frame { fill: var(--v64-surface-container-high, rgba(var(--v-theme-primary), 0.08)); stroke: var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24)); stroke-width: 2; }
+.training-preview__empty-art .line { fill: none; stroke: rgba(var(--v-theme-primary), 0.55); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.training-preview__empty-art .sun { fill: var(--v64-learning, #f5c518); }
+
+@keyframes training-preview-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes training-preview-pop { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes training-preview-pulse { 0% { transform: scale(0.94); opacity: 0.9; } 70% { transform: scale(1.2); opacity: 0; } 100% { opacity: 0; } }
+@media (max-width: 599px) {
+  .training-preview__segmented { flex: 1 1 100%; }
+  .training-preview__segmented > .training-preview__segment { min-height: 44px !important; padding-inline: 10px; }
+  .training-preview__cue .v-btn, .training-preview__notice .v-btn { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .training-preview__notice, .training-preview__cue, .training-preview__segment-check, .training-preview__cue-icon::after { animation: none; }
 }
 </style>
