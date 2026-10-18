@@ -8,6 +8,9 @@ or temporary review conversation does not count; use its **Main chat** button
 first. Wait for each view to finish opening.
 Colleague can explain these steps, but its own navigation is a demonstration,
 not evidence that you performed them.
+For a question that asks you to change code, use **Workspace → Dashboard →
+Code** and **Check my code**; see "Answering a code question" in
+[Choosing lessons and Learning conversations](learning-mode-ui.md).
 
 Keep one delivered challenge and its question reference across all three steps.
 The Main teacher may explain one substep at a time, but must not prepare a new question

@@ -28,9 +28,13 @@ goal/target, active/paused/unavailable state, latest valid observation and time,
 last delivered-help receipt, and any saved assessment outcome. Observation and
 help are not themselves proof of completion. A separate Learning watcher checks
 only those validated facts; Colleague manages its controls, while Main receives
-bounded updates and never checks your activity itself. Stop removes the watch
-without stopping Main, the lesson or the app, and polling grants no unrelated
-mutation permission.
+bounded updates and never checks your activity itself. Each observation is
+delivered to Main once. Switching between **Workspace** and **Learning**, and
+between Workspace panes such as **Preview** and **Dashboard**, is observed; a
+lesson without a practice project, such as Lesson 0, can be watched too. Stop
+removes the watch without stopping Main, the lesson or the app, and polling grants
+no unrelated mutation permission. For the eye dialog's controls, see
+[Choosing lessons and Learning conversations](learning-mode-ui.md).
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.

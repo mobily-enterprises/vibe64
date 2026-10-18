@@ -33,10 +33,10 @@ attempt. They do not change the working project or indicate that a different
 lesson has completed. If updates stop, check this same saved conversation before
 retrying a message; a refresh is not permission to send the message again.
 
-These action and storage prerequisites do not yet expose a complete lesson picker
-or Main teacher in every installation. They do not establish successful question
-delivery, assessment, speech or presentation. Use the installation's supported
-controls; an internal operation name is not a visible button.
+Start and resume lessons from Learning → **Courses**; see
+[Choosing lessons and Learning conversations](learning-mode-ui.md). Opening a
+conversation does not establish successful question delivery, assessment, speech
+or presentation. An internal operation name is not a visible button.
 
 
 ## Local editor availability
@@ -75,7 +75,7 @@ failed. The read addition alone does not establish that every installation has
 completed its visible Learning filter or teacher controls.
 
 
-## Main chat transport: integration prerequisite
+## Main chat transport
 
 A supported Learning Main chat uses your actual saved attempt and authorized
 conversation, including its original Send, steering, Stop and goal behavior.
@@ -89,7 +89,7 @@ Learning chat updates belong to the exact attempt. Updates for another lesson or
 working project cannot enable its access, change activity or refresh its goal.
 If updates or access are unavailable, check the same saved attempt before
 retrying; refresh never proves failure or authorizes repeating a message. The
-same transport applies on desktop and mobile. Its prepared client integration
-does not yet prove the visible Main launcher, actual teaching, speech or visuals.
+same transport applies on desktop and mobile. An open chat alone does not prove
+actual teaching, speech or visuals.
 Colleague can explain the supported controls and offer the original actions; an
 offer does not authorize a new lesson or reset progress.

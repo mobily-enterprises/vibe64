@@ -124,9 +124,10 @@ lesson pin or installed exercise remains an error, and historical reading does
 not permit new practice work. A confirmed preparation refusal before admission keeps the
 message failed; after preparation is ready, use its **Retry** once to send the same
 saved request. If delivery is unconfirmed, use **Retry**; an unknown result
-is not permission to resend. If setup has finished but the lesson still shows
-preparing, use **Resume** for that saved lesson to confirm its preparation; do not
-start a replacement or change its pin.
+is not permission to resend. The lesson normally becomes ready by itself when
+setup finishes. If setup has finished but the lesson still shows preparing, use
+**Resume saved lesson** (or **Continue** on its course) to confirm its
+preparation; do not start a replacement or change its pin.
 If preparation reports
 missing source, retain the attempt and resolve that failure before continuing;
 a conversation alone cannot replace the workspace. Existing conversations and
@@ -151,8 +152,9 @@ installation's supported connection/replacement recovery.
 
 ## A prepared practice lesson
 
-Start or Resume the saved lesson in **Courses**, then select its Learning
-conversation in the same session list. Ask Main to teach that lesson. The
+Start or resume the saved lesson in **Courses**. Its Learning conversation opens
+by itself once the request is confirmed; otherwise select it in the same session
+list. Ask Main to teach that lesson. The
 conversation belongs to the lesson’s prepared workspace; changing the visible
 Working project does not move it. Keep the existing attempt and history if its
 source is unavailable, and ask the owner to restore that saved workspace.

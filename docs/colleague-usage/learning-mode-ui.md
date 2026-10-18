@@ -29,13 +29,16 @@ and a status of **Completed**, **In progress** (an open attempt or some passes) 
 lesson** (with the next lesson named beside it), and a **Start lesson** button on
 each available lesson if you want a different one. **Back to courses** returns to
 the list. While you have a saved active lesson, Start buttons stay disabled:
-continue it, or end it first. On a phone the cards stack in one column and the
+continue it, or end it first. There is no End button; ask Colleague to end the
+lesson (see [Lesson history and resume](learning-history.md)). On a phone the cards stack in one column and the
 course page scrolls in the same pane.
 
 Choose **Resume saved lesson** on the saved lesson card for the exact saved attempt. Disabled,
 unavailable, loading and error states are shown on the same page. Choosing a
 release is not permission to install or enable it. **Refresh courses** rereads
-the catalogue and progress.
+the catalogue and progress. A lesson without a practice project, such as local
+Vibe64's Lesson 0 **Set yourself up**, opens only its Learning conversation; that
+lesson uses [Dashboard → Health](health-checks.md).
 Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
 If Resume reports that the saved exercise is busy preparing or finishing a command, wait for that operation to settle and retry the same attempt. Do not create a replacement.
 
@@ -64,9 +67,12 @@ even when its individual lessons are published. It needs an authorized author
 trial or a released, enabled course; changing views does not bypass that rule.
 
 Practice commands and their Git operations stay with the saved lesson until they
-finish. If a command is still finishing, wait before ending the lesson. After
-cancellation or End, an old command cannot restart work; resume the same saved
-attempt only when you intend to continue.
+finish. If a command is still finishing, wait before ending the lesson. Ending a
+lesson stops its lesson conversation's running work, as **Stop** does, and keeps
+the conversation, practice project and history; it does not archive or delete
+anything. After cancellation or an end, an old command cannot restart work. An
+ended lesson cannot be resumed; ask Colleague to continue it in a fresh exercise
+(see [Lesson history and resume](learning-history.md)).
 
 When Learning first creates its teacher session, it uses the first available AI
 workflow shown by the normal session picker, then checks your current Junior
@@ -279,13 +285,19 @@ open until confirmation. Practice lesson diagrams save to that same lesson and
 Main conversation. A changed account, attempt or conversation retires its old
 handle; an error never grants a pass.
 
-While a start is in progress, the picker says **Starting the selected lesson and
-preparing its practice project**, and **Start selected lesson** stays disabled
-until the request settles; the teacher conversation then opens by itself. This
+While a start is in progress, the Courses pane says **Starting the selected
+lesson and preparing its practice project. Its teacher conversation opens when
+this finishes.** Every **Start**, **Start next lesson** and **Start lesson**
+button stays disabled until the request settles; the teacher conversation then
+opens by itself. A practice project's Workspace setup can continue afterwards;
+the lesson becomes ready by itself when setup succeeds, so you do not need
+**Resume saved lesson** after a normal start (see
+[Practice projects in standalone lessons](learning-practice-projects.md)). This
 looks the same on desktop and phone. **Starting lessons is unavailable in this
 installation** appears only when the installation cannot start lessons.
 
-If Start is unconfirmed, the picker says so and **Retry lesson start** keeps its original request
+If Start is unconfirmed, the pane says **The last lesson start was not confirmed**
+and a **Retry lesson start** button appears above it. It keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.
 An ended replay is history; it does not select a different current attempt. If
 opening the saved conversation is unconfirmed, the exact Start retry or Resume

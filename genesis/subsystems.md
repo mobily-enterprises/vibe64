@@ -245,8 +245,9 @@ learner reservations outside projects, reusing Core atomic writes and Kernel loc
 Owns installed immutable course definitions/locks and revisioned enablement, and
 declared visual asset reads from exact installed lesson pins. These are internal
 server facilities without source access for Colleague. The presentational lesson
-picker displays parent-supplied installed choices and saved progress, and emits
-explicit start/resume intent through the original Training operations. It owns
+picker (the Learning **Courses** pane) displays parent-supplied installed courses,
+read-only per-lesson progress and the owner's custom-course form, and emits
+explicit start/resume/create intent through the original Training operations. It owns
 neither API reads, permission/pin/progress rules nor writes. One shared client
 Learning UI adapter supplies actor-scoped original Training reads and captured
 Start/Resume/Open coordination; server owners retain admission and progress.

@@ -77,7 +77,9 @@ the shared viewer and Colleague identities. Refresh does nothing when signed out
 
 `startLesson` accepts the existing picker's course/release/code/revision intent
 and retains one generated request ID with those exact inputs after uncertainty.
-`retryStart` does not rebase the revision or admit changed intent. `resumeLesson`
+`starting` marks the in-flight request; `startRetry` offers the exact retry only
+after a start settles unconfirmed, so the picker shows distinct starting and
+unconfirmed-start states. `retryStart` does not rebase the revision or admit changed intent. `resumeLesson`
 targets the requested attempt. Both use the original Training HTTP actions and
 by default open only their confirmed active attempt through the original
 learning-scoped Session Create route with an empty body. An ended original

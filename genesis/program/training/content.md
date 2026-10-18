@@ -441,8 +441,9 @@ into a new attempt; existing exact installed-pin validation remains authoritativ
 The original teaching brief and shared action projections identify historical
 passes by their original attempt/submission IDs and native provenance, separately
 from current submissions. `learning.read` includes ended history; `lesson.end`
-uses the supplied original host retirement owner and does not dispose of the
-exercise. The teacher must distinguish historical provenance from new practical
+uses the supplied original host retirement owner, then stops that attempt's
+lesson session work through the original session Stop owner (see `teaching.md`),
+and does not dispose of the exercise. The teacher must distinguish historical provenance from new practical
 observations.
 
 With no active attempt, `active-lesson.json` stores the strict versioned object

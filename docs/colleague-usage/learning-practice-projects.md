@@ -1,7 +1,9 @@
 # Practice projects in standalone lessons
 
-Some lessons need a practice application. Use the existing lesson **Start** or
-**Resume** control. If the installation reports that exercise preparation is
+Some lessons need a practice application. In Learning → **Courses**, use
+**Start**, **Start next lesson** or **Start lesson** for a new lesson, or
+**Continue**/**Resume saved lesson** for your saved one (see
+[Choosing lessons and Learning conversations](learning-mode-ui.md)). If the installation reports that exercise preparation is
 unavailable, keep the saved attempt and ask the owner to provide preparation
 support before retrying. That refusal means preparation did not start.
 

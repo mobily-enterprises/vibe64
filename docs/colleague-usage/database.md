@@ -69,6 +69,11 @@ Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the
 identified active query when asked. It acknowledges actual view/table selection;
 that is not proof a query succeeded. It does not receive rows or write SQL itself.
+In a practice lesson, Learning's **Workspace → Dashboard** shows the practice
+app's **Database** view (ERD, tables and data) read-only beside the lesson **Code**
+tab; running a data change there reports "Learning shows this lesson's data
+read-only. Change data in a Working session." See
+[Choosing lessons and Learning conversations](learning-mode-ui.md).
 For an active supervised lesson, Colleague or its bound Main teacher can reveal
 the exact exercise session's **ERD** in **Workspace** while Learning stays on.
 The initiating browser must confirm the same project, session and attempt; this

@@ -496,7 +496,7 @@ original App Preview slot alongside the unchanged `TrainingVisualPlayer.vue`.
 The original Autopilot Preview tree supplies its App body. Both views remain
 mounted under `v-show`; switching and minimising do not replace an App iframe or
 stop its process. Opening the split Workspace pane does not overwrite the
-retained Lessons/Presentation selection; returning to Learning restores that
+retained Courses/Presentation selection; returning to Learning restores that
 content. Automatic practice opening waits for the existing assistant connection
 initialization/reconciliation to settle, including failure or unavailable state,
 so those initial writes do not compete for the original preparation barrier.

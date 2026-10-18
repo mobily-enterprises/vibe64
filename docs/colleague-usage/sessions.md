@@ -74,20 +74,20 @@ address. If the error persists, report the project, session and exact error.
 On phones, open the chat pane to find the same control. Colleague can explain
 recovery and open the session; the person selects **Reload chat**.
 
-## Working and Learning session navigation: integration prerequisite
+## Working and Learning session navigation
 
 The prepared mode filter uses the same session tabs and chat panel for Working
 and Learning sessions. Older sessions without a purpose remain Working. Hiding
 a session from navigation preserves its running work, mounted conversation and
 draft; it does not stop or archive anything. A selected session of the other
-purpose is hidden without opening a different session automatically. The host
-must attach the actual mode control and remembered selection before this is a
-complete visible feature. The filter does not create a lesson, authorize an
+purpose is hidden without opening a different session automatically. The yellow
+**L** plate in the app header switches the filter (see
+[Choosing lessons and Learning conversations](learning-mode-ui.md)). The filter does not create a lesson, authorize an
 attempt or turn an ordinary session into a teacher. Desktop and mobile use the
 same navigation contract. Colleague can explain the mode; changing it does not
 authorize starting or ending a lesson.
 
-When the host connects Working and Learning to these tabs, each mode remembers
+Each mode remembers
 its own selected conversation. A Working conversation that finishes opening
 while you view Learning stays with its original project and does not replace the
 lesson you are viewing. Switching modes preserves hidden conversations and
@@ -100,8 +100,8 @@ must not remain available. If a conflicting-conversation error appears, retain
 your work and ask the owner to inspect it. Colleague can explain these states;
 it cannot grant access or repair saved identities. Ordinary **New session** and
 **Archive session** are Working operations, not ways to start or end a lesson.
-These rules apply on desktop and mobile; this prerequisite alone does not add
-the visible mode control or complete lesson delivery.
+These rules apply on desktop and mobile. Start, resume and end lessons through
+Learning → **Courses** and Colleague instead.
 
 ## Keep the fresh session's link after renewal
 
@@ -251,10 +251,9 @@ but cannot continue running as the archived conversation. Colleague can explain
 the reported error; it cannot grant another learner's access or silently replace
 the saved lesson with newer content.
 
-This session foundation adds no lesson-launch control. Lesson selection and
-Main teaching must be connected through the existing learning flow before this
-can be used from the interface; the ordinary **New session** control still creates
-a working session with source.
+Start such a lesson from Learning → **Courses** (see
+[Choosing lessons and Learning conversations](learning-mode-ui.md)); the ordinary
+**New session** control still creates a working session with source.
 
 ## Pin a source session
 

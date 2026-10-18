@@ -394,7 +394,7 @@ exercise execution is introduced. This projection can be reconstructed only by
 an explicit owner operation from the same approved definitions/pins; it is not a
 backup of learner state.
 
-The future authenticated start action chooses an enabled exact entry from a fresh
+The authenticated `lesson.start` action chooses an enabled exact entry from a fresh
 read. That read admits the start; a later disable blocks future admissions but
 does not revoke work already admitted or a saved attempt. This store does not
 serialize its lock with reservation writes or add an action/authentication layer.

@@ -86,12 +86,13 @@ with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
 intact. Learning keeps the teacher chat visible throughout the lesson. The right
 side switches between the complete normal Preview/Dashboard workspace and a
-Learning pane containing the existing lesson picker and Presentation player.
+Learning pane containing the Courses pane (course cards and progress, course
+pages and the owner's custom-course form) and the Presentation player.
 A supervised project defaults to Workspace; a source-less lesson honestly stays
 in Learning. Both views retain their application, Dashboard and interactive
 visual state in the same session/conversation implementation, on desktop and
 phones. Hidden visuals pause without being treated as completed teaching.
-Colleague can open the picker, active lesson or exact supervised Workspace view,
+Colleague can open Courses, the active lesson or exact supervised Workspace view,
 and the bound Main teacher can reveal that lesson's Preview, ERD, Learning pane
 or declared visual. Both wait for the same browser's settled selection. Showing
 a view is a teacher demonstration, not learner evidence, and leaving Learning

@@ -173,7 +173,7 @@ configured before retrying. Unrelated history cannot be assessed; host support i
 For workspace observations, application checks and practical assessment, read
 [Practical Learning exercises](learning-practical-exercises.md).
 
-## Preview lesson choices: integration prerequisite
+## Course and lesson choices
 
 The prepared **Courses** pane displays the host's installed courses in their
 original order as cards with "N of M lessons complete" and a progress bar.
@@ -195,7 +195,10 @@ successful start. The owner's **New course** form is described in
 pin can be older than the currently enabled catalogue. This button is available
 only when the host actually supports resume, not merely because progress exists.
 Starting a different lesson requires explicitly ending the active saved attempt
-through the existing lesson operation first; the picker never does that for you.
+first: ask Colleague, which uses `lesson.end` and stops that lesson
+conversation's work while keeping its history (see
+[Lesson history and resume](learning-history.md)). The Courses pane has no End
+button and never ends a lesson for you.
 **Saved lesson history** remains read-only and visible independently of new-start
 or resume support. Ended history is not marked completed without an actual
 completion result.
