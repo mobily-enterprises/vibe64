@@ -112,6 +112,8 @@ async function controlRequest(requestPath, input = {}) {
   try {
     response = await requestSocket({
       body: {
+        // A Learning helper joins its parent command's lesson admission.
+        parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
         ...input,
         generationId: controlGeneration,
         sessionId,
@@ -139,6 +141,7 @@ async function controlRequest(requestPath, input = {}) {
 
 async function streamingControlRequest(requestPath, input = {}) {
   const requestBody = JSON.stringify({
+    parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
     ...input,
     generationId: controlGeneration,
     sessionId,
