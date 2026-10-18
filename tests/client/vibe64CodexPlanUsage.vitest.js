@@ -100,7 +100,7 @@ it("keeps retained goal controls on their own engine after a foreign chat turn",
   expect(mocks.options.enabled.value).toBe(false);
   mocks.goal = null;
 });
-it("shows Claude's native blocked reason and offers explicit Resume without calling it", async () => {
+it("shows Claude's native blocked reason and offers explicit Pause and Resume without calling them", async () => {
   mocks.goal = { status: "available", routing: { selection: { engineId: "claude" } },
     goal: { status: "blocked", objective: "Finish the checks", threadId: "claude-goal",
       reason: "Claude stopped after repeated attempts. Six checks require credentials." } };
@@ -109,7 +109,7 @@ it("shows Claude's native blocked reason and offers explicit Resume without call
   expect(html).toContain("Six checks require credentials.");
   expect(html).toContain("Resume goal");
   expect(html).toContain("Cancel goal");
-  expect(html).not.toContain("Pause goal");
+  expect(html).toContain("Pause goal");
   expect(mocks.goalController.changeGoal).not.toHaveBeenCalled();
   mocks.goal = null;
 });
