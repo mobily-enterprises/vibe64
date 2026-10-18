@@ -759,7 +759,7 @@ onBeforeUnmount(() => {
   .studio-home-shell-heading {
     display: flex;
     gap: var(--v64-space-1);
-    padding-left: var(--v64-space-1);
+    padding-left: 0;
     width: 100%;
   }
 
@@ -792,6 +792,11 @@ onBeforeUnmount(() => {
 
   .studio-home-shell-project-selector :deep(.v-icon) {
     margin-inline-start: 0;
+  }
+
+  /* Room for the branch count badge before the collapse arrow. */
+  .studio-home-shell-local-remotes-host {
+    margin-inline-end: 0.375rem;
   }
 
   .studio-home-shell-local-remotes-host :deep(.local-remotes__branch) {

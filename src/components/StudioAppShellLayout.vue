@@ -376,10 +376,15 @@ function endPaneSwipe(event) {
      name keeps its readable minimum. */
   .studio-app-shell-layout__top-right {
     gap: 0;
+    margin-left: auto;
+  }
+
+  .shell-layout__app-bar .v-spacer {
+    display: none;
   }
 
   .studio-app-shell-layout__top-right > :deep(button:disabled) {
-    width: 1.25rem !important;
+    width: 1rem !important;
   }
 
   .studio-app-shell-layout__top-right :deep(.vibe64-auth-settings) {
@@ -388,6 +393,7 @@ function endPaneSwipe(event) {
 
   .studio-app-shell-layout__top-right :deep(.vibe64-auth-settings__button),
   .studio-app-shell-layout__top-right :deep(.vibe64-colleague-launcher-target > .v-btn) {
+    flex-basis: 2.5rem;
     height: 2.5rem !important;
     min-height: 2.5rem;
     min-width: 2.5rem;
