@@ -187,14 +187,19 @@ async function renderLearningShell(learningMode, showLearningModeControl = true)
 
 describe("controlled Learning shell", () => {
   it.each([
-    [false, "false", "Switch to Learning mode"],
-    [true, "true", "Switch to Working mode"]
+    [false, "false", "Enter Learning mode"],
+    [true, "true", "Leave Learning mode"]
   ])("renders the actual L button with truthful state %s", async (mode, pressed, title) => {
     const html = await renderLearningShell(mode);
     expect(html.match(/aria-label="Learning mode"/gu)).toHaveLength(1);
     expect(html).toContain(`aria-pressed="${pressed}"`);
     expect(html).toContain(`title="${title}"`);
     expect(html).toMatch(/<span aria-hidden="true"[^>]*>L<\/span>/u);
+    // Neighbouring header icon-button size; full yellow only while Learning is on.
+    const plateClass = html.match(/class="([^"]*studio-app-shell-layout__learning-plate[^"]*)"/u)[1].split(" ");
+    expect(plateClass).toEqual(expect.arrayContaining(["v-btn--icon", "v-btn--size-small", "v-btn--density-comfortable"]));
+    expect(plateClass).toContain(mode ? "v-btn--variant-flat" : "v-btn--variant-outlined");
+    expect(html.includes("studio-app-shell-layout__learning-plate--active")).toBe(mode);
     expect(html).toContain('data-test="retained-workspace"');
     expect(html).toContain('data-test="unchanged-main-controls"');
     expect(html).toContain('data-test="unchanged-project-identity"');

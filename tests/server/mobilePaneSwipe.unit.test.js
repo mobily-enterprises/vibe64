@@ -56,6 +56,15 @@ test("horizontal swipes reveal project or chat and suppress the resulting tap", 
   assert.deepEqual(f.changes, [true, false]);
 });
 
+test("Learning mode uses the same chat/project swipe as Working", (t) => {
+  const f = fixture(t, { learningMode: true });
+  f.swipe(280, 100);
+  assert.deepEqual(f.changes, [true]);
+  f.props.chatCollapsed = true;
+  f.swipe(100, 280);
+  assert.deepEqual(f.changes, [true, false]);
+});
+
 test("desktop, unavailable panes, screen edges, taps and small drags do not switch", (t) => {
   const f = fixture(t, { mobilePaneSwipeEnabled: false });
   assert.equal(f.swipe(280, 100).move.defaultPrevented, false);

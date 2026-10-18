@@ -17,10 +17,11 @@
       :class="{ 'studio-app-shell-layout__learning-plate--active': learningMode }"
       aria-label="Learning mode"
       :aria-pressed="learningMode"
-      :title="learningMode ? 'Switch to Working mode' : 'Switch to Learning mode'"
-      height="40"
-      min-width="44"
-      variant="flat"
+      :title="learningMode ? 'Leave Learning mode' : 'Enter Learning mode'"
+      density="comfortable"
+      icon
+      size="small"
+      :variant="learningMode ? 'flat' : 'outlined'"
       @click="emit('update:learningMode', !learningMode)"
     >
       <span aria-hidden="true">L</span>
@@ -34,7 +35,14 @@
     </div>
   </v-app-bar>
 
-  <v-main class="bg-background" :class="{ 'studio-app-shell-layout--learning': learningMode, 'studio-app-shell-layout--fill-viewport': fillViewport }">
+  <v-main
+    class="bg-background"
+    :class="{
+      'studio-app-shell-layout--learning': learningMode,
+      'studio-app-shell-layout--learning-stacked': learningMode && !mobilePaneSwipeEnabled,
+      'studio-app-shell-layout--fill-viewport': fillViewport
+    }"
+  >
     <v-container
       fluid
       class="shell-layout__content studio-app-shell-layout__content"
@@ -79,7 +87,7 @@ function cancelPaneSwipe() {
 function startPaneSwipe(event, header = false) {
   cancelPaneSwipe();
   if (
-    props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
+    !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
     || window.getSelection()?.isCollapsed === false
   ) {
     return;
@@ -131,7 +139,7 @@ function movePaneSwipe(event) {
     return;
   }
   if (
-    props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
+    !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length !== 1
     || event.timeStamp - paneSwipe.startedAt > SWIPE_MAX_DURATION_MS
   ) {
     cancelPaneSwipe();
@@ -164,7 +172,7 @@ function endPaneSwipe(event) {
   const swipe = paneSwipe;
   cancelPaneSwipe();
   if (
-    !swipe || props.learningMode || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length
+    !swipe || !props.mobilePaneSwipeEnabled || event.defaultPrevented || event.touches.length
     || props.chatCollapsed !== swipe.chatCollapsed || event.timeStamp - swipe.startedAt > SWIPE_MAX_DURATION_MS
     || window.getSelection()?.isCollapsed === false
   ) {
@@ -247,21 +255,24 @@ function endPaneSwipe(event) {
   background-color: color-mix(in srgb, rgb(var(--v-theme-surface)) 92%, #ffdb2c) !important;
 }
 
+/* Same size as the neighbouring header icon buttons. Full yellow L only while
+   Learning mode is on; an outlined, untoggled L otherwise. */
 .studio-app-shell-layout__learning-plate {
   flex: 0 0 auto;
   margin-left: 0.75rem;
-  border: 2px solid #101010;
-  border-radius: 3px;
-  background-color: #ffdb2c !important;
-  color: #101010 !important;
-  font-size: 1.75rem;
+  border-radius: 6px;
+  color: rgb(var(--v-theme-on-surface)) !important;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1;
-  padding: 0 0.5rem;
+  opacity: 0.72;
 }
 
 .studio-app-shell-layout__learning-plate--active {
-  box-shadow: 0 0 0 2px rgb(var(--v-theme-on-surface));
+  background-color: #ffdb2c !important;
+  border: 2px solid #101010;
+  color: #101010 !important;
+  opacity: 1;
 }
 
 .studio-app-shell-layout__learning-plate:focus-visible {
@@ -283,16 +294,19 @@ function endPaneSwipe(event) {
   min-width: 0;
 }
 
+/* Only where Learning has no chat/project pane switching (the Courses page
+   without a project) are chat and lessons stacked; a project page in Learning
+   uses the Working arrow and swipe unchanged. */
 @media (max-width: 980px) {
-  .studio-app-shell-layout--learning :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed)),
-  .studio-app-shell-layout--learning :deep(.studio-ai-sessions__empty-layout) {
+  .studio-app-shell-layout--learning-stacked :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed)),
+  .studio-app-shell-layout--learning-stacked :deep(.studio-ai-sessions__empty-layout) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
     gap: 0.5rem;
   }
 
-  .studio-app-shell-layout--learning :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed) .studio-autopilot__project-panel),
-  .studio-app-shell-layout--learning :deep(.studio-ai-sessions__empty-project-panel) {
+  .studio-app-shell-layout--learning-stacked :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed) .studio-autopilot__project-panel),
+  .studio-app-shell-layout--learning-stacked :deep(.studio-ai-sessions__empty-project-panel) {
     display: grid;
     visibility: visible;
   }
