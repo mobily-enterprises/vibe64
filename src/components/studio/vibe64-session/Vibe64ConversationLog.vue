@@ -1,5 +1,5 @@
 <template>
-  <AssistantConversationElement :adapter="adapter" v-model:avatar-size="avatarSize">
+  <AssistantConversationElement class="vibe64-conversation-log" :adapter="adapter" v-model:avatar-size="avatarSize">
     <template v-if="voiceBinding && visible" #avatar="size">
       <component :is="voice.Avatar || VoiceAvatar" v-bind="avatarVisual" :binding="voiceBinding" :size="size.size" :height="size.height" />
     </template>
@@ -545,20 +545,136 @@ watch(() => {
 </script>
 
 <style scoped>
-:deep(.assistant-transcript__message-row--assistant) { max-width: min(28rem, 88%); }
+/* Chat bubbles follow the M3 chat shape: a tighter corner at the author side. */
+:deep(.assistant-transcript__message-row--assistant) { max-width: min(30rem, 92%); }
 :deep(.assistant-transcript__message--assistant) {
   margin-left: 2.15rem;
   max-width: calc(100% - 2.15rem);
   padding: .75rem 1rem;
-  border-radius: 16px;
+  border-radius: var(--v64-shape-xs, 4px) var(--v64-shape-lg, 16px) var(--v64-shape-lg, 16px) var(--v64-shape-lg, 16px);
   background: rgb(var(--v-theme-surface-variant));
   color: rgb(var(--v-theme-on-surface-variant));
+}
+:deep(.assistant-transcript__message--user) {
+  border-radius: var(--v64-shape-lg, 16px) var(--v64-shape-xs, 4px) var(--v64-shape-lg, 16px) var(--v64-shape-lg, 16px);
+}
+/* Progress reads as a quiet timeline under the turn it belongs to. */
+:deep(.assistant-transcript__thinking) {
+  border-left: 2px solid var(--v64-outline-variant, rgba(0, 0, 0, .12));
+  padding: .1rem 0 .1rem .75rem;
+}
+:deep(.assistant-progress__toggle) {
+  border-radius: var(--v64-shape-full, 999px);
+  font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif);
+  margin-left: -.5rem;
+  padding: .3rem .6rem;
+  transition: background-color var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
+}
+:deep(.assistant-progress__toggle:hover),
+:deep(.assistant-progress__toggle:focus-visible) {
+  background: rgba(var(--v-theme-primary), var(--v64-state-hover, .08));
+  text-decoration: none;
+}
+/* The newest turn arrives with a short emphasized entrance (off for reduced motion). */
+:deep(.assistant-transcript__turn:last-of-type) {
+  animation: vibe64-conversation-arrive var(--v64-duration-medium, 300ms) var(--v64-ease-emphasized-decelerate, ease-out) both;
 }
 :deep(.assistant-transcript__system:has(.vibe64-project-message) > .assistant-transcript__system-icon),
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-meta) { display: none; }
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-body) { width: 100%; }
 :deep(.assistant-transcript__system:has(.vibe64-project-message)) { display: block; width: 100%; max-width: none; padding: 0; }
 .vibe64-main-conversation__voice-tools { display: flex; align-items: center; gap: 0; }
-.vibe64-main-conversation__voice-disc { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(var(--v-theme-primary), .12); }
+.vibe64-main-conversation__voice-disc {
+  display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--v64-primary-container, rgba(var(--v-theme-primary), .12));
+  transition: background-color var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease), box-shadow var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
+}
+.vibe64-main-conversation__voice-tools :deep(.v-btn:hover:not(:disabled)) .vibe64-main-conversation__voice-disc { box-shadow: var(--v64-elevation-1); }
+.vibe64-main-conversation__voice-tools :deep(.v-btn[aria-pressed="true"]) .vibe64-main-conversation__voice-disc {
+  background: rgb(var(--v-theme-primary)); color: rgb(var(--v-theme-on-primary));
+}
 .vibe64-main-conversation__voice-tools--opening :deep(.assistant-voice-controls__tools) { display: none; }
+@keyframes vibe64-conversation-arrive { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) {
+  :deep(.assistant-transcript__turn:last-of-type) { animation: none; }
+}
+</style>
+
+<style>
+/* Learning: the same conversation as a warm tutor dialogue. The teacher speaks
+   from a lit card with a yellow badge; the learner answers in the primary
+   container; teacher status lines (Watching: …) become quiet tonal chips. */
+.studio-app-shell-layout--learning .vibe64-conversation-log {
+  --vibe64-tutor-card: color-mix(in srgb, var(--v64-learning, #f5c518) 9%, rgb(var(--v-theme-surface)));
+  --vibe64-tutor-edge: color-mix(in srgb, var(--v64-learning, #f5c518) 38%, rgb(var(--v-theme-surface)));
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__body { gap: 1.1rem; }
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__avatar--assistant {
+  background: var(--v64-learning, #f5c518);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v64-learning, #f5c518) 25%, transparent);
+  color: var(--v64-on-learning, #2b2100);
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-row--assistant .assistant-transcript__message-header {
+  color: var(--v64-on-learning-container, #4d3a00);
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
+  font-size: .9rem;
+  letter-spacing: .01em;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--assistant {
+  background: var(--vibe64-tutor-card);
+  border: 1px solid var(--vibe64-tutor-edge);
+  box-shadow: var(--v64-elevation-1);
+  color: rgb(var(--v-theme-on-surface));
+  font: var(--v64-type-body-lg, 400 1rem/1.5rem system-ui, sans-serif);
+  margin-left: 2.4rem;
+  max-width: calc(100% - 2.4rem);
+  padding: .9rem 1.1rem;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--assistant .studio-long-text-review__paragraph { line-height: 1.6; }
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--user {
+  background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14));
+  color: var(--v64-on-primary-container, rgb(var(--v-theme-on-surface)));
+  font: var(--v64-type-body-lg, 400 1rem/1.5rem system-ui, sans-serif);
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-footer { color: var(--v64-on-surface-variant); font-size: .75rem; }
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-footer--assistant { margin-left: 2.4rem; }
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__system:not(:has(.vibe64-project-message)) {
+  align-items: center;
+  background: var(--v64-surface-container, rgba(var(--v-theme-primary), .05));
+  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, .12));
+  border-radius: var(--v64-shape-lg, 16px);
+  font: var(--v64-type-label-lg, 500 .875rem/1.25rem system-ui, sans-serif);
+  justify-self: center;
+  margin-inline: auto;
+  padding: .4rem .85rem .4rem .55rem;
+  width: fit-content;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__system:not(:has(.vibe64-project-message)) .assistant-transcript__system-icon {
+  background: var(--v64-learning-container, #fdf3c4);
+  border-radius: 50%;
+  box-sizing: content-box;
+  color: var(--v64-on-learning-container, #4d3a00);
+  margin-top: 0;
+  padding: 4px;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__thinking {
+  border-left-color: var(--vibe64-tutor-edge);
+  margin-left: 2.4rem;
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .vibe64-main-conversation__voice-disc,
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-conversation__avatar-size-disc {
+  background: var(--v64-learning-container, #fdf3c4);
+  color: var(--v64-on-learning-container, #4d3a00);
+}
+.studio-app-shell-layout--learning .vibe64-conversation-log .v-btn[aria-pressed="true"] .vibe64-main-conversation__voice-disc {
+  background: var(--v64-learning, #f5c518);
+  color: var(--v64-on-learning, #2b2100);
+}
+/* A soft stage behind the (unchanged) avatar artwork. */
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-conversation__avatar-visual {
+  background: radial-gradient(circle at 50% 58%, color-mix(in srgb, var(--v64-learning, #f5c518) 30%, transparent) 0 52%, transparent 53%);
+  border-radius: 50%;
+}
 </style>
