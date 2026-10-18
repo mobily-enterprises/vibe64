@@ -98,6 +98,35 @@
                 {{ preferredNameSaving ? "Saving…" : "Save name" }}
               </v-btn>
             </div>
+            <div class="vibe64-personal-profile__heading vibe64-personal-profile__appearance">
+              <h3 id="vibe64-appearance-title">Appearance</h3>
+              <p>This browser</p>
+            </div>
+            <v-btn-toggle
+              :model-value="appearance"
+              aria-labelledby="vibe64-appearance-title"
+              class="vibe64-personal-profile__appearance-choice"
+              color="primary"
+              data-vibe64-appearance
+              density="comfortable"
+              divided
+              mandatory
+              rounded="xl"
+              variant="outlined"
+              @update:model-value="chooseAppearance"
+            >
+              <v-btn
+                v-for="choice in appearanceChoices"
+                :key="choice.value"
+                :prepend-icon="choice.icon"
+                :value="choice.value"
+              >
+                {{ choice.label }}
+              </v-btn>
+            </v-btn-toggle>
+            <p class="vibe64-personal-profile__supporting-text">
+              System follows your device's light or dark setting.
+            </p>
           </section>
           <AiConnectionsSettings
             v-if="selectedProviderId === 'ai'"
@@ -124,10 +153,15 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useTheme } from "vuetify";
+import { readAppearance, writeAppearance } from "@/lib/appearance.js";
 import {
   mdiAccountOutline,
   mdiAccountCogOutline,
   mdiClose,
+  mdiMonitor,
+  mdiWeatherNight,
+  mdiWeatherSunny,
   mdiGithub,
   mdiRobotOutline
 } from "@mdi/js";
@@ -165,6 +199,20 @@ const providerOptions = computed(() => [
   ...accountProviderOptions
 ]);
 const dialogOpen = ref(false);
+const theme = useTheme();
+const appearance = ref(readAppearance());
+const appearanceChoices = Object.freeze([
+  { icon: mdiWeatherSunny, label: "Light", value: "light" },
+  { icon: mdiWeatherNight, label: "Dark", value: "dark" },
+  { icon: mdiMonitor, label: "System", value: "system" }
+]);
+
+function chooseAppearance(value) {
+  if (!value) return;
+  appearance.value = value;
+  theme.change(value);
+  writeAppearance(value);
+}
 const selectedProviderId = ref("ai");
 const aiConnectionsSettings = ref(null);
 const aiConnectionsBusy = ref(false);
@@ -389,6 +437,14 @@ watch(
   flex: 1 1 auto;
   overflow: auto;
   padding: 1rem;
+}
+
+.vibe64-personal-profile__appearance {
+  margin-top: 1.5rem;
+}
+
+.vibe64-personal-profile__appearance-choice {
+  margin-top: 0.5rem;
 }
 
 .vibe64-personal-profile {

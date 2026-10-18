@@ -8,6 +8,7 @@ import {
 import {
   preferredNameDraftState
 } from "../../src/lib/vibe64PersonalAiProfile.js";
+import { readAppearance, writeAppearance } from "../../src/lib/appearance.js";
 
 describe("standalone personal AI profile settings", () => {
   it("opens the account settings dialog directly on the personal profile section", () => {
@@ -67,5 +68,38 @@ describe("standalone personal AI profile settings", () => {
       length: 81,
       valid: false
     });
+  });
+
+  it("remembers the chosen appearance per browser and defaults to light", () => {
+    const store = new Map();
+    vi.stubGlobal("window", { localStorage: {
+      getItem: key => store.get(key) ?? null,
+      setItem: (key, value) => store.set(key, String(value))
+    } });
+    expect(readAppearance()).toBe("light");
+    writeAppearance("dark");
+    expect(readAppearance()).toBe("dark");
+    writeAppearance("system");
+    expect(readAppearance()).toBe("system");
+    writeAppearance("neon");
+    expect(readAppearance()).toBe("system");
+    store.set("vibe64.appearance", "\"neon\"");
+    expect(readAppearance()).toBe("light");
+    vi.unstubAllGlobals();
+    expect(readAppearance()).toBe("light");
+  });
+
+  it("offers Light, Dark and System on the You tab and applies the choice through the theme", async () => {
+    const component = await readFile(
+      new URL("../../src/components/studio/Vibe64AuthSettingsButton.vue", import.meta.url),
+      "utf8"
+    );
+    const main = await readFile(new URL("../../src/main.js", import.meta.url), "utf8");
+
+    expect(component).toContain(">Appearance</h3>");
+    expect(component).toMatch(/label: "Light", value: "light"[\s\S]*label: "Dark", value: "dark"[\s\S]*label: "System", value: "system"/u);
+    expect(component).toContain("theme.change(value);");
+    expect(component).toContain("writeAppearance(value);");
+    expect(main).toContain("defaultTheme: readAppearance(),");
   });
 });

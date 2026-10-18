@@ -25,6 +25,7 @@ import {
   bootBrowserLifecycle
 } from "./lib/browserLifecycleBootstrap.js";
 import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
+import { readAppearance } from "./lib/appearance.js";
 
 configureHttpWebClient({
   csrf: {
@@ -60,7 +61,7 @@ const { router, fallbackRoute } = createShellRouter({
 
 const vuetify = createVuetify({
   theme: {
-    defaultTheme: "light",
+    defaultTheme: readAppearance(),
     themes: {
       light: {
         colors: {

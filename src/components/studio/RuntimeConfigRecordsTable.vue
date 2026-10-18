@@ -240,13 +240,29 @@ async function copyKey(key = "") {
 }
 
 .runtime-config-records-table__key {
-  color: rgb(var(--v-theme-primary));
+  /* A tonal copy chip; without this reset the browser draws its default button. */
+  appearance: none;
+  background: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.12));
+  border: 0;
+  border-radius: var(--v64-shape-sm, 8px);
+  color: var(--v64-on-primary-container, rgb(var(--v-theme-primary)));
+  cursor: pointer;
+  padding: 2px 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.86rem;
   font-weight: 650;
   max-width: 100%;
   overflow-wrap: anywhere;
   text-align: left;
+}
+
+.runtime-config-records-table__key:hover {
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 22%, rgb(var(--v-theme-surface)));
+}
+
+.runtime-config-records-table__key:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 
 .runtime-config-records-table__secret-value {
