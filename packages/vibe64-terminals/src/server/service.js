@@ -1162,7 +1162,8 @@ function createService({
     launchTarget: outputTarget,
     logger,
     projectService,
-    publishSessionChanged: publishSessionChanged.outputTarget
+    publishSessionChanged: publishSessionChanged.outputTarget,
+    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation)
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
@@ -1170,7 +1171,8 @@ function createService({
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
     logger,
-    projectService
+    projectService,
+    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation)
   });
   const agentSessionCommand = createAgentSessionCommandService({
     sendProjectMessage: input => sendProjectMessage(input, {
