@@ -1,0 +1,89 @@
+/* Material 3 design tokens shared by Vibe64 surfaces (shape, motion, elevation,
+   state layers, type scale, surface tiers and the Learning accent). Components
+   use these custom properties instead of one-off values so every screen keeps
+   the same rhythm. Colours derive from the Vuetify theme, so light and dark
+   follow the active theme automatically. */
+:root {
+  /* Shape scale */
+  --v64-shape-xs: 4px;
+  --v64-shape-sm: 8px;
+  --v64-shape-md: 12px;
+  --v64-shape-lg: 16px;
+  --v64-shape-xl: 28px;
+  --v64-shape-full: 999px;
+
+  /* Spacing (4 dp grid) */
+  --v64-space-1: 4px;
+  --v64-space-2: 8px;
+  --v64-space-3: 12px;
+  --v64-space-4: 16px;
+  --v64-space-5: 24px;
+  --v64-space-6: 32px;
+  --v64-space-7: 48px;
+
+  /* Motion */
+  --v64-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --v64-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --v64-ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --v64-ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --v64-duration-short: 150ms;
+  --v64-duration-medium: 300ms;
+  --v64-duration-long: 500ms;
+
+  /* Elevation (tonal shadow levels 1-3) */
+  --v64-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.12), 0 1px 3px 1px rgba(0, 0, 0, 0.06);
+  --v64-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.12), 0 2px 6px 2px rgba(0, 0, 0, 0.08);
+  --v64-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12);
+
+  /* State layers (opacity of on-colour over a surface) */
+  --v64-state-hover: 0.08;
+  --v64-state-focus: 0.1;
+  --v64-state-pressed: 0.1;
+  --v64-state-dragged: 0.16;
+
+  /* Type scale */
+  --v64-type-display-sm: 600 2.25rem/2.75rem system-ui, sans-serif;
+  --v64-type-headline-md: 600 1.75rem/2.25rem system-ui, sans-serif;
+  --v64-type-headline-sm: 600 1.5rem/2rem system-ui, sans-serif;
+  --v64-type-title-lg: 600 1.375rem/1.75rem system-ui, sans-serif;
+  --v64-type-title-md: 600 1rem/1.5rem system-ui, sans-serif;
+  --v64-type-body-lg: 400 1rem/1.5rem system-ui, sans-serif;
+  --v64-type-body-md: 400 0.875rem/1.25rem system-ui, sans-serif;
+  --v64-type-label-lg: 500 0.875rem/1.25rem system-ui, sans-serif;
+  --v64-type-label-md: 500 0.75rem/1rem system-ui, sans-serif;
+
+  /* Surface container tiers derived from the theme surface and primary */
+  --v64-surface: rgb(var(--v-theme-surface));
+  --v64-on-surface: rgb(var(--v-theme-on-surface));
+  --v64-on-surface-variant: rgba(var(--v-theme-on-surface), 0.72);
+  --v64-outline: rgba(var(--v-theme-on-surface), 0.24);
+  --v64-outline-variant: rgba(var(--v-theme-on-surface), 0.12);
+  --v64-surface-container-lowest: rgb(var(--v-theme-surface));
+  --v64-surface-container-low: color-mix(in srgb, rgb(var(--v-theme-primary)) 3%, rgb(var(--v-theme-surface)));
+  --v64-surface-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 5%, rgb(var(--v-theme-surface)));
+  --v64-surface-container-high: color-mix(in srgb, rgb(var(--v-theme-primary)) 8%, rgb(var(--v-theme-surface)));
+  --v64-surface-container-highest: color-mix(in srgb, rgb(var(--v-theme-primary)) 11%, rgb(var(--v-theme-surface)));
+  --v64-primary: rgb(var(--v-theme-primary));
+  --v64-on-primary: rgb(var(--v-theme-on-primary));
+  --v64-primary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 14%, rgb(var(--v-theme-surface)));
+  --v64-on-primary-container: color-mix(in srgb, rgb(var(--v-theme-primary)) 70%, rgb(var(--v-theme-on-surface)));
+  --v64-success: rgb(var(--v-theme-success));
+  --v64-success-container: color-mix(in srgb, rgb(var(--v-theme-success)) 14%, rgb(var(--v-theme-surface)));
+  --v64-error: rgb(var(--v-theme-error));
+  --v64-error-container: color-mix(in srgb, rgb(var(--v-theme-error)) 12%, rgb(var(--v-theme-surface)));
+
+  /* Learning accent: the warm yellow of the Learning L */
+  --v64-learning: #f5c518;
+  --v64-on-learning: #2b2100;
+  --v64-learning-container: color-mix(in srgb, #f5c518 22%, rgb(var(--v-theme-surface)));
+  --v64-on-learning-container: color-mix(in srgb, #6b5000 85%, rgb(var(--v-theme-on-surface)));
+  --v64-learning-tint: color-mix(in srgb, #f5c518 7%, rgb(var(--v-theme-surface)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --v64-duration-short: 0ms;
+    --v64-duration-medium: 0ms;
+    --v64-duration-long: 0ms;
+  }
+}
