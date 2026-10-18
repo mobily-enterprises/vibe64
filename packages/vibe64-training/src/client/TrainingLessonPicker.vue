@@ -140,6 +140,8 @@ const savedPlace = computed(() => {
 });
 const statusTone = course => !course.enabled ? "disabled" : course.status === "released" ? "enabled" : "preview";
 const statusIcon = { enabled: icons.checkCircle, preview: icons.eye, disabled: icons.cancel };
+// Lessons shared by several courses count once.
+const uniqueLessonCount = computed(() => new Set(choices.value.map(({ lesson }) => `${lesson.code}\n${lesson.hash}`)).size);
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 </script>
 <template>
@@ -162,7 +164,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         <h2>Courses</h2>
         <p>Choose a course to see its lessons and your progress, or resume your saved lesson.</p>
         <p v-if="courses.length" class="tlp-hero__meta">
-          {{ plural(courses.length, 'course') }} · {{ plural(choices.length, 'lesson') }} installed
+          {{ plural(courses.length, 'course') }} · {{ plural(uniqueLessonCount, 'lesson') }} installed
         </p>
       </div>
       <v-btn class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
