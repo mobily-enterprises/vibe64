@@ -584,6 +584,13 @@ watch(() => {
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-body) { width: 100%; }
 :deep(.assistant-transcript__system:has(.vibe64-project-message)) { display: block; width: 100%; max-width: none; padding: 0; }
 .vibe64-main-conversation__voice-tools { display: flex; align-items: center; gap: 0; }
+/* The avatar tools float over the transcript as one M3 toolbar pill. */
+:deep(.assistant-conversation__avatar-tools) {
+  background: var(--v64-surface-container-high, rgb(var(--v-theme-surface)));
+  border-radius: var(--v64-shape-full, 999px);
+  box-shadow: var(--v64-elevation-2);
+  padding: 0 4px;
+}
 .vibe64-main-conversation__voice-disc {
   display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%;
   background: var(--v64-primary-container, rgba(var(--v-theme-primary), .12));
