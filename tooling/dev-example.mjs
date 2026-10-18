@@ -78,6 +78,7 @@ async function main() {
   process.env.VIBE64_SERVICE_DATA_ROOT = path.join(developmentRoot, "state", "services");
   process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
   process.env.VIBE64_CODEX_ATTACHMENTS_ROOT = path.join(developmentRoot, "state", "attachments");
+  process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR = path.join(developmentRoot, "preview-sockets");
   await prepareExampleProject(projectRoot);
 
   const { parseStartupArgs } = await import("../bin/server.js");
@@ -100,7 +101,8 @@ async function main() {
     const apiOrigin = await app.listen({ host: "127.0.0.1", port: 0 });
     process.env.VITE_API_PROXY_TARGET = apiOrigin;
     const proxy = { target: apiOrigin, changeOrigin: true, ws: true,
-      headers: { origin: apiOrigin }, rewriteWsOrigin: true };
+      headers: { origin: apiOrigin, "x-forwarded-proto": new URL(apiOrigin).protocol.slice(0, -1) },
+      rewriteWsOrigin: true };
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({
       root: appRoot,

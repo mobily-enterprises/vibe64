@@ -6,6 +6,8 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import getPort from "get-port";
+import { once } from "node:events";
+import { io } from "socket.io-client";
 import {
   inspectGenesisProject, inspectGenesisSubsystems, inspectVibe64Outputs, inspectVibe64WorkspaceSetup
 } from "@local/vibe64-genesis/server";
@@ -113,6 +115,22 @@ test("the development preview serves its own backend, frontend and project", { t
     const realtime = await fetch(`${origin}/socket.io/?EIO=4&transport=polling`);
     assert.equal(realtime.status, 200);
     assert.match(await realtime.text(), /^0\{"sid"/u);
+    const socket = io(origin, { autoConnect: false, forceNew: true, reconnection: false,
+      transports: ["websocket"], extraHeaders: { Origin: origin, "x-forwarded-proto": "https" } });
+    try {
+      const connected = once(socket, "connect", { signal: AbortSignal.timeout(5000) });
+      socket.connect();
+      await connected;
+      const response = await socket.timeout(5000).emitWithAck("assistant.conversation.subscribe", {
+        subscriptionId: "example-proxy-origin", conversationId: "missing-example-conversation",
+        targetSurfaceId: "app", hostSurfaceId: "app"
+      });
+      assert.equal(response.code, "conversation_forbidden");
+      assert.equal(response.error, "This Colleague conversation is unavailable.",
+        "forwarded HTTPS must reach conversation lookup, not fail the local origin check");
+    } finally {
+      socket.disconnect();
+    }
     assert.match(logs, /"level":(?:10|20|30),/u, "the existing LOG_LEVEL setting must reach the application logger");
   } finally {
     child.kill("SIGTERM");
