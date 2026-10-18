@@ -116,7 +116,7 @@ function handleCreated(response = {}) {
   border: 1px solid transparent;
   border-radius: 999px;
   box-shadow: none !important;
-  color: #1a73e8 !important;
+  color: var(--v64-primary) !important;
   height: 3rem;
   min-height: 3rem;
   min-width: 3rem;
@@ -135,7 +135,7 @@ function handleCreated(response = {}) {
 }
 
 .studio-ai-sessions__create-button--attention:not(.v-btn--disabled) {
-  border-color: rgba(26, 115, 232, 0.36);
+  border-color: color-mix(in srgb, var(--v64-primary) 36%, transparent);
 }
 
 .studio-ai-sessions__create-button--attention:not(.v-btn--disabled)::after {
