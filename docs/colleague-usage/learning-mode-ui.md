@@ -7,16 +7,57 @@ names the mode it will switch to. In a lesson with saved practice projects, the
 **Practice project** menu sits beside it; on a phone it shrinks to its ▾ arrow so
 the **Workspace**/**Learning** switch stays visible. On the
 projectless app page, Working shows the original project picker; Learning shows
-installed lessons without asking you to invent or choose a project. In a project
+installed courses without asking you to invent or choose a project; its header
+reads **Courses**. In a project
 view, the same control changes the existing session panel's purpose filter.
 
-The **Lessons** pane shows the installed course release, lesson title and code,
-and the authenticated person's saved progress. Choose **Start** for an available
-lesson or **Resume** for the exact saved attempt. Disabled, unavailable, loading
-and error states are shown by the original lesson picker. Choosing a release is
-not permission to install or enable it. Refresh rereads catalogue and progress.
+The **Courses** pane (called **Lessons** in earlier releases) opens on a list of
+course cards. Each card shows the course title, its ID and release, whether it is
+**Enabled**, a **Preview course** or **Disabled for new lessons**, "N of M lessons
+complete" and a progress bar. A lesson counts as complete when all of its required
+assessments are passed in your saved progress; only required lessons are counted,
+unless a course has none. Progress is read from what is already saved; opening a
+course grades nothing. A lesson passed in one course counts in every course that
+contains the same lesson.
+
+On a card, **Continue** reopens your saved lesson when it belongs to that course;
+it is the same request as **Resume saved lesson**. Otherwise **Start** starts the
+course's first published lesson that is not yet complete. **View course** opens
+the course page: its topics in order, each with its lessons, their title and code
+and a status of **Completed**, **In progress** (an open attempt or some passes) or
+**Not started**. The page has one main action, **Continue** or **Start next
+lesson** (with the next lesson named beside it), and a **Start lesson** button on
+each available lesson if you want a different one. **Back to courses** returns to
+the list. While you have a saved active lesson, Start buttons stay disabled:
+continue it, or end it first. On a phone the cards stack in one column and the
+course page scrolls in the same pane.
+
+Choose **Resume saved lesson** on the saved lesson card for the exact saved attempt. Disabled,
+unavailable, loading and error states are shown on the same page. Choosing a
+release is not permission to install or enable it. **Refresh courses** rereads
+the catalogue and progress.
 Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
 If Resume reports that the saved exercise is busy preparing or finishing a command, wait for that operation to settle and retry the same attempt. Do not create a replacement.
+
+### Creating a custom course
+
+The workspace owner sees **New course** below the course cards (on local Vibe64
+you are the owner). Enter a **Course name**, tick whole topics under **Installed
+topics**, put them in learning order with **Up** and **Down** under **Topic
+order**, then choose **Create course**; **Cancel** closes the form without
+changes. The new course opens straight away and stays in the list for everyone in
+this installation. Only topics from enabled, released courses are offered. The
+course is pinned to those exact installed topic releases, so it never changes
+lesson content, and saved progress is shared with the original course.
+
+If creation fails, the message appears at the top of the pane: a name that is
+already used (choose another name), a catalogue that changed meanwhile (use
+**Refresh courses**, then try again), a topic that is no longer available, or the
+16 course-release limit. Other people cannot create courses; on hosted Vibe64
+only the workspace owner can. Colleague can create a custom course when the owner
+asks for it with a name and topics. A custom course cannot be renamed or edited;
+the owner can disable it with `vibe64 training disable-course` (see
+`docs/training-content.md`) and create another one.
 
 A course labelled **Preview course** is not available through ordinary Start,
 even when its individual lessons are published. It needs an authorized author
@@ -51,8 +92,8 @@ tables and data, read-only. Running a change to data reports that Learning shows
 data read-only; change data in a Working session. An app without a database shows
 "The session Stack does not declare a supported database." Switching between Preview and Dashboard keeps Learning
 on and retains the same selected teacher session; it does not switch to your last
-Working session. **Learning** reveals the existing **Lessons** and
-**Presentation** controls. Returning from Workspace keeps the selected Lessons
+Working session. **Learning** reveals the existing **Courses** and
+**Presentation** controls. Returning from Workspace keeps the selected Courses
 or Presentation content visible without requiring another click. A supervised
 project opens in Workspace by default. On reopening, Workspace waits for the
 assistant's initial connection check to settle before opening the saved practice
@@ -63,19 +104,19 @@ instead of showing a remembered Working project. On phones and tablets, the same
 two choices remain available around the stacked chat and right-hand content.
 Learning has no chat-collapse or pane-swipe control.
 
-You can ask Colleague to enter or leave Learning, show **Lessons**, show the
+You can ask Colleague to enter or leave Learning, show **Courses**, show the
 active lesson, or reveal the exact lesson project's normal **Preview** or
 **Dashboard → Database → ERD**. Main can reveal those same workspace views only
 for its bound active lesson, and can return to that lesson's Learning pane or
 open a visual declared by its pinned content. Both use the same initiating
 browser and wait for its actual settled mode, pane, session and attempt before
 reporting success. For a declared visual, confirmation follows the visual opening;
-the earlier Lessons view is not its success receipt. This also applies when a
+the earlier Courses view is not its success receipt. This also applies when a
 saved lesson finishes loading after the chat first appears. If the lesson or
 visual changes while opening, the request is not confirmed; return to the intended
 saved lesson before requesting its visual again. On a phone, the request changes
 the same stacked panes; it
-does not open another app or conversation. Showing **Lessons** does not start a
+does not open another app or conversation. Showing **Courses** does not start a
 lesson, leaving Learning does not end one, and any agent-opened view is a
 demonstration rather than evidence that you performed an assessed step.
 
@@ -260,8 +301,8 @@ While a lesson’s narrated visual explanation awaits its final response, option
 thinking and interim speech stay silent too. Your speech preferences remain saved;
 fresh confirmed replies use the same voice controls. This does not hide chat text.
 
-After Main finishes a Learning turn, **Lessons** refreshes the saved progress
+After Main finishes a Learning turn, **Courses** refreshes the saved progress
 for that same lesson. An owner’s author trial remains separate from ordinary
-lesson progress. If updates were disconnected, use **Refresh lessons** to read
+lesson progress. If updates were disconnected, use **Refresh courses** to read
 the current saved results before choosing Start or Resume. The saved checkpoint
 question may already have been assessed; it is not a new unanswered question.

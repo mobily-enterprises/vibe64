@@ -87,12 +87,16 @@ import { createRenderer, createSSRApp, h, nextTick, ssrContextKey } from "vue";
 import { createVuetify } from "vuetify";
 import { afterEach, vi } from "vitest";
 import TrainingLessonPicker from "../../packages/vibe64-training/src/client/TrainingLessonPicker.vue";
+import TrainingCoursePage from "../../packages/vibe64-training/src/client/TrainingCoursePage.vue";
+import TrainingCourseCreator from "../../packages/vibe64-training/src/client/TrainingCourseCreator.vue";
+import { courseProgress } from "../../packages/vibe64-training/src/client/courseProgress.js";
 
 const pickerHash = "c".repeat(64);
 const savedId = "11111111-1111-4111-8111-111111111111";
 function pickerCatalogue() {
   return { ok: true, available: true, revision: 3, courses: [
-    { courseId: "getting-started", release: "0.1.7", title: "Getting started", status: "released", enabled: true, lessons: [
+    { courseId: "getting-started", release: "0.1.7", title: "Getting started", status: "released", enabled: true,
+      topics: [{ topicId: "intro", release: "0.1.7", title: "Introduction" }], lessons: [
       { code: "V64-START-00", title: "Connect your first AI", hash: pickerHash, topicId: "intro", topicRelease: "0.1.7", status: "published", required: true },
       { code: "V64-START-01", title: "Explore Vibe64", hash: "d".repeat(64), topicId: "intro", topicRelease: "0.1.7", status: "published", required: true }
     ] }
@@ -108,18 +112,21 @@ function pickerAttempt() {
     lesson: { code: "V64-START-00", hash: pickerHash }
   }, projectSlug: "", preparation: { phase: "reserved" }, learning: { submissions: [], resume: null } };
 }
-async function renderPicker(props = {}) {
-  const app = createSSRApp({ render: () => h(TrainingLessonPicker, props) });
+async function renderPicker(props = {}, component = TrainingLessonPicker) {
+  const app = createSSRApp({ render: () => h(component, props) });
   app.use(createVuetify());
   return renderToString(app);
 }
+function renderCoursePage(course = pickerCatalogue().courses[0], { lessonProgress = [], active = null, ...props } = {}) {
+  return renderPicker({ course, progress: courseProgress(course, lessonProgress, active), startAllowed: true, resumeAllowed: true, ...props }, TrainingCoursePage);
+}
 let pickerApp;
 afterEach(() => { pickerApp?.unmount(); pickerApp = null; });
-function mountPicker(props = {}) {
+function mountPicker(props = {}, component = TrainingLessonPicker) {
   pickerApp = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
-    .createApp({ ...TrainingLessonPicker, render: () => null }, {
+    .createApp({ ...component, render: () => null }, component === TrainingLessonPicker ? {
       catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, canResume: true, ...props
-    });
+    } : props);
   pickerApp.provide(ssrContextKey, { modules: new Set() });
   pickerApp.mount({});
   return pickerApp._instance.setupState;
@@ -136,11 +143,16 @@ describe("Training lesson picker prerequisite", () => {
     expect(state.startEnabled).toBeFalsy();
     expect(start).not.toHaveBeenCalled();
     const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true });
-    expect(html).toContain('aria-label="Lessons"');
+    expect(html).toContain('aria-label="Courses"');
     expect(html).toContain("getting-started · 0.1.7");
-    expect(html).toContain(pickerHash);
-    expect(html.indexOf("V64-START-00")).toBeLessThan(html.indexOf("V64-START-01"));
-    expect(html).toContain("Select a published lesson from an enabled release.");
+    expect(html).toContain("0 of 2 lessons complete");
+    expect(html).toContain("View course");
+    const page = await renderCoursePage();
+    expect(page).toContain("Back to courses");
+    expect(page).toContain("Introduction");
+    expect(page).toContain(pickerHash);
+    expect(page.indexOf("V64-START-00")).toBeLessThan(page.indexOf("V64-START-01"));
+    expect(page).toContain("Start next lesson");
   });
 
   it("emits only the existing start input's captured exact choice and learner revision", async () => {
@@ -183,7 +195,8 @@ describe("Training lesson picker prerequisite", () => {
     selectFirst(state);
     state.requestStart();
     expect(start).not.toHaveBeenCalled();
-    const html = await renderPicker({ catalogueResult: catalogue, learningResult: pickerLearning(), canStart: true });
+    const html = kind === "draft" ? await renderCoursePage(catalogue.courses[0])
+      : await renderPicker({ catalogueResult: catalogue, learningResult: pickerLearning(), canStart: true });
     expect(html).toContain(kind === "disabled" ? "Disabled for new lessons" : kind === "preview" ? "Preview course" : "Draft — unavailable for new lessons");
   });
 
@@ -232,12 +245,12 @@ describe("Training lesson picker prerequisite", () => {
   it("shows truthful initial loading, unavailable, empty, corrupt and explicit read-error states", async () => {
     const loading = await renderPicker({ catalogueLoading: true, learningLoading: true });
     expect(loading).toContain('aria-busy="true"');
-    expect(loading).toContain('aria-label="Loading installed lessons"');
+    expect(loading).toContain('aria-label="Loading installed courses"');
     expect(loading).toContain('aria-label="Loading saved lesson"');
     expect(loading).not.toContain("No courses are installed.");
     expect(await renderPicker({ catalogueResult: { ok: false, available: false, error: "Courses unavailable" } })).toContain("Courses unavailable");
     expect(await renderPicker({ catalogueResult: { ok: true, available: true, revision: 0, courses: [] }, learningResult: pickerLearning() })).toContain("No courses are installed.");
-    expect(await renderPicker({ catalogueResult: { ok: true, available: true, revision: 1, courses: [{}] } })).toContain("Installed lesson choices could not be displayed.");
+    expect(await renderPicker({ catalogueResult: { ok: true, available: true, revision: 1, courses: [{}] } })).toContain("Installed courses could not be displayed.");
     expect(await renderPicker({ catalogueError: "Pinned catalogue is corrupt", learningError: "Saved learning cannot load" })).toContain("Pinned catalogue is corrupt");
     expect(await renderPicker({ catalogueError: "Pinned catalogue is corrupt", learningError: "Saved learning cannot load" })).toContain("Saved learning cannot load");
   });
@@ -261,14 +274,14 @@ describe("Training lesson picker prerequisite", () => {
     const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(pickerAttempt()), catalogueLoading: true, learningLoading: true });
     expect(html).toContain("Saved lesson · V64-START-00");
     expect(html).toContain("Getting started");
-    expect(html).not.toContain('aria-label="Loading installed lessons"');
+    expect(html).not.toContain('aria-label="Loading installed courses"');
     expect(html).not.toContain('aria-label="Loading saved lesson"');
   });
 });
 
 
 it("shows the actual readable lesson title alongside its exact code", async () => {
-  const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true });
+  const html = await renderCoursePage();
   expect(html).toContain("Connect your first AI · V64-START-00");
   expect(html).toContain("Explore Vibe64 · V64-START-01");
   expect(html).toContain(pickerHash);
@@ -280,8 +293,8 @@ it("missing titles refuse new choice intent while retaining saved attempt and re
   const learning = pickerLearning(pickerAttempt());
   learning.history = [{ ...pickerAttempt(), attemptId: "22222222-2222-4222-8222-222222222222", ended: { reason: "restart" } }];
   const html = await renderPicker({ catalogueResult: catalogue, learningResult: learning, canStart: true, canResume: true });
-  expect(html).toContain("Lesson titles are unavailable. Refresh lesson choices");
-  expect(html).toContain("Refresh lessons");
+  expect(html).toContain("Lesson titles are unavailable. Refresh courses");
+  expect(html).toContain("Refresh courses");
   expect(html).toContain("Saved lesson · V64-START-00");
   expect(html).toContain("Saved lesson history (1)");
   const start = vi.fn();
@@ -299,4 +312,102 @@ it("missing titles refuse new choice intent while retaining saved attempt and re
   await nextTick();
   expect(state.selected.lesson.title).toBe("Connect your first AI");
   expect(state.selected.lesson.hash).toBe(pickerHash);
+});
+
+describe("Training courses", () => {
+  const passed = (code, hash, extra = {}) => ({ lessonCode: code, lessonHash: hash, required: 1, passed: 1, completed: true, open: false, ...extra });
+  const releasedAttempt = () => {
+    const attempt = pickerAttempt();
+    attempt.pin.course.release = "0.1.7";
+    return attempt;
+  };
+
+  it("derives read-only lesson statuses and course progress from saved per-lesson passes", () => {
+    const course = pickerCatalogue().courses[0];
+    expect(courseProgress(course).lessons.map(value => value.status)).toEqual(["not-started", "not-started"]);
+    const done = courseProgress(course, [passed("V64-START-00", pickerHash)]);
+    expect(done.lessons.map(value => value.status)).toEqual(["completed", "not-started"]);
+    expect([done.completed, done.total, done.next.code]).toEqual([1, 2, "V64-START-01"]);
+    const started = courseProgress(course, [{ ...passed("V64-START-01", "d".repeat(64)), completed: false, passed: 0, open: true }]);
+    expect(started.lessons[1].status).toBe("in-progress");
+    expect(courseProgress(course, [passed("V64-START-00", "e".repeat(64))]).lessons[0].status).toBe("not-started");
+    course.lessons[1].required = false;
+    expect(courseProgress(course, [passed("V64-START-00", pickerHash)]).total).toBe(1);
+  });
+
+  it("starts the course's first not-completed lesson through the original start intent", async () => {
+    const start = vi.fn();
+    const learning = { ...pickerLearning(), lessonProgress: [passed("V64-START-00", pickerHash)] };
+    const state = mountPicker({ learningResult: learning, onStart: start });
+    const [summary] = state.summaries;
+    expect(summary.progress.next.code).toBe("V64-START-01");
+    state.startLesson(summary.course, summary.progress.next);
+    expect(start).toHaveBeenCalledExactlyOnceWith({ courseId: "getting-started", release: "0.1.7", lessonCode: "V64-START-01", expectedRevision: 9 });
+    const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: learning, canStart: true });
+    expect(html).toContain("1 of 2 lessons complete");
+    expect(html).toContain(">Start<");
+    expect(await renderCoursePage(undefined, { lessonProgress: learning.lessonProgress })).toContain("Completed");
+  });
+
+  it("continues only the saved attempt of the same course and refuses a parallel start", async () => {
+    const start = vi.fn();
+    const resume = vi.fn();
+    const state = mountPicker({ learningResult: pickerLearning(releasedAttempt()), onStart: start, onResume: resume });
+    expect(state.summaries[0].progress.activeHere).toBe(true);
+    state.requestResume();
+    expect(resume).toHaveBeenCalledExactlyOnceWith({ attemptId: savedId });
+    state.startLesson(state.summaries[0].course, state.summaries[0].course.lessons[1]);
+    expect(start).not.toHaveBeenCalled();
+    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toContain(">Continue<");
+    const other = mountPicker({ learningResult: pickerLearning(pickerAttempt()) });
+    expect(other.summaries[0].progress.activeHere).toBe(false);
+    expect(other.startPossible).toBe(false);
+  });
+
+  it("opens one course page, returns to the list and refuses malformed saved progress", async () => {
+    const state = mountPicker();
+    state.openCourseKey = state.summaries[0].key;
+    await nextTick();
+    expect(state.openCourse.course.courseId).toBe("getting-started");
+    pickerApp._instance.props.catalogueResult = { ...pickerCatalogue(), courses: [] };
+    await nextTick();
+    expect(state.openCourseKey).toBe("");
+    const invalid = mountPicker({ learningResult: { ...pickerLearning(), lessonProgress: [{ lessonCode: "V64-START-00" }] } });
+    expect(invalid.learningInvalid).toBe(true);
+  });
+
+  it("offers owner-only New course from enabled released topics and opens the confirmed course", async () => {
+    const created = { ok: true, available: true, revision: 4, course: { courseId: "custom-mine", release: "1.0.0", title: "Mine", status: "released", enabled: true } };
+    const createCourse = vi.fn(async () => created);
+    const catalogue = pickerCatalogue();
+    catalogue.courses.push({ ...catalogue.courses[0], courseId: "preview", status: "preview", topics: [{ topicId: "draft-topic", release: "0.2.0", title: "Draft topic" }], lessons: [] });
+    expect(mountPicker({ catalogueResult: catalogue, createCourse }).canCreateCourses).toBe(false);
+    pickerApp.unmount();
+    const state = mountPicker({ catalogueResult: { ...catalogue, canCreateCourses: true }, createCourse });
+    expect(state.canCreateCourses).toBe(true);
+    expect(state.availableTopics).toEqual([{ topicId: "intro", release: "0.1.7", title: "Introduction" }]);
+    await state.requestCreateCourse({ title: "Mine", topics: [{ topicId: "intro", release: "0.1.7" }] });
+    expect(createCourse).toHaveBeenCalledExactlyOnceWith({ title: "Mine", topics: [{ topicId: "intro", release: "0.1.7" }], expectedRevision: 3 });
+    expect(state.openCourseKey).toBe(JSON.stringify(["custom-mine", "1.0.0"]));
+    expect(await renderPicker({ catalogueResult: { ...catalogue, canCreateCourses: true }, learningResult: pickerLearning(), createCourse })).toContain("New course");
+    expect(await renderPicker({ catalogueResult: catalogue, learningResult: pickerLearning(), createCourse })).not.toContain("New course");
+  });
+
+  it("collects a named course of ordered whole topics", async () => {
+    const create = vi.fn();
+    const topics = [{ topicId: "intro", release: "0.1.7", title: "Introduction" }, { topicId: "data", release: "0.3.0", title: "Data" }];
+    const state = mountPicker({ topics, onCreate: create }, TrainingCourseCreator);
+    state.requestCreate();
+    expect(create).not.toHaveBeenCalled();
+    state.name = "  My path ";
+    state.toggle(topics[0], true);
+    state.toggle(topics[1], true);
+    state.move(1, -1);
+    state.requestCreate();
+    expect(create).toHaveBeenCalledExactlyOnceWith({ title: "My path", topics: [{ topicId: "data", release: "0.3.0" }, { topicId: "intro", release: "0.1.7" }] });
+    const html = await renderPicker({ topics }, TrainingCourseCreator);
+    expect(html).toContain("Course name");
+    expect(html).toContain("Introduction · 0.1.7");
+    expect(html).toContain("Create course");
+  });
 });

@@ -18,7 +18,7 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
 <template>
   <StudioAppShellLayout show-learning-mode-control :learning-mode="learningMode" :fill-viewport="learningMode" @update:learning-mode="setLearningMode">
     <template #top-left>
-      <div class="vibe64-local-app-index__top">{{ learningMode ? "Lessons" : "Projects" }}</div>
+      <div class="vibe64-local-app-index__top">{{ learningMode ? "Courses" : "Projects" }}</div>
       <Vibe64LearningPracticeProjectSelector v-if="learningMode" :panel="panel" />
     </template>
     <template #top-right>

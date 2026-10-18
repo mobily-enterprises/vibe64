@@ -1,5 +1,8 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import TrainingCourseCreator from "./TrainingCourseCreator.vue";
+import TrainingCoursePage from "./TrainingCoursePage.vue";
+import { courseProgress, offered } from "./courseProgress.js";
 
 const props = defineProps({
   catalogueResult: { type: Object, default: null },
@@ -10,7 +13,9 @@ const props = defineProps({
   learningError: { type: String, default: "" },
   busy: Boolean,
   canStart: Boolean,
-  canResume: Boolean
+  canResume: Boolean,
+  // Optional owner-only custom course request; resolves to the confirmed result or null.
+  createCourse: { type: Function, default: null }
 });
 const emit = defineEmits(["refresh", "start", "resume"]);
 const selectionId = ref("");
@@ -28,6 +33,7 @@ const catalogueInvalid = computed(() => {
     !Array.isArray(result.courses) || result.courses.some(course =>
       !text(course?.courseId) || !text(course.release) || !text(course.title) ||
       typeof course.enabled !== "boolean" || !text(course.status) || !Array.isArray(course.lessons) ||
+      !Array.isArray(course.topics) || course.topics.some(topic => !text(topic?.topicId) || !text(topic.release) || !text(topic.title)) ||
       course.lessons.some(lesson => !text(lesson?.code) || !text(lesson.hash) ||
         !text(lesson.topicId) || !text(lesson.topicRelease) || !text(lesson.status) || !text(lesson.title))));
 });
@@ -59,6 +65,9 @@ const learningInvalid = computed(() => {
   if (!revision(result.revision) || !Object.hasOwn(result, "active") ||
       result.active !== null && (!hasDisplayPin(result.active) || result.active.ended) || !Array.isArray(result.history) ||
       result.history.some(attempt => !hasDisplayPin(attempt) || !attempt.ended)) return true;
+  if (result.lessonProgress !== undefined && (!Array.isArray(result.lessonProgress) || result.lessonProgress.some(value =>
+    !text(value?.lessonCode) || !text(value.lessonHash) || !revision(value.required) || !revision(value.passed) ||
+    value.passed > value.required || typeof value.completed !== "boolean" || typeof value.open !== "boolean"))) return true;
   const completion = result.completion;
   return completion != null && (!result.active || !revision(completion.required) || !revision(completion.passed) ||
     completion.passed > completion.required || typeof completion.completed !== "boolean" ||
@@ -71,11 +80,9 @@ const savedAttempt = computed(() => !learningInvalid.value && props.learningResu
 const history = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
   props.learningResult.available === true ? props.learningResult.history : []);
 const completion = computed(() => savedAttempt.value ? props.learningResult.completion : null);
-function offered(course, lesson) {
-  return course.enabled && course.status === "released" && lesson.status === "published";
-}
-const startEnabled = computed(() => props.canStart && !props.busy && !props.catalogueLoading && !props.catalogueError &&
-  learningReady.value && !savedAttempt.value && selected.value && offered(selected.value.course, selected.value.lesson));
+const startPossible = computed(() => Boolean(props.canStart && !props.busy && !props.catalogueLoading && !props.catalogueError &&
+  learningReady.value && !savedAttempt.value));
+const startEnabled = computed(() => startPossible.value && selected.value && offered(selected.value.course, selected.value.lesson));
 const resumeEnabled = computed(() => props.canResume && !props.busy && learningReady.value && savedAttempt.value && !savedAttempt.value.ended);
 
 function requestStart() {
@@ -87,16 +94,45 @@ function requestStart() {
 function requestResume() {
   if (resumeEnabled.value) emit("resume", { attemptId: savedAttempt.value.attemptId });
 }
+// Course Start selects one exact displayed lesson for the same original start.
+function startLesson(course, lesson) {
+  selectionId.value = choiceId(course, lesson);
+  requestStart();
+}
+
+const courseKey = course => JSON.stringify([course.courseId, course.release]);
+const lessonProgress = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
+  props.learningResult.available === true ? props.learningResult.lessonProgress || [] : []);
+const summaries = computed(() => courses.value.map(course => ({ course, key: courseKey(course),
+  progress: courseProgress(course, lessonProgress.value, savedAttempt.value) })));
+const openCourseKey = ref("");
+const openCourse = computed(() => summaries.value.find(summary => summary.key === openCourseKey.value) || null);
+watch(summaries, values => {
+  if (!props.catalogueLoading && openCourseKey.value && !values.some(value => value.key === openCourseKey.value)) openCourseKey.value = "";
+});
+
+const creating = ref(false);
+const canCreateCourses = computed(() => typeof props.createCourse === "function" && !catalogueInvalid.value &&
+  props.catalogueResult?.ok === true && props.catalogueResult.canCreateCourses === true);
+const availableTopics = computed(() => [...new Map(courses.value.filter(course => course.enabled && course.status === "released")
+  .flatMap(course => course.topics).map(topic => [JSON.stringify([topic.topicId, topic.release]), topic])).values()]);
+async function requestCreateCourse(input) {
+  if (!canCreateCourses.value || props.busy) return;
+  const result = await props.createCourse({ ...input, expectedRevision: props.catalogueResult.revision });
+  if (result?.ok !== true || !result.course) return;
+  creating.value = false;
+  openCourseKey.value = courseKey(result.course);
+}
 </script>
 
 <template>
-  <section class="training-lesson-picker" aria-label="Lessons" :aria-busy="catalogueLoading || learningLoading">
+  <section class="training-lesson-picker" aria-label="Courses" :aria-busy="catalogueLoading || learningLoading">
     <header class="training-lesson-picker__header">
       <div>
-        <h2>Lessons</h2>
-        <p>Choose an installed lesson or resume your saved lesson.</p>
+        <h2>Courses</h2>
+        <p>Choose a course to see its lessons and your progress, or resume your saved lesson.</p>
       </div>
-      <v-btn variant="text" min-height="48" :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')">Refresh lessons</v-btn>
+      <v-btn variant="text" min-height="48" :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')">Refresh courses</v-btn>
     </header>
 
     <v-skeleton-loader v-if="learningLoading && !savedAttempt" type="list-item-two-line" aria-label="Loading saved lesson" />
@@ -127,34 +163,48 @@ function requestResume() {
       <v-card-actions><v-btn variant="tonal" min-height="48" :disabled="!resumeEnabled" @click="requestResume">Resume saved lesson</v-btn></v-card-actions>
     </v-card>
 
-    <v-skeleton-loader v-if="catalogueLoading && !courses.length" type="heading, list-item-two-line, list-item-two-line" aria-label="Loading installed lessons" />
+    <v-skeleton-loader v-if="catalogueLoading && !courses.length" type="heading, list-item-two-line, list-item-two-line" aria-label="Loading installed courses" />
     <v-alert v-if="catalogueError || catalogueInvalid" type="error" variant="tonal" role="alert">
-      {{ catalogueError || (lessonTitlesMissing ? 'Lesson titles are unavailable. Refresh lesson choices; your saved lesson and history remain retained.' : 'Installed lesson choices could not be displayed. Refresh or ask the owner to restore the exact content; nothing was installed or enabled.') }}
+      {{ catalogueError || (lessonTitlesMissing ? 'Lesson titles are unavailable. Refresh courses; your saved lesson and history remain retained.' : 'Installed courses could not be displayed. Refresh or ask the owner to restore the exact content; nothing was installed or enabled.') }}
     </v-alert>
     <p v-else-if="!catalogueLoading && (!catalogueResult || catalogueResult.ok !== true || catalogueResult.available !== true)" role="status">
-      {{ catalogueResult?.error || 'Installed lessons are not available yet.' }}
+      {{ catalogueResult?.error || 'Installed courses are not available yet.' }}
     </p>
-    <p v-else-if="!catalogueLoading && courses.length === 0" role="status">No courses are installed. Ask the owner to install and enable a course; this picker cannot install one.</p>
+    <p v-else-if="!catalogueLoading && courses.length === 0" role="status">No courses are installed. Ask the owner to install and enable a course; this page cannot install one.</p>
 
-    <v-radio-group v-if="courses.length" v-model="selectionId" label="Choose a lesson" class="training-lesson-picker__choices" :disabled="busy || catalogueLoading || !!catalogueError">
-      <v-card v-for="course in courses" :key="JSON.stringify([course.courseId, course.release])" variant="outlined">
-        <v-card-title>{{ course.title }}</v-card-title>
-        <v-card-subtitle>{{ course.courseId }} · {{ course.release }} · {{ !course.enabled ? 'Disabled for new lessons' : course.status === 'released' ? 'Enabled' : 'Preview course' }}</v-card-subtitle>
-        <v-card-text>
-          <p v-if="course.lessons.length === 0">This course has no displayed lesson choices.</p>
-          <div v-for="lesson in course.lessons" :key="choiceId(course, lesson)" class="training-lesson-picker__choice">
-            <v-radio :value="choiceId(course, lesson)" :label="`${lesson.title} · ${lesson.code}`" :disabled="!offered(course, lesson)" />
-            <p>{{ lesson.topicId }} · {{ lesson.topicRelease }} · {{ lesson.status === 'published' ? 'Published' : 'Draft — unavailable for new lessons' }}</p>
-            <details><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-radio-group>
+    <TrainingCoursePage
+      v-if="openCourse"
+      :course="openCourse.course"
+      :progress="openCourse.progress"
+      :start-allowed="startPossible"
+      :resume-allowed="!!resumeEnabled"
+      @back="openCourseKey = ''"
+      @start="startLesson(openCourse.course, $event)"
+      @resume="requestResume"
+    />
+    <template v-else>
+      <div v-if="courses.length" class="training-lesson-picker__courses">
+        <v-card v-for="{ course, key, progress } in summaries" :key="key" variant="outlined">
+          <v-card-title>{{ course.title }}</v-card-title>
+          <v-card-subtitle>{{ course.courseId }} · {{ course.release }} · {{ !course.enabled ? 'Disabled for new lessons' : course.status === 'released' ? 'Enabled' : 'Preview course' }}</v-card-subtitle>
+          <v-card-text>
+            <p>{{ progress.completed }} of {{ progress.total }} lessons complete</p>
+            <v-progress-linear :model-value="progress.total ? 100 * progress.completed / progress.total : 0" height="8" rounded
+              :aria-label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`" />
+          </v-card-text>
+          <v-card-actions>
+            <v-btn v-if="progress.activeHere" variant="tonal" min-height="48" :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
+            <v-btn v-else-if="progress.next" variant="tonal" min-height="48" :disabled="!startPossible" @click="startLesson(course, progress.next)">Start</v-btn>
+            <v-btn variant="text" min-height="48" @click="openCourseKey = key">View course</v-btn>
+          </v-card-actions>
+        </v-card>
+      </div>
+      <TrainingCourseCreator v-if="creating && canCreateCourses" :topics="availableTopics" :busy="busy" @create="requestCreateCourse" @cancel="creating = false" />
+      <div v-else-if="canCreateCourses"><v-btn variant="text" min-height="48" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
+    </template>
     <div v-if="courses.length" class="training-lesson-picker__start">
       <p v-if="savedAttempt">Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</p>
       <p v-else-if="!canStart">Starting lessons is unavailable in this installation.</p>
-      <p v-else-if="!selected">Select a published lesson from an enabled release.</p>
-      <v-btn variant="tonal" min-height="48" :disabled="!startEnabled" @click="requestStart">Start selected lesson</v-btn>
     </div>
 
     <details v-if="history.length" class="training-lesson-picker__history">
@@ -176,9 +226,8 @@ function requestResume() {
 .training-lesson-picker__header { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.5rem; }
 .training-lesson-picker__header h2 { font-size: 1.25rem; }
 .training-lesson-picker__header p { margin-top: 0.25rem; }
-.training-lesson-picker__choices :deep(.v-selection-control-group) { gap: 1rem; }
-.training-lesson-picker__choice + .training-lesson-picker__choice { margin-top: 1rem; }
-.training-lesson-picker__choice p { margin-bottom: 0.5rem; }
+.training-lesson-picker__courses { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
+.training-lesson-picker__courses :deep(.v-card-actions) { flex-wrap: wrap; }
 .training-lesson-picker__saved p + p { margin-top: 0.5rem; }
 .training-lesson-picker__history li + li { margin-top: 1rem; }
 .training-lesson-picker :deep(.v-card-title), .training-lesson-picker :deep(.v-card-subtitle), .training-lesson-picker p, .training-lesson-picker code, .training-lesson-picker dd { white-space: normal; overflow-wrap: anywhere; }

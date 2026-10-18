@@ -163,7 +163,7 @@ immutable. Check both the exact local lock and actual requested Git publication;
 
 In supported hosted installations, ask Colleague to admit your exact clean
 committed snapshot from the authorized authoring session. Then turn on Learning
-mode in that project view and use **Resume author trial** under **Lessons** to
+mode in that project view and use **Resume author trial** under **Courses** to
 open its same Main teacher. This saved trial has isolated progress; it is not an
 enabled learner course. Ordinary **Start** still requires a published lesson in
 an enabled release. Local validation/bundling alone admits no trial. Do not change

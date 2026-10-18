@@ -57,7 +57,7 @@ async function request(operation) {
       <p>This isolated snapshot is separate from your published lesson progress.</p>
       <v-skeleton-loader v-if="toValue(trialResource.isLoading) && !trial" type="list-item-two-line, actions" aria-label="Loading saved author trial" />
       <v-alert v-if="toValue(trialResource.loadError)" type="error" variant="tonal">
-        {{ toValue(trialResource.loadError) }} Refresh lessons before reopening the trial.
+        {{ toValue(trialResource.loadError) }} Refresh courses before reopening the trial.
       </v-alert>
       <template v-if="trial">
         <p>{{ trial.pin.lesson.code }} · {{ trial.pin.topic.release }}</p>
@@ -84,6 +84,7 @@ async function request(operation) {
       :busy="busy"
       :can-start="canRequest && !retry"
       :can-resume="canRequest"
+      :create-course="input => request(owner => owner.createCourse(input))"
       @refresh="request(owner => owner.refresh())"
       @start="request(owner => owner.startLesson($event))"
       @resume="request(owner => owner.resumeLesson($event.attemptId))"

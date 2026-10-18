@@ -291,6 +291,8 @@ runs no authored exercise, check or visual controller.
 `enableCourse({course,lock,expectedRevision})` and
 `disableCourse({courseId,release,expectedRevision})`. These are internal server
 facilities, with explicit local operator commands documented below and no browser control or Colleague tool.
+The one exception is `createCourse({title,topics,expectedRevision})`, described
+under [Custom courses](#custom-courses).
 An admitted owner caller supplies the approved course and its exact lock together;
 the store does not authenticate objects or discover/fetch repositories.
 
@@ -331,6 +333,39 @@ read. That read admits the start; a later disable blocks future admissions but
 does not revoke work already admitted or a saved attempt. This store does not
 serialize its lock with reservation writes or add an action/authentication layer.
 Resume continues through the saved learner pin independently of the catalogue.
+
+### Custom courses
+
+The workspace owner can create a custom course from Learning → **Courses** →
+**New course**, or through the owner-only `vibe64.training.courses.create` action
+(`POST /api/vibe64/training/courses` with `{title,topics,expectedRevision}`).
+`courses.list` reports `canCreateCourses` for the signed-in person and each
+course's ordered `topics` with their installed titles. On local Vibe64 the OS user
+is the owner; on hosted Vibe64 only the workspace owner may create one, through
+the existing `ownerRequired` action check.
+
+`createCourse` adds no storage and no new record format. It accepts 1–32
+different whole topics, each an exact `topicId`/`release` already pinned by an
+**enabled released** catalogue course, and resolves them through those existing
+lock pins and the installed snapshots. It builds an ordinary course definition
+`{courseId:"custom-<name-slug>",title,release:"1.0.0",status:"released",topics}`,
+generates its lock with the original `createCourseLock` and saves it with the
+original `enableCourse` (same lock, revision check, 16-release limit and atomic
+writer). The entry is therefore immutable like any other release and is verified
+on every catalogue read. Lessons keep their exact code and hash, so saved passes
+count in every course containing them; lesson content never changes. An identical
+retry returns `changed:false`; the same name with a different definition returns
+`VIBE64_TRAINING_COURSE_EXISTS`. Other refusals are
+`VIBE64_TRAINING_COURSE_INVALID`, `VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE`,
+`VIBE64_TRAINING_COURSE_LIMIT` and the original catalogue revision/busy/save
+errors. To retire a custom course, disable its exact release with
+`vibe64 training disable-course custom-<name-slug> 1.0.0 <system-root> <revision>`.
+
+Course progress in the **Courses** pane is read-only: `learning.read` adds
+`lessonProgress`, one `{lessonCode,lessonHash,required,passed,completed,open}`
+summary per saved lesson pin, computed from the same verified passes as
+`completion`. The browser joins it with `courses.list` to show lesson statuses and
+"N of M lessons complete" (required lessons, or all lessons when none is required).
 
 ## Private learner reservations
 

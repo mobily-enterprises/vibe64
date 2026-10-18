@@ -1804,6 +1804,8 @@ test("opt-in completion reads verify the saved pin without writes while default 
   const restored = await treeState(f.systemRoot);
   const verified = await createTrainingLearnerState({ systemRoot: f.systemRoot }).readState({ actor: f.actor, includeCompletion: true });
   assert.deepEqual(verified.completion, { lessonCode: "INTRO-01", lessonHash: f.pin.lesson.hash, required: 6, passed: 6, completed: true });
+  assert.deepEqual(verified.lessonCompletions, [{ ...verified.completion, open: true }], "the per-lesson summary repeats the same verified passes");
+  assert.equal(Object.hasOwn(state, "lessonCompletions"), false);
   assert.equal(verified.activeSummaryCurrent, false);
   assert.deepEqual(verified.active.learning, state.active.learning);
   assert.deepEqual(await treeState(f.systemRoot), restored);

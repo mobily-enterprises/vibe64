@@ -1,6 +1,6 @@
 # Main lesson conversations
 
-Use the yellow **L** plate and the existing **Lessons** pane to Start or Resume
+Use the yellow **L** plate and the existing **Courses** pane to Start or Resume
 your saved lesson attempt. The same left Main conversation is the intended
 teacher; Colleague remains available for general application assistance. See
 [Choosing lessons and Learning conversations](learning-mode-ui.md) for the
@@ -151,14 +151,14 @@ installation's supported connection/replacement recovery.
 
 ## A prepared practice lesson
 
-Start or Resume the saved lesson in **Lessons**, then select its Learning
+Start or Resume the saved lesson in **Courses**, then select its Learning
 conversation in the same session list. Ask Main to teach that lesson. The
 conversation belongs to the lesson’s prepared workspace; changing the visible
 Working project does not move it. Keep the existing attempt and history if its
 source is unavailable, and ask the owner to restore that saved workspace.
 
 Main can use a declared lesson diagram in **Presentation** when the installation
-supports it. **Lessons** returns to the picker; **Presentation** returns to the same
+supports it. **Courses** returns to the Courses pane; **Presentation** returns to the same
 diagram. A confirmed diagram state is retained separately from an assessment pass.
 On a phone, use the existing conversation and Preview view controls to switch
 between the teacher and diagram.
@@ -174,7 +174,7 @@ console is read-only. On a phone, closing its full-screen log returns to the
 underlying view.
 
 The App remains attached to this lesson's saved workspace when you select another
-Working project. **Lessons** returns to the picker and **Presentation** returns
+Working project. **Courses** returns to the Courses pane and **Presentation** returns
 to the lesson diagram. A visible app or successful Run does not by itself confirm
 a practical or pass an assessment; follow Main's actual practical instructions.
 
@@ -186,7 +186,7 @@ Save, manual command terminals or Workspace setup retry. Do not substitute a
 Working conversation to bypass the refusal. Colleague can explain the controls
 and help you recover; Main remains the lesson teacher.
 
-The App setup view retains the same lesson presentation handle and saved lesson identity. Switching between App, Lessons and Presentation does not switch to a working project. A changed account or saved lesson target retires that view; open the current Learning session again.
+The App setup view retains the same lesson presentation handle and saved lesson identity. Switching between App, Courses and Presentation does not switch to a working project. A changed account or saved lesson target retires that view; open the current Learning session again.
 
 An accepted Claude teacher request keeps its own saved lesson, conversation and
 account while its answer continues, including after the Send request returns.

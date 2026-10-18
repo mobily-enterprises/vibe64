@@ -83,6 +83,12 @@ by default open only their confirmed active attempt through the original
 learning-scoped Session Create route with an empty body. An ended original
 replay never opens an unrelated current successor. Admission, replay, pins,
 capacity, progress and grading remain with their original server owners.
+`createCourse` posts the owner's custom-course name, ordered topics and the
+displayed catalogue revision to the original Training `courses.create` action,
+then rereads courses; it admits no lesson and writes no progress. The launcher
+passes it to the picker, which shows **New course** only when `courses.list`
+reports `canCreateCourses`. The Learning content button and the root header read
+**Courses**; the internal `lessons` pane and `picker` navigation names are unchanged.
 
 The adapter serializes its UI operation only. Captured actor, API learner and
 route generation fence new follow-up requests and the selection callback.

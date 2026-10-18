@@ -15,6 +15,9 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 ## Sources
 
 - `packages/vibe64-training/src/client/TrainingLessonPicker.vue`
+- `packages/vibe64-training/src/client/TrainingCoursePage.vue`
+- `packages/vibe64-training/src/client/TrainingCourseCreator.vue`
+- `packages/vibe64-training/src/client/courseProgress.js`
 
 - `packages/vibe64-training/src/server/contentSchemas.js`
 - `packages/vibe64-training/src/server/content.js`
@@ -513,12 +516,26 @@ unchanged, and the original shipped-topic test verifies every complete guide rea
 ## Read-only lesson picker prerequisite
 
 `@local/vibe64-training/client/lesson-picker` exports the presentational
-`TrainingLessonPicker`. The parent supplies the original bounded `courses.list`
+`TrainingLessonPicker`, shown as the Learning **Courses** pane. The parent supplies the original bounded `courses.list`
 and `learning.read` projections, separate read/loading errors, pending action
 state and explicit supported start/resume capabilities. The picker preserves
 supplied course/topic lesson order. It displays disabled/preview/draft choices
 truthfully and emits no automatic selection, installation, enablement, start,
 progress or repair operation.
+
+Its home lists course cards with read-only progress; `TrainingCoursePage` shows
+one course's topics and lesson statuses. `courseProgress.js` joins each displayed
+lesson's exact code/hash with `learning.read`'s `lessonProgress` (the learner
+store's per-lesson summary of the same verified passes): Completed, In progress
+(open attempt or some passes) or Not started. Course progress counts completed
+required lessons. Card **Start**, **Start next lesson** and per-lesson **Start
+lesson** select one exact displayed lesson and use the same start emit below;
+**Continue** is the original saved-attempt resume. `TrainingCourseCreator` lets
+the owner name a custom course and order whole topics from enabled released
+courses; the parent supplies `createCourse`, which calls the owner-only
+`courses.create` action. The installed catalogue owner resolves those existing
+topic pins and reuses `createCourseLock`/`enableCourse`, so a custom course is an
+ordinary immutable catalogue release with no new storage.
 
 A selected exact course/release/lesson/hash/topic identity remains local display
 state. Changed or removed choices clear it rather than retargeting a request.
