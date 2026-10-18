@@ -697,7 +697,8 @@ test("native lesson end and ended-start replay expose the original target and ac
   assert.equal(f.calls.at(-1).value.actor, f.auth.user);
   const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.end");
   assert.equal(definition.idempotency, "domain_native");
-  assert.match(definition.extensions.assistant.description, /does not Stop, close, archive or delete/u);
+  assert.match(definition.extensions.assistant.description, /stops this attempt's lesson conversation work/u);
+  assert.match(definition.extensions.assistant.description, /does not close, archive or delete anything/u);
   const beforeReplay = await inventory(f.systemRoot);
   const replay = await c.tool("lesson.end", input);
   assert.equal(replay.ok, true, JSON.stringify(replay));

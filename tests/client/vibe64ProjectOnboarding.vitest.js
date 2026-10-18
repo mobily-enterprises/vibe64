@@ -1778,7 +1778,8 @@ it("the actual selected Learning workspace publisher waits for the original snap
   const end = source.indexOf("const assistantLayerSelected = computed(", start);
   expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
   const layout = Vue.shallowRef(null), view = Vue.shallowRef(null), preview = Vue.shallowRef(null), width = Vue.ref(1200);
-  const keyNames = ["VIBE64_ASSISTANT_HOST_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY"];
+  const keyNames = ["VIBE64_ASSISTANT_HOST_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY",
+    "VIBE64_TRAINING_LEARNER_GESTURE_KEY"];
   const keys = Object.fromEntries(keyNames.map(name => [name, Symbol(name)]));
   const binding = Object.freeze({ actorKey: "scoped", viewerActorKey: "member", learnerId: "own", learningAttemptId: "saved-attempt",
     sessionId: "saved-initial", sourceProjectSlug: "practice", noExercise: false });
