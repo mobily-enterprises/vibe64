@@ -639,6 +639,13 @@ watch(() => {
   max-width: calc(100% - 2.4rem);
   padding: .9rem 1.1rem;
 }
+/* The teacher's opening greeting is the same tutor card as its replies. */
+.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__welcome {
+  background: var(--vibe64-tutor-card);
+  border: 1px solid var(--vibe64-tutor-edge);
+  box-shadow: var(--v64-elevation-1);
+  color: rgb(var(--v-theme-on-surface));
+}
 .studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--assistant .studio-long-text-review__paragraph { line-height: 1.6; }
 .studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--user {
   background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14));
