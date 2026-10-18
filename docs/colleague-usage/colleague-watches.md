@@ -43,7 +43,7 @@ delivered to Main once. Switching between the practice project's **Preview** or
 lesson without a practice project, such as Lesson 0, can be watched too. Stop
 removes the watch without stopping Main, the lesson or the app, and polling grants
 no unrelated mutation permission. For the eye dialog's controls, see
-[Choosing lessons and Learning conversations](learning-mode-ui.md).
+[Watching a lesson step by step](learning-lesson-watch.md).
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.
