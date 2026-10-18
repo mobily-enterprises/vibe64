@@ -40,6 +40,9 @@ import {
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_INTERRUPT_AGENT_TURN,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
+  ACTION_INSPECT_INCOMING,
+  ACTION_REVIEW_INCOMING,
+  ACTION_CHANGE_INCOMING,
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
@@ -243,6 +246,16 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+    "vibe64.sessions.connected.prepare",
+    "vibe64.sessions.connected.source",
+    "vibe64.sessions.connected.inputs.inspect",
+    "vibe64.sessions.connected.replacement.inspect",
+    "vibe64.sessions.connected.replace",
+    "vibe64.sessions.connected.work.inspect",
+    "vibe64.sessions.connected.work.inputs",
+    "vibe64.sessions.connected.work.incoming",
+    "vibe64.sessions.connected.work.save",
+    "vibe64.sessions.connected.allocate",
     ACTION_READ_CONVERSATION_CONTEXT,
     ACTION_PIN_SESSION,
   ACTION_RENAME_SESSION,
@@ -270,6 +283,9 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_INSPECT_SESSION_WORK,
     ACTION_CREATE_PULL_REQUEST,
     ACTION_SAVE_SESSION_WORK,
+    ACTION_INSPECT_INCOMING,
+    ACTION_REVIEW_INCOMING,
+    ACTION_CHANGE_INCOMING,
     ACTION_CHECK_SESSION_UPDATES,
     ACTION_UPDATE_SESSION_WORK,
     ACTION_READ_SESSION_CONVERSATION_LOG,
