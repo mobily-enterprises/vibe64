@@ -1,0 +1,179 @@
+import fs from "node:fs";
+import path from "node:path";
+import { compile } from "@vue/compiler-dom";
+import { compileScript, parse } from "@vue/compiler-sfc";
+import * as Vue from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import TrainingGuideOverlay from "../../packages/vibe64-training/src/client/TrainingGuideOverlay.vue";
+import { runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+
+const overlayFile = path.resolve("packages/vibe64-training/src/client/TrainingGuideOverlay.vue");
+{
+  const { descriptor } = parse(fs.readFileSync(overlayFile, "utf8"), { filename: overlayFile });
+  const script = compileScript(descriptor, { id: "training-guide-overlay" });
+  TrainingGuideOverlay.render = new Function("Vue", compile(descriptor.template.content, {
+    bindingMetadata: script.bindings, mode: "function", prefixIdentifiers: true
+  }).code)(Vue);
+}
+
+// The teacher's guide rings one real Vibe64 control (by its data-vibe64-guide
+// id), never takes input, and reports truthfully whether anything was drawn.
+
+function control(attributes, rect = { top: 10, left: 20, width: 80, height: 24 }) {
+  return { isConnected: true, attributes, rect, hidden: false,
+    closest: () => null,
+    getBoundingClientRect() { return this.hidden ? { top: 0, left: 0, width: 0, height: 0 } : this.rect; } };
+}
+function fakeDocument(controls) {
+  const listeners = new Map();
+  return { controls, listeners,
+    querySelectorAll(selector) {
+      const [, name, value] = selector.match(/^\[([a-z0-9-]+)="(.*)"\]$/u);
+      return controls.filter(item => item.attributes[name] === value.replace(/\\(.)/gu, "$1"));
+    },
+    addEventListener(type, listener) { listeners.set(type, listener); },
+    removeEventListener(type, listener) { if (listeners.get(type) === listener) listeners.delete(type); } };
+}
+function text(node) {
+  return node.type === "text" ? node.text : (node.children || []).map(text).join("") + (node.text || "");
+}
+function find(node, predicate, found = []) {
+  if (predicate(node)) found.push(node);
+  for (const child of node.children || []) find(child, predicate, found);
+  return found;
+}
+
+const body = { type: "body", children: [], props: {} };
+const renderer = Vue.createRenderer({
+  createElement: type => ({ type, children: [], props: {}, parent: null }),
+  createComment: value => ({ type: "comment", text: value, children: [], props: {} }),
+  createText: value => ({ type: "text", text: value, children: [], props: {} }),
+  insert(child, parent, anchor = null) {
+    const previous = child.parent?.children?.indexOf(child) ?? -1;
+    if (previous >= 0) child.parent.children.splice(previous, 1);
+    child.parent = parent;
+    const index = anchor ? parent.children.indexOf(anchor) : -1;
+    if (index < 0) parent.children.push(child); else parent.children.splice(index, 0, child);
+  },
+  remove(child) { const index = child.parent?.children?.indexOf(child) ?? -1; if (index >= 0) child.parent.children.splice(index, 1); },
+  parentNode: node => node.parent,
+  nextSibling: node => node.parent?.children[node.parent.children.indexOf(node) + 1] || null,
+  patchProp: (node, key, _previous, value) => { node.props[key] = value; },
+  setElementText: (node, value) => { node.text = value; node.children = []; },
+  setText: (node, value) => { node.text = value; },
+  querySelector: selector => selector === "body" ? body : null
+});
+let app = null;
+function mountOverlay() {
+  app = renderer.createApp(TrainingGuideOverlay);
+  app.provide(Vue.ssrContextKey, { modules: new Set() });
+  app.mount({ type: "root", children: [], props: {} });
+}
+const overlay = () => find(body, node => String(node.props.class || "").includes("training-guide-overlay") &&
+  node.props["data-guide-step"])[0];
+const erd = trainingGuideCommand(trainingGuideRequest({ target: "database-erd" }), { id: "one", attemptId: "attempt" }).guide;
+
+let document;
+beforeEach(() => {
+  vi.useFakeTimers();
+  document = fakeDocument([control({ "data-vibe64-guide": "dashboard" })]);
+  vi.stubGlobal("document", document);
+  vi.stubGlobal("requestAnimationFrame", undefined);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+});
+afterEach(() => {
+  app?.unmount(); app = null;
+  body.children.splice(0);
+  trainingGuide.value = null;
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("teacher guide overlay", () => {
+  it("never claims a highlight without a mounted overlay or a visible real control", async () => {
+    expect(await showTrainingGuide(erd)).toEqual({ shown: false, reason: "overlay-unavailable" });
+    mountOverlay();
+    expect(await showTrainingGuide({ ...erd, highlight: false })).toEqual({ shown: false, reason: "highlight-off" });
+    document.controls[0].hidden = true; // e.g. the phone layout hides the Dashboard tab
+    expect(await showTrainingGuide(erd)).toEqual({ shown: false, reason: "target-hidden" });
+    await Vue.nextTick();
+    expect(overlay()).toBeUndefined();
+  });
+
+  it("rings the next real control on the path with its caption, without taking input", async () => {
+    mountOverlay();
+    expect(await showTrainingGuide(erd)).toEqual({ shown: true, step: "dashboard" });
+    await Vue.nextTick();
+    const node = overlay();
+    expect(node.props["data-guide-step"]).toBe("dashboard");
+    expect(text(node).trim()).toBe("Dashboard → Database → ERD");
+    const ring = find(node, child => child.props.class === "training-guide-overlay__ring")[0];
+    expect(ring.props.style).toMatchObject({ top: "4px", left: "14px", width: "92px", height: "36px" });
+    expect(String(node.props.class)).not.toContain("training-guide-overlay--still");
+
+    // Once the learner reaches Database, the deepest visible step is the ERD toggle.
+    document.controls.push(control({ "data-vibe64-guide": "database" }), control({ "data-vibe64-guide": "database-erd" }));
+    expect(await showTrainingGuide(erd)).toEqual({ shown: true, step: "database-erd" });
+  });
+
+  it("clears after its time limit", async () => {
+    mountOverlay();
+    await showTrainingGuide(erd);
+    await Vue.nextTick();
+    expect(overlay()).toBeDefined();
+    vi.advanceTimersByTime(7999);
+    expect(trainingGuide.value).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    await Vue.nextTick();
+    expect(trainingGuide.value).toBeNull();
+    expect(overlay()).toBeUndefined();
+  });
+
+  it("clears on the learner's first click", async () => {
+    mountOverlay();
+    await showTrainingGuide(erd);
+    await Vue.nextTick();
+    document.listeners.get("pointerdown")({ type: "pointerdown" });
+    await Vue.nextTick();
+    expect(trainingGuide.value).toBeNull();
+    expect(overlay()).toBeUndefined();
+    expect(document.listeners.has("pointerdown")).toBe(false);
+  });
+
+  it("holds the ring still for reduced motion", async () => {
+    vi.stubGlobal("matchMedia", query => ({ matches: query === "(prefers-reduced-motion: reduce)" }));
+    mountOverlay();
+    await showTrainingGuide(erd);
+    await Vue.nextTick();
+    expect(String(overlay().props.class)).toContain("training-guide-overlay--still");
+  });
+});
+
+describe("teacher guide commands in the Main browser", () => {
+  it("points without navigating, and shows me by navigating first and opening a lesson file", async () => {
+    mountOverlay();
+    const navigateBrowser = vi.fn(async () => ({ pane: "files", learningView: "workspace" }));
+    const pointed = trainingGuideCommand(trainingGuideRequest({ target: "files", filePath: "src/app.js" }),
+      { id: "point", projectSlug: "practice", sessionId: "session", attemptId: "attempt" });
+    expect(await runTrainingGuideCommand(pointed, { navigateBrowser })).toEqual({ guide: { shown: true, step: "dashboard" } });
+    expect(navigateBrowser).not.toHaveBeenCalled();
+
+    const shown = trainingGuideCommand(trainingGuideRequest({ target: "files", filePath: "src/app.js", navigate: true }),
+      { id: "show", projectSlug: "practice", sessionId: "session", attemptId: "attempt" });
+    const view = { openFile: vi.fn(path => {
+      document.controls.push(control({ "data-vibe64-guide": "files" }), control({ "data-vibe64-guide-path": path }));
+      return true;
+    }) };
+    expect(await runTrainingGuideCommand(shown, { navigateBrowser, view }))
+      .toEqual({ focus: { pane: "files", learningView: "workspace" }, guide: { shown: true, step: "file" } });
+    const { guide, ...navigation } = shown;
+    expect(navigateBrowser).toHaveBeenCalledWith(navigation);
+    expect(view.openFile).toHaveBeenCalledWith("src/app.js");
+
+    await expect(runTrainingGuideCommand(shown, { navigateBrowser, view: { openFile: () => false } }))
+      .rejects.toThrow(/could not open that practice project file/u);
+    await expect(runTrainingGuideCommand(shown, {})).rejects.toThrow(/navigation is unavailable/u);
+    expect(guide.caption).toBe("Dashboard → Files → src/app.js");
+  });
+});

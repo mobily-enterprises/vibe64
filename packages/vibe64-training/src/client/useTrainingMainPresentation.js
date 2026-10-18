@@ -7,12 +7,13 @@ import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createTrainingNavigation } from "./createTrainingNavigation.js";
 import { useTrainingPresentationCue } from "./useTrainingPresentationCue.js";
 import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "./presentationOperation.js";
-import { VIBE64_BROWSER_NAVIGATION_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { runTrainingGuideCommand } from "./trainingGuide.js";
+import { VIBE64_BROWSER_NAVIGATION_KEY, VIBE64_COLLEAGUE_VIEW_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // A captured Main application owns only product read/commands and the original
 // shared browser transaction. It creates no subscriber, player or speech queue.
 export function useTrainingMainPresentation({ identity, current, preview, voice, enabled, ready, retain,
-  browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null) }) {
+  browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null), view = inject(VIBE64_COLLEAGUE_VIEW_KEY, null) }) {
   const clientId = globalThis.crypto.randomUUID();
   const conversationId = mainConversationId(identity);
   const base = `${identity.sessionsApiPath}/${encodeURIComponent(identity.sessionId)}/training/presentation`;
@@ -73,6 +74,13 @@ export function useTrainingMainPresentation({ identity, current, preview, voice,
     voiceSession, acknowledge, error, holdMainReplies: true });
   const navigation = createTrainingNavigation({ scope, navigate: () => browserNavigation?.value || selectedPreview() ? async command => {
     const navigateBrowser = browserNavigation?.value;
+    if (command.guide) {
+      // Files open only in this exact lesson's own view, never another project.
+      const handle = view?.value;
+      const lessonView = handle?.projectSlug === (identity.sourceProjectSlug || "") && handle?.sessionId === identity.sessionId &&
+        handle?.learningBinding?.learningAttemptId === identity.learningAttemptId ? handle : null;
+      return runTrainingGuideCommand(command, { navigateBrowser, view: lessonView });
+    }
     if (!command.presentation) {
       if (navigateBrowser) return navigateBrowser(command);
       throw new Error("Lesson workspace navigation is unavailable in this installation.");

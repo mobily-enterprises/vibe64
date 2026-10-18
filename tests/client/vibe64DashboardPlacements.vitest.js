@@ -137,4 +137,12 @@ describe("Vibe64 dashboard placements", () => {
       `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
     ]));
   });
+
+  it("gives the real Dashboard sections the guide ids a lesson teacher can point at", () => {
+    const guides = Object.fromEntries(getPlacements()
+      .filter((placement) => placement?.props?.toolId)
+      .map((placement) => [placement.props.toolId, placement.props.guideId]));
+    expect(guides).toEqual({ info: "session-info", changes: "changes", repository: "git-log", editor: "files",
+      database: "database", system: "architecture", "ai-terminal": undefined });
+  });
 });

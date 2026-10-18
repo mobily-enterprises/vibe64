@@ -113,6 +113,7 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
     order: projectTool ? tool.order : 100 + tool.order,
     props: {
       icon: tool.icon,
+      ...(tool.guideId ? { guideId: tool.guideId } : {}),
       label: tool.label,
       scopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
       title: tool.title,

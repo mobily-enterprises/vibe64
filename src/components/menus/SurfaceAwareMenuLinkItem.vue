@@ -34,7 +34,16 @@ const props = defineProps({
   exact: {
     type: Boolean,
     default: false
+  },
+  // A lesson teacher's overlay points at this real section by its guide id.
+  guideId: {
+    type: String,
+    default: ""
   }
+});
+const linkProps = computed(() => {
+  const { guideId, ...value } = props;
+  return value;
 });
 const incomingCount = inject("vibe64.incoming.pendingCount", null);
 const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/incoming"));
@@ -42,9 +51,12 @@ const incomingLink = computed(() => props.scopedSuffix.endsWith("/dashboard/inco
 
 <template>
   <v-badge v-if="incomingLink" class="incoming-menu-link" :model-value="incomingCount > 0" :content="incomingCount" max="99" inline>
-    <ShellSurfaceAwareMenuLinkItem v-bind="props" />
+    <ShellSurfaceAwareMenuLinkItem v-bind="linkProps" />
   </v-badge>
-  <ShellSurfaceAwareMenuLinkItem v-else v-bind="props" />
+  <div v-else-if="guideId" class="surface-aware-menu-link-guide" :data-vibe64-guide="guideId">
+    <ShellSurfaceAwareMenuLinkItem v-bind="linkProps" />
+  </div>
+  <ShellSurfaceAwareMenuLinkItem v-else v-bind="linkProps" />
 </template>
 
 <style>

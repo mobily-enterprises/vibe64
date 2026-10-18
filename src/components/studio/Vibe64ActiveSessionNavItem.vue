@@ -13,6 +13,10 @@ const props = defineProps({
     default: "",
     type: String
   },
+  guideId: {
+    default: "",
+    type: String
+  },
   label: {
     default: "",
     type: String
@@ -92,6 +96,7 @@ function selectTool() {
     :disabled="itemDisabled"
     :prepend-icon="itemIcon"
     :title="itemLabel"
+    :data-vibe64-guide="props.guideId || undefined"
     :subtitle="itemDisabled ? itemDisabledReason : ''"
     :to="itemTo || undefined"
     @click="selectTool"

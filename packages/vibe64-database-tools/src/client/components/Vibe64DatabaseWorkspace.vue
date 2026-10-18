@@ -32,9 +32,9 @@
         </div>
 
         <v-btn-toggle v-model="activeView" mandatory density="compact" variant="outlined">
-          <v-btn value="overview" :prepend-icon="mdiGraphOutline" size="small">Overview</v-btn>
-          <v-btn value="erd" :prepend-icon="mdiGraphOutline" size="small">ERD</v-btn>
-          <v-btn value="data" :prepend-icon="mdiTableSearch" size="small">Data</v-btn>
+          <v-btn value="overview" data-vibe64-guide="database-overview" :prepend-icon="mdiGraphOutline" size="small">Overview</v-btn>
+          <v-btn value="erd" data-vibe64-guide="database-erd" :prepend-icon="mdiGraphOutline" size="small">ERD</v-btn>
+          <v-btn value="data" data-vibe64-guide="database-data" :prepend-icon="mdiTableSearch" size="small">Data</v-btn>
         </v-btn-toggle>
 
         <div class="database-workspace__header-actions">

@@ -22,6 +22,7 @@ import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64Lea
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
 import { VIBE64_LEARNING_NAVIGATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
@@ -244,7 +245,7 @@ onBeforeUnmount(() => {
               :class="{ 'studio-home-shell-project-tab--active': activeHeaderTab === tab.id }"
               role="tab"
               type="button"
-              :data-vibe64-guide="`tab-${tab.id}`"
+              :data-vibe64-guide="tab.id"
               :aria-label="tab.icon ? tab.label : undefined"
               :aria-selected="activeHeaderTab === tab.id ? 'true' : 'false'"
               :aria-disabled="headerTabDisabled(tab.id) ? 'true' : undefined"
@@ -279,6 +280,7 @@ onBeforeUnmount(() => {
       <Vibe64AuthSettingsButton />
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
+      <TrainingGuideOverlay v-if="learningMode" />
       <v-alert
         v-if="pageError && (!learningMode || !learningPaneActive)"
         type="error"

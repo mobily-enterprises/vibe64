@@ -469,7 +469,7 @@ The project page renders one tab group for both modes (`headerTabs`): Working
 shows `projectTabs` (Preview | Dashboard); Learning appends one icon-only
 graduation-cap option (aria-label "Learning", title "Learning: courses and
 lesson") to the same markup. Each option carries `data-vibe64-guide`
-(`tab-preview`, `tab-dashboard`, `tab-learning`). Selecting the cap sets the
+(`preview`, `dashboard`, `learning`). Selecting the cap sets the
 route's `learningView` to `learning`; selecting Preview or Dashboard sets it to
 `workspace` and runs the ordinary `selectProjectPane`, so Colleague, Main and
 the watch use the same values. There is no separate Learning tab or panes

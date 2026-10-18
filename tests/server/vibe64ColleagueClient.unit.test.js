@@ -2622,7 +2622,9 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
     "./createTrainingNavigation.js": { createTrainingNavigation },
     "./useTrainingPresentationCue.js": { useTrainingPresentationCue },
     "./presentationOperation.js": operations,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_BROWSER_NAVIGATION_KEY: navigationKey }
+    "./trainingGuide.js": await import("../../packages/vibe64-training/src/client/trainingGuide.js"),
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_BROWSER_NAVIGATION_KEY: navigationKey,
+      VIBE64_COLLEAGUE_VIEW_KEY: hostKeys.VIBE64_COLLEAGUE_VIEW_KEY }
   };
   const module = { exports: {} };
   new Function("require", "module", "exports", mainCode)(name => {

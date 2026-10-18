@@ -761,8 +761,8 @@
             mandatory
             variant="outlined"
           >
-            <v-btn value="database">Database</v-btn>
-            <v-btn value="files">Files</v-btn>
+            <v-btn value="database" data-vibe64-guide="database">Database</v-btn>
+            <v-btn value="files" data-vibe64-guide="files">Files</v-btn>
           </v-btn-toggle>
         </header>
         <Vibe64DatabaseWorkspace
@@ -785,6 +785,7 @@
           assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
           class="studio-autopilot__session-tool-content"
           :file-bookmarks="fileBookmarks"
+          :open-request="learningFileOpenRequest"
           :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
           :session-id="selectedAssistantSessionId"
           :sessions-api-path="learningSessionsApiPath"
@@ -1832,6 +1833,15 @@ watch(rightPaneTab, tab => {
 watch(learningDatabaseAvailable, available => {
   if (!available) { learningCodeMounted.value = false; learningCodeResult.value = null; learningDashboardTab.value = "database"; }
 });
+// A teacher "show me" for one practice file reuses the ordinary opener's request
+// and opens it in this lesson's own Files tab (the attempt-scoped editor).
+const learningFileOpenRequest = computed(() => learningDatabaseAvailable.value ? sourceEditorOpenRequest.value : null);
+function openLearningFile(path) {
+  if (!learningDatabaseAvailable.value || typeof path !== "string" || !path) return false;
+  openSourceEditorFile({ path, presentation: "code" });
+  learningDashboardTab.value = "files";
+  return sourceEditorOpenRequest.value?.path === path;
+}
 async function checkLearningCode(event) {
   const owner = learningGestures?.value;
   if (learningCodeChecking.value) return;
@@ -1870,6 +1880,7 @@ const learningView = Object.freeze({
   get learningView() { return props.learningView; },
   get hostConversationSelected() { return false; }, get temporarySelected() { return false; },
   get conversationId() { return ""; },
+  openFile: openLearningFile,
   get pane() {
     if (!learningLayout.projectVisible) return "chat";
     if (props.learningView === "workspace") {

@@ -25,6 +25,7 @@ vi.mock("@/components/studio/Vibe64AuthSettingsButton.vue", () => ({ default: { 
 vi.mock("@/components/studio/repository/Vibe64LocalRemoteControls.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/studio/Vibe64LearningPracticeProjectSelector.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/studio/Vibe64LearningLessonLauncher.vue", () => ({ default: { render: () => null } }));
+vi.mock("@local/vibe64-training/client/guide-overlay", () => ({ default: { render: () => Vue.h("aside", { "data-guide-overlay": "mounted" }) } }));
 vi.mock("@/components/studio/ProjectSelectionGate.vue", () => ({ default: Vue.defineComponent({
   setup(_props, { slots }) {
     return () => slots.default?.({ contentActive: true, projectSelection: { currentProject: { slug: "practice" } } });
@@ -149,8 +150,8 @@ describe("one Preview | Dashboard header for Working and Learning", () => {
     expect(learning.tabs().map(tab => tab.node.props["aria-label"] || tab.label)).toEqual(["Preview", "Dashboard", "Learning"]);
     expect(learning.tabs().map(tab => tab.node.props.class)).toEqual(working.tabs().map(tab => tab.node.props.class).concat([
       learning.tabs()[2].node.props.class]));
-    expect(learning.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["tab-preview", "tab-dashboard", "tab-learning"]);
-    expect(working.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["tab-preview", "tab-dashboard"]);
+    expect(learning.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["preview", "dashboard", "learning"]);
+    expect(working.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["preview", "dashboard"]);
     expect(learning.tabs()[2].node.props.title).toBe("Learning: courses and lesson");
     expect(learning.tabs()[2].label).toBe("");
     expect(findAll(learning.root, node => /Learning panes$/u.test(node.props["aria-label"] || ""))).toHaveLength(0);
@@ -164,6 +165,10 @@ describe("one Preview | Dashboard header for Working and Learning", () => {
     const view = mountLearningPage();
     await Vue.nextTick();
     expect(view.tabs().map(tab => tab.selected)).toEqual([true, false, false]);
+    expect(view.tabs().some(tab => tab.label === "Workspace")).toBe(false);
+    // The teacher's guide overlay points at these real tabs by their guide ids.
+    expect(view.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["preview", "dashboard", "learning"]);
+    expect(findAll(view.root, node => node.props["data-guide-overlay"] === "mounted")).toHaveLength(1);
     expect(view.panel().props["data-learning-view"]).toBe("workspace");
 
     const event = { type: "click", isTrusted: true };
@@ -250,10 +255,12 @@ describe("a practice lesson's Dashboard and Check my code", () => {
     const lessonTabs = findTemplate(ast, node => node.tag === "v-btn-toggle" &&
       attribute(node, "aria-label")?.value?.content === "Lesson dashboard tools")[0];
     expect(lessonTabs.children.filter(child => child.tag === "v-btn").map(child => [
-      attribute(child, "value").value.content, child.children[0].content.trim()])).toEqual([["database", "Database"], ["files", "Files"]]);
+      attribute(child, "value").value.content, child.children[0].content.trim(), attribute(child, "data-vibe64-guide").value.content]))
+      .toEqual([["database", "Database", "database"], ["files", "Files", "files"]]);
     const lessonEditor = findTemplate(ast, node => node.tag === "Vibe64SessionSourceEditor" && attribute(node, "lesson-scoped"))[0];
     expect(attribute(lessonEditor, "file-bookmarks").exp.content).toBe("fileBookmarks");
     expect(attribute(lessonEditor, "sessions-api-path").exp.content).toBe("learningSessionsApiPath");
+    expect(attribute(lessonEditor, "open-request").exp.content).toBe("learningFileOpenRequest");
     const label = node => typeof node.children?.[0]?.content === "string" ? node.children[0].content.trim() : "";
     const checks = findTemplate(ast, node => node.tag === "v-btn" && label(node) === "Check my code");
     expect(checks).toHaveLength(1);
@@ -282,15 +289,19 @@ describe("a practice lesson's Dashboard and Check my code", () => {
     const owner = { matchesLearning: value => value === binding,
       async submitCode(event) { submitted.push(event); return { checkOutcome: "passed" }; } };
     const view = Vue.shallowRef(null);
+    // The ordinary opener: it records one open request (and would select Files).
+    const sourceEditorOpenRequest = Vue.ref(null);
+    const openSourceEditorFile = vi.fn(target => { sourceEditorOpenRequest.value = { ...target, sequence: 1 }; return false; });
     let selected;
     const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
     const app = renderer.createApp({ setup() {
       const args = ["inject", "ref", "computed", "watch", "watchEffect", "onBeforeUnmount", "useDisplay", "props",
-        "chatCollapsed", "rightPaneTab", "vibe64SessionToolRouteSegment", ...keyNames];
+        "chatCollapsed", "rightPaneTab", "vibe64SessionToolRouteSegment", "sourceEditorOpenRequest", "openSourceEditorFile", ...keyNames];
       selected = new Function(...args, `${autopilotSource.slice(start, end)}
-return { learningView, learningDashboardTab, learningCodeResult, checkLearningCode, learningDatabaseAvailable };`)(
+return { learningView, learningDashboardTab, learningCodeResult, checkLearningCode, learningDatabaseAvailable, learningFileOpenRequest };`)(
         Vue.inject, Vue.ref, Vue.computed, Vue.watch, Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width: Vue.ref(1200) }),
-        props, Vue.ref(false), rightPaneTab, vibe64SessionToolRouteSegment, ...keyNames.map(name => keys[name]));
+        props, Vue.ref(false), rightPaneTab, vibe64SessionToolRouteSegment, sourceEditorOpenRequest, openSourceEditorFile,
+        ...keyNames.map(name => keys[name]));
       return () => null;
     } });
     app.provide(keys.VIBE64_ASSISTANT_HOST_KEY, Vue.shallowRef(null)); app.provide(keys.VIBE64_COLLEAGUE_VIEW_KEY, view);
@@ -307,6 +318,15 @@ return { learningView, learningDashboardTab, learningCodeResult, checkLearningCo
       expect(selected.learningDashboardTab.value).toBe("database");
       rightPaneTab.value = "editor"; await Vue.nextTick();
       expect(selected.learningDashboardTab.value).toBe("files");
+
+      // A teacher "show me" for one practice file uses the ordinary opener and
+      // opens it in this lesson's own Files tab.
+      selected.learningDashboardTab.value = "database";
+      expect(view.value.openFile("src/app.js")).toBe(true);
+      expect(openSourceEditorFile).toHaveBeenLastCalledWith({ path: "src/app.js", presentation: "code" });
+      expect(selected.learningDashboardTab.value).toBe("files");
+      expect(selected.learningFileOpenRequest.value.path).toBe("src/app.js");
+      expect(view.value.openFile("")).toBe(false);
 
       props.learningView = "learning";
       const press = { type: "click", isTrusted: true };

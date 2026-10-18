@@ -10,6 +10,7 @@
           v-if="child.type === 'file'"
           class="vibe64-source-tree__button"
           :class="{ 'vibe64-source-tree__button--active': child.path === selectedPath }"
+          :data-vibe64-guide-path="child.path || undefined"
           :title="child.path || child.name || 'source'"
           type="button"
           @click="emit('open-file', child.path)"

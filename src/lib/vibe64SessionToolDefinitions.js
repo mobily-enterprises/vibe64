@@ -12,10 +12,12 @@ import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 const VIBE64_ACTIVE_SESSION_NAV_TARGET = "page.active-session-nav";
 const VIBE64_ACTIVE_SESSION_NAV_OWNER = "vibe64-session";
 
+// guideId is the stable `data-vibe64-guide` id a lesson teacher's overlay can point at.
 const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiInformationOutline,
     id: "info",
+    guideId: "session-info",
     label: "Session info",
     order: 100,
     routeSegment: "session",
@@ -24,6 +26,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiFileCompare,
     id: "changes",
+    guideId: "changes",
     label: "Current changes",
     order: 150,
     routeSegment: "changes",
@@ -32,6 +35,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiSourceRepository,
     id: "repository",
+    guideId: "git-log",
     label: "Git log",
     navigationScope: "project",
     order: 290,
@@ -41,6 +45,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiFileCodeOutline,
     id: "editor",
+    guideId: "files",
     label: "Files",
     order: 200,
     routeSegment: "files",
@@ -49,6 +54,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiDatabaseOutline,
     id: "database",
+    guideId: "database",
     label: "Database",
     order: 225,
     routeSegment: "database",
@@ -57,6 +63,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiGraphOutline,
     id: "system",
+    guideId: "architecture",
     label: "Architecture",
     order: 250,
     routeSegment: "system",
