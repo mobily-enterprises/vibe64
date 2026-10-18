@@ -102,15 +102,34 @@ Dashboard shows the Learning panes (**Courses**, **Check my code**, the lesson
 and its history); Preview and Dashboard then appear unselected, exactly as one
 option of three. Selecting **Preview** or **Dashboard** deselects the cap. The
 collapse-chat arrow hides or shows the teacher chat exactly as it hides or shows
-the Working chat. In a practice lesson, **Dashboard** has **Database** and **Files**
-tabs. **Database** shows the practice app's ERD, tables and data, editable like
-any project's database (see [Browse a project's Database](database.md)). An app
-without a database shows "The session Stack does not declare a supported
-database." **Files** is the ordinary source editor for the practice project; see
-"Answering a code question" below. The other Dashboard sections (Project
-settings, Git log, Env, AI Terminal, Architecture, Current changes, Session
-history, Health and the rest) are not yet available in a lesson's Dashboard.
-Switching between Preview, Dashboard and Learning keeps Learning mode on and
+the Working chat. In a practice lesson, **Dashboard** is the ordinary Dashboard for the
+lesson's practice project and lesson session, showing every section that works
+inside a lesson:
+
+- Project sections: **Git log**, **Env**, **Session History** and **Health**.
+- Session tools: **Session info**, **Current changes**, **Files**, **Database**
+  and **Architecture**.
+
+Each one reads and changes only this lesson's practice project and session,
+never your Working project. **Database** shows the practice app's ERD, tables
+and data, editable like any project's database (see
+[Browse a project's Database](database.md)). An app without a database shows
+"The session Stack does not declare a supported database." **Files** is the
+source editor for the practice project; see "Answering a code question" below.
+**Env** shows and edits this lesson session's user values; **Reveal** for a
+secret is not offered. **Git log** and **Current changes** are read-only: their
+**Check for updates**, update and **Review changes** (save) buttons are not
+shown, because a lesson is never saved, updated or published. **Session
+History** lists only this lesson's archived lesson sessions. **Architecture**
+can analyse the practice project; its **Ask** assistant is off (ask your lesson
+teacher instead). The **Database** Copilot is off too.
+
+A lesson's Dashboard does not show **Project settings**, **Integrations**,
+**App access**, **Incoming changes**, **Issues/PR** or **AI Terminal**. These
+change or reach outside the practice project, and the AI Terminal would type
+straight into the teacher's agent. Opening one of their addresses directly in a
+lesson shows **Env** instead. Moving between Dashboard sections keeps Learning
+on. Switching between Preview, Dashboard and Learning keeps Learning mode on and
 retains the same selected teacher session; it does not switch to your last
 Working session. The graduation-cap **Learning** option shows the existing **Courses** and
 **Presentation** controls. Returning to it keeps the selected Courses or
@@ -133,7 +152,7 @@ which has no right-hand project pane, chat and lessons are stacked instead.
 Some practice lessons ask you to change code, for example "make `notes.mjs`
 refuse an empty title". To answer:
 
-1. Choose **Dashboard**, then the **Files** tab (beside **Database**). It is
+1. Choose **Dashboard**, then **Files** in the session tools. It is
    the ordinary source editor for this lesson's practice project: the file list,
    **New file at source root**, **Download file**, **Star file** and a file's
    **⋮** actions menu (**Star file**, **Download file**, **New file here**,
@@ -158,7 +177,7 @@ refuse an empty title". To answer:
    check for grading. A pass is saved only when the check passed **and** the
    explanation meets the lesson's rubric.
 
-What counts: only edits you saved yourself in the **Files** tab editor since the
+What counts: only edits you saved yourself in the **Dashboard → Files** editor since the
 teacher asked the question. If anything else changed a named file in the
 meantime—the teacher or another assistant, a terminal command, Git, or another
 editor—the check does not run and reports "needs an independent attempt: other
@@ -177,7 +196,7 @@ the teacher for the code question first), or "Earlier presses are still being
 handled" (wait, then press again). An asked, unanswered code question stays open
 when the server restarts or the page reloads, including the next day: open the
 lesson again and press **Check my code**; you do not need a new question, and
-your earlier saves in the **Files** tab still count. Colleague can explain
+your earlier saves in **Dashboard → Files** still count. Colleague can explain
 these steps but cannot type, save or check code for you.
 
 You can ask Colleague to enter or leave Learning, show **Courses**, show the

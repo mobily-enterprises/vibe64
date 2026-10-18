@@ -642,13 +642,13 @@
 
     <section class="studio-autopilot__project-panel" aria-label="Project">
       <Vibe64AsyncModuleState
-        v-if="props.sourceWorkspaceAvailable && sourceToolLoading"
+        v-if="dashboardAvailable && sourceToolLoading"
         class="studio-autopilot__right-pane-page"
         label="session source"
         loading
       />
       <Vibe64DashboardShell
-        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard'"
+        v-if="dashboardAvailable && props.projectPane === 'dashboard'"
         v-show="dashboardShellVisible && normalWorkspaceActive"
         class="studio-autopilot__dashboard-shell"
         :dashboard-context="dashboardContext"
@@ -679,7 +679,7 @@
       </Vibe64DashboardShell>
 
       <section
-        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
+        v-if="dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
         v-show="normalWorkspaceActive"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
@@ -693,7 +693,7 @@
       </section>
 
       <section
-        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -720,10 +720,26 @@
           @ask-codex-about-file="askCodexAboutSourceEditorFile"
           @open-program="architectureProgramRequest = { id: $event }; selectSessionTool('system')"
         />
+        <!-- A lesson's Files is the source editor on its saved attempt; only
+             these saves are ledgered as the learner's own code. -->
+        <Vibe64SessionSourceEditor
+          v-if="practiceLesson && rightPaneTabMounted('editor')"
+          lesson-scoped
+          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+          :agent-active="agentActive"
+          :assistant-available="false"
+          assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
+          class="studio-autopilot__session-tool-content"
+          :file-bookmarks="fileBookmarks"
+          :open-request="sourceEditorOpenRequest"
+          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
+          :session-id="sessionId"
+          :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+        />
       </section>
 
       <section
-        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -735,12 +751,13 @@
         <Vibe64DatabaseWorkspace
           :key="assistantAccessScopeKey"
           :open-request="databaseOpenRequest"
-          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('database')"
+          v-if="dashboardAvailable && rightPaneTabMounted('database')"
           :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
-          :assistant-available="assistantCanUsePurpose('junior')"
-          :assistant-unavailable-message="assistantJuniorRestrictionMessage"
+          :assistant-available="!practiceLesson && assistantCanUsePurpose('junior')"
+          :assistant-unavailable-message="practiceLesson ? 'Ask your lesson teacher in Learning about this data.' : assistantJuniorRestrictionMessage"
           class="studio-autopilot__session-tool-content"
-          :project-slug="projectSlug"
+          :learning-attempt-id="practiceLesson ? props.learningAttemptId : ''"
+          :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
           @request-overview-assistant="assistantCanUsePurpose('junior') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
@@ -748,58 +765,13 @@
       </section>
 
       <section
-        v-if="learningDatabaseMounted"
-        v-show="learningDatabaseActive"
-        class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
-        role="tabpanel"
-      >
-        <header class="studio-autopilot__session-tool-header">
-          <v-btn-toggle
-            v-model="learningDashboardTab"
-            aria-label="Lesson dashboard tools"
-            density="compact"
-            mandatory
-            variant="outlined"
-          >
-            <v-btn value="database" data-vibe64-guide="database">Database</v-btn>
-            <v-btn value="files" data-vibe64-guide="files">Files</v-btn>
-          </v-btn-toggle>
-        </header>
-        <Vibe64DatabaseWorkspace
-          v-show="learningDashboardTab === 'database'"
-          :active="props.active && learningDatabaseActive && learningDashboardTab === 'database'"
-          :assistant-available="false"
-          assistant-unavailable-message="Ask your lesson teacher in Learning about this data."
-          class="studio-autopilot__session-tool-content"
-          :learning-attempt-id="props.learningAttemptId"
-          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
-          :session-id="selectedAssistantSessionId"
-        />
-        <Vibe64SessionSourceEditor
-          v-if="learningCodeMounted"
-          v-show="learningDashboardTab === 'files'"
-          lesson-scoped
-          :active="props.active && learningDatabaseActive && learningDashboardTab === 'files'"
-          :agent-active="agentActive"
-          :assistant-available="false"
-          assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
-          class="studio-autopilot__session-tool-content"
-          :file-bookmarks="fileBookmarks"
-          :open-request="learningFileOpenRequest"
-          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
-          :session-id="selectedAssistantSessionId"
-          :sessions-api-path="learningSessionsApiPath"
-        />
-      </section>
-
-      <section
-        v-show="normalWorkspaceActive && props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
         <Vibe64ArchitectureView
-          :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
-          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('system')"
+          :assistant-available="!practiceLesson && assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
+          v-if="dashboardAvailable && rightPaneTabMounted('system')"
           :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
@@ -819,13 +791,13 @@
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
           <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
-            <Vibe64SessionSourceEditor single-file :active="props.active && active" :agent-active="agentActive"
+            <Vibe64SessionSourceEditor single-file :lesson-scoped="practiceLesson" :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture"
               :file-bookmarks="fileBookmarks"
               :ask-codex-available="sourceEditorAskCodexAvailable"
               @ask-codex-about-file="askCodexAboutSourceEditorFile"
               @open-program="openProgram"
-              :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
+              :open-request="request" :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openFile"
               @interface-location="updateLocation"
@@ -836,9 +808,9 @@
         <v-dialog :model-value="Boolean(architectureFileRequest)" max-width="1100" @update:model-value="!$event && (architectureFileRequest = null)">
           <section class="studio-autopilot__architecture-file" aria-label="Architecture file viewer">
             <header><strong>{{ architectureFileRequest?.path }}</strong><v-btn variant="text" aria-label="Close file viewer" @click="architectureFileRequest = null">Close</v-btn></header>
-            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file
+            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file :lesson-scoped="practiceLesson"
               :key="architectureFileRequest.path" :active="props.active" :agent-active="agentActive"
-              :open-request="architectureFileRequest" :project-slug="projectSlug" :session-id="sessionId"
+              :open-request="architectureFileRequest" :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openSourceEditorFile"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
@@ -848,8 +820,7 @@
       </section>
 
       <div
-        v-show="!props.sourceWorkspaceAvailable && !learningDatabaseActive ||
-          learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
+        v-show="!dashboardAvailable || learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
@@ -866,7 +837,7 @@
           :session-id="selectedAssistantSessionId"
         >
           <template #lessons>
-            <div v-if="learningDatabaseAvailable" class="studio-autopilot__learning-code-check">
+            <div v-if="practiceLesson" class="studio-autopilot__learning-code-check">
               <v-btn
                 color="primary"
                 :disabled="learningCodeChecking"
@@ -1016,7 +987,8 @@
 import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, provide, reactive, ref, useId, watch, watchEffect } from "vue";
+import { VIBE64_LESSON_DASHBOARD_KEY, lessonDashboardScope } from "@/lib/vibe64LessonDashboard.js";
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
@@ -1347,6 +1319,7 @@ const {
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
   sessionSourceRoot,
+  practiceLesson,
   sessionToolbarVisible,
   selectedAnswerChoice,
   sourceEditorAskCodexAvailable,
@@ -1792,6 +1765,14 @@ function requestSessionRenewal(returnFocusTarget = null) {
   return true;
 }
 
+// A practice lesson shows the ordinary Dashboard for its lesson session. Its
+// sections address the saved attempt's lesson URLs, provided here once.
+const dashboardAvailable = computed(() => props.sourceWorkspaceAvailable || practiceLesson.value);
+provide(VIBE64_LESSON_DASHBOARD_KEY, computed(() => practiceLesson.value
+  ? lessonDashboardScope(props.learningAttemptId, sessionId.value) : null));
+const learningCodeChecking = ref(false);
+const learningCodeResult = ref(null);
+watch(practiceLesson, available => { if (!available) learningCodeResult.value = null; });
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
 const learningViewRef = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
@@ -1802,44 +1783,14 @@ const learningWorkspaceAvailable = computed(() => props.outputWorkspaceAvailable
 const learningPaneActive = computed(() => props.lessonsAvailable &&
   (props.learningView === "learning" || !learningWorkspaceAvailable.value));
 const normalWorkspaceActive = computed(() => !props.lessonsAvailable || !learningPaneActive.value);
-// A practice lesson's Dashboard shows only its database, read through the saved attempt.
-const learningDatabaseAvailable = computed(() => !props.sourceWorkspaceAvailable && Boolean(props.learningAttemptId) &&
-  props.outputWorkspaceAvailable === true && props.conversationRuntime?.identity?.noExercise === false);
-const learningDatabaseActive = computed(() => learningDatabaseAvailable.value && normalWorkspaceActive.value &&
-  props.projectPane === "dashboard");
-// Mounted on first use and then retained, like Working Dashboard tools, so a
-// Learning/Workspace switch keeps the SQL draft and selected database view.
-const learningDatabaseMounted = ref(false);
-watch(learningDatabaseActive, active => { if (active) learningDatabaseMounted.value = true; }, { immediate: true });
-watch(learningDatabaseAvailable, available => { if (!available) learningDatabaseMounted.value = false; });
-// The Files tab edits this lesson's practice project through the saved attempt.
-// Its saves are the only edits that count for a code question; Check my code
-// sits in the Learning pane beside Preview | Dashboard.
-const learningDashboardTab = ref("database");
-const learningCodeMounted = ref(false);
-const learningCodeChecking = ref(false);
-const learningCodeResult = ref(null);
+// Check my code sits in the Learning pane beside Preview | Dashboard; only the
+// learner's own saves in Dashboard → Files count for a code question.
 const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-const learningSessionsApiPath = computed(() => props.learningAttemptId
-  ? `/api/learning/${encodeURIComponent(props.learningAttemptId)}/vibe64/sessions` : "");
-watch(() => learningDatabaseActive.value && learningDashboardTab.value === "files", active => {
-  if (active) learningCodeMounted.value = true;
-}, { immediate: true });
-// A navigation to Dashboard → Database or Files selects the same lesson tab.
-watch(rightPaneTab, tab => {
-  if (tab === "database") learningDashboardTab.value = "database";
-  else if (tab === "editor") learningDashboardTab.value = "files";
-});
-watch(learningDatabaseAvailable, available => {
-  if (!available) { learningCodeMounted.value = false; learningCodeResult.value = null; learningDashboardTab.value = "database"; }
-});
-// A teacher "show me" for one practice file reuses the ordinary opener's request
-// and opens it in this lesson's own Files tab (the attempt-scoped editor).
-const learningFileOpenRequest = computed(() => learningDatabaseAvailable.value ? sourceEditorOpenRequest.value : null);
+// A teacher "show me" for one practice file opens it in this lesson's own
+// Dashboard → Files editor (the attempt-scoped source editor).
 function openLearningFile(path) {
-  if (!learningDatabaseAvailable.value || typeof path !== "string" || !path) return false;
+  if (!practiceLesson.value || typeof path !== "string" || !path) return false;
   openSourceEditorFile({ path, presentation: "code" });
-  learningDashboardTab.value = "files";
   return sourceEditorOpenRequest.value?.path === path;
 }
 async function checkLearningCode(event) {
@@ -1885,8 +1836,9 @@ const learningView = Object.freeze({
     if (!learningLayout.projectVisible) return "chat";
     if (props.learningView === "workspace") {
       if (props.projectPane !== "dashboard") return "preview";
-      const tool = learningDatabaseAvailable.value ? learningDashboardTab.value === "files" ? "editor" : "database" : rightPaneTab.value;
-      return vibe64SessionToolRouteSegment(tool) || "preview";
+      // A Dashboard section page (Env, Git log, Session history, Health) is
+      // "dashboard", never "preview", so a Preview step cannot be satisfied there.
+      return vibe64SessionToolRouteSegment(rightPaneTab.value) || "dashboard";
     }
     const preview = learningPreviewRef?.value;
     const binding = learningIdentity.value;

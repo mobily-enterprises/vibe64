@@ -69,8 +69,8 @@ Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the
 identified active query when asked. It acknowledges actual view/table selection;
 that is not proof a query succeeded. It does not receive rows or write SQL itself.
-In a practice lesson, the **Dashboard** tab shows the practice app's
-**Database** view (ERD, tables and data) beside the lesson **Files** tab. It is
+In a practice lesson, **Dashboard → Database** (a session tool of the lesson's
+ordinary Dashboard) shows the practice app's ERD, tables and data. It is
 editable like any project's database: cell edits, **Add row**, row deletion,
 confirmed data-changing SQL, snippets and ERD arrangement work as described
 above and change only that lesson's practice database. The database

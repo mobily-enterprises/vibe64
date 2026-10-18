@@ -16,6 +16,7 @@ import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix
 } from "./lib/vibe64SessionToolDefinitions.js";
+import { lessonDashboardSectionVisible } from "./lib/vibe64LessonDashboard.js";
 
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
@@ -23,7 +24,14 @@ const { addPlacement } = registry;
 export { addPlacement, uniqueDashboardSectionPlacements };
 
 export default function getPlacements() {
-  return uniqueDashboardSectionPlacements(registry.build());
+  return uniqueDashboardSectionPlacements(registry.build()).map(dashboardSectionVisibility);
+}
+
+// Dashboard section links state their visibility once, in props.visibleWhen,
+// for both the desktop outlet and the mobile section list.
+function dashboardSectionVisibility(placement) {
+  return placement?.owner === "app-dashboard" && placement.target === "page.section-nav" && !placement.when &&
+    typeof placement.props?.visibleWhen === "function" ? { ...placement, when: placement.props.visibleWhen } : placement;
 }
 
 function uniqueDashboardSectionPlacements(placements = []) {
@@ -118,9 +126,11 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
       scopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
       title: tool.title,
       toolId: tool.id,
-      unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
+      unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
+      ...(projectTool ? { visibleWhen: context => lessonDashboardSectionVisible(context, tool.routeSegment) } : {})
     },
-    when: projectTool ? undefined : activeSessionNavPlacementVisible
+    when: projectTool ? context => lessonDashboardSectionVisible(context, tool.routeSegment)
+      : context => activeSessionNavPlacementVisible(context) && activeSessionToolOffered(context, tool.id)
   });
 }
 
@@ -128,8 +138,18 @@ function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
   return activeSessionNav?.visible === true;
 }
 
-function githubProjectVisible({ projectContext = {} } = {}) {
-  return githubProjectAvailable(projectContext);
+// A lesson's session navigation offers only the tools its Dashboard declares.
+function activeSessionToolOffered({ activeSessionNav } = {}, toolId = "") {
+  return activeSessionNav?.lesson !== true ||
+    (Array.isArray(activeSessionNav.tools) && activeSessionNav.tools.some(tool => tool?.id === toolId));
+}
+
+function githubProjectVisible(context = {}) {
+  return githubProjectAvailable(context?.projectContext || {}) && lessonDashboardSectionVisible(context, "issues");
+}
+
+function incomingVisible(context = {}) {
+  return context?.projectContext?.repositoryMode === "github" && lessonDashboardSectionVisible(context, "incoming");
 }
 
 addPlacement({
@@ -137,8 +157,8 @@ addPlacement({
   surfaces: ["app"], order: 320,
   props: { label: "Incoming changes", icon: mdiSourceMerge, surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/incoming", unscopedSuffix: "/project/[slug]/dashboard/incoming",
-    visibleWhen: ({ projectContext = {} } = {}) => projectContext.repositoryMode === "github" },
-  when: ({ projectContext = {} } = {}) => projectContext.repositoryMode === "github"
+    visibleWhen: incomingVisible },
+  when: incomingVisible
 });
 
 addPlacement({
@@ -164,6 +184,7 @@ addPlacement({
     icon: mdiCogOutline,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/settings",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "settings"),
     unscopedSuffix: "/project/[slug]/dashboard/settings",
     to: ""
   }
@@ -183,6 +204,7 @@ addPlacement({
       icon: mdiFileCogOutline,
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/env",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "env"),
       unscopedSuffix: "/project/[slug]/dashboard/env",
       to: "",
     },
@@ -200,6 +222,7 @@ addPlacement({
     icon: mdiConnection,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/integrations",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "integrations"),
     unscopedSuffix: "/project/[slug]/dashboard/integrations",
     to: ""
   }
@@ -216,6 +239,7 @@ addPlacement({
     icon: mdiAccountKeyOutline,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/access",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "access"),
     unscopedSuffix: "/project/[slug]/dashboard/access",
     to: ""
   }
@@ -234,6 +258,7 @@ addPlacement({
       icon: mdiHistory,
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/history",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "history"),
       unscopedSuffix: "/project/[slug]/dashboard/history",
       to: "",
     },
@@ -251,6 +276,7 @@ addPlacement({
     icon: mdiHeartPulse,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/health",
+    visibleWhen: context => lessonDashboardSectionVisible(context, "health"),
     unscopedSuffix: "/project/[slug]/dashboard/health",
     to: ""
   }

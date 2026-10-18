@@ -145,4 +145,33 @@ describe("Vibe64 dashboard placements", () => {
     expect(guides).toEqual({ info: "session-info", changes: "changes", repository: "git-log", editor: "files",
       database: "database", system: "architecture", "ai-terminal": undefined });
   });
+
+  it("shows a practice lesson only the Dashboard sections and session tools with lesson actions", () => {
+    const placements = getPlacements();
+    const sectionLinks = placements.filter(placement => placement?.kind === "link" &&
+      placement?.owner === "app-dashboard" && placement?.target === "page.section-nav");
+    const sessionLinks = placements.filter(placement => placement?.owner === VIBE64_ACTIVE_SESSION_NAV_OWNER &&
+      placement?.target === VIBE64_ACTIVE_SESSION_NAV_TARGET && placement.props?.toolId);
+    const projectContext = { repositoryMode: "github", githubRepository: "owner/repo", repository: { provider: "github" } };
+    const lessonTools = ["info", "changes", "editor", "database", "system"].map(id => ({ id }));
+    const working = { projectContext, activeSessionNav: { visible: true, tools: lessonTools } };
+    const lesson = { projectContext, lessonDashboard: true,
+      activeSessionNav: { visible: true, lesson: true, tools: lessonTools } };
+    const shown = (context) => sectionLinks.filter(placement => placement.when(context) !== false &&
+      placement.props.visibleWhen?.(context) !== false).map(placement => placement.props.label).sort();
+
+    expect(shown(lesson)).toEqual(["Env", "Git log", "Health", "Session History"]);
+    // Working keeps every section it showed before.
+    expect(shown(working)).toEqual(expect.arrayContaining(["App access", "Env", "Git log", "Health", "Integrations",
+      "Project settings", "Session History"]));
+    for (const placement of sectionLinks) {
+      expect(typeof placement.when).toBe("function");
+      expect(placement.when(lesson)).toBe(placement.props.visibleWhen(lesson));
+    }
+    // AI Terminal has no lesson URL, so a lesson never offers it.
+    const offered = (context) => sessionLinks.filter(placement => placement.when(context)).map(placement => placement.props.toolId);
+    expect(offered(lesson)).toEqual(["info", "changes", "editor", "database", "system"]);
+    expect(offered({ ...working, activeSessionNav: { visible: true, tools: [...lessonTools, { id: "ai-terminal" }] } }))
+      .toContain("ai-terminal");
+  });
 });

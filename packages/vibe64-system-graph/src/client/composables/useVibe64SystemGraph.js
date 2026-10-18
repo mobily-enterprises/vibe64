@@ -10,6 +10,7 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
+import { lessonDashboardApiPath, useVibe64LessonDashboard } from "@/lib/vibe64LessonDashboard.js";
 
 const SYSTEM_GRAPH_API_SUFFIX = "/vibe64/system-graph";
 const SYSTEM_GRAPH_SURFACE = "app";
@@ -37,12 +38,15 @@ function useVibe64SystemGraph({
   projection = "native"
 } = {}) {
   const paths = usePaths();
-  const projectSlug = useVibe64ProjectSlug();
+  const workingProjectSlug = useVibe64ProjectSlug();
+  // A practice lesson's Architecture reads its own project through the saved attempt.
+  const lessonDashboard = useVibe64LessonDashboard();
+  const projectSlug = computed(() => lessonDashboard.value ? `lesson:${lessonDashboard.value.attemptId}` : workingProjectSlug.value);
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
   const enabled = computed(() => Boolean(unref(active) && normalizedSessionId.value));
-  const apiPath = computed(() => paths.api(SYSTEM_GRAPH_API_SUFFIX, {
+  const apiPath = computed(() => lessonDashboardApiPath(lessonDashboard.value, paths.api(SYSTEM_GRAPH_API_SUFFIX, {
     surface: SYSTEM_GRAPH_SURFACE
-  }));
+  })));
   const sessionPath = computed(() => systemSessionPath(apiPath.value, normalizedSessionId.value));
 
   // Retained readers share query keys. Their endpoints must stay identical;
@@ -101,7 +105,10 @@ function useVibe64SystemGraph({
     queryOptions: { refetchOnMount: "always", refetchOnWindowFocus: false, retry: false },
     realtime: {
       event: "vibe64.session.changed",
-      matches: ({ payload = {} } = {}) => !payload.learningAttemptId && payload.projectSlug === projectSlug.value && payload.sessionId === normalizedSessionId.value && payload.reason === "architecture-refresh"
+      matches: ({ payload = {} } = {}) => (lessonDashboard.value
+        ? payload.learningAttemptId === lessonDashboard.value.attemptId
+        : !payload.learningAttemptId && payload.projectSlug === projectSlug.value) &&
+        payload.sessionId === normalizedSessionId.value && payload.reason === "architecture-refresh"
     },
     fallbackLoadError: "Analysis progress is unavailable."
   });

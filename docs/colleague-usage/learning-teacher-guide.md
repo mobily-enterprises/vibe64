@@ -31,7 +31,7 @@ instead; follow it with the visible controls.
 ## "Show me"
 
 Ask the teacher to "show me" and it opens the place itself (for a file, in the
-lesson's **Dashboard → Files** tab) and rings it there. A view the teacher opens is
+lesson's **Dashboard → Files** editor) and rings it there. A view the teacher opens is
 a demonstration, not your step; when a lesson asks you to find a place, click it
 yourself so **Watch me** observes your own navigation.
 

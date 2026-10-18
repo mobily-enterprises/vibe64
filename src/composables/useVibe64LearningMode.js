@@ -5,6 +5,7 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
 
 const TRAINING_PATH = "/api/vibe64/training";
 
@@ -21,7 +22,17 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   let generation = 0;
   let disposed = false;
   watch(() => [actorKey.value, route.fullPath, learningMode.value], () => { generation += 1; }, { flush: "sync" });
-  onScopeDispose(() => { disposed = true; generation += 1; });
+  // Learning is a page mode: ordinary navigation inside the same project (the
+  // Dashboard's section links and back buttons) keeps it. Leaving Learning
+  // replaces the same path without the flag, so it is never re-added.
+  const removeModeGuard = typeof router?.beforeEach === "function" ? router.beforeEach((to, from) => {
+    if (from.query?.mode !== "learning" || Object.hasOwn(to.query || {}, "mode") || to.path === from.path) return true;
+    const slug = projectSlugFromPathname(from.path);
+    if (!slug || projectSlugFromPathname(to.path) !== slug) return true;
+    return { path: to.path, hash: to.hash, query: { ...to.query, mode: "learning",
+      ...(from.query.learningView ? { learningView: from.query.learningView } : {}) } };
+  }) : null;
+  onScopeDispose(() => { disposed = true; generation += 1; removeModeGuard?.(); });
 
   function readResource(name, enabled = null) {
     const client = getHttpWebClient();

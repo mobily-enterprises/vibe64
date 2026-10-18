@@ -24,6 +24,13 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
+- `src/lib/vibe64LessonDashboard.js`
+- `src/placement.js`
+- `src/components/studio/EnvPanel.vue`
+- `src/composables/useArchivedVibe64Sessions.js`
+- `src/composables/useVibe64RepositoryWorkspace.js`
+- `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
+- `packages/vibe64-core/src/server/featureRoutes.js`
 - Main: `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
 - `packages/vibe64-training/src/client/useTrainingLearnerGestures.js`
 - `packages/vibe64-training/src/client/useTrainingWorkspaceObservation.js`
@@ -488,8 +495,7 @@ places (`guideTargets.js`): `preview`, `dashboard`, `database-erd`,
 `git-log`, `session-info`, `architecture` and `learning`. The older
 `workspace-preview` and `workspace-erd` names remain aliases that open their view.
 Each place is a path of `data-vibe64-guide` ids on existing controls: the Learning
-page's Preview/Dashboard/Learning tabs, the lesson Dashboard's Database/Files tabs,
-the real Dashboard section items (`guideId` in `vibe64SessionToolDefinitions.js`,
+page's Preview/Dashboard/Learning tabs, the real Dashboard section items (`guideId` in `vibe64SessionToolDefinitions.js`,
 rendered by `Vibe64ActiveSessionNavItem` and `SurfaceAwareMenuLinkItem`), the
 Database Overview/ERD/Data toggle, and file-tree rows (`data-vibe64-guide-path`).
 Lessons supply no selectors.
@@ -500,8 +506,8 @@ browser (`useTrainingMainPresentation` → `runTrainingGuideCommand`) rings the
 deepest visible step, i.e. the next control the learner must click, with a caption
 such as "Dashboard → Database → ERD". `navigate=true` ("show me") first runs the
 ordinary browser navigator with the normal command and, for `filePath`, the lesson
-view handle's `openFile`, which reuses `openSourceEditorFile`'s request in the
-attempt-scoped lesson Files editor; `dashboard` cannot be opened. Opening with
+view handle's `openFile`, which reuses `openSourceEditorFile` (selecting
+Dashboard → Files) in the lesson's attempt-scoped Files editor; `dashboard` cannot be opened. Opening with
 `highlight=false` is the ordinary navigation command.
 
 `TrainingGuideOverlay` (mounted by the project page in Learning mode, teleported to
@@ -513,55 +519,110 @@ claims a drawn highlight without its step or an undrawn one without a reason
 (`highlight-off`, `target-hidden`, `overlay-unavailable`). The Main ACK focus pane
 also accepts `files`, `changes`, `repository` and `system` for opened sections.
 
-## Practice Dashboard files
+## Full Dashboard in a practice lesson
 
-A practice lesson's Dashboard has **Database** and **Files** tabs. **Files**
-mounts the existing `Vibe64SessionSourceEditor` with `lesson-scoped`, the page's
-starred-files owner and `sessions-api-path="/api/learning/<attempt>/vibe64/sessions"`.
-`lessonScoped` now only opens files as code and skips the architecture reader,
-because lesson routes have no architecture reader; downloads, new files, stars
-and the file tree's menu are the ordinary editor's. **Explain** stays disabled
-because the lesson passes no assistant. Source-editor reads, `file.download`,
-`stars.read` (observe) and `file.create`, `star.set` (write) use its lesson routes;
-`PUT .../source-editor/file` is Training's `vibe64.training.code.file.save`
-(learning `control`), which wraps the generic save and records the authorship
-ledger. The live change stream is not mounted in lesson scope; the editor's
-revalidation and baseHash conflict remain. **Check my code** sits at the top of
-the Learning (graduation-cap) pane's Courses view whenever a practice lesson is open. It calls the
-selected Main gesture owner's `submitCode`, which posts a `code-submit`
-observation for the current delivered question to the Main practical route. The
-server decides whether that question is a code practical; the control shows its
-outcome and reason. The Colleague view reports a lesson Dashboard pane as
-`database` or `files` from the selected lesson tab, and a navigation to
-Dashboard → Database or Files selects that lesson tab.
-Main's gesture product carries `loaded` (the conversation snapshot exists). Until
-the reopened conversation has re-read its saved question after a reload or
-server restart, a press reports that the lesson conversation is still loading
-rather than that no question is open.
+A practice lesson (`practiceLesson` in `useVibe64AutopilotView.js`: no Working
+source, a learning attempt, an output workspace and a lesson with an exercise)
+shows the ordinary Dashboard for its lesson session. `Vibe64AutopilotView.vue`
+uses `dashboardAvailable` (`sourceWorkspaceAvailable || practiceLesson`) for the
+Dashboard shell and the Current changes, Files, Database and Architecture
+panes, and provides one lesson scope (`VIBE64_LESSON_DASHBOARD_KEY`,
+`src/lib/vibe64LessonDashboard.js`) holding `/api/learning/<attempt>/vibe64`
+and the lesson session ID. Dashboard sections read that scope instead of the
+page's project slug:
 
-## Practice Dashboard database
+- Env (`EnvPanel.vue`) reads and saves the lesson session's Env through the
+  lesson base; secret reveal stays undeclared and its button is not offered.
+- Session History (`useArchivedVibe64Sessions.js`) lists and opens archived
+  lesson sessions, including their conversation log, through the lesson base.
+- Architecture (`useVibe64SystemGraph.js`) reads, refreshes and cancels through
+  the lesson base and follows only that attempt's `architecture-refresh`
+  events; its assistant is off in a lesson.
+- Git log and Current changes already use the runtime's lesson
+  `sessionsApiPath`. `useVibe64RepositoryWorkspace.js` reads changes in a lesson
+  (`lessonDashboard`) although lesson source operations are suspended, and never
+  checks, applies updates or saves; `Vibe64RepositoryWorkspace.vue` hides those
+  buttons.
+- Files mounts `Vibe64SessionSourceEditor` with `lesson-scoped` and the lesson
+  `sessionsApiPath` (not `Vibe64SessionFiles`, whose file areas have no lesson
+  actions). `lessonScoped` only opens files as code and skips the Interface
+  reader. Downloads, new files, stars and the tree menu are the ordinary
+  editor's. `PUT .../source-editor/file` is Training's
+  `vibe64.training.code.file.save` (learning `control`), which wraps the generic
+  save and records the authorship ledger. Explain stays disabled.
+- Database mounts `Vibe64DatabaseWorkspace` with the saved attempt; its client
+  uses `/api/learning/<attempt>/vibe64/database`. Every Database action except
+  the assistant declares `learningAccess`; the practice database is editable
+  under the ordinary write-confirmation rules.
+- Health is global Studio health and needs no lesson base.
 
-In a practice lesson the Dashboard's Database tab mounts the existing
-`Vibe64DatabaseWorkspace` with the saved attempt (`learningDatabaseAvailable` in
-`Vibe64AutopilotView.vue`). Its client uses `/api/learning/<attempt>/vibe64/database`.
-Database tools register lesson-scoped routes for every Database operation except
-the database assistant: state read, schema refresh, query run/cancel, lookup
-search, cell update, row insert/delete, ERD layout save, data-overview save and
-snippet save/delete. Those actions declare `learningAccess` (`write` for the data
-and layout changes), so the original Learning admission resolves the practice
-session. The practice database is editable like any project's: the service applies
-the ordinary write-confirmation rules and reports write access available.
+Navigation (`src/placement.js`) shows a lesson only the sections with lesson
+actions. These are the project sections in `LESSON_DASHBOARD_PROJECT_SECTIONS`
+(Git log, Env, Session History, Health) and the session tools in
+`LESSON_DASHBOARD_SESSION_TOOLS` (Session info, Current changes, Files,
+Database, Architecture).
 
-## Full Dashboard in a practice lesson: design note (not implemented)
+The following stay hidden: Project settings, Integrations, App access, Incoming
+changes, Issues/PR and AI Terminal. AI Terminal is raw PTY input to the Main
+teacher's native session; it would bypass Main's lesson send admission, and the
+lesson output socket already refuses raw input.
 
-Owner direction: a lesson shows the normal full Dashboard for its lesson-only
-practice project and session, not a restricted lesson copy. The lead chose
-option (b): the practice project is a normal project of the learner, reached
-through the ordinary project routes. This note records what the current Learning
-binding protects and why (b) cannot keep all of it without a larger redesign.
-The interim Database | Files lesson Dashboard above remains until a path is chosen.
+A lesson route to a hidden section is replaced with `/dashboard/env`.
+`useVibe64LearningMode.js` keeps `mode=learning` (and `learningView`) on
+same-project navigation that does not state a mode, so Dashboard links and back
+buttons stay in Learning. Leaving Learning replaces the same path without it.
 
-What the binding and lesson admission protect today:
+The Colleague view reports `rightPaneTab`'s route segment as the lesson pane
+(`files`, `database`, `changes`, `system`, …), and `dashboard` for a section
+page. It never reports `preview` for a Dashboard page, so a Preview step cannot
+be satisfied there.
+
+**Check my code** sits at the top of the Learning (graduation-cap) pane's Courses view whenever a
+practice lesson is open. It calls the selected Main gesture owner's
+`submitCode`, which posts a `code-submit` observation for the current delivered
+question to the Main practical route. The server decides whether that question
+is a code practical; the control shows its outcome and reason. Main's gesture
+product carries `loaded`. Until the reopened conversation has re-read its saved
+question after a reload or server restart, a press reports that the lesson
+conversation is still loading.
+
+Server routes come from one owner. `createVibe64FeatureRoutes`
+(`packages/vibe64-core/src/server/featureRoutes.js`) takes `learningActions`.
+When given, it registers `learning/:learningAttemptId/vibe64/...` routes only
+for actions declaring `extensions.vibe64.learningAccess`. It strips browser
+identity (`vibe64User`, `projectSlug`, `learningAttemptId`) from the input and
+takes the attempt from the URL. A route may opt out (`learning: false`) or adapt
+its lesson path. These packages build their lesson routes from their own action
+lists through that option, replacing their four per-package wrappers:
+
+- sessions
+- terminals
+- project
+- source-editor
+- database-tools
+- system-graph
+
+New lesson declarations, admitted through the original `runLearningOperation`:
+
+- Git history, version files and diffs, Current changes and their diff: observe.
+- Env read: observe. Env user-value save: write. Onboarding read: observe.
+- Architecture reads and refresh status: observe. Refresh cancel: control.
+  Refresh: write.
+
+Each of these refuses a lesson without a practice project
+(`vibe64_learning_source_required`) instead of reading a fallback project.
+
+Undeclared actions have no lesson URL. These include repository remote, Save,
+updates, pull requests, GitHub, settings, secret reveal, archive, generic file
+save, explanations and the Database assistant.
+
+Serving the practice project through the ordinary `/api/app/<slug>/vibe64/…`
+routes (option (b)) was not taken. It would turn lesson default-deny into
+default-allow for every project action, including Online-contributed ones. It
+would also need per-action lesson admission, and would move the lesson onto the
+practice project's own page.
+
+The design note's guarantees and how each holds:
 
 1. Account isolation. Every lesson session stores an immutable
    `learning_session` binding (learner, attempt, pin, exercise purpose,
@@ -596,33 +657,17 @@ What the binding and lesson admission protect today:
    delete/settings writes, Online Deploy) is refused by absence. There is no
    explicit refusal point to reuse.
 
-Obstacles to (b) as described:
 
-- Default-deny becomes default-allow. Ordinary `/api/app/<slug>/vibe64/…`
-  routes cover every project-scoped action in Public and Online. Serving the
-  practice project there means every outward action must gain a new explicit
-  lesson refusal, including Online-contributed ones outside this repository;
-  any omission silently grants reach (guarantee 7).
-- Ordinary admission would have to become lesson admission. To read the bound
-  session and keep guarantees 2–3, every project-scoped action on a practice
-  slug must re-enter `resolveBoundPracticeContext`/`runLearningOperation` with an
-  access derived per action. Project-level commands without a session ID fail
-  its write rule, and hosted authorization (`authorizeProject`,
-  `runWithHostedTrainingProjectScope`) is Online-owned.
-- The client scopes every `/api/vibe64/…` call by the window's project slug
-  (`src/main.js` → `resolveStudioRequestUrl`). The lesson is shown on the
-  learner's Working project page, so the normal Dashboard there addresses the
-  Working project. (b) needs the lesson to move to the practice project's own
-  page and `sourceWorkspaceAvailable` (`!learningScope`) to be reopened, which
-  enables Working-only controls whose actions also need the audit above.
+All seven hold unchanged. Guarantees 1–3 hold because every new lesson route
+enters the same `registerVibe64ActionContext` → `resolveLearningContext` →
+`runLearningOperation` path. Guarantee 4 holds because the only lesson
+source-editor `PUT` is the ledgered Training action. Guarantees 5 and 6 are
+untouched. Guarantee 7 holds because route registration is still by
+declaration. Evidence:
 
-Recommended smallest path (b′): show the normal Dashboard components in a
-practice lesson, keep the existing default-deny authority. Generalize the four
-per-package lesson route wrappers into `createVibe64FeatureRoutes` so any
-action that declares `learningAccess` gets its lesson URL; let the lesson
-Dashboard address `/api/learning/<attempt>/vibe64/…` through one injected API
-base instead of the window slug; then add one-line `learningAccess`
-declarations to the read/write actions of Git history, current changes,
-session history, Env, Health and Architecture. Saves keep Training's ledgered
-route, Main identity and Working-list filtering are unchanged, and unlisted
-actions stay refused.
+- `tests/server/vibe64LearningDashboardRoutes.unit.test.js`: declared-only lesson
+  URLs, URL-only identity, the ledgered save, and refusal of a foreign account,
+  an unknown attempt or a source-less lesson.
+- `tests/client/vibe64DashboardPlacements.vitest.js` and
+  `useVibe64AutopilotViewRouteHydration.vitest.js`: lesson navigation and
+  redirects.

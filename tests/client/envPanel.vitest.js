@@ -75,6 +75,26 @@ describe("Env panel", () => {
     expect(table).toContain(':loading="secretRevealBusyKey === record.key"');
   });
 
+  it("reads and saves a practice lesson's Env and Session history through the lesson API base", async () => {
+    const { lessonDashboardApiPath, lessonDashboardScope } = await import("../../src/lib/vibe64LessonDashboard.js");
+    const scope = lessonDashboardScope("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "training-own");
+    expect(lessonDashboardApiPath(scope, "/api/vibe64/env/user-values"))
+      .toBe("/api/learning/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/vibe64/env/user-values");
+    expect(lessonDashboardApiPath(null, "/api/vibe64/env")).toBe("/api/vibe64/env");
+    expect(lessonDashboardApiPath(scope, "/api/studio/health")).toBe("/api/studio/health");
+
+    const panel = componentSource("src/components/studio/EnvPanel.vue");
+    expect(panel).toContain("path: computed(() => lessonDashboardApiPath(lessonDashboard.value, ENV_ENDPOINT))");
+    expect(panel).toContain("path: lessonDashboardApiPath(lessonDashboard.value, ENV_USER_VALUES_ENDPOINT)");
+    // The lesson's own session, not the Working selection; reveal keeps no lesson URL.
+    expect(panel).toMatch(/lessonDashboard\.value\s*\?\s*lessonDashboard\.value\.sessionId : sessionSelection\.selectedId\.value/u);
+    expect(panel).toContain(':secret-reveal-enabled="!lessonDashboard"');
+
+    const history = readFileSync("src/composables/useArchivedVibe64Sessions.js", "utf8");
+    expect(history.match(/lessonDashboardApiPath\(lessonDashboard\.value,/gu)).toHaveLength(2);
+    expect(history).toContain("learningAttemptId: lessonDashboard.value?.attemptId");
+  });
+
   it("keeps the dashboard rail compact", () => {
     const source = componentSource("src/components/SectionContainerShell.vue");
 

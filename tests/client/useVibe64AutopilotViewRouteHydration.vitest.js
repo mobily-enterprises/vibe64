@@ -116,6 +116,48 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(view.saveWorkOutput.value).toContain("Publishing failed; retry Save.");
   });
 
+  it("offers a practice lesson only its lesson-URL Dashboard tools and sends undeclared sections to Env", async () => {
+    route.path = "/app/project/chat-test/dashboard/settings";
+    const props = attachConversationRuntime(viewProps());
+    // A practice lesson's session has no Working source path; its tools use lesson URLs.
+    props.session = { ...props.session, sessionRoot: "", sourceRoot: "" };
+    props.sourceWorkspaceAvailable = false;
+    props.outputWorkspaceAvailable = true;
+    props.learningAttemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    props.conversationRuntime = { ...props.conversationRuntime,
+      identity: { learningAttemptId: props.learningAttemptId, noExercise: false } };
+    const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    await nextTick();
+
+    expect(view.practiceLesson.value).toBe(true);
+    expect(view.sessionToolControls.value.map(tool => tool.id)).toEqual(["info", "changes", "editor", "database", "system"]);
+    expect(view.sessionToolControls.value.filter(tool => tool.disabled)).toEqual([]);
+    expect(view.dashboardSessionContext.value).toMatchObject({ lessonDashboard: true, learningAttemptId: props.learningAttemptId,
+      activeSessionNav: { lesson: true } });
+    // Project settings has no lesson actions: the lesson opens Env instead.
+    expect(router.replace).toHaveBeenCalledWith("/app/project/chat-test/dashboard/env");
+    expect(route.path).toBe("/app/project/chat-test/dashboard/env");
+
+    route.path = "/app/project/chat-test/dashboard/repository";
+    await nextTick();
+    expect(route.path).toBe("/app/project/chat-test/dashboard/repository");
+    expect(view.rightPaneTab.value).toBe("repository");
+    route.path = "/app/project/chat-test/dashboard/ai-terminal";
+    await nextTick();
+    expect(route.path).toBe("/app/project/chat-test/dashboard/env");
+    expect(view.rightPaneTab.value).not.toBe("ai-terminal");
+
+    // Leaving the lesson restores the Working Dashboard unchanged.
+    props.conversationRuntime = { ...props.conversationRuntime, identity: null };
+    props.learningAttemptId = "";
+    props.sourceWorkspaceAvailable = true;
+    await nextTick();
+    expect(view.practiceLesson.value).toBe(false);
+    expect(view.dashboardSessionContext.value.lessonDashboard).toBeUndefined();
+    expect(view.sessionToolControls.value.map(tool => tool.id)).toContain("ai-terminal");
+  });
+
   it.each([true, false])("opens Current changes without the dashboard menu (direct link: %s)", async (direct) => {
     route.path = `/app/project/chat-test/dashboard/${direct ? "changes" : "health"}`;
     const { useVibe64AutopilotView } = await import(
@@ -290,7 +332,9 @@ describe("useVibe64AutopilotView route hydration", () => {
     ), "utf8");
     const loadingTag = autopilot.match(/<Vibe64AsyncModuleState\b[\s\S]*?\/>/u)?.[0];
     expect(autopilot).toContain('import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue"');
-    expect(loadingTag).toContain('v-if="props.sourceWorkspaceAvailable && sourceToolLoading"');
+    // dashboardAvailable is sourceWorkspaceAvailable, or a practice lesson's lesson-URL Dashboard.
+    expect(loadingTag).toContain('v-if="dashboardAvailable && sourceToolLoading"');
+    expect(autopilot).toContain("const dashboardAvailable = computed(() => props.sourceWorkspaceAvailable || practiceLesson.value);");
     expect(loadingTag).toContain('class="studio-autopilot__right-pane-page"');
     expect(loadingTag).toMatch(/\sloading\s/u);
     const shellTag = autopilot.match(/<Vibe64DashboardShell\b[^>]*>/u)?.[0];

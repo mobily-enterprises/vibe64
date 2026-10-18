@@ -138,7 +138,7 @@
         :revealed-secrets="revealedSecrets"
         :save-busy="saveBusy"
         :secret-reveal-busy-key="secretRevealBusyKey"
-        secret-reveal-enabled
+        :secret-reveal-enabled="!lessonDashboard"
         system-title="System values"
         @hide-secret="hideSecret"
         @remove-record="requestRemoveRecord"
@@ -214,12 +214,18 @@ import {
 import {
   useVibe64SessionSelection
 } from "@/composables/useVibe64SessionSelection.js";
+import { lessonDashboardApiPath, useVibe64LessonDashboard } from "@/lib/vibe64LessonDashboard.js";
 
 const projectSlug = useVibe64ProjectSlug();
 const sessionSelection = useVibe64SessionSelection({
   projectSlug
 });
-const selectedSessionId = sessionSelection.selectedId;
+// A practice lesson reads and saves its own lesson session's Env through the
+// saved attempt; secret reveal stays owner-only Working access.
+const lessonDashboard = useVibe64LessonDashboard();
+const selectedSessionId = computed(() => lessonDashboard.value
+  ? lessonDashboard.value.sessionId : sessionSelection.selectedId.value);
+const envQueryProject = computed(() => lessonDashboard.value ? `lesson:${lessonDashboard.value.attemptId}` : projectSlug.value);
 const PROJECT_ENV_TAB = "dev";
 const PROJECT_ENVIRONMENT = "dev";
 const PROJECT_ENVIRONMENT_LABEL = "development";
@@ -240,9 +246,9 @@ const pendingRemoval = ref(null);
 
 const envResource = useEndpointResource({
   fallbackLoadError: "Env could not load.",
-  path: ENV_ENDPOINT,
+  path: computed(() => lessonDashboardApiPath(lessonDashboard.value, ENV_ENDPOINT)),
   queryKey: computed(() => [
-    ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
+    ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, envQueryProject.value),
     PROJECT_ENVIRONMENT,
     selectedSessionId.value || "baseline"
   ]),
@@ -262,7 +268,7 @@ const saveCommand = useCommand({
   apiSuffix: VIBE64_ENV_USER_VALUES_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
-    path: ENV_USER_VALUES_ENDPOINT
+    path: lessonDashboardApiPath(lessonDashboard.value, ENV_USER_VALUES_ENDPOINT)
   }),
   buildRawPayload: (_model, { context }) => ({
     environment: PROJECT_ENVIRONMENT,

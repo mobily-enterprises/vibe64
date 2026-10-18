@@ -88,8 +88,11 @@ intact. Learning keeps the teacher chat visible throughout the lesson. The right
 side keeps the normal Preview | Dashboard tabs and adds a toggleable Learning tab
 beside them, containing the Courses pane (course cards and progress, course
 pages and the owner's custom-course form, and Check my code during a practice
-lesson) and the Presentation player. A practice lesson's Dashboard offers its
-editable Database and Files. A supervised project defaults to its Preview; a
+lesson) and the Presentation player. A practice lesson's Dashboard is the normal
+Dashboard for its practice project and lesson session, showing the sections that
+stay inside it (Git log, Env, Session History, Health, Session info, Current
+changes, Files, Database and Architecture); sections that save, publish, change
+settings or reach outside the practice project are not offered. A supervised project defaults to its Preview; a
 source-less lesson honestly stays in Learning. Both views retain their application, Dashboard and interactive
 visual state in the same session/conversation implementation, on desktop and
 phones. Hidden visuals pause without being treated as completed teaching.

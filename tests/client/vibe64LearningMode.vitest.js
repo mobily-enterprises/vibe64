@@ -4,8 +4,9 @@ import { configureHttpWebClient, getHttpWebClient } from "@jskit-ai/http-web/cli
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
-const harness = vi.hoisted(() => ({ route: null, replace: null, command: null, options: null }));
-vi.mock("vue-router", () => ({ useRoute: () => harness.route, useRouter: () => ({ replace: harness.replace }) }));
+const harness = vi.hoisted(() => ({ route: null, replace: null, command: null, options: null, guards: [] }));
+vi.mock("vue-router", () => ({ useRoute: () => harness.route, useRouter: () => ({ replace: harness.replace,
+  beforeEach(guard) { harness.guards.push(guard); return () => { harness.guards.splice(harness.guards.indexOf(guard), 1); }; } }) }));
 // Only command placement/admission is a bounded harness. Reads run through the
 // original resource, real Vue Query observers, cancellation and HTTP client.
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
@@ -42,6 +43,25 @@ beforeEach(async () => {
   await flush();
 });
 afterEach(() => { app.unmount(); queryClient.clear(); configureHttpWebClient(originalClient); });
+
+it("keeps Learning across Dashboard navigation inside the same project, never re-adding it once left", () => {
+  expect(harness.guards).toHaveLength(1);
+  const [guard] = harness.guards;
+  const from = { path: "/app/project/practice", hash: "", query: { mode: "learning", learningView: "workspace" } };
+  // A Dashboard section link pushes a bare path; Learning stays on.
+  expect(guard({ path: "/app/project/practice/dashboard/env", hash: "", query: {} }, from)).toEqual({
+    path: "/app/project/practice/dashboard/env", hash: "", query: { mode: "learning", learningView: "workspace" } });
+  // Leaving Learning replaces the same path without the flag.
+  expect(guard({ path: from.path, hash: "", query: {} }, from)).toBe(true);
+  // Another project, or a route already stating its mode, is left alone.
+  expect(guard({ path: "/app/project/other/dashboard/env", hash: "", query: {} }, from)).toBe(true);
+  expect(guard({ path: "/app/project/practice/dashboard", hash: "", query: { mode: "x" } }, from)).toBe(true);
+  // Working navigation is never turned into Learning.
+  expect(guard({ path: "/app/project/practice/dashboard/env", hash: "", query: {} },
+    { path: from.path, hash: "", query: {} })).toBe(true);
+  app.unmount(); app = { unmount() {} };
+  expect(harness.guards).toHaveLength(0);
+});
 
 it("uses original route flag and actor-scoped resources without requiring a project", async () => {
   expect(mode.learningMode.value).toBe(true);

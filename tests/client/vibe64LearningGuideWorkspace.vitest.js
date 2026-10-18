@@ -5,6 +5,7 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { vibe64SessionToolRouteSegment } from "../../src/lib/vibe64SessionToolDefinitions.js";
+import { lessonDashboardApiPath, lessonDashboardScope } from "../../src/lib/vibe64LessonDashboard.js";
 
 // Learning is a guide on the real Vibe64 workspace: one header serves both modes and
 // Learning only adds a graduation-cap option to the same Preview | Dashboard group, a practice lesson's Dashboard keeps
@@ -250,32 +251,39 @@ const attribute = (node, name) => (node.props || []).find(prop => prop.name === 
   prop.name === "bind" && prop.arg?.content === name || prop.name === "slot" && prop.arg?.content === name);
 
 describe("a practice lesson's Dashboard and Check my code", () => {
-  it("offers Database and the ordinary Files editor; Check my code lives in the Learning pane", () => {
+  it("shows the real Dashboard sections on lesson URLs; AI Terminal stays Working-only; Check my code lives in the Learning pane", () => {
     const ast = templateNodes(autopilotFile);
-    const lessonTabs = findTemplate(ast, node => node.tag === "v-btn-toggle" &&
-      attribute(node, "aria-label")?.value?.content === "Lesson dashboard tools")[0];
-    expect(lessonTabs.children.filter(child => child.tag === "v-btn").map(child => [
-      attribute(child, "value").value.content, child.children[0].content.trim(), attribute(child, "data-vibe64-guide").value.content]))
-      .toEqual([["database", "Database", "database"], ["files", "Files", "files"]]);
-    const lessonEditor = findTemplate(ast, node => node.tag === "Vibe64SessionSourceEditor" && attribute(node, "lesson-scoped"))[0];
+    // The interim Database | Files toggle is gone: a lesson uses the ordinary Dashboard.
+    expect(findTemplate(ast, node => attribute(node, "aria-label")?.value?.content === "Lesson dashboard tools")).toHaveLength(0);
+    const shell = findTemplate(ast, node => node.tag === "Vibe64DashboardShell")[0];
+    expect(attribute(shell, "if").exp.content).toBe("dashboardAvailable && props.projectPane === 'dashboard'");
+    const terminal = findTemplate(shell, node => node.tag === "slot" && attribute(node, "name")?.value?.content === "ai-terminal")[0];
+    expect(attribute(terminal, "if").exp.content).toMatch(/^props\.sourceWorkspaceAvailable && /u);
+    const lessonEditor = findTemplate(ast, node => node.tag === "Vibe64SessionSourceEditor" &&
+      attribute(node, "lesson-scoped") && !attribute(node, "single-file"))[0];
+    expect(attribute(lessonEditor, "if").exp.content).toMatch(/^practiceLesson && /u);
     expect(attribute(lessonEditor, "file-bookmarks").exp.content).toBe("fileBookmarks");
-    expect(attribute(lessonEditor, "sessions-api-path").exp.content).toBe("learningSessionsApiPath");
-    expect(attribute(lessonEditor, "open-request").exp.content).toBe("learningFileOpenRequest");
+    expect(attribute(lessonEditor, "sessions-api-path").exp.content).toBe("readRefOrGetterValue(props.sessionsApiPath)");
+    const database = findTemplate(ast, node => node.tag === "Vibe64DatabaseWorkspace")[0];
+    expect(attribute(database, "learning-attempt-id").exp.content).toBe("practiceLesson ? props.learningAttemptId : ''");
+    expect(attribute(database, "assistant-available").exp.content).toMatch(/^!practiceLesson && /u);
+    // A teacher "show me" opens a file through the ordinary opener in this lesson's Files editor.
+    expect(attribute(lessonEditor, "open-request").exp.content).toBe("sourceEditorOpenRequest");
     const label = node => typeof node.children?.[0]?.content === "string" ? node.children[0].content.trim() : "";
     const checks = findTemplate(ast, node => node.tag === "v-btn" && label(node) === "Check my code");
     expect(checks).toHaveLength(1);
     const lessons = findTemplate(ast, node => node.tag === "template" && attribute(node, "lessons"))[0];
     expect(findTemplate(lessons, node => checks.includes(node))).toHaveLength(1);
     expect(attribute(checks[0].parent || findTemplate(lessons, node => node.children?.includes(checks[0]))[0], "if")
-      ?.exp?.content).toBe("learningDatabaseAvailable");
+      ?.exp?.content).toBe("practiceLesson");
   });
 
-  it("reports the selected lesson Dashboard tab and checks the learner's code from the Learning pane", async () => {
-    const start = autopilotSource.indexOf("const assistantHost = inject(");
+  it("provides the lesson API base to the Dashboard, reports the Dashboard tab and checks the learner's code", async () => {
+    const start = autopilotSource.indexOf("// A practice lesson shows the ordinary Dashboard for its lesson session.");
     const end = autopilotSource.indexOf("const assistantLayerSelected = computed(", start);
     expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
     const keyNames = ["VIBE64_ASSISTANT_HOST_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY",
-      "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY"];
+      "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY", "VIBE64_LESSON_DASHBOARD_KEY"];
     const keys = Object.fromEntries(keyNames.map(name => [name, Symbol(name)]));
     const binding = Object.freeze({ actorKey: "scoped", viewerActorKey: "member", learnerId: "own",
       learningAttemptId: "12345678-1234-4234-8234-123456789abc", sessionId: "saved-initial",
@@ -284,7 +292,8 @@ describe("a practice lesson's Dashboard and Check my code", () => {
       learningView: "workspace", projectPane: "dashboard", sourceWorkspaceAvailable: false, outputWorkspaceAvailable: true,
       learningAttemptId: binding.learningAttemptId,
       conversationRuntime: { identity: binding, conversationReady: Vue.ref(true), available: Vue.ref(true) } });
-    const rightPaneTab = Vue.ref("env");
+    const rightPaneTab = Vue.ref("database");
+    const practiceLesson = Vue.ref(true);
     const submitted = [];
     const owner = { matchesLearning: value => value === binding,
       async submitCode(event) { submitted.push(event); return { checkOutcome: "passed" }; } };
@@ -292,16 +301,18 @@ describe("a practice lesson's Dashboard and Check my code", () => {
     // The ordinary opener: it records one open request (and would select Files).
     const sourceEditorOpenRequest = Vue.ref(null);
     const openSourceEditorFile = vi.fn(target => { sourceEditorOpenRequest.value = { ...target, sequence: 1 }; return false; });
-    let selected;
+    let selected; let provided;
     const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
     const app = renderer.createApp({ setup() {
-      const args = ["inject", "ref", "computed", "watch", "watchEffect", "onBeforeUnmount", "useDisplay", "props",
-        "chatCollapsed", "rightPaneTab", "vibe64SessionToolRouteSegment", "sourceEditorOpenRequest", "openSourceEditorFile", ...keyNames];
+      const args = ["inject", "provide", "ref", "computed", "watch", "watchEffect", "onBeforeUnmount", "useDisplay", "props",
+        "chatCollapsed", "rightPaneTab", "practiceLesson", "sessionId", "lessonDashboardScope",
+        "vibe64SessionToolRouteSegment", "sourceEditorOpenRequest", "openSourceEditorFile", ...keyNames];
       selected = new Function(...args, `${autopilotSource.slice(start, end)}
-return { learningView, learningDashboardTab, learningCodeResult, checkLearningCode, learningDatabaseAvailable, learningFileOpenRequest };`)(
-        Vue.inject, Vue.ref, Vue.computed, Vue.watch, Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width: Vue.ref(1200) }),
-        props, Vue.ref(false), rightPaneTab, vibe64SessionToolRouteSegment, sourceEditorOpenRequest, openSourceEditorFile,
-        ...keyNames.map(name => keys[name]));
+return { learningView, learningCodeResult, checkLearningCode, dashboardAvailable };`)(
+        Vue.inject, (key, value) => { if (key === keys.VIBE64_LESSON_DASHBOARD_KEY) provided = value; },
+        Vue.ref, Vue.computed, Vue.watch, Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width: Vue.ref(1200) }),
+        props, Vue.ref(false), rightPaneTab, practiceLesson, Vue.ref("training-own"), lessonDashboardScope,
+        vibe64SessionToolRouteSegment, sourceEditorOpenRequest, openSourceEditorFile, ...keyNames.map(name => keys[name]));
       return () => null;
     } });
     app.provide(keys.VIBE64_ASSISTANT_HOST_KEY, Vue.shallowRef(null)); app.provide(keys.VIBE64_COLLEAGUE_VIEW_KEY, view);
@@ -310,22 +321,22 @@ return { learningView, learningDashboardTab, learningCodeResult, checkLearningCo
     app.provide(keys.VIBE64_TRAINING_LEARNER_GESTURE_KEY, Vue.shallowRef(owner));
     app.mount({});
     try {
-      expect(selected.learningDatabaseAvailable.value).toBe(true);
+      expect(selected.dashboardAvailable.value).toBe(true);
+      // One lesson API base for every Dashboard section, from the saved attempt.
+      expect(provided.value).toEqual({ attemptId: binding.learningAttemptId, sessionId: "training-own",
+        apiBase: `/api/learning/${binding.learningAttemptId}/vibe64` });
+      expect(lessonDashboardApiPath(provided.value, "/api/vibe64/env")).toBe(`/api/learning/${binding.learningAttemptId}/vibe64/env`);
       expect(view.value.pane).toBe("database");
-      selected.learningDashboardTab.value = "files";
+      rightPaneTab.value = "editor";
       expect(view.value.pane).toBe("files");
-      rightPaneTab.value = "database"; await Vue.nextTick();
-      expect(selected.learningDashboardTab.value).toBe("database");
-      rightPaneTab.value = "editor"; await Vue.nextTick();
-      expect(selected.learningDashboardTab.value).toBe("files");
+      rightPaneTab.value = "dashboard";
+      expect(view.value.pane).toBe("dashboard");
 
       // A teacher "show me" for one practice file uses the ordinary opener and
-      // opens it in this lesson's own Files tab.
-      selected.learningDashboardTab.value = "database";
+      // opens it in this lesson's own Dashboard → Files editor.
       expect(view.value.openFile("src/app.js")).toBe(true);
       expect(openSourceEditorFile).toHaveBeenLastCalledWith({ path: "src/app.js", presentation: "code" });
-      expect(selected.learningDashboardTab.value).toBe("files");
-      expect(selected.learningFileOpenRequest.value.path).toBe("src/app.js");
+      expect(sourceEditorOpenRequest.value.path).toBe("src/app.js");
       expect(view.value.openFile("")).toBe(false);
 
       props.learningView = "learning";
@@ -333,6 +344,11 @@ return { learningView, learningDashboardTab, learningCodeResult, checkLearningCo
       await selected.checkLearningCode(press);
       expect(submitted).toEqual([press]);
       expect(selected.learningCodeResult.value.message).toMatch(/^Your code passed the check/u);
+
+      // Leaving the practice lesson withdraws the lesson base and the Dashboard.
+      practiceLesson.value = false; await Vue.nextTick();
+      expect(provided.value).toBe(null);
+      expect(selected.dashboardAvailable.value).toBe(false);
     } finally { app.unmount(); }
   });
 
