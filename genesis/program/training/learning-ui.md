@@ -32,6 +32,9 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 - `src/components/studio/Vibe64LearningPracticeProjectSelector.vue`
 - `packages/vibe64-training/src/client/useTrainingPresentationCue.js`
 - `packages/vibe64-training/src/client/createTrainingNavigation.js`
+- `packages/vibe64-training/src/client/trainingGuide.js`
+- `packages/vibe64-training/src/client/TrainingGuideOverlay.vue`
+- `packages/vibe64-training/src/shared/guideTargets.js`
 - `packages/vibe64-training/src/client/useTrainingPreviewRegistration.js`
 - `packages/vibe64-training/src/server/visualResourceActions.js`
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
@@ -476,6 +479,39 @@ the watch use the same values. There is no separate Learning tab or panes
 toggle. A source-less lesson disables Preview and Dashboard and stays on the
 cap. The same Preview toolbar host is shown whenever Preview is the selected
 option.
+
+## Teacher guide overlay
+
+`vibe64.training.view.open` guides the learner to a closed product list of real
+places (`guideTargets.js`): `preview`, `dashboard`, `database-erd`,
+`database-data`, `files` (optional relative `filePath` without `..`), `changes`,
+`git-log`, `session-info`, `architecture` and `learning`. The older
+`workspace-preview` and `workspace-erd` names remain aliases that open their view.
+Each place is a path of `data-vibe64-guide` ids on existing controls: the Learning
+page's Preview/Dashboard/Learning tabs, the lesson Dashboard's Database/Files tabs,
+the real Dashboard section items (`guideId` in `vibe64SessionToolDefinitions.js`,
+rendered by `Vibe64ActiveSessionNavItem` and `SurfaceAwareMenuLinkItem`), the
+Database Overview/ERD/Data toggle, and file-tree rows (`data-vibe64-guide-path`).
+Lessons supply no selectors.
+
+The default (`navigate=false`, `highlight=true`) is point only: the server sends a
+command with only `guide` and no Learning mode/pane, so no view changes. The Main
+browser (`useTrainingMainPresentation` → `runTrainingGuideCommand`) rings the
+deepest visible step, i.e. the next control the learner must click, with a caption
+such as "Dashboard → Database → ERD". `navigate=true` ("show me") first runs the
+ordinary browser navigator with the normal command and, for `filePath`, the lesson
+view handle's `openFile`, which reuses `openSourceEditorFile`'s request in the
+attempt-scoped lesson Files editor; `dashboard` cannot be opened. Opening with
+`highlight=false` is the ordinary navigation command.
+
+`TrainingGuideOverlay` (mounted by the project page in Learning mode, teleported to
+the body) draws a ring, pulse and caption with `pointer-events: none`, keeps the
+ring still under `prefers-reduced-motion`, and clears after about 8 seconds, on the
+learner's first pointer or key press, or when the control disappears. The ACK
+carries `guide: { shown, reason?, step? }`; the coordinator rejects a receipt that
+claims a drawn highlight without its step or an undrawn one without a reason
+(`highlight-off`, `target-hidden`, `overlay-unavailable`). The Main ACK focus pane
+also accepts `files`, `changes`, `repository` and `system` for opened sections.
 
 ## Practice Dashboard files
 

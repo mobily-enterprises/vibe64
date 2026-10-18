@@ -26,7 +26,11 @@ watch shown in that dialog; asking how it works does not start anything. You can
 ask Colleague to read, pause, resume or stop it. Learning status reports the exact
 goal/target, active/paused/unavailable state, latest valid observation and time,
 last delivered-help receipt, and any saved assessment outcome. Observation and
-help are not themselves proof of completion. Besides Vibe64 view and control
+help are not themselves proof of completion. When Main points you to a place
+(a ring and caption on the real control), the view switch you then make yourself,
+such as Preview to **Dashboard → Database** or **Dashboard → Files**, is observed as
+your step; a database sub-view switch (Overview/ERD/Data) is not yet observed
+separately. Besides Vibe64 view and control
 steps, the watch notices a failed data-changing request that your own click or
 submit in the visible practice-app **Preview** started (method, a lesson-declared
 path or `other`, status and failure code only—never typed text, bodies, headers

@@ -44,7 +44,9 @@ or “Open Project settings”. It can explain visible controls using its guides
 During an active lesson, ask it to show that lesson project's normal **Preview**
 or **Database → ERD** without leaving Learning; that project tab becomes selected and
 Main remains the teacher. The bound Main teacher can reveal the same Preview or
-ERD for its exact attempt. A changed project, session, attempt or browser is
+ERD for its exact attempt, or—by default—point at the real tab or Dashboard section
+(Database, Files, Current changes, Git log, Session info, Architecture) with a
+short ring and caption so you click it yourself. A changed project, session, attempt or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,
 not proof that the learner used the control.
 If you directly ask Colleague to “Watch me while I do this,” it starts the same

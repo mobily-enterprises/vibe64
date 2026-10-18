@@ -184,7 +184,10 @@ You can ask Colleague to enter or leave Learning, show **Courses**, show the
 active lesson, or reveal the exact lesson project's normal **Preview** or
 **Dashboard → Database → ERD**. Main can reveal those same workspace views only
 for its bound active lesson, and can return to that lesson's Learning pane or
-open a visual declared by its pinned content. Both use the same initiating
+open a visual declared by its pinned content.
+
+Main usually points you to these places instead of opening them; see
+**Learning teacher guide** (`learning-teacher-guide`). Both use the same initiating
 browser and wait for its actual settled mode, pane, session and attempt before
 reporting success. For a declared visual, confirmation follows the visual opening;
 the earlier Courses view is not its success receipt. This also applies when a
