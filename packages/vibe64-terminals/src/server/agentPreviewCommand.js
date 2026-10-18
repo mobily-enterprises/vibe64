@@ -570,7 +570,7 @@ function createAgentPreviewCommandService({
   // A Learning helper re-enters its saved lesson admission; its socket may
   // outlive the practice grant that was current when it was created.
   const inSession = (input, operation) => typeof runSessionOperation === "function"
-    ? runSessionOperation(input, () => operation()) : operation();
+    ? runSessionOperation(input, operation) : operation();
   const browserTestRuns = new Map();
 
   async function runBrowserCommand(request) {

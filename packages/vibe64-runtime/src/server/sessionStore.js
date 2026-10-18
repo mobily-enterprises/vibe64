@@ -4211,6 +4211,11 @@ function createVibe64SessionStore({
     });
   }
 
+  async function hasGenuineLearningBinding(sessionId) {
+    const raw = normalizeText(await readTextIfExists(metadataFilePath(paths(sessionId), LEARNING_SESSION_METADATA)));
+    return genuineLearningBinding(raw, sessionId);
+  }
+
   async function readCurrentSession() {
     const rootPaths = paths();
     if (!rootPaths.currentSessionAliasPath) {
@@ -4219,8 +4224,7 @@ function createVibe64SessionStore({
     const sessionId = await readVibe64CurrentSessionAlias({
       aliasPath: rootPaths.currentSessionAliasPath
     });
-    if (!sessionId || !admittedLearningScope && genuineLearningBinding(normalizeText(await readTextIfExists(
-      metadataFilePath(paths(assertValidVibe64SessionId(sessionId)), LEARNING_SESSION_METADATA))), sessionId)) {
+    if (!sessionId || !admittedLearningScope && await hasGenuineLearningBinding(assertValidVibe64SessionId(sessionId))) {
       return null;
     }
     const session = await readSessionForRenewal(assertValidVibe64SessionId(sessionId));
@@ -5009,8 +5013,7 @@ function createVibe64SessionStore({
       ...activeSessionIds,
       ...closingSessionIds
     ])].sort((left, right) => left.localeCompare(right));
-    const learning = !admittedLearningScope ? await Promise.all(sessionIds.map(async sessionId => genuineLearningBinding(
-      normalizeText(await readTextIfExists(metadataFilePath(paths(sessionId), LEARNING_SESSION_METADATA))), sessionId))) : [];
+    const learning = !admittedLearningScope ? await Promise.all(sessionIds.map(hasGenuineLearningBinding)) : [];
     return Promise.all(sessionIds.filter((_sessionId, index) => !learning[index]).map(async (sessionId) => ({
       sessionId,
       status: await readStatusForRenewal(sessionId)

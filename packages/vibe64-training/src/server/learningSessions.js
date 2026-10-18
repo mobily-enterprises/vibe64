@@ -431,7 +431,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
 async function admitLocalPracticeProject({ learners, actor, slug }) {
   const hex = /^training-([a-f0-9]{32})$/u.exec(slug)?.[1];
   if (!hex) return null;
-  const attemptId = [8, 12, 16, 20].reduceRight((value, at) => `${value.slice(0, at)}-${value.slice(at)}`, hex);
+  const attemptId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   let saved;
   try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "control" }); }
   catch (error) {
