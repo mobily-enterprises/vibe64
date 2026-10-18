@@ -28,7 +28,9 @@ function courseArt(courseId) {
 }
 
 function courseMonogram(title) {
-  const words = String(title || "").trim().split(/\s+/).filter(Boolean);
+  // A "Series — Name" title is identified by its name, not the shared series.
+  const text = String(title || "").split(/\s+[—–-]\s+/).pop();
+  const words = text.trim().split(/\s+/).filter(word => /^[\p{L}\p{N}]/u.test(word));
   return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
 }
 

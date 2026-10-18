@@ -97,6 +97,7 @@ function requestCreate() {
 .training-course-creator p, .training-course-creator h3 { overflow-wrap: anywhere; white-space: normal; }
 .training-course-creator :deep(.v-label) { white-space: normal; overflow-wrap: anywhere; opacity: 1; }
 .training-course-creator :deep(.v-btn) { text-transform: none; letter-spacing: 0.01em; font-weight: 600; }
+.training-course-creator :deep(.v-btn--variant-flat.v-btn--disabled) { background: rgba(var(--v-theme-on-surface), 0.12) !important; color: rgba(var(--v-theme-on-surface), 0.5) !important; }
 .tcc-header { display: flex; align-items: flex-start; gap: var(--v64-space-4, 16px); }
 .tcc-header__icon { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--v64-shape-lg, 16px); background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
 .tcc-header h3 { margin: 0 0 var(--v64-space-1, 4px); font: var(--v64-type-headline-sm); }
@@ -132,6 +133,7 @@ function requestCreate() {
 .tcc-order__name { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; font: var(--v64-type-body-lg); }
 .tcc-order__moves { display: inline-flex; flex-wrap: wrap; }
 .tcc-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--v64-space-2, 8px); }
+:global(.v-theme--dark .tcc-order__index) { color: var(--v64-learning); }
 @keyframes tcc-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .training-course-creator { animation: none; } }
 @container (max-width: 34rem) {

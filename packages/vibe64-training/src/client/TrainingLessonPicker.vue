@@ -155,9 +155,6 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         <circle cx="104" cy="92" r="9" class="tlp-hero__stop tlp-hero__stop--done" />
         <circle cx="196" cy="52" r="11" class="tlp-hero__stop" />
         <path d="M190 52 l4.5 4.5 l8 -9" class="tlp-hero__tick" />
-        <rect x="132" y="104" width="78" height="40" rx="12" class="tlp-hero__card" />
-        <rect x="142" y="116" width="40" height="6" rx="3" class="tlp-hero__line" />
-        <rect x="142" y="128" width="58" height="6" rx="3" class="tlp-hero__line tlp-hero__line--soft" />
       </svg>
       <div class="tlp-hero__text">
         <p class="tlp-eyebrow"><v-icon :icon="icons.school" size="18" /> Learning</p>
@@ -208,7 +205,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
             :disabled="!resumeEnabled" @click="requestResume">Resume saved lesson</v-btn>
         </div>
         <details class="tlp-identity">
-          <summary>Saved lesson identity</summary>
+          <summary><v-icon :icon="icons.info" size="18" /><span>Saved lesson identity</span><v-icon class="tlp-chevron" :icon="icons.chevronDown" size="18" /></summary>
           <dl>
             <dt>Topic</dt><dd>{{ savedAttempt.pin.topic.topicId }} · {{ savedAttempt.pin.topic.release }}</dd>
             <dt>Commit</dt><dd><code>{{ savedAttempt.pin.topic.commit }}</code></dd>
@@ -306,7 +303,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
     </div>
 
     <details v-if="history.length" class="tlp-history training-lesson-picker__history">
-      <summary><v-icon :icon="icons.history" size="20" /> Saved lesson history ({{ history.length }})</summary>
+      <summary><v-icon :icon="icons.history" size="20" /><span>Saved lesson history ({{ history.length }})</span><v-icon class="tlp-chevron" :icon="icons.chevronDown" size="18" /></summary>
       <ol>
         <li v-for="attempt in history" :key="attempt.attemptId">
           <strong>{{ attempt.pin.lesson.code }}</strong> · {{ attempt.pin.course.courseId }} · {{ attempt.pin.course.release }}
@@ -329,6 +326,9 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 .training-lesson-picker p, .training-lesson-picker code, .training-lesson-picker dd, .training-lesson-picker h3 { white-space: normal; overflow-wrap: anywhere; }
 .training-lesson-picker :deep(.v-label) { white-space: normal; overflow-wrap: anywhere; }
 .training-lesson-picker :deep(.v-btn) { letter-spacing: 0.01em; text-transform: none; font-weight: 600; }
+/* M3 disabled filled button: neutral container, not a faded primary. */
+.training-lesson-picker :deep(.v-btn--variant-flat.v-btn--disabled) { background: rgba(var(--v-theme-on-surface), 0.12) !important; color: rgba(var(--v-theme-on-surface), 0.5) !important; }
+.training-lesson-picker :deep(.v-btn--variant-flat.v-btn--disabled .v-btn__overlay) { opacity: 0; }
 
 /* Eyebrow labels */
 .tlp-eyebrow {
@@ -353,9 +353,6 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 .tlp-hero__stop--done { fill: var(--v64-primary); stroke: var(--v64-primary); opacity: 0.55; }
 .tlp-hero__stop:not(.tlp-hero__stop--done) { fill: var(--v64-learning); stroke: var(--v64-on-learning); opacity: 0.85; }
 .tlp-hero__tick { fill: none; stroke: var(--v64-on-learning); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
-.tlp-hero__card { fill: var(--v64-surface); opacity: 0.75; }
-.tlp-hero__line { fill: var(--v64-primary); opacity: 0.45; }
-.tlp-hero__line--soft { opacity: 0.2; }
 .tlp-hero__text { flex: 1 1 18rem; min-width: 0; max-width: 34rem; }
 .tlp-hero__text h2 { margin: var(--v64-space-1, 4px) 0 var(--v64-space-2, 8px); font: var(--v64-type-display-sm); letter-spacing: -0.01em; }
 .tlp-hero__text p { margin: 0; font: var(--v64-type-body-lg); color: var(--v64-on-surface-variant); }
@@ -403,7 +400,16 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 .tlp-saved .tlp-note { background: color-mix(in srgb, var(--v64-surface) 70%, transparent); }
 .tlp-saved__actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-2, 8px); margin-top: var(--v64-space-2, 8px); }
 
-.tlp-identity { margin-top: var(--v64-space-1, 4px); font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-identity {
+  margin-top: var(--v64-space-2, 8px); padding-top: var(--v64-space-3, 12px);
+  border-top: 1px solid color-mix(in srgb, var(--v64-on-surface) 10%, transparent);
+  font: var(--v64-type-body-md); color: var(--v64-on-surface-variant);
+}
+.tlp-identity summary, .tlp-history summary { list-style: none; }
+.tlp-identity summary::-webkit-details-marker, .tlp-history summary::-webkit-details-marker { display: none; }
+.tlp-identity summary { border: 1px solid var(--v64-outline); background: color-mix(in srgb, var(--v64-surface) 60%, transparent); margin-left: 0 !important; }
+.tlp-chevron { transition: transform var(--v64-duration-short) var(--v64-ease-standard); }
+details[open] > summary .tlp-chevron { transform: rotate(180deg); }
 .tlp-identity summary, .tlp-history summary {
   cursor: pointer; width: fit-content; min-height: 40px; display: inline-flex; align-items: center; gap: var(--v64-space-2, 8px);
   padding: 0 var(--v64-space-3, 12px); margin-left: calc(-1 * var(--v64-space-3, 12px)); border-radius: var(--v64-shape-full, 999px);
@@ -509,6 +515,13 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 .tlp-history li::before { content: ""; position: absolute; left: calc(-1 * var(--v64-space-5, 24px) - 6px); top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--v64-outline); }
 .tlp-history li + li { margin-top: var(--v64-space-4, 16px); }
 .tlp-history li p { margin: 2px 0 0; color: var(--v64-on-surface-variant); }
+
+/* Dark theme: the shared on-learning-container token is too dim on the warm
+   containers, so Learning labels use the bright Learning accent instead. */
+:global(.v-theme--dark .tlp-eyebrow--learning), :global(.v-theme--dark .tlp-hero__text .tlp-eyebrow) { color: var(--v64-learning); }
+:global(.v-theme--dark .tlp-note--warn) { color: var(--v64-on-surface); }
+:global(.v-theme--dark .tlp-saved__ring) { --training-ring-track: rgba(var(--v-theme-on-surface), 0.16); }
+:global(.v-theme--dark .tlp-saved) { background: linear-gradient(120deg, color-mix(in srgb, var(--v64-learning) 16%, rgb(var(--v-theme-surface))) 0%, var(--v64-surface-container-low) 70%); }
 
 @keyframes tlp-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes tlp-shimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
