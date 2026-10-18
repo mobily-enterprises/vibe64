@@ -99,7 +99,8 @@ function sourceInput(request, input = {}) {
   return { ...data, sessionId: request.params.sessionId };
 }
 
-// The lesson Code tab mounts only the read operations its saved attempt can observe.
+// A lesson's Files editor reads, downloads, creates and stars its practice
+// project's files through the saved attempt. Saving is Training's ledgered save.
 function registerLearningRoutes(http, { routeSurface = "" } = {}) {
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
@@ -129,6 +130,15 @@ function registerLearningRoutes(http, { routeSurface = "" } = {}) {
   route("GET", "/search", "search", "Search lesson source files.", searched);
   route("POST", "/resolve-path", "path.resolve", "Resolve a lesson source path reference.",
     (request) => learningInput(request, routes.requestBody(request)));
+  route("POST", "/file", "file.create", "Create a lesson source file.",
+    (request) => learningInput(request, routes.requestBody(request)));
+  route("GET", "/stars", "stars.read", "Read this account's starred lesson files.", query);
+  route("POST", "/stars", "star.set", "Star or unstar a lesson file.",
+    (request) => learningInput(request, routes.requestBody(request)));
+  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
+    summary: "Download an original lesson source file."
+  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
+    actionId: "vibe64.source-editor.file.download", input: query(request) })));
 }
 
 function registerRoutes(http, {

@@ -85,11 +85,12 @@ A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
 intact. Learning keeps the teacher chat visible throughout the lesson. The right
-side switches between the complete normal Preview/Dashboard workspace and a
-Learning pane containing the Courses pane (course cards and progress, course
-pages and the owner's custom-course form) and the Presentation player.
-A supervised project defaults to Workspace; a source-less lesson honestly stays
-in Learning. Both views retain their application, Dashboard and interactive
+side keeps the normal Preview | Dashboard tabs and adds a toggleable Learning tab
+beside them, containing the Courses pane (course cards and progress, course
+pages and the owner's custom-course form, and Check my code during a practice
+lesson) and the Presentation player. A practice lesson's Dashboard offers its
+editable Database and Files. A supervised project defaults to its Preview; a
+source-less lesson honestly stays in Learning. Both views retain their application, Dashboard and interactive
 visual state in the same session/conversation implementation, on desktop and
 phones. Hidden visuals pause without being treated as completed teaching.
 Colleague can open Courses, the active lesson or exact supervised Workspace view,

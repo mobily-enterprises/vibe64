@@ -1789,9 +1789,11 @@ it("the actual selected Learning workspace publisher waits for the original snap
   let selected;
   const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const app = renderer.createApp({ setup() {
-    const args = ["inject", "ref", "computed", "watch", "watchEffect", "onBeforeUnmount", "useDisplay", "props", "chatCollapsed", ...keyNames];
+    const args = ["inject", "ref", "computed", "watch", "watchEffect", "onBeforeUnmount", "useDisplay", "props", "chatCollapsed",
+      "rightPaneTab", ...keyNames];
     selected = new Function(...args, `${source.slice(start, end)}\nreturn {learningView,learningLayout};`)(Vue.inject, Vue.ref, Vue.computed,
-      Vue.watch, Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width }), props, collapsed, ...keyNames.map(name => keys[name]));
+      Vue.watch, Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width }), props, collapsed, Vue.ref("preview"),
+      ...keyNames.map(name => keys[name]));
     return () => null;
   } });
   app.provide(keys.VIBE64_ASSISTANT_HOST_KEY, Vue.shallowRef(null)); app.provide(keys.VIBE64_COLLEAGUE_VIEW_KEY, view);

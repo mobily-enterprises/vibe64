@@ -372,7 +372,7 @@ installation and learner admission remain separate operations.
 
 Owns code practicals: their `code` evidence/check schema, the per-question
 starting-file baseline and the private server-side save ledger beside learner
-state, the learner-scoped ledgered save action used by the lesson Code tab, and
+state, the learner-scoped ledgered save action used by the lesson Files tab, and
 the code check that runs a pinned check on a private overlay copy through the
 existing execution owner. The generic source-editor save, its baseHash check and
 the existing practical observation, Helper grading and progress writer remain
@@ -414,10 +414,11 @@ preserves unrequested records and extensions. The existing setup owner retains c
 payment and advertising authorization and revision checks. Source tools remain
 with coding conversations; Colleague delegates source investigation.
 
-A practice lesson's Code tab mounts the same editor through lesson-scoped read
-routes (tree, file, find, search, path resolve) that declare observe access for
-the saved attempt; its save is Training's ledgered action, and file areas,
-uploads, downloads, integrations, stars and explanations stay unavailable there.
+A practice lesson's Files tab mounts the same editor through lesson-scoped routes
+(tree, file, find, search, path resolve, download and stars read with observe
+access; file create and star set with write access) for the saved attempt; its
+save is Training's ledgered action. File areas, uploads, integrations, the
+Interface view and explanations stay unavailable there.
 
 Provides the shared file viewer and editor used by Files and Architecture, including saved-source reads, edits, conflict checks, downloads and source references. File overviews and per-function pseudocode are generated only on request through the configured Helper. Informational answers are cached against source and guidance identity; they remain separate from authored subsystem and Program explanations. Terminal orchestration owns publishing session source through Save work.
 

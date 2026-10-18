@@ -58,7 +58,6 @@
               @click="fileBookmarks.toggle(displayedPath)"
             />
             <v-list-item
-              v-if="!lessonScoped"
               title="Download file"
               :prepend-icon="mdiDownload"
               :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
@@ -77,7 +76,7 @@
               @click="runEditorCommand('redo')"
             />
             <v-list-item
-              v-if="!singleFile && !lessonScoped"
+              v-if="!singleFile"
               title="Explain file or selection"
               :prepend-icon="mdiRobotOutline"
               :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
@@ -105,7 +104,6 @@
           @click="fileBookmarks.toggle(displayedPath)"
         />
         <v-btn
-          v-if="!lessonScoped"
           aria-label="Download file"
           :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
           :icon="mdiDownload"
@@ -150,7 +148,7 @@
           @click="editor.saveNow"
         />
         <v-btn
-          v-if="!singleFile && !lessonScoped"
+          v-if="!singleFile"
           class="vibe64-source-editor__explain-button"
           :aria-busy="editor.explanationBusy.value || editor.explanationClosing.value ? 'true' : 'false'"
           color="primary"
@@ -287,7 +285,6 @@
             <span>Files</span>
             <div class="vibe64-source-editor__tree-actions">
               <v-btn
-                v-if="!lessonScoped"
                 aria-label="New file at source root"
                 :disabled="editor.creatingFile.value || !editor.tree.value"
                 :icon="mdiFilePlusOutline"
@@ -413,7 +410,6 @@
             :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
             :ask-codex-available="askCodexAvailable"
-            :lesson-scoped="lessonScoped"
             @ask-codex="askCodexAboutPath"
             @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
@@ -788,8 +784,8 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
-  // A lesson Code tab: code view only, no downloads, new files, explanations
-  // or architecture reads; its routes expose only reads and the ledgered save.
+  // A lesson's Files tab: lesson routes have no architecture reader, so files
+  // open as code without the Interface view. Everything else is the ordinary editor.
   lessonScoped: {
     default: false,
     type: Boolean

@@ -5,7 +5,7 @@ Learning. Its pressed state and highlighted header indicate Learning. It is the
 first keyboard stop in the header: Enter or Space switches mode, and its tooltip
 names the mode it will switch to. In a lesson with saved practice projects, the
 **Practice project** menu sits beside it; on a phone it shrinks to its ▾ arrow so
-the **Workspace**/**Learning** switch stays visible. On the
+the **Preview**/**Dashboard**/**Learning** tabs stay visible. On the
 projectless app page, Working shows the original project picker; Learning shows
 installed courses without asking you to invent or choose a project; its header
 reads **Courses**. In a project
@@ -91,25 +91,34 @@ lesson, invent an observation or count its own demonstration as your pass.
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
 The teacher chat stays visible throughout Learning, including after opening a
-lesson or reloading the page. The right side gains **Workspace** and **Learning**
-tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs. In a
-practice lesson, **Dashboard** shows the practice app's **Database** view: its ERD,
-tables and data, editable like any project's database (see
-[Browse a project's Database](database.md)). An app without a database shows
-"The session Stack does not declare a supported database." A practice lesson's
-**Dashboard** also has a **Code** tab next to **Database**; see "Answering a code
-question" below. Switching between Preview and Dashboard keeps Learning
-on and retains the same selected teacher session; it does not switch to your last
-Working session. **Learning** reveals the existing **Courses** and
-**Presentation** controls. Returning from Workspace keeps the selected Courses
-or Presentation content visible without requiring another click. A supervised
-project opens in Workspace by default. On reopening, Workspace waits for the
+lesson or reloading the page. The right side keeps the ordinary **Preview** and
+**Dashboard** tabs of the practice project and adds a **Learning** tab beside
+them. The graduation-cap button after the tabs (**Hide Learning panes** /
+**Show Learning panes**) hides or shows that extra **Learning** tab; hiding it
+while it is selected returns to the practice project, and showing it selects it.
+Learning panes add to the project's panes; they never replace Preview or
+Dashboard. In a practice lesson, **Dashboard** has **Database** and **Files**
+tabs. **Database** shows the practice app's ERD, tables and data, editable like
+any project's database (see [Browse a project's Database](database.md)). An app
+without a database shows "The session Stack does not declare a supported
+database." **Files** is the ordinary source editor for the practice project; see
+"Answering a code question" below. The other Dashboard sections (Project
+settings, Git log, Env, AI Terminal, Architecture, Current changes, Session
+history, Health and the rest) are not yet available in a lesson's Dashboard.
+Switching between Preview, Dashboard and Learning keeps Learning mode on and
+retains the same selected teacher session; it does not switch to your last
+Working session. The **Learning** tab shows the existing **Courses** and
+**Presentation** controls. Returning to it keeps the selected Courses or
+Presentation content visible without requiring another click. A supervised
+project opens on its Preview by default. On reopening, the practice project waits for the
 assistant's initial connection check to settle before opening the saved practice
 runtime. It still opens if that check reports an unavailable or failed AI;
 repairing the AI connection is separate from using the practice Preview.
-A source-less lesson disables Workspace and explains that it has no project,
-instead of showing a remembered Working project. On phones and tablets, the same
-two choices remain available around the stacked chat and right-hand content.
+A source-less lesson disables **Preview** and **Dashboard** (their tooltip says
+the lesson has no project workspace), keeps **Learning** selected and disables
+the Learning panes button, instead of showing a remembered Working project. On
+phones and tablets, the same tabs and button remain available around the stacked
+chat and right-hand content.
 Learning has no chat-collapse or pane-swipe control.
 
 ### Answering a code question
@@ -117,16 +126,20 @@ Learning has no chat-collapse or pane-swipe control.
 Some practice lessons ask you to change code, for example "make `notes.mjs`
 refuse an empty title". To answer:
 
-1. Choose **Workspace**, then **Dashboard**, then the **Code** tab (beside
-   **Database**). It is the ordinary source editor for this lesson's practice
-   project, showing code only. Downloads, new files, file uploads, file areas,
-   integrations, stars and **Explain** are not available here; ask your teacher
-   in Learning instead. A file's **⋮** actions menu in the file list offers only
-   **Copy path**. On a phone, use the files button to show or hide the file
-   list.
+1. Choose **Dashboard**, then the **Files** tab (beside **Database**). It is
+   the ordinary source editor for this lesson's practice project: the file list,
+   **New file at source root**, **Download file**, **Star file** and a file's
+   **⋮** actions menu (**Star file**, **Download file**, **New file here**,
+   **Copy path**) work as in any project. Files open as code; the **Interface**
+   view is not available in a lesson. **Explain** is shown but disabled; its
+   tooltip says to ask your lesson teacher in Learning. On a phone, use the files
+   button to show or hide the file list.
 2. Open the file the teacher named and edit it. Your changes save automatically
    a moment after you stop typing; the editor shows when a save has finished.
-3. Press **Check my code**. The lesson's declared check runs on a private copy of
+3. Choose the **Learning** tab (show it first with the Learning panes button if
+   it is hidden) and press **Check my code** at the top of its **Courses** view.
+   The button is there whenever a practice lesson is open; it checks only an open
+   code question. The lesson's declared check runs on a private copy of
    the pinned exercise with your saved version of the named files. The result
    appears next to the button: either "Your code passed the check…" or
    "Not yet: …" with the check's reason (for example "Empty or blank titles are
@@ -138,7 +151,7 @@ refuse an empty title". To answer:
    check for grading. A pass is saved only when the check passed **and** the
    explanation meets the lesson's rubric.
 
-What counts: only edits you saved yourself in this **Code** tab since the
+What counts: only edits you saved yourself in the **Files** tab editor since the
 teacher asked the question. If anything else changed a named file in the
 meantime—the teacher or another assistant, a terminal command, Git, or another
 editor—the check does not run and reports "needs an independent attempt: other
@@ -157,7 +170,7 @@ the teacher for the code question first), or "Earlier presses are still being
 handled" (wait, then press again). An asked, unanswered code question stays open
 when the server restarts or the page reloads, including the next day: open the
 lesson again and press **Check my code**; you do not need a new question, and
-your earlier saves in the **Code** tab still count. Colleague can explain
+your earlier saves in the **Files** tab still count. Colleague can explain
 these steps but cannot type, save or check code for you.
 
 You can ask Colleague to enter or leave Learning, show **Courses**, show the
@@ -184,8 +197,9 @@ you do not need to enter the project again. Otherwise, enter one bounded task in
 project, such as Lesson 0; its target then shows as a source-less lesson. The compact details dialog shows the task as
 **active**, **paused**, or **unavailable**, its exact target, and its latest
 structured observation and time, last delivered help, and any saved assessment
-outcome. Observations include switching between **Workspace** and **Learning** and
-between Workspace panes such as **Preview** and **Dashboard** (the lesson's database);
+outcome. Observations include switching between the practice project's
+**Preview**/**Dashboard** and the **Learning** tab, and between project panes such
+as **Preview**, **Dashboard → Database** and **Dashboard → Files**;
 a view opened by Main or Colleague is recorded as their demonstration, not your step.
 The watch also notices when something you do inside the practice app fails: if
 you click or submit in the visible **Preview** (for example **Add note**) and the
@@ -219,7 +233,7 @@ registers your current view but leaves the watch paused: return to the intended
 task and choose **Resume**. Minimizing Colleague keeps the same connected task.
 Replacing or closing the watched Main conversation also pauses its old watch,
 even when the project and lesson remain selected. Switching only between that
-task's Workspace and Learning panes keeps polling active.
+task's project panes and its Learning tab keeps polling active.
 After an application update, reload the page before starting or resuming polling.
 Start and Resume require the initiating browser's live connection. If it has not
 connected yet, wait for it to reconnect and then choose the control again; saved
@@ -230,12 +244,12 @@ complete your task. A task you describe in your own words has no automatic
 assessment match; polling and help do not grade it.
 You do not need to keep the dialog open.
 When a watched step reaches the lesson teacher, Main's chat shows a short status
-line such as “Watching: you are in Workspace → Preview.” followed by the teacher's
+line such as “Watching: you are in Preview.” followed by the teacher's
 reply. The teacher still receives the full observation; its internal prompt is
 not shown as a chat message. A failed step shows “Watching: that step did not
-finish.”; returning to the lesson shows “Watching: you are back in the lesson.”
+finish.”; choosing the **Learning** tab shows “Watching: you are in the Learning pane.”
 
-Polling reports only named Vibe64 controls, settled Workspace/Learning view,
+Polling reports only named Vibe64 controls, the settled project-or-Learning view,
 saved lesson progress and the reduced failed app request described above. It
 never sends typed text, form values, request or response bodies, headers, query
 strings, arbitrary page content, screenshots, secrets or another project. Navigation performed by Colleague is
@@ -287,7 +301,7 @@ Main readiness flow as Working. Preparation retains that saved conversation and
 checks your current access; it does not send your draft or begin teaching. An
 ended or inaccessible attempt cannot start agent preparation.
 
-Source-less Learning conversations show Learning and disable Workspace. A supported declared
+Source-less Learning conversations show the Learning tab and disable Preview and Dashboard. A supported declared
 diagram can use the same Presentation player only in your exact saved lesson
 conversation; an empty picker or unavailable diagram cannot open it. This does
 not give the lesson repository, Save or Temporary AI/workspace access. A saved

@@ -762,7 +762,7 @@
             variant="outlined"
           >
             <v-btn value="database">Database</v-btn>
-            <v-btn value="code">Code</v-btn>
+            <v-btn value="files">Files</v-btn>
           </v-btn-toggle>
         </header>
         <Vibe64DatabaseWorkspace
@@ -775,42 +775,20 @@
           :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
           :session-id="selectedAssistantSessionId"
         />
-        <div
+        <Vibe64SessionSourceEditor
           v-if="learningCodeMounted"
-          v-show="learningDashboardTab === 'code'"
-          class="studio-autopilot__learning-code"
-        >
-          <div class="studio-autopilot__learning-code-check">
-            <v-btn
-              color="primary"
-              :disabled="learningCodeChecking"
-              :loading="learningCodeChecking"
-              variant="flat"
-              @click="checkLearningCode"
-            >
-              Check my code
-            </v-btn>
-            <p
-              class="studio-autopilot__learning-code-status"
-              :class="{ 'text-error': learningCodeResult?.error }"
-              role="status"
-              aria-live="polite"
-            >
-              {{ learningCodeResult?.message || "Edit the files your teacher names, then press Check my code. Only your own edits here count." }}
-            </p>
-          </div>
-          <Vibe64SessionSourceEditor
-            lesson-scoped
-            :active="props.active && learningDatabaseActive && learningDashboardTab === 'code'"
-            :agent-active="agentActive"
-            :assistant-available="false"
-            assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
-            class="studio-autopilot__session-tool-content"
-            :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
-            :session-id="selectedAssistantSessionId"
-            :sessions-api-path="learningSessionsApiPath"
-          />
-        </div>
+          v-show="learningDashboardTab === 'files'"
+          lesson-scoped
+          :active="props.active && learningDatabaseActive && learningDashboardTab === 'files'"
+          :agent-active="agentActive"
+          :assistant-available="false"
+          assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
+          class="studio-autopilot__session-tool-content"
+          :file-bookmarks="fileBookmarks"
+          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
+          :session-id="selectedAssistantSessionId"
+          :sessions-api-path="learningSessionsApiPath"
+        />
       </section>
 
       <section
@@ -886,7 +864,28 @@
           :project-slug="props.conversationRuntime?.identity?.noExercise === false ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug"
           :session-id="selectedAssistantSessionId"
         >
-          <template #lessons><slot name="learning" :dashboard-context="dashboardContext" /></template>
+          <template #lessons>
+            <div v-if="learningDatabaseAvailable" class="studio-autopilot__learning-code-check">
+              <v-btn
+                color="primary"
+                :disabled="learningCodeChecking"
+                :loading="learningCodeChecking"
+                variant="flat"
+                @click="checkLearningCode"
+              >
+                Check my code
+              </v-btn>
+              <p
+                class="studio-autopilot__learning-code-status"
+                :class="{ 'text-error': learningCodeResult?.error }"
+                role="status"
+                aria-live="polite"
+              >
+                {{ learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
+              </p>
+            </div>
+            <slot name="learning" :dashboard-context="dashboardContext" />
+          </template>
           <template #default="{ appVisible, presentation }">
             <Vibe64ProjectOnboarding
               v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
@@ -1812,8 +1811,9 @@ const learningDatabaseActive = computed(() => learningDatabaseAvailable.value &&
 const learningDatabaseMounted = ref(false);
 watch(learningDatabaseActive, active => { if (active) learningDatabaseMounted.value = true; }, { immediate: true });
 watch(learningDatabaseAvailable, available => { if (!available) learningDatabaseMounted.value = false; });
-// The Code tab edits this lesson's practice project through the saved attempt.
-// Its saves are the only edits that count for a code question.
+// The Files tab edits this lesson's practice project through the saved attempt.
+// Its saves are the only edits that count for a code question; Check my code
+// sits in the Learning pane beside Preview | Dashboard.
 const learningDashboardTab = ref("database");
 const learningCodeMounted = ref(false);
 const learningCodeChecking = ref(false);
@@ -1821,9 +1821,14 @@ const learningCodeResult = ref(null);
 const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 const learningSessionsApiPath = computed(() => props.learningAttemptId
   ? `/api/learning/${encodeURIComponent(props.learningAttemptId)}/vibe64/sessions` : "");
-watch(() => learningDatabaseActive.value && learningDashboardTab.value === "code", active => {
+watch(() => learningDatabaseActive.value && learningDashboardTab.value === "files", active => {
   if (active) learningCodeMounted.value = true;
 }, { immediate: true });
+// A navigation to Dashboard → Database or Files selects the same lesson tab.
+watch(rightPaneTab, tab => {
+  if (tab === "database") learningDashboardTab.value = "database";
+  else if (tab === "editor") learningDashboardTab.value = "files";
+});
 watch(learningDatabaseAvailable, available => {
   if (!available) { learningCodeMounted.value = false; learningCodeResult.value = null; learningDashboardTab.value = "database"; }
 });
@@ -1868,7 +1873,9 @@ const learningView = Object.freeze({
   get pane() {
     if (!learningLayout.projectVisible) return "chat";
     if (props.learningView === "workspace") {
-      return props.projectPane === "dashboard" ? vibe64SessionToolRouteSegment(rightPaneTab.value) || "preview" : "preview";
+      if (props.projectPane !== "dashboard") return "preview";
+      const tool = learningDatabaseAvailable.value ? learningDashboardTab.value === "files" ? "editor" : "database" : rightPaneTab.value;
+      return vibe64SessionToolRouteSegment(tool) || "preview";
     }
     const preview = learningPreviewRef?.value;
     const binding = learningIdentity.value;
@@ -2244,12 +2251,6 @@ onBeforeUnmount(() => {
 .studio-autopilot__session-tool-pane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-}
-
-.studio-autopilot__learning-code {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
 }
 
 .studio-autopilot__learning-code-check {

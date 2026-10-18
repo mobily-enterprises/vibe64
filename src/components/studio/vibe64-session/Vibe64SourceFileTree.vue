@@ -69,19 +69,19 @@
             density="compact"
           >
             <v-list-item
-              v-if="child.type === 'file' && !lessonScoped"
+              v-if="child.type === 'file'"
               :prepend-icon="starredPaths.includes(child.path) ? mdiStar : mdiStarOutline"
               :title="starredPaths.includes(child.path) ? 'Unstar file' : 'Star file'"
               @click="emit('toggle-star', child.path)"
             />
             <v-list-item
-              v-if="child.type === 'file' && !lessonScoped"
+              v-if="child.type === 'file'"
               :prepend-icon="mdiDownload"
               title="Download file"
               @click="emit('download-file', child.path)"
             />
             <v-list-item
-              v-if="child.type === 'directory' && !lessonScoped"
+              v-if="child.type === 'directory'"
               :prepend-icon="mdiFilePlusOutline"
               title="New file here"
               @click="emit('new-file', child.path || '')"
@@ -108,7 +108,6 @@
         <Vibe64SourceFileTree
           :node="child"
           :ask-codex-available="askCodexAvailable"
-          :lesson-scoped="lessonScoped"
           :selected-path="selectedPath"
           :starred-paths="starredPaths"
           :expanded-paths="expandedPaths"
@@ -211,10 +210,6 @@ const props = defineProps({
     type: Number
   },
   askCodexAvailable: {
-    default: false,
-    type: Boolean
-  },
-  lessonScoped: {
     default: false,
     type: Boolean
   }

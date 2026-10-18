@@ -42,7 +42,7 @@ Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”
 or “Open Project settings”. It can explain visible controls using its guides.
 During an active lesson, ask it to show that lesson project's normal **Preview**
-or **Database → ERD** without leaving Learning; **Workspace** becomes visible and
+or **Database → ERD** without leaving Learning; that project tab becomes selected and
 Main remains the teacher. The bound Main teacher can reveal the same Preview or
 ERD for its exact attempt. A changed project, session, attempt or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,

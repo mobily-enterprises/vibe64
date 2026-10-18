@@ -27,10 +27,10 @@ function paneLabel(pane) {
 function learningGuidanceSummary(evidence) {
   if (evidence?.outcome === "failed") return "Watching: that step did not finish.";
   const workspace = evidence?.workspace || {};
-  if (workspace.learningView === "learning") return "Watching: you are back in the lesson.";
+  if (workspace.learningView === "learning") return "Watching: you are in the Learning pane.";
   const pane = paneLabel(workspace.pane);
   if (!pane) return "Watching your practice task.";
-  return `Watching: you are in Workspace → ${pane}${workspace.ready === false ? " (still loading)" : ""}.`;
+  return `Watching: you are in ${pane}${workspace.ready === false ? " (still loading)" : ""}.`;
 }
 
 // Recognizes only a delivered guidance wake: its server-owned message ID and

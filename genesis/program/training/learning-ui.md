@@ -396,7 +396,7 @@ Practice project lists actual loaded own-learner saved rows and delegates to the
 same original session selector. It captures a person click before selection and
 settles only a confirmed selection. Like the Working project selector, its label
 shrinks to an ellipsis and chevron on narrow app bars instead of overlapping the
-Workspace/Learning switch. Automatic Start/Resume callbacks supply no
+Preview/Dashboard/Learning tabs. Automatic Start/Resume callbacks supply no
 gesture. Saved Main session and App choices forward their native event, while the original
 App observer retains server instance, interaction, player/frame and request IDs.
 Main and general Colleague remain different conversations: only the real drawer's
@@ -460,22 +460,38 @@ effects still require lesson admission. Unscoped (Working) session-store listing
 renewal reads and the current-session alias omit a genuine lesson binding, which its
 Learning store owns; direct reads and malformed bindings still refuse.
 
-## Practice Dashboard code
+## Learning panes beside Preview and Dashboard
 
-The same Learning Dashboard pane has **Database** and **Code** tabs for every
-practice lesson. **Code** mounts the existing `Vibe64SessionSourceEditor` with
-`lesson-scoped` and `sessions-api-path="/api/learning/<attempt>/vibe64/sessions"`.
-`lessonScoped` keeps the code view and hides downloads, new files and explanations
-(including the file tree's Star, Download and New file menu items, via
-`Vibe64SourceFileTree`'s `lessonScoped` prop),
-and skips the architecture reader. Source-editor reads use its lesson routes;
+In Learning mode the project page keeps the ordinary Preview | Dashboard tabs
+(`projectTabs`) and adds a **Learning** tab beside them; the route's
+`learningView` stays `workspace` for a project tab and `learning` for the
+Learning tab, so Colleague, Main and the watch use the same values. A page-local
+toggle (**Hide/Show Learning panes**) removes or restores the Learning tab;
+hiding it while selected returns to `workspace`, showing it selects it, and any
+navigation to `learning` shows it again. A source-less lesson disables the
+project tabs and the toggle and stays on the Learning tab.
+
+## Practice Dashboard files
+
+A practice lesson's Dashboard has **Database** and **Files** tabs. **Files**
+mounts the existing `Vibe64SessionSourceEditor` with `lesson-scoped`, the page's
+starred-files owner and `sessions-api-path="/api/learning/<attempt>/vibe64/sessions"`.
+`lessonScoped` now only opens files as code and skips the architecture reader,
+because lesson routes have no architecture reader; downloads, new files, stars
+and the file tree's menu are the ordinary editor's. **Explain** stays disabled
+because the lesson passes no assistant. Source-editor reads, `file.download`,
+`stars.read` (observe) and `file.create`, `star.set` (write) use its lesson routes;
 `PUT .../source-editor/file` is Training's `vibe64.training.code.file.save`
 (learning `control`), which wraps the generic save and records the authorship
 ledger. The live change stream is not mounted in lesson scope; the editor's
-revalidation and baseHash conflict remain. **Check my code** calls the selected
-Main gesture owner's `submitCode`, which posts a `code-submit` observation for
-the current delivered question to the Main practical route. The server decides
-whether that question is a code practical; the tab shows its outcome and reason.
+revalidation and baseHash conflict remain. **Check my code** sits at the top of
+the Learning tab's Courses view whenever a practice lesson is open. It calls the
+selected Main gesture owner's `submitCode`, which posts a `code-submit`
+observation for the current delivered question to the Main practical route. The
+server decides whether that question is a code practical; the control shows its
+outcome and reason. The Colleague view reports a lesson Dashboard pane as
+`database` or `files` from the selected lesson tab, and a navigation to
+Dashboard → Database or Files selects that lesson tab.
 Main's gesture product carries `loaded` (the conversation snapshot exists). Until
 the reopened conversation has re-read its saved question after a reload or
 server restart, a press reports that the lesson conversation is still loading
@@ -483,7 +499,7 @@ rather than that no question is open.
 
 ## Practice Dashboard database
 
-In a practice lesson the Learning Dashboard pane mounts only the existing
+In a practice lesson the Dashboard's Database tab mounts the existing
 `Vibe64DatabaseWorkspace` with the saved attempt (`learningDatabaseAvailable` in
 `Vibe64AutopilotView.vue`). Its client uses `/api/learning/<attempt>/vibe64/database`.
 Database tools register lesson-scoped routes for every Database operation except

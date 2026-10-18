@@ -666,7 +666,7 @@ keyed by question ID, assessment and issued revision. A replay keeps the origina
 baseline; without the facility a code question is refused. The ledger is separate
 from progress so autosaves never advance the learning revision.
 
-The lesson Code tab saves through `vibe64.training.code.file.save`. It calls the
+The lesson Files tab saves through `vibe64.training.code.file.save`. It calls the
 generic source-editor save under the ledger lock and appends
 `{path, baseHash, intendedHash, savedHash, actorId, at}`; consecutive clean saves
 of one file collapse into one link. A save whose read-back bytes differ from the

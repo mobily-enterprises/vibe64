@@ -62,12 +62,12 @@ describe("source file tree actions", () => {
     expect(html).toContain('title="Copy path"');
   });
 
-  it("offers only actions the lesson routes allow in lesson-scoped mode", async () => {
+  it("has no lesson-only restriction: a lesson's Files tab offers the same file actions", async () => {
     const html = await renderTree({ lessonScoped: true });
 
+    expect(html).toContain('title="Star file"');
+    expect(html).toContain('title="Download file"');
+    expect(html).toContain('title="New file here"');
     expect(html).toContain('title="Copy path"');
-    expect(html).not.toContain("Star file");
-    expect(html).not.toContain("Download file");
-    expect(html).not.toContain("New file here");
   });
 });

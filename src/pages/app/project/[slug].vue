@@ -16,7 +16,8 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch, watchEffect } from "vue";
+import { mdiSchoolOutline } from "@mdi/js";
 import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
@@ -81,6 +82,26 @@ function showProjectPane() {
 function setLearningView(view) {
   if (view === "workspace" && !learningWorkspaceAvailable.value) return;
   void learning.setLearningView(view);
+}
+// Learning keeps the ordinary Preview | Dashboard tabs. Its own panes are an
+// extra tab beside them that this toggle shows or hides; it never replaces them.
+const learningPanesVisible = ref(true);
+const learningPanesShown = computed(() => learningPanesVisible.value || !learningWorkspaceAvailable.value);
+watch(learningPaneActive, active => { if (active) learningPanesVisible.value = true; });
+async function selectLearningProjectPane(pane, event) {
+  if (!learningWorkspaceAvailable.value) return;
+  if (learningView.value !== "workspace") await learning.setLearningView("workspace");
+  selectProjectPane(pane, event);
+}
+function toggleLearningPanes() {
+  if (learningPanesShown.value) {
+    if (!learningWorkspaceAvailable.value) return;
+    learningPanesVisible.value = false;
+    if (learningView.value !== "workspace") void learning.setLearningView("workspace");
+  } else {
+    learningPanesVisible.value = true;
+    void learning.setLearningView("learning");
+  }
 }
 
 const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
@@ -224,32 +245,50 @@ onBeforeUnmount(() => {
             aria-label="Learning workspace view"
           >
             <button
+              v-for="tab in projectTabs"
+              :key="tab.id"
               class="studio-home-shell-project-tab"
-              :class="{ 'studio-home-shell-project-tab--active': !learningPaneActive }"
+              :class="{ 'studio-home-shell-project-tab--active': !learningPaneActive && projectPane === tab.id }"
               role="tab"
               type="button"
               :aria-disabled="!learningWorkspaceAvailable ? 'true' : undefined"
-              :aria-selected="!learningPaneActive ? 'true' : 'false'"
+              :aria-selected="!learningPaneActive && projectPane === tab.id ? 'true' : 'false'"
               :disabled="!learningWorkspaceAvailable"
-              :title="learningWorkspaceAvailable ? 'Show the normal project workspace' : 'This lesson has no project workspace'"
-              @click="setLearningView('workspace')"
+              :title="learningWorkspaceAvailable ? `Show the practice project's ${tab.label}` : 'This lesson has no project workspace'"
+              @click="selectLearningProjectPane(tab.id, $event)"
             >
-              Workspace
+              {{ tab.label }}
             </button>
             <button
+              v-if="learningPanesShown"
               class="studio-home-shell-project-tab"
               :class="{ 'studio-home-shell-project-tab--active': learningPaneActive }"
               role="tab"
               type="button"
               :aria-selected="learningPaneActive ? 'true' : 'false'"
-              title="Show lesson content and presentation"
+              title="Show courses, lesson progress and presentation"
               @click="setLearningView('learning')"
             >
               Learning
             </button>
           </div>
+          <v-btn
+            v-if="learningMode"
+            class="studio-home-shell-learning-panes-toggle"
+            density="comfortable"
+            :icon="mdiSchoolOutline"
+            size="small"
+            type="button"
+            :variant="learningPanesShown ? 'tonal' : 'text'"
+            :aria-label="learningPanesShown ? 'Hide Learning panes' : 'Show Learning panes'"
+            :aria-pressed="learningPanesShown ? 'true' : 'false'"
+            :disabled="!learningWorkspaceAvailable"
+            :title="learningWorkspaceAvailable ? learningPanesShown ? 'Hide Learning panes' : 'Show Learning panes'
+              : 'This lesson has only Learning panes'"
+            @click="toggleLearningPanes"
+          />
           <div
-            v-if="projectPaneNavigationVisible && (!learningMode || !learningPaneActive)"
+            v-if="projectPaneNavigationVisible && !learningMode"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"

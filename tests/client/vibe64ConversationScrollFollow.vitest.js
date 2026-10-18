@@ -658,7 +658,7 @@ describe("Vibe64 conversation scroll following", () => {
     expect(text).not.toContain("supervised Learning observation");
     expect(text).not.toContain("Observed application fact");
     expect(text).not.toContain("view-change");
-    expect(text).toContain("Watching: you are in Workspace → Preview.");
+    expect(text).toContain("Watching: you are in Preview.");
     // Only the exact delivered guidance format is summarised; the learner's own words stay a user bubble.
     expect(renderedUserPromptBlocks(mounted.container).some(block => block.text === "My own words.")).toBe(true);
     mounted.app.unmount();

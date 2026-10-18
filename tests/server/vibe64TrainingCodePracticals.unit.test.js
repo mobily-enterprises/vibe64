@@ -274,22 +274,25 @@ test("bundling validates code questions, their files, check kind and timeout", a
   }
 });
 
-test("the lesson Code tab mounts only reads and a ledgered save; agent-starting editor actions are refused", async () => {
+test("the lesson Files editor mounts reads, downloads, new files, stars and a ledgered save; agent-starting editor actions are refused", async () => {
   const registered = [];
   const http = { router: { register(method, route, options, handler) { registered.push({ method, route, handler }); } } };
   registerSourceEditorRoutes(http, { learningScoped: true, routeSurface: "app" });
   registerTrainingCodeEditorRoutes(http);
   const base = "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/source-editor";
   assert.deepEqual(registered.map(value => `${value.method} ${value.route}`).sort(), [
-    `GET ${base}/file`, `GET ${base}/files`, `GET ${base}/search`, `GET ${base}/tree`,
-    `POST ${base}/resolve-path`, `PUT ${base}/file`].sort());
+    `GET ${base}/download`, `GET ${base}/file`, `GET ${base}/files`, `GET ${base}/search`, `GET ${base}/stars`,
+    `GET ${base}/tree`, `POST ${base}/file`, `POST ${base}/resolve-path`, `POST ${base}/stars`, `PUT ${base}/file`].sort());
   const editor = Object.fromEntries(createSourceEditorActions({ sourceEditor: {} }).map(value => [value.id, value]));
-  for (const id of ["tree.read", "file.read", "files.find", "search", "path.resolve"]) {
+  for (const id of ["tree.read", "file.read", "files.find", "search", "path.resolve", "file.download", "stars.read"]) {
     assert.equal(editor[`vibe64.source-editor.${id}`].extensions.vibe64.learningAccess, "observe", id);
   }
+  for (const id of ["file.create", "star.set"]) {
+    assert.equal(editor[`vibe64.source-editor.${id}`].extensions.vibe64.learningAccess, "write", id);
+  }
   const refused = Object.keys(editor).filter(id => !editor[id].extensions.vibe64.learningAccess);
-  for (const id of ["file.save", "file.create", "explanation.create", "explanation.followup", "file-area.upload", "file-area.save",
-    "integrations.setup", "star.set", "file.download"]) assert.equal(refused.includes(`vibe64.source-editor.${id}`), true, id);
+  for (const id of ["file.save", "explanation.create", "explanation.followup", "file-area.upload", "file-area.save",
+    "integrations.setup"]) assert.equal(refused.includes(`vibe64.source-editor.${id}`), true, id);
   const learningAttemptId = randomUUID();
   const context = { vibe64Action: { user: { uid: 42, username: "alice" }, project: null,
     learning: { learningScope: { attemptId: learningAttemptId, noExercise: false } } } };

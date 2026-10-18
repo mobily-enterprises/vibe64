@@ -35,7 +35,11 @@ const LEARNING_ACCESS = Object.freeze({
   "vibe64.source-editor.file.read": "observe",
   "vibe64.source-editor.files.find": "observe",
   "vibe64.source-editor.search": "observe",
-  "vibe64.source-editor.path.resolve": "observe"
+  "vibe64.source-editor.path.resolve": "observe",
+  "vibe64.source-editor.file.download": "observe",
+  "vibe64.source-editor.file.create": "write",
+  "vibe64.source-editor.stars.read": "observe",
+  "vibe64.source-editor.star.set": "write"
 });
 
 function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {

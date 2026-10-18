@@ -33,8 +33,9 @@ path or `other`, status and failure code only—never typed text, bodies, header
 or queries); Main gets at most one hint for it per 30 seconds. A separate Learning watcher checks
 only those validated facts; Colleague manages its controls, while Main receives
 bounded updates and never checks your activity itself. Each observation is
-delivered to Main once. Switching between **Workspace** and **Learning**, and
-between Workspace panes such as **Preview** and **Dashboard**, is observed; a
+delivered to Main once. Switching between the practice project's **Preview** or
+**Dashboard** and the **Learning** tab, and between project panes such as
+**Preview**, **Dashboard → Database** and **Dashboard → Files**, is observed; a
 lesson without a practice project, such as Lesson 0, can be watched too. Stop
 removes the watch without stopping Main, the lesson or the app, and polling grants
 no unrelated mutation permission. For the eye dialog's controls, see
