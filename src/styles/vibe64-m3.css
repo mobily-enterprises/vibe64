@@ -41,16 +41,17 @@
   --v64-state-pressed: 0.1;
   --v64-state-dragged: 0.16;
 
-  /* Type scale */
-  --v64-type-display-sm: 600 2.25rem/2.75rem system-ui, sans-serif;
-  --v64-type-headline-md: 600 1.75rem/2.25rem system-ui, sans-serif;
-  --v64-type-headline-sm: 600 1.5rem/2rem system-ui, sans-serif;
-  --v64-type-title-lg: 600 1.375rem/1.75rem system-ui, sans-serif;
-  --v64-type-title-md: 600 1rem/1.5rem system-ui, sans-serif;
-  --v64-type-body-lg: 400 1rem/1.5rem system-ui, sans-serif;
-  --v64-type-body-md: 400 0.875rem/1.25rem system-ui, sans-serif;
-  --v64-type-label-lg: 500 0.875rem/1.25rem system-ui, sans-serif;
-  --v64-type-label-md: 500 0.75rem/1rem system-ui, sans-serif;
+  /* Type scale (the app font: Vuetify's body font, Roboto) */
+  --v64-font-family: var(--v-font-body, "Roboto", system-ui, sans-serif);
+  --v64-type-display-sm: 600 2.25rem/2.75rem var(--v64-font-family);
+  --v64-type-headline-md: 600 1.75rem/2.25rem var(--v64-font-family);
+  --v64-type-headline-sm: 600 1.5rem/2rem var(--v64-font-family);
+  --v64-type-title-lg: 600 1.375rem/1.75rem var(--v64-font-family);
+  --v64-type-title-md: 600 1rem/1.5rem var(--v64-font-family);
+  --v64-type-body-lg: 400 1rem/1.5rem var(--v64-font-family);
+  --v64-type-body-md: 400 0.875rem/1.25rem var(--v64-font-family);
+  --v64-type-label-lg: 500 0.875rem/1.25rem var(--v64-font-family);
+  --v64-type-label-md: 500 0.75rem/1rem var(--v64-font-family);
 
   /* Focus ring shared by custom (non-Vuetify) controls */
   --v64-focus-ring-width: 2px;
