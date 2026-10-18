@@ -66,6 +66,8 @@ test("current-app and Studio Health inspections resolve current actor and their 
     await direct("vibe64.studio-health.read", {});
     assert.equal(projectChecks, before, "Workspace health remains usable when a selected project is inaccessible.");
     await assert.rejects(direct("vibe64.studio-health.read", { projectSlug: slug }), { code: "ACTION_VALIDATION_FAILED" });
-    assert.deepEqual(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools, []);
+    // Colleague may read Health checks (Lesson 0 and setup help); current-app stays excluded.
+    assert.deepEqual(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools.map(tool => tool.actionId),
+      ["vibe64.studio-health.read"]);
   }));
 });
