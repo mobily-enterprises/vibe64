@@ -76,10 +76,12 @@ explicit command, the installed managed-runtime command remains the default.
 
 Each example keeps its frontend dependency cache under its own state directory.
 Keep that directory between runs so normal restarts can reuse the prepared cache.
-Its Preview sockets also use that writable state directory; the example does not
-need permission to create a system directory under `/run`. When opening the example
-through an HTTPS Preview, its API and conversation connection use the same local
-backend origin. If an already-running example predates a launcher fix, use
+When a host supplies Preview routing and a socket directory, the example retains
+those facilities so its own project outputs remain reachable through that host.
+Each example has a distinct Preview namespace while keeping its session data
+isolated. Standalone runs keep sockets under their writable state directory.
+Its API and conversation connection use a consistent origin through the internal
+proxy, including when opened through HTTPS Preview. If an already-running example predates a launcher fix, use
 **Restart preview** to apply it while retaining its example project and sessions.
 
 For a slow agent startup, a developer can launch with `LOG_LEVEL=debug npm run

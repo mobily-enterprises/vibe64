@@ -94,9 +94,11 @@ The default working copy, isolated state and session source live in ignored
 example working-copy path, `--state-dir` selects its runtime directory, and
 `--host`/`--port` select the loopback frontend listener. The backend gets its own
 OS-assigned port. Vite proxies API and realtime traffic to that backend.
-The proxy normalizes both Origin and forwarded protocol to the backend's local
-origin. Preview socket housekeeping uses `preview-sockets` under the example's
-state directory, independently of the parent's system runtime directory.
+The proxy keeps Origin and protocol local for backend authorization. Its forwarded
+host retains the configured Studio hostname for hosted output routing.
+Hosted Preview routing and socket placement are retained from the host, with a
+per-example routing namespace. Standalone Preview socket housekeeping uses
+`preview-sockets` under the example's state directory.
 The listener can be reached through an authenticated hosting preview proxy.
 The browser connects realtime directly over WebSocket, which supplies the Origin
 header required by hosted cookie authentication. It does not begin with a

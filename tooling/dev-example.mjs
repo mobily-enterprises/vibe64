@@ -67,8 +67,13 @@ async function main() {
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
+  const hostedStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
+    ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
   const sharedTools = new Set(["VIBE64_RUNTIME_PACK_ROOT", "VIBE64_SHARED_CACHE_ROOT",
-    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND"]);
+    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
+    "VIBE64_PUBLIC_USER_DOMAIN", "VIBE64_PUBLIC_PROTOCOL",
+    "VIBE64_PREVIEW_PUBLIC_DOMAIN", "VIBE64_PREVIEW_PUBLIC_PROTOCOL",
+    "VIBE64_PREVIEW_PUBLIC_NAMESPACE", "VIBE64_PREVIEW_PROXY_SOCKET_DIR"]);
   for (const key of Object.keys(process.env)) {
     if (key.startsWith("VIBE64_") && !sharedTools.has(key)) delete process.env[key];
   }
@@ -78,7 +83,8 @@ async function main() {
   process.env.VIBE64_SERVICE_DATA_ROOT = path.join(developmentRoot, "state", "services");
   process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
   process.env.VIBE64_CODEX_ATTACHMENTS_ROOT = path.join(developmentRoot, "state", "attachments");
-  process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR = path.join(developmentRoot, "preview-sockets");
+  process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR ||= path.join(developmentRoot, "preview-sockets");
+  process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE = `${process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE || "example"}-${identity}`;
   await prepareExampleProject(projectRoot);
 
   const { parseStartupArgs } = await import("../bin/server.js");
@@ -100,8 +106,11 @@ async function main() {
   try {
     const apiOrigin = await app.listen({ host: "127.0.0.1", port: 0 });
     process.env.VITE_API_PROXY_TARGET = apiOrigin;
+    // API authorization remains loopback. Only output routing uses the host's
+    // configured Studio hostname; it must not become the backend Origin.
     const proxy = { target: apiOrigin, changeOrigin: true, ws: true,
-      headers: { origin: apiOrigin, "x-forwarded-proto": new URL(apiOrigin).protocol.slice(0, -1) },
+      headers: { origin: apiOrigin, "x-forwarded-host": hostedStudioHost || new URL(apiOrigin).host,
+        "x-forwarded-proto": new URL(apiOrigin).protocol.slice(0, -1) },
       rewriteWsOrigin: true };
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({

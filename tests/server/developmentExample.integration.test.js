@@ -75,7 +75,11 @@ test("the development preview serves its own backend, frontend and project", { t
     cwd: path.resolve(import.meta.dirname, "../.."),
     env: { ...process.env, VIBE64_MANAGED_EXECUTION_REQUIRED: "1", VIBE64_RUNTIME_NAMESPACE: "parent-editor",
       VIBE64_SYSTEM_ROOT: path.join(root, "parent-state"), VIBE64_TARGET_ROOT: "/invalid-parent-project",
-      VIBE64_CLAUDE_COMMAND: claudeCommand, LOG_LEVEL: "debug" },
+      VIBE64_CLAUDE_COMMAND: claudeCommand, LOG_LEVEL: "debug",
+      VIBE64_WORKSPACE: "example", VIBE64_PUBLIC_USER_DOMAIN: "users.example.test",
+      VIBE64_PUBLIC_PROTOCOL: "https", VIBE64_PREVIEW_PUBLIC_DOMAIN: "preview.example.test",
+      VIBE64_PREVIEW_PUBLIC_NAMESPACE: "parent-editor",
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: path.join(root, "host-sockets") },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => { logs += data; });
