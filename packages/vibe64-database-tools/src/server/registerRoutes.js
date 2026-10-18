@@ -52,13 +52,21 @@ function databaseStatusCode(response = {}) {
   return 400;
 }
 
-// A saved lesson reads its practice database through these read operations only.
+// A saved lesson edits its practice database like any project's Database;
+// only the database assistant stays with Working sessions.
 const LEARNING_ROUTE_ACTIONS = new Set([
   ACTION_DATABASE_STATE_READ,
   ACTION_DATABASE_SCHEMA_REFRESH,
   ACTION_DATABASE_QUERY_RUN,
   ACTION_DATABASE_QUERY_CANCEL,
-  ACTION_DATABASE_LOOKUP_SEARCH
+  ACTION_DATABASE_LOOKUP_SEARCH,
+  ACTION_DATABASE_CELL_UPDATE,
+  ACTION_DATABASE_ROW_INSERT,
+  ACTION_DATABASE_ROW_DELETE,
+  ACTION_DATABASE_LAYOUT_SAVE,
+  ACTION_DATABASE_OVERVIEW_SAVE,
+  ACTION_DATABASE_SNIPPET_SAVE,
+  ACTION_DATABASE_SNIPPET_DELETE
 ]);
 
 function registerRoutes(http, {

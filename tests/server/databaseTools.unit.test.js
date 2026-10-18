@@ -1361,24 +1361,13 @@ test("database members can browse, run SQL and use a shared assistant through th
   assert.equal(refusedWrite.ok, false);
   assert.equal(refusedWrite.code, "vibe64_database_write_confirmation_required");
 
-  // A saved lesson reads its practice database; confirmed writes stay refused there.
+  // A saved lesson's practice database is editable like any project's: a
+  // confirmed write runs there and the state offers write access.
   const lessonContext = { slug: "first-project", learningScope: { learnerId: "42",
     attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", pin: {}, noExercise: false } };
-  const lessonWrite = await runWithProjectRequestContext(lessonContext, () => service.runQuery({
-    confirmationDatabase: "catalogue",
-    confirmed: true,
-    queryId: "lesson-write-refused",
-    readOnly: false,
-    sessionId: "service-session",
-    sql: "UPDATE public.books SET title = 'Lesson' WHERE id = 7;",
-    vibe64User: { role: "member", username: "member" },
-    writeUnlocked: true
-  }));
-  assert.equal(lessonWrite.ok, false);
-  assert.equal(lessonWrite.code, "vibe64_database_learning_read_only");
   const lessonState = await runWithProjectRequestContext(lessonContext, () => service.readState({
     sessionId: "service-session", vibe64User: { role: "member", username: "member" } }));
-  assert.equal(lessonState.writeAccess.available, false);
+  assert.equal(lessonState.writeAccess.available, true);
   const lessonRead = await runWithProjectRequestContext(lessonContext, () => service.runQuery({
     queryId: "lesson-read",
     readOnly: true,
@@ -1388,6 +1377,19 @@ test("database members can browse, run SQL and use a shared assistant through th
   }));
   assert.equal(lessonRead.ok, true);
   assert.equal(lessonRead.readOnly, true);
+  assert.equal(JSON.stringify(lessonRead).includes("read-only"), false);
+  const lessonWrite = await runWithProjectRequestContext(lessonContext, () => service.runQuery({
+    confirmationDatabase: "catalogue",
+    confirmed: true,
+    queryId: "lesson-write",
+    readOnly: false,
+    sessionId: "service-session",
+    sql: "UPDATE public.books SET title = 'Lesson' WHERE id = 7;",
+    vibe64User: { role: "member", username: "member" },
+    writeUnlocked: true
+  }));
+  assert.equal(lessonWrite.ok, true);
+  assert.equal(statements.at(-1), "UPDATE public.books SET title = 'Lesson' WHERE id = 7;");
 
   const write = await service.runQuery({
     confirmationDatabase: "catalogue",

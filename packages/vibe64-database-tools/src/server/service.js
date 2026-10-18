@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { currentProjectRequestContext, currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
@@ -64,8 +64,6 @@ function databaseResult(operation) {
     fallbackMessage: "The session database operation failed."
   });
 }
-
-const LEARNING_READ_ONLY_REASON = "Learning shows this lesson's data read-only.";
 
 function databaseError(message, code, details = {}) {
   const error = vibe64Error(message, code);
@@ -414,7 +412,7 @@ function createService({
           schema,
           workspace,
           writeAccess: {
-            available: !currentProjectRequestContext()?.learningScope,
+            available: true,
             confirmationDatabase: context.writeConnection.database,
             unlocked: false
           }
@@ -464,11 +462,6 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const readOnly = input.readOnly !== false;
-        const learning = Boolean(currentProjectRequestContext()?.learningScope);
-        if (!readOnly && learning) {
-          throw databaseError(`${LEARNING_READ_ONLY_REASON} Change data in a Working session.`,
-            "vibe64_database_learning_read_only");
-        }
         const automaticDefault = input.automatic === true && schema.tables.some((table) => (
           String(input.sql || "").trim() === defaultQuery(table, schema.engine)
         ));
@@ -477,18 +470,12 @@ function createService({
         }
         const startedAt = Date.now();
         try {
-          const executed = await executeSessionQuery(context, {
+          const result = await executeSessionQuery(context, {
             queryId: input.queryId,
             readOnly,
             schema,
             sql: input.sql
           });
-          // Learning shows rows only: no cell edit or row delete identities.
-          const result = learning && executed.cellMeta ? {
-            ...executed,
-            cellMeta: executed.cellMeta.map(row => row.map(() => ({ editable: false, reason: LEARNING_READ_ONLY_REASON }))),
-            rowMeta: executed.cellMeta.map(() => [])
-          } : executed;
           if (!automaticDefault) {
             await recordQueryHistory(
               context.store,

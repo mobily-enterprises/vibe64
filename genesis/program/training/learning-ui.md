@@ -486,7 +486,10 @@ rather than that no question is open.
 In a practice lesson the Learning Dashboard pane mounts only the existing
 `Vibe64DatabaseWorkspace` with the saved attempt (`learningDatabaseAvailable` in
 `Vibe64AutopilotView.vue`). Its client uses `/api/learning/<attempt>/vibe64/database`.
-Database tools register lesson-scoped routes for state read, schema refresh, query
-run/cancel and lookup search only; those actions declare `learningAccess`, so the
-original Learning admission resolves the practice session. Under a lesson scope the
-service refuses non-read-only queries and reports write access unavailable.
+Database tools register lesson-scoped routes for every Database operation except
+the database assistant: state read, schema refresh, query run/cancel, lookup
+search, cell update, row insert/delete, ERD layout save, data-overview save and
+snippet save/delete. Those actions declare `learningAccess` (`write` for the data
+and layout changes), so the original Learning admission resolves the practice
+session. The practice database is editable like any project's: the service applies
+the ordinary write-confirmation rules and reports write access available.

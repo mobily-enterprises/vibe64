@@ -94,8 +94,8 @@ The teacher chat stays visible throughout Learning, including after opening a
 lesson or reloading the page. The right side gains **Workspace** and **Learning**
 tabs. **Workspace** reveals the ordinary **Preview**/**Dashboard** tabs. In a
 practice lesson, **Dashboard** shows the practice app's **Database** view: its ERD,
-tables and data, read-only. Running a change to data reports that Learning shows the
-data read-only; change data in a Working session. An app without a database shows
+tables and data, editable like any project's database (see
+[Browse a project's Database](database.md)). An app without a database shows
 "The session Stack does not declare a supported database." A practice lesson's
 **Dashboard** also has a **Code** tab next to **Database**; see "Answering a code
 question" below. Switching between Preview and Dashboard keeps Learning
