@@ -461,8 +461,12 @@ bytes. Readers do not reserve or repair state. An ended start replay returns its
 original target and actual current active attempt without provisioning it.
 `lesson.end` accepts exact attempt/request/revision and restart/discard reason,
 returns the ended target plus actual active state and native replay flag, and
-retains the exercise and all history. It does not Stop, close, archive or delete;
-those are separate existing authorised operations. Neither old replay can retire
+retains the exercise and all history. After the durable end it stops that
+attempt's lesson session through the original session Stop owner
+(`terminals.closeSessionTerminals`, as Archive does), so the session's Codex
+provider and its connection checks are released instead of repeatedly losing
+observation on retired instructions; a replay retries an unconfirmed stop. It
+does not close, archive or delete; those are separate existing authorised operations. Neither old replay can retire
 or reactivate a successor. Preparing a lesson never claims Preview
 is running, and these operations alone do not implement guided assessment.
 `lesson.continue` accepts an ended attempt ID, stable request of at most 18

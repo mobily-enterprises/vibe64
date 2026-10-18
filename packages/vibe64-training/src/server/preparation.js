@@ -48,8 +48,14 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
     // A confirmed end replay may belong to an earlier attempt. It cannot take
     // the active preparation lock, reactivate old work or end its successor.
-    if (attempt?.ended) return learners.endAttempt(input);
-    return learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
+    const ended = attempt?.ended ? await learners.endAttempt(input)
+      : await learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
+    // The durable end retires the teaching instructions, so stop the attempt's
+    // agent work. A replay retries an unconfirmed stop of that same attempt.
+    if (ended?.attempt?.ended && ended.attempt.attemptId === attemptId) {
+      await learningSessions?.stopAttemptSessions({ actor, attemptId });
+    }
+    return ended;
   }
 
   async function continueLesson({ actor, attemptId, requestId, expectedRevision } = {}) {

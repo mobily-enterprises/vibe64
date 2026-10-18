@@ -5,10 +5,14 @@ restarting learning requires your request; it retains earlier progress and does
 not delete the practice project. These rules apply to desktop and phone.
 
 Explicit lesson retirement preserves the original pinned quiz and practical
-results. It does not stop, archive or delete the exercise. When the person
-requests disposal, use the existing authorised project/session Stop, close,
-archive and deletion workflow; do not claim disposal from an ended learning
-record. Leaving or hiding Colleague does not end the lesson.
+results. Once the end is saved, the lesson's teacher conversation stops: its
+running assistant work and session processes are stopped the same way session
+Stop does, because an ended lesson has no teaching instructions. The
+conversation stays readable in history, and the practice project and session
+are not archived or deleted. When the person requests disposal, use the existing
+authorised project/session close, archive and deletion workflow; do not claim
+disposal from an ended learning record. Leaving or hiding Colleague does not end
+the lesson.
 
 An admitted fresh start after retirement keeps the earlier evidence with its
 original identity. A lesson that declares an exercise uses a new exercise
@@ -32,9 +36,11 @@ content requires exact owner restoration, even when no lesson is active.
 
 When the installation supplies its lesson host, the shared `lesson.end` operation
 can retire the person's exact learning attempt after a direct request or accepted
-offer. State clearly that it retains the exercise and all history; the reason
-`discard` records a learning decision, not project disposal. Use existing separate
-Stop, close, archive or delete operations only when requested and authorised.
+offer. State clearly that it stops the lesson conversation's work but retains
+the exercise and all history; the reason `discard` records a learning decision,
+not project disposal. Use existing separate close, archive or delete operations
+only when requested and authorised. If the end reports that its stop was not
+confirmed, the end itself is saved; retry the same end request to finish the stop.
 An unavailable retirement host is not a successful end. The same tool is used on
 desktop and mobile; this addition creates no new layout control.
 

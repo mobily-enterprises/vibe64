@@ -235,6 +235,37 @@ test("ending learning excludes preparation and old end replay cannot acquire a s
   assert.deepEqual(f.calls.map(([name]) => name), ["lock", "end"], "no native Stop/archive/delete or source effects");
 });
 
+test("ending learning stops the ended attempt's agent work after the durable end, and a replay retries it", async t => {
+  const f = await fixture(t);
+  const input = { actor, attemptId, requestId: "end-one", expectedRevision: 1, reason: "discard" };
+  f.owners.learners.readState = async () => ({ progress: { attempts: [f.attempt] } });
+  f.owners.learners.endAttempt = async () => {
+    f.calls.push(["end"]);
+    f.attempt.ended = { requestId: "end-one", revision: 2, reason: "discard" };
+    return { revision: 2, attempt: f.attempt, active: null, replayed: Boolean(f.calls.filter(([name]) => name === "end").length > 1) };
+  };
+  let stopFailure = Object.assign(new Error("Stop is not yet confirmed."), { code: "vibe64_session_stop_failed" });
+  const service = createTrainingService({ ...f.owners, learningSessions: {
+    runPreparationSessionContext: () => assert.fail("Ending does not prepare a session."),
+    async stopAttemptSessions(value) {
+      assert.deepEqual(value, { actor, attemptId });
+      assert.ok(f.attempt.ended, "agent work stops only after the end is durable");
+      f.calls.push(["stop"]);
+      if (stopFailure) throw stopFailure;
+      return { stopped: 1 };
+    }
+  } });
+  await assert.rejects(service.endLesson(input), error => error === stopFailure);
+  assert.deepEqual(f.calls.map(([name]) => name), ["lock", "end", "stop"]);
+  stopFailure = null;
+  const replay = await service.endLesson(input);
+  assert.equal(replay.attempt.ended.reason, "discard");
+  assert.deepEqual(f.calls.map(([name]) => name), ["lock", "end", "stop", "end", "stop"], "the replay retries only this attempt's stop");
+  f.owners.learners.endAttempt = async () => ({ revision: 3, attempt: { attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", ended: f.attempt.ended } });
+  await service.endLesson(input);
+  assert.equal(f.calls.filter(([name]) => name === "stop").length, 2, "a different returned attempt is never stopped");
+});
+
 test("an ended reservation replay is returned without preparing or reactivating its project", async t => {
   const f = await fixture(t);
   f.attempt.ended = { requestId: "end-one", revision: 2, reason: "restart" };

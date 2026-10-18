@@ -69,6 +69,7 @@ import {
   runVibe64AgentWriteExclusive
 } from "../../packages/vibe64-runtime/src/server/agentWriteLock.js";
 import {
+  currentProjectRequestContext,
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -4315,7 +4316,7 @@ async function learningSessionCreationFixture(root, { denied = false, publishFai
   const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
   const learningSessions = createTrainingLearningSessions({ learners, teachingBrief, project, sessions: service });
   return { actor, scope, context, events, createdInputs, publications, nativeMessages, project, service,
-    trainingState, teachingBrief, learningSessions, get runtime() { return runtime; } };
+    trainingState, teachingBrief, learners, learningSessions, get runtime() { return runtime; } };
 }
 
 test("trusted no-exercise learning creation reuses real Project Runtime and original routing, metadata and publication without source effects", async () => {
@@ -4843,6 +4844,40 @@ test("saved learning collection uses the original exact summary reader without c
   });
 });
 
+
+test("ending a no-exercise attempt stops its saved conversation through the original session Stop owner and keeps its history", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await learningSessionCreationFixture(root);
+    const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+    const stops = [];
+    const terminals = { async closeSessionTerminals(sessionId, options) {
+      const context = currentProjectRequestContext();
+      stops.push({ sessionId, session: options.session, scope: context.learningScope, root: context.projectRuntimeRoot });
+      return { ok: true, closed: 1 };
+    } };
+    const owner = () => createTrainingLearningSessions({ learners: f.learners, teachingBrief: f.teachingBrief, project: f.project,
+      sessions: f.service, terminals });
+    f.trainingState.active = false;
+    assert.deepEqual(await owner().stopAttemptSessions({ actor: f.actor, attemptId: f.scope.attemptId }), { stopped: 0 },
+      "a lesson that never opened its conversation has no agent work");
+    f.trainingState.active = true;
+    const created = await f.learningSessions.openSession({ actor: f.actor, attemptId: f.scope.attemptId });
+    assert.equal(created.ok, true, created.error);
+    f.trainingState.active = false;
+    assert.deepEqual(await owner().stopAttemptSessions({ actor: f.actor, attemptId: f.scope.attemptId }), { stopped: 1 });
+    assert.equal(stops.length, 1);
+    assert.equal(stops[0].sessionId, `learning-${f.scope.attemptId}`);
+    assert.equal(stops[0].session.sessionId, created.sessionId);
+    assert.deepEqual(stops[0].scope, f.scope);
+    assert.equal(stops[0].root, f.context.projectRuntimeRoot);
+    const retained = await runWithProjectRequestContext(f.context, async () =>
+      (await f.project.createRuntime({ inspectSource: false })).store.readSessionSummary(created.sessionId));
+    assert.equal(retained.status, created.status, "Stop does not archive or delete the retained conversation");
+    terminals.closeSessionTerminals = async () => ({ ok: false, code: "vibe64_session_stop_failed", error: "Stop unconfirmed." });
+    await assert.rejects(owner().stopAttemptSessions({ actor: f.actor, attemptId: f.scope.attemptId }), { code: "vibe64_session_stop_failed" });
+    assert.equal(f.nativeMessages.length, 0);
+  });
+});
 
 test("the original Sessions Feature registers a separate internal teaching WRITE grant without changing its observe catalogue", async () => {
   await withTemporaryRoot(async root => {

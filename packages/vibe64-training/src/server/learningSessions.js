@@ -394,6 +394,41 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     });
   }
 
+  // An ended attempt can no longer supply teaching instructions, so its saved
+  // conversation's agent work cannot continue. Stop it through the original
+  // session Stop owner that Archive uses; the session, history and any
+  // practice project remain. A missing or archived session has no live work.
+  async function stopAttemptSessions({ actor, attemptId } = {}) {
+    if (typeof terminals?.closeSessionTerminals !== "function") return { stopped: 0 };
+    let context;
+    try { context = await resolveContext({ actor, attemptId, access: "control" }); }
+    catch (error) {
+      if (error.code === "VIBE64_TRAINING_SESSION_REQUIRED" || error.code === "vibe64_session_not_found") return { stopped: 0 };
+      throw error;
+    }
+    const sessionId = context.learningScope.noExercise ? `learning-${attemptId}`
+      : (await learners.readExerciseProjectScope({ actor, attemptId })).initialSessionId;
+    const run = async () => {
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      if (session.archived === true || session.status === "archived") return { stopped: 0 };
+      const result = await terminals.closeSessionTerminals(sessionId, { session });
+      if (result?.ok === false) {
+        throw learningError(result.code || "VIBE64_TRAINING_SESSION_STOP_FAILED",
+          result.error || "The ended lesson's assistant could not be stopped. Retry the same end request.");
+      }
+      return { stopped: 1 };
+    };
+    try {
+      return await (context.learningScope.noExercise
+        ? runWithProjectRequestContext(context, run)
+        : context.runLearningOperation(run));
+    } catch (error) {
+      if (error.code === "vibe64_session_not_found") return { stopped: 0 };
+      throw error;
+    }
+  }
+
   async function guideTask({ actor, actorId, attemptId, sessionId, guidanceId, requestContext, task, evidence } = {}) {
     if (typeof terminals?.openBrowserConversation !== "function") {
       throw learningError("VIBE64_TRAINING_POLLING_GUIDANCE_UNAVAILABLE", "This installation cannot open the saved Main teacher conversation.");
@@ -423,7 +458,8 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       : context.runLearningOperation(run);
   }
 
-  return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions, guideTask, runPreparationSessionContext });
+  return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions, guideTask, runPreparationSessionContext,
+    stopAttemptSessions });
 }
 
 // Ordinary local Project pages open only this person's own saved lesson
