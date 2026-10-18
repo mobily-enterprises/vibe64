@@ -80,3 +80,10 @@ it cannot repair native provider state through this usage guide.
 
 This policy concerns ordinary Main chat. Learning's tool-bound context, temporary
 chat context copying and Colleague's own history policy are separate.
+
+While Claude is working, you can send a follow-up to steer the same conversation.
+Updated project guidance is applied when a later turn starts idle; it must not
+block an ordinary follow-up or restart active work. Account changes and explicit
+model settings still use their existing checks. If a message shows an error,
+keep its text and use **Retry** after the reported problem is resolved; a failed
+message does not mean Claude has stopped its previous task.

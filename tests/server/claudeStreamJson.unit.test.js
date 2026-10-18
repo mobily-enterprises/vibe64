@@ -1711,6 +1711,8 @@ test("main Claude binds the actual provider once and adopts its original receipt
   assert.equal(first.delivered, true);
   assert.equal(callbackThread, state.thread.id);
   assert.equal(first.conversationTurn.messages[0].messageId, "bound-first");
+  // Ordinary steering must not reinstall refreshed project guidance mid-turn.
+  f.providerOptions.env.VIBE64_HOST_AGENT_GUIDANCE = "Updated host guidance for the next idle turn.";
   const second = await f.provider.sendMessage({ ...f.context, vibe64User: { username: "second", role: "owner" } }, {
     message: "Guide", messageId: "bound-second"
   });
@@ -1750,6 +1752,11 @@ test("main Claude binds the actual provider once and adopts its original receipt
   assert.equal(JSON.parse(metadata.assistant_changeover).engines.claude.pending, undefined);
   assert.equal(turns.some(turn => turn.metadata.runtime), false, "original rows receive no common runtime annotation");
   assert.equal(events.some(event => Object.hasOwn(event, "nativeResult") || Object.hasOwn(event, "session")), false);
+  await f.provider.sendMessage(f.context, { message: "Next idle turn", messageId: "bound-third" });
+  assert.equal(f.processes.length, 2, "idle admission installs the deferred guidance");
+  assert.equal(f.processes[0].stopped, true);
+  assert.equal(f.processes[1].options.sessionId, f.processes[0].options.sessionId);
+  assert.match(f.processes[1].options.instructionArguments[1], /Updated host guidance for the next idle turn/);
 });
 
 test("main Claude preserves a native-only duplicate without inventing a canonical authored receipt", { timeout: 15000 }, async t => {
