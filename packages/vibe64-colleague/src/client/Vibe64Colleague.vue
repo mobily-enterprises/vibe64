@@ -884,17 +884,18 @@ onBeforeUnmount(() => {
     </aside>
   </Teleport>
   <v-dialog v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Watches and assignments">
-    <v-card>
-      <v-card-title class="d-flex align-center text-title-large">
+    <v-card class="vibe64-colleague__watch-dialog">
+      <v-card-title class="vibe64-colleague__watch-title d-flex align-center text-title-large">
+        <span class="vibe64-colleague__watch-badge" aria-hidden="true"><v-icon :icon="mdiEyeOutline" size="22" /></span>
         <span class="flex-grow-1">Watches and assignments</span>
         <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__watch-details">
-        <section v-if="learningTask" aria-label="Current learning task polling">
+        <section v-if="learningTask" class="vibe64-colleague__watch-card vibe64-colleague__watch-card--learning" aria-label="Current learning task polling">
           <p class="text-title-medium">Current learning task</p>
           <template v-if="learningWatch">
-            <p><strong>{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.question }}</p>
-            <p>{{ learningWatch.projectSlug || 'Source-less lesson' }} · {{ learningWatch.sessionId }}</p>
+            <p><strong class="vibe64-colleague__watch-chip" :data-status="learningWatch.status">{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.question }}</p>
+            <p class="vibe64-colleague__watch-meta">{{ learningWatch.projectSlug || 'Source-less lesson' }} · {{ learningWatch.sessionId }}</p>
             <p v-if="learningWatch.latestObservation">
               Latest: {{ learningWatch.latestObservation.control }} · {{ learningWatch.latestObservation.workspace?.learningView }}
               · {{ learningWatch.latestObservation.workspace?.pane || 'no pane' }}
@@ -912,13 +913,13 @@ onBeforeUnmount(() => {
             <p v-if="learningWatch.error" class="text-error">{{ learningWatch.error }}</p>
             <div class="d-flex flex-wrap ga-1">
               <v-btn
-                v-if="learningWatch.status === 'active' || learningWatch.status === 'pending'" variant="text" min-height="48"
+                v-if="learningWatch.status === 'active' || learningWatch.status === 'pending'" variant="tonal" color="primary" min-height="48"
                 @click="changeWatch(learningWatch, 'pause')"
               >
                 Pause
               </v-btn>
               <v-btn
-                v-if="learningWatch.status === 'paused'" variant="text" min-height="48"
+                v-if="learningWatch.status === 'paused'" variant="tonal" color="primary" min-height="48"
                 @click="changeWatch(learningWatch, 'resume')"
               >
                 Resume
@@ -944,12 +945,12 @@ onBeforeUnmount(() => {
             </v-btn>
           </template>
         </section>
-        <section v-if="conversationWatches.length" aria-label="Conversation watches">
+        <section v-if="conversationWatches.length" class="vibe64-colleague__watch-card" aria-label="Conversation watches">
           <p class="text-title-medium">Conversation watches ({{ conversationWatches.length }})</p>
           <ul>
             <li v-for="item in conversationWatches" :key="item.watchId">
               <div>
-                <strong>{{ item.projectSlug || 'Workspace' }}</strong> · {{ item.status }}
+                <strong>{{ item.projectSlug || 'Workspace' }}</strong> · <span class="vibe64-colleague__watch-chip" :data-status="item.status">{{ item.status }}</span>
                 <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
               </div>
               <div class="d-flex flex-wrap ga-1">
@@ -959,7 +960,7 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </section>
-        <section v-if="assignments.length" aria-label="Ongoing assignments">
+        <section v-if="assignments.length" class="vibe64-colleague__watch-card" aria-label="Ongoing assignments">
           <p class="text-title-medium">Ongoing assignments ({{ assignments.length }})</p>
           <ul>
             <li v-for="item in assignments" :key="item.assignmentId">
@@ -968,7 +969,7 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </section>
-        <p v-if="!learningTask && !watches.length && !assignments.length" role="status">No ongoing watches or assignments.</p>
+        <p v-if="!learningTask && !watches.length && !assignments.length" class="vibe64-colleague__watch-empty" role="status">No ongoing watches or assignments.</p>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -1067,12 +1068,27 @@ onBeforeUnmount(() => {
   .vibe64-colleague__voice-tools :deep(.v-btn),
   .vibe64-colleague :deep(.assistant-conversation__avatar-size) { min-width: 48px !important; min-height: 48px !important; }
 }
-.vibe64-colleague__watch-details { padding: 16px; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
-.vibe64-colleague__watch-details section + section { margin-top: 16px; }
-.vibe64-colleague__watch-details ul { list-style: none; padding: 0; }
+.vibe64-colleague__watch-dialog { border-radius: var(--v64-shape-xl, 28px); background: var(--v64-surface-container-low, rgb(var(--v-theme-surface))); }
+.vibe64-colleague__watch-title { gap: 12px; padding: 20px 16px 8px 24px; }
+.vibe64-colleague__watch-badge { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14)); color: var(--v64-on-primary-container, rgb(var(--v-theme-primary))); }
+.vibe64-colleague__watch-details { padding: 8px 24px 24px; min-height: 0; overflow: auto; overflow-wrap: anywhere; font: var(--v64-type-body-md, inherit); }
+.vibe64-colleague__watch-details p { margin-block: 0 8px; }
+.vibe64-colleague__watch-card { padding: 16px; border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), .12)); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface)); }
+.vibe64-colleague__watch-card--learning { border-color: color-mix(in srgb, var(--v64-learning, #f5c518) 45%, rgb(var(--v-theme-surface))); background: var(--v64-learning-tint, rgb(var(--v-theme-surface))); }
+.vibe64-colleague__watch-card > .text-title-medium { margin-bottom: 12px; }
+.vibe64-colleague__watch-details section + section { margin-top: 12px; }
+.vibe64-colleague__watch-details ul { list-style: none; padding: 0; margin: 0; }
 .vibe64-colleague__watch-details li { padding-block: 12px; }
-.vibe64-colleague__watch-details li + li { border-top: 1px solid rgb(var(--v-theme-outline-variant)); }
+.vibe64-colleague__watch-details li + li { border-top: 1px solid var(--v64-outline-variant, rgb(var(--v-theme-outline-variant))); }
+.vibe64-colleague__watch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--v64-shape-sm, 8px); background: var(--v64-surface-container-high, rgba(var(--v-theme-on-surface), .08)); font: var(--v64-type-label-md, 500 .75rem/1rem system-ui, sans-serif); text-transform: capitalize; }
+.vibe64-colleague__watch-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v64-on-surface-variant, currentColor); }
+.vibe64-colleague__watch-chip[data-status="active"] { background: var(--v64-success-container); }
+.vibe64-colleague__watch-chip[data-status="active"]::before { background: var(--v64-success); }
+.vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning, #f5c518); }
+.vibe64-colleague__watch-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
+.vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: var(--v64-on-surface-variant); }
 .vibe64-colleague__watch-criteria { margin-top: 12px; }
+.vibe64-colleague__watch-criteria summary { min-height: 40px; align-content: center; cursor: pointer; }
 .vibe64-colleague__watch-criteria p { white-space: pre-wrap; }
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
