@@ -45,6 +45,7 @@ import { startResourceWorkflow } from "./resourceWorkflow.js";
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
+const CONNECTED_PREPARATION_LABEL = "Preparing connected projects";
 
 function diagnosticText(diagnostics = []) {
   return (Array.isArray(diagnostics) ? diagnostics : [])
@@ -601,10 +602,39 @@ function createWorkspaceSetupRunner({
       });
     }
 
+    const run = {
+      migrationStartedAt, migrationTranscript, projectContext, renewal, retry,
+      runKey, runtime, session, sessionId, setup, sourcePath, stateBase
+    };
+    if (runtime.learningScope || !setup?.connectedDevelopment || retry !== true) return startRecipe(run);
+    // A requested run prepares connected projects in the background: they
+    // can take minutes, and the session shows each step while it runs.
+    const startedAt = migrationStartedAt || stateTimestamp(clock);
+    const currentLabel = CONNECTED_PREPARATION_LABEL;
+    const state = await persist(runtime, sessionId, {
+      ...stateBase, currentLabel, diagnostic: "", finishedAt: "", startedAt, status: "running"
+    }, renewal);
+    const begin = () => startRecipe({
+      ...run,
+      onProgress: label => persist(runtime, sessionId, {
+        ...stateBase, currentLabel: safeSetupLabel(label), diagnostic: "", finishedAt: "", startedAt, status: "running"
+      }, renewal)
+    }).then(next => next.completion || next.state);
+    const completion = observe(sessionId, projectContext ? runWithProjectRequestContext(projectContext, begin) : begin(), {
+      currentLabel, recipeHash: "", redactionSecrets: [], renewal, projectContext,
+      runtime, runKey, startedAt, transcript: stateBase.transcript
+    });
+    return { completion, state };
+  }
+
+  async function startRecipe({
+    migrationStartedAt, migrationTranscript, onProgress = null, projectContext, renewal, retry,
+    runKey, runtime, session, sessionId, setup, sourcePath, stateBase
+  }) {
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
         if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
-        const prepared = await connectedPreparation({ mode: "prepare", runtime, session });
+        const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
         session = await runtime.getSession(sessionId, { inspectSource: false });
         setup = await inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });

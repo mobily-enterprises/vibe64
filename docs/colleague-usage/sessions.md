@@ -8,6 +8,14 @@ pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
 opens the new session. If creation fails, review the error and retry or dismiss
 the dialog. This works the same way on desktop and mobile.
 
+For a project with connected projects, the dialog closes once the session's own
+source is ready. The session then shows **Preparing workspace…** while Vibe64
+prepares the connected projects together, naming those still in progress (for
+example **Preparing connected projects: jskit-ai, genesis (1 of 3 ready)**),
+followed by the project's setup steps. The assistant can start when preparation
+finishes; see [Prepare a session after updating its source](workspace-preparation.md)
+for failures and retry.
+
 Creation through an action without an explicit AI choice uses the first available
 workflow from the same picker. An explicit choice is preserved even when it is
 unavailable: fix its account or Model routing settings before retrying. Colleague

@@ -294,6 +294,9 @@ function createService({
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
     env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}`, undefined, "GET"),
+  inspectConnectedBranch = (fullName, branch, input) => githubApi(input, {
+    env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
+  })(`repos/${fullName}/branches/${encodeURI(branch)}`, undefined, "GET", { allowNotFound: true }),
   inspectCollaboration = inspectGenesisCollaboration,
   inspectEngineering = inspectGenesisEngineering,
   inspectEnvironment = inspectGenesisEnvironment,
@@ -1511,10 +1514,11 @@ function createService({
       if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
         `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
       const integrationBranch = current.repository.defaultBranch;
-      const listed = await repositoryBranches(current, { ...input, name: integrationBranch, limit: 1 }, { env });
-      const branch = listed.branches.find(item => item.name === integrationBranch);
-      if (!branch) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
-      return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit };
+      // Read only the integration branch; listing every branch made each
+      // connected session start page through the whole repository.
+      const branch = await inspectConnectedBranch(repository, integrationBranch, input);
+      if (!branch?.commit?.sha) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
+      return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit.sha };
     },
     async readRepositoryWorkflow() {
       return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());

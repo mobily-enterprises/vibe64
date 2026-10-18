@@ -188,6 +188,52 @@ test("workspace preparation executes declared argv in order through the managed 
 });
 
 
+test("a requested connected preparation returns at once and records each progress step", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const stored = async () => workspaceSetupStateFromMetadata(
+      (await runtime.store.readSession(session.sessionId)).metadata
+    );
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let preparations = 0;
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
+      async finishWorkflow() {},
+      inspect: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" } }),
+      async connectedPreparation({ mode, onProgress }) {
+        if (mode === "inspect") return { inputsHash: "sha256:connected", sourceRoots: [] };
+        preparations += 1;
+        await onProgress("Preparing connected projects: library (1 of 2 ready)");
+        await gate;
+        return { ok: true };
+      },
+      projectService: {
+        async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
+      },
+      async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
+    });
+
+    const started = await runner.start({ retry: true, runtime, session });
+    assert.equal(started.state.status, "running");
+    assert.equal(started.state.currentLabel, "Preparing connected projects");
+    assert.equal(runner.isRunning(session.sessionId), true);
+    const again = await runner.start({ retry: true, runtime, session });
+    assert.equal(again.completion, started.completion, "a repeated start joins the running preparation");
+    while ((await stored()).currentLabel !== "Preparing connected projects: library (1 of 2 ready)") {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal((await stored()).status, "running");
+
+    release();
+    const finished = await started.completion;
+    assert.equal(finished.status, "succeeded");
+    assert.equal(preparations, 1);
+    assert.equal(runner.isRunning(session.sessionId), false);
+    assert.equal((await stored()).status, "succeeded");
+  });
+});
+
 for (const [phase, change] of ["environment preparation", "admission"].flatMap((phase) =>
   ["command", "removed setup", "estimates", "removed estimates", "invalid estimates"].map((change) => [phase, change]))) {
   test(`workspace preparation rechecks ${change} after ${phase} before execution`, async () => {

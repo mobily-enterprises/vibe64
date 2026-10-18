@@ -964,11 +964,17 @@ function createService({
     });
   }
 
-  async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input = {}, requestContext = {}) {
+  async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input = {}, requestContext = {}, {
+    onProgress = null
+  } = {}) {
     const sessionId = session.sessionId;
     const prepared = [];
     const resolvedSources = [];
     let preparingRepository = "";
+    let progress = Promise.resolve();
+    const report = label => {
+      if (typeof onProgress === "function") progress = progress.then(() => onProgress(label)).catch(() => {});
+    };
     const result = await sessionResult(async () => {
       assertProjectEffectAdmission();
       const origin = currentProjectRequestContext();
@@ -979,10 +985,20 @@ function createService({
       }
       const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
       const sources = sessionConnectedSources(session);
-      for (const target of targets) {
-        preparingRepository = target.repository;
-        if (target.projectSlug === origin.slug) throw Object.assign(new Error(
+      const self = targets.find(target => target.projectSlug === origin.slug);
+      if (self) {
+        preparingRepository = self.repository;
+        throw Object.assign(new Error(
           "A project cannot prepare itself as a connected contribution."), { code: "vibe64_connected_source_self_reference" });
+      }
+      const names = targets.map(target => target.repository.split("/").pop());
+      if (targets.length) report(`Preparing connected projects: ${names.join(", ")}`);
+      const remaining = new Set(names);
+      let reservation = Promise.resolve();
+      // Connected projects are independent, so each one is prepared at the same
+      // time. Reservations are written one at a time, each with every binding
+      // reserved so far; results are still reported in target order.
+      const allocated = await Promise.allSettled(targets.map(async (target, index) => {
         const repository = target.repository.slice("https://github.com/".length);
         const source = await executeConnectedAction(target.projectSlug, "vibe64.sessions.connected.source", {}, requestContext);
         if (source.repository !== repository) throw Object.assign(new Error(
@@ -1000,16 +1016,30 @@ function createService({
             schemaVersion: 1, id: crypto.randomUUID(), ...source
           } };
           sources.push(binding);
-          const serialized = JSON.stringify({ schemaVersion: 1, sources });
-          sessionConnectedSources({ metadata: { connected_sources: serialized } });
           // Reserve the exact identity before creation, so a lost response or
           // partial preparation retries the same source instead of cloning again.
-          await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
+          const write = reservation.then(() => {
+            const serialized = JSON.stringify({ schemaVersion: 1, sources });
+            sessionConnectedSources({ metadata: { connected_sources: serialized } });
+            return runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
+          });
+          reservation = write.catch(() => {});
+          await write;
         }
         const result = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
           contribution: binding.contribution,
           workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId
         }, requestContext);
+        remaining.delete(names[index]);
+        if (remaining.size) {
+          report(`Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`);
+        }
+        return { repository, binding, result };
+      }));
+      for (const [index, target] of targets.entries()) {
+        preparingRepository = target.repository;
+        if (allocated[index].status === "rejected") throw allocated[index].reason;
+        const { repository, binding, result } = allocated[index].value;
         if (result?.ok === false) return { ...result, prepared };
         prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: result.sessionId,
           sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup });
@@ -1020,6 +1050,7 @@ function createService({
         };
         resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: result });
       }
+      if (targets.length) report("Linking connected sources");
       preparingRepository = "";
       const development = await project.prepareConnectedDevelopmentInputs({
         session: await runtime.getSession(sessionId, { inspectSource: false }),
@@ -1028,6 +1059,7 @@ function createService({
       });
       return { ok: true, prepared, development };
     });
+    await progress;
     return result?.ok === false ? {
       ...result, prepared,
       ...(preparingRepository ? { failedRepository: preparingRepository } : {})
@@ -2443,10 +2475,19 @@ function createService({
       });
     }
   });
-  terminals.setConnectedPreparation?.(async ({ mode, runtime, session }) => {
+  terminals.setConnectedPreparation?.(async ({ mode, runtime, session, onProgress = null }) => {
     const requestContext = { requestMeta: currentProjectActionRequestMeta() };
+    // Each progress label is saved by workspace setup, then published so the
+    // open session shows which connected projects are still being prepared.
+    const progress = typeof onProgress === "function" ? async label => {
+      await onProgress(label);
+      await publishSessionChanged(session.sessionId, {
+        operation: "updated", reason: "workspace-setup-progress",
+        session: await runtime.getSession(session.sessionId, { inspectSource: false })
+      });
+    } : null;
     return mode === "prepare"
-      ? prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext)
+      ? prepareConnectedSourcesInsideAgentWrite({ runtime, session }, {}, requestContext, { onProgress: progress })
       : service.inspectConnectedDevelopmentInputs(session.sessionId, {}, requestContext);
   });
   return service;

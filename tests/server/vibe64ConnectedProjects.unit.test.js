@@ -83,6 +83,25 @@ test("Incoming integration checks fresh receiving write access and the existing 
   });
 });
 
+test("a contribution source reads only the receiving integration branch", async () => {
+  await withTemporaryRoot(async root => {
+    const context = createStudioProjectContext({ explicitTargetRoot: root, explicitSystemRoot: path.join(root, "system"), home: root });
+    const current = { slug: "receiving", path: root, repositoryMode: "github",
+      repository: { mode: "github", defaultBranch: "release/main" }, githubRepository: { fullName: "Example/Library" } };
+    const reads = [];
+    let branch = { name: "release/main", commit: { sha: "a".repeat(40) } };
+    const project = createService({ env: {}, projectContext: { ...context,
+      listProjects: async () => ({ currentProject: current, projects: [current] }) },
+      inspectConnectedRepository: async () => ({ permissions: { push: true } }),
+      inspectConnectedBranch: async (name, branchName) => { reads.push([name, branchName]); return branch; } });
+    assert.deepEqual(await project.connectedContributionSource({}),
+      { repository: "example/library", integrationBranch: "release/main", baseCommit: "a".repeat(40) });
+    assert.deepEqual(reads, [["Example/Library", "release/main"]]);
+    branch = null;
+    await assert.rejects(project.connectedContributionSource({}), { code: "vibe64_incoming_target_missing" });
+  });
+});
+
 test("connection reads do not create files; writes preserve concurrent edits and malformed source", async () => {
   await withTemporaryRoot(async (root) => {
     const file = path.join(root, "vibe64.connections.json");

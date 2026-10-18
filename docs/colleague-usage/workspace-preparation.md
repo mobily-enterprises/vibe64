@@ -16,6 +16,12 @@ preparation notice. It runs the complete current recipe, including declared
 database steps and connected-source Prepare/Verify commands. It is unavailable
 while another assistant or repository operation is active, or for archived sessions.
 
+A new session with connected projects starts preparation automatically. Its
+first step, **Preparing connected projects**, creates or reuses each connected
+project's contribution session at the same time and lists the ones still in
+progress. If one fails, the notice names that repository; earlier prepared
+sources are kept and **Retry** reuses them instead of copying them again.
+
 A successful result records the previous recipe execution. It does not prove
 that custom compiled outputs still match later source or script edits. Rerun
 preparation explicitly after those edits when the project needs rebuilt outputs;

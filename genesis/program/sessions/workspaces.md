@@ -115,6 +115,13 @@ selection for the declared preparation recipe. Connected-first Save publishes
 those owned contributions sequentially and leaves the main push to a separate
 action.
 
+Connected projects are prepared concurrently: each target resolves its receiving
+source, reserves its binding and allocates its session independently. Binding
+reservations are written one at a time, each containing every binding reserved
+so far. Results are still evaluated in target order, so the first failing
+repository is reported and earlier prepared sources are retained. The receiving
+source reads only its integration branch from GitHub, not the full branch list.
+
 Every new connected binding reserves a fresh contribution UUID. Its receiving
 session starts without the origin's connected-source or submission metadata;
 receiving allocation does not recursively prepare more connections. Explicitly

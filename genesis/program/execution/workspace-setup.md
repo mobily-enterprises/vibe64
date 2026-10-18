@@ -65,6 +65,14 @@ accepting a cached success. Those authorized roots enter the existing execution
 request; the map itself grants no filesystem authority. Node.js consumption
 has a focused real npm/import proof; other toolchains remain unproven.
 
+A requested run (session creation, Prepare or Retry) with connected development
+first saves a running `Preparing connected projects` state and returns; the
+allocation and the rest of the recipe continue in the observed background run,
+so creating a session no longer waits for every connected checkout. Sessions
+reports which connected projects remain through that running label and publishes
+each change. An unrequested start keeps cached-success reuse and runs the same
+preparation inline.
+
 Working-session preparation and explicit Prepare/Retry consume the existing
 project connection file. They never create that file or import connections from
 Stack. Settings or ordinary source editing owns changes to the connection list.
