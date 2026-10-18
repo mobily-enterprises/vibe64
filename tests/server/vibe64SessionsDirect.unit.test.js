@@ -2305,7 +2305,8 @@ test("native Save rejects every active provider state before touching Git", asyn
               sessionId: "session-1",
               status: "active"
             };
-          }
+          },
+          store: { async readBackgroundTask() { return null; } }
         };
       }
     },
