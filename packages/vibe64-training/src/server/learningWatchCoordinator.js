@@ -74,8 +74,10 @@ function createTrainingLearningWatchSource(actions) {
         details: { task, latestObservation: latest } };
     },
     notify(watch, pending, context) {
+      // The eventId only deduplicates observations inside the watch; Main receives the evidence itself.
+      const { eventId: _eventId, ...evidence } = pending.evidence;
       return actions.execute({ actionId: "vibe64.training.polling.guide",
-        input: { ...learningInput(watch), guidanceId: pending.guidanceId, evidence: pending.evidence }, context });
+        input: { ...learningInput(watch), guidanceId: pending.guidanceId, evidence }, context });
     }
   });
 }

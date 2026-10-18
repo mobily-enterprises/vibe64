@@ -210,10 +210,13 @@ test("learning watch polling reads its exact attempt owner without replacing ord
   assert.equal(reads.length, 1);
   const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
     failure: "workspace-settle-failed", workspace: { projectSlug, sessionId, pane: "preview", ready: false, learningView: "learning" } };
-  assert.deepEqual(await source.notify(watch, { guidanceId: "same-task-guide", evidence }, context), { ok: true, status: "accepted" });
+  // The coordinator's pending evidence keeps the observation's eventId; Main receives the evidence without it.
+  assert.deepEqual(await source.notify(watch, { guidanceId: "same-task-guide", evidence: { eventId: "event-one", ...evidence } }, context),
+    { ok: true, status: "accepted" });
   assert.equal(reads.length, 2);
   assert.equal(guidance.length, 1);
   assert.equal(guidance[0].attemptId, attemptId);
+  assert.deepEqual(guidance[0].evidence, evidence);
   allowed = false;
   await assert.rejects(source.read(watch, context), { code: "vibe64_owner_required" });
   await assert.rejects(source.notify(watch, { guidanceId: "revoked-guide", evidence }, context), { code: "vibe64_owner_required" });
