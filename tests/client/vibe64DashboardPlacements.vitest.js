@@ -29,7 +29,7 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(8);
+    expect(labels).toHaveLength(9);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
@@ -38,6 +38,7 @@ describe("Vibe64 dashboard placements", () => {
       "Issues/PR",
       "Project settings",
       "Git log",
+      "Incoming changes",
       "Session History"
     ]));
     expect(labels).not.toContain("Configure");
