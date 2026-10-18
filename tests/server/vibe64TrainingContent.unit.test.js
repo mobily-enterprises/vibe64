@@ -77,6 +77,29 @@ test("content rejects missing rubrics, invalid producer/check references and uns
   }
 });
 
+test("an exercise lesson may declare a small list of in-app request routes for Learning watches", async t => {
+  const f = await fixture(t);
+  const appRoutes = [{ method: "POST", path: "/api/notes" }, { method: "DELETE", path: "/api/notes/:id" }];
+  await f.write("training/lessons/LESSON-01/lesson.json", { ...f.lesson, appRoutes });
+  const bundle = (await validateTopic(f.root)).bundles[0];
+  assert.deepEqual(bundle.lesson.appRoutes, appRoutes);
+  const cases = [
+    [lesson => { delete lesson.exercise; delete lesson.checks; lesson.assessments = [lesson.assessments[0]]; },
+      /declare app routes only with its exercise/u],
+    [lesson => lesson.appRoutes = [{ method: "GET", path: "/api/notes" }], /validation/iu],
+    [lesson => lesson.appRoutes = [{ method: "POST", path: "/api/notes?draft=1" }], /validation/iu],
+    [lesson => lesson.appRoutes = [{ method: "POST", path: "/api/notes/" }], /app route path/u],
+    [lesson => lesson.appRoutes = [{ method: "POST", path: "/api/:noteId" }], /app route path/u],
+    [lesson => lesson.appRoutes = [appRoutes[0], { ...appRoutes[0] }], /duplicate app route/u]
+  ];
+  for (const [change, expected] of cases) {
+    const lesson = structuredClone({ ...f.lesson, appRoutes });
+    change(lesson);
+    await f.write("training/lessons/LESSON-01/lesson.json", lesson);
+    await assert.rejects(() => validateTopic(f.root), expected);
+  }
+});
+
 test("topic files cannot escape the root through relative paths, absolute paths or symlinks", async t => {
   const f = await fixture(t);
   for (const document of ["../../../../outside.md", "/etc/passwd", "https://example.com/lesson.md"]) {

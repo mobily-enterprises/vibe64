@@ -99,6 +99,9 @@ push, remote release, installation or course enabling.
 
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.
+Optional `appRoutes` (exercise lessons only, ≤16 unique `{method,path}` with
+literal or `:id` segments) are projected into the teaching brief and polling task
+so a Learning watch can label a failed in-app request; they never grade.
 A `code` producer also requires a bundled exercise, a `kind:"code"` check and
 1–8 unique, safe exercise-relative `files` that are bundled exercise files; only
 code evidence may name files or a code check, and `timeoutSeconds` (1–60) is

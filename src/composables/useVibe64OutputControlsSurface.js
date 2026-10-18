@@ -8,6 +8,7 @@ import {
   useVibe64OutputControls
 } from "@/composables/useVibe64OutputControls.js";
 import {
+  PREVIEW_APP_REQUEST_MESSAGE_TYPE,
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
@@ -1178,12 +1179,32 @@ function useVibe64OutputControlsSurface(props) {
       projectSlug.value === channel.projectSlug && Boolean(previewUrl.value);
   }
 
-  function orientationFrameVisible(channel) {
-    return orientationFrameCurrent(channel) && previewFrameLoaded.value && previewPaneDisplayed.value &&
+  function previewFrameVisible(frame) {
+    return Boolean(frame) && previewFrameLoaded.value && previewPaneDisplayed.value &&
       props.windowDisplayed !== false && document.visibilityState === "visible" &&
-      Boolean(previewVisibleViewportRect(channel.frame.getBoundingClientRect(), {
+      Boolean(previewVisibleViewportRect(frame.getBoundingClientRect(), {
         width: window.innerWidth, height: window.innerHeight
       }));
+  }
+
+  function orientationFrameVisible(channel) {
+    return orientationFrameCurrent(channel) && previewFrameVisible(channel.frame);
+  }
+
+  // The bridge's reduced failure of a learner-started in-app request. It goes to
+  // the Learning gesture owner only from the visible Preview of the bound task.
+  function handlePreviewAppRequest(data) {
+    const owner = learnerGestures?.value;
+    if (!props.learningBinding || props.learningBinding.noExercise !== false ||
+        owner?.matchesLearning?.(props.learningBinding) !== true || typeof owner.reportAppRequest !== "function" ||
+        !orientationFields(data, ["type", "version", "method", "pathTemplate", "status", "failure"]) ||
+        !["POST", "PUT", "PATCH", "DELETE"].includes(data.method) || typeof data.pathTemplate !== "string" ||
+        !data.pathTemplate.startsWith("/") || data.pathTemplate.length > 256 ||
+        !Number.isInteger(data.status) || data.status < 0 || data.status > 599 ||
+        !["http-4xx", "http-5xx", "network"].includes(data.failure) || !props.embeddedPreview ||
+        !projectSlug.value || !props.session?.sessionId || !previewUrl.value || !previewFrameVisible(previewFrame.value)) return;
+    void owner.reportAppRequest({ projectSlug: projectSlug.value, sessionId: props.session.sessionId },
+      { method: data.method, pathTemplate: data.pathTemplate, status: data.status, failure: data.failure });
   }
 
   function retireOrientationInteraction(channel = orientation) {
@@ -2024,6 +2045,7 @@ function useVibe64OutputControlsSurface(props) {
   
   function isPreviewBridgeMessage(value = {}) {
     return [
+      PREVIEW_APP_REQUEST_MESSAGE_TYPE,
       PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
       PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
       PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
@@ -2072,6 +2094,10 @@ function useVibe64OutputControlsSurface(props) {
       // The bridge announces readiness as soon as its listeners are installed.
       // Application modules and rendering may still be pending.
       markPreviewFrameReady(previewFrameRequestId.value, "bridge-ready");
+      return;
+    }
+    if (messageType === PREVIEW_APP_REQUEST_MESSAGE_TYPE) {
+      handlePreviewAppRequest(event.data);
       return;
     }
     if (messageType === PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE) {

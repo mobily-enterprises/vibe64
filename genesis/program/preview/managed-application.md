@@ -529,6 +529,12 @@ or starting it. The server removes URL credentials, queries and fragments and
 limits records per daemon/minute. This is diagnostic logging, not a second
 Preview lifecycle or application-state store.
 
+Separately, the bridge reports a reduced failure of a learner-started in-app
+request (`vibe64:preview-app-request`: method, `:id`-templated path, status,
+failure code) for Learning watches only; it carries no body, header, query or
+diagnostic entry, and the surface ignores it outside a visible bound Learning
+Preview.
+
 
 Preview suspension belongs to the displayed output surface. It clears its frame
 request (therefore removing the iframe), resource retry timer and pending bridge

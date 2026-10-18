@@ -59,6 +59,7 @@ function createTrainingTeachingBrief({ systemRoot, content: suppliedContent, lea
         code: lesson.lesson.code, hash: lesson.hash, title: lesson.lesson.title,
         estimatedMinutes: lesson.lesson.estimatedMinutes, teachingText: lesson.document.text,
         exerciseRequired: Boolean(lesson.lesson.exercise),
+        ...(lesson.lesson.appRoutes ? { appRoutes: lesson.lesson.appRoutes } : {}),
         assessments: lesson.lesson.assessments.map(assessment => ({
           id: assessment.id, kind: assessment.kind, required: assessment.required,
           rubric: lesson.rubrics.find(rubric => rubric.id === assessment.id),

@@ -372,6 +372,18 @@ shared `learningGuidance` module that writes it; it then renders a short
 system status line instead of a learner bubble, as application-origin and
 project messages already do. Saved history needs no upgrade.
 
+In-app request failures reuse that path. The Preview bridge posts a separate
+reduced `vibe64:preview-app-request` (bridge version 7) only for a same-origin
+POST/PUT/PATCH/DELETE started within 3 s of a trusted click/submit in the frame
+that ends in HTTP 4xx/5xx or a network failure: method, path with numeric/UUID
+segments as `:id`, status and failure code; the diagnostics feed never joins it.
+The output surface forwards it only from the current visible bound Learning
+Preview to the gesture owner, which requires the active polling watch, preview
+focus and no phone overlay, and keeps the path only when it equals a route the
+pinned lesson declared (`task.appRoutes`), otherwise `other`. The watcher refuses
+other request facts, keys the once-only evidence by method/path/status and caps
+app-request guidance at one per 30 s per watch; it remains hint-only context.
+
 The shared root provides the original companion refs and one actual Colleague
 body handle. Online keeps its authenticated AuthGate viewer and original host;
 standalone explicitly supplies its established local display scope and mounts the

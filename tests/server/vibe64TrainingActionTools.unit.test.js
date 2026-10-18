@@ -177,6 +177,40 @@ test("learning polling reads one exact active pinned task and sends bounded guid
     conversationId, criterion: "Reserved slug" }), /project or conversation changed/, "an exercise-less lesson has no project to watch");
 });
 
+test("learning polling projects declared app routes and forwards only the reduced app-request failure to Main", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const projectSlug = "";
+  const sessionId = `learning-${attemptId}`;
+  const appRoutes = [{ method: "POST", path: "/api/notes" }];
+  const guidance = [];
+  const learningSessions = {
+    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
+    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
+  };
+  // The installed reader supplies a declared route list; this fixture lesson has none of its own.
+  const teachingBrief = { async readBrief(input) {
+    const brief = await f.teachingBrief.readBrief(input);
+    return { ...brief, lesson: { ...brief.lesson, appRoutes } };
+  } };
+  const c = f.register(null, { learningSessions, teachingBrief });
+  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
+  const target = { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId, criterion: "Add one note." };
+  const read = await c.execute("polling.read", target);
+  assert.deepEqual(read.task.appRoutes, appRoutes);
+  const evidence = { outcome: "failed", control: "app-request", origin: "learner", failure: "http-4xx",
+    request: { method: "POST", path: "/api/notes", status: 400 },
+    workspace: { projectSlug, sessionId, pane: "preview", ready: true, learningView: "workspace" } };
+  assert.deepEqual(await c.execute("polling.guide", { ...target, guidanceId: "guide-app", evidence }), { ok: true, status: "accepted" });
+  assert.deepEqual(guidance[0].evidence, evidence);
+  for (const invalid of [{ ...evidence, request: { ...evidence.request, body: "typed title" } },
+    { ...evidence, request: { ...evidence.request, method: "GET" } }, { ...evidence, failure: "http-3xx" }]) {
+    await assert.rejects(c.execute("polling.guide", { ...target, guidanceId: "guide-invalid", evidence: invalid }), /validation|Invalid|unexpected|not allowed/iu);
+  }
+  assert.equal(guidance.length, 1);
+});
+
 test("learning watch polling reads its exact attempt owner without replacing ordinary progress or reentering practice admission", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();

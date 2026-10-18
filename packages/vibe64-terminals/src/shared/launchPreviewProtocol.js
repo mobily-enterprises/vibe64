@@ -1,4 +1,6 @@
-const PREVIEW_BRIDGE_VERSION = 6;
+const PREVIEW_BRIDGE_VERSION = 7;
+// Learning-only reduced projection of a failed learner-started in-app request.
+const PREVIEW_APP_REQUEST_MESSAGE_TYPE = "vibe64:preview-app-request";
 const PREVIEW_BRIDGE_READY_MESSAGE_TYPE = "vibe64:preview-bridge-ready";
 const PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE = "vibe64:preview-diagnostics-request";
 const PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE = "vibe64:preview-diagnostics-response";
@@ -19,6 +21,7 @@ function previewDiagnosticUrl(value) {
 
 export {
   previewDiagnosticUrl,
+  PREVIEW_APP_REQUEST_MESSAGE_TYPE,
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,

@@ -2279,6 +2279,26 @@ test("Learning polling publishes its exact private browser binding and uses the 
 });
 
 
+test("an active Learning watch hands the lesson's declared app routes to the gesture owner", async t => {
+  const attemptId = "33333333-3333-4333-8333-333333333333";
+  const task = { attemptId, projectSlug: "practice", sessionId: "practice-session",
+    conversationId: "learning-main", learningClientId: "learning-client" };
+  const appRoutes = [{ method: "POST", path: "/api/notes" }];
+  const installed = [];
+  const gestureChannel = vue.shallowRef({ pollingTask: () => task, setPollingWatch(value) { installed.push(value); }, clearPollingWatch() {} });
+  const props = vue.reactive({ name: "Colleague", focus: { projectSlug: "practice", sessionId: "practice-session",
+    pane: "preview", learningAttemptId: attemptId, learningView: "workspace" } });
+  const watch = { watchId: "learning-watch", source: "learning-task", status: "active", projectSlug: "practice",
+    sessionId: "practice-session", condition: "reply", question: "Add one note.",
+    learningTask: { attemptId, sessionId: "practice-session", appRoutes } };
+  mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], watches: [watch], status: "ready" }),
+    props, vue.ref({ actorKey: "person-a" }), null, null, gestureChannel);
+  await flush();
+  assert.equal(installed.at(-1)?.watchId, "learning-watch");
+  assert.deepEqual(installed.at(-1).appRoutes, appRoutes);
+  assert.equal(typeof installed.at(-1).observe, "function");
+});
+
 // Genuine new Main native saved-block timing. The SAME shared cue/voice owners
 // run here; synthesis/playback transport is controlled, not acoustic acceptance.
 test("Main holds saved native blocks before checkpoint; failed A never speaks after proven B", async t => {

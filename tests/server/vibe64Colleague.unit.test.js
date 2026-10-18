@@ -1251,6 +1251,15 @@ test("learning-task polling guides Main once after meaningful evidence and retai
   await watchAction(f, "watch.resume", { watchId: input.watchId,
     browserClientId: "browser-learning", learningClientId: "main-learning-2" });
   assert.equal((await f.service.read({}, f.context)).watches[0].status, "active");
+  // The reduced in-app request failure uses the same observe action; nothing else may ride along.
+  const appRequest = { ...event, learningClientId: "main-learning-2", eventId: "app-request-1", outcome: "failed", control: "app-request", failure: "http-4xx",
+    request: { method: "POST", path: "other", status: 400 } };
+  await assert.rejects(watchAction(f, "learning-watch.observe", { ...appRequest, request: { ...appRequest.request, body: "typed" } }),
+    /validation|not allowed/iu);
+  await assert.rejects(watchAction(f, "learning-watch.observe", { ...appRequest, request: { ...appRequest.request, path: "/api/undeclared" } }),
+    /declared/u);
+  assert.equal((await watchAction(f, "learning-watch.observe", appRequest)).duplicate, false);
+  assert.deepEqual((await f.service.read({}, f.context)).watches[0].latestObservation.request, appRequest.request);
   await watchAction(f, "watch.cancel", { watchId: input.watchId });
   assert.equal((await f.service.read({}, f.context)).watches[0].status, "cancelled");
   assert.ok(reads >= 3, "start, observation and resume each reauthorize the source");

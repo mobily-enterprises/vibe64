@@ -2,7 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { mainConversationRequestContext } from "@local/vibe64-sessions/server/main-conversation-authority";
-import { trainingQuestionField } from "../shared/practicalSchemas.js";
+import { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField } from "../shared/practicalSchemas.js";
 import { isDeepStrictEqual } from "node:util";
 
 const MAX_RESULT_BYTES = 128 * 1024;
@@ -202,6 +202,8 @@ function pollingTaskSnapshot({ input, state, brief, sessions }) {
   return {
     attemptId: attempt.attemptId, projectSlug, sessionId, conversationId, pin, criterion,
     ...(reference ? { reference } : {}),
+    // Watch context only: the browser reduces any other in-app request path to "other".
+    ...(brief.lesson?.appRoutes?.length ? { appRoutes: brief.lesson.appRoutes.map(route => pick(route, ["method", "path"])) } : {}),
     progress: {
       revision: state.revision,
       passedAssessmentIds: brief.learning.passedAssessmentIds,
@@ -297,7 +299,9 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
         control: { ...text, maxLength: 64 },
         origin: { type: "string", required: true, enum: ["learner", "view", "demonstration"] },
         failure: { type: "string", required: false,
-          enum: ["workspace-settle-failed", "exercise-observation-failed"] },
+          enum: ["workspace-settle-failed", "exercise-observation-failed", ...trainingAppRequestFailures] },
+        // A failed in-app request: never a body, header, query or typed text.
+        request: { type: "object", required: false, schema: trainingAppRequestSchema },
         workspace: { type: "object", required: true, schema: createSchema({
           // A lesson without an exercise has no project.
           projectSlug: { ...text, required: true, minLength: 0, maxLength: 128 },

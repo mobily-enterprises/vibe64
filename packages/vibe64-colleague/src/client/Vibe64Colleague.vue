@@ -682,6 +682,7 @@ watch([() => learnerGestures?.value, learningWatch], ([owner, item], previous) =
   const oldOwner = previous?.[0], oldWatch = previous?.[1];
   if (oldOwner && oldWatch && (oldOwner !== owner || oldWatch.watchId !== item?.watchId)) oldOwner.clearPollingWatch?.(oldWatch.watchId);
   if (owner && item?.status === "active") owner.setPollingWatch?.({ watchId: item.watchId,
+    appRoutes: Array.isArray(item.learningTask?.appRoutes) ? item.learningTask.appRoutes : [],
     observe: body => requestColleague("/learning-watches/observations", { method: "POST", body }) });
   else if (owner && item) owner.clearPollingWatch?.(item.watchId);
 }, { immediate: true });

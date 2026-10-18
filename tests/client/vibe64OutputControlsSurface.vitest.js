@@ -11,6 +11,7 @@ vi.mock("@/composables/useVibe64OutputControls.js", async original => ({
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => surfaceHost.projectSlug }));
 
 import {
+  PREVIEW_APP_REQUEST_MESSAGE_TYPE,
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
@@ -985,6 +986,62 @@ it("eligible actual Main collector consumes the same real App port/request/displ
   expect(fixture.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
 });
 
+
+function mountAppRequestSurface() {
+  const identity = Object.freeze({ actorKey: "scoped", viewerActorKey: "member", learnerId: "own", learningAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    sessionId: "session-a", sourceProjectSlug: "practice", noExercise: false });
+  const observations = [], failures = [], current = ref(true), xs = ref(false), bodyVisible = ref(false);
+  const focus = reactive({ projectSlug: "practice", sessionId: "session-a", pane: "preview", learningView: "workspace" });
+  const fixture = mountOrientationSurface({ createOwner: () => useTrainingLearnerGestures({
+    scope: { actorKey: ref("member"), clientId: "same-client", product: ref({ conversationId: "typed-main", trainingQuestion: null }),
+      current: () => current.value, learningBinding: identity },
+    workspace: { focus, settle: async () => ({ projectSlug: "practice", sessionId: "session-a", mainChatVisible: false,
+      projectVisible: true, pane: focus.pane, ready: true }) },
+    drawer: { bodyVisible, xs },
+    observe: async () => ({ ok: true }), failure: error => failures.push(error.message) }) });
+  fixture.props.learningBinding = identity;
+  const watch = { watchId: "watch-1", appRoutes: [{ method: "POST", path: "/api/notes" }],
+    observe: async body => { observations.push(structuredClone(body)); return { ok: true }; } };
+  fixture.channel.value.setPollingWatch(watch);
+  fixture.load();
+  const report = (fields = {}) => fixture.announce({ type: PREVIEW_APP_REQUEST_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION,
+    method: "POST", pathTemplate: "/api/notes", status: 400, failure: "http-4xx", ...fields });
+  return { fixture, observations, failures, focus, xs, bodyVisible, watch, report };
+}
+
+it("forwards only the reduced in-app request failure, mapping an undeclared path to other", async () => {
+  const t = mountAppRequestSurface();
+  t.report();
+  t.report({ pathTemplate: "/api/notes/my-secret-title", status: 500, failure: "http-5xx" });
+  await portFlush();
+  expect(t.observations).toEqual([
+    { watchId: "watch-1", learningClientId: "same-client", eventId: expect.any(String), outcome: "failed", control: "app-request",
+      failure: "http-4xx", request: { method: "POST", path: "/api/notes", status: 400 },
+      workspace: { projectSlug: "practice", sessionId: "session-a", pane: "preview", ready: true, learningView: "workspace" } },
+    expect.objectContaining({ failure: "http-5xx", request: { method: "POST", path: "other", status: 500 } })
+  ]);
+  expect(JSON.stringify(t.observations)).not.toMatch(/secret/u);
+  expect(t.failures).toEqual([]);
+});
+
+it("ignores in-app request reports without an active watch, visible bound Preview or an exact reduced shape", async () => {
+  const t = mountAppRequestSurface();
+  t.report({ body: "typed title" });
+  t.report({ method: "GET" });
+  t.report({ status: 200, failure: "" });
+  t.fixture.announce({ type: PREVIEW_APP_REQUEST_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION, method: "POST",
+    pathTemplate: "/api/notes", status: 400, failure: "http-4xx" }, {});
+  t.fixture.props.previewDisplayed = false; t.report(); t.fixture.props.previewDisplayed = true;
+  t.fixture.documentObject.visibilityState = "hidden"; t.report(); t.fixture.documentObject.visibilityState = "visible";
+  t.xs.value = true; t.bodyVisible.value = true; t.report(); t.xs.value = false; t.bodyVisible.value = false;
+  t.focus.pane = "dashboard"; t.report(); t.focus.pane = "preview";
+  t.fixture.channel.value.clearPollingWatch("watch-1"); t.report();
+  await portFlush();
+  expect(t.observations).toEqual([]);
+  t.fixture.channel.value.setPollingWatch(t.watch); t.report();
+  await portFlush();
+  expect(t.observations).toHaveLength(1);
+});
 
 it("opt-in Preview diagnostics capture each failed module and retry without accepting a foreign iframe", async () => {
   vi.useFakeTimers();

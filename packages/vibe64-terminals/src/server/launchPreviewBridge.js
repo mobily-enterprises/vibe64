@@ -1,4 +1,5 @@
 import {
+  PREVIEW_APP_REQUEST_MESSAGE_TYPE,
   PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
@@ -18,6 +19,7 @@ function launchPreviewBridgeScript({
   targetOrigin = ""
 } = {}) {
   const config = JSON.stringify({
+    appRequestMessageType: PREVIEW_APP_REQUEST_MESSAGE_TYPE,
     bridgeReadyMessageType: PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
     debug: debug === true,
     diagnosticsRequestMessageType: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
@@ -324,6 +326,52 @@ function launchPreviewBridgeScript({
   function elapsedMilliseconds(startedAt) {
     return Math.max(0, Math.round((performance.now() - startedAt) * 100) / 100);
   }
+  // Learning sees only a reduced failure of a same-origin, data-changing request
+  // started within 3 s of a trusted learner click/submit in this frame: method,
+  // path with numeric/UUID segments as :id, status and a failure code. Bodies,
+  // headers, queries, fragments and the diagnostics feed above never join it.
+  let learnerGestureAt = -Infinity;
+  for (const gestureType of ["click", "submit"]) {
+    window.addEventListener(gestureType, (event) => {
+      if (event?.isTrusted === true) {
+        learnerGestureAt = performance.now();
+      }
+    }, true);
+  }
+  function appRequestCandidate(method, url) {
+    const normalizedMethod = String(method || "GET").toUpperCase();
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(normalizedMethod) ||
+        performance.now() - learnerGestureAt > 3000) {
+      return null;
+    }
+    try {
+      const resource = new URL(String(url || ""), window.location.href);
+      if (resource.origin !== window.location.origin) {
+        return null;
+      }
+      const pathTemplate = resource.pathname.split("/").map((segment) =>
+        /^(?:\\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/iu.test(segment) ? ":id" : segment
+      ).join("/").slice(0, 256);
+      return { method: normalizedMethod, pathTemplate };
+    } catch {
+      return null;
+    }
+  }
+  function publishAppRequest(candidate, status) {
+    const code = Math.max(0, Math.min(599, Number(status) || 0));
+    const failure = code >= 500 ? "http-5xx" : code >= 400 ? "http-4xx" : code === 0 ? "network" : "";
+    if (!candidate || !failure) {
+      return;
+    }
+    window.parent.postMessage({
+      failure,
+      method: candidate.method,
+      pathTemplate: candidate.pathTemplate,
+      status: code,
+      type: config.appRequestMessageType,
+      version: config.version
+    }, "*");
+  }
   const originalFetch = window.fetch;
   if (typeof originalFetch === "function") {
     window.fetch = async function vibe64PreviewFetch(input, init = {}) {
@@ -335,11 +383,13 @@ function launchPreviewBridgeScript({
         requestHeaders: networkHeaders(init?.headers || input?.headers),
         url: String(input?.url || input || "")
       });
+      const appRequest = appRequestCandidate(init?.method || input?.method, input?.url || input);
       void requestBodyPreview(input, init).then((requestBody) => {
         updateNetworkEntry(entry, { requestBody });
       });
       try {
         const response = await originalFetch.apply(this, arguments);
+        publishAppRequest(appRequest, response.status);
         updateNetworkEntry(entry, {
           durationMs: elapsedMilliseconds(startedAt),
           phase: "complete",
@@ -353,6 +403,7 @@ function launchPreviewBridgeScript({
         });
         return response;
       } catch (error) {
+        publishAppRequest(appRequest, 0);
         updateNetworkEntry(entry, {
           durationMs: elapsedMilliseconds(startedAt),
           error: formatConsoleValue(error),
@@ -396,7 +447,9 @@ function launchPreviewBridgeScript({
         requestHeaders: networkHeaders(metadata.headers),
         url: metadata.url
       });
+      const appRequest = appRequestCandidate(metadata.method, metadata.url);
       this.addEventListener("loadend", () => {
+        publishAppRequest(appRequest, this.status);
         let responseBody = "";
         try {
           if (!this.responseType || this.responseType === "text") {

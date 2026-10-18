@@ -15,6 +15,15 @@ const trainingQuestionField = { type: "object", required: false, schema: createS
   lessonHash: { type: "string", required: true, noTrim: true, maxLength: 64, pattern: "^[a-f0-9]{64}$" }
 }) };
 
+// A Learning watch's reduced in-app request failure. The path is a lesson-declared
+// route or "other"; bodies, headers, queries and typed text have no field here.
+const trainingAppRequestSchema = createSchema({
+  method: { type: "string", required: true, enum: ["POST", "PUT", "PATCH", "DELETE"] },
+  path: { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128, pattern: "^(?:other|/[A-Za-z0-9._~:/-]*)$" },
+  status: { type: "integer", required: true, min: 0, max: 599 }
+});
+const trainingAppRequestFailures = Object.freeze(["http-4xx", "http-5xx", "network"]);
+
 const trainingObservationFields = {
     clientId, conversationId: clientId,
     gestureId: { ...clientId, noTrim: true, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
@@ -55,4 +64,5 @@ const trainingPracticalField = { type: "object", required: false, schema: create
   checkReason: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 256 }
 }) };
 
-export { trainingQuestionField, trainingObservationFields, trainingPracticalProgressField, trainingPracticalField };
+export { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField, trainingObservationFields,
+  trainingPracticalProgressField, trainingPracticalField };

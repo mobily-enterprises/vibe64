@@ -1,4 +1,5 @@
-import { trainingQuestionField, trainingObservationFields, trainingPracticalProgressField, trainingPracticalField } from "@local/vibe64-training/shared/practical-schemas";
+import { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField, trainingObservationFields, trainingPracticalProgressField,
+  trainingPracticalField } from "@local/vibe64-training/shared/practical-schemas";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge } from "./usageKnowledge.js";
@@ -85,9 +86,11 @@ const learningObservationFields = {
   watchId: clientId, learningClientId: clientId, eventId: clientId,
   outcome: { type: "string", required: false, enum: ["confirmed", "failed"] },
   failure: { type: "string", required: false,
-    enum: ["workspace-settle-failed", "exercise-observation-failed"] },
+    enum: ["workspace-settle-failed", "exercise-observation-failed", ...trainingAppRequestFailures] },
   control: { type: "string", required: true,
-    enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response", "view-change"] },
+    enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response", "view-change", "app-request"] },
+  // Only with app-request: a failed in-app request's method, declared path or "other", and status.
+  request: { type: "object", required: false, schema: trainingAppRequestSchema },
   workspace: { type: "object", required: true, schema: createSchema({
     projectSlug: { ...text, required: true, maxLength: 128 },
     sessionId: { ...text, required: true, maxLength: 128 }, pane: { ...text, required: true, maxLength: 64 },

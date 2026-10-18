@@ -57,6 +57,17 @@ The validator includes these files but never executes them.
 The managed application execution owner will run approved pinned checks; teaching
 tools do not gain arbitrary shell access. Demonstrations cannot earn learner passes.
 
+An exercise lesson may optionally declare the practice app's data-changing routes
+so a Learning watch can name a failed request the learner started:
+`appRoutes: [{method, path}]`, at most 16 unique entries. `method` is `POST`,
+`PUT`, `PATCH` or `DELETE`; `path` starts with `/`, has no query, fragment or
+trailing slash, and each segment is a literal or `:id` (the Preview replaces
+numeric and UUID segments with `:id`). For the notes exercise:
+`"appRoutes": [{ "method": "POST", "path": "/api/notes" }]`. A failed request on
+any other path is still reported, as `other`, so route segments that might carry
+typed text never leave the learner's browser. Routes only label watch hints; they
+never grade, and a lesson without an exercise cannot declare them.
+
 ### Authoring a code question
 
 A `code` practical asks the learner to change exercise code in the lesson

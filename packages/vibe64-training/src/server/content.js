@@ -120,6 +120,17 @@ async function bundleLesson(reader, entry) {
       throw new Error(`Only code evidence names edited files or runs a code check: ${assessment.id}.`);
     }
   }
+  if (lesson.appRoutes && !lesson.exercise) throw new Error(`Lesson ${entry.code} can declare app routes only with its exercise.`);
+  const appRoutes = new Set();
+  for (const route of lesson.appRoutes || []) {
+    // Paths are literal segments or :id, matching the Preview's reduced request path.
+    if (route.path !== "/" && !route.path.slice(1).split("/").every(segment => segment === ":id" || /^[A-Za-z0-9._~-]+$/u.test(segment))) {
+      throw new Error(`Invalid app route path for ${entry.code}: ${route.path}.`);
+    }
+    const key = `${route.method} ${route.path}`;
+    if (appRoutes.has(key)) throw new Error(`Lesson ${entry.code} has a duplicate app route: ${key}.`);
+    appRoutes.add(key);
+  }
   for (const check of lesson.checks || []) {
     if (check.timeoutSeconds !== undefined && check.kind !== "code") throw new Error(`Only a code check declares a timeout: ${check.id}.`);
   }

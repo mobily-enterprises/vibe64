@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { LEARNING_GUIDANCE_MESSAGE_PREFIX } from "../shared/learningGuidance.js";
 import { conversationObservation, watchUpdate } from "@local/vibe64-core/server/watch-observations";
+import { trainingAppRequestFailures } from "../shared/practicalSchemas.js";
 
 const LEARNING_WATCH_SOURCE = "learning-task";
 
@@ -32,7 +33,8 @@ function isLearningWatch(watch) {
   return watch?.source === LEARNING_WATCH_SOURCE;
 }
 
-function publicLearningWatch({ cursor, eventIds, browserClientId, learningClientId, pendingGuidance, lastGuidanceEvidenceKey, ...watch }) {
+function publicLearningWatch({ cursor, eventIds, browserClientId, learningClientId, pendingGuidance, lastGuidanceEvidenceKey,
+  lastAppRequestGuidanceAt: _lastAppRequestGuidanceAt, ...watch }) {
   const latest = watch.learningTask?.progress?.latest;
   const assessmentId = watch.learningTask?.reference?.assessmentId;
   return { ...watch, assessmentEvidence: {
@@ -54,7 +56,7 @@ function normalizeSource(source) {
 function createTrainingLearningWatchSource(actions) {
   if (typeof actions?.execute !== "function") throw new TypeError("The Learning watch source requires the shared action catalogue.");
   const learningInput = watch => {
-    const { pin: _pin, progress: _progress, projectSlug: _projectSlug, ...input } = watch.learningTask;
+    const { pin: _pin, progress: _progress, projectSlug: _projectSlug, appRoutes: _appRoutes, ...input } = watch.learningTask;
     const pin = watch.learningTask.pin;
     return { ...input, targetProjectSlug: watch.projectSlug,
       ...(pin ? { topicHash: pin.topicHash, lessonHash: pin.lessonHash } : {}) };
@@ -83,7 +85,7 @@ function createTrainingLearningWatchSource(actions) {
   });
 }
 
-function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250 } = {}) {
+function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250, appRequestGuidanceMs = 30000, now = Date.now } = {}) {
   if (typeof host?.persist !== "function" || typeof host?.actionContext !== "function" || typeof host?.closed !== "function") {
     throw new TypeError("Learning watches require persistence, request-context and lifecycle host facilities.");
   }
@@ -245,6 +247,22 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     return { ok: true, watch: publicLearningWatch(watch) };
   }
 
+  // Only a failed in-app request may carry request facts, and its path must be a
+  // route the pinned lesson declares or the opaque "other" the browser reduced it to.
+  function validateAppRequest(watch, input) {
+    const invalid = message => failure(message, "ACTION_VALIDATION_FAILED", 400);
+    if (input.control !== "app-request") {
+      if (input.request || trainingAppRequestFailures.includes(input.failure)) throw invalid("Only an app-request observation carries in-app request facts.");
+      return;
+    }
+    if (input.outcome !== "failed" || !input.request) throw invalid("An app-request observation reports only a failed in-app request.");
+    if (!trainingAppRequestFailures.includes(input.failure)) throw invalid("An app-request observation needs an in-app request failure code.");
+    const { method, path } = input.request;
+    if (path !== "other" && !(watch.learningTask?.appRoutes || []).some(route => route.method === method && route.path === path)) {
+      throw invalid("An app-request path must be a route the lesson declared, or other.");
+    }
+  }
+
   async function observe(state, input, origin = "learner") {
     state.requestContext ||= {};
     const watch = state.record.watches.find(item => item.watchId === input.watchId);
@@ -269,9 +287,11 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
         throw failure("The Learning task changed before its observation was recorded. Return to that task and repeat the step.");
       }
     };
+    validateAppRequest(watch, input);
     const payload = { eventId: input.eventId, outcome: input.outcome || "confirmed", control: input.control,
       workspace: structuredClone(input.workspace), origin,
-      ...(input.failure ? { failure: input.failure } : {}) };
+      ...(input.failure ? { failure: input.failure } : {}),
+      ...(input.request ? { request: { method: input.request.method, path: input.request.path, status: input.request.status } } : {}) };
     const duplicate = (watch.eventIds || []).find(value => value.eventId === input.eventId);
     if (duplicate) {
       if (!isDeepStrictEqual(duplicate, payload)) throw failure("This learning observation ID belongs to a different event.");
@@ -282,10 +302,15 @@ function createLearningWatchCoordinator({ host, pollMs = 30000, debounceMs = 250
     watch.eventIds = [...(watch.eventIds || []).slice(-15), payload];
     watch.latestObservation = { ...payload, observedAt: new Date().toISOString() };
     const evidenceKey = JSON.stringify({ outcome: payload.outcome, control: payload.control, workspace: payload.workspace,
-      failure: payload.failure || "", progressRevision: watch.learningTask?.progress?.revision });
-    if (watch.lastGuidanceEvidenceKey !== evidenceKey && watch.pendingGuidance?.evidenceKey !== evidenceKey) {
+      failure: payload.failure || "", ...(payload.request ? { request: payload.request } : {}),
+      progressRevision: watch.learningTask?.progress?.revision });
+    // An in-app failure is an app claim: besides once-per-evidence, allow one hint per interval per watch.
+    const appRequestCapped = payload.control === "app-request" &&
+      now() - Number(watch.lastAppRequestGuidanceAt || -Infinity) < appRequestGuidanceMs;
+    if (!appRequestCapped && watch.lastGuidanceEvidenceKey !== evidenceKey && watch.pendingGuidance?.evidenceKey !== evidenceKey) {
       watch.pendingGuidance = { guidanceId: `${LEARNING_GUIDANCE_MESSAGE_PREFIX}${randomUUID()}`, evidenceKey,
         evidence: structuredClone(payload) };
+      if (payload.control === "app-request") watch.lastAppRequestGuidanceAt = now();
     }
     await read(state, watch, { clientId: watch.browserClientId, focus: connection.focus });
     requireCurrent();

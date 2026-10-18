@@ -204,8 +204,35 @@ export function useTrainingLearnerGestures({ scope, workspace, drawer, observe, 
       nativeTickets.delete(ticket);
     }
   }
+  // A failed in-app request from the visible bound Preview while a watch is
+  // active. Hint-only context: a path outside the lesson's declared routes is
+  // reduced to "other" here, before it leaves the browser.
+  async function reportAppRequest(frame, request) {
+    const watched = polling;
+    const task = watched && pollingTask();
+    const visible = () => mounted && (!scope.current || scope.current()) && polling === watched && Boolean(pollingTask()) &&
+      workspace.focus.pane === "preview" && workspace.focus.projectSlug === frame.projectSlug &&
+      workspace.focus.sessionId === frame.sessionId && !(xs.value && bodyVisible.value);
+    if (!task?.projectSlug || frame.projectSlug !== task.projectSlug || frame.sessionId !== task.sessionId ||
+        !actorKey.value || !workspace.settle || !visible()) return false;
+    const path = (watched.appRoutes || []).some(route => route.method === request.method &&
+      route.path === request.pathTemplate) ? request.pathTemplate : "other";
+    try {
+      const settled = await workspace.settle({ control: "app-request", projectSlug: frame.projectSlug, sessionId: frame.sessionId }, visible);
+      if (!visible()) return false;
+      await watched.observe({ watchId: watched.watchId, learningClientId: clientId, eventId: crypto.randomUUID(),
+        outcome: "failed", control: "app-request", failure: request.failure,
+        request: { method: request.method, path, status: request.status },
+        workspace: { projectSlug: settled.projectSlug, sessionId: settled.sessionId, pane: settled.pane,
+          ready: settled.ready === true, learningView: workspace.focus.learningView || "workspace" } });
+      return true;
+    } catch (error) {
+      if (visible()) failure(new Error(`The learning watch did not record this app step. ${error.message}`));
+      return false;
+    }
+  }
   const nativeGestureOwner = { begin: beginNativeGesture, finish: finishNativeGesture, beginExercise, finishExercise, submitCode,
-    pollingTask,
+    pollingTask, reportAppRequest,
     setPollingWatch(value) { polling = value?.watchId && typeof value.observe === "function" ? value : null; },
     clearPollingWatch(watchId) { if (!watchId || polling?.watchId === watchId) polling = null; },
     discard(ticket) { nativeTickets.delete(ticket); }, clear() { nativeTickets.clear(); },

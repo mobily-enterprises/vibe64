@@ -31,6 +31,9 @@ const lessonSchema = createSchema({
   checks: { ...list(createSchema({ id, file: text, assets: { ...list(text, 32), required: false },
     kind: { ...text, required: false, enum: ["response", "code"] },
     timeoutSeconds: { type: "integer", required: false, min: 1, max: 60 } }), 12), required: false },
+  // Learning watches keep a failed in-app request's path only when it matches one of these.
+  appRoutes: { ...list(createSchema({ method: { ...text, enum: ["POST", "PUT", "PATCH", "DELETE"] },
+    path: { ...text, maxLength: 128, pattern: "^/[A-Za-z0-9._~:/-]*$" } }), 16), required: false },
   assessments: list(assessment, 32)
 });
 const topicSchema = createSchema({

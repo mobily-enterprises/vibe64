@@ -26,7 +26,11 @@ watch shown in that dialog; asking how it works does not start anything. You can
 ask Colleague to read, pause, resume or stop it. Learning status reports the exact
 goal/target, active/paused/unavailable state, latest valid observation and time,
 last delivered-help receipt, and any saved assessment outcome. Observation and
-help are not themselves proof of completion. A separate Learning watcher checks
+help are not themselves proof of completion. Besides Vibe64 view and control
+steps, the watch notices a failed data-changing request that your own click or
+submit in the visible practice-app **Preview** started (method, a lesson-declared
+path or `other`, status and failure code only—never typed text, bodies, headers
+or queries); Main gets at most one hint for it per 30 seconds. A separate Learning watcher checks
 only those validated facts; Colleague manages its controls, while Main receives
 bounded updates and never checks your activity itself. Each observation is
 delivered to Main once. Switching between **Workspace** and **Learning**, and

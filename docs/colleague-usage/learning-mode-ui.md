@@ -181,7 +181,16 @@ project, such as Lesson 0; its target then shows as a source-less lesson. The co
 structured observation and time, last delivered help, and any saved assessment
 outcome. Observations include switching between **Workspace** and **Learning** and
 between Workspace panes such as **Preview** and **Dashboard** (the lesson's database);
-a view opened by Main or Colleague is recorded as their demonstration, not your step. Expand **Task criteria** below the watch controls to read the full
+a view opened by Main or Colleague is recorded as their demonstration, not your step.
+The watch also notices when something you do inside the practice app fails: if
+you click or submit in the visible **Preview** (for example **Add note**) and the
+app's data-changing request then fails, the watch records **app-request** with
+only its method, a path the lesson declared (otherwise `other`), the HTTP status
+and a failure code (`http-4xx`, `http-5xx` or `network`). Main may then offer one
+hint; at most one such hint is offered every 30 seconds, and the same failure
+gets only one. Successful app requests, requests the app makes by itself, and
+anything while Preview is hidden (including behind the phone Colleague overlay)
+are not reported. This is the app's own claim, so it never grades or completes. Expand **Task criteria** below the watch controls to read the full
 criteria; long criteria stay collapsed so **Pause**, **Resume** and **Stop** remain
 easy to reach. You can instead tell Colleague “Watch me while I do this”; that direct
 request starts the same watch and the eye dialog shows the same state. Asking how
@@ -221,9 +230,10 @@ reply. The teacher still receives the full observation; its internal prompt is
 not shown as a chat message. A failed step shows “Watching: that step did not
 finish.”; returning to the lesson shows “Watching: you are back in the lesson.”
 
-Polling reports only named Vibe64 controls, settled Workspace/Learning view and
-saved lesson progress. It never sends typed text, arbitrary page content,
-screenshots, secrets or another project. Navigation performed by Colleague is
+Polling reports only named Vibe64 controls, settled Workspace/Learning view,
+saved lesson progress and the reduced failed app request described above. It
+never sends typed text, form values, request or response bodies, headers, query
+strings, arbitrary page content, screenshots, secrets or another project. Navigation performed by Colleague is
 reported as a demonstration, not as something you did and not as assessment
 evidence. Polling does not grade a question or mark a lesson complete.
 Only a saved assessment outcome supports completion; a recent observation or a
