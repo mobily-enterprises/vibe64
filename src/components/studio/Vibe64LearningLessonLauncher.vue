@@ -44,16 +44,14 @@ async function request(operation) {
 
 <template>
   <div class="vibe64-learning-launcher">
-    <p class="vibe64-learning-launcher__status" role="status">
-      You can switch back to Working without closing your lesson.
-    </p>
     <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
     </v-alert>
-    <v-btn v-if="retry" variant="tonal" :disabled="busy || !canRequest" @click="request(owner => owner.retryStart())">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="request(owner => owner.retryStart())">
       Retry lesson start
     </v-btn>
-    <section v-if="trialEnabled && trialResource" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
+    <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
+      <p class="vibe64-learning-launcher__trial-eyebrow">Authoring</p>
       <h2>Author trial</h2>
       <p>This isolated snapshot is separate from your published lesson progress.</p>
       <v-skeleton-loader v-if="toValue(trialResource.isLoading) && !trial" type="list-item-two-line, actions" aria-label="Loading saved author trial" />
@@ -64,7 +62,7 @@ async function request(operation) {
         <p>{{ trial.pin.lesson.code }} · {{ trial.pin.topic.release }}</p>
         <details><summary>Saved trial identity</summary><code>{{ trial.pin.topic.commit }}</code></details>
         <v-btn
-          variant="tonal" min-height="48" data-test="resume-author-trial"
+          variant="tonal" rounded="pill" min-height="48" data-test="resume-author-trial"
           :disabled="busy || !canRequest || toValue(trialResource.isLoading) || !!toValue(trialResource.loadError)"
           @click="request(owner => owner.resumeAuthorPreview(trial.attemptId))"
         >
@@ -92,11 +90,43 @@ async function request(operation) {
       @start="request(owner => owner.startLesson($event))"
       @resume="request(owner => owner.resumeLesson($event.attemptId))"
     />
+    <p class="vibe64-learning-launcher__status" role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 9h2V7h-2m1 13a8 8 0 1 1 0-16 8 8 0 0 1 0 16m0-18a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1 15h2v-6h-2v6Z" /></svg>
+      You can switch back to Working without closing your lesson.
+    </p>
   </div>
 </template>
 
 <style scoped>
-.vibe64-learning-launcher { min-height: 0; overflow-y: auto; padding: 1rem; }
-.vibe64-learning-launcher__status { color: rgba(var(--v-theme-on-surface), 0.72); font-size: .875rem; }
-.vibe64-learning-launcher__error { flex: 0 0 auto; margin-block: .75rem; }
+.vibe64-learning-launcher { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); }
+/* A quiet footnote: the pane opens on the Courses hero, not on utility text. */
+.vibe64-learning-launcher__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--v64-space-2, 8px);
+  margin: var(--v64-space-5, 24px) 0 0;
+  color: var(--v64-on-surface-variant, rgba(var(--v-theme-on-surface), 0.72));
+  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
+  font-weight: 400;
+  text-align: center;
+}
+.vibe64-learning-launcher__status svg { flex: 0 0 auto; width: 16px; height: 16px; fill: currentColor; opacity: 0.8; }
+.vibe64-learning-launcher__retry { margin-bottom: var(--v64-space-3, 12px); letter-spacing: 0; text-transform: none; }
+.vibe64-learning-launcher__trial {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--v64-space-2, 8px);
+  margin-bottom: var(--v64-space-4, 16px);
+  padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px);
+  border: 1px dashed var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
+  border-radius: var(--v64-shape-lg, 16px);
+  background: var(--v64-surface-container-low, rgb(var(--v-theme-surface)));
+}
+.vibe64-learning-launcher__trial > * { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
+.vibe64-learning-launcher__trial h2 { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); }
+.vibe64-learning-launcher__trial-eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.08em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
+.vibe64-learning-launcher__trial .v-btn { letter-spacing: 0; text-transform: none; }
+.vibe64-learning-launcher__error { flex: 0 0 auto; margin-block: 0 var(--v64-space-3, 12px); }
 </style>

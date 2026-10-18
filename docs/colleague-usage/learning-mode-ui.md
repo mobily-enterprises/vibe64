@@ -28,11 +28,12 @@ contains the same lesson.
 On a card, **Continue** reopens your saved lesson when it belongs to that course;
 it is the same request as **Resume saved lesson**. Otherwise **Start** starts the
 course's first published lesson that is not yet complete. **View course** opens
-the course page: its topics in order, each with its lessons, their title and code
-and a status of **Completed**, **In progress** (an open attempt or some passes) or
-**Not started**. The page has one main action, **Continue** or **Start next
-lesson** (with the next lesson named beside it), and a **Start lesson** button on
-each available lesson if you want a different one. **Back to courses** returns to
+the course page: a header with the course cover and a ring showing lessons complete,
+an **Up next** card, then a path of its topics in order, each with its lessons, their title and code
+and a status of **Completed** (green tick), **In progress** (yellow; an open attempt or some passes) or
+**Not started** (numbered). The **Up next** card has one main action, **Continue** or **Start next
+lesson** (with the next lesson named beside it), and each available lesson has a **Start lesson** button
+if you want a different one. **Back to courses** returns to
 the list. While you have a saved active lesson, Start buttons stay disabled:
 continue it, or end it first. There is no End button; ask Colleague to end the
 lesson (see [Lesson history and resume](learning-history.md)). On a phone the cards stack in one column and the
@@ -137,8 +138,8 @@ straight into the teacher's agent. Opening one of their addresses directly in a
 lesson shows **Env** instead. Moving between Dashboard sections keeps Learning
 on. Switching between Preview, Dashboard and Learning keeps Learning mode on and
 retains the same selected teacher session; it does not switch to your last
-Working session. The graduation-cap **Learning** option shows the existing **Courses** and
-**Presentation** controls. Returning to it keeps the selected Courses or
+Working session. The graduation-cap **Learning** option shows the **Courses** | **Presentation**
+switch. Returning to it keeps the selected Courses or
 Presentation content visible without requiring another click. A supervised
 project opens on its Preview by default. On reopening, the practice project waits for the
 assistant's initial connection check to settle before opening the saved practice

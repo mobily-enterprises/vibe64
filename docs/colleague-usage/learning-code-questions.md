@@ -17,14 +17,15 @@ refuse an empty title". To answer:
 2. Open the file the teacher named and edit it. Your changes save automatically
    a moment after you stop typing; the editor shows when a save has finished.
 3. Choose the graduation-cap option beside **Preview** and **Dashboard** (on a
-   phone, the next-pane button labelled **Learning**) and press **Check my code** at the top of its **Courses** view.
+   phone, the next-pane button labelled **Learning**) and press **Check my code** in the
+   code-check bar docked at the bottom of its **Courses** view (it stays in view while you scroll).
    The button is there whenever a practice lesson is open; it checks only an open
    code question. The lesson's declared check runs on a private copy of
    the pinned exercise with your saved version of the named files. The result
-   appears next to the button: either "Your code passed the check…" or
-   "Not yet: …" with the check's reason (for example "Empty or blank titles are
+   appears in that bar: a green **Check passed** with "Your code passed the check…",
+   an amber **Not yet** with the check's reason (for example "Empty or blank titles are
    still accepted", or that the check stopped after its time limit because the
-   code never finished). Fix the code and press **Check my code** again as often
+   code never finished), or a red **Could not check** saying what to do first. Fix the code and press **Check my code** again as often
    as you like; only your latest check counts.
 4. After a passing check, explain to your teacher in Learning, in your own
    words, what you changed and why. The teacher submits that explanation with the
