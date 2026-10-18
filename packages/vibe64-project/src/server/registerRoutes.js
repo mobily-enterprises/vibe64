@@ -14,7 +14,8 @@ import {
   ACTION_SAVE_ENGINEERING_PROFILE,
   ACTION_SAVE_PROJECT_PROMPT_HINTS,
   ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
-  ACTION_SELECT_PROJECT
+  ACTION_SELECT_PROJECT,
+  createProjectActions
 } from "./actions.js";
 import {
   projectRemoteInputValidator,
@@ -45,31 +46,14 @@ function registerRoutes(http, {
   routeRelativePath = "",
   learningScoped = false
 } = {}) {
-  const featureRoutes = createVibe64FeatureRoutes(http, {
+  const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
+    routeRelativePath,
     routeSurface,
-    projectScoped: !learningScoped,
+    learningActions: learningScoped ? createProjectActions({ project: {} }) : null,
     tags: ["studio", "vibe64-project"]
   });
-
-  const routes = learningScoped ? {
-    ...featureRoutes,
-    actionRoute(method, suffix, options) {
-      if (options.actionId !== ACTION_READ_ONBOARDING || method !== "GET") return;
-      featureRoutes.actionRoute(method, "/sessions/:sessionId/onboarding", { ...options, query: undefined, buildInput(request) {
-        const learningAttemptId = request.params?.learningAttemptId;
-        if (!learningAttemptId) throw Object.assign(new Error("Use the exact saved lesson URL."), {
-          code: "vibe64_learning_attempt_required", statusCode: 400
-        });
-        const { vibe64User: _ignored, ...input } = options.buildInput(request);
-        void _ignored;
-        return { ...input, sessionId: request.params.sessionId, learningAttemptId };
-      } });
-    },
-    serviceRoute() {}
-  } : featureRoutes;
   routes.actionRoute("GET", "/repository/remote", {
     actionId: "vibe64.project.repository.remote.read",
     summary: "Read local Git remote configuration and last observed freshness."
@@ -132,6 +116,8 @@ function registerRoutes(http, {
     actionId: ACTION_READ_ONBOARDING,
     buildInput: routes.requestQuery,
     query: projectOnboardingInputValidator,
+    // The lesson URL names the session; the original action validates it.
+    learning: { path: "/sessions/:sessionId/onboarding", query: undefined },
     summary: "Inspect project opening state and available templates."
   });
   routes.actionRoute("POST", "/templates/apply", {

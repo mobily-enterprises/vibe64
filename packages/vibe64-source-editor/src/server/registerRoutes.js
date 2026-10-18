@@ -1,7 +1,7 @@
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
-import { LEARNING_ACCESS } from "./actions.js";
+import { createSourceEditorActions } from "./actions.js";
 import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
@@ -99,58 +99,18 @@ function sourceInput(request, input = {}) {
   return { ...data, sessionId: request.params.sessionId };
 }
 
-// A lesson's Files editor reads, downloads, creates and stars its practice
-// project's files through the saved attempt. Saving is Training's ledgered save.
-function registerLearningRoutes(http, { routeSurface = "" } = {}) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
-    projectScoped: false, routeRelativePath: "learning/:learningAttemptId/vibe64", routeSurface,
-    tags: ["studio", "vibe64-source-editor"]
-  });
-  const learningInput = (request, input) => {
-    const { projectSlug: _project, learningAttemptId: _attempt, ...data } = sourceInput(request, input);
-    void _project; void _attempt;
-    return { ...data, learningAttemptId: request.params.learningAttemptId };
-  };
-  const query = (request) => learningInput(request, routes.requestQuery(request));
-  const route = (method, suffix, operation, summary, buildInput) => {
-    if (!LEARNING_ACCESS[`vibe64.source-editor.${operation}`]) throw new TypeError(`${operation} is not a lesson source operation.`);
-    routes.actionRoute(method, `/sessions/:sessionId/source-editor${suffix}`, {
-      actionId: `vibe64.source-editor.${operation}`, summary, buildInput,
-      ...(method === "POST" ? { bodyLimit: 32 * 1024 } : {})
-    });
-  };
-  const searched = (request) => {
-    const { q, ...rest } = routes.requestQuery(request);
-    return learningInput(request, { ...rest, ...(q !== undefined ? { query: q } : {}) });
-  };
-  route("GET", "/tree", "tree.read", "Read the lesson's source tree.", query);
-  route("GET", "/file", "file.read", "Read a lesson source file.", query);
-  route("GET", "/files", "files.find", "Find lesson source files.", searched);
-  route("GET", "/search", "search", "Search lesson source files.", searched);
-  route("POST", "/resolve-path", "path.resolve", "Resolve a lesson source path reference.",
-    (request) => learningInput(request, routes.requestBody(request)));
-  route("POST", "/file", "file.create", "Create a lesson source file.",
-    (request) => learningInput(request, routes.requestBody(request)));
-  route("GET", "/stars", "stars.read", "Read this account's starred lesson files.", query);
-  route("POST", "/stars", "star.set", "Star or unstar a lesson file.",
-    (request) => learningInput(request, routes.requestBody(request)));
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
-    summary: "Download an original lesson source file."
-  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
-    actionId: "vibe64.source-editor.file.download", input: query(request) })));
-}
-
 function registerRoutes(http, {
   projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor, learningScoped = false
 } = {}) {
-  if (learningScoped) return registerLearningRoutes(http, { routeSurface });
-  if (!sourceEditor || typeof sourceEditor.readTree !== "function") {
+  if (!learningScoped && (!sourceEditor || typeof sourceEditor.readTree !== "function")) {
     throw new TypeError("registerRoutes requires the Vibe64 Source Editor API.");
   }
+  // A lesson's Files editor uses the declared reads, download, file create and
+  // stars through its saved attempt. Saving is Training's ledgered save.
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
-    projectContext, routeRelativePath, routeSurface, tags: ["studio", "vibe64-source-editor"]
+    projectContext, routeRelativePath, routeSurface, tags: ["studio", "vibe64-source-editor"],
+    learningActions: learningScoped ? createSourceEditorActions({ sourceEditor: {} }) : null
   });
   const route = (method, suffix, operation, options = {}, buildInput = (request) => sourceInput(request)) => routes.actionRoute(
     method, `/sessions/:sessionId${suffix}`, { ...options, actionId: `vibe64.source-editor.${operation}`, buildInput }
@@ -213,8 +173,9 @@ function registerRoutes(http, {
   route("GET", "/source-editor/files", "files.find", { summary: "Find editable source files." }, searched);
   route("GET", "/source-editor/search", "search", { summary: "Search editable source files." }, searched);
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
-    summary: "Download an original source file."
-  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({ actionId: "vibe64.source-editor.file.download", input: query(request) })));
+    learning: true, summary: "Download an original source file."
+  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
+    actionId: "vibe64.source-editor.file.download", input: routes.actionInput(request, query(request)) })));
   route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });
   route("POST", "/source-editor/stars", "star.set", { bodyLimit: 16 * 1024, summary: "Star or unstar a file." }, body);
   route("POST", "/source-editor/resolve-path", "path.resolve", { bodyLimit: 32 * 1024, summary: "Resolve a source path reference." }, body);

@@ -206,36 +206,14 @@ function registerRoutes(
   if (!learningScoped && (!uploads || typeof uploads.readSingleMultipartFile !== "function")) {
     throw new TypeError("Vibe64 terminal routes require runtime.uploads.");
   }
-  const featureRoutes = createVibe64FeatureRoutes(http, {
+  const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 terminal routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
+    routeRelativePath,
     routeSurface,
-    projectScoped: !learningScoped,
+    learningActions: learningScoped ? createTerminalActions({ terminals }) : null,
     tags: ["studio", "vibe64-terminals"]
   });
-  const learningActions = learningScoped ? new Set(createTerminalActions({ terminals })
-    .filter(action => action.extensions.vibe64.learningAccess &&
-      (action.id.startsWith("vibe64.terminals.output") || action.id === ACTION_SELECT_PREVIEW_IDENTITY ||
-        action.id === "vibe64.terminals.agent-session.prepare")).map(action => action.id)) : null;
-  const routes = learningScoped ? {
-    ...featureRoutes,
-    actionRoute(method, suffix, options) {
-      if (!learningActions.has(options.actionId)) return;
-      featureRoutes.actionRoute(method, suffix, { ...options, buildInput(request) {
-        const learningAttemptId = request.params?.learningAttemptId;
-        if (!learningAttemptId) throw Object.assign(new Error("Use the exact saved lesson URL."), {
-          code: "vibe64_learning_attempt_required", statusCode: 400
-        });
-        return { ...withoutVibe64User(options.buildInput?.(request) || {}), learningAttemptId };
-      } });
-    },
-    serviceRoute(method, suffix, options, handler) {
-      if (method === "GET" && suffix === "/sessions/:sessionId/output-results/:resultId") {
-        featureRoutes.serviceRoute(method, suffix, options, handler);
-      }
-    }
-  } : featureRoutes;
   routes.actionRoute("GET", "/codex-terminal", {
     actionId: "vibe64.terminals.global-terminal.status",
     summary: "Read global Vibe64 Codex terminal status."
@@ -290,6 +268,7 @@ function registerRoutes(
   });
 
   routes.serviceRoute("GET", "/sessions/:sessionId/output-results/:resultId", {
+    learning: true,
     summary: "Download one immutable Vibe64 output result."
   }, async (request, reply) => {
     const opened = await request.executeAction({
@@ -337,12 +316,16 @@ function registerRoutes(
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/agent-goal", {
-    actionId: "vibe64.terminals.agent-goal.read", buildInput: sessionInput,
+    actionId: "vibe64.terminals.agent-goal.read",
+    // Main's goal tools use this internally; it has no lesson URL.
+    learning: false, buildInput: sessionInput,
     summary: "Read the selected assistant conversation goal."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-goal", {
     actionId: "vibe64.terminals.agent-goal.update",
+    // Main's goal tools use this internally; it has no lesson URL.
+    learning: false,
     buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Set, pause, resume, or cancel the selected assistant conversation goal."
   });

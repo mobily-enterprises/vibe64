@@ -63,37 +63,17 @@ function registerRoutes(http, {
   routeRelativePath = "",
   learningScoped = false
 } = {}) {
-  const featureRoutes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 session routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
-    routeSurface,
-    projectScoped: !learningScoped,
-    tags: ["studio", "vibe64-sessions"]
-  });
   // Reuse every original HTTP validator/input builder. The canonical action
   // metadata is the single allowlist: source/setup/Git operations stay on the
   // project routes and cannot gain authority from a lesson URL.
-  const learningActions = learningScoped ? new Set(createSessionActions({ sessions: {} })
-    .filter(action => action.extensions.vibe64.learningAccess).map(action => action.id)) : null;
-  const routes = learningScoped ? {
-    ...featureRoutes,
-    actionRoute(method, suffix, options) {
-      if (!learningActions.has(options.actionId)) return;
-      featureRoutes.actionRoute(method, suffix, {
-        ...options,
-        buildInput(request) {
-          const learningAttemptId = request.params?.learningAttemptId;
-          if (!learningAttemptId) {
-            throw Object.assign(new Error("Use the exact saved learning attempt URL."), {
-              code: "vibe64_learning_attempt_required", statusCode: 400
-            });
-          }
-          return { ...withoutVibe64User(options.buildInput?.(request) || {}), learningAttemptId };
-        }
-      });
-    }
-  } : featureRoutes;
+  const routes = createVibe64FeatureRoutes(http, {
+    localRequestMessage: "Vibe64 session routes only accept loopback Studio requests.",
+    projectContext,
+    routeRelativePath,
+    routeSurface,
+    learningActions: learningScoped ? createSessionActions({ sessions: {} }) : null,
+    tags: ["studio", "vibe64-sessions"]
+  });
 
   routes.actionRoute("GET", "/repository/history", {
     actionId: ACTION_INSPECT_REPOSITORY_HISTORY,

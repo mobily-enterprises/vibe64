@@ -14,7 +14,8 @@ import {
   ACTION_DATABASE_OVERVIEW_SAVE,
   ACTION_DATABASE_SNIPPET_SAVE,
   ACTION_DATABASE_SNIPPET_DELETE,
-  ACTION_DATABASE_ASSISTANT_ASK
+  ACTION_DATABASE_ASSISTANT_ASK,
+  createDatabaseActions
 } from "./actions.js";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
@@ -52,23 +53,6 @@ function databaseStatusCode(response = {}) {
   return 400;
 }
 
-// A saved lesson edits its practice database like any project's Database;
-// only the database assistant stays with Working sessions.
-const LEARNING_ROUTE_ACTIONS = new Set([
-  ACTION_DATABASE_STATE_READ,
-  ACTION_DATABASE_SCHEMA_REFRESH,
-  ACTION_DATABASE_QUERY_RUN,
-  ACTION_DATABASE_QUERY_CANCEL,
-  ACTION_DATABASE_LOOKUP_SEARCH,
-  ACTION_DATABASE_CELL_UPDATE,
-  ACTION_DATABASE_ROW_INSERT,
-  ACTION_DATABASE_ROW_DELETE,
-  ACTION_DATABASE_LAYOUT_SAVE,
-  ACTION_DATABASE_OVERVIEW_SAVE,
-  ACTION_DATABASE_SNIPPET_SAVE,
-  ACTION_DATABASE_SNIPPET_DELETE
-]);
-
 function registerRoutes(http, {
   projectContext = null,
   routeRelativePath = "",
@@ -78,14 +62,15 @@ function registerRoutes(http, {
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 database routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath: learningScoped ? "learning/:learningAttemptId/vibe64" : routeRelativePath,
+    routeRelativePath,
     routeSurface,
-    projectScoped: !learningScoped,
+    // A saved lesson edits its practice database like any project's Database;
+    // only the database assistant (undeclared) stays with Working sessions.
+    learningActions: learningScoped ? createDatabaseActions({ databaseTools: {} }) : null,
     tags: ["studio", "vibe64-database-tools"]
   });
   const sessionRoute = "/database/sessions/:sessionId";
   const route = (method, suffix, actionId, options, buildInput) => {
-    if (learningScoped && !LEARNING_ROUTE_ACTIONS.has(actionId)) return;
     routes.actionRoute(
       method,
       `${sessionRoute}${suffix}`,
@@ -93,9 +78,7 @@ function registerRoutes(http, {
         statusCode: databaseStatusCode,
         ...options,
         actionId,
-        buildInput: learningScoped
-          ? request => ({ ...buildInput(request), learningAttemptId: request.params.learningAttemptId })
-          : buildInput
+        buildInput
       }
     );
   };
