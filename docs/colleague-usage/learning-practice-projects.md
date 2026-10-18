@@ -7,8 +7,10 @@ support before retrying. That refusal means preparation did not start.
 
 Supported preparation uses the exercise bundled with your saved lesson and keeps
 its reserved practice project and session when you resume. Workspace setup may
-continue after the start request finishes. Pending or failed setup needs its
-existing recovery; it does not mean Preview is running or a practical has passed.
+continue after the start request finishes. When that setup run succeeds, the
+lesson becomes ready on its own; you do not need to press **Resume saved lesson**
+first. Failed setup needs its existing recovery, then **Resume saved lesson**;
+setup success does not mean Preview is running or a practical has passed.
 Standalone setup uses the installation's actual resources; it does not create a
 hosted development database by default.
 

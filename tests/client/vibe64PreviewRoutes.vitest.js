@@ -264,6 +264,25 @@ describe("Training lesson picker prerequisite", () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it("shows a start in flight or an unconfirmed start as such, never as an unavailable installation", async () => {
+    for (const gate of ["starting", "startUnconfirmed"]) {
+      const start = vi.fn();
+      const state = mountPicker({ onStart: start, [gate]: true });
+      selectFirst(state);
+      state.requestStart();
+      expect(start).not.toHaveBeenCalled();
+      pickerApp.unmount(); pickerApp = null;
+    }
+    const starting = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, busy: true, starting: true });
+    expect(starting).toContain("Starting the selected lesson");
+    expect(starting).not.toContain("unavailable in this installation");
+    const unconfirmed = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, startUnconfirmed: true });
+    expect(unconfirmed).toContain("Use Retry lesson start");
+    expect(unconfirmed).not.toContain("unavailable in this installation");
+    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: false }))
+      .toContain("Starting lessons is unavailable in this installation.");
+  });
+
   it("retains displayed cached choices during refresh without admitting new work", async () => {
     const state = mountPicker();
     selectFirst(state);

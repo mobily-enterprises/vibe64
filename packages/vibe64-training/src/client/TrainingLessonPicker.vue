@@ -15,7 +15,9 @@ const props = defineProps({
   canStart: Boolean,
   canResume: Boolean,
   // Optional owner-only custom course request; resolves to the confirmed result or null.
-  createCourse: { type: Function, default: null }
+  createCourse: { type: Function, default: null },
+  starting: Boolean,
+  startUnconfirmed: Boolean
 });
 const emit = defineEmits(["refresh", "start", "resume"]);
 const selectionId = ref("");
@@ -80,8 +82,8 @@ const savedAttempt = computed(() => !learningInvalid.value && props.learningResu
 const history = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
   props.learningResult.available === true ? props.learningResult.history : []);
 const completion = computed(() => savedAttempt.value ? props.learningResult.completion : null);
-const startPossible = computed(() => Boolean(props.canStart && !props.busy && !props.catalogueLoading && !props.catalogueError &&
-  learningReady.value && !savedAttempt.value));
+const startPossible = computed(() => Boolean(props.canStart && !props.starting && !props.startUnconfirmed && !props.busy &&
+  !props.catalogueLoading && !props.catalogueError && learningReady.value && !savedAttempt.value));
 const startEnabled = computed(() => startPossible.value && selected.value && offered(selected.value.course, selected.value.lesson));
 const resumeEnabled = computed(() => props.canResume && !props.busy && learningReady.value && savedAttempt.value && !savedAttempt.value.ended);
 
@@ -204,6 +206,8 @@ async function requestCreateCourse(input) {
     </template>
     <div v-if="courses.length" class="training-lesson-picker__start">
       <p v-if="savedAttempt">Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</p>
+      <p v-else-if="starting" role="status">Starting the selected lesson and preparing its practice project. Its teacher conversation opens when this finishes.</p>
+      <p v-else-if="startUnconfirmed">The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</p>
       <p v-else-if="!canStart">Starting lessons is unavailable in this installation.</p>
     </div>
 

@@ -83,8 +83,29 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }
 
+  // Creating the exercise session starts the original asynchronous Workspace
+  // setup, so the first preparation normally returns "preparing". When that
+  // exact setup run finishes, recheck the same attempt through this original
+  // owner, as Resume would; it records ready only when setup is proven.
+  const setupFollowUps = new Map();
+  function followSetup({ actor, attemptId, setupRun }) {
+    if (setupFollowUps.has(attemptId)) return;
+    const task = Promise.resolve(setupRun).catch(() => null).then(async () => {
+      for (let tries = 1; ; tries++) {
+        try { return await prepareLesson({ actor, attemptId }); }
+        catch (error) {
+          // A concurrent learning write may briefly hold the preparation barrier.
+          if (error.code !== "VIBE64_TRAINING_PREPARATION_BUSY" || tries >= 3) throw error;
+        }
+      }
+    }).catch(() => null).finally(() => setupFollowUps.delete(attemptId));
+    // Resume remains the explicit recovery when this follow-up cannot finish.
+    setupFollowUps.set(attemptId, task);
+  }
+
   async function prepareLesson({ actor, attemptId } = {}) {
-    return learners.runPreparationExclusive({ actor, attemptId }, async () => {
+    let setupRun = null;
+    const prepared = await learners.runPreparationExclusive({ actor, attemptId }, async () => {
       let saved = await learners.resumeAttempt({ actor, attemptId });
       const lesson = await content.readLesson({ ...saved.attempt.pin.topic,
         lessonCode: saved.attempt.pin.lesson.code, lessonHash: saved.attempt.pin.lesson.hash });
@@ -155,6 +176,8 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
               if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
                 throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
               }
+              // The setup runner is keyed in this Project context.
+              setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
               return current;
             };
             return learningSessions
@@ -167,6 +190,7 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
           if (session.workspaceSetup?.status !== "succeeded") {
             const current = await learners.resumeAttempt({ actor, attemptId });
             if (["failed", "ambiguous", "required", "unconfigured"].includes(session.workspaceSetup?.status)) {
+              setupRun = null;
               if (attempt.preparation.phase === "ready") return { ...current, setup: session.workspaceSetup, previewReady: false };
               return { ...await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
                 stage, code: "VIBE64_TRAINING_SETUP_INCOMPLETE", message: "Exercise Workspace setup is incomplete. Use the existing setup recovery, then resume this same lesson." }), previewReady: false };
@@ -188,9 +212,12 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
             stage, code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
             message: "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics." });
         } catch { /* Original failure remains authoritative. */ }
+        setupRun = null;
         throw error;
       }
     });
+    if (setupRun) followSetup({ actor, attemptId, setupRun });
+    return prepared;
   }
 
   return Object.freeze({ startLesson, prepareLesson, endLesson, continueLesson });

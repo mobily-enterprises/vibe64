@@ -11,6 +11,7 @@ const courses = computed(() => toValue(props.learning.coursesResource.data));
 const progress = computed(() => toValue(props.learning.learningResource.data));
 const busy = computed(() => toValue(props.learning.busy));
 const retry = computed(() => toValue(props.learning.startRetry));
+const starting = computed(() => toValue(props.learning.starting) === true);
 const trial = computed(() => toValue(props.learning.savedAuthorPreview));
 const trialResource = computed(() => props.learning.authorPreviewResource);
 const trialEnabled = computed(() => toValue(props.learning.authorPreviewEnabled) === true);
@@ -82,9 +83,11 @@ async function request(operation) {
       :catalogue-error="toValue(learning.coursesResource.loadError)"
       :learning-error="toValue(learning.learningResource.loadError)"
       :busy="busy"
-      :can-start="canRequest && !retry"
+      :can-start="canRequest"
       :can-resume="canRequest"
       :create-course="input => request(owner => owner.createCourse(input))"
+      :starting="starting"
+      :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
       @start="request(owner => owner.startLesson($event))"
       @resume="request(owner => owner.resumeLesson($event.attemptId))"

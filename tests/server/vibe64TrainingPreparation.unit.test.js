@@ -189,6 +189,36 @@ test("session failures retain the same identity and original error when diagnosi
   assert.equal(f.attempt.preparation.initialSessionId, `training-${attemptId}`);
 });
 
+test("a start whose Workspace setup is still running records ready through the original owner when that setup run finishes", async t => {
+  const f = await fixture(t);
+  const finished = Promise.withResolvers();
+  f.owners.terminals.waitForWorkspaceSetup = id => { f.calls.push(["setup-wait", id]); return finished.promise; };
+  const service = createTrainingService(f.owners);
+  const started = await service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
+  assert.equal(started.attempt.preparation.phase, "preparing", "a running setup is not reported ready");
+  assert.deepEqual(f.calls.filter(([name]) => name === "setup-wait"), [["setup-wait", `training-${attemptId}`]]);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(f.attempt.preparation.phase, "preparing", "readiness waits for the actual setup run");
+  // The fixture session stands in for the setup runner's own saved result.
+  f.setSession({ sessionId: `training-${attemptId}`, status: "open", workspaceSetup: { status: "succeeded" } });
+  finished.resolve();
+  for (let i = 0; i < 50 && f.attempt.preparation.phase !== "ready"; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(f.attempt.preparation.phase, "ready");
+  assert.equal(f.calls.filter(([name]) => name === "session-create").length, 1, "the follow-up reuses the exact prepared session");
+  assert.equal(f.calls.filter(([name]) => name === "lock").length, 2, "the follow-up uses the original preparation barrier");
+  assert.equal(f.calls.filter(([name]) => name === "setup-check").length, 1, "the follow-up proves current setup before ready");
+});
+
+test("a failed Workspace setup leaves the start preparing without a readiness follow-up", async t => {
+  const f = await fixture(t, { setup: "failed" });
+  f.owners.terminals.waitForWorkspaceSetup = async () => null;
+  const result = await createTrainingService(f.owners).prepareLesson({ actor, attemptId });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(result.attempt.preparation.phase, "preparing");
+  assert.equal(f.calls.filter(([name]) => name === "failure").length, 1, "the failure keeps its original diagnosis");
+  assert.equal(f.calls.filter(([name]) => name === "lock").length, 1, "no follow-up repeats a finished failure");
+});
+
 test("changed canonical initial source refuses before session creation", async t => {
   const f = await fixture(t);
   const original = Object.assign(new Error("Changed canonical source"), { code: "vibe64_managed_project_source_mismatch" });

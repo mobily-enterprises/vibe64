@@ -720,14 +720,20 @@ before claiming the real hosted lesson passes.
 
 `learning.read` is deliberately read-only: saved `preparation.phase` is an earlier
 checkpoint, not a current running/healthy setup observation. The original hosted
-initializer starts asynchronous Workspace setup; its completion does not itself
-write learner readiness. During an already-requested lesson, `lesson.resume` keeps
+initializer starts asynchronous Workspace setup. When a preparation returns
+`preparing` while that session's setup run is active, the preparation owner keeps
+that exact run (`terminals.waitForWorkspaceSetup`, read in the practice Project
+context) and, once it settles, reruns the same `prepareLesson` for the same
+attempt under the original preparation barrier, retrying a briefly busy barrier at
+most three times. It records ready only through the same proof below; a failed or
+changed setup keeps its diagnosis, and Resume remains the explicit recovery.
+During an already-requested lesson, `lesson.resume` keeps
 the same attempt/project/initial session and freshly checks that session through
 its original preparation owner, including `workspaceSetupIsPrepared`, before
 recording ready. Original `sessions.inspect` exposes the actual reported
 `workspaceSetupStatus`; repeated learning reads neither refresh that authority nor
 advance the checkpoint. `question.prepare` remains restricted to a ready attempt.
-No background polling, lazy handler repair or new operation is added. Ready still
+No polling, lazy handler repair or new operation is added. Ready still
 does not prove running App Preview, successful view opening or a learner pass.
 
 The existing `TrainingPreviewPresentation` component/player is consumed through

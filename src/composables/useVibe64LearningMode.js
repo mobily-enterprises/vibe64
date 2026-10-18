@@ -74,7 +74,10 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     && typeof learningResource.data.value.learnerId === "string" ? learningResource.data.value.learnerId : "");
   const busy = ref(false);
   const pendingStart = shallowRef(null);
-  const startRetry = computed(() => pendingStart.value?.actor === actorKey.value ? pendingStart.value.input : null);
+  // A start in flight is not yet unconfirmed: offer its exact retry only after
+  // that request settles without confirming the attempt and its conversation.
+  const starting = ref(false);
+  const startRetry = computed(() => !starting.value && pendingStart.value?.actor === actorKey.value ? pendingStart.value.input : null);
   const command = useCommand({
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: "app", access: "never",
     apiSuffix: "/vibe64/training", placementSource: "vibe64.training.learning-mode",
@@ -163,12 +166,13 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
       pendingStart.value = request;
     }
     busy.value = true;
+    starting.value = true;
     try {
       const outcome = await prepare(`${TRAINING_PATH}/lessons/start`,
         { ...request.input, requestId: request.requestId }, scope, options);
       if (pendingStart.value === request) pendingStart.value = null;
       return { ...outcome, requestId: request.requestId };
-    } finally { busy.value = false; }
+    } finally { busy.value = false; starting.value = false; }
   }
 
   function retryStart(options = {}) {
@@ -212,6 +216,6 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   }
 
   return Object.freeze({ learningMode, learningView, purposeFilter, setLearningMode, setLearningView,
-    coursesResource, learningResource, learnerId, busy, startRetry,
+    coursesResource, learningResource, learnerId, busy, starting, startRetry,
     refresh, startLesson, retryStart, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

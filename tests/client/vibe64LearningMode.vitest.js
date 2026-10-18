@@ -171,6 +171,20 @@ it("retains start retry after uncertain Create and never overlaps another UI ope
   expect(harness.command.mock.calls[2][1]).toEqual(harness.command.mock.calls[0][1]);
 });
 
+it("reports a start in flight as starting, offering its exact retry only after it settles unconfirmed", async () => {
+  const admitted = Promise.withResolvers(); harness.command.mockReturnValueOnce(admitted.promise);
+  const pending = mode.startLesson(selection); await flush();
+  expect(mode.starting.value).toBe(true);
+  expect(mode.startRetry.value).toBeNull();
+  admitted.reject(new Error("ack lost"));
+  await expect(pending).rejects.toThrow("ack lost");
+  expect(mode.starting.value).toBe(false);
+  expect(mode.startRetry.value).toEqual(selection);
+  await mode.retryStart();
+  expect(mode.startRetry.value).toBeNull();
+  expect(opened).toHaveBeenCalledWith({ attemptId: A, sessionId: `learning-${A}`, learnerId: "learner-owner" });
+});
+
 it("does not select a created conversation after the fresh progress read revokes access", async () => {
   read.mockRejectedValueOnce(Object.assign(new Error("revoked"), { status: 403 }));
   const outcome = await mode.startLesson(selection);

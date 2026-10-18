@@ -229,7 +229,13 @@ open until confirmation. Practice lesson diagrams save to that same lesson and
 Main conversation. A changed account, attempt or conversation retires its old
 handle; an error never grants a pass.
 
-If Start is unconfirmed, **Retry lesson start** keeps its original request
+While a start is in progress, the picker says **Starting the selected lesson and
+preparing its practice project**, and **Start selected lesson** stays disabled
+until the request settles; the teacher conversation then opens by itself. This
+looks the same on desktop and phone. **Starting lessons is unavailable in this
+installation** appears only when the installation cannot start lessons.
+
+If Start is unconfirmed, the picker says so and **Retry lesson start** keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.
 An ended replay is history; it does not select a different current attempt. If
 opening the saved conversation is unconfirmed, the exact Start retry or Resume
