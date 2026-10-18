@@ -1,21 +1,27 @@
 <template>
   <section class="env-panel">
-    <header class="env-panel__header">
-      <div class="env-panel__title">
-        <h1 class="text-headline-small font-weight-bold ma-0">Env</h1>
+    <Vibe64DashboardPageHeader
+      description="Values supplied to this project's development processes."
+      :icon="mdiFileCogOutline"
+      title="Env"
+    >
+      <template #meta>
         <v-chip
           v-if="envConfigSourceLabel"
-          size="x-small"
+          class="env-panel__source"
+          label
+          size="small"
           variant="tonal"
         >
           {{ envConfigSourceLabel }}
         </v-chip>
-      </div>
-      <div class="env-panel__actions">
+      </template>
+      <template #actions>
         <template v-if="projectEnvTabActive">
           <v-btn
             :loading="envLoading"
-            size="small"
+            :prepend-icon="mdiRefresh"
+            rounded="pill"
             type="button"
             variant="tonal"
             @click="refresh"
@@ -27,12 +33,13 @@
           name="tab-actions"
           :active-tab="activeTab"
         />
-      </div>
-    </header>
+      </template>
+    </Vibe64DashboardPageHeader>
 
     <v-tabs
       v-model="activeTab"
       class="env-panel__tabs"
+      color="primary"
       density="comfortable"
     >
       <v-tab :value="PROJECT_ENV_TAB">Development</v-tab>
@@ -189,11 +196,13 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { mdiFileCogOutline, mdiRefresh } from "@mdi/js";
 import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
+import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import RuntimeConfigRecordsView from "@/components/studio/RuntimeConfigRecordsView.vue";
 import { useRuntimeConfigSecretReveal } from "@/composables/useRuntimeConfigSecretReveal.js";
 import {
@@ -459,59 +468,57 @@ function reloadPage() {
 <style scoped>
 .env-panel {
   display: grid;
-  gap: 0.85rem;
+  gap: var(--v64-space-4, 16px);
   min-width: 0;
 }
 
-.env-panel__header {
-  align-items: center;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.env-panel__title {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.env-panel__actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.env-panel__source {
+  font-weight: 600;
 }
 
 .env-panel__tabs {
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+}
+
+.env-panel__tabs :deep(.v-tab) {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .env-panel__alert {
-  border-radius: 8px;
+  border-radius: var(--v64-shape-md, 12px);
 }
 
-.env-panel__expected {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
+/* M3 filled cards: tonal surfaces instead of hairline boxes. */
+.env-panel__expected,
+.env-panel__add {
+  background: var(--v64-surface-container-low);
+  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12));
+  border-radius: var(--v64-shape-lg, 16px);
 }
 
 .env-panel__add {
   align-items: center;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
   display: grid;
-  gap: 0.6rem;
+  gap: var(--v64-space-3, 12px);
   grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto auto;
-  padding: 0.75rem;
+  padding: var(--v64-space-4, 16px);
+}
+
+.env-panel__add :deep(.v-field) {
+  background: var(--v64-surface);
+  border-radius: var(--v64-shape-sm, 8px);
+}
+
+.env-panel__add > .v-btn {
+  border-radius: var(--v64-shape-full, 999px);
+  min-height: 40px;
+  padding-inline: var(--v64-space-5, 24px);
 }
 
 .env-panel__expected {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--v64-space-2, 8px);
   min-width: 0;
   overflow: hidden;
 }
@@ -519,9 +526,9 @@ function reloadPage() {
 .env-panel__section-heading {
   align-items: center;
   display: flex;
-  gap: 0.5rem;
+  gap: var(--v64-space-2, 8px);
   justify-content: space-between;
-  padding: 0.75rem 0.75rem 0;
+  padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px) 0;
 }
 
 .env-panel__section-heading--inline {
@@ -529,8 +536,7 @@ function reloadPage() {
 }
 
 .env-panel__section-heading h2 {
-  font-size: 0.98rem;
-  font-weight: 700;
+  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
   letter-spacing: 0;
   margin: 0;
 }
@@ -539,19 +545,13 @@ function reloadPage() {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0 0.75rem 0.75rem;
+  gap: var(--v64-space-2, 8px);
+  padding: 0 var(--v64-space-4, 16px) var(--v64-space-4, 16px);
 }
 
 @media (max-width: 900px) {
-  .env-panel__header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .env-panel__add {
     grid-template-columns: 1fr;
   }
-
 }
 </style>

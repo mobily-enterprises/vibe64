@@ -112,19 +112,22 @@ onBeforeUnmount(() => {
     </header>
 
     <v-sheet
-      :rounded="navigationCollapsed ? 0 : 'lg'"
+      :rounded="navigationCollapsed ? 0 : 'xl'"
       :border="!navigationCollapsed"
       class="section-container-shell__panel"
     >
       <div class="section-container-shell__body">
         <v-select
           v-if="mobileSectionsActive && !navigationCollapsed"
+          class="section-container-shell__mobile-select"
           :model-value="activeMobileSectionValue"
           :items="mobileSectionLinks"
           item-title="label"
           item-value="to"
-          :item-props="(item) => ({ disabled: item.disabled })"
+          :item-props="(item) => ({ disabled: item.disabled, prependIcon: item.icon || undefined })"
+          :prepend-inner-icon="activeMobileSection?.icon || undefined"
           label="Dashboard section"
+          rounded="lg"
           variant="outlined"
           hide-details
           @update:model-value="selectMobileSection"
@@ -136,8 +139,8 @@ onBeforeUnmount(() => {
         >
           <v-list
             nav
+            bg-color="transparent"
             density="compact"
-            rounded="lg"
           >
             <slot name="tabs" />
           </v-list>
@@ -170,14 +173,14 @@ onBeforeUnmount(() => {
 }
 
 .section-container-shell__title {
-  font-size: 1.1rem;
-  font-weight: 650;
+  font: var(--v64-type-title-lg);
   letter-spacing: 0;
-  line-height: 1.15;
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--v64-space-1);
 }
 
 .section-container-shell__panel {
+  background: var(--v64-surface-container-lowest);
+  border-color: var(--v64-outline-variant) !important;
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -185,28 +188,69 @@ onBeforeUnmount(() => {
 
 .section-container-shell__body {
   display: grid;
-  gap: 0.45rem;
+  gap: var(--v64-space-3);
   grid-template-columns: minmax(10rem, 11.5rem) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 0.75rem;
+  padding: var(--v64-space-2);
 }
 
+/* M3 navigation drawer: a tonal container holding pill-shaped destinations. */
 .section-container-shell__nav {
+  background: var(--v64-surface-container-low);
+  border-radius: var(--v64-shape-lg);
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
+  padding: var(--v64-space-2) var(--v64-space-1);
 }
 
 .section-container-shell__nav :deep(.v-list) {
-  padding: 0.15rem 0.1rem;
+  display: grid;
+  gap: 2px;
+  padding: 0;
 }
 
 .section-container-shell__nav :deep(.v-list-item) {
-  border-radius: var(--studio-control-radius, 7px);
-  min-height: 38px;
-  padding-inline: 0.6rem 0.7rem;
+  border-radius: var(--v64-shape-full);
+  color: var(--v64-on-surface-variant);
+  margin: 0;
+  min-height: 40px;
+  padding-inline: var(--v64-space-3) var(--v64-space-4);
+  transition:
+    background-color var(--v64-duration-short) var(--v64-ease-standard),
+    color var(--v64-duration-short) var(--v64-ease-standard);
+}
+
+/* Replace Vuetify's overlay with explicit M3 state layers. */
+.section-container-shell__nav :deep(.v-list-item__overlay) {
+  display: none;
+}
+
+.section-container-shell__nav :deep(.v-list-item:not(.v-list-item--active):not(.v-list-item--disabled):hover) {
+  background: color-mix(in srgb, var(--v64-on-surface) calc(var(--v64-state-hover) * 100%), transparent);
+  color: var(--v64-on-surface);
+}
+
+.section-container-shell__nav :deep(.v-list-item:focus-visible) {
+  outline: 2px solid var(--v64-primary);
+  outline-offset: -2px;
+}
+
+.section-container-shell__nav :deep(.v-list-item:not(.v-list-item--disabled):active) {
+  background: color-mix(in srgb, var(--v64-on-surface) calc(var(--v64-state-pressed) * 100% + 4%), transparent);
+}
+
+.section-container-shell__nav :deep(.v-list-item.v-list-item--active) {
+  background: var(--v64-primary-container);
+  color: var(--v64-on-primary-container);
+  font-weight: 650;
+}
+
+.section-container-shell__nav :deep(.v-list-item.v-list-item--active .v-list-item__prepend > .v-icon) {
+  color: var(--v64-primary);
+  opacity: 1;
 }
 
 .section-container-shell__nav :deep(.v-list-item__prepend) {
@@ -214,23 +258,28 @@ onBeforeUnmount(() => {
 }
 
 .section-container-shell__nav :deep(.v-list-item__prepend > .v-icon) {
+  font-size: 20px;
   margin-inline-end: 0;
+  opacity: 0.86;
 }
 
 .section-container-shell__nav :deep(.v-list-item__spacer) {
-  min-width: 0.5rem;
-  width: 0.5rem;
+  min-width: var(--v64-space-3);
+  width: var(--v64-space-3);
 }
 
 .section-container-shell__nav :deep(.v-list-item-title) {
+  font: var(--v64-type-label-lg);
+  font-weight: inherit;
+  letter-spacing: 0;
   line-height: 1.2;
 }
 
 .section-container-shell__content {
-  border-left: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
+  padding: var(--v64-space-2) var(--v64-space-2) var(--v64-space-4);
   padding-left: 0.75rem;
   scrollbar-gutter: stable;
 }
@@ -242,19 +291,30 @@ onBeforeUnmount(() => {
 }
 
 .section-container-shell--collapsed .section-container-shell__content {
-  border-left: 0;
-  padding-left: 0;
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-container-shell__nav :deep(.v-list-item) {
+    transition: none;
+  }
 }
 
 @media (max-width: 760px) {
   .section-container-shell__body {
+    gap: var(--v64-space-2);
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
+    padding: var(--v64-space-3) var(--v64-space-3) 0;
+  }
+
+  .section-container-shell__mobile-select :deep(.v-field) {
+    background: var(--v64-surface-container-low);
+    min-height: 48px;
   }
 
   .section-container-shell__content {
-    border-left: 0;
-    padding-left: 0;
+    padding: var(--v64-space-1) 0 var(--v64-space-4);
   }
 }
 </style>
