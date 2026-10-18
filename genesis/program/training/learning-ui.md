@@ -551,3 +551,78 @@ snippet save/delete. Those actions declare `learningAccess` (`write` for the dat
 and layout changes), so the original Learning admission resolves the practice
 session. The practice database is editable like any project's: the service applies
 the ordinary write-confirmation rules and reports write access available.
+
+## Full Dashboard in a practice lesson: design note (not implemented)
+
+Owner direction: a lesson shows the normal full Dashboard for its lesson-only
+practice project and session, not a restricted lesson copy. The lead chose
+option (b): the practice project is a normal project of the learner, reached
+through the ordinary project routes. This note records what the current Learning
+binding protects and why (b) cannot keep all of it without a larger redesign.
+The interim Database | Files lesson Dashboard above remains until a path is chosen.
+
+What the binding and lesson admission protect today:
+
+1. Account isolation. Every lesson session stores an immutable
+   `learning_session` binding (learner, attempt, pin, exercise purpose,
+   conversation). `sessionStore.js` `learningSessionBinding` refuses reads and
+   writes from an unscoped store or another learner/attempt/pin
+   (`vibe64_learning_session_scope_mismatch`; session-store tests "ordinary and
+   foreign learning stores refuse…"). Admission derives the attempt from the
+   authenticated learner's saved progress (`readExerciseProjectScope`), never
+   from a browser slug or path.
+2. Fresh-effect admission. Writes and creates require the exact active,
+   current attempt (`readExerciseProjectScope` `workInactive`), run inside
+   `runLearningOperation`, which re-reads and compares the pin per operation and
+   joins the preparation barrier that also serializes End. The local practice
+   page projection is control-only; `assertProjectEffectAdmission` refuses
+   effects that did not re-enter lesson admission.
+3. Ending stops work. `stopAttemptSessions` stops the lesson conversation
+   through the original Stop owner under that barrier; later writes fail
+   `VIBE64_TRAINING_ATTEMPT_INACTIVE`.
+4. Evidence binding. The lesson's `PUT …/source-editor/file` is Training's
+   `vibe64.training.code.file.save`, which records each learner save in the one
+   authorship ledger (`codeAuthorship.js`); practical observations carry the
+   learning attempt. Agent or ordinary-route saves are deliberately unledgered,
+   so they void a code attempt.
+5. Teacher identity. Main is `vibe64-main:{learningAttemptId,sessionId}` and
+   receives lesson instructions only through `learningInstructions` of a bound
+   context.
+6. Working lists. Unscoped lists, renewal and the current-session alias omit a
+   genuine binding (`genuineLearningBinding`).
+7. No reach outside the practice project. Lesson URLs exist only for actions
+   that declare `learningAccess`; everything else (repository remote,
+   `vibe64.sessions.pull-request.create`, GitHub, Colleague messaging, project
+   delete/settings writes, Online Deploy) is refused by absence. There is no
+   explicit refusal point to reuse.
+
+Obstacles to (b) as described:
+
+- Default-deny becomes default-allow. Ordinary `/api/app/<slug>/vibe64/…`
+  routes cover every project-scoped action in Public and Online. Serving the
+  practice project there means every outward action must gain a new explicit
+  lesson refusal, including Online-contributed ones outside this repository;
+  any omission silently grants reach (guarantee 7).
+- Ordinary admission would have to become lesson admission. To read the bound
+  session and keep guarantees 2–3, every project-scoped action on a practice
+  slug must re-enter `resolveBoundPracticeContext`/`runLearningOperation` with an
+  access derived per action. Project-level commands without a session ID fail
+  its write rule, and hosted authorization (`authorizeProject`,
+  `runWithHostedTrainingProjectScope`) is Online-owned.
+- The client scopes every `/api/vibe64/…` call by the window's project slug
+  (`src/main.js` → `resolveStudioRequestUrl`). The lesson is shown on the
+  learner's Working project page, so the normal Dashboard there addresses the
+  Working project. (b) needs the lesson to move to the practice project's own
+  page and `sourceWorkspaceAvailable` (`!learningScope`) to be reopened, which
+  enables Working-only controls whose actions also need the audit above.
+
+Recommended smallest path (b′): show the normal Dashboard components in a
+practice lesson, keep the existing default-deny authority. Generalize the four
+per-package lesson route wrappers into `createVibe64FeatureRoutes` so any
+action that declares `learningAccess` gets its lesson URL; let the lesson
+Dashboard address `/api/learning/<attempt>/vibe64/…` through one injected API
+base instead of the window slug; then add one-line `learningAccess`
+declarations to the read/write actions of Git history, current changes,
+session history, Env, Health and Architecture. Saves keep Training's ledgered
+route, Main identity and Working-list filtering are unchanged, and unlisted
+actions stay refused.
