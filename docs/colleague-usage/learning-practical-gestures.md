@@ -4,7 +4,7 @@ Main is the teacher in the selected saved lesson conversation. Colleague remains
 
 ## Choose the saved practice project and chat
 
-Turn on **Learning mode** with the yellow L. Start or resume the lesson through Courses, then use **Practice project** to choose its already prepared saved workspace. This menu lists saved practice targets available to your current learner; it does not install or create another project. A source-less introductory lesson has no practice project entry.
+Turn on **Learning mode** with the **L** button at the left of the header (full yellow while Learning is on). Start or resume the lesson through Courses, then use **Practice project** to choose its already prepared saved workspace. This menu lists saved practice targets available to your current learner; it does not install or create another project. A source-less introductory lesson has no practice project entry.
 
 Follow Main's current practical question. Choose the requested practice project yourself, then choose its saved Main session. Main stays visible in Learning mode. Press **App** in Preview when the question asks for the running application. These person clicks retain the selected saved lesson target. Automatic selection after Start or Resume does not count as an independent project-choice step. Answer Main after the actions; do not submit an explanation to Colleague instead. If you reload the page or return to a loaded lesson, wait for the current question and saved workspace to be ready, then carry out all its steps in that browser before sending your explanation.
 

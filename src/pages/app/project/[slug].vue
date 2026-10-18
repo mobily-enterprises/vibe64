@@ -16,7 +16,7 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { computed, inject, nextTick, onBeforeUnmount, ref, watch, watchEffect } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
 import { mdiSchoolOutline } from "@mdi/js";
 import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
@@ -25,9 +25,11 @@ import { VIBE64_LEARNING_NAVIGATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
+const LEARNING_TAB = Object.freeze({ id: "learning", label: "Learning", icon: mdiSchoolOutline,
+  title: "Learning: courses and lesson" });
 
 const {
-  chatCollapsed: workingChatCollapsed,
+  chatCollapsed,
   chatToggleIcon,
   chatToggleTitle,
   dashboardRouteActive,
@@ -54,7 +56,7 @@ const {
   projectTabs,
   retryProjectRuntime,
   selectProjectPane,
-  setChatCollapsed: setWorkingChatCollapsed,
+  setChatCollapsed,
   showProjectPane: showWorkingProjectPane,
   switcherProjects,
   targetFolderName
@@ -68,10 +70,6 @@ const { learningMode, learningView, purposeFilter, learningResource } = learning
 const learningWorkspaceAvailable = computed(() => panel.value?.learningWorkspaceAvailable === true);
 const learningPaneActive = computed(() => learningMode.value &&
   (learningView.value === "learning" || !learningWorkspaceAvailable.value));
-const chatCollapsed = computed(() => !learningMode.value && workingChatCollapsed.value);
-function setChatCollapsed(collapsed, event) {
-  if (!learningMode.value) setWorkingChatCollapsed(collapsed, event);
-}
 function showProjectPane() {
   if (learningMode.value) {
     if (!learningWorkspaceAvailable.value) return;
@@ -79,30 +77,26 @@ function showProjectPane() {
   }
   showWorkingProjectPane();
 }
-function setLearningView(view) {
-  if (view === "workspace" && !learningWorkspaceAvailable.value) return;
-  void learning.setLearningView(view);
+// One header for both modes: Learning only adds its graduation-cap option to
+// the same Preview | Dashboard group; selecting it shows the Learning panes.
+const headerTabs = computed(() => learningMode.value ? [...projectTabs, LEARNING_TAB] : projectTabs);
+const activeHeaderTab = computed(() => learningPaneActive.value ? "learning" : projectPane.value);
+const headerTabDisabled = id => learningMode.value && id !== "learning" && !learningWorkspaceAvailable.value;
+async function selectHeaderTab(id, event) {
+  if (headerTabDisabled(id)) return;
+  if (id === "learning") return learning.setLearningView("learning");
+  if (learningMode.value && learningView.value !== "workspace") await learning.setLearningView("workspace");
+  selectProjectPane(id, event);
 }
-// Learning keeps the ordinary Preview | Dashboard tabs. Its own panes are an
-// extra tab beside them that this toggle shows or hides; it never replaces them.
-const learningPanesVisible = ref(true);
-const learningPanesShown = computed(() => learningPanesVisible.value || !learningWorkspaceAvailable.value);
-watch(learningPaneActive, active => { if (active) learningPanesVisible.value = true; });
-async function selectLearningProjectPane(pane, event) {
-  if (!learningWorkspaceAvailable.value) return;
-  if (learningView.value !== "workspace") await learning.setLearningView("workspace");
-  selectProjectPane(pane, event);
-}
-function toggleLearningPanes() {
-  if (learningPanesShown.value) {
-    if (!learningWorkspaceAvailable.value) return;
-    learningPanesVisible.value = false;
-    if (learningView.value !== "workspace") void learning.setLearningView("workspace");
-  } else {
-    learningPanesVisible.value = true;
-    void learning.setLearningView("learning");
-  }
-}
+// The phone header keeps Working's single "next pane" button; Learning's cap is
+// one more stop in that cycle.
+const mobileHeaderAction = computed(() => {
+  if (!learningMode.value) return mobileProjectAction.value;
+  const ids = headerTabs.value.map(tab => tab.id).filter(id => !headerTabDisabled(id));
+  const next = headerTabs.value.find(tab => tab.id === ids[(ids.indexOf(activeHeaderTab.value) + 1) % ids.length]);
+  return next.id === activeHeaderTab.value ? null
+    : { ariaLabel: `Go to ${next.label.toLowerCase()}`, label: next.label, pane: next.id };
+});
 
 const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
 function waitForLearningPanel(action, isCurrent, failure) {
@@ -226,7 +220,6 @@ onBeforeUnmount(() => {
 
         <div class="studio-home-shell-project-controls">
           <v-btn
-            v-if="!learningMode"
             class="studio-home-shell-chat-toggle"
             density="comfortable"
             :icon="chatToggleIcon"
@@ -239,71 +232,28 @@ onBeforeUnmount(() => {
           />
 
           <div
-            v-if="learningMode"
-            class="studio-home-shell-project-tabs studio-home-shell-project-tabs--learning"
-            role="tablist"
-            aria-label="Learning workspace view"
-          >
-            <button
-              v-for="tab in projectTabs"
-              :key="tab.id"
-              class="studio-home-shell-project-tab"
-              :class="{ 'studio-home-shell-project-tab--active': !learningPaneActive && projectPane === tab.id }"
-              role="tab"
-              type="button"
-              :aria-disabled="!learningWorkspaceAvailable ? 'true' : undefined"
-              :aria-selected="!learningPaneActive && projectPane === tab.id ? 'true' : 'false'"
-              :disabled="!learningWorkspaceAvailable"
-              :title="learningWorkspaceAvailable ? `Show the practice project's ${tab.label}` : 'This lesson has no project workspace'"
-              @click="selectLearningProjectPane(tab.id, $event)"
-            >
-              {{ tab.label }}
-            </button>
-            <button
-              v-if="learningPanesShown"
-              class="studio-home-shell-project-tab"
-              :class="{ 'studio-home-shell-project-tab--active': learningPaneActive }"
-              role="tab"
-              type="button"
-              :aria-selected="learningPaneActive ? 'true' : 'false'"
-              title="Show courses, lesson progress and presentation"
-              @click="setLearningView('learning')"
-            >
-              Learning
-            </button>
-          </div>
-          <v-btn
-            v-if="learningMode"
-            class="studio-home-shell-learning-panes-toggle"
-            density="comfortable"
-            :icon="mdiSchoolOutline"
-            size="small"
-            type="button"
-            :variant="learningPanesShown ? 'tonal' : 'text'"
-            :aria-label="learningPanesShown ? 'Hide Learning panes' : 'Show Learning panes'"
-            :aria-pressed="learningPanesShown ? 'true' : 'false'"
-            :disabled="!learningWorkspaceAvailable"
-            :title="learningWorkspaceAvailable ? learningPanesShown ? 'Hide Learning panes' : 'Show Learning panes'
-              : 'This lesson has only Learning panes'"
-            @click="toggleLearningPanes"
-          />
-          <div
-            v-if="projectPaneNavigationVisible && !learningMode"
+            v-if="projectPaneNavigationVisible || learningMode"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"
           >
             <button
-              v-for="tab in projectTabs"
+              v-for="tab in headerTabs"
               :key="tab.id"
               class="studio-home-shell-project-tab"
-              :class="{ 'studio-home-shell-project-tab--active': projectPane === tab.id }"
+              :class="{ 'studio-home-shell-project-tab--active': activeHeaderTab === tab.id }"
               role="tab"
               type="button"
-              :aria-selected="projectPane === tab.id ? 'true' : 'false'"
-              @click="selectProjectPane(tab.id, $event)"
+              :data-vibe64-guide="`tab-${tab.id}`"
+              :aria-label="tab.icon ? tab.label : undefined"
+              :aria-selected="activeHeaderTab === tab.id ? 'true' : 'false'"
+              :aria-disabled="headerTabDisabled(tab.id) ? 'true' : undefined"
+              :disabled="headerTabDisabled(tab.id)"
+              :title="headerTabDisabled(tab.id) ? 'This lesson has no project workspace' : tab.title"
+              @click="selectHeaderTab(tab.id, $event)"
             >
-              {{ tab.label }}
+              <v-icon v-if="tab.icon" :icon="tab.icon" size="18" />
+              <template v-else>{{ tab.label }}</template>
             </button>
           </div>
           <div
@@ -313,13 +263,13 @@ onBeforeUnmount(() => {
             class="studio-home-shell-preview-toolbar-host"
           />
           <button
-            v-if="mobileProjectActionVisible && (!learningMode || !learningPaneActive)"
+            v-if="mobileProjectActionVisible && mobileHeaderAction"
             class="studio-home-shell-project-mobile-action"
             type="button"
-            :aria-label="mobileProjectAction.ariaLabel"
-            @click="selectProjectPane(mobileProjectAction.pane, $event)"
+            :aria-label="mobileHeaderAction.ariaLabel"
+            @click="selectHeaderTab(mobileHeaderAction.pane, $event)"
           >
-            {{ mobileProjectAction.label }}
+            {{ mobileHeaderAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
         </div>

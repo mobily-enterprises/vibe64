@@ -9,7 +9,7 @@ first. Wait for each view to finish opening.
 Colleague can explain these steps, but its own navigation is a demonstration,
 not evidence that you performed them.
 For a question that asks you to change code, edit in **Dashboard → Files** and
-press **Check my code** in the **Learning** tab; see "Answering a code question" in
+press **Check my code** in the graduation-cap **Learning** option; see "Answering a code question" in
 [Choosing lessons and Learning conversations](learning-mode-ui.md).
 
 Keep one delivered challenge and its question reference across all three steps.

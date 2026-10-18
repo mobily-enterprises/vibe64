@@ -3,7 +3,7 @@
 On an installation with supported Learning controls, the Working/Learning filter
 changes which sessions you see in the existing chat panel. Hiding a lesson chat
 does not stop its work, discard its draft or send another message. Return to that
-saved lesson conversation to see its retained history and draft. The yellow L
+saved lesson conversation to see its retained history and draft. The **L** button
 switch preserves where you were reading in each mode. Ordinary session selection
 and collapsing or reopening chat keep their existing scroll-to-latest behavior.
 

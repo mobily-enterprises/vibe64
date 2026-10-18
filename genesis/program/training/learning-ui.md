@@ -56,15 +56,18 @@ choice. These flags are presentation, never Training or session authority. The
 root app and project page attach the existing L control and original picker to
 the same session panel. The adapter itself owns no mounting or session state.
 
-The root, project and hosted project views keep Learning Main visible without
-changing the Working collapse preference. Learning ignores collapse/reveal
-requests and the shared shell does not start or finish a pane swipe in this mode.
-The project page switches one right-hand region between the complete retained
+The project page uses one header and one chat-collapse state for both modes:
+the same collapse arrow, `setChatCollapsed`, mobile next-pane button and shared
+shell pane swipe as Working. Only the projectless root Courses page, which has
+no pane switching (`mobilePaneSwipeEnabled` false), stacks chat and lessons at
+phone widths (`studio-app-shell-layout--learning-stacked`). The **L** control is
+a small icon button: flat yellow and `aria-pressed=true` ("Leave Learning
+mode") only while Learning is on, outlined and unpressed ("Enter Learning
+mode") otherwise. The project page switches one right-hand region between the complete retained
 Preview/Dashboard workspace and the existing Training lesson/player composition.
 The normal workspace remains the default only when the exact selected Learning
 session owns a supervised project. Source-less sessions force the Learning pane.
-At widths up to 980px, the shared shell retains the same controls in its stacked
-layout. No alternate teacher, session panel, Preview, progress writer or
+No alternate teacher, session panel, Preview, progress writer or
 presentation host is introduced.
 
 `coursesResource` and `learningResource` use the original endpoint resource,
@@ -396,7 +399,7 @@ Practice project lists actual loaded own-learner saved rows and delegates to the
 same original session selector. It captures a person click before selection and
 settles only a confirmed selection. Like the Working project selector, its label
 shrinks to an ellipsis and chevron on narrow app bars instead of overlapping the
-Preview/Dashboard/Learning tabs. Automatic Start/Resume callbacks supply no
+Preview | Dashboard | graduation-cap tab group. Automatic Start/Resume callbacks supply no
 gesture. Saved Main session and App choices forward their native event, while the original
 App observer retains server instance, interaction, player/frame and request IDs.
 Main and general Colleague remain different conversations: only the real drawer's
@@ -460,16 +463,19 @@ effects still require lesson admission. Unscoped (Working) session-store listing
 renewal reads and the current-session alias omit a genuine lesson binding, which its
 Learning store owns; direct reads and malformed bindings still refuse.
 
-## Learning panes beside Preview and Dashboard
+## Learning as a third option of Preview | Dashboard
 
-In Learning mode the project page keeps the ordinary Preview | Dashboard tabs
-(`projectTabs`) and adds a **Learning** tab beside them; the route's
-`learningView` stays `workspace` for a project tab and `learning` for the
-Learning tab, so Colleague, Main and the watch use the same values. A page-local
-toggle (**Hide/Show Learning panes**) removes or restores the Learning tab;
-hiding it while selected returns to `workspace`, showing it selects it, and any
-navigation to `learning` shows it again. A source-less lesson disables the
-project tabs and the toggle and stays on the Learning tab.
+The project page renders one tab group for both modes (`headerTabs`): Working
+shows `projectTabs` (Preview | Dashboard); Learning appends one icon-only
+graduation-cap option (aria-label "Learning", title "Learning: courses and
+lesson") to the same markup. Each option carries `data-vibe64-guide`
+(`tab-preview`, `tab-dashboard`, `tab-learning`). Selecting the cap sets the
+route's `learningView` to `learning`; selecting Preview or Dashboard sets it to
+`workspace` and runs the ordinary `selectProjectPane`, so Colleague, Main and
+the watch use the same values. There is no separate Learning tab or panes
+toggle. A source-less lesson disables Preview and Dashboard and stays on the
+cap. The same Preview toolbar host is shown whenever Preview is the selected
+option.
 
 ## Practice Dashboard files
 
@@ -485,7 +491,7 @@ because the lesson passes no assistant. Source-editor reads, `file.download`,
 (learning `control`), which wraps the generic save and records the authorship
 ledger. The live change stream is not mounted in lesson scope; the editor's
 revalidation and baseHash conflict remain. **Check my code** sits at the top of
-the Learning tab's Courses view whenever a practice lesson is open. It calls the
+the Learning (graduation-cap) pane's Courses view whenever a practice lesson is open. It calls the
 selected Main gesture owner's `submitCode`, which posts a `code-submit`
 observation for the current delivered question to the Main practical route. The
 server decides whether that question is a code practical; the control shows its

@@ -26,7 +26,7 @@ In a practice lesson, **Preview** shows the practice app as soon as it
 reports ready, including after the app starts while you are on the **Learning**
 pane. **Stop preview** stops the practice app cleanly and keeps it stopped, even
 after a reload, until you choose **Restart preview**. Switching between
-**Preview**, **Dashboard** and the **Learning** tab keeps the same running app without reloading it.
+**Preview**, **Dashboard** and the graduation-cap **Learning** option keeps the same running app without reloading it.
 Standalone exercise conversations in Learning, their Preview and practical
 assessment are still being integrated; prepared source alone does not make that
 complete flow available.

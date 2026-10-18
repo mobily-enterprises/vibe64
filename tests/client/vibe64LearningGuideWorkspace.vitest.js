@@ -6,15 +6,21 @@ import * as Vue from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { vibe64SessionToolRouteSegment } from "../../src/lib/vibe64SessionToolDefinitions.js";
 
-// Learning is a guide on the real Vibe64 workspace: its panes are an extra,
-// toggleable tab beside Preview | Dashboard, a practice lesson's Dashboard keeps
+// Learning is a guide on the real Vibe64 workspace: one header serves both modes and
+// Learning only adds a graduation-cap option to the same Preview | Dashboard group, a practice lesson's Dashboard keeps
 // its editable Database and ordinary Files editor, and Check my code stays reachable.
 
 const fixture = vi.hoisted(() => ({ route: null, page: null, learning: null, panel: null }));
 vi.mock("vue-router", () => ({ RouterView: { render: () => null }, useRoute: () => fixture.route }));
 vi.mock("@/composables/useVibe64AppPage.js", () => ({ useVibe64AppPage: () => fixture.page }));
 vi.mock("@/composables/useVibe64LearningMode.js", () => ({ useVibe64LearningMode: () => fixture.learning }));
-vi.mock("@/components/StudioAppShellLayout.vue", () => ({ default: passthrough("section") }));
+vi.mock("@/components/StudioAppShellLayout.vue", () => ({ default: Vue.defineComponent({
+  props: ["chatCollapsed", "mobilePaneSwipeEnabled", "learningMode"],
+  setup(props, { attrs, slots }) {
+    return () => Vue.h("section", { ...attrs, "data-shell": true, "chat-collapsed": props.chatCollapsed,
+      "mobile-pane-swipe-enabled": props.mobilePaneSwipeEnabled }, Object.values(slots).flatMap(slot => slot({ props: {} })));
+  }
+}) }));
 vi.mock("@/components/studio/Vibe64AuthSettingsButton.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/studio/repository/Vibe64LocalRemoteControls.vue", () => ({ default: { render: () => null } }));
 vi.mock("@/components/studio/Vibe64LearningPracticeProjectSelector.vue", () => ({ default: { render: () => null } }));
@@ -25,10 +31,11 @@ vi.mock("@/components/studio/ProjectSelectionGate.vue", () => ({ default: Vue.de
   }
 }) }));
 vi.mock("@/components/studio/Vibe64SessionPanel.vue", () => ({ default: Vue.defineComponent({
-  props: ["learningView", "projectPane"],
+  props: ["learningView", "projectPane", "chatCollapsed", "previewToolbarTeleportTarget"],
   setup(props, { expose }) {
     expose({ get learningWorkspaceAvailable() { return fixture.panel.workspace.value; } });
-    return () => Vue.h("article", { "data-learning-view": props.learningView, "data-project-pane": props.projectPane });
+    return () => Vue.h("article", { "data-learning-view": props.learningView, "data-project-pane": props.projectPane,
+      "data-chat-collapsed": props.chatCollapsed, "data-preview-toolbar": props.previewToolbarTeleportTarget });
   }
 }) }));
 
@@ -64,23 +71,26 @@ function findAll(node, predicate, found = []) {
 const mounted = [];
 afterEach(() => { for (const app of mounted.splice(0)) app.unmount(); });
 
-function mountLearningPage({ workspace = true, learningView = "workspace" } = {}) {
+function mountLearningPage({ workspace = true, learningView = "workspace", mode = "learning", previewToolbar = false,
+  mobile = false } = {}) {
   const route = Vue.reactive({ path: "/app/project/practice", params: { slug: "practice" },
-    query: { mode: "learning", learningView } });
+    query: mode === "learning" ? { mode, learningView } : {} });
+  const chatCollapsed = Vue.ref(false);
   fixture.route = route;
   const projectPane = Vue.ref("preview");
   fixture.page = {
-    chatCollapsed: Vue.ref(false), chatToggleIcon: "", chatToggleTitle: "", dashboardRouteActive: Vue.ref(false),
+    chatCollapsed, chatToggleIcon: "", chatToggleTitle: "Collapse chat", dashboardRouteActive: Vue.ref(false),
     emitPageTitle: vi.fn(), handleProjectSelectionError: vi.fn(), handleProjectSelectionMissing: vi.fn(),
-    handleProjectSelectionReady: vi.fn(), mdiChevronDown: "", mdiChevronRight: "", mobilePaneSwipeEnabled: Vue.ref(false),
-    mobileProjectAction: Vue.ref({ ariaLabel: "", label: "", pane: "preview" }), mobileProjectActionVisible: Vue.ref(false),
+    handleProjectSelectionReady: vi.fn(), mdiChevronDown: "", mdiChevronRight: "", mobilePaneSwipeEnabled: Vue.ref(true),
+    mobileProjectAction: Vue.ref({ ariaLabel: "", label: "", pane: "preview" }), mobileProjectActionVisible: Vue.ref(mobile),
     openProject: vi.fn(), pageError: Vue.ref(""), previewToolbarHostId: "preview-toolbar",
-    previewToolbarHostVisible: Vue.ref(false), previewToolbarTeleportTarget: Vue.ref(""), projectLoadError: Vue.ref(""),
+    previewToolbarHostVisible: Vue.computed(() => previewToolbar && projectPane.value === "preview"),
+    previewToolbarTeleportTarget: Vue.computed(() => previewToolbar && projectPane.value === "preview" ? "#preview-toolbar" : ""), projectLoadError: Vue.ref(""),
     projectPane, projectPaneNavigationVisible: Vue.ref(true), projectRuntimeError: Vue.ref(""),
     projectRuntimeReady: Vue.ref(true), projectSlug: Vue.ref("practice"),
     projectTabs: [{ id: "preview", label: "Preview" }, { id: "dashboard", label: "Dashboard" }],
     retryProjectRuntime: vi.fn(), selectProjectPane: vi.fn((pane) => { projectPane.value = pane; }),
-    setChatCollapsed: vi.fn(), showProjectPane: vi.fn(), switcherProjects: Vue.ref([]), targetFolderName: Vue.ref("practice")
+    setChatCollapsed: vi.fn((value) => { chatCollapsed.value = Boolean(value); }), showProjectPane: vi.fn(), switcherProjects: Vue.ref([]), targetFolderName: Vue.ref("practice")
   };
   const views = [];
   fixture.learning = {
@@ -92,7 +102,7 @@ function mountLearningPage({ workspace = true, learningView = "workspace" } = {}
   };
   fixture.panel = { workspace: Vue.ref(workspace) };
   const renderer = Vue.createRenderer({
-    createElement: type => ({ type, children: [], props: {}, parent: null }),
+    createElement: type => ({ type, children: [], props: {}, style: {}, parent: null }),
     createComment: text => ({ type: "comment", text, children: [], props: {} }),
     createText: text => ({ type: "text", text, children: [], props: {} }),
     insert(child, parent, anchor = null) {
@@ -118,19 +128,42 @@ function mountLearningPage({ workspace = true, learningView = "workspace" } = {}
   mounted.push(app);
   const tabs = () => findAll(root, node => node.props.role === "tab").map(node => ({ node, label: textOf(node).trim(),
     selected: node.props["aria-selected"] === "true", disabled: Boolean(node.props.disabled) }));
-  const toggle = () => findAll(root, node => /Learning panes$/u.test(node.props["aria-label"] || ""))[0];
   const panel = () => findAll(root, node => node.type === "article")[0];
-  return { route, root, tabs, toggle, panel, views, projectPane, page: fixture.page };
+  const shell = () => findAll(root, node => node.props["data-shell"])[0];
+  return { route, root, tabs, panel, shell, views, projectPane, page: fixture.page };
 }
 
-describe("Learning panes beside Preview | Dashboard", () => {
-  it("keeps the real Preview and Dashboard tabs and adds a Learning tab beside them", async () => {
+describe("one Preview | Dashboard header for Working and Learning", () => {
+  const tablist = view => findAll(view.root, node => node.props.role === "tablist");
+  const collapse = view => findAll(view.root, node => String(node.props.class || "").includes("studio-home-shell-chat-toggle"));
+
+  it("renders the same tab group, positions and classes; Learning only adds the graduation-cap option", async () => {
+    const working = mountLearningPage({ mode: "working" });
+    const learning = mountLearningPage();
+    await Vue.nextTick();
+    expect(tablist(working)).toHaveLength(1);
+    expect(tablist(learning)).toHaveLength(1);
+    expect(tablist(learning)[0].props.class).toEqual(tablist(working)[0].props.class);
+    expect(tablist(learning)[0].props["aria-label"]).toBe(tablist(working)[0].props["aria-label"]);
+    expect(working.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard"]);
+    expect(learning.tabs().map(tab => tab.node.props["aria-label"] || tab.label)).toEqual(["Preview", "Dashboard", "Learning"]);
+    expect(learning.tabs().map(tab => tab.node.props.class)).toEqual(working.tabs().map(tab => tab.node.props.class).concat([
+      learning.tabs()[2].node.props.class]));
+    expect(learning.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["tab-preview", "tab-dashboard", "tab-learning"]);
+    expect(working.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["tab-preview", "tab-dashboard"]);
+    expect(learning.tabs()[2].node.props.title).toBe("Learning: courses and lesson");
+    expect(learning.tabs()[2].label).toBe("");
+    expect(findAll(learning.root, node => /Learning panes$/u.test(node.props["aria-label"] || ""))).toHaveLength(0);
+    // Controls keep their order: collapse arrow, tabs, Preview toolbar.
+    const order = view => findAll(view.root, node => node.props.class === "studio-home-shell-project-controls")[0].children
+      .filter(node => node.type !== "comment").map(node => String(node.props.class || node.props.id));
+    expect(order(learning)).toEqual(order(working));
+  });
+
+  it("selects one of three options: the cap shows Learning panes, Preview or Dashboard deselects it", async () => {
     const view = mountLearningPage();
     await Vue.nextTick();
-    expect(view.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard", "Learning"]);
     expect(view.tabs().map(tab => tab.selected)).toEqual([true, false, false]);
-    expect(view.tabs().some(tab => tab.label === "Workspace")).toBe(false);
-    expect(view.toggle().props["aria-label"]).toBe("Hide Learning panes");
     expect(view.panel().props["data-learning-view"]).toBe("workspace");
 
     const event = { type: "click", isTrusted: true };
@@ -146,39 +179,53 @@ describe("Learning panes beside Preview | Dashboard", () => {
     expect(view.panel().props["data-project-pane"]).toBe("dashboard");
   });
 
-  it("hides and shows the extra Learning tab without removing Preview or Dashboard", async () => {
-    const view = mountLearningPage({ learningView: "learning" });
+  it("keeps the same collapse-chat arrow and chat state in Learning", async () => {
+    const working = mountLearningPage({ mode: "working" });
+    const view = mountLearningPage();
     await Vue.nextTick();
-    view.toggle().props.onClick(); await Vue.nextTick(); await Vue.nextTick();
-    expect(view.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard"]);
-    expect(view.route.query.learningView).toBe("workspace");
-    expect(view.toggle().props["aria-label"]).toBe("Show Learning panes");
-    expect(view.toggle().props["aria-pressed"]).toBe("false");
-
-    view.toggle().props.onClick(); await Vue.nextTick(); await Vue.nextTick();
-    expect(view.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard", "Learning"]);
-    expect(view.route.query.learningView).toBe("learning");
-
-    view.toggle().props.onClick(); await Vue.nextTick(); await Vue.nextTick();
-    expect(view.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard"]);
-    // A teacher or Colleague navigation to the Learning view shows its tab again.
-    view.route.query = { ...view.route.query, learningView: "learning" }; await Vue.nextTick(); await Vue.nextTick();
-    expect(view.tabs().map(tab => tab.label)).toEqual(["Preview", "Dashboard", "Learning"]);
+    expect(collapse(view)).toHaveLength(1);
+    expect(collapse(view)[0].props.class).toBe(collapse(working)[0].props.class);
+    const event = { type: "click", isTrusted: true };
+    collapse(view)[0].props.onClick(event); await Vue.nextTick();
+    expect(view.page.setChatCollapsed).toHaveBeenLastCalledWith(true, event);
+    expect(view.panel().props["data-chat-collapsed"]).toBe(true);
+    expect(view.shell().props["chat-collapsed"]).toBe(true);
+    expect(view.shell().props["mobile-pane-swipe-enabled"]).toBe(true);
   });
 
-  it("keeps a source-less lesson on Learning with Preview, Dashboard and the toggle disabled", async () => {
+  it("shows the same Preview toolbar host in Learning while Preview is shown", async () => {
+    const view = mountLearningPage({ previewToolbar: true });
+    await Vue.nextTick();
+    const host = () => findAll(view.root, node => node.props.id === "preview-toolbar")[0];
+    expect(host()).toBeTruthy();
+    expect(view.panel().props["data-preview-toolbar"]).toBe("#preview-toolbar");
+    view.tabs()[2].node.props.onClick({ type: "click", isTrusted: true }); await Vue.nextTick();
+    expect(view.panel().props["data-preview-toolbar"]).toBe("");
+  });
+
+  it("cycles the same phone next-pane button through Preview, Dashboard and the cap", async () => {
+    const view = mountLearningPage({ mobile: true });
+    await Vue.nextTick();
+    const action = () => findAll(view.root, node => node.props.class === "studio-home-shell-project-mobile-action")[0];
+    expect(action().props["aria-label"]).toBe("Go to dashboard");
+    await action().props.onClick({ type: "click", isTrusted: true }); await Vue.nextTick();
+    expect(view.page.selectProjectPane).toHaveBeenLastCalledWith("dashboard", expect.anything());
+    expect(action().props["aria-label"]).toBe("Go to learning");
+    await action().props.onClick({ type: "click", isTrusted: true }); await Vue.nextTick();
+    expect(view.route.query.learningView).toBe("learning");
+    expect(action().props["aria-label"]).toBe("Go to preview");
+  });
+
+  it("keeps a source-less lesson on the cap with Preview and Dashboard disabled", async () => {
     const view = mountLearningPage({ workspace: false });
     await Vue.nextTick();
-    expect(view.tabs().map(({ label, selected, disabled }) => ({ label, selected, disabled }))).toEqual([
+    expect(view.tabs().map(({ node, selected, disabled }) => ({ label: node.props["aria-label"] || textOf(node).trim(), selected, disabled }))).toEqual([
       { label: "Preview", selected: false, disabled: true },
       { label: "Dashboard", selected: false, disabled: true },
       { label: "Learning", selected: true, disabled: false }
     ]);
-    expect(view.toggle().props.disabled).toBe(true);
     await view.tabs()[0].node.props.onClick({ type: "click", isTrusted: true });
-    view.toggle().props.onClick(); await Vue.nextTick();
     expect(view.page.selectProjectPane).not.toHaveBeenCalled();
-    expect(view.tabs().map(tab => tab.label)).toContain("Learning");
   });
 });
 
