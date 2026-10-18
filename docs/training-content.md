@@ -119,6 +119,26 @@ ordered lesson identities. If a topic changes during generation, commit the
 intended content and retry. This command generates local release material only;
 it does not push Git, create a remote release, install content or enable a course.
 
+### Lesson 0 is supplied by each installation
+
+Local and hosted Vibe64 are set up very differently, so "Set yourself up"
+(Lesson 0) is not part of the shared topic. Each installation supplies its own
+Lesson 0 topic and lists it first in the same course, followed by the shared,
+installation-agnostic topic:
+
+```json
+{ "schemaVersion": 1, "courseId": "vibe64-getting-started-local", "title": "Getting started with local Vibe64",
+  "release": "0.1.0", "status": "preview",
+  "topics": [{ "topicId": "vibe64-local-setup", "release": "0.1.0" },
+             { "topicId": "vibe64-getting-started", "release": "0.1.12" }] }
+```
+
+Local Vibe64 uses `learn-vibe64-local-setup` (V64-SETUP-00). It checks the
+machine through the real **Dashboard → Health** checks and **Account settings**,
+which Colleague can also read for the person. A hosted service keeps its own
+Lesson 0 topic in its own repository. Every later lesson stays in the shared
+topic and must work the same way on both.
+
 ## Server reads of installed snapshots
 
 This release provides a read-only server API at
