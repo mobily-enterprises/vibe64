@@ -282,7 +282,8 @@ test("learning route and input cannot mix another attempt, project or reserved a
   for (const [input, context] of [
     [{ learningAttemptId: learningAttempt, projectSlug: "working" }, {}],
     [{ learningAttemptId: learningAttempt }, { projectSlug: "working" }],
-    [{ learningAttemptId: learningAttempt }, { requestMeta: { request: { params: { slug: "working" } } } }]
+    [{ learningAttemptId: learningAttempt }, { requestMeta: { request: { params: { slug: "working" } } } }],
+    [{ learningAttemptId: learningAttempt, projectSlug: "working" }, { projectSlug: "working", colleague: {} }]
   ]) await assert.rejects(f.execute(input, context), { code: "vibe64_learning_project_mismatch" });
   await assert.rejects(f.execute({ learningAttemptId: learningAttempt }, { vibe64Action: {
     user: f.state.actor, learning: { learningScope: { attemptId: learningAttempt } }
@@ -417,6 +418,10 @@ test("learning-only matching retains reserved authority, exact selector and fore
     requestMeta: { request: { params: { learningAttemptId: learningAttempt } } }
   }), { code: "vibe64_learning_attempt_mismatch" });
   assert.equal(f.calls.some(value => value.learning), false);
+  // Colleague's displayed project is ambient focus, not a second selection.
+  const ambient = await f.contribute(main, { learningAttemptId: learningAttempt }, { projectSlug: "working", colleague: {} })
+    .then(() => null, error => error);
+  assert.notEqual(ambient?.code, "vibe64_learning_project_mismatch");
   f.state.foreign = true;
   await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt, sessionId: "saved-learning" }),
     { code: "vibe64_learning_scope_mismatch" });

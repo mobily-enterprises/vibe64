@@ -33,7 +33,9 @@ function actionLearningAttemptId(input, context) {
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId))) {
     throw actionContextError("vibe64_learning_attempt_invalid", "Use the exact saved learning attempt identity.", 400);
   }
-  if (attemptId && (context.requestMeta?.request?.params?.slug || input.projectSlug || context.projectSlug)) {
+  // Colleague's context project is the page the person is viewing, not a
+  // selection; an explicit route or input project still conflicts.
+  if (attemptId && (context.requestMeta?.request?.params?.slug || input.projectSlug || context.projectSlug && !context.colleague)) {
     throw actionContextError("vibe64_learning_project_mismatch", "A learning operation cannot also select a working project.");
   }
   return attemptId;

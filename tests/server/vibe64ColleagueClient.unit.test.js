@@ -2757,3 +2757,40 @@ test("the local browser navigator returns plain settled focus for an ordinary Le
   validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, clientId: "3c85e5a4-2990-43ed-b56e-d4ea63286c79",
     commandId: "ed44616a-14ac-4235-9e0b-acf13032f5bf", ok: true, focus });
 });
+
+test("the local Colleague host hands Colleague its own browser navigator", async t => {
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "colleague-navigate-prop", inlineTemplate: true }).content, { format: "cjs" });
+  let received = null;
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+      setup(props) { received = props; return () => null; } } },
+    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const navigation = vue.shallowRef(null);
+  const host = renderer.createApp(module.exports.default);
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  assert.equal(typeof received?.navigate, "function", "Colleague must receive a callable navigator");
+  assert.equal(received.navigate, navigation.value);
+  assert.deepEqual(Object.keys(await received.navigate({ managementView: "accounts" })), ["route"]);
+});
