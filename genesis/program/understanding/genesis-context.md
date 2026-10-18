@@ -130,7 +130,9 @@ length, experience level, and explanation style. The host does not impose a
 separate brevity rule. Bare Deslop requests use the agent's own task changes,
 committed or uncommitted; explicit commits or ranges retain their chosen scope.
 Vibe64's numbered-question presentation and managed-session operating rules live in
-that stable contribution rather than being appended to each user message. The
+that stable contribution rather than being appended to each user message. Each
+question’s answer list immediately follows that question, with one distinct answer
+per bullet; a shared trailing list and slash-combined alternatives are forbidden. The
 Vibe64 driver has no turn form and Vibe64 adds nothing to ordinary user turns.
 Genesis still offers a generic bounded turn-context capability, but Vibe64 does
 not use it. Genesis supports the one host driver and process bridge, not a

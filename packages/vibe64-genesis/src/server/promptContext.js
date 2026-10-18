@@ -15,7 +15,9 @@ const VIBE64_EPHEMERAL_CONTEXT_MAX_CHARACTERS = 64 * 1024;
 const QUESTION_CONTRACT = Object.freeze([
   "When user input is necessary, ask no more than three concise, high-impact questions at once.",
   "Put multiple questions on separate lines as `[1] Question`, `[2] Question`, and so on.",
-  "For a small fixed set of useful choices, finish with `Possible answers:` and a short bullet list; the user may always type a different answer."
+  "For a small fixed set of useful choices, put `Possible answers:` and its short bullet list immediately beneath that question, before the next numbered question. Each list belongs only to the question directly above it; never collect answers for several questions into one trailing list.",
+  "Each bullet must be one distinct, complete answer to that question. Put alternatives such as Yes and No, or Compact and Comfortable, in separate bullets; never combine mutually exclusive answers with a slash or with or. If the answer needs free text, omit the choice list. The user may always type a different answer.",
+  "Example:\n[1] Which density?\nPossible answers:\n- Compact\n- Comfortable\n[2] Tell the main agent before changes?\nPossible answers:\n- Yes, tell main first\n- No, proceed independently"
 ]);
 const MANAGED_PREVIEW_INSTRUCTIONS = Object.freeze([
   "The Vibe64-managed preview is the canonical application server; do not start a duplicate server on another port.",

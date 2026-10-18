@@ -278,3 +278,13 @@ no source pin. Separate project pins do not affect each other.
 Colleague can explain the pin or, on your explicit request, pin/unpin a named
 session through its session action. Source cleanliness and publication checks
 for host updates still apply to the pinned source.
+
+## Answer clarification questions
+
+When the agent asks numbered questions, answer each question using its own choices
+or a typed response. This works the same way on desktop and phone. Choices should
+appear beneath the question they answer, with one alternative per option. If an
+option combines opposite answers (for example, “Yes / No”) or belongs to another
+question, do not use it to communicate approval. Ask the agent to restate the
+questions with separate choices. Colleague can explain the questions; your chosen
+answers determine what work is authorized.
