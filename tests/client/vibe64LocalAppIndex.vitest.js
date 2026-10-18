@@ -286,7 +286,8 @@ it("shared original shell refs are per mount and only local composition supplies
     const localSource = readFileSync(path.resolve("src/components/Vibe64LocalColleagueHost.vue"), "utf8");
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
     expect(localSource).toContain("if (browserNavigation) browserNavigation.value = navigate;");
-    expect(localSource).toContain(':navigate="browserNavigation?.value || null"');
+    // A template auto-unwraps the injected ref, so Colleague receives the local navigator itself.
+    expect(localSource).toContain(':navigate="navigate"');
     expect(localSource).not.toContain("createConversationRuntime");
     const projectSource = readFileSync(path.resolve("src/pages/app/project/[slug].vue"), "utf8");
     expect(projectSource).toContain("if (learningNavigation) learningNavigation.value = navigateLearning;");
