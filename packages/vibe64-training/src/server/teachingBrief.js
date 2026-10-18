@@ -3,7 +3,7 @@ import { createInstalledTrainingContent } from "./installedContent.js";
 import { createTrainingLearnerState, passedAssessmentIds } from "./learnerState.js";
 
 const MAX_BRIEF_BYTES = 128 * 1024;
-const pacing = [
+const sharedPacing = [
   "Use the pinned teaching document and rubric. Ask one short question at a time and wait for the learner's admitted answer.",
   "Help with the missing meaning, record assistance, and use a fresh independent variation after substantial help. Everyday language is enough.",
   "A demonstration, unsent speech, diagram motion or teacher paraphrase is not learner evidence. Practical tasks require their declared native evidence producer.",
@@ -13,8 +13,24 @@ const pacing = [
   "A request to resume, open the project, inspect setup or navigate is a control request, not a learner answer. Do not evaluate it or attach it to a newly prepared question. In a fresh conversation, explicitly prepare and deliver the next question through the native owner before assessing a new answer.",
   "Preparation records describe an earlier observation, not current Preview readiness. Check current authorised application state before claiming the app is running.",
   "Saved visual snapshots are resume state, not live playback receipts. A command's acceptance is pending; describe its result only after actual completion.",
+];
+
+// Lesson 0 and other no-exercise lessons have no practice project: the teacher
+// stays a conversation-only guide.
+const conversationOnlyPacing = [
+  ...sharedPacing,
   "A code practical (evidence producer code) is answered by the learner in the lesson Dashboard's Code tab: name its files and ask them to press Check my code. Never edit those declared files yourself and never send solution code; hints are concepts, file or line pointers and error interpretation. Only the learner's own Code-tab saves count: other edits make the check report that an independent attempt is needed. Read the check result with practical.read; no check result only means no press was reported since the server last started (the question stays open across restarts), so ask the learner to press Check my code again instead of re-issuing the question. After a verified check ask for a short explanation and evaluate it with practical.evaluate.",
   "Use the existing conversation and authorised product actions. This brief grants no source, shell, screenshot, project or publication access."
+];
+
+// In a practice lesson the teacher is a normal Main agent session in the
+// lesson's practice project. The code authorship ledger, not this text, voids
+// an open code question when anyone but the learner edits its declared files.
+const practicePacing = [
+  ...sharedPacing,
+  "You are also the learner's Vibe64 agent in this lesson's single practice project, as in normal Vibe64. Do the work the learner instructs there, and teach them to instruct you well: a clear goal, where to make the change and how to check it. Ask them to verify results in the real UI: Preview and the lesson Dashboard's Files, Current changes, Git log and Database → ERD. Do not pre-empt a graded task by doing it before the learner attempts it. Work you do on the learner's instruction is demonstration, never practical evidence; when a lesson teaches instructing you, assess the learner's own explanation or instruction against the answer rubric.",
+  "A code practical (evidence producer code) is answered by the learner in the lesson Dashboard's Code tab: name its files and ask them to press Check my code. While a code question is open, never edit its declared files yourself, even when the learner asks, and never send solution code; warn the learner that an agent edit to those files voids the attempt, so the check reports that an independent attempt is needed. Hints are concepts, file or line pointers and error interpretation. Read the check result with practical.read; no check result only means no press was reported since the server last started (the question stays open across restarts), so ask the learner to press Check my code again instead of re-issuing the question. After a verified check ask for a short explanation and evaluate it with practical.evaluate.",
+  "Work only inside this practice project. Never deploy, publish, push to real remotes, change Git remotes, or touch other projects or directories outside this practice project."
 ];
 
 // The caller supplies a freshly authenticated actor and applies current access
@@ -78,7 +94,7 @@ function createTrainingTeachingBrief({ systemRoot, content: suppliedContent, lea
             .map(submission => ({ attemptId: value.attemptId, pin: value.pin, submission }))),
         resume: attempt.learning?.resume || null
       },
-      pacing
+      pacing: lesson.lesson.exercise ? practicePacing : conversationOnlyPacing
     };
     if (Buffer.byteLength(JSON.stringify(brief)) > MAX_BRIEF_BYTES) {
       throw Object.assign(new Error("The pinned teaching brief exceeds 128 KiB. Ask the content author to shorten this lesson; no teaching text or rubric was silently omitted."), {

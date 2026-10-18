@@ -128,8 +128,11 @@ with its base hash, intended hash and saved hash. At **Check my code** the chain
 from the starting point through those saves must reach the current bytes
 exactly; otherwise the check is not run and the question is automatically not
 passed with "needs an independent attempt: other edits detected in `<file>`".
-The teaching brief instructs Main not to write declared files or send solution
-code; there is no technical write-deny for agents in this slice. Teacher chat
+In a practice lesson Main is also the learner's agent, but while a code
+question is open the teaching brief instructs Main not to write that question's
+declared files (even when asked) or send solution code, and to warn the learner
+that an agent edit there voids the attempt. The ledger above enforces this; there
+is no technical write-deny for agents in this slice. Teacher chat
 is not shared with the grader. The check is learner-run code on the learner's
 own machine and has no network isolation: for hosted use, sandboxing and network
 denial of the check job are an open gap.

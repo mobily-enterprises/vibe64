@@ -408,6 +408,22 @@ motion cannot substitute for practical evidence. The brief cannot grade or save 
 result and grants no operation authority. Source, controller/SVG bytes, checks,
 asset paths and manifests remain in their original internal readers.
 
+`pacing` branches on the pinned lesson's exercise. A no-exercise lesson
+(Lesson 0) keeps its conversation-only text unchanged: the brief grants no
+source, shell, screenshot, project or publication access. In a practice lesson
+the teacher is the normal Main agent session in the practice project, so the
+brief also makes it the learner's Vibe64 agent there: it does the work the
+learner instructs, teaches clear instructions (goal, where, how to check) and
+verification in Preview and Dashboard Files, Current changes, Git log and
+Database → ERD, does not pre-empt graded tasks, and never counts its own work as
+practical evidence; lessons about instructing the agent assess the learner's own
+explanation against the answer rubric. While a code question is open it must
+not edit that question's declared files and warns that such an edit voids the
+attempt; `codeAuthorship.js` enforces this, with no new persisted origin or
+assistance value. It must not deploy, publish, push to real remotes, change Git
+remotes or touch other projects or directories. That last rule is instruction
+only; shell and network confinement is a later slice.
+
 The serialized brief is limited to 128 KiB. Oversized content fails with author
 guidance rather than silently truncating teaching text or rubrics. Missing or
 changed content retains the installed reader's actionable error. This module is

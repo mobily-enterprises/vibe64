@@ -41,6 +41,29 @@ the project's ordinary (Working) session list and settings do not show it. Anoth
 address with no saved lesson behind it, still reports "Local editor mode only
 serves the selected project."
 
+## Instructing your teacher-agent
+
+In a lesson with a practice project, the teacher in the lesson's conversation is
+also your Vibe64 agent for that project, as in normal Vibe64. Ask it to make a
+change and it does the work in the practice project. It also teaches you to
+instruct it well: say the goal, where the change belongs, and how you will check
+it. Then check the result yourself in the real interface: **Preview**, and in the
+lesson **Dashboard** the **Files**, **Current changes**, **Git log** and
+**Database** → **ERD** views.
+
+Work the teacher does for you is a demonstration. It never counts as your
+practical evidence, and the teacher does not do a graded task for you before you
+try it. When a lesson is about instructing the agent, your own explanation or
+instruction is what is assessed.
+
+While a code question is open, the teacher will not edit that question's files,
+even if you ask; any agent edit there voids the attempt and **Check my code**
+then reports that an independent attempt is needed. Make those edits yourself in
+the lesson Dashboard's **Code** tab. The teacher also never deploys, publishes,
+pushes to real remotes, changes Git remotes, or touches other projects or folders
+outside this practice project. Lesson 0 and other lessons without a practice
+project keep a conversation-only teacher that does no project work.
+
 Opening supported practice teaching retains the reserved initial conversation,
 source and history. An ownership or lesson-binding error needs owner inspection;
 do not create a replacement or switch it to an unrelated Working project. An
