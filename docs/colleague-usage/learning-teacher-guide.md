@@ -19,7 +19,7 @@ You then click it yourself.
 
 **Preview**, **Dashboard**, **Dashboard → Database → ERD** or **Data**,
 **Dashboard → Files** (and one file in it), **Current changes**, **Git log**,
-**Session info**, **Architecture**, and the **Learning** tab. A Dashboard section
+**Session info**, **Architecture**, and the graduation-cap (Learning) option beside Preview and Dashboard. A Dashboard section
 the lesson does not show cannot be ringed.
 
 ## When nothing is ringed
