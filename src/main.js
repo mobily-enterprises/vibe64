@@ -74,6 +74,12 @@ const vuetify = createVuetify({
       },
       dark: {
         colors: {
+          // Material 3 dark surfaces: a cool near-black background with a
+          // slightly lighter surface so containers read as tonal tiers.
+          background: "#111318",
+          surface: "#1A1C21",
+          "surface-bright": "#37393F",
+          "surface-light": "#2A2D33",
           "surface-variant": "#243342",
           "on-surface-variant": "#EDF4FC",
           warning: "#DFC477",
@@ -83,6 +89,12 @@ const vuetify = createVuetify({
         }
       }
     }
+  },
+  // Material 3 shape defaults: medium-rounded cards and alerts. Explicit
+  // component props still win.
+  defaults: {
+    VCard: { rounded: "lg" },
+    VAlert: { rounded: "lg" }
   },
   icons: {
     defaultSet: "mdi",

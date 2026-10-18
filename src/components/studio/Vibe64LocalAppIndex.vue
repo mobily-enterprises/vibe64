@@ -49,11 +49,12 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
 
 <style scoped>
 .vibe64-local-app-index__top {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-  font-weight: 720;
+  color: var(--v64-on-surface);
+  font: var(--v64-type-title-lg);
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
   min-width: 0;
-  padding-left: 1rem;
+  padding-inline: var(--v64-space-4) var(--v64-space-3);
 }
 
 .vibe64-local-app-index {

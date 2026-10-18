@@ -470,24 +470,35 @@ const visibleSessions = computed(() => {
   background: currentColor;
 }
 
+.studio-ai-sessions__tab-main,
+.studio-ai-sessions__tab-close-slot {
+  transition:
+    background-color var(--v64-duration-short) var(--v64-ease-standard),
+    color var(--v64-duration-short) var(--v64-ease-standard);
+}
+
+/* M3 selected input chip: secondary container with its on-colour. */
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main {
   background: var(--studio-control-active-bg, #e7e7e7);
   border-radius: 999px 0 0 999px;
+  color: var(--v64-on-secondary-container);
   padding-inline-end: 0.34rem;
 }
 
-.studio-ai-sessions__tab-main:hover,
-.studio-ai-sessions__tab:focus-visible .studio-ai-sessions__tab-main {
-  background: rgb(var(--v-theme-primary));
-  border-color: transparent;
-  color: rgb(var(--v-theme-on-primary));
+/* Hover and keyboard focus add the M3 state layer over the chip's own tone
+   instead of flooding it with primary. */
+.studio-ai-sessions__tab:not(.studio-ai-sessions__tab--active) .studio-ai-sessions__tab-main:hover {
+  background: color-mix(in srgb, var(--v64-on-surface) 8%, var(--studio-control-rest-bg, #f7f7f8));
 }
 
-.studio-ai-sessions__tab-main:hover + .studio-ai-sessions__tab-close-slot,
-.studio-ai-sessions__tab:focus-visible .studio-ai-sessions__tab-close-slot {
-  background: rgb(var(--v-theme-primary));
-  border-color: transparent;
-  color: rgb(var(--v-theme-on-primary));
+.studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover,
+.studio-ai-sessions__tab--active .studio-ai-sessions__tab-main:hover + .studio-ai-sessions__tab-close-slot {
+  background: color-mix(in srgb, var(--v64-on-secondary-container) 8%, var(--studio-control-active-bg, #e7e7e7));
+}
+
+.studio-ai-sessions__tab:focus-visible {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: var(--v64-focus-ring-offset);
 }
 
 .studio-ai-sessions__tab :deep(.v-chip__overlay),
@@ -571,22 +582,13 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__tab-archive:hover,
 .studio-ai-sessions__tab-archive:focus-visible {
-  background: rgb(var(--v-theme-primary)) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--v-theme-on-primary), 0.16),
-    0 1px 3px rgba(var(--v-theme-primary), 0.34);
-  color: rgb(var(--v-theme-on-primary)) !important;
+  background: color-mix(in srgb, currentColor 14%, transparent) !important;
   opacity: 1;
   pointer-events: auto;
 }
 
 .studio-ai-sessions__tab-archive :deep(.v-icon) {
   font-size: 0.98rem;
-}
-
-.studio-ai-sessions__tab-main:hover .studio-ai-sessions__status-dot,
-.studio-ai-sessions__tab:focus-visible .studio-ai-sessions__status-dot {
-  background: currentColor;
 }
 
 .studio-ai-sessions__status-dot {
@@ -640,8 +642,15 @@ const visibleSessions = computed(() => {
   min-width: 0;
 }
 
+/* Equal-width compact chips: the chip surface fills its share of the row
+   instead of floating inside it. */
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab :deep(.v-chip__content) {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-main {
-  padding-inline: 0.25rem;
+  padding-inline: 0.5rem 0.25rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab--active {
