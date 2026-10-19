@@ -27,6 +27,8 @@ import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../pa
 import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
+import { agentTurnRealtimeOverlayFromPayload } from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
 
 test("Claude subscription launch preserves native auth and makes helper tools unavailable", () => {
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });
@@ -687,6 +689,20 @@ test("Claude observation failure stops native work before publishing idle", asyn
   await f.processes[0].options.onFailure(new Error("Broken stream"));
   assert.equal(f.processes[0].stopped, true);
   assert.equal((await f.provider.sessionState(f.context)).turn.state, "interrupted");
+});
+
+test("Claude active turn publication carries the revision the client overlay requires", async (t) => {
+  const f = await fixture(t);
+  const before = (await f.context.runtime.store.readSession("test")).revision;
+  await f.provider.sendMessage(f.context, { message: "Go", messageId: "working-revision" });
+  const event = f.publications.find(publication => publication.reason === "claude-stream-turn-active");
+  assert.ok(event, "Claude published its active turn.");
+  assert.ok(Number.isSafeInteger(event.session?.revision) && event.session.revision > before);
+  const published = [];
+  await createSessionChangedPublisher({ publish: async value => published.push(value) })("test", event);
+  const overlay = agentTurnRealtimeOverlayFromPayload(published[0].realtime.payload, "test");
+  assert.equal(overlay?.active, true);
+  assert.equal(overlay.revision, event.session.revision);
 });
 
 test("Claude managed bridge carries JSON and provides a verified scope stop", async (t) => {

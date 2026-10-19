@@ -199,6 +199,9 @@ if it remains stuck. Report the selected session and any failed chat/access
 request status when asking for help; do not share cookies or tokens. Colleague can identify the
 selected session and explain recovery, but cannot read the browser console.
 
+**Sending to assistant…** covers delivery of your message. With Claude,
+**Assistant is working…** replaces it as soon as Claude starts the turn, before
+its first reply arrives; the composer is not left without a status in between.
 **Assistant is working…** means the turn is active. Its animated dots require
 the provider to report a live reasoning phase. Tool use and waiting between
 provider events can keep the turn active without animating those dots. Reasoning
