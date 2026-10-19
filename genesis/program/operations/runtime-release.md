@@ -26,7 +26,6 @@ so the same command works without a source checkout in the relocated runtime.
 - `tooling/release/verify-client-startup.mjs`
 - `tooling/package-install-smoke.mjs`
 - `tooling/verify-package-boundaries.mjs`
-- `scripts/npm-release.js`
 - `tests/server/runtimePackage.unit.test.js`
 - `tooling/development/source-roots.mjs`
 - `tooling/development/source-packages.mjs`
@@ -175,10 +174,13 @@ The native-terminal proof is shared with hosted artifact creation: it starts a
 real PTY from the assembled package before release, catching missing packages
 and unusable native binaries without depending on a project's dependencies.
 
-`npm run release` keeps its existing token authentication and clean-worktree
-requirements, bumps the version without making a Git tag, then builds and tests
-the tarball and publishes that same file. A pending version-only change may be
-retried. Direct `npm publish` or `npm pack` in the source checkout fails with an
+`npm run npm-publish` runs the shared `jskit-release publish` tool, whose
+`jskitRelease.pack` command is `tooling/release/pack-release.mjs`. It requires a
+clean `main` checkout matching `origin/main`, compares the built, tested
+tarball's contents with the current npm version, and publishes only when they
+differ: it bumps the patch version, commits and pushes the bump, rebuilds and
+tests the tarball and publishes that same file. Unchanged contents publish
+nothing. Direct `npm publish` or `npm pack` in the source checkout fails with an
 instruction to use these commands, avoiding publication of the development tree.
 Every external dependency version must already exist in the target registry.
 

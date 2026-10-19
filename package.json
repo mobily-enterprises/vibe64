@@ -69,12 +69,15 @@
     "verify:packages": "node ./tooling/verify-package-boundaries.mjs",
     "smoke:package": "node ./tooling/package-install-smoke.mjs",
     "smoke:new-project": "node ./tooling/verify-new-project-foundation.mjs",
-    "release": "node ./scripts/npm-release.js",
     "dev:home": "VITE_SURFACE=home node ./bin/dev.js",
     "jskit:update": "npx --yes @jskit-ai/jskit-catalog@latest update",
     "jskit:check": "jskit check",
     "pack:release": "node ./tooling/release/pack-release.mjs",
-    "test:client:file": "node tooling/run-targeted-client-tests.mjs"
+    "test:client:file": "node tooling/run-targeted-client-tests.mjs",
+    "npm-publish": "jskit-release publish"
+  },
+  "jskitRelease": {
+    "pack": "node ./tooling/release/pack-release.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -151,6 +154,7 @@
     "@jskit-ai/agent-docs": "0.1.232",
     "@jskit-ai/config-eslint": "0.1.241",
     "@jskit-ai/jskit-catalog": "0.1.285",
+    "@jskit-ai/release": "0.1.1",
     "@playwright/test": "1.61.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "chokidar": "5.0.0",

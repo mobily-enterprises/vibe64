@@ -39,8 +39,10 @@ async function packRelease({ appRoot = APP_ROOT, outputDirectory = path.join(app
   }
 }
 
+// Also the jskit-release pack command (package.json jskitRelease.pack): the
+// last output line names the tested tarball.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await packRelease();
+  console.log(JSON.stringify({ tarball: await packRelease() }));
 }
 
 export { packRelease };

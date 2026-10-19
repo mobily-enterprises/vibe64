@@ -25,7 +25,6 @@ const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([
   "jsconfig.json",
   "package.json",
   "packages",
-  "scripts",
   "server",
   "server.js",
   "src",
@@ -103,9 +102,11 @@ test("the application owns verification and uses exact JSKIT dependency specifie
   }
 });
 
-test("package release script publishes through the npm release helper", async () => {
+test("package publication runs the shared release tool with the tested runtime artifact", async () => {
   const packageJson = await readPackageJson();
-  assert.equal(packageJson.scripts?.release, "node ./scripts/npm-release.js");
+  assert.equal(packageJson.scripts?.["npm-publish"], "jskit-release publish");
+  assert.equal(packageJson.scripts?.release, undefined);
+  assert.equal(packageJson.jskitRelease?.pack, "node ./tooling/release/pack-release.mjs");
 });
 
 test("the application foundation files are present at the app root", async () => {
