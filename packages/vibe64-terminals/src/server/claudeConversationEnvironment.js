@@ -1,3 +1,5 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { claudeModelConfiguration } from "@jskit-ai/assistant-core/server/claude-process";
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
@@ -13,6 +15,26 @@ import {
 } from "@local/vibe64-execution/server/terminalSessions";
 
 const ENGINE = "claude";
+
+// Interactive Claude shows its first-run setup, including a login choice, until
+// this flag exists. Headless chat never sets it, so a signed-in account would
+// otherwise open the terminal at that setup instead of the conversation.
+async function markClaudeOnboarded(env, credentialHome) {
+  const file = env?.CLAUDE_CONFIG_DIR
+    ? path.join(env.CLAUDE_CONFIG_DIR, ".claude.json")
+    : path.join(credentialHome.home, ".claude.json");
+  let settings = {};
+  try {
+    settings = JSON.parse(await readFile(file, "utf8"));
+  } catch (cause) {
+    if (cause.code !== "ENOENT") throw cause;
+  }
+  if (settings.hasCompletedOnboarding === true) return;
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  const temporary = `${file}.vibe64-${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify({ ...settings, hasCompletedOnboarding: true }, null, 2)}\n`, { mode: 0o600 });
+  await rename(temporary, file);
+}
 
 // Vibe64's selected settings, managed command environment and Genesis host facts.
 function createClaudeConversationEnvironment({
@@ -151,6 +173,7 @@ function createClaudeConversationEnvironment({
           session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
         if (actor?.ok === false) throw error(actor.error, actor.code);
         const terminal = await conversations.prepareTerminal(entry, ctx);
+        await markClaudeOnboarded(env, credentialHome);
         return commandRunner({ actor: "app", command,
           args: terminal.args,
           baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,

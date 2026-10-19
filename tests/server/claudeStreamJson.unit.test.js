@@ -1584,7 +1584,13 @@ test("Claude-only keys work in the catalogue, access check, chat and native term
   const terminalProvider = createClaudeSessionAgentProvider({ ...f.providerOptions,
     commandRunner: async input => { request = input; return { ok: true }; }
   });
+  const claudeSettings = path.join(f.providerOptions.env.CLAUDE_CONFIG_DIR, ".claude.json");
+  await mkdir(path.dirname(claudeSettings), { recursive: true });
+  await writeFile(claudeSettings, JSON.stringify({ oauthAccount: { emailAddress: "fixture@example.test" } }));
   await terminalProvider.startTerminal(f.context);
+  // A headless-only account must open the conversation, not first-run login setup.
+  assert.deepEqual(JSON.parse(await readFile(claudeSettings, "utf8")),
+    { oauthAccount: { emailAddress: "fixture@example.test" }, hasCompletedOnboarding: true });
   assert.equal(request.mode, "pty");
   assert.equal(request.args[request.args.indexOf("--model") + 1], "deepseek-flash[1m]");
   assert.equal(request.baseEnv.ANTHROPIC_AUTH_TOKEN, "claude-only-key");

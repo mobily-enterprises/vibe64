@@ -10,9 +10,10 @@ interactive terminal; starting it again resumes the saved conversation.
 Claude opens a new interactive process for the current saved conversation. Finish
 or stop an active chat turn before selecting **Start Claude Code**. The idle chat
 process stops first, and chat is unavailable while the terminal is open. Use
-**Close terminal** to return to chat. Even with a saved Claude connection, its
-interactive terminal may request first-use setup or sign-in. Complete the native
-steps yourself; Colleague can explain them but cannot sign in for you.
+**Close terminal** to return to chat. With a saved Claude connection the
+terminal opens the conversation directly, skipping Claude's first-run setup.
+It asks you to sign in only when the connection is missing or has expired.
+Complete sign-in yourself; Colleague can explain it but cannot sign in for you.
 
 Click inside the terminal before typing or pasting. Text and Enter are delivered
 in the order you entered them, even while the server checks terminal access.
