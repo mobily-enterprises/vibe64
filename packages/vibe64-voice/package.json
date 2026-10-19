@@ -38,7 +38,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-voice": "0.1.30",
+    "@jskit-ai/assistant-voice": "0.1.31",
     "@jskit-ai/kernel": "0.1.244",
     "@local/vibe64-core": "0.1.0",
     "@mdi/js": "^7.4.47",

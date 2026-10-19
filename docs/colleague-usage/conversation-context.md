@@ -66,17 +66,25 @@ it does not create a summary or change the saved chat.
 
 If the history is too large, the oldest complete transferred messages are omitted
 first. Returning to an existing AI sends missed or corrected messages within the
-remaining allowance. The transfer reserves working space and does not enable an
+remaining allowance. The transfer reserves a small working space (5% of the
+usable window, at least 32,768 tokens) and does not enable an
 extended context window or change model settings. Carrying more history can still
 increase input usage and cost.
 
-An unavailable usage reading or insufficient remaining context stops delivery
-before sending. Keep the message and saved history; ask the operator to inspect
-the selected native conversation's context and recover it before retrying. If a
+When Claude's own memory is nearly full, Vibe64 first summarises it
+automatically — the same compaction Claude performs on its own — and then sends
+the missed messages that fit. The send can take noticeably longer while this
+happens; keep the page open. Nothing in the saved chat changes.
+
+If summarising fails, or even after it there is no room left, a **Not enough
+room** dialog explains the problem and the message is not sent. Select
+**Summarise and continue** to try again, or **Close** and choose another
+assistant with the existing assistant controls. An unavailable usage reading also
+stops delivery before sending; retry after reconnecting the assistant. If a
 message instead reports uncertain delivery, use its existing **Retry**, which
 checks the original receipt without rebuilding or duplicating the request.
-These steps are the same on desktop and phone. Colleague can explain recovery;
-it cannot repair native provider state through this usage guide.
+These steps are the same on desktop and phone. Colleague can explain this dialog;
+selecting its buttons requires the person's interaction.
 
 This policy concerns ordinary Main chat. Learning's tool-bound context, temporary
 chat context copying and Colleague's own history policy are separate.

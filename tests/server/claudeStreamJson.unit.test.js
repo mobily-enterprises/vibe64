@@ -3665,17 +3665,40 @@ test("Main transfer budget uses Claude's current context and reserves the reques
   const signal = new AbortController().signal;
   const options = { context: f.context, input: { message: "Continue" }, handover: "", signal };
   const before = await binding.maximumHistoryBytes(options);
-  assert.equal(before, 967_000 - 1000 - 193_400 - 8 - 2 - 4096);
+  assert.equal(before, 967_000 - 1000 - 48_350 - 8 - 2 - 4096);
   assert.equal(f.processes.length, 1);
   assert.equal(f.processes[0].lastInput, undefined, "Budget inspection must not submit a request");
   f.behavior.contextUsage = { totalTokens: 20_000, maxTokens: 200_000, autoCompactThreshold: 167_000, model: "haiku" };
   const after = await binding.maximumHistoryBytes(options);
-  assert.equal(after, 167_000 - 20_000 - 33_400 - 8 - 2 - 4096);
+  assert.equal(after, 167_000 - 20_000 - 32_768 - 8 - 2 - 4096);
   assert.equal(f.processes.length, 1, "Repeated inspection reuses the original native owner");
   assert.ok(after < before);
-  f.behavior.contextUsage.totalTokens = 166_000;
-  await assert.rejects(binding.maximumHistoryBytes(options), /too little context/u);
-  assert.equal(f.processes[0].lastInput, undefined);
+});
+
+test("Main transfer budget summarises a nearly full Claude context before sizing history", async t => {
+  const f = await fixture(t);
+  const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
+  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal: new AbortController().signal };
+  f.behavior.contextUsage = { totalTokens: 946_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
+  f.behavior.afterSend = async (native, message) => {
+    assert.equal(message, "/compact");
+    f.behavior.contextUsage = { ...f.behavior.contextUsage, totalTokens: 40_000 };
+    await native.options.onEvent({ type: "result", subtype: "success", result: "", local_command: "compact",
+      user_message_uuid: native.lastInput.messageId, session_id: native.options.sessionId });
+  };
+  assert.equal(await binding.maximumHistoryBytes(options), 967_000 - 40_000 - 48_350 - 8 - 2 - 4096);
+  assert.equal(f.processes[0].lastInput.message, "/compact");
+
+  f.behavior.contextUsage = { totalTokens: 946_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
+  f.behavior.afterSend = async native => native.options.onEvent({ type: "result", subtype: "error_during_execution", is_error: true,
+    local_command: "compact", user_message_uuid: native.lastInput.messageId, session_id: native.options.sessionId });
+  await assert.rejects(binding.maximumHistoryBytes(options), error => error.code === "vibe64_assistant_context_full" &&
+    error.statusCode === 409 && /could not be summarised automatically/u.test(error.message));
+
+  f.behavior.afterSend = async native => native.options.onEvent({ type: "result", subtype: "success", result: "",
+    local_command: "compact", user_message_uuid: native.lastInput.messageId, session_id: native.options.sessionId });
+  await assert.rejects(binding.maximumHistoryBytes(options), error => error.code === "vibe64_assistant_context_full" &&
+    error.statusCode === 409 && /too full/u.test(error.message), "a summary that frees too little stays a readable refusal");
 });
 
 

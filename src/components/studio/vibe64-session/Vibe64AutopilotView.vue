@@ -936,6 +936,24 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog
+      :model-value="Boolean(contextFullFailure)" max-width="30rem" aria-label="Not enough room"
+      @update:model-value="!$event && (contextFullFailure = null)"
+    >
+      <v-card v-if="contextFullFailure" rounded="xl">
+        <v-card-title class="text-wrap">Not enough room</v-card-title>
+        <v-card-text>
+          <p>{{ contextFullFailure.message }}</p>
+          <p class="text-body-small mt-3 mb-0">Your message was not sent and nothing was lost. Try again to summarise the assistant's memory and send it, or choose another assistant.</p>
+        </v-card-text>
+        <v-card-actions class="flex-wrap ga-2 px-6 pb-5">
+          <v-spacer />
+          <v-btn height="48" variant="text" @click="contextFullFailure = null">Close</v-btn>
+          <v-btn color="primary" variant="flat" height="48" @click="retryContextFull">Summarise and continue</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" :aria-label="saveWorkConnectedReview ? 'Save connected first' : 'Save changes'" scrollable>
       <v-card rounded="xl">
         <v-card-title>{{ saveWorkConnectedReview ? 'Save connected first' : 'Save changes' }}</v-card-title>
@@ -1302,6 +1320,8 @@ const {
   rightPaneTab,
   rightPaneTabMounted,
   saveWorkConfirmOpen,
+  contextFullFailure,
+  retryContextFull,
   saveWorkReview,
   saveConnectedFirst,
   saveWorkConnectedReview,

@@ -272,6 +272,11 @@ function createClaudeConversationHost({
             const entry = await conversations.acquire({ ...current, sessionId });
             return conversations.readContextUsage(entry, { ...input, signal });
           },
+          async compactContext({ context: current, input, signal }) {
+            signal?.throwIfAborted();
+            const entry = await conversations.acquire({ ...current, sessionId });
+            return conversations.compactContext(entry, { ...input, signal });
+          },
           state: {
             async read(current, representation, nativeState) {
               if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };

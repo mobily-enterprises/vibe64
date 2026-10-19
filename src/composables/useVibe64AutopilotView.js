@@ -468,6 +468,7 @@ function useVibe64AutopilotView(props, emit, {
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
   const saveWorkConfirmOpen = ref(false);
+  const contextFullFailure = ref(null);
   const saveWorkReview = ref(null);
   const saveWorkConnectedReview = ref(null);
   const saveWorkConnectedResults = ref([]);
@@ -1148,6 +1149,9 @@ function useVibe64AutopilotView(props, emit, {
         return false;
       }
       const message = normalizedAgentTurnText(error?.message || error) || "Message could not be sent.";
+      if (error?.code === "vibe64_assistant_context_full") {
+        contextFullFailure.value = { message, payload, options: { messageId, submissionKind, composer, questionText } };
+      }
       const attention = executionAttentionForError(error, message);
       if (attention) {
         emit("execution-attention", attention);
@@ -1158,6 +1162,12 @@ function useVibe64AutopilotView(props, emit, {
         composerSubmissionKind.value = "";
       }
     }
+  }
+
+  function retryContextFull() {
+    const failure = contextFullFailure.value;
+    contextFullFailure.value = null;
+    return failure ? sendChatPayload(failure.payload, failure.options) : false;
   }
 
   async function submitComposerMessage() {
@@ -2215,6 +2225,8 @@ function useVibe64AutopilotView(props, emit, {
     rightPaneTab,
     rightPaneTabMounted,
     saveWorkConfirmOpen,
+    contextFullFailure,
+    retryContextFull,
     saveWorkReview,
     saveConnectedFirst,
     saveWorkConnectedReview,
