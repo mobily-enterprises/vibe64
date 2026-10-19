@@ -2216,6 +2216,16 @@ function useVibe64OutputControlsSurface(props) {
     immediate: true
   });
 
+  // A page served by a preview that is no longer running cannot recover, and it
+  // looks alive. Replace it with the stopped state and its Start control.
+  watch(previewState, (state) => {
+    if (outputTargetsLoaded.value && ["failed", "idle", "project_closed", "stopped"].includes(state)) {
+      clearPreviewFrame("preview-not-running");
+    }
+  }, {
+    flush: "sync"
+  });
+
   watch([projectSlug, () => String(props.session?.sessionId || "")], () => {
     previewSuspended.value = false;
     cancelPreviewResourceRetry();
@@ -2443,7 +2453,7 @@ function launchPreviewEmptyText({
     return startUnavailableReason;
   }
   if (previewManualStartAvailable) {
-    return "Preview is ready to start.";
+    return "Preview is not running. Start it to see the app.";
   }
   if (launchStatusText) {
     return launchStatusText;

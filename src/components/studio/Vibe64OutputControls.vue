@@ -630,6 +630,17 @@
         </div>
         <span>{{ previewEmptyText }}</span>
         <v-btn
+          v-if="embeddedManualStartButtonVisible && !previewActivityVisible"
+          :disabled="embeddedManualStartButtonDisabled"
+          color="primary"
+          :prepend-icon="mdiPlayCircleOutline"
+          size="small"
+          variant="flat"
+          @click="forceStartEmbeddedPreview"
+        >
+          Start preview
+        </v-btn>
+        <v-btn
           v-if="previewCheckAgainVisible"
           :disabled="operationBusy || loading"
           :prepend-icon="mdiRefresh"

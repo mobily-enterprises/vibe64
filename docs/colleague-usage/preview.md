@@ -98,6 +98,12 @@ managed-browser registration. The same assistant can run another managed browser
 check or test suite afterward without reopening its conversation.
 It stays stopped after navigation, reload or reopening the session. Use the
 toolbar's **Start preview** or **Restart preview** deliberately to run it again.
+
+A Preview also stops when the platform restarts, for example during an update.
+The pane then removes the old page instead of leaving it looking alive. It shows
+**Preview state was lost after a server restart** with **Restart preview**, or,
+once that has been seen, **Preview is not running** with a **Start preview**
+button in the middle of the pane. Starting it runs the session's current code.
 If Stop reports incomplete cleanup, retry Stop before starting. Browser tests
 may temporarily run an isolated target, then restore the prior stopped choice.
 Managed suites without `--target` also restore the previous running or stopped

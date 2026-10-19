@@ -70,7 +70,7 @@ describe("Vibe64 launch controls surface", () => {
 
     expect(launchPreviewEmptyText({
       previewManualStartAvailable: true
-    })).toBe("Preview is ready to start.");
+    })).toBe("Preview is not running. Start it to see the app.");
   });
 
   it("explains non-web outputs without waiting for a web server", () => {
@@ -174,7 +174,7 @@ describe("Vibe64 launch controls surface", () => {
   it("surfaces a manual start state when an embedded target can be launched", () => {
     expect(launchPreviewEmptyText({
       previewManualStartAvailable: true
-    })).toBe("Preview is ready to start.");
+    })).toBe("Preview is not running. Start it to see the app.");
   });
 
   it("does not call unavailable embedded launch targets ready to start", () => {
@@ -1158,4 +1158,14 @@ it("keeps ordinary Reload recoverable when it retires a pending identity grant",
   expect(f.state.previewIdentityBusy.value).toBe(false);
   expect(f.state.previewIdentityError.value).toBe("");
   expect(f.posts.some(post => post.data.grant === "retired-grant")).toBe(false);
+});
+
+it("a page from a preview that stopped running is removed rather than left looking alive", async () => {
+  const f = mountOrientationSurface();
+  f.outputs.outputTargetsLoaded.value = true;
+  expect(f.state.previewUrl.value).toMatch(/^https:\/\/preview\.example\.test\//u);
+  f.outputs.previewState.value = "stale";
+  expect(f.state.previewUrl.value, "a stale preview still runs").not.toBe("");
+  f.outputs.previewState.value = "idle";
+  expect(f.state.previewUrl.value).toBe("");
 });
