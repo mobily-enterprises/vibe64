@@ -957,6 +957,30 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.activeTask.value.draft).toBe("Repair this conflict.");
   });
 
+  it("lists a chat another view created, from its notice or after a missed one on reconnect", async () => {
+    const saved = [];
+    http.request.mockImplementation(async (_path, options = {}) => (
+      options.method === "GET" ? { ok: true, conversations: saved.map((conversationId) => ({ conversationId, status: "ready" })) } : { ok: true }
+    ));
+    const { temporary, socket } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.tasks.value).toEqual([]);
+    saved.push("conversation-2");
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, reason: "temporary-conversation-created", conversationId: "conversation-2" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.tasks.value.map((task) => task.id)).toEqual(["conversation-2"]);
+    const reads = () => http.request.mock.calls.filter(([, options = {}]) => options.method === "GET").length;
+    const before = reads();
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, reason: "temporary-conversation-created", conversationId: "conversation-2" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads(), "a view already showing the chat does not read again").toBe(before);
+    saved.push("conversation-3");
+    socket.emit("disconnect");
+    socket.emit("connect");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.tasks.value.map((task) => task.id)).toEqual(["conversation-2", "conversation-3"]);
+  });
+
   it("does not follow a late creation response with a draft save or Send after remote Close", async () => {
     const creating = Promise.withResolvers();
     const { temporary, socket, task } = mountTemporaryAi();

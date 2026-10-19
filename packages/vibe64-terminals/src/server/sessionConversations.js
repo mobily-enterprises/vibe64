@@ -602,10 +602,12 @@ function createSessionConversations({
     },
 
     async createTemporaryConversation(sessionId, input = {}, options = {}) {
-      return writeSnapshot(sessionId, options, async (ctx) => {
+      let created = false;
+      const result = await writeSnapshot(sessionId, options, async (ctx) => {
         const conversationId = input.conversationId || randomUUID();
         const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
         if (existing) return snapshot(ctx, existing, true);
+        created = true;
         const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
         const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
         const inheritedPreferences = parentPreferences
@@ -635,6 +637,14 @@ function createSessionConversations({
         });
         return snapshot(ctx, record, true);
       });
+      // Other open views of this session list the new chat; Close has the same notice.
+      if (created && result?.ok !== false) {
+        await publishSessionChanged(sessionId, {
+          reason: "temporary-conversation-created",
+          payload: { conversationId: result.conversationId }
+        });
+      }
+      return result;
     },
 
     async listTemporaryConversations(sessionId, options = {}) {

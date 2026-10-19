@@ -4,7 +4,7 @@ import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   defaultVibe64AgentSettings,
   normalizeVibe64AgentSettings,
@@ -886,6 +886,22 @@ function useVibe64TemporaryAi({
   for (const event of [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT]) {
     useRealtimeEvent({ event, onEvent: () => void restoreTasks() });
   }
+  // Chats created or closed while this view was disconnected sent their notice
+  // to nobody; the saved list is the authority once the connection returns.
+  const realtimeSocket = useRealtimeSocket({ required: false });
+  const restoreAfterReconnect = () => void restoreTasks();
+  realtimeSocket?.on?.("connect", restoreAfterReconnect);
+  onBeforeUnmount(() => realtimeSocket?.off?.("connect", restoreAfterReconnect));
+  useRealtimeEvent({
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} }) => (
+      !disposed && payload.projectSlug === projectSlug.value &&
+      payload.sessionId === currentSessionId() && payload.reason === "temporary-conversation-created" &&
+      Boolean(payload.conversationId) && !closedConversationIds.has(payload.conversationId) &&
+      !tasks.value.some((task) => task.conversationId === payload.conversationId || task.id === payload.conversationId)
+    ),
+    onEvent: () => void restoreTasks()
+  });
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} }) => (

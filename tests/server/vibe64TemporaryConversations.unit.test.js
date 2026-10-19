@@ -781,6 +781,9 @@ test("Close publishes its exact conversation after deletion, including retries, 
   await withTemporaryRoot(async (root) => {
     const { service, store, restart, events } = await conversationFixture(root);
     await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    assert.deepEqual(events.splice(0), [["one", { reason: "temporary-conversation-created", payload: { conversationId: "chat" } }]],
+      "other views learn of a new chat once; repeating an acknowledged creation is silent");
     const failingPublisher = restart({ publishSessionChanged: async () => {
       assert.equal(await store.readSessionConversation("one", "chat"), null);
       throw new Error("Realtime unavailable");

@@ -444,6 +444,10 @@ cancel its pending saves, release its reader, and ignore late responses that wou
 it. Reconnection reconciles the saved collection to recover missed closures while
 preserving new local drafts. A closed-conversation API error also removes the
 stale tab; Send never recreates a chat closed by another browser.
+Creation publishes `temporary-conversation-created` once, when the chat is first
+saved. Other views that do not already show it reread the saved collection, and
+every view rereads it when its realtime connection returns, so a chat created
+while a view was disconnected also appears.
 Closing an incomplete Update repair requires confirmation that partial edits
 will remain and may still need repair. Closing waits for Stop and provider
 deletion to succeed; a failure leaves the chat available for retry, and a failed

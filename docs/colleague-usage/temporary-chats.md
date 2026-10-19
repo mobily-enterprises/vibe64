@@ -98,6 +98,10 @@ plain draft save once the earlier update has been stored. If one of those action
 operation is starting, wait for Save or Update to settle and try that action
 again; do not resend a message whose delivery is uncertain.
 
+A temporary chat opened in one browser tab or window appears in the session's
+other open tabs once it is saved, which happens when it is created or its first
+message is sent. A tab that lost its connection catches up when it reconnects.
+
 Leaving the view does not stop work or close a chat. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** to remove that chat after
 cleanup succeeds. Colleague can explain the current state and perform supported
