@@ -30,6 +30,8 @@ a server restart must not resume it. An assistant reply saying “paused” alon
 not confirmation: check that the goal control shows **paused**. If it does not,
 use **Pause goal**. Temporary chats, child agents and Colleague cannot invoke
 Main's self-pause action; Colleague can explain these steps.
+Closing, archiving or renewing a session never depends on these actions: an
+older session with no saved AI choice still closes and renews normally.
 When Claude invokes Pause or Block itself, its successful action response is
 delivered before its process is stopped. No further application actions are
 accepted during that handoff. If Claude does not acknowledge the response within

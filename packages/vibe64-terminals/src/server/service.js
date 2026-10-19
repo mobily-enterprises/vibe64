@@ -1245,9 +1245,11 @@ function createService({
       : Boolean(context.runtime?.learningScope && context.runtime.learningTeaching?.actionIds.includes(actionId))
   }) : null;
   function applicationToolManifest(context) {
-    const selection = context.assistantSelection || vibe64AssistantSelectionFromMetadata(context.session?.metadata);
+    // Tools decorate the context; a missing selection must not block cleanup.
+    const selection = context.assistantSelection ||
+      vibe64AssistantSelectionFromMetadata(context.session?.metadata, { required: false });
     const teaching = context.runtime?.learningScope && context.runtime.learningTeaching;
-    const mainClaude = selection.engineId === "claude" && !context.runtime?.learningScope &&
+    const mainClaude = selection?.engineId === "claude" && !context.runtime?.learningScope &&
       !context.assistantScope && !context.temporaryConversationId && !context.scopedConversationId;
     if (!mainToolCatalog || !teaching && !mainClaude) return context;
     const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });

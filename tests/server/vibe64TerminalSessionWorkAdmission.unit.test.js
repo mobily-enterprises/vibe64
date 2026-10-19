@@ -59,7 +59,9 @@ function deferred() {
 }
 
 function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
-  let active = false;
+  // Like the session store, locks are keyed by name, so a different lock
+  // (for example goal settings) can nest inside the agent-write lock.
+  const active = new Set();
   let attemptNumber = 0;
   const attempts = [];
   const firstEntered = deferred();
@@ -74,7 +76,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
       sessionId,
       ...(Number(options.waitMs) > 0 ? { waitMs: Number(options.waitMs) } : {})
     });
-    if (active) {
+    if (active.has(operationName)) {
       if (Number(options.waitMs) > 0) {
         await firstFinished.promise;
       } else {
@@ -84,7 +86,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
         };
       }
     }
-    active = true;
+    active.add(operationName);
     if (currentAttempt === 1) {
       firstEntered.resolve();
       if (holdFirst) {
@@ -99,7 +101,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
           : await operation()
       };
     } finally {
-      active = false;
+      active.delete(operationName);
       if (currentAttempt === 1) {
         firstFinished.resolve();
       }
@@ -108,7 +110,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
 
   return {
     attempts,
-    get held() { return active; },
+    get held() { return active.size > 0; },
     firstEntered: firstEntered.promise,
     releaseFirst: releaseFirst.resolve,
     store: {

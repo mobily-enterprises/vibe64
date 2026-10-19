@@ -617,6 +617,9 @@ access, then derives the native goal identity on the server. It invokes the same
 native Pause and inactive-intent writer as the explicit control. The common
 runtime retains the application receipt after native cleanup. Colleague,
 temporary chats, Learning and child agents do not acquire this capability.
+Advertising these tools only decorates the assistant context. A session without
+a durable assistant selection receives no Main tools, so close, interrupt and
+renewal cleanup never fail on the missing selection; delivery still requires one.
 Goal startup installs the same discovery protocol as ordinary Main requests, so
 an admitted pause does not require changing a running process's tool settings.
 Assistant prose never changes goal intent; blocked prerequisites remain distinct.
