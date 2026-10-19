@@ -4164,6 +4164,21 @@ test("named chat modes switch workflow through authorized native handover and pr
 });
 
 
+test("a routed send reports its sub-phase timing once", async () => {
+  const session = { sessionId: "session-1", status: "active", metadata: {} };
+  const runtime = { stateRoot: "/unused-timing-fixture", store: { async readMetadataValue(_id, name) { return session.metadata[name]; } } };
+  const events = [];
+  const routing = createAssistantRouting({ agent: {},
+    exclusive: async (_id, options, operation) => operation({ ...options, runtime, session }),
+    publish: async () => {}, onTiming: event => events.push(event),
+    dispatch: async () => ({ ok: true, delivered: true, messageId: "timed" }) });
+  assert.equal((await routing.send(session.sessionId, { messageId: "timed", message: "Hello" }, {})).delivered, true);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].messageId, "timed");
+  assert.deepEqual(Object.keys(events[0].stages), ["lock-acquired", "dispatch-called", "dispatched"]);
+  assert.equal(Number.isFinite(events[0].elapsedMs), true);
+});
+
 test("credit exhaustion permits an authorized assistant change without replaying uncertain delivery", async () => {
   for (const status of ["routing", "sending", "uncertain", "review_pending", "review_sending", "review_uncertain",
     "planning_pending", "planning_sending", "planning_uncertain", "implementation_pending", "implementation_sending", "implementation_uncertain", "sent"]) {

@@ -2287,8 +2287,11 @@ createInterface({ input: process.stdin }).on('line', async line => {
     await firstResponseTiming.promise;
     const timingStages = deliveryDiagnostics.filter(event => event.event === "vibe64.agent_message.delivery_timing" &&
       event.messageId === request.messageId).map(event => event.stage);
-    assert.deepEqual(timingStages.slice(0, 8), ["received", "preparation-started", "provider-started", "runtime-ready",
-      "dispatch-started", "native-acknowledged", "receipt-persisted", "accepted"]);
+    const milestones = ["received", "preparation-started", "provider-started", "runtime-ready",
+      "dispatch-started", "native-acknowledged", "receipt-persisted", "accepted"];
+    // Finer marks may appear between these milestones; the milestones keep their order.
+    assert.deepEqual(timingStages.filter(stage => milestones.includes(stage)).slice(0, 8), milestones);
+    if (timingStages.includes("authorized")) assert.ok(timingStages.includes("git-actor"), "Preparation marks its Git actor on the delivery observer.");
     assert.equal(timingStages.filter(stage => stage === "first-response").length, 1);
     assert.ok(deliveryDiagnostics.some(event => event.event === "vibe64.agent_message.lock_acquired" && event.messageId === request.messageId));
     assert.ok(deliveryDiagnostics.some(event => event.event === "vibe64.agent_message.delivery_finished" && event.delivered));

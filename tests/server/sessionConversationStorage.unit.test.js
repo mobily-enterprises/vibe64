@@ -153,6 +153,24 @@ test("unchanged transcripts are parsed once, written compactly and reread after 
   } finally { JSON.parse = realParse; }
 });
 
+test("submitted-turn and turn lookups match the conversation log and omit rewound turns", async t => {
+  const f = await fixture(t);
+  await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
+  const first = await f.store.writeConversationUserMessage("one", { text: "First", messageId: "first" });
+  await f.store.writeConversationUserMessage("one", { text: "Second", messageId: "second" });
+  const [logged] = await f.store.readConversationLog("one");
+  assert.deepEqual(await f.store.readConversationLogTurn("one", first.turnId), logged);
+  assert.equal(await f.store.readConversationLogTurn("one", "999999"), null);
+  if (f.store.findSubmittedConversationTurn) {
+    assert.deepEqual(await f.store.findSubmittedConversationTurn("one", "first"), logged);
+    assert.equal(await f.store.findSubmittedConversationTurn("one", "missing"), null);
+  }
+  await markHistoricalConversationRewound(f.store, "one", [first.turnId]);
+  assert.equal(await f.store.readConversationLogTurn("one", first.turnId), null);
+  if (f.store.findSubmittedConversationTurn) assert.equal(await f.store.findSubmittedConversationTurn("one", "first"), null);
+  assert.equal((await f.store.findSubmittedConversationTurn?.("one", "second"))?.user.text ?? "Second", "Second");
+});
+
 test("an existing empty transcript is rejected as corrupt storage", async t => {
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });

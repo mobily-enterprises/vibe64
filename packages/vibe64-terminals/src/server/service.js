@@ -1551,6 +1551,11 @@ function createService({
     },
     publish: publishAgentSessionChanged,
     prepareSelection: prepareRoutingSelection,
+    onTiming(event) {
+      logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
+        event: "vibe64.agent_message.routing_timing", component: "vibe64.agent_message", ...event
+      }, "Assistant routing timing.");
+    },
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await prepareAgentSkillsInsideAgentWrite(sessionId, context);

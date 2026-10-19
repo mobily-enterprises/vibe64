@@ -2832,6 +2832,8 @@ function createVibe64SessionStore({
     const storage = createConversationStorage({
       async readRecord() { record = await readConversationRecord(sessionPaths); return record; },
       async writeRecord(_scope, next) {
+        // Transactions cannot change rewind markers; keep the saved ones.
+        next = { metadata: next.metadata, turns: next.turns, rewound: next.rewound ?? record.rewound };
         const document = conversationRecordJson(next);
         validateConversationDocument(document);
         // Compact JSON: every reader parses it, and pretty printing a long
@@ -2839,7 +2841,7 @@ function createVibe64SessionStore({
         const filePath = path.join(sessionPaths.conversationLogRoot, "transcript.json");
         const identity = await writeTextFile(filePath, `${JSON.stringify(document)}\n`);
         // JSKIT's write owns this draft and no longer changes it.
-        conversationRecordCache.remember(filePath, identity, { metadata: next.metadata, rewound: next.rewound, turns: next.turns });
+        conversationRecordCache.remember(filePath, identity, next);
       }
     });
     return storage[write ? "write" : "read"](sessionPaths.conversationLogRoot, (transaction) => callback({
@@ -2847,6 +2849,11 @@ function createVibe64SessionStore({
       // A read sees the saved record unchanged, so its message index applies.
       ...(write ? {} : { async hasMessage(id) { return conversationRecordHasMessage(record, id); } }),
       async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
+      // Identity lookups see the same turns as listTurnIds.
+      ...(typeof transaction.findMessageTurnId === "function" ? { async findMessageTurnId(id) {
+        const turnId = await transaction.findMessageTurnId(id);
+        return turnId && !record.rewound.includes(turnId) ? turnId : "";
+      } } : {}),
       async readTurn(id) {
         const turn = await transaction.readTurn(id);
         if (!turn || record.rewound.includes(id)) return turn;
@@ -2978,6 +2985,7 @@ function createVibe64SessionStore({
     readConversationLog,
     readConversationLogPage,
     conversationMessageIdExists,
+    findSubmittedTurn: findSubmittedConversationTurn,
     writeConversationUserMessage: appendUserMessage,
     writeConversationAssistantMessage,
     upsertConversationAssistantMessage,
@@ -2988,6 +2996,15 @@ function createVibe64SessionStore({
     clock: now,
     storage: conversationStorage
   });
+
+  // One conversation-log entry by turn ID, or null like an absent log entry.
+  function readConversationLogTurn(scope, turnId) {
+    return withConversationTransaction(scope, async (transaction) => {
+      if (!(await transaction.listTurnIds()).includes(turnId)) return null;
+      const turn = await transaction.readTurn(turnId);
+      return turn?.messages?.length ? turn : null;
+    }, false);
+  }
 
   function writeConversationUserMessage(scope, input) {
     return appendUserMessage(scope, { ...input, attachments: normalizeVibe64ConversationAttachments(input?.attachments) });
@@ -5671,6 +5688,8 @@ function createVibe64SessionStore({
     prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade,
     conversationMessageIdExists,
+    ...(findSubmittedConversationTurn ? { findSubmittedConversationTurn } : {}),
+    readConversationLogTurn,
     conversationStorage,
     deleteMetadataValue,
     deleteMetadataValues,
