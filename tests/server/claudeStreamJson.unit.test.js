@@ -3686,8 +3686,11 @@ test("Main transfer budget summarises a nearly full Claude context before sizing
     await native.options.onEvent({ type: "result", subtype: "success", result: "", local_command: "compact",
       user_message_uuid: native.lastInput.messageId, session_id: native.options.sessionId });
   };
-  assert.equal(await binding.maximumHistoryBytes(options), 967_000 - 40_000 - 48_350 - 8 - 2 - 4096);
+  const phases = [];
+  assert.equal(await binding.maximumHistoryBytes({ ...options, setPhase: async phase => phases.push(phase) }),
+    967_000 - 40_000 - 48_350 - 8 - 2 - 4096);
   assert.equal(f.processes[0].lastInput.message, "/compact");
+  assert.deepEqual(phases, ["compacting", "preparing"], "the wait is shown while Claude summarises");
 
   f.behavior.contextUsage = { totalTokens: 946_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
   f.behavior.afterSend = async native => native.options.onEvent({ type: "result", subtype: "error_during_execution", is_error: true,

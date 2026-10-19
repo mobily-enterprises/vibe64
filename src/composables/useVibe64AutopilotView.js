@@ -701,6 +701,7 @@ function useVibe64AutopilotView(props, emit, {
       status: composerConnectionStatus.value
     }) ||
     (agentActive.value && activeAgentTurn.value.phase === "compacting" ? "Compacting conversation context…" : "") ||
+    (unref(props.conversationRuntime?.phase) === "compacting" ? "Summarising the assistant's memory before sending…" : "") ||
     (agentActive.value ? unref(assistantProgressLabel) : "") ||
     (agentActive.value ? "Assistant is working..." : "") ||
     (composerSending.value ? "Sending to assistant..." : "")

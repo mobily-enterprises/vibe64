@@ -445,7 +445,7 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         ? { ...prepared, actorContext: prepared.vibe64User || null } : prepared;
     } : prepareInput,
     ...(!teachingAvailable && host.readContextUsage ? {
-      async maximumHistoryBytes({ context, signal, input, handover }) {
+      async maximumHistoryBytes({ context, signal, input, handover, setPhase }) {
         // Count UTF-8 bytes conservatively instead of assuming English text's
         // usual characters/token ratio. Keep normal model settings unchanged.
         // The window already ends at the native auto-compaction point.
@@ -466,11 +466,14 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         // own automatic compaction would, before the missed history is sized.
         if (bytes < 32_768 && host.compactContext) {
           try {
+            await setPhase?.("compacting");
             await host.compactContext({ context, signal, input });
           } catch (error) {
             if (signal?.aborted) throw error;
             throw Object.assign(new Error(`The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`),
               { code: "vibe64_assistant_context_full", statusCode: 409 });
+          } finally {
+            await setPhase?.("preparing");
           }
           bytes = await room();
         }

@@ -185,6 +185,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     }
   }
   return { identity, mounted, conversationLog, access, agentSettings, available, steerable, trainingQuestion, presentation,
+    phase: computed(() => conversation.snapshot.value?.phase || ""),
     ...(identity.learningAttemptId !== undefined ? { conversationReady: computed(() => Boolean(conversation.snapshot.value)) } : {}),
     ...(identity.learningAttemptId !== undefined ? { async prepareVoice() {
       if (!current.value || !available.value || !access.canUseChat.value) throw new Error("This lesson conversation is no longer available for voice.");

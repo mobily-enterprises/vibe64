@@ -73,8 +73,9 @@ increase input usage and cost.
 
 When Claude's own memory is nearly full, Vibe64 first summarises it
 automatically — the same compaction Claude performs on its own — and then sends
-the missed messages that fit. The send can take noticeably longer while this
-happens; keep the page open. Nothing in the saved chat changes.
+the missed messages that fit. The chat shows **Summarising the assistant's
+memory before sending…** while this happens, which can take a minute or two;
+keep the page open. Nothing in the saved chat changes.
 
 If summarising fails, or even after it there is no room left, a **Not enough
 room** dialog explains the problem and the message is not sent. Select
