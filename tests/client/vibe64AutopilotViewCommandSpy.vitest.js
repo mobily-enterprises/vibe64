@@ -13,6 +13,7 @@ import { sourceEditorLinkTarget } from "../../src/lib/vibe64SourceEditorLinks.js
 import { thinkingMessagePresentation, usesCommentaryForThinking } from "../../src/lib/vibe64ThinkingPresentation.js";
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { learningGuidancePresentation } from "@local/vibe64-training/shared/learning-guidance";
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
 const composablePath = path.resolve("src/composables/useVibe64AutopilotView.js");
@@ -84,7 +85,8 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     "@local/vibe64-runtime/shared": { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel },
     "@/lib/vibe64SourceEditorLinks.js": { sourceEditorLinkTarget },
     "@/lib/vibe64ConversationAttribution.js": { conversationAttribution },
-    "@/lib/vibe64ThinkingPresentation.js": { thinkingMessagePresentation, usesCommentaryForThinking }
+    "@/lib/vibe64ThinkingPresentation.js": { thinkingMessagePresentation, usesCommentaryForThinking },
+    "@local/vibe64-training/shared/learning-guidance": { learningGuidancePresentation }
   };
   const controls = [];
   if (render) {
@@ -1247,7 +1249,7 @@ it("projects actual source availability without suppressing suspended Working co
   expect(presentation).toContain(':attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"');
   expect(presentation).toContain(':learning-pane-active="learningPaneActive"');
   expect(presentation).toContain(':workspace-active="normalWorkspaceActive && props.projectPane === \'preview\'"');
-  expect(presentation).toContain('<template #lessons><slot name="learning"');
+  expect(presentation).toMatch(/<template #lessons>\s*<slot name="learning"/u);
   expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Courses"');
   expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
 });
