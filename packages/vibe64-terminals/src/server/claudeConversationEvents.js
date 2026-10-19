@@ -23,13 +23,17 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       return;
     }
     const { runtime, sessionId, selection } = entry.context;
-    const run = await runtime.store.writeAgentRunEvent(sessionId, TRANSPORT, {
-      event: { kind: `claude-${state}`, state, message },
-      patch: { engineId: ENGINE, state, error: message, phase: entry.turn.phase, observationError: entry.observationError || "",
-        model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
-        turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : now(), updatedAt: now() }
-    });
+    // The client applies a turn overlay only with the session revision this
+    // write produced; without it the working state waits for a later refresh.
+    const { run, revision } = await runtime.store.mutateSession(sessionId, async () => ({ sessionId,
+      run: await runtime.store.writeAgentRunEvent(sessionId, TRANSPORT, {
+        event: { kind: `claude-${state}`, state, message },
+        patch: { engineId: ENGINE, state, error: message, phase: entry.turn.phase, observationError: entry.observationError || "",
+          model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
+          turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : now(), updatedAt: now() }
+      }) }));
     await publishSessionChanged(sessionId, {
+      session: { sessionId, revision },
       reason: active ? "claude-stream-turn-active" : "claude-stream-turn-idle",
       payload: {
         ...(!active ? { conversationStream: runtime.store.clearConversationStream(sessionId) } : {}),
