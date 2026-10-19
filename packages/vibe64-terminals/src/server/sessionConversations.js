@@ -105,7 +105,8 @@ function createSessionConversations({
   systemRoot,
   prepareSelection = async () => {},
   publishSessionChanged = async () => {},
-  publishConversation = async () => {}
+  publishConversation = async () => {},
+  temporarySaveDelayMs = 1_000
 }) {
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
@@ -375,6 +376,34 @@ function createSessionConversations({
     waitMs: options.lockWaitMs ?? 10_000
   });
 
+  // Temporary output is saved by the same transcript read as a browser read or
+  // the idle completion. A completed native message schedules one coalesced
+  // read without waiting for the lease; when the lease is busy, the next
+  // completed message or the idle completion read saves it instead.
+  const temporarySaves = new Map();
+  function scheduleTemporarySave(sessionId, conversationId, runtime) {
+    const key = `${sessionId}\0${conversationId}`;
+    if (temporarySaves.has(key)) return;
+    const timer = setTimeout(() => {
+      temporarySaves.delete(key);
+      void write(sessionId, { runtime, lockWaitMs: 0 }, async (ctx) => {
+        const record = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
+        return record && record.state !== "closing" ? snapshot(ctx, record) : null;
+      }).catch(() => {}); // Later reads and the idle completion retry the same save.
+    }, temporarySaveDelayMs);
+    timer.unref?.();
+    temporarySaves.set(key, timer);
+  }
+  function savingTemporaryOutput(sessionId, conversationId, ctx) {
+    const forward = ctx.onEvent;
+    return { ...ctx, onEvent(event) {
+      if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
+        scheduleTemporarySave(sessionId, conversationId, ctx.runtime);
+      }
+      return forward?.(event);
+    } };
+  }
+
   async function writeSnapshot(sessionId, options, operation) {
     let context;
     const result = await write(sessionId, options, (ctx) => {
@@ -518,12 +547,16 @@ function createSessionConversations({
     const record = await recordFor(ctx, input.conversationId);
     if (record.state === "closing") throw new Error("This conversation is closing.");
     return conversationRuntime.startPersistentConversationTurn({
-      ...persistentConversationOptions(ctx, record), sessionId, input
+      ...persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record), sessionId, input
     });
   }
 
   const service = {
-    close: routing.close,
+    close() {
+      for (const timer of temporarySaves.values()) clearTimeout(timer);
+      temporarySaves.clear();
+      return routing.close();
+    },
     temporaryConversationDataSchema: createSchema(Object.fromEntries(messageFields.map(key =>
       [key, temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions()[key]]))),
     temporaryConversationSelectionSchema: createSchema(Object.fromEntries(["agentSettings", "assistantRouting"].map(key =>

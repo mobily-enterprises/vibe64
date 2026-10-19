@@ -1272,6 +1272,55 @@ test("temporary replies retain their routed identity across multiple native mess
   });
 });
 
+test("completed temporary output is saved while the run stays active, skipping a busy lease until the next message", { timeout: 15_000 }, async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    const start = f.sessionAgent.startConversationTurn;
+    let onEvent;
+    f.sessionAgent.startConversationTurn = async (id, input, ctx) => {
+      onEvent = ctx.onEvent;
+      return start(id, input, ctx);
+    };
+    await f.send("senior", "report-request", "Write the usage report.");
+    assert.equal(typeof onEvent, "function");
+    const record = await f.record();
+    const row = f.native.get(record.providerConversationId);
+    const savedIds = async () => (await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" }))
+      .flatMap(turn => turn.messages.map(message => message.messageId));
+    const settle = () => new Promise(resolve => setTimeout(resolve, 1_300));
+    const emit = async (message) => {
+      row.messages.push(message);
+      await onEvent({ type: "message", message, threadId: row.id, turnId: row.runId });
+    };
+    // A live reply after which a native background task keeps the run active: no browser read happens.
+    await emit({ role: "thinking", id: "plan", text: "Planning the query.", complete: true });
+    await emit({ role: "commentary", id: "interim", text: "The query is still running.", complete: true });
+    await onEvent({ type: "message", message: { role: "assistant", id: "partial", text: "Draft", complete: false },
+      threadId: row.id, turnId: row.runId });
+    await settle();
+    assert.equal(row.status, "inProgress");
+    assert.deepEqual(await savedIds(), ["report-request", "plan", "interim"], "completed output is saved once; partial text is not");
+    // Another operation holds the session lease while the next message completes.
+    let entered, release;
+    const holding = new Promise(resolve => { entered = resolve; });
+    const held = runVibe64AgentWriteExclusive(f.runtime, "one", async () => {
+      entered();
+      await new Promise(resolve => { release = resolve; });
+    }, { operation: "test-hold" });
+    await holding;
+    await emit({ role: "commentary", id: "progress", text: "Grouping the results.", complete: true });
+    await settle();
+    release();
+    assert.equal((await held).acquired, true);
+    assert.deepEqual(await savedIds(), ["report-request", "plan", "interim"], "a busy lease skips the save without waiting");
+    await emit({ role: "assistant", id: "report", text: "| Group | Share |\n| --- | --- |\n| A | 60% |", complete: true });
+    await settle();
+    assert.deepEqual(await savedIds(), ["report-request", "plan", "interim", "progress", "report"]);
+    assert.equal((await f.record()).status, "inProgress", "saving output does not finish the active run");
+    await f.service.close();
+  });
+});
+
 test("a temporary direct Junior read observes completion without starting review", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "collaborator" }, true);
