@@ -636,6 +636,7 @@ function createWorkspaceSetupRunner({
         if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
         const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
+        await onProgress?.("Checking connected sources");
         session = await runtime.getSession(sessionId, { inspectSource: false });
         setup = await inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await connectedSourceRoots(setup, runtime, session);

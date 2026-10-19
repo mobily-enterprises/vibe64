@@ -197,6 +197,12 @@ test("a requested connected preparation returns at once and records each progres
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
     let preparations = 0;
+    const labels = [];
+    const write = runtime.store.writeMetadataValue.bind(runtime.store);
+    runtime.store.writeMetadataValue = async (id, name, value) => {
+      if (name === "workspace_setup") labels.push(JSON.parse(value).currentLabel);
+      return write(id, name, value);
+    };
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
       async finishWorkflow() {},
@@ -229,6 +235,8 @@ test("a requested connected preparation returns at once and records each progres
     const finished = await started.completion;
     assert.equal(finished.status, "succeeded");
     assert.equal(preparations, 1);
+    assert.ok(labels.indexOf("Checking connected sources") > labels.indexOf("Preparing connected projects: library (1 of 2 ready)"),
+      "the label names the access recheck after linking");
     assert.equal(runner.isRunning(session.sessionId), false);
     assert.equal((await stored()).status, "succeeded");
   });

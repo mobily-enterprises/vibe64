@@ -19,7 +19,8 @@ while another assistant or repository operation is active, or for archived sessi
 A new session with connected projects starts preparation automatically. Its
 first step, **Preparing connected projects**, creates or reuses each connected
 project's contribution session at the same time and lists the ones still in
-progress. If one fails, the notice names that repository; earlier prepared
+progress, then **Linking connected sources** and **Checking connected sources**
+while it rechecks access to each one. If one fails, the notice names that repository; earlier prepared
 sources are kept and **Retry** reuses them instead of copying them again.
 
 A successful result records the previous recipe execution. It does not prove
