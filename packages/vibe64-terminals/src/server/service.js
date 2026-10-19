@@ -216,6 +216,7 @@ import {
 import {
   GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
+  genesisProjectContractNeedsAttention,
   inspectGenesisProjectFormat,
   inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
@@ -1043,6 +1044,7 @@ function createService({
   authorizeCodexGitActorAccess = null,
   codexTerminalController = {},
   env = process.env,
+  inspectAgentSkills = inspectGenesisSkills,
   logger = null,
   opencodeTerminalController = {},
   projectServices: suppliedProjectServices = null,
@@ -1624,15 +1626,15 @@ function createService({
     if (format.status !== "current") return;
     let inspection;
     try {
-      inspection = await inspectGenesisSkills({ projectRoot });
+      inspection = await inspectAgentSkills({ projectRoot });
     } catch (error) {
-      if (error?.code === "STACK_PROJECT_CONTRACTS_INCOMPLETE") {
+      if (genesisProjectContractNeedsAttention(error)) {
         logOperationalEvent(logger, "warn", {
           code: error.code,
           component: "vibe64.agent_skills",
           event: "vibe64.agent_skills.refresh_deferred",
           sessionId
-        }, "Project contracts need repair; skill refresh deferred so chat remains available.");
+        }, "Project contracts need repair or a project decision; skill refresh deferred so chat remains available.");
         return;
       }
       if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;

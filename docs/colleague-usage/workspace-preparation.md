@@ -68,6 +68,23 @@ The same recovery applies on desktop and mobile. Colleague can explain the
 warning and offer the supported repair flow; source edits and terminal commands
 belong to the coding assistant or the person, not Colleague.
 
+## Competing Stack proposals
+
+When two selected technologies propose different bodies for the same section,
+for example Node and Python both proposing `## Connected development`, Genesis
+leaves that heading unwritten and reports `STACK_SECTION_AMBIGUOUS` until the
+project chooses. **Project setup needs attention** shows Genesis's message,
+which quotes each proposal; workspace preparation shows **Workspace setup needs
+a choice** with the same text. Vibe64 never picks a proposal for you, and
+retrying preparation alone does not resolve it.
+
+Chat stays available: use **Fix it with AI** or ask your coding assistant to
+author one complete project-owned section in `genesis/stack.md` that fits the
+application (a multi-language project chooses one `Default package type`).
+Then select **Recheck setup** and **Prepare workspace** or **Retry**. Skill
+refresh waits until the section is decided. Colleague can explain the choice;
+the source edit belongs to the coding assistant or the person.
+
 ## Locally installed command-line tools
 
 When you open a directory with the local Vibe64 editor, start Vibe64 from the

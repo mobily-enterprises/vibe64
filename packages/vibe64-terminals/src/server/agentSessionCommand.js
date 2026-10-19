@@ -33,7 +33,12 @@ import {
   stopVibe64OwnedExecutions,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
-import { genesisParserEnvironment, inspectVibe64WorkspaceSetup, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import {
+  genesisParserEnvironment,
+  genesisProjectContractNeedsAttention,
+  inspectVibe64WorkspaceSetup,
+  withGenesisCommandShim
+} from "@local/vibe64-genesis/server";
 import {
   pathInsideOrEqual
 } from "./terminalShared.js";
@@ -690,10 +695,18 @@ function createAgentSessionCommandService({
       const environment = await projectService.projectEnvironmentStatus({
         sessionId, session: { ...descriptor, sessionId }
       });
-      const setup = typeof projectService.inspectWorkspaceSetup === "function"
-        ? await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
-          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) })
-        : await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+      let setup;
+      try {
+        setup = typeof projectService.inspectWorkspaceSetup === "function"
+          ? await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
+            session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) })
+          : await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+      } catch (error) {
+        // The agent repairing or deciding a project contract still needs status;
+        // report Genesis's actionable message instead of failing the command.
+        if (!genesisProjectContractNeedsAttention(error)) throw error;
+        setup = { status: "blocked", steps: [], diagnostics: [{ code: error.code, message: normalizeText(error.message) }] };
+      }
       const state = workspaceSetupStateFromMetadata({
         [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
       });

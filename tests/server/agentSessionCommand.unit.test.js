@@ -12,6 +12,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import {
   genesisCommandShimDirectory,
+  genesisProjectContractNeedsAttention,
   initializeGenesisProject
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
@@ -236,4 +237,46 @@ test("agent shell commands run as session-owned managed executions and drain on 
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
+});
+
+test("project contract decisions are one shared predicate and keep agent status available", async (t) => {
+  for (const code of ["STACK_SECTION_AMBIGUOUS", "STACK_PROJECT_CONTRACTS_INCOMPLETE"]) {
+    assert.equal(genesisProjectContractNeedsAttention({ code }), true, code);
+  }
+  for (const value of [null, {}, { code: "STACK_REQUIRED" }, { code: "BLUEPRINT_INVALID" }, new Error("plain")]) {
+    assert.equal(genesisProjectContractNeedsAttention(value), false);
+  }
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-status-contract-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const sourceRoot = path.join(temporaryRoot, "sessions", "active", "session-1", "source");
+  await mkdir(sourceRoot, { recursive: true });
+  const descriptor = { metadata: { source_kind: "session_clone", source_path: sourceRoot,
+    source_path_authority: "managed_session_source" }, sessionId: "session-1" };
+  let failure;
+  const service = createAgentSessionCommandService({
+    projectService: {
+      async createSessionStore() {
+        return { async readSessionSourceDescriptor() { return descriptor; },
+          async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
+      },
+      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async inspectWorkspaceSetup() { throw failure; },
+      async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
+      async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
+      async runInProjectContext(_slug, operation) { return operation(); }
+    }
+  });
+  await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
+  for (const code of ["STACK_SECTION_AMBIGUOUS", "STACK_PROJECT_CONTRACTS_INCOMPLETE"]) {
+    const message = `Decide \`## Connected development\` first (${code}).`;
+    failure = Object.assign(new Error(message), { code });
+    const status = await service.sessionStatus("session-1");
+    assert.equal(status.ok, true);
+    assert.equal(status.workspaceSetup.inspectionStatus, "blocked");
+    assert.deepEqual(status.workspaceSetup.steps, []);
+    assert.deepEqual(status.workspaceSetup.diagnostics, [{ code, message }]);
+  }
+  failure = Object.assign(new Error("Genesis is unavailable."), { code: "GENESIS_UNAVAILABLE" });
+  await assert.rejects(service.sessionStatus("session-1"), { code: "GENESIS_UNAVAILABLE" },
+    "other inspection failures keep failing the status command");
 });

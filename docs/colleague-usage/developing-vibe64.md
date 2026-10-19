@@ -122,8 +122,8 @@ development permission; do not create another human-approval exchange.
 
 New Hello Node examples include Node's default connected package type, `npm`.
 An existing example is preserved on restart. If current Genesis reports
-`STACK_PROJECT_CONTRACTS_INCOMPLETE`, explicitly reconcile that example's Stack
-with the current Node catalog before retrying; restarting does not rewrite its
+`STACK_PROJECT_CONTRACTS_INCOMPLETE` or `STACK_SECTION_AMBIGUOUS`, explicitly
+reconcile or decide that example's Stack section before retrying; restarting does not rewrite its
 source or discard its state.
 
 If a source is unavailable, correct its path or pin and restart Preview. If a

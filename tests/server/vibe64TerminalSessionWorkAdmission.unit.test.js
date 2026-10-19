@@ -122,6 +122,7 @@ async function terminalServiceFixture(t, lock, {
   assistantSelection = null,
   codexAppServerProviderFactory,
   env = {},
+  inspectAgentSkills,
   logger = null,
   opencodeTerminalController = {},
   publishSessionChanged = {}
@@ -218,6 +219,7 @@ async function terminalServiceFixture(t, lock, {
     }
   };
   const service = createTerminalService({
+    ...(inspectAgentSkills ? { inspectAgentSkills } : {}),
     logger,
     codexTerminalController: {
       codexAppServerProviderFactory,
@@ -498,6 +500,32 @@ test("incomplete project contracts defer skill refresh without blocking repair c
   assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: "existing-setup" });
   assert.equal(await readFile(stackPath, "utf8"), stack);
   assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred"), true);
+});
+
+test("an undecided competing Stack section defers skill refresh like incomplete contracts", async (t) => {
+  const warnings = [];
+  const ambiguous = Object.assign(new Error("Decide `## Connected development` first. Author one complete project section."), {
+    code: "STACK_SECTION_AMBIGUOUS",
+    details: { name: "Connected development", sources: ["component:nodejs", "component:python"], proposals: [] }
+  });
+  const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    inspectAgentSkills: async () => { throw ambiguous; },
+    logger: { warn(event) { warnings.push(event); } }
+  });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  const stackPath = path.join(projectRoot, "genesis/stack.md");
+  const stack = await readFile(stackPath, "utf8");
+  session.workspaceSetup = { status: "succeeded", recipeHash: "existing-setup" };
+  projectService.runProjectSourceExclusive = async () => assert.fail("An undecided section must not change source.");
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Help decide the connected development section." }, { engineId: "opencode" }),
+  { code: "vibe64_assistant_selection_invalid" });
+  assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: "existing-setup" });
+  assert.equal(await readFile(stackPath, "utf8"), stack, "Vibe64 never picks one of the competing proposals");
+  assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred" &&
+    event.code === "STACK_SECTION_AMBIGUOUS"), true);
 });
 
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {

@@ -719,6 +719,31 @@ test("workspace preparation treats a missing Genesis Stack as unconfigured", asy
   });
 });
 
+test("workspace preparation reports project contract decisions with Genesis's message and never picks one", async () => {
+  for (const [code, status] of [["STACK_SECTION_AMBIGUOUS", "ambiguous"], ["STACK_PROJECT_CONTRACTS_INCOMPLETE", "failed"]]) {
+    await withTemporaryRoot(async (targetRoot) => {
+      const { runtime, session } = await workspaceSession(targetRoot);
+      const message = `${code}: author one complete project \`## Connected development\` section in genesis/stack.md.`;
+      const commands = [];
+      const runner = createWorkspaceSetupRunner({
+        inspect: async () => { throw Object.assign(new Error(message), { code }); },
+        inspectProjectFormat: async () => ({ action: "none", status: "current" }),
+        projectService: {},
+        async runCommand(request) { commands.push(request); return { ok: true, exitCode: 0, output: "" }; }
+      });
+      for (const retry of [false, true]) {
+        const result = await runner.start({ runtime, retry,
+          session: await runtime.getSession(session.sessionId, { inspectSource: false }) });
+        assert.equal(result.completion, null);
+        assert.equal(result.state.status, status, `${code} keeps its project-decision status`);
+        assert.equal(result.state.diagnostic, message);
+        assert.equal(result.state.recipeHash, "");
+      }
+      assert.deepEqual(commands, [], "no migration or setup command runs for a project decision");
+    });
+  }
+});
+
 test("workspace preparation retry migrates a recognized legacy Genesis project before setup", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session, sourceRoot } = await workspaceSession(targetRoot);

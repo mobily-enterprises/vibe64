@@ -6,6 +6,11 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 
+import {
+  GENESIS_STACK_CONTRACTS_INCOMPLETE,
+  GENESIS_STACK_SECTION_AMBIGUOUS,
+  genesisProjectContractNeedsAttention
+} from "./projectContractAttention.js";
 import * as genesisCompiler from "genesis-compiler";
 import { createVibe64HostContextRegistry } from "./hostContextRegistry.js";
 
@@ -498,6 +503,9 @@ async function renderGenesisPrompt({
 }
 
 export {
+  GENESIS_STACK_CONTRACTS_INCOMPLETE,
+  GENESIS_STACK_SECTION_AMBIGUOUS,
+  genesisProjectContractNeedsAttention,
   inspectVibe64ConnectedDevelopment,
   inspectVibe64ProjectServices,
   parseVibe64ProjectServicesLines,

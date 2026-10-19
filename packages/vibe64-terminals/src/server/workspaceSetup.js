@@ -21,6 +21,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
+  GENESIS_STACK_SECTION_AMBIGUOUS,
   inspectGenesisProjectFormat,
   inspectVibe64WorkspaceSetup,
   withGenesisCommandShim
@@ -481,7 +482,9 @@ function createWorkspaceSetupRunner({
           finishedAt: stateTimestamp(clock),
           recipeHash: "",
           startedAt: "",
-          status: "failed"
+          // Genesis now rejects reads until the project authors one competing
+          // section; keep the same "needs a choice" state its diagnostic used.
+          status: normalizeText(error?.code) === GENESIS_STACK_SECTION_AMBIGUOUS ? "ambiguous" : "failed"
         }, renewal);
         return { completion: null, state };
       }
@@ -662,7 +665,7 @@ function createWorkspaceSetupRunner({
     if (normalizeText(setup?.status) !== "ready") {
       const ambiguous = diagnosticsInclude(
         setup?.diagnostics,
-        "STACK_SECTION_AMBIGUOUS"
+        GENESIS_STACK_SECTION_AMBIGUOUS
       );
       const state = await persistInspectedState(runtime, sessionId, stateBase, {
         currentLabel: "",
