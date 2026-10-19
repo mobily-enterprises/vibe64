@@ -1574,7 +1574,9 @@ function createService({
         logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
           event: "vibe64.agent_message.routing_timing", component: "vibe64.agent_message", ...event
         }, "Assistant routing timing.");
-      } catch {}
+      } catch {
+        // Ignore: timing diagnostics are best-effort.
+      }
     },
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);

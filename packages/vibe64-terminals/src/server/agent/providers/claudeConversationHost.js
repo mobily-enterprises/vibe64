@@ -63,7 +63,9 @@ function createClaudeConversationHost({
         logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
           event: "vibe64.agent_message.preparation_timing", component: "vibe64.agent_message", engineId: "claude", ...event
         }, "Assistant message preparation timing.");
-      } catch {}
+      } catch {
+        // Ignore: timing diagnostics are best-effort.
+      }
     } });
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({ env, projectService, command, credentialHome, commandRunner, stopExecution,
