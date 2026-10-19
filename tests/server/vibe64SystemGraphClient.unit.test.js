@@ -6,6 +6,7 @@ import { useRealtimeEvent } from '@jskit-ai/realtime/client/composables/useRealt
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { useEndpointResource } from '@jskit-ai/http-web/client/composables/useEndpointResource';
 import { transform } from 'esbuild';
+import * as lessonDashboard from '../../src/lib/vibe64LessonDashboard.js';
 
 const source = await readFile(new URL('../../packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js', import.meta.url), 'utf8');
 const { code } = await transform(source, { format: 'cjs' });
@@ -27,7 +28,8 @@ test('a retained inactive graph reader cannot break the visible reader sharing i
   new Function('require', 'module', 'exports', code)(name => {
     if (name === 'vue') return vue;
     if (name === '@jskit-ai/realtime/client/composables/useRealtimeEvent') return { useRealtimeEvent };
-    if (name === '@/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => vue.ref('test-project') };
+    if (name === '/src/lib/vibe64LessonDashboard.js') return lessonDashboard;
+    if (name === '/src/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => vue.ref('test-project') };
     if (name === '@jskit-ai/http-web/client/composables/useEndpointResource') {
       return { useEndpointResource: options => useEndpointResource({ ...options, client }) };
     }
@@ -88,7 +90,8 @@ test('fresh and retained viewers reconcile scan progress, completion and failure
   new Function('require', 'module', 'exports', code)(name => {
     if (name === 'vue') return vue;
     if (name === '@jskit-ai/realtime/client/composables/useRealtimeEvent') return { useRealtimeEvent };
-    if (name === '@/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => projectSlug };
+    if (name === '/src/lib/vibe64LessonDashboard.js') return lessonDashboard;
+    if (name === '/src/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => projectSlug };
     if (name === '@jskit-ai/http-web/client/composables/useEndpointResource') return { useEndpointResource: options => useEndpointResource({ ...options, client }) };
     assert.equal(name, '@jskit-ai/shell-web/client/navigation/usePaths');
     return { usePaths: () => ({ api: suffix => '/api/app' + suffix }) };

@@ -9,8 +9,8 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
-import { lessonDashboardApiPath, useVibe64LessonDashboard } from "@/lib/vibe64LessonDashboard.js";
+import { useVibe64ProjectSlug } from "/src/composables/useVibe64ProjectScope.js";
+import { lessonDashboardApiPath, useVibe64LessonDashboard } from "/src/lib/vibe64LessonDashboard.js";
 
 const SYSTEM_GRAPH_API_SUFFIX = "/vibe64/system-graph";
 const SYSTEM_GRAPH_SURFACE = "app";
