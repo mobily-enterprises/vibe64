@@ -7,7 +7,15 @@ vi.mock("../../src/composables/useVibe64MountedSessionData.js", () => ({ useVibe
 vi.mock("../../src/composables/useVibe64ConversationLog.js", () => ({ useVibe64ConversationLog: mocks.log }));
 vi.mock("../../src/composables/useVibe64AssistantAccess.js", () => ({ useVibe64AssistantAccess: mocks.access }));
 vi.mock("../../src/composables/useVibe64AgentSettings.js", () => ({ useVibe64AgentSettings: () => ({ settings: ref({ providerId: "codex" }), requestSettings: ref(null) }) }));
-vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => url.includes("/training/presentation") ? (mocks.presentation(url, options) ?? Promise.resolve({ ok: true, navigation: null, cue: null })) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
+const fixtureClient = vi.hoisted(() => ({ request: (url, options) => url.includes("/training/presentation") ? (mocks.presentation(url, options) ?? Promise.resolve({ ok: true, navigation: null, cue: null })) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => fixtureClient }));
+// Installed http-web is external, so its own relative client import escapes the
+// mock above. Give the real useCommand the same fixture client (as source-composed
+// JSKIT does), keeping Main's focus and ACK writes on the coordinated fixture.
+vi.mock("@jskit-ai/http-web/client/composables/useCommand", async importOriginal => {
+  const actual = await importOriginal();
+  return { ...actual, useCommand: options => actual.useCommand({ ...options, client: options?.client || fixtureClient }) };
+});
 // Same feedback resource interface; original tests have no practical commands.
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
 import { useVibe64ConversationRuntime } from "../../src/composables/useVibe64ConversationRuntime.js";
