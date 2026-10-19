@@ -74,16 +74,25 @@ workspace**. A session with connected repositories also shows **Update connected
 repositories** in its session actions menu (**⋮** on a phone or narrow window).
 It runs the same preparation.
 
-A checkout is updated only when it holds nothing that is not already on its
-branch. One with unsaved edits, saved work still awaiting integration, or a Save
-or Update in progress is used as it is. The preparation output shows one line per
-repository: `[Connected] jskit updated to abc1234.`, `[Connected] genesis is up to
-date.`, or `[Connected] vibe64 was not updated:` followed by the reason.
-Preparation continues either way. To update a skipped checkout, finish or save its
-work from its own session in the receiving project, then choose **Update connected
-repositories** again. An updated checkout is prepared again before the consuming
-session links it. Colleague can run this preparation for the session on request
-and report each line; it does not resolve a skipped checkout's work.
+The update uses the receiving session's normal **Update this session (rebase)**,
+which carries that checkout's own changes, including unsaved edits, onto the
+branch's latest commit. A checkout is left as it is while its agent is working,
+while a Save or Update runs in it, while its published contribution still awaits
+acceptance, or when the update would conflict with its changes. The preparation
+output shows one line per repository: `[Connected] jskit updated to abc1234.`,
+`[Connected] genesis is up to date.`, or `[Connected] vibe64 was not updated:`
+followed by the reason. A conflict is recorded in the receiving session for review;
+open that session in the receiving project to resolve it. Preparation continues
+either way, and an updated checkout is prepared again before the consuming
+session links it. Choose **Update connected repositories** again once the cause
+is resolved. Colleague can run this preparation for the session on request and
+report each line; it does not resolve a skipped checkout's work.
+
+Main Save and pull-request creation check each connected repository's branch
+live. If a connected checkout is behind, they stop with `<repository> is behind
+<branch> by N commits. Choose Update connected repositories, check your work,
+then Save.` This keeps saved and deployed work tested against the current
+connected sources.
 
 When a session has recorded submitted contributions, its normal Save checks those
 exact revisions before publishing, including when the main repository has no new

@@ -340,6 +340,18 @@ function createService({
 
   async function assertConnectedWorkSaved(runtime, sessionId, requestContext) {
     const current = await runtime.getSession(sessionId, { inspectSource: false });
+    // Read each integration branch live before taking snapshots, so Save
+    // publishes only work tested against every connected branch's latest commit.
+    const checks = [];
+    for (const binding of sessionConnectedSources(current)) {
+      const check = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.work.check",
+        { contribution: binding.contribution }, requestContext);
+      if (check?.ok !== true) throw Object.assign(new Error(check?.error || "The connected source could not be checked for updates."), {
+        code: check?.code || "vibe64_connected_source_unavailable",
+        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, ...check?.details }
+      });
+      checks.push({ binding, check });
+    }
     const connected = await inspectConnectedWork(current, requestContext, sessionConnectedSources(current), true);
     const pending = connected.find(item => item.needsSave || !item.reconciled);
     if (pending) throw Object.assign(new Error(
@@ -350,6 +362,15 @@ function createService({
       repository: pending.contribution.repository, projectSlug: pending.projectSlug,
       sessionId: pending.sessionId
     } });
+    const behind = checks.find(({ check }) => check.behind > 0);
+    if (behind) {
+      const { binding, check } = behind;
+      throw Object.assign(new Error(`${binding.contribution.repository} is behind ${binding.contribution.integrationBranch} ` +
+        `by ${check.behind} commit${check.behind === 1 ? "" : "s"}. Choose Update connected repositories, check your work, then Save.`), {
+        code: "vibe64_connected_source_behind",
+        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, sessionId: check.sessionId }
+      });
+    }
     return connected.map(item => item.snapshot);
   }
 
@@ -1097,21 +1118,36 @@ function createService({
   }
 
   // Brings a receiving checkout up to its integration branch through the normal
-  // Update, only when it holds nothing that is not already on that branch: no
-  // unsaved edits and no saved work still awaiting integration.
-  async function refreshConnectedContribution(session, branch) {
+  // Update, carrying its edits onto the new commit. It leaves the checkout as it
+  // is while its agent or a Save/Update is working, while a published
+  // contribution awaits acceptance, and when the Update would conflict.
+  async function refreshConnectedContribution(runtime, session, branch) {
     const sessionId = session.sessionId;
     const skipped = reason => ({ ok: true, sessionId, status: "skipped", reason });
     if (activeSaveOperations.has(sessionId) || activeUpdateOperations.has(sessionId)) {
       return skipped("A Save or Update is already running in it.");
     }
-    const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
+    const agent = typeof terminals.agentSessionState === "function"
+      ? await terminals.agentSessionState(sessionId, { runtime, session })
+      : null;
+    if (agent?.turn?.active) return skipped("Its agent is working. Update it once the agent finishes.");
+    const check = await service.checkSessionUpdates(sessionId, { force: true });
+    if (check?.ok === false) return skipped(text(check.error) || `It could not be checked against ${branch}.`);
+    if (!(check.behind > 0)) return { ok: true, sessionId, status: "current", commit: text(check.canonicalCommit) };
+    const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false, inspectContributionPublication: true });
     if (work?.ok === false) return skipped(text(work.error) || "Its work could not be inspected.");
-    if (work.sessionMatchesCanonical !== true) {
-      return skipped(`It has changes that are not on ${branch} yet. Save or update it from its own session.`);
+    if (work.publishedCommit && work.publishedCommit !== work.baseCommit && work.ahead > 0) {
+      return skipped(`Its published contribution is not on ${branch} yet. Merge it through Incoming changes, then update again.`);
     }
     const updated = await service.updateSessionWork(sessionId, { connectedRefresh: true });
-    if (updated?.ok === false) return skipped(text(updated.error) || `It could not be updated to ${branch}.`);
+    if (updated?.ok === false) {
+      if (updated.code === "vibe64_session_update_conflict") {
+        const paths = updated.details?.conflictRecovery?.conflictPaths || [];
+        return skipped(`Updating it to ${branch} conflicts with its changes${paths.length ? ` in ${paths.join(", ")}` : ""}. ` +
+          "Open its session to review the conflict.");
+      }
+      return skipped(text(updated.error) || `It could not be updated to ${branch}.`);
+    }
     return { ok: true, sessionId, status: updated.status === "already_current" ? "current" : "updated",
       commit: text(updated.operation?.canonicalCommit || updated.canonicalCommit) };
   }
@@ -1228,7 +1264,8 @@ function createService({
         const session = await resolveConnectedSession(runtime, contribution,
           await runtime.getSession(contribution.id, { inspectSource: false }));
         if (operation === "inputs") return session;
-        if (operation === "update") return refreshConnectedContribution(session, contribution.integrationBranch);
+        if (operation === "update") return refreshConnectedContribution(runtime, session, contribution.integrationBranch);
+        if (operation === "check") return { ...await service.checkSessionUpdates(session.sessionId, { force: true }), sessionId: session.sessionId };
         const work = operation === "incoming"
           ? await service.inspectIncomingContributions(session.sessionId, { id: contribution.id })
           : operation === "save"

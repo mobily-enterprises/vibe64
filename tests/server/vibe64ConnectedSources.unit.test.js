@@ -24,8 +24,8 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     let preparingSession = parent;
     let preparingProject = slug;
     let setupStarts = 0;
-    let receivingMatchesBranch = false;
-    let receivingUpdateStatus = "updated";
+    // The receiving checkout's state for the automatic update during preparation.
+    const receiving = { agentActive: false, behind: 0, conflict: false, published: "", ahead: 0 };
     const receivingUpdates = [];
     const calls = [];
     let allowReceiver = false;
@@ -103,15 +103,24 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
       workspaceSetupRunner: { start: async () => { setupStarts++; return { completion: null }; } },
       terminals: {
-        async inspectSessionWork(id, { session }) {
+        async inspectSessionWork(id, { session, inspectContributionPublication }) {
           calls.push(`inspect work:${id}`);
-          return { ok: true, unsaved: false, ahead: 0, sessionMatchesCanonical: receivingMatchesBranch,
+          return { ok: true, unsaved: false, ahead: receiving.ahead, baseCommit: "a".repeat(40),
+            ...(inspectContributionPublication ? { publishedCommit: receiving.published } : {}),
             destination: sessionRepositoryDestination(await project.readCurrentProject(), session) };
+        },
+        async agentSessionState() { return { turn: { active: receiving.agentActive } }; },
+        async checkSessionUpdates() {
+          return { ok: true, ahead: receiving.ahead, behind: receiving.behind, canonicalCommit: "e".repeat(40) };
         },
         async updateSessionWork(id, { onRepositoryWriteAcquired }) {
           receivingUpdates.push(id);
           await onRepositoryWriteAcquired();
-          return { canonicalCommit: "e".repeat(40), reconciled: true, status: receivingUpdateStatus };
+          if (receiving.conflict) {
+            throw Object.assign(new Error("conflict"), { code: "vibe64_session_update_conflict",
+              details: { conflictPaths: ["src/a.js"], conflictRecovery: { conflictPaths: ["src/a.js"] } } });
+          }
+          return { canonicalCommit: "e".repeat(40), reconciled: true, status: "updated" };
         },
         async saveSessionWork(id, input) {
           calls.push(`save work:${id}`);
@@ -223,19 +232,29 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     received.sourceReady = true;
 
     const updateOf = async () => (await prepare()).prepared[0].update;
-    assert.deepEqual(await updateOf(), { status: "skipped",
-      reason: "It has changes that are not on main yet. Save or update it from its own session." },
-      "a checkout holding work not on its branch is used as it is");
-    assert.equal(receivingUpdates.length, 0);
-    receivingMatchesBranch = true;
     const startsBefore = setupStarts;
-    assert.deepEqual(await updateOf(), { status: "updated", commit: "e".repeat(40) });
-    assert.deepEqual(receivingUpdates, [binding.contribution.id]);
-    assert.equal(setupStarts, startsBefore + 1, "an updated checkout is rebuilt before the consumer links it");
-    receivingUpdateStatus = "already_current";
     assert.deepEqual(await updateOf(), { status: "current", commit: "e".repeat(40) });
-    assert.equal(setupStarts, startsBefore + 1, "a checkout that was already current is not rebuilt");
-    receivingMatchesBranch = false;
+    assert.equal(receivingUpdates.length, 0, "a checkout already on its branch's latest commit is left alone");
+    receiving.behind = 2;
+    receiving.agentActive = true;
+    assert.deepEqual(await updateOf(), { status: "skipped", reason: "Its agent is working. Update it once the agent finishes." });
+    receiving.agentActive = false;
+    receiving.published = "b".repeat(40);
+    receiving.ahead = 1;
+    assert.deepEqual(await updateOf(), { status: "skipped",
+      reason: "Its published contribution is not on main yet. Merge it through Incoming changes, then update again." });
+    assert.equal(receivingUpdates.length, 0, "a contribution awaiting acceptance is not rewritten");
+    receiving.published = "";
+    receiving.conflict = true;
+    assert.deepEqual(await updateOf(), { status: "skipped",
+      reason: "Updating it to main conflicts with its changes in src/a.js. Open its session to review the conflict." });
+    assert.equal(setupStarts, startsBefore, "a conflicting update changes nothing");
+    receiving.conflict = false;
+    assert.deepEqual(await updateOf(), { status: "updated", commit: "e".repeat(40) },
+      "unpublished work, including unsaved edits, is carried onto the branch's latest commit");
+    assert.equal(receivingUpdates.length, 2);
+    assert.equal(setupStarts, startsBefore + 1, "an updated checkout is rebuilt before the consumer links it");
+    Object.assign(receiving, { behind: 0, ahead: 0 });
 
     assert.equal(received.sessionName, "parent", "a receiving session carries its parent's name, not a random identity");
     parent.sessionName = "Payments";

@@ -230,7 +230,7 @@ function createSessionActions({ sessions } = {}) {
     action({ id: "vibe64.sessions.connected.replace", kind: "command", input: connectedReplacementInputValidator,
       assistant: sessionTool("Only on a request to replace a discarded contribution, pass the exact review from connected.replacement.inspect. Reserve and prepare a new contribution from the discarded commit; preserve the old source, branch and integration requirements. No repository is pushed. Retry the same review after an uncertain result. Prepare the originating workspace before testing the new source."),
       execute: (input, context) => sessions.replaceConnectedSource(input.sessionId, input, context) }),
-    ...["inspect", "inputs", "incoming", "save", "update"].map(operation => ({
+    ...["inspect", "inputs", "incoming", "save", "update", "check"].map(operation => ({
       ...action({ id: `vibe64.sessions.connected.work.${operation}`, kind: ["save", "update"].includes(operation) ? "command" : "query",
         input: connectedWorkInputValidator,
         execute: (input, context) => sessions.connectedContributionWork(operation, input, context) }),
@@ -529,7 +529,7 @@ function createSessionActions({ sessions } = {}) {
     action({
       id: ACTION_RETRY_WORKSPACE_SETUP,
       kind: "command",
-      assistant: sessionTool("Run or rerun the existing workspace preparation for the exact requested session, including after an earlier success. Use only when the user requests preparation or retry; the existing service rejects running or unavailable retries. This runs the complete declared recipe and can start installation and managed work. Inspect the returned setup status afterward; accepted preparation is not proof that it finished. Do not invent or edit setup commands. In a session with connected repositories this also updates each clean connected checkout to its branch; report the [Connected] transcript lines."),
+      assistant: sessionTool("Run or rerun the existing workspace preparation for the exact requested session, including after an earlier success. Use only when the user requests preparation or retry; the existing service rejects running or unavailable retries. This runs the complete declared recipe and can start installation and managed work. Inspect the returned setup status afterward; accepted preparation is not proof that it finished. Do not invent or edit setup commands. In a session with connected repositories this also updates each connected checkout to its branch when safe; report the [Connected] transcript lines."),
       input: sessionIdInputValidator,
       execute: (input) => sessions.retryWorkspaceSetup(input.sessionId, {
         originId: input.originId || "",

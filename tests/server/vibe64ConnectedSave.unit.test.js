@@ -85,6 +85,9 @@ test("connected Save commits and records each receiver, resumes after failure, a
           try { return await operation({ runtime: runtimeFor(slug), session: parent }); }
           finally { mainLocked = false; }
         },
+        async checkSessionUpdates(_id, { session }) {
+          return { ok: true, ahead: 0, behind: 0, canonicalCommit: session.metadata.canonical_commit };
+        },
         async inspectSessionWork(_id, { session, inspectContributionPublication, knownSubmittedCommit }) {
           const target = currentProjectRequestContext().slug;
           return { ok: true, unsaved: dirty.has(target), ahead: dirty.has(target) ? 1 : 0,
@@ -258,6 +261,7 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
       connected_contribution: JSON.stringify(contribution)
     } };
     let dirty = false;
+    let behind = 0;
     let allowed = true;
     let publications = 0;
     let authorizations = 0;
@@ -266,12 +270,17 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
       project: {
         createRuntime: async () => ({
           getSession: async () => currentProjectRequestContext().slug === slug ? parent : receiver,
-          store: { readBackgroundTask: async () => null }
+          store: { readBackgroundTask: async () => null,
+            async writeMetadataValue(_id, key, value) { receiver.metadata[key] = value; } }
         }),
         connectedContributionSource: async () => ({ repository: contribution.repository, integrationBranch: "main" })
       },
       terminals: {
         openBrowserConversation() {},
+        async checkSessionUpdates() {
+          assert.equal(currentProjectRequestContext().slug, "library");
+          return { ok: true, ahead: 0, behind, canonicalCommit: "c".repeat(40) };
+        },
         async inspectSessionWork(_id, input) {
           assert.equal(currentProjectRequestContext().slug, "library");
           assert.equal(input.inspectContributionPublication, true);
@@ -313,9 +322,14 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
     dirty = true;
     assert.equal((await create()).code, "vibe64_connected_save_required");
     dirty = false;
+    behind = 2;
+    const stale = await create();
+    assert.equal(stale.code, "vibe64_connected_source_behind", "work tested against an older branch is not published");
+    assert.match(stale.error, /example\/library is behind main by 2 commits\. Choose Update connected repositories/u);
+    behind = 0;
     allowed = false;
     assert.equal((await create()).code, "receiver_forbidden");
     assert.equal(publications, 1, "dirty or unauthorized connected work cannot create a PR branch");
-    assert.equal(authorizations, 3, "every PR attempt reauthorizes its receiving project");
+    assert.equal(authorizations, 7, "every receiving check and inspection in each PR attempt reauthorizes its project");
   });
 });
