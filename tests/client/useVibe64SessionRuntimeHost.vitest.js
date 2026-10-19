@@ -11,6 +11,7 @@ import {
   proxySessionDialogs,
   runtimeHostAgentWorking,
   runtimeHostToolbarSessions,
+  runtimeHostWorkInspectionRevision,
   runtimeHostWorkTaskRevision,
   runtimeHostWorkTaskState
 } from "../../src/composables/useVibe64SessionRuntimeHost.js";
@@ -151,6 +152,30 @@ describe("Vibe64 direct session runtime host", () => {
     });
 
     expect(ready).not.toBe(running);
+  });
+
+  it("inspects files when an operation starts, is replaced or ends, not at each progress event", () => {
+    const update = (status, operationId, events) => ({ backgroundTasks: [{
+      events: events.map((kind, index) => ({ at: `2026-10-19T01:22:0${index}.000Z`, kind, status })),
+      id: "update-session", operationId, status, updatedAt: `2026-10-19T01:22:0${events.length}.000Z`
+    }] });
+    const started = update("running", "update-a", ["started"]);
+    const rebased = update("running", "update-a", ["started", "rebased", "verified"]);
+    expect(runtimeHostWorkTaskRevision(rebased), "progress is still displayed").not.toBe(runtimeHostWorkTaskRevision(started));
+    expect(runtimeHostWorkInspectionRevision(rebased)).toBe(runtimeHostWorkInspectionRevision(started));
+    for (const changed of [
+      update("running", "update-b", ["started"]),
+      update("ready", "update-a", ["started", "rebased", "verified", "updated"]),
+      update("failed", "update-a", ["started", "rebased", "failed"]),
+      { backgroundTasks: [] }
+    ]) {
+      expect(runtimeHostWorkInspectionRevision(changed)).not.toBe(runtimeHostWorkInspectionRevision(started));
+    }
+    const checkpoint = (at) => ({ events: [{ at, kind: "checkpoint-confirmed", status: "running" }],
+      id: "codex_turn_checkpoint", status: "running", updatedAt: at });
+    const withCheckpoint = (at) => ({ backgroundTasks: [...started.backgroundTasks, checkpoint(at)] });
+    expect(runtimeHostWorkInspectionRevision(withCheckpoint("2026-10-19T01:23:00.000Z")),
+      "agent checkpoints still change files").not.toBe(runtimeHostWorkInspectionRevision(withCheckpoint("2026-10-19T01:24:00.000Z")));
   });
 
   it("projects realtime Save progress without waiting for repository inspection", () => {

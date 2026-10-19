@@ -123,10 +123,27 @@ function createVibe64SessionWorkRefreshQueue({ inspect } = {}) {
   });
 }
 
-function runtimeHostWorkTaskRevision(session = {}) {
+const ACTIVE_WORK_TASK_STATUSES = ["queued", "running", "starting"];
+
+function workTaskActive(task = {}) {
+  return ACTIVE_WORK_TASK_STATUSES.includes(String(task?.status || "").trim().toLowerCase());
+}
+
+// Inspection reads repository files, so it follows changes that can alter them:
+// a started, replaced or finished Save or Update, and checkpoints. Progress
+// events of one running Save or Update only change its displayed progress; the
+// server still recovers an interrupted one whenever the session is inspected.
+function runtimeHostWorkInspectionRevision(session = {}) {
+  return runtimeHostWorkTaskRevision(session, { progress: false });
+}
+
+function runtimeHostWorkTaskRevision(session = {}, { progress = true } = {}) {
   return (Array.isArray(session?.backgroundTasks) ? session.backgroundTasks : [])
     .filter((task) => SESSION_WORK_TASK_IDS.includes(String(task?.id || "")))
     .map((task) => {
+      if (!progress && task.id !== "codex_turn_checkpoint" && workTaskActive(task)) {
+        return [task.id, String(task.status || "").trim().toLowerCase(), String(task.operationId || "")].join(":");
+      }
       const events = Array.isArray(task?.events) ? task.events : [];
       const latestEvent = events.at(-1) || {};
       return [
@@ -147,9 +164,7 @@ function runtimeHostWorkTaskState(session = {}) {
   const tasks = Array.isArray(session?.backgroundTasks) ? session.backgroundTasks : [];
   const operation = tasks.find((task) => String(task?.id || "") === "save-work") || null;
   const updateOperation = tasks.find((task) => String(task?.id || "") === "update-session") || null;
-  const activeOperation = [operation, updateOperation].find((task) => (
-    ["queued", "running", "starting"].includes(String(task?.status || "").trim().toLowerCase())
-  ));
+  const activeOperation = [operation, updateOperation].find(workTaskActive);
   return {
     activeOperation: activeOperation
       ? {
@@ -645,6 +660,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
         loading: false
       };
     }
+  }, { flush: "post", immediate: true });
+  watch(() => {
+    return `${selectedSessionId.value}:${selectedSessionArchived.value}:${runtimeHostWorkInspectionRevision(selectedSession.value)}`;
+  }, () => {
     void refreshWorkState();
   }, { flush: "post", immediate: true });
 
@@ -699,6 +718,7 @@ export {
   proxySessionDialogs,
   runtimeHostAgentWorking,
   runtimeHostToolbarSessions,
+  runtimeHostWorkInspectionRevision,
   runtimeHostWorkTaskRevision,
   runtimeHostWorkTaskState,
   useVibe64SessionRuntimeHost

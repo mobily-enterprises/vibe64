@@ -133,6 +133,12 @@ uses the original reconciliation path. An unreadable post-push authority records
 `vibe64_session_save_publication_unknown` on the existing Save task; its original
 operation ID and prepared Git refs remain recovery evidence. Work inspection or
 an explicit retry resumes that verifier after restart, without publishing again.
+The open session view inspects work when it opens or changes session, when a Save
+or Update starts, is replaced by another operation or ends, and on agent
+checkpoints. Progress events of one running Save or Update update only the
+displayed progress (`runtimeHostWorkInspectionRevision`), so a rebase costs one
+inspection of each repository instead of one per event. Opening a session with
+an interrupted running task still inspects it and therefore recovers it.
 An unresolved unknown outcome cannot be overwritten by another Save or treated
 as a completed connected contribution.
 Failed native publishing tasks also use that verifier before replacement, so a
