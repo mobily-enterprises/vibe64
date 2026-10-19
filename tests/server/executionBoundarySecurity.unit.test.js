@@ -168,6 +168,36 @@ test("the daemon's generic commands admit only exact Learning source scratch dir
   assert.throws(() => resolveAllowedCwd(scratch, owner.username, { ...options, operation: "github-workflow-command" }));
 });
 
+test("the daemon's generic commands admit only exact Learning session agent directories", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-learning-session-security-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = path.join(root, "home");
+  const users = path.join(home, ".local/state/vibe64/training/users");
+  const learner = Buffer.from("1000").toString("base64url");
+  const attemptId = "9fb73496-78fc-4f42-b8eb-ed7c6ed0bfcc";
+  const otherAttempt = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const session = path.join(users, learner, "learning-sessions", attemptId, "sessions/active", `learning-${attemptId}`);
+  const native = path.join(session, "native");
+  const nested = path.join(native, "nested");
+  const mismatched = path.join(users, learner, "learning-sessions", attemptId, "sessions/active", `learning-${otherAttempt}`, "native");
+  const malformedLearner = path.join(users, "user.name", "learning-sessions", attemptId, "sessions/active", `learning-${attemptId}`, "native");
+  const otherNamespace = path.join(home, ".local/state/vibe64/training/content", learner, "learning-sessions", attemptId, "sessions/active", `learning-${attemptId}`, "native");
+  const outside = path.join(root, "outside");
+  for (const directory of [nested, mismatched, malformedLearner, otherNamespace, outside]) await mkdir(directory, { recursive: true });
+  const escapingAttempt = "11111111-2222-4333-8444-555555555555";
+  await mkdir(path.join(users, learner, "learning-sessions", escapingAttempt, "sessions/active", `learning-${escapingAttempt}`), { recursive: true });
+  const escaping = path.join(users, learner, "learning-sessions", escapingAttempt, "sessions/active", `learning-${escapingAttempt}`, "native");
+  await symlink(outside, escaping);
+  const owner = { home, username: "v64d_workspace" };
+  const options = { operation: "vibe64-command", targetUser: owner };
+  assert.equal(resolveAllowedCwd(native, owner.username, options), native);
+  for (const refused of [users, session, nested, mismatched, malformedLearner, otherNamespace, escaping]) {
+    assert.throws(() => resolveAllowedCwd(refused, owner.username, options), undefined, refused);
+  }
+  assert.throws(() => resolveAllowedCwd(native, "v64d_another", options));
+  assert.throws(() => resolveAllowedCwd(native, owner.username, { ...options, operation: "github-workflow-command" }));
+});
+
 test("workspace cache jobs use an exact daemon scratch directory without opening other private state", async (t) => {
   const home = await mkdtemp(path.join(os.tmpdir(), "cache-job-boundary-"));
   t.after(() => rm(home, { recursive: true, force: true }));

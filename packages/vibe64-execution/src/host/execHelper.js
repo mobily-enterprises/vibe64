@@ -2176,6 +2176,18 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
         return resolved;
       }
     }
+    // A source-less Learning session runs its teacher agent in the session's
+    // exact private native directory inside the learner's training namespace.
+    const ownerLearningUsersRoot = path.join(targetUser.home, ".local", "state", "vibe64", "training", "users");
+    if (existsSync(ownerLearningUsersRoot)) {
+      const parts = relativePathParts(canonicalPath(ownerLearningUsersRoot), resolved);
+      const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u;
+      if (parts.length === 7 && /^[A-Za-z0-9_-]+$/u.test(parts[0]) && parts[1] === "learning-sessions" &&
+          uuid.test(parts[2]) && parts[3] === "sessions" && parts[4] === "active" &&
+          parts[5] === `learning-${parts[2]}` && parts[6] === "native") {
+        return resolved;
+      }
+    }
     // Official Learning catalogue/topic sources are fetched into one exact
     // private scratch directory beside the training namespace, then verified.
     const ownerTrainingSourcesRoot = path.join(targetUser.home, ".local", "state", "vibe64", "training-sources");
