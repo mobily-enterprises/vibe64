@@ -599,6 +599,8 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.thinkingLabel.value).toBe("Compacting conversation context…");
     props.session.agentSession.turn.phase = "";
     expect(view.thinkingLabel.value).toBe("Assistant is working...");
+    props.session.agentSession.turn.phase = "background";
+    expect(view.thinkingLabel.value).toBe("Reply ready · background task still running…");
     props.session.agentSession.turn.phase = "compacting";
     props.session.agentSession.turn.status = "observation_lost";
     expect(view.thinkingLabel.value).toContain("not yet confirmed");

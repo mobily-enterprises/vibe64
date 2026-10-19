@@ -176,6 +176,7 @@ function useVibe64TemporaryAi({
             if (!observed.readError && !observed.deferredReconciliation) {
               update.status = temporaryAiText(observed.status) || task.status;
               update.busy = temporaryAiTurnIsActive(update.status);
+              update.phase = update.busy ? temporaryAiText(snapshot.phase) : "";
               update.runId = observed.runId || task.runId;
               update.outcomeKind = temporaryAiText(observed.outcome?.kind);
             }

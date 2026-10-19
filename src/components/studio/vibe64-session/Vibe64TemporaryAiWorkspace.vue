@@ -549,6 +549,7 @@ const typingPresence = useVibe64SessionTypingPresence({
 const activityLabel = computed(() => {
   if (activeTaskRecoveryChecking.value) return "Checking Update…";
   if (activeTask.value?.delivery.state.sending) return "Sending to assistant…";
+  if (activeTask.value?.busy && activeTask.value.phase === "background") return "Reply ready · background task still running…";
   if (activeTask.value?.busy) return "AI is working…";
   return typingPresence.typingLabel.value;
 });

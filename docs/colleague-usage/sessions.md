@@ -208,6 +208,13 @@ provider events can keep the turn active without animating those dots. Reasoning
 summaries may arrive late in a response; absent dots alone do not prove a stall.
 Reduced-motion preferences also disable the animation.
 
+With Claude, **Reply ready · background task still running…** (Main) means
+Claude has posted its answer, but a command it started in the background is
+still running. The answer above is complete and readable. The turn stays active
+until that command finishes or times out, and Claude may then add a short
+follow-up reply after the answer; earlier replies stay visible. Temporary chat
+shows the same text. Press **Stop** if you do not need the background command.
+
 Colleague can explain these states. It should verify current session activity
 through its available read operations before claiming that work has stopped.
 

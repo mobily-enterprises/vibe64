@@ -20,6 +20,9 @@ Temporary chat uses Main's round Send arrow and square Stop control. While a
 message is being delivered, you can type and send another; it appears as
 **Pending** until the earlier delivery settles. The diagonal arrow sends guidance
 to a working assistant. **Stop** interrupts that chat without closing it.
+**Reply ready · background task still running…** means the answer is already
+shown but a background command Claude started is still running; any later
+follow-up reply appears after the answer without replacing it.
 The same controls remain available in narrow layouts. Goals are not offered in
 Temporary chat.
 

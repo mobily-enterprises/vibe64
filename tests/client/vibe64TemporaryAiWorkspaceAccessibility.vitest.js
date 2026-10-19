@@ -851,6 +851,12 @@ describe("Temporary AI recovery workspace accessibility", () => {
         "Hide progress updates Inspecting the conflict. Checking the repair. The repair is ready for verification."
       );
       expect(nodeText(activity)).toBe("AI is working…");
+      temporary.tasks.value[0].phase = "background";
+      await nextTick();
+      expect(nodeText(activity)).toBe("Reply ready · background task still running…");
+      temporary.tasks.value[0].phase = "";
+      await nextTick();
+      expect(nodeText(activity)).toBe("AI is working…");
       toggle.props.onClick();
       await nextTick();
       expect(nodeText(updatedProgress)).toBe("Show all 3 progress updates");
