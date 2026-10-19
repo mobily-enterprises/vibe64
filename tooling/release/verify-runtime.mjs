@@ -45,9 +45,15 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
     const module = await import(pathToFileURL(path.join(appRoot, serverEntry)).href);
     server = await module.createServer({ runtimeMode: "local", targetRoot: project, systemRoot: path.join(root, "state"), logLevel: "silent" });
     assert.equal((await server.inject("/api/health")).statusCode, 200);
-    const usageTopics = await server.inject("/api/vibe64/colleague/usage/topics?query=plan");
-    assert.equal(usageTopics.statusCode, 200);
-    assert.ok(usageTopics.json().topics.some(topic => topic.topicId === "plans"));
+    // Search results are paged; follow nextOffset as Colleague does.
+    const planTopics = [];
+    for (let offset = 0; offset !== undefined;) {
+      const usageTopics = await server.inject(`/api/vibe64/colleague/usage/topics?query=plan&offset=${offset}`);
+      assert.equal(usageTopics.statusCode, 200);
+      planTopics.push(...usageTopics.json().topics);
+      offset = usageTopics.json().nextOffset;
+    }
+    assert.ok(planTopics.some(topic => topic.topicId === "plans"));
     const planGuide = await server.inject("/api/vibe64/colleague/usage/guide?topicId=plans");
     assert.equal(planGuide.statusCode, 200);
     assert.equal(planGuide.json().text, await readFile(path.join(appRoot, "docs/colleague-usage/plans.md"), "utf8"));
