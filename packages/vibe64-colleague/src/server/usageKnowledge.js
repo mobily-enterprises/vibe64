@@ -5,7 +5,7 @@ import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
 
 const topicPattern = /^[a-z][a-z0-9-]{0,63}$/u;
 const maxGuideBytes = 65536;
-const maxGuideCharacters = 16000;
+const maxGuideCharacters = 24000;
 
 function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppRoot(), "docs/colleague-usage") } = {}) {
   async function readGuide(topicId) {
@@ -59,4 +59,4 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
   };
 }
 
-export { createColleagueUsageKnowledge };
+export { createColleagueUsageKnowledge, maxGuideCharacters };

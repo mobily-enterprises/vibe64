@@ -66,7 +66,7 @@ test("missing releases and malformed or oversized guides give actionable failure
   assert.equal((await createColleagueUsageKnowledge({ directory: path.join(directory, "missing") }).topics()).ok, false);
   await writeFile(path.join(directory, "large.md"), "# Large\n\n" + "x".repeat(65536));
   await assert.rejects(usage.guide({ topicId: "large" }), /too large/u);
-  await writeFile(path.join(directory, "large.md"), "# Large\n\n" + "x".repeat(16000));
+  await writeFile(path.join(directory, "large.md"), "# Large\n\n" + "x".repeat(24000));
   await assert.rejects(usage.guide({ topicId: "large" }), /split into smaller/u);
   await writeFile(path.join(directory, "untitled.md"), "No heading\n");
   await assert.rejects(usage.guide({ topicId: "untitled" }), /no title/u);
