@@ -44,9 +44,23 @@ added later, up to 64 entries within a 64 KiB file. Oversized saves preserve the
 current list; shorten the entries before retrying.
 
 **Package type** is separate from Relationship. Choose **Stack default** to
-inherit the consuming Stack's package type; Node defines `npm`. Choose **npm**
-or **custom** to override it for this connection. Stack default leaves `type`
-out of the file, so a later Stack default change still applies.
+inherit the consuming project's `Default package type`, or override it for this
+connection with **npm (Node.js)**, **Composer (PHP)**, **pip (Python)**,
+**Bundler (Ruby)**, **Go modules**, **Cargo (Rust)**, **Maven**, **Gradle**,
+**NuGet (.NET)** or **custom**. The file stores `npm`, `composer`, `pip`,
+`bundler`, `gomod`, `cargo`, `maven`, `gradle`, `nuget` or `custom`. Stack
+default leaves `type` out of the file, so a later Stack default change still
+applies.
+
+Each language's Stack proposes its default: Node `npm`, PHP/Laravel
+`composer`, Python `pip`, Ruby `bundler`, Go `gomod`, Rust `cargo`, Java
+`maven`, Kotlin `gradle` and C# `nuget`; C/C++ and shell projects use `custom`.
+A multi-language project's own `Connected development` section chooses one
+default; override other connections individually. A type other than custom is a
+declared label, not an installer: Vibe64 never runs Composer, pip or any other
+package manager because of it. The consuming project's declared Prepare and
+Verify commands read the type from the prepared source map and give the source
+that ecosystem's treatment. Every such type requires at least one Verify command.
 
 For **custom**, provide **Preparation script (project-relative)**, for example
 `tooling/prepare-native-worker.mjs`. The script lives in the consuming project;
@@ -61,8 +75,8 @@ The existing preparer appends the absolute script path, then `--phase`
 (`prepare` or `verify`), `--source-root`, `--project-root`, `--sources-file` and
 `--repository` with their values. The script must remain inside the consuming
 project; preparation rejects missing files and symlinks that escape that root.
-An npm connection cannot have a script; choosing npm removes the script from
-the draft. Stack default may retain a script for a custom default, and workspace
+Only custom connections have a script. Choosing any other type disables
+**Preparation script (project-relative)** and removes the script from the draft. Stack default may retain a script for a custom default, and workspace
 preparation checks the effective type before running anything. The script must
 handle both phases: prepare makes the development artifact available; verify
 checks that the consuming app uses the selected source and exits nonzero on
@@ -109,10 +123,11 @@ declarations must identify the connected source, where the task exposes it, how
 the selected toolchain builds/uses it, and how to verify that selection. This
 applies to mixed-language connections too: a Node application can use a connected
 C executable or library. Choose **custom** for that connection's **Package type**. Package type is
-independent of programming language and relationship. **Stack default** omits
-`type` in the repository file; Node projects declare `npm` as their default.
-The prepared source map records the effective type. npm treatment requires a
-Node package manifest and excludes custom entries even if they contain one.
+independent of the consuming project's language and of relationship. **Stack
+default** omits `type` in the repository file. The prepared source map records
+the effective type of every entry. A project's commands decide how to treat each
+type; for example, Node treatment requires a package manifest and excludes
+custom entries even if they contain one.
 Custom sources remain available to the project's build and execution commands. For a C program those commands must build it, expose its development
 executable or library to the app, and verify the app uses that build. It need
 not appear in `node_modules`. A cloned repository alone does not establish that
@@ -121,7 +136,10 @@ Use the existing **Prepare workspace** action (or its **Retry** action after a
 failure). When Stack declares `Connected development`, preparation creates or
 reuses the task's authorized contribution sources, writes the declared source
 map, runs ordinary Workspace setup, then runs the connected Prepare and Verify
-commands in order. Success requires those commands to succeed. The preparation
+commands in order. Success requires those commands to succeed. If a non-custom
+connection exists without a Verify command, preparation is blocked with
+`vibe64_connected_verification_required` ("Declare a Verify command for the
+connected pip packages."); add a Verify entry to Stack and use **Retry**. The preparation
 identity includes both recipes and the exact task source selection; changing
 that selection requires preparation again. Access is rechecked before each
 command and when checking whether preparation remains current.
@@ -136,7 +154,8 @@ The initial consumption proof covers Node.js packages through `node_modules`:
 two tasks use distinct sources, source edits reach only the intended task, and
 an ordinary release installation retains its published dependency. PHP, Python,
 Ruby, C/C++, C#, Go, Java, Kotlin, Rust and framework-specific consumption still
-need their own commands and end-to-end proof. Installed language runtimes alone
+need their own declared commands and end-to-end proof; choosing their package
+type only records intent. Installed language runtimes alone
 do not establish connected-source support. A declaration alone does not prove
 that Preview or tests consume the dependency.
 

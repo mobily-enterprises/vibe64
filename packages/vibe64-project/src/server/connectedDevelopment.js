@@ -8,6 +8,7 @@ import { sessionConnectedContribution, sessionConnectedSources } from "@local/vi
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { connectedPackageTypeUsesScript, isConnectedPackageType } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { readConnectedProjects } from "./connectedProjects.js";
 import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
 
@@ -19,13 +20,13 @@ function connectedDevelopmentHash(value) {
 
 function connectedPackageType(connection, inspection) {
   const type = connection.type || inspection.defaultPackageType;
-  if (!["npm", "custom"].includes(type)) throw vibe64Error(
+  if (!isConnectedPackageType(type)) throw vibe64Error(
     `Choose a package type for ${connection.name}, or declare Default package type in Connected development.`,
     "vibe64_connected_package_type_required");
-  if (type === "custom" && !connection.script) throw vibe64Error(
+  if (connectedPackageTypeUsesScript(type) && !connection.script) throw vibe64Error(
     `Choose a project script for custom connection ${connection.name}.`, "vibe64_connected_custom_script_required");
-  if (type === "npm" && connection.script) throw vibe64Error(
-    `The npm connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid");
+  if (!connectedPackageTypeUsesScript(type) && connection.script) throw vibe64Error(
+    `The ${type} connection ${connection.name} cannot select a custom script.`, "vibe64_connected_custom_script_invalid");
   return type;
 }
 
@@ -135,8 +136,13 @@ async function inspectConnectedWorkspaceSetup({ session, setup, inspection, env,
     if (custom.length && !inspection.customRunner) throw vibe64Error(
       "Declare a Custom runner in Connected development to run this project's custom scripts.",
       "vibe64_connected_custom_runner_required");
-    if (expected.some(connection => connection.type === "npm") && !inspection.steps.some(step => step.phase === "verify")) {
-      throw vibe64Error("Declare a Verify command for the connected npm packages.", "vibe64_connected_npm_verification_required");
+    // Vibe64 runs no package manager for a declared type; the project's own
+    // Verify command must prove each non-custom ecosystem's treatment.
+    const declaredTypes = [...new Set(expected.map(connection => connection.type)
+      .filter(type => !connectedPackageTypeUsesScript(type)))];
+    if (declaredTypes.length && !inspection.steps.some(step => step.phase === "verify")) {
+      throw vibe64Error(`Declare a Verify command for the connected ${declaredTypes.join(" and ")} packages.`,
+        "vibe64_connected_verification_required");
     }
     const customSteps = [];
     for (const connection of custom) {

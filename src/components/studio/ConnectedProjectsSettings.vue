@@ -19,7 +19,7 @@
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.repository" label="GitHub repository URL" placeholder="https://github.com/owner/repository" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" v-model="entry.relationship" label="Relationship" :items="relationships" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" :model-value="entry.type || ''" @update:model-value="setPackageType(entry, $event)" label="Package type" :items="packageTypes" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
-          <v-text-field :disabled="!state.canEdit || saving || entry.type === 'npm'" :model-value="entry.script || ''" @update:model-value="setScript(entry, $event)" label="Preparation script (project-relative)" placeholder="tooling/prepare-native-worker.mjs" maxlength="1024" hint="Required for custom. Relative to this project's root; Stack declares the runtime." persistent-hint variant="outlined" hide-details="auto" />
+          <v-text-field :disabled="!state.canEdit || saving || !scriptAllowed(entry)" :model-value="entry.script || ''" @update:model-value="setScript(entry, $event)" label="Preparation script (project-relative)" placeholder="tooling/prepare-native-worker.mjs" maxlength="1024" hint="Required for custom. Relative to this project's root; Stack declares the runtime." persistent-hint variant="outlined" hide-details="auto" />
           <v-btn :disabled="!state.canEdit || saving" variant="text" :aria-label="`Remove ${entry.name || 'connected project'}`" @click="draft.splice(index, 1)">Remove</v-btn>
         </fieldset>
         <p v-if="state.exists && !draft.length">No connected projects.</p>
@@ -37,6 +37,7 @@
 import { computed, ref, watch } from "vue";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { CONNECTED_PACKAGE_TYPES, connectedPackageTypeUsesScript } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 
@@ -52,15 +53,16 @@ const relationships = [
   { label: "Dependency — a library or tool", value: "dependency" },
   { label: "Composition — source assembled into this project", value: "composition" }
 ];
-const packageTypes = [
-  { label: "Stack default", value: "" },
-  { label: "npm", value: "npm" },
-  { label: "custom", value: "custom" }
-];
+const packageTypes = [{ label: "Stack default", value: "" }, ...CONNECTED_PACKAGE_TYPES];
+// An inherited Stack default may be custom, so only an explicit ecosystem type
+// excludes the per-connection script.
+function scriptAllowed(entry) {
+  return !entry.type || connectedPackageTypeUsesScript(entry.type);
+}
 function setPackageType(entry, value) {
   if (value) entry.type = value;
   else delete entry.type;
-  if (value === "npm") delete entry.script;
+  if (!scriptAllowed(entry)) delete entry.script;
 }
 function setScript(entry, value) {
   if (value) entry.script = value;

@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { access, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { connectedPackageTypeListText, isConnectedPackageType } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 
 const exec = promisify(execFile);
 
@@ -20,9 +21,9 @@ export async function readConnectedDevelopmentSources(sourceFile, { projectRoot 
   const projects = [];
   for (const project of map.projects) {
     if (!["dependency", "composition"].includes(project?.relationship) ||
-        !["npm", "custom"].includes(project.type) ||
+        !isConnectedPackageType(project.type) ||
         typeof project.sourceRoot !== "string" || !path.isAbsolute(project.sourceRoot)) {
-      throw new Error("Connected development requires an absolute source root, relationship and effective npm/custom type for each project.");
+      throw new Error(`Connected development requires an absolute source root, relationship and effective package type (${connectedPackageTypeListText()}) for each project.`);
     }
     const sourceRoot = await realpath(project.sourceRoot);
     if (roots.has(sourceRoot)) throw new Error(`Duplicate connected development source root: ${sourceRoot}.`);

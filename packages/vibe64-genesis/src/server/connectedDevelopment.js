@@ -6,6 +6,7 @@ import {
   uniqueSorted
 } from "./stackOperation.js";
 import { parseVibe64WorkspaceSetupLines } from "./workspaceSetup.js";
+import { connectedPackageTypeListText, isConnectedPackageType } from "../shared/connectedPackageTypes.js";
 
 const VIBE64_CONNECTED_DEVELOPMENT_SECTION = "Connected development";
 const VIBE64_CONNECTED_DEVELOPMENT_CONTRACT = "vibe64.connected-development.v1";
@@ -25,10 +26,12 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
       const source = text.trim();
       if (!source) continue;
       const line = index + 1;
-      const packageType = source.match(/^- Default package type: `(npm|custom)`$/u);
+      const packageType = source.match(/^- Default package type: `([^`\r\n]*)`$/u);
       if (packageType) {
         if (defaultPackageType) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
           "Declare exactly one default package type.", line);
+        if (!isConnectedPackageType(packageType[1])) invalidStackOperation(ERROR_CODE, OPERATION_PATH,
+          `Default package type must be ${connectedPackageTypeListText()}.`, line);
         defaultPackageType = packageType[1];
         continue;
       }

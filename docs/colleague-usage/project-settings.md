@@ -13,10 +13,12 @@ code automatically. Prompt suggestions can be changed separately from those choi
 
 **Connected projects** maintains the source-owned `vibe64.connections.json` list.
 Add a name, GitHub URL and Dependency/Composition relationship.
-Package type can inherit the Stack default or explicitly select npm or custom;
-it is independent of the relationship.
+Package type can inherit the Stack default or explicitly select npm (Node.js),
+Composer (PHP), pip (Python), Bundler (Ruby), Go modules, Cargo (Rust), Maven,
+Gradle, NuGet (.NET) or custom; it is independent of the relationship.
 Custom requires a Preparation script path relative to this project, with its
-runtime declared in Stack. npm does not accept a custom script.
+runtime declared in Stack. Every other type disables and clears the script; the
+project's own declared Verify command, not Vibe64, treats that source.
 Use **Save connected projects** for the list; ordinary project Save publishes
 that source edit. See **Configure connected projects** for access and recovery.
 

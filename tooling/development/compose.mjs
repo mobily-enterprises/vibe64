@@ -17,6 +17,12 @@ export async function composePublicDevelopment({ publicRoot, appRoot, env = proc
   publicRoot = await realpath(publicRoot);
   const connected = connectedSourcesFile
     ? await readConnectedDevelopmentSources(connectedSourcesFile, { projectRoot: publicRoot }) : null;
+  // Public Vibe64's own Stack gives only npm dependencies a Node treatment;
+  // other declared ecosystems would otherwise be silently left unconsumed.
+  const untreated = connected?.projects.find(project => !["npm", "custom"].includes(project.type));
+  if (untreated) {
+    throw new Error(`Public Vibe64 source development treats only npm dependencies and custom connections; it has no treatment for ${untreated.type} connections. Use npm, or a project-owned custom treatment.`);
+  }
   if (connected?.projects.some(project => project.relationship === "composition" && project.type === "npm")) {
     throw new Error("Public Vibe64 source development supports npm dependencies, not npm composition projects. Declare a project-owned custom treatment for this composition.");
   }

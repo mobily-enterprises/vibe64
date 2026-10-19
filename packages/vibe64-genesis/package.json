@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./server": "./src/server/index.js",
-    "./server/promptContext": "./src/server/promptContext.js"
+    "./server/promptContext": "./src/server/promptContext.js",
+    "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -28,6 +29,10 @@
           {
             "subpath": "./server",
             "summary": "Uses Genesis transport while Vibe64 owns workspace setup, Outputs, preview identity, and application deployment contracts."
+          },
+          {
+            "subpath": "./shared/connectedPackageTypes",
+            "summary": "Owns the connected-project package type vocabulary shared by Stack parsing, connection validation, schemas and the client."
           }
         ]
       }

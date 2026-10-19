@@ -175,7 +175,12 @@ export async function inspectVibe64ConnectedDevelopment() {
   const invalidMap = JSON.parse(await readFile(path.join(f.publicRoot, sourcesFile), "utf8"));
   delete invalidMap.projects[0].type;
   await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));
-  await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }), /effective npm\/custom type/u);
+  await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }),
+    /effective package type \(npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget or custom\)/u);
+  invalidMap.projects[0].type = "pip";
+  await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));
+  await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot, env }),
+    /has no treatment for pip connections/u, "Vibe64's own Node consumer never silently ignores another declared ecosystem");
   invalidMap.projects[0].type = "npm";
   invalidMap.projects[0].relationship = "composition";
   await file(f.publicRoot, sourcesFile, JSON.stringify(invalidMap));

@@ -3,6 +3,7 @@ import { readFile, writeFile, symlink, mkdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "../../packages/vibe64-project/src/server/connectedProjects.js";
+import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -33,8 +34,14 @@ test("connection identity rejects credentials, duplicate identities and runtime 
     "tooling//prepare", "tooling/prepare/", "prepare\n.sh"]) {
     assert.throws(() => normalizeConnectedProjects({ projects: [{ ...customLibrary, script }] }), { code: "vibe64_connections_invalid" });
   }
-  for (const type of ["", null, "composer", "gem", "script", "NPM", 42]) {
+  for (const type of ["", null, "gem", "script", "NPM", "Composer", "yarn", "python", 42]) {
     assert.throws(() => normalizeConnectedProjects({ projects: [{ ...library, type }] }), { code: "vibe64_connections_invalid" });
+  }
+  for (const type of CONNECTED_PACKAGE_TYPE_VALUES.filter(value => value !== "custom")) {
+    assert.deepEqual(normalizeConnectedProjects({ projects: [{ ...library, type }] }), { projects: [{ ...library, type }] },
+      `${type} is a declared ecosystem type`);
+    assert.throws(() => normalizeConnectedProjects({ projects: [{ ...customLibrary, type }] }),
+      { code: "vibe64_connections_invalid", message: new RegExp(`The ${type} connection cannot have a custom script`, "u") });
   }
   for (const repository of ["../library", "git@github.com:example/library", "https://token@github.com/example/library",
     "https://github.com/example/library?token=secret", "https://github.com/example/..", "https://github.com/example/library#main"]) {

@@ -4,6 +4,11 @@ import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import {
+  connectedPackageTypeListText,
+  connectedPackageTypeUsesScript,
+  isConnectedPackageType
+} from "@local/vibe64-genesis/shared/connectedPackageTypes";
 
 const CONNECTED_PROJECTS_FILE = "vibe64.connections.json";
 const CONNECTED_PROJECTS_LIMIT = 64;
@@ -35,14 +40,20 @@ function normalizeConnectedProjects(value) {
     if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
     repositories.add(repository);
     if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
-    if (entry.type !== undefined && !["npm", "custom"].includes(entry.type)) invalid("Type must be npm or custom, or omitted to use the consuming Stack default.");
+    if (entry.type !== undefined && !isConnectedPackageType(entry.type)) {
+      invalid(`Type must be ${connectedPackageTypeListText()}, or omitted to use the consuming Stack default.`);
+    }
     if (entry.script !== undefined && (typeof entry.script !== "string" || !entry.script.trim() || entry.script.length > 1024 ||
         /[\\:\x00-\x1f\x7f]/u.test(entry.script) ||
         entry.script.split("/").some(part => ["", ".", "..", ".git"].includes(part.toLowerCase())))) {
       invalid("Script must be a project-relative path outside .git, without absolute paths or traversal.");
     }
-    if (entry.type === "custom" && entry.script === undefined) invalid("A custom connection requires its project-relative script.");
-    if (entry.type === "npm" && entry.script !== undefined) invalid("An npm connection cannot have a custom script.");
+    if (entry.type !== undefined && connectedPackageTypeUsesScript(entry.type) && entry.script === undefined) {
+      invalid("A custom connection requires its project-relative script.");
+    }
+    if (entry.type !== undefined && !connectedPackageTypeUsesScript(entry.type) && entry.script !== undefined) {
+      invalid(`The ${entry.type} connection cannot have a custom script; only custom connections select a script.`);
+    }
     return { name: entry.name.trim(), repository, relationship: entry.relationship,
       ...(entry.type === undefined ? {} : { type: entry.type }),
       ...(entry.script === undefined ? {} : { script: entry.script }) };

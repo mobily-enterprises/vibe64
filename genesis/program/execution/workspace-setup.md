@@ -28,8 +28,10 @@ The Genesis boundary also inspects `## Connected development` as
 `vibe64.connected-development.v1`. This is a separate development recipe, not
 an alternative connection list. Repository identities belong only in the
 project's `vibe64.connections.json`; Stack owns generic treatment. Optional
-`Default package type` declares `npm` or `custom`, independently of command
-runtimes or the project's other technologies. A connection's explicit type
+`Default package type` declares one type from the shared connected-project
+vocabulary (`npm`, `composer`, `pip`, `bundler`, `gomod`, `cargo`, `maven`,
+`gradle`, `nuget` or `custom`), independently of command runtimes or the
+project's other technologies; a multi-language project declares one default. A connection's explicit type
 wins; an omitted type requires this declared default. The resulting source map
 contains the effective type for each repository, and changing that selection
 invalidates preparation. A default-only section is unconfigured: it supplies
@@ -39,13 +41,15 @@ and runtimes using the existing setup grammar. The runner appends the resolved
 script and `--phase`, `--source-root`, `--project-root`, `--sources-file` and
 `--repository` arguments. Prepare runs before Verify; both phases must succeed.
 The script receives `prepare` or `verify` as its phase. Missing runners or
-scripts, symbolic-link escapes, and npm connections carrying a script fail.
-Custom source checks do not replace npm Verify commands when both types exist.
+scripts, symbolic-link escapes, and non-custom connections carrying a script fail.
+Custom source checks do not replace Verify commands when non-custom types exist.
 One `Sources file`
 declares the project-relative input location. Ordered `Prepare` and `Verify`
 entries reuse the Workspace setup argv, runtime and working-directory grammar.
-Prepare entries precede verification. npm sources require a Verify entry;
-custom-only recipes may use the Custom runner's verification phase.
+Prepare entries precede verification. Every non-custom source type requires a
+Verify entry (`vibe64_connected_verification_required`), because Vibe64 runs no
+ecosystem command of its own; custom-only recipes may use the Custom runner's
+verification phase.
 Conditions are rejected so missing files cannot silently skip a consumption
 check. Exactly `- Nothing.` or an absent section is unconfigured. Invalid or
 blocked sections cannot yield a ready recipe identity.

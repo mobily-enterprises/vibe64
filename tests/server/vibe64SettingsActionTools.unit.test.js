@@ -6,6 +6,7 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
 const sourceOperations = ["connections.save", "settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read", "env.user-values.save"];
@@ -392,7 +393,10 @@ test("connection tools preserve source/revision and expose no private binding st
       { name: "Library", repository: "https://github.com/example/library", relationship: "dependency", type: "custom", script: "tooling/prepare-native-worker.mjs" },
       { name: "Editor", repository: "https://github.com/example/editor", relationship: "composition", type: "npm" },
       { name: "Default", repository: "https://github.com/example/default", relationship: "dependency" },
-      { name: "Inherited custom", repository: "https://github.com/example/inherited", relationship: "dependency", script: "tooling/prepare-other.mjs" }
+      { name: "Inherited custom", repository: "https://github.com/example/inherited", relationship: "dependency", script: "tooling/prepare-other.mjs" },
+      ...CONNECTED_PACKAGE_TYPE_VALUES.filter(type => !["npm", "custom"].includes(type)).map(type => ({
+        name: `${type} library`, repository: `https://github.com/example/${type}-library`, relationship: "dependency", type
+      }))
     ];
     const typed = await execute("connections.save", { projects, revision: "" });
     assert.equal(typed.ok, true, JSON.stringify(typed));
@@ -401,7 +405,7 @@ test("connection tools preserve source/revision and expose no private binding st
     assert.deepEqual((await execute("settings.read")).result.connectedProjects.projects, projects);
     assert.equal(Object.hasOwn(typed.result.connectedProjects.projects[2], "type"), false);
     const beforeRejected = calls.length;
-    for (const type of ["", "composer", null]) {
+    for (const type of ["", "Composer", "yarn", null]) {
       assert.equal((await execute("connections.save", { projects: [{ ...projects[0], type }], revision: "" })).ok, false);
     }
     assert.equal(calls.length, beforeRejected, "invalid types must not reach the Settings write owner");

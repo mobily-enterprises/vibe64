@@ -7,6 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "../../packages/vibe64-project/src/server/connectedDevelopment.js";
 import { materializeProjectEnvironmentFiles, projectEnvironmentFilesAreCurrent } from "../../packages/vibe64-project/src/server/projectEnvironmentFiles.js";
+import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const exec = promisify(execFile);
@@ -229,5 +230,35 @@ test("workspace readiness includes both recipes and the exact task source select
     assert.equal((await inspect(first)).status, "blocked", "Settings changes invalidate the old projection");
     await materializeConnectedDevelopmentInputs({ ...first.input, projects: [changed] });
     assert.notEqual((await inspect(first)).recipeHash, ready.recipeHash);
+  });
+});
+
+test("every non-custom package type is recorded in the map and requires the project's own Verify command", async () => {
+  await withTemporaryRoot(async target => {
+    const { root, input } = await fixture(target);
+    const mapFile = path.join(root, input.inspection.sourcesFile);
+    const setup = { status: "ready", recipeHash: "ordinary", diagnostics: [], steps: [] };
+    const verify = { label: "Verify connected source", phase: "verify", argv: ["sh", "verify.sh"],
+      runtimeRequirements: ["shell"], workdir: "." };
+    for (const type of CONNECTED_PACKAGE_TYPE_VALUES.filter(value => value !== "custom")) {
+      const typed = { ...input, inspection: { ...input.inspection, defaultPackageType: type } };
+      await materializeConnectedDevelopmentInputs(typed);
+      assert.equal(JSON.parse(await readFile(mapFile, "utf8")).projects[0].type, type);
+      const unverified = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
+        inspection: { ...typed.inspection, steps: [], customRunner: null } });
+      assert.equal(unverified.status, "blocked");
+      assert.deepEqual(unverified.diagnostics.at(-1), { code: "vibe64_connected_verification_required",
+        message: `Declare a Verify command for the connected ${type} packages.` });
+      const verified = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
+        inspection: { ...typed.inspection, steps: [verify], customRunner: null } });
+      assert.equal(verified.status, "ready", `${type} relies only on the declared Verify step`);
+      assert.deepEqual(verified.steps, [verify], `Vibe64 adds no ${type} package-manager command`);
+    }
+    const connectionFile = path.join(root, "vibe64.connections.json");
+    const configuration = JSON.parse(await readFile(connectionFile, "utf8"));
+    configuration.projects[0].type = "pip";
+    configuration.projects[0].script = "tooling/prepare.py";
+    await writeFile(connectionFile, JSON.stringify(configuration));
+    await assert.rejects(materializeConnectedDevelopmentInputs(input), { code: "vibe64_connections_invalid" });
   });
 });

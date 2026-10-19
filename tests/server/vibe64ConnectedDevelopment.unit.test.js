@@ -6,6 +6,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { vibe64ConnectedDevelopmentInspection } from "../../packages/vibe64-genesis/src/server/connectedDevelopment.js";
 import { initializeGenesisProject, inspectVibe64ConnectedDevelopment } from "../../packages/vibe64-genesis/src/server/index.js";
+import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const lines = [
@@ -53,6 +54,22 @@ test("Stack declares a package default independently of command runtimes", () =>
   assert.equal(defaultOnly.status, "unconfigured");
   assert.equal(defaultOnly.recipeHash, "");
   assert.throws(() => inspect("nodejs"), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+  assert.deepEqual(CONNECTED_PACKAGE_TYPE_VALUES,
+    ["npm", "composer", "pip", "bundler", "gomod", "cargo", "maven", "gradle", "nuget", "custom"]);
+  const hashes = new Set();
+  for (const type of CONNECTED_PACKAGE_TYPE_VALUES) {
+    const inspected = inspect(type);
+    assert.equal(inspected.defaultPackageType, type);
+    assert.equal(inspected.status, "ready");
+    hashes.add(inspected.recipeHash);
+    assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready",
+      lines: [`- Default package type: \`${type}\``] }).defaultPackageType, type, `${type} may be declared alone`);
+  }
+  assert.equal(hashes.size, CONNECTED_PACKAGE_TYPE_VALUES.length, "each declared default is part of the recipe");
+  for (const unknown of ["", "NPM", "Composer", "yarn", "gem", "python", "npm custom"]) {
+    assert.throws(() => inspect(unknown), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID",
+      message: /Default package type must be npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget or custom/u });
+  }
   assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready",
     lines: ["- Default package type: `npm`", "- Default package type: `custom`", ...lines] }),
   { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });

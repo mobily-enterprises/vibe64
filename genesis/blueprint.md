@@ -5,8 +5,11 @@ People declare connected libraries and source projects in the project's
 repositories later. Stack describes technology and generic source treatment;
 it never contains repository identities or a starting connection list.
 Connections may use different package types from the app: each entry can
-choose npm or custom treatment, or inherit the default declared by Stack.
-Node projects declare npm; custom source treatment belongs to project scripts.
+choose an ecosystem type (npm, Composer, pip, Bundler, Go modules, Cargo, Maven,
+Gradle or NuGet) or custom treatment, or inherit the one default declared by the
+project's Stack. A type records intent only; the project's declared commands
+give the source that ecosystem's treatment, and custom treatment belongs to
+project scripts.
 The connection file travels with project source. Configuration requires
 the owner's connected account to have write access to the receiving repositories.
 Removing an entry preserves existing contributions; configuration changes alone

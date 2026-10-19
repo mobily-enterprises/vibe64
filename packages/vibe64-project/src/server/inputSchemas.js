@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT, PREVIEW_IDENTITY_SELECTOR_TYPES } from "@local/vibe64-core/server/previewAuth";
 import { RUNTIME_CONFIG_SCOPES } from "@local/vibe64-core/server/runtimeConfig";
+import { CONNECTED_PACKAGE_TYPE_VALUES } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 const createProjectSchema = createSchema.createFactory();
 const maxItems = ({ value, parameterValue, throwParamError }) => {
   if (Array.isArray(value) && value.length > parameterValue) {
@@ -63,7 +64,7 @@ const projectConnectedProjectsInputValidator = inputSchema({
     name: { type: "string", required: true, minLength: 1, maxLength: 100 },
     repository: { type: "string", required: true, minLength: 1, maxLength: 512 },
     relationship: { type: "string", required: true, enum: ["dependency", "composition"] },
-    type: { type: "string", required: false, enum: ["npm", "custom"] },
+    type: { type: "string", required: false, enum: [...CONNECTED_PACKAGE_TYPE_VALUES] },
     script: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 1024 }
   }) }
 });

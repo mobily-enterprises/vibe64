@@ -8,6 +8,7 @@ source editing.
 
 - Main: `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/connectedProjects.js`
+- `packages/vibe64-genesis/src/shared/connectedPackageTypes.js`
 - `packages/vibe64-project/src/server/connectedDevelopment.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-project/src/server/actions.js`
@@ -24,18 +25,24 @@ source editing.
 `vibe64.connections.json` contains exactly a `projects` array, with up to 64
 entries containing `name`, `repository` and `relationship`, plus optional `type`
 and `script`.
-The only explicit types are `npm` and `custom`; omission remains omitted in
-source and inherits the consuming Stack default (`npm` for Node). Type is
-independent of the dependency/composition relationship. Settings offers Stack
-default, npm and custom; selecting Stack default removes the override rather
-than writing an empty value or a resolved default. The bounded Colleague
+The explicit types are one Vibe64-owned vocabulary shared by Stack parsing,
+validation, schemas, Colleague contracts and Settings: `npm`, `composer`,
+`pip`, `bundler`, `gomod`, `cargo`, `maven`, `gradle`, `nuget` and `custom`.
+Omission remains omitted in source and inherits the consuming Stack default
+(for example `npm` for Node or `composer` for PHP). Type is independent of the
+dependency/composition relationship. A non-custom type is a declared ecosystem
+label recorded in the prepared map; Vibe64 never derives or runs a package
+manager from it, and the consumer's declared commands perform the treatment.
+Settings offers Stack default and each type with its ecosystem label; selecting
+Stack default removes the override rather than writing an empty value or a
+resolved default. The bounded Colleague
 read/write projection preserves explicit types and their absence.
-Explicit custom requires a script; explicit npm rejects one. A script without
+Explicit custom requires a script; every other explicit type rejects one. A script without
 an explicit type is preserved for a future consuming Stack custom default;
 the resolved map validates that combination before execution. Script is a bounded
 project-relative path in the consumer, outside `.git`, with no traversal,
 absolute path, drive prefix, backslash or control character. Settings never
-stores an empty script and clears it when npm is explicitly selected. Stack
+stores an empty script and clears it when a non-custom type is explicitly selected. Stack
 declares the custom runtime and runner, such as
 ``- Custom runner with `nodejs` `cpp`: `node` ``. The existing preparer appends
 the absolute script path and `--phase`, `--source-root`, `--project-root`,
