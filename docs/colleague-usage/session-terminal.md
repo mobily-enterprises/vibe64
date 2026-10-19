@@ -11,7 +11,8 @@ Claude opens a new interactive process for the current saved conversation. Finis
 or stop an active chat turn before selecting **Start Claude Code**. The idle chat
 process stops first, and chat is unavailable while the terminal is open. Use
 **Close terminal** to return to chat. With a saved Claude connection the
-terminal opens the conversation directly, skipping Claude's first-run setup.
+terminal opens the conversation directly, without Claude's first-run setup,
+folder-trust question or bypass-permissions warning.
 It asks you to sign in only when the connection is missing or has expired.
 Complete sign-in yourself; Colleague can explain it but cannot sign in for you.
 

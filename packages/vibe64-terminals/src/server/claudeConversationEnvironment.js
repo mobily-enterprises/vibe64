@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { claudeModelConfiguration } from "@jskit-ai/assistant-core/server/claude-process";
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
@@ -16,10 +16,12 @@ import {
 
 const ENGINE = "claude";
 
-// Interactive Claude shows its first-run setup, including a login choice, until
-// this flag exists. Headless chat never sets it, so a signed-in account would
-// otherwise open the terminal at that setup instead of the conversation.
-async function markClaudeOnboarded(env, credentialHome) {
+// Interactive Claude asks first-run setup (including a login choice) and
+// whether to trust the folder until its settings record both. Headless chat
+// never records them, so a signed-in session would otherwise open the terminal
+// at those prompts instead of the conversation. Vibe64 already admitted the
+// session's folder, so the terminal records the same decisions.
+async function markClaudeTerminalReady(env, credentialHome, workdir) {
   const file = env?.CLAUDE_CONFIG_DIR
     ? path.join(env.CLAUDE_CONFIG_DIR, ".claude.json")
     : path.join(credentialHome.home, ".claude.json");
@@ -29,10 +31,14 @@ async function markClaudeOnboarded(env, credentialHome) {
   } catch (cause) {
     if (cause.code !== "ENOENT") throw cause;
   }
-  if (settings.hasCompletedOnboarding === true) return;
+  const folders = [...new Set([path.resolve(workdir), await realpath(workdir).catch(() => path.resolve(workdir))])];
+  const projects = settings.projects || {};
+  if (settings.hasCompletedOnboarding === true &&
+      folders.every(folder => projects[folder]?.hasTrustDialogAccepted === true)) return;
+  for (const folder of folders) projects[folder] = { ...projects[folder], hasTrustDialogAccepted: true };
   await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.vibe64-${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify({ ...settings, hasCompletedOnboarding: true }, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(temporary, `${JSON.stringify({ ...settings, hasCompletedOnboarding: true, projects }, null, 2)}\n`, { mode: 0o600 });
   await rename(temporary, file);
 }
 
@@ -151,7 +157,8 @@ function createClaudeConversationEnvironment({
       get systemPrompt() { return vibe64ConversationInstructions({ workdir: ctx.workdir, promptContext: sessionGuidance(entry) }); },
       get model() { return configuration.model; },
       get effort() { return ctx.selection.variantId; },
-      get settings() { return claudeFlagSettings(); },
+      // The terminal opens in Vibe64's bypass mode; skip Claude's warning for it.
+      get settings() { return { ...claudeFlagSettings(), skipDangerousModePermissionPrompt: true }; },
       permissionMode: "bypassPermissions",
       get env() { return { ...guidanceEnvironment, ...configuration.env }; }
     };
@@ -173,7 +180,7 @@ function createClaudeConversationEnvironment({
           session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
         if (actor?.ok === false) throw error(actor.error, actor.code);
         const terminal = await conversations.prepareTerminal(entry, ctx);
-        await markClaudeOnboarded(env, credentialHome);
+        await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
         return commandRunner({ actor: "app", command,
           args: terminal.args,
           baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,

@@ -58,9 +58,12 @@ function createClaudeConversationHost({
   const { metadata, ...nativeStorage } = conversationStorage;
   const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged,
     onTiming(event) {
-      logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
-        event: "vibe64.agent_message.preparation_timing", component: "vibe64.agent_message", engineId: "claude", ...event
-      }, "Assistant message preparation timing.");
+      // Timing is diagnostic only; a failing log sink must not fail the send.
+      try {
+        logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
+          event: "vibe64.agent_message.preparation_timing", component: "vibe64.agent_message", engineId: "claude", ...event
+        }, "Assistant message preparation timing.");
+      } catch {}
     } });
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({ env, projectService, command, credentialHome, commandRunner, stopExecution,

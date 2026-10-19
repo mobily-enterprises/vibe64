@@ -729,7 +729,7 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
       prompt = (await ctx.runtime.renderPrompt(ctx.sessionId, { input, request: message, task: input.genesisTask || "start" }))?.prompt || message;
       mark("genesis-rendered");
     }
-    if (!deliveryTiming) onTiming({ sessionId: ctx.sessionId, messageId: input.messageId, stages, elapsedMs: Math.round(performance.now() - started) });
+    if (!deliveryTiming) onTiming({ sessionId: ctx.sessionId, conversationId: entry.id, messageId: input.messageId, stages, elapsedMs: Math.round(performance.now() - started) });
     // The attachment owner already added validated paths to the prompt.
     if (input.attachments?.length && (entry.profile || ctx.assistantScope)) {
       throw error("These attachments cannot be passed to Claude.");

@@ -754,6 +754,9 @@ test("Claude command admission is distinct from user tool-result frames and wait
   await event({ type: "result", subtype: "success", result: "Done", uuid: "done" });
   assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
   await event({ type: "system", subtype: "task_notification", task_id: "task", status: "completed" });
+  // The main model still has to consume the finished task's result.
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
+  await event({ type: "result", subtype: "success", result: "Task checked", uuid: "after-task" });
   await (await f.open()).wait();
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
 });
@@ -1604,9 +1607,14 @@ test("Claude-only keys work in the catalogue, access check, chat and native term
   await mkdir(path.dirname(claudeSettings), { recursive: true });
   await writeFile(claudeSettings, JSON.stringify({ oauthAccount: { emailAddress: "fixture@example.test" } }));
   await terminalProvider.startTerminal(f.context);
-  // A headless-only account must open the conversation, not first-run login setup.
-  assert.deepEqual(JSON.parse(await readFile(claudeSettings, "utf8")),
-    { oauthAccount: { emailAddress: "fixture@example.test" }, hasCompletedOnboarding: true });
+  // A headless-only account must open the conversation, not first-run setup,
+  // folder trust or the bypass-mode warning.
+  const written = JSON.parse(await readFile(claudeSettings, "utf8"));
+  assert.deepEqual(written.oauthAccount, { emailAddress: "fixture@example.test" });
+  assert.equal(written.hasCompletedOnboarding, true);
+  assert.equal(written.projects[path.resolve(f.context.session.metadata.source_path)].hasTrustDialogAccepted, true);
+  const settingsArgument = request.args[request.args.indexOf("--settings") + 1];
+  assert.equal(JSON.parse(settingsArgument).skipDangerousModePermissionPrompt, true);
   assert.equal(request.mode, "pty");
   assert.equal(request.args[request.args.indexOf("--model") + 1], "deepseek-flash[1m]");
   assert.equal(request.baseEnv.ANTHROPIC_AUTH_TOKEN, "claude-only-key");
