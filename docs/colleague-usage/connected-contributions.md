@@ -6,6 +6,11 @@ Preparing a connected source records the creating user's Git identity for that
 receiving session. You can inspect and save its contribution without first
 opening an AI conversation there. GitHub access is still checked when used.
 
+A connected session takes the name of the session it was prepared for: that
+session's name, or its date when it has none yet. When the originating session
+is renamed, its connected sessions follow at the next workspace preparation. If
+you rename a connected session yourself, it keeps your name.
+
 Allocating a connected contribution creates its receiving checkout without
 automatically preparing that receiving project's own connections. The originating
 project's Stack recipe prepares its directly connected sources. This prevents

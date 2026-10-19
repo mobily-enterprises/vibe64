@@ -314,7 +314,8 @@ const incomingChangeInputValidator = patchSchema({
 
 const connectedSourceAllocationInputValidator = patchSchema({
   contribution: { type: "object", additionalProperties: true, required: true },
-  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false }
+  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
+  sessionName: { type: "string", required: false, minLength: 1, maxLength: 120 }
 });
 
 const connectedReplacementInspectionInputValidator = patchSchema({

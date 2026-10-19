@@ -43,6 +43,8 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         async readBackgroundTask() { return null; },
         async writeBackgroundTaskEvent(_id, _key, { patch }) { return patch; },
         async writeMetadataValue(id, key, value) { sessionsByProject[projectSlug].get(id).metadata[key] = value; },
+        async readMetadataValue(id, key) { return sessionsByProject[projectSlug].get(id).metadata[key] || ""; },
+        async writeSessionLabel(id, name) { sessionsByProject[projectSlug].get(id).sessionName = name; return name; },
         async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); }
       },
       async getSession(id) { return structuredClone(sessionsByProject[projectSlug].get(id) || null); },
@@ -211,6 +213,15 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(unavailable.prepared[0].sourceReady, false);
     assert.equal(createCount, 1, "failed source remains owned by its original recovery session");
     received.sourceReady = true;
+
+    assert.equal(received.sessionName, "parent", "a receiving session carries its parent's name, not a random identity");
+    parent.sessionName = "Payments";
+    assert.equal((await prepare()).ok, true);
+    assert.equal(received.sessionName, "Payments", "it follows the parent's later name");
+    received.sessionName = "Library tweaks";
+    parent.sessionName = "Billing";
+    assert.equal((await prepare()).ok, true);
+    assert.equal(received.sessionName, "Library tweaks", "a name given to the receiving session itself is kept");
 
     allowWrite = false;
     assert.equal((await prepare()).code, "vibe64_connections_access_required");

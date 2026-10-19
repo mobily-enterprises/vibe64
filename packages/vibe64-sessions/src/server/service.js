@@ -157,6 +157,8 @@ function sessionRuntimeOptions(terminals) {
   return createSessionSource ? { createSessionSource } : {};
 }
 
+const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
+
 function publicSession(session = {}, extra = {}) {
   return {
     ...session,
@@ -1028,7 +1030,8 @@ function createService({
         }
         const result = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
           contribution: binding.contribution,
-          workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId
+          workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId,
+          sessionName: (text(session.sessionName) || sessionId).slice(0, 120)
         }, requestContext);
         remaining.delete(names[index]);
         if (remaining.size) {
@@ -1217,11 +1220,31 @@ function createService({
             });
           }
         }
+        // A receiving session carries the name of the session it serves; its
+        // random identity means nothing to people. It follows that name on later
+        // preparations until someone renames the receiving session itself.
+        const named = async (allocated) => {
+          const sessionId = allocated?.sessionId;
+          if (!input.sessionName || !sessionId || allocated.sessionName === input.sessionName) return allocated;
+          try {
+            const assigned = await runtime.store.readMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA);
+            if (allocated.sessionName && allocated.sessionName !== assigned) return allocated;
+            const sessionName = await runtime.store.writeSessionLabel(sessionId, input.sessionName);
+            await runtime.store.writeMetadataValue(sessionId, CONNECTED_SESSION_NAME_METADATA, sessionName);
+            await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
+            return { ...allocated, sessionName };
+          } catch (error) {
+            vibe64SessionDebugLog("server.sessions.connected.name.error", {
+              error: vibe64SessionDebugError(error), sessionId: allocated.sessionId
+            });
+            return allocated;
+          }
+        };
         let existing;
         try { existing = await runtime.getSession(contribution.id, { inspectSource: false }); }
         catch (error) { if (error.code !== "vibe64_session_not_found") throw error; }
         if (existing) {
-          return publicSession(await resolveConnectedSession(runtime, contribution, existing));
+          return named(publicSession(await resolveConnectedSession(runtime, contribution, existing)));
         }
         if (contribution.replaces) {
           predecessor = await resolveConnectedSession(runtime, sessionConnectedContribution(predecessor), predecessor);
@@ -1233,9 +1256,9 @@ function createService({
             });
           }
         }
-        return service.createSession({ workflowEngineId: input.workflowEngineId, vibe64User: trustedAssistantUser(input) }, {
+        return named(await service.createSession({ workflowEngineId: input.workflowEngineId, vibe64User: trustedAssistantUser(input) }, {
           sessionId: contribution.id, expectedCommit: contribution.baseCommit, connectedContribution: contribution
-        });
+        }));
       });
     },
     browserConversations: actions ? createMainBrowserConversations({ actions, terminals }) : null,

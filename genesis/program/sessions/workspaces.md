@@ -122,6 +122,11 @@ so far. Results are still evaluated in target order, so the first failing
 repository is reported and earlier prepared sources are retained. The receiving
 source reads only its integration branch from GitHub, not the full branch list.
 
+Allocation also carries the originating session's display name (its label, or
+its identity). The receiving session takes it as its label and records it as
+`connected_session_name`; later allocations update the label only while it still
+equals that recorded value, so a person's own rename is kept.
+
 Every new connected binding reserves a fresh contribution UUID. Its receiving
 session starts without the origin's connected-source or submission metadata;
 receiving allocation does not recursively prepare more connections. Explicitly
