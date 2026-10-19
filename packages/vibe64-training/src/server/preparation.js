@@ -29,6 +29,12 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     const approved = await catalogue.readCatalogue();
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
     if (!entry?.enabled) throw trainingError("VIBE64_TRAINING_COURSE_UNAVAILABLE", "This exact course release is not enabled. Ask the owner to enable it, or resume your saved lesson.");
+    // A preview course is for the workspace owner to review before release;
+    // its admitted attempt is otherwise an ordinary saved lesson.
+    if (entry.course.status !== "released" && actor?.role !== "owner") {
+      throw Object.assign(trainingError("VIBE64_TRAINING_COURSE_PREVIEW",
+        "This preview course can be tried only by the workspace owner until it is released."), { statusCode: 403 });
+    }
     const topic = entry.lock.topics.find(value => value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
     if (!topic) throw trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE", "Choose a published lesson in the approved course release.");
     const lesson = topic.lessons.find(value => value.code === lessonCode);

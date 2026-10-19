@@ -74,9 +74,13 @@ asks for it with a name and topics. A custom course cannot be renamed or edited;
 the owner can disable it with `vibe64 training disable-course` (see
 `docs/training-content.md`) and create another one.
 
-A course labelled **Preview course** is not available through ordinary Start,
-even when its individual lessons are published. It needs an authorized author
-trial or a released, enabled course; changing views does not bypass that rule.
+A **Preview course** is for the workspace owner to review before release. The
+owner (on local Vibe64, you) sees **Try preview** instead of **Start**, **Start
+next lesson** and **Start lesson**, on desktop and phone; it starts an ordinary
+saved lesson exactly like Start. Others see **Preview — the workspace owner can
+try it; it becomes startable when released** and no start button, and the server
+refuses their start. Drafts and disabled courses stay unavailable to everyone.
+Once released, everyone gets **Start**.
 
 Practice commands and their Git operations stay with the saved lesson until they
 finish. If a command is still finishing, wait before ending the lesson. Ending a

@@ -562,6 +562,15 @@ test("invalid exact identities and revisions fail before exercise admission", as
   assert.equal(f.calls.length, 0);
 });
 
+test("a refused preview start reports its owner-only admission message", async t => {
+  const f = await fixture(t);
+  const refusal = "This preview course can be tried only by the workspace owner until it is released.";
+  const c = f.register({ async startLesson() {
+    throw Object.assign(new Error(refusal), { code: "VIBE64_TRAINING_COURSE_PREVIEW", statusCode: 403 });
+  } });
+  await assert.rejects(() => c.execute("lesson.start", f.input), { code: "VIBE64_TRAINING_COURSE_PREVIEW", statusCode: 403, message: refusal });
+});
+
 test("oversized projections and native failures remain bounded, truthful and source-free", async t => {
   const f = await fixture(t);
   const saved = await f.reserve();
@@ -1545,6 +1554,7 @@ test("owner custom course pins installed released topics through the original ca
   const c = f.register();
   const listed = await c.execute("courses.list");
   assert.equal(listed.canCreateCourses, false);
+  assert.equal(listed.canTryPreviews, false);
   assert.deepEqual(listed.courses[0].topics, [{ topicId: "action-fixture", release: "0.1.0", title: "Action fixture" }]);
   const input = { title: " My path ", topics: [{ topicId: "action-fixture", release: "0.1.0" }], expectedRevision: listed.revision };
   const before = await inventory(f.systemRoot);
@@ -1552,6 +1562,7 @@ test("owner custom course pins installed released topics through the original ca
   assert.deepEqual(await inventory(f.systemRoot), before, "a member cannot change the catalogue");
   f.auth.user = { ...f.auth.user, role: "owner" };
   assert.equal((await c.execute("courses.list")).canCreateCourses, true);
+  assert.equal((await c.execute("courses.list")).canTryPreviews, true);
   const created = await c.execute("courses.create", input);
   assert.deepEqual(created.course, { courseId: "custom-my-path", release: "1.0.0", title: "My path", status: "released", enabled: true });
   const catalogue = await f.catalogue.readCatalogue();

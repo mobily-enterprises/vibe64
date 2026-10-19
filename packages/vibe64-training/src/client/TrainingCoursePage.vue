@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from "vue";
-import { courseStatusLabel, earlierCompletionLabel, offered, statusLabels } from "./courseProgress.js";
+import { courseStatusLabel, earlierCompletionLabel, offered, previewCourse, previewNote, statusLabels } from "./courseProgress.js";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 
@@ -11,12 +11,15 @@ const props = defineProps({
   course: { type: Object, required: true },
   progress: { type: Object, required: true },
   startAllowed: Boolean,
+  // Display only: whether courses.list reports this person may try preview courses.
+  canTryPreviews: Boolean,
   resumeAllowed: Boolean
 });
 const emit = defineEmits(["back", "start", "resume"]);
 
 const complete = computed(() => Boolean(props.progress.total && props.progress.completed === props.progress.total));
 const availability = computed(() => courseStatusLabel(props.course));
+const preview = computed(() => previewCourse(props.course));
 const isNext = lesson => Boolean(props.progress.next && props.progress.next.code === lesson.code && props.progress.next.hash === lesson.hash);
 // One running step number across topics so the path reads as one journey.
 const path = computed(() => {
@@ -73,12 +76,13 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">Start next lesson</v-btn>
+        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
       </template>
       <div v-else-if="complete" class="training-course-page__next-text">
         <p class="training-course-page__next-label">All lessons done</p>
         <p class="training-course-page__next-title">Course complete.</p>
       </div>
+      <p v-else-if="preview && !canTryPreviews" class="training-course-page__next-title training-course-page__preview-note">{{ previewNote }}</p>
       <p v-else class="training-course-page__next-title">No lesson in this course can be started here.</p>
     </div>
 
@@ -116,10 +120,10 @@ const path = computed(() => {
                 <details class="training-course-page__identity"><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
               </div>
               <v-btn
-                v-if="offered(course, lesson) && !progress.activeHere"
+                v-if="offered(course, lesson, canTryPreviews) && !progress.activeHere"
                 :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
                 class="training-course-page__start" :disabled="!startAllowed" @click="emit('start', lesson)"
-              >Start lesson</v-btn>
+              >{{ preview ? 'Try preview' : 'Start lesson' }}</v-btn>
             </div>
           </li>
         </ol>

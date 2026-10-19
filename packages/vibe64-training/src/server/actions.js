@@ -36,7 +36,7 @@ const resultOutput = {
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: true },
     revision: { ...revision, required: false }, activeSummaryCurrent: { type: "boolean", required: false },
     courses: { type: "array", required: false, items: opaque },
-    canCreateCourses: { type: "boolean", required: false }, course: { ...opaque, required: false },
+    canCreateCourses: { type: "boolean", required: false }, canTryPreviews: { type: "boolean", required: false }, course: { ...opaque, required: false },
     domains: { type: "array", required: false, items: opaque },
     repository: { ...text, required: false, maxLength: 256 }, catalogueCommit: { ...text, required: false, maxLength: 64 },
     changed: { type: "boolean", required: false },
@@ -270,6 +270,8 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
         // Course creation reports the catalogue owner's own corrective message.
         if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
+        // A preview refusal reports its owner-only admission message.
+        if (name === "lesson.start" && cause.code === "VIBE64_TRAINING_COURSE_PREVIEW") throw cause;
         // Catalogue reads and installs report their owner's corrective message.
         if (["available.list", "course.install"].includes(name)) throw installError(cause);
         throw operationError(cause);
@@ -353,10 +355,11 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
     }
   }, { projectScoped: false, learningAccess: "write" });
   return Object.freeze([
-    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course.", async (_input, actor) => {
+    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course.", async (_input, actor) => {
       const result = await catalogue.readCatalogue({ includeLessonTitles: true });
       return { ok: true, available: true, revision: result.revision,
         canCreateCourses: actor?.role === "owner" && typeof catalogue.createCourse === "function",
+        canTryPreviews: actor?.role === "owner",
         courses: result.courses.map(entry => ({
         ...pick(entry.course, ["courseId", "release", "title", "status"]), enabled: entry.enabled,
         topics: entry.lock.topics.map(topic => ({ topicId: topic.topicId, release: topic.release,

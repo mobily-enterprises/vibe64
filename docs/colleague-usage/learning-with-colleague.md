@@ -184,10 +184,13 @@ progress. Opening a course does not install or enable content; the separate
 **Install a course** catalogue below the cards does, and Colleague may install or
 update an official catalogue course only on the person's direct request or
 accepted offer (see [Installing and updating Learning courses](learning-course-catalogue.md)).
-Disabled courses, preview courses
-and draft lessons stay labelled and unavailable for a new start. **Start** on a
-card, **Start next lesson** or **Start lesson** on the course page requests that
-exact published lesson from an enabled release; opening a course alone never
+Disabled courses and draft lessons stay labelled and unavailable for a new start.
+A preview course can be started only by the workspace owner: `courses.list`
+reports `canTryPreviews`, the owner sees **Try preview**, and the server refuses
+anyone else's start (Colleague included, acting for that person) with **This
+preview course can be tried only by the workspace owner until it is released.**
+**Start** or **Try preview** on a card, **Start next lesson** or **Start lesson**
+on the course page requests that exact published lesson from an enabled release; opening a course alone never
 starts anything. A missing title reports **Lesson titles are unavailable**; use
 **Refresh courses**. This preserves the saved attempt and history and does not
 substitute an invented title or another lesson. The host's original lesson action

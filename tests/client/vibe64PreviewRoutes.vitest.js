@@ -200,6 +200,36 @@ describe("Training lesson picker prerequisite", () => {
     expect(html).toContain(kind === "disabled" ? "Disabled for new lessons" : kind === "preview" ? "Preview course" : "Draft — unavailable for new lessons");
   });
 
+  it("offers Try preview on a preview course only when courses.list reports the person may try previews", async () => {
+    const catalogue = pickerCatalogue();
+    catalogue.courses[0].status = "preview";
+    const owner = { ...catalogue, canTryPreviews: true };
+    const start = vi.fn();
+    const state = mountPicker({ catalogueResult: owner, onStart: start });
+    state.startLesson(owner.courses[0], owner.courses[0].lessons[0]);
+    expect(start).toHaveBeenCalledExactlyOnceWith({ courseId: "getting-started", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 9 });
+    const ownerCard = await renderPicker({ catalogueResult: owner, learningResult: pickerLearning(), canStart: true });
+    expect(ownerCard).toContain("Try preview");
+    expect(ownerCard).toContain("Preview course");
+    expect(ownerCard).not.toContain("the workspace owner can try it");
+    const ownerPage = await renderPicker({ course: owner.courses[0], canTryPreviews: true, startAllowed: true, resumeAllowed: true,
+      progress: courseProgress(owner.courses[0], [], null, [], { canTryPreviews: true }) }, TrainingCoursePage);
+    expect(ownerPage).toContain("Try preview");
+    expect(ownerPage).not.toContain("Start lesson");
+
+    const memberCard = await renderPicker({ catalogueResult: catalogue, learningResult: pickerLearning(), canStart: true });
+    expect(memberCard).toContain("Preview — the workspace owner can try it; it becomes startable when released.");
+    expect(memberCard).not.toContain("Try preview");
+    const memberPage = await renderCoursePage(catalogue.courses[0]);
+    expect(memberPage).toContain("Preview — the workspace owner can try it; it becomes startable when released.");
+    expect(memberPage).not.toContain("Try preview");
+    expect(memberPage).not.toContain("Start lesson");
+
+    const released = await renderPicker({ catalogueResult: { ...pickerCatalogue(), canTryPreviews: true }, learningResult: pickerLearning(), canStart: true });
+    expect(released).not.toContain("Try preview");
+    expect(released).toContain(">Start<");
+  });
+
   it("resumes the exact saved attempt independently of disabled or missing current catalogue release", () => {
     const resume = vi.fn();
     const start = vi.fn();

@@ -102,7 +102,9 @@ capacity, progress and grading remain with their original server owners.
 displayed catalogue revision to the original Training `courses.create` action,
 then rereads courses; it admits no lesson and writes no progress. The launcher
 passes it to the picker, which shows **New course** only when `courses.list`
-reports `canCreateCourses`. The Learning content button and the root header read
+reports `canCreateCourses`; it offers a preview course's lessons, labelled
+**Try preview**, only when `courses.list` reports `canTryPreviews`, and otherwise
+shows the preview note. The Learning content button and the root header read
 **Courses**; the internal `lessons` pane and `picker` navigation names are unchanged.
 
 In Learning only, the adapter also reads `available` (the official catalogue)
@@ -436,7 +438,8 @@ standalone browser checks at 1280×900 and 390×844 retain the Working draft and
 App counter across Learning switches, with a 380-pixel right Colleague drawer
 on desktop and a full-screen Colleague dialog on phone. The launcher status
 uses the existing on-surface text token after a real white-on-white contrast
-failure. Preview-course ordinary Start remains disabled. These checks do
+failure. A preview course offers **Try preview** (the same start) only when
+`courses.list` reports `canTryPreviews`. These checks do
 not establish actual native question-to-gesture-to-Send, Helper/check/rubric
 progress, genuine trusted browser clicks, mobile display, speech or whole-lesson
 acceptance. Those remain separate required gates.

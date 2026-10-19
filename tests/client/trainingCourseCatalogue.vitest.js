@@ -71,7 +71,7 @@ describe("Training course catalogue", () => {
     expect(html).toContain("View course");
     expect(html).toContain("Disabled by the owner");
     expect(html).toContain("Ask the owner to enable this release again.");
-    expect(html).toContain("Preview course: it can be installed, but its lessons cannot be started");
+    expect(html).toContain("Preview course: it can be installed; until it is released, only the workspace owner can try its lessons");
     expect(html).toContain("Downloading and verifying topic 1 of 2");
     const failed = await render({ availableResult: available([course({ courseId: "failed" })]),
       installState: { courseId: "failed", release: "0.2.0", phase: "failed", message: "Topic intro could not be downloaded." } }, TrainingCourseCatalogue);

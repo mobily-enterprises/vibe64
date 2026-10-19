@@ -2,9 +2,17 @@
 // learning.read projections. It grades nothing and admits no lesson; a lesson's
 // saved passes count in every course containing its exact code and hash.
 
-function offered(course, lesson) {
-  return course.enabled && course.status === "released" && lesson.status === "published";
+// An enabled preview course is offered only to a person whom courses.list
+// reports may try previews (the workspace owner); the server enforces it.
+function offered(course, lesson, canTryPreviews = false) {
+  return course.enabled && (course.status === "released" || canTryPreviews) && lesson.status === "published";
 }
+
+function previewCourse(course) {
+  return course.enabled && course.status !== "released";
+}
+
+const previewNote = "Preview — the workspace owner can try it; it becomes startable when released.";
 
 function lessonStatus(lesson, lessonProgress) {
   const saved = lessonProgress.find(value => value.lessonCode === lesson.code && value.lessonHash === lesson.hash);
@@ -22,7 +30,7 @@ function earlierCompletion(lesson, lessonProgress, attempts) {
   return { release: releases.at(-1) || "" };
 }
 
-function courseProgress(course, lessonProgress = [], active = null, history = []) {
+function courseProgress(course, lessonProgress = [], active = null, history = [], { canTryPreviews = false } = {}) {
   const attempts = [...history, ...(active ? [active] : [])];
   const lessons = course.lessons.map(lesson => {
     const status = lessonStatus(lesson, lessonProgress);
@@ -37,7 +45,7 @@ function courseProgress(course, lessonProgress = [], active = null, history = []
     completed: counted.filter(value => value.status === "completed").length,
     total: counted.length,
     activeHere: Boolean(active && active.pin.course.courseId === course.courseId && active.pin.course.release === course.release),
-    next: lessons.find(value => value.status !== "completed" && offered(course, value.lesson))?.lesson || null
+    next: lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews))?.lesson || null
   };
 }
 
@@ -53,4 +61,4 @@ function earlierCompletionLabel(earlier) {
   return earlier ? `Completed in ${earlier.release || "an earlier release"} · updated since` : "";
 }
 
-export { courseProgress, courseStatusLabel, earlierCompletionLabel, lessonStatus, offered, statusLabels };
+export { courseProgress, courseStatusLabel, earlierCompletionLabel, lessonStatus, offered, previewCourse, previewNote, statusLabels };

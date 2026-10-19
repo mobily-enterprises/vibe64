@@ -50,10 +50,13 @@ lists. Courses from other sources remain an owner/operator task (see
 ### Preview courses
 
 A **Preview** course can be installed so that it is ready, and the row says
-**Preview course: it can be installed, but its lessons cannot be started from
-Courses until it is released.** Its installed card shows **Preview course** and
-no **Start** button. This is the existing rule for preview courses; installing
-does not change it.
+**Preview course: it can be installed; until it is released, only the workspace
+owner can try its lessons from Courses.** Its installed card keeps the
+**Preview course** chip. The workspace owner (on local Vibe64, you) sees
+**Try preview**, which starts the lesson exactly like **Start**; everyone else
+sees the course with the note **Preview — the workspace owner can try it; it
+becomes startable when released** and no start button. Installing does not change
+this; once the course is released, everyone gets **Start**.
 
 ## Updating a course
 

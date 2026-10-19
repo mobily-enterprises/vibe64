@@ -5,7 +5,7 @@ import TrainingCoursePage from "./TrainingCoursePage.vue";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingCourseCatalogue from "./TrainingCourseCatalogue.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
-import { courseProgress, courseStatusLabel, offered } from "./courseProgress.js";
+import { courseProgress, courseStatusLabel, offered, previewCourse, previewNote } from "./courseProgress.js";
 import { trainingIcons as icons } from "./trainingIcons.js";
 
 const props = defineProps({
@@ -93,7 +93,11 @@ const history = computed(() => !learningInvalid.value && props.learningResult?.o
 const completion = computed(() => savedAttempt.value ? props.learningResult.completion : null);
 const startPossible = computed(() => Boolean(props.canStart && !props.starting && !props.startUnconfirmed && !props.busy &&
   !props.catalogueLoading && !props.catalogueError && learningReady.value && !savedAttempt.value));
-const startEnabled = computed(() => startPossible.value && selected.value && offered(selected.value.course, selected.value.lesson));
+// Display only: the server admits preview lessons for the workspace owner alone.
+const canTryPreviews = computed(() => !catalogueInvalid.value && props.catalogueResult?.ok === true &&
+  props.catalogueResult.canTryPreviews === true);
+const startEnabled = computed(() => startPossible.value && selected.value &&
+  offered(selected.value.course, selected.value.lesson, canTryPreviews.value));
 const resumeEnabled = computed(() => props.canResume && !props.busy && learningReady.value && savedAttempt.value && !savedAttempt.value.ended);
 
 function requestStart() {
@@ -123,7 +127,7 @@ const releaseOrder = (left, right) => {
 const superseded = course => !course.enabled && courses.value.some(other => other.courseId === course.courseId && other.enabled &&
   releaseOrder(other.release, course.release) > 0);
 const summaries = computed(() => courses.value.map(course => ({ course, key: courseKey(course),
-  progress: courseProgress(course, lessonProgress.value, savedAttempt.value, history.value) }))
+  progress: courseProgress(course, lessonProgress.value, savedAttempt.value, history.value, { canTryPreviews: canTryPreviews.value }) }))
   .filter(summary => !superseded(summary.course) || summary.progress.activeHere));
 const availableCourses = computed(() => props.availableResult?.ok === true && Array.isArray(props.availableResult.courses)
   ? props.availableResult.courses : []);
@@ -272,6 +276,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       :course="openCourse.course"
       :progress="openCourse.progress"
       :start-allowed="startPossible"
+      :can-try-previews="canTryPreviews"
       :resume-allowed="!!resumeEnabled"
       @back="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
@@ -304,6 +309,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
               <div>
                 <p class="tlp-card__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
                 <p v-if="progress.next && !progress.activeHere" class="tlp-card__next">Next: {{ progress.next.title }}</p>
+                <p v-else-if="previewCourse(course) && !canTryPreviews && !progress.activeHere" class="tlp-card__next tlp-card__preview-note">{{ previewNote }}</p>
               </div>
             </div>
           </div>
@@ -311,7 +317,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
             <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
             <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
-              :disabled="!startPossible" @click="startLesson(course, progress.next)">Start</v-btn>
+              :disabled="!startPossible" @click="startLesson(course, progress.next)">{{ previewCourse(course) ? 'Try preview' : 'Start' }}</v-btn>
             <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
               :loading="installState?.phase === 'installing' && installState.courseId === course.courseId"
               :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })">Update</v-btn>

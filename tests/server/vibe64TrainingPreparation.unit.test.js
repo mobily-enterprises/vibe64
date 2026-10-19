@@ -13,7 +13,7 @@ const pin = {
   lesson: { code: "V64-START-01", hash: "c".repeat(64) }
 };
 
-async function fixture(t, { enabled = true, phase = "reserved", setup = "running", files = [{ path: "genesis/stack.md", bytes: Buffer.from("approved exercise") }] } = {}) {
+async function fixture(t, { enabled = true, courseStatus = "released", phase = "reserved", setup = "running", files = [{ path: "genesis/stack.md", bytes: Buffer.from("approved exercise") }] } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-service-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const projectRoot = path.join(root, "project");
@@ -39,7 +39,7 @@ async function fixture(t, { enabled = true, phase = "reserved", setup = "running
     async recordPreparationFailure(input) { failure = input; calls.push(["failure", input]); attempt.preparation.phase = "preparing"; revision++; return state(); }
   };
   const owners = {
-    catalogue: { async readCatalogue() { return { courses: [{ enabled, course: pin.course, lock: { topics: [{ ...pin.topic, manifestHash: pin.topic.topicHash, lessons: [{ ...pin.lesson, status: "published" }] }] } }] }; } },
+    catalogue: { async readCatalogue() { return { courses: [{ enabled, course: { ...pin.course, status: courseStatus }, lock: { topics: [{ ...pin.topic, manifestHash: pin.topic.topicHash, lessons: [{ ...pin.lesson, status: "published" }] }] } }] }; } },
     content: {
       async readLesson(input) { calls.push(["lesson", input]); return { lesson: { exercise: { kind: "bundled" } } }; },
       async readExercise(input) { calls.push(["exercise", input]); return { sourcePath: "training/exercises/orientation-app", files }; }
@@ -117,6 +117,38 @@ test("disabled course rejects new reservations without project or session effect
   const f = await fixture(t, { enabled: false });
   await assert.rejects(f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code }), { code: "VIBE64_TRAINING_COURSE_UNAVAILABLE" });
   assert.deepEqual(f.calls, []);
+});
+
+test("a preview course admits a new start only for the workspace owner; released courses admit every role", async t => {
+  for (const role of [undefined, "member", "admin"]) {
+    const f = await fixture(t, { courseStatus: "preview" });
+    await assert.rejects(f.service.startLesson({ actor: { ...actor, role }, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "try-1" }),
+      { code: "VIBE64_TRAINING_COURSE_PREVIEW", statusCode: 403,
+        message: "This preview course can be tried only by the workspace owner until it is released." });
+    assert.deepEqual(f.calls, []);
+  }
+  const owner = { ...actor, role: "owner" };
+  const tried = await fixture(t, { courseStatus: "preview" });
+  const started = await tried.service.startLesson({ actor: owner, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "try-1" });
+  assert.deepEqual(tried.calls[0], ["reserve", { actor: owner, expectedRevision: 0, requestId: "try-1", pin }]);
+  assert.equal(started.attempt.preparation.phase, "preparing");
+  // The owner's preview attempt is ordinary saved work: resume reads no catalogue.
+  tried.owners.catalogue.readCatalogue = () => assert.fail("Resume must not re-admit the course");
+  assert.equal((await tried.service.prepareLesson({ actor: owner, attemptId })).attempt.attemptId, attemptId);
+  for (const role of ["member", "admin", "owner"]) {
+    const f = await fixture(t);
+    await f.service.startLesson({ actor: { ...actor, role }, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
+    assert.equal(f.calls[0][0], "reserve");
+  }
+  for (const enabled of [false, true]) {
+    const f = await fixture(t, { enabled, courseStatus: "preview" });
+    const lessonCode = enabled ? "V64-DRAFT" : pin.lesson.code;
+    if (enabled) f.owners.catalogue.readCatalogue = async () => ({ courses: [{ enabled, course: { ...pin.course, status: "preview" },
+      lock: { topics: [{ ...pin.topic, manifestHash: pin.topic.topicHash, lessons: [{ code: lessonCode, hash: pin.lesson.hash, status: "draft" }] }] } }] });
+    await assert.rejects(f.service.startLesson({ actor: owner, ...pin.course, lessonCode, expectedRevision: 0, requestId: "try-1" }),
+      { code: enabled ? "VIBE64_TRAINING_LESSON_UNAVAILABLE" : "VIBE64_TRAINING_COURSE_UNAVAILABLE" });
+    assert.deepEqual(f.calls, []);
+  }
 });
 
 test("resume retains prepared project/session and works after course is disabled", async t => {
