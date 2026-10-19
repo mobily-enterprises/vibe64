@@ -49,7 +49,7 @@
         v-for="choice in choices"
         :key="choice.engineId"
         class="vibe64-assistant-dialog__choice"
-        :class="{ 'vibe64-assistant-dialog__choice--selected': selectedChoiceId === choice.engineId }"
+        :class="{ 'vibe64-assistant-dialog__choice--selected': selectedChoiceId === choice.engineId, 'vibe64-assistant-dialog__choice--unavailable': !choice.available }"
         :for="`vibe64-assistant-${choice.engineId}`"
       >
         <span class="vibe64-assistant-dialog__choice-icon">
@@ -104,7 +104,9 @@ const { resource, loadError, scopeKey } = useModelRouting({ enabled: computed(()
 const loading = computed(() => Boolean(resource.isInitialLoading.value));
 const canConfigure = computed(() => resource.data.value?.canConfigure === true);
 
-const choices = computed(() => resource.data.value?.workflows || []);
+// A workflow whose account is disconnected is not a choice; its saved routing
+// returns when the account is connected again.
+const choices = computed(() => (resource.data.value?.workflows || []).filter((choice) => choice.connected || choice.available));
 const selectedChoice = computed(() => choices.value.find((choice) => choice.engineId === selectedChoiceId.value) || null);
 
 function defaultChoiceId(available = choices.value) {
@@ -139,6 +141,16 @@ watch([selectedChoice, () => props.active, () => props.disabled], ([choice, acti
 }, { immediate: true });
 </script>
 <style scoped>
+.vibe64-assistant-dialog__choice--unavailable {
+  cursor: default;
+}
+
+.vibe64-assistant-dialog__choice--unavailable .vibe64-assistant-dialog__choice-icon,
+.vibe64-assistant-dialog__choice--unavailable .vibe64-assistant-dialog__choice-heading,
+.vibe64-assistant-dialog__choice--unavailable small:not(.text-error) {
+  opacity: 0.55;
+}
+
 .vibe64-assistant-dialog__choices {
   display: grid;
   gap: 0.65rem;

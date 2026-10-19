@@ -43,8 +43,8 @@ beforeEach(() => {
   };
   mocks.scopeKey = ref("owner:workspace");
   mocks.resource = { data: ref({ canConfigure: true, workflows: [
-    { engineId: "codex", label: "Codex", available: true, seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)" },
-    { engineId: "opencode", label: "OpenCode", available: true, seniorLabel: "OpenCode (big-pickle default)", juniorLabel: "OpenCode (big-pickle default)" }
+    { engineId: "codex", label: "Codex", connected: true, available: true, seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)" },
+    { engineId: "opencode", label: "OpenCode", connected: true, available: true, seniorLabel: "OpenCode (big-pickle default)", juniorLabel: "OpenCode (big-pickle default)" }
   ] }),
     isInitialLoading: ref(false), reload: vi.fn() };
 });
@@ -81,6 +81,19 @@ it("retains an unavailable configured workflow with its reason and selects an av
   await nextTick();
   expect(f.workflow).toHaveBeenLastCalledWith("");
   expect(f.ready).toHaveBeenLastCalledWith(false);
+});
+
+it("hides a workflow whose account is disconnected unless it is still usable", async () => {
+  Object.assign(mocks.resource.data.value.workflows[0], { connected: false, available: false,
+    error: "The configured connection is no longer recognised. Review Model routing." });
+  const f = mount();
+  expect(f.state.choices.map(({ engineId }) => engineId)).toEqual(["opencode"]);
+  expect(f.state.selectedChoiceId).toBe("opencode");
+  Object.assign(mocks.resource.data.value.workflows[0], { available: true });
+  mocks.resource.data.value = { ...mocks.resource.data.value };
+  await nextTick();
+  expect(f.state.choices.map(({ engineId }) => engineId)).toEqual(["codex", "opencode"],
+    "a shared backup can still make a disconnected orchestrator usable");
 });
 
 it("keeps the selected workflow on a refresh", async () => {

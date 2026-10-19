@@ -1214,6 +1214,7 @@ resource edits refreshes facts without restarting the native conversation.
 - `src/components/studio/Vibe64NativeAgentSession.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64SwitchWorkflowButton.vue`
 - `src/components/studio/vibe64-session/Vibe64RoutingNotice.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
@@ -2649,7 +2650,10 @@ temporary root reports `vibe64_agent_control_path_too_long` with a repair action
 An unavailable AI connection is a separate account-attention state: it stops
 timed retries, explains that Codex needs sign-in (or that the selected account or
 model is unavailable), and offers Open AI Accounts through the existing account
-dialog. Account-change events recheck readiness, including when they arrive
+dialog. When another connected orchestrator is available, the notice also offers
+**Switch to** it (`Vibe64SwitchWorkflowButton.vue`), saving the same
+assistant-selection routing as Chat mode: Senior, Junior or Auto is kept, Custom
+becomes Senior and automatic review is turned off. Account-change events recheck readiness, including when they arrive
 during an older check. Drafts remain intact and no message is sent automatically.
 Session detail reads have a twenty-second deadline and honor query cancellation,
 so a hung read cannot trap later recovery attempts. Each complete check has a

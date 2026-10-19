@@ -173,6 +173,10 @@ retains its named scope and asks to connect a model; it never selects another
 orchestrator. Retained saved assignments remain stored for reconnection.
 Catalogue failure after a connection has been observed retains its error; an
 unconnected, unconfigured catalogue does not create a selectable workflow.
+Workflow responses keep a disconnected orchestrator with `connected: false` so
+saved routing survives; the new-session dialog, like Chat mode, offers it only
+when it is connected or still available (for example through Shared backup), and
+greys out a connected but unavailable choice with its reason.
 Auto identifies missing Senior, Junior or Router assignments. Opening configuration
 from its disabled state brings the first missing assignment into view.
 User-created temporary chats inherit Main instead of using a workspace default.

@@ -62,6 +62,14 @@ OpenCode may require you to close its native terminals, other-provider chats and
 Colleague conversations before changing a key. If it refuses, the saved key stays
 unchanged and those conversations keep running; close the named users and retry. Saved routing can still name a disconnected
 provider; reconnect the exact row or deliberately choose a different route.
+**Start an AI session** lists only orchestrators you can use: one whose account
+was removed disappears until you connect it again, while its saved routing is
+kept. A connected orchestrator with a routing problem stays visible but greyed
+out with its reason; fix it with **Configure model routing**. An existing chat
+whose orchestrator is no longer connected shows **Open AI Accounts** and, when
+another orchestrator is available, **Switch to** that orchestrator (for example
+**Switch to Claude Code**). Switching keeps the chat's Senior, Junior or Auto
+mode (Custom becomes Senior), turns automatic review off, and keeps your draft.
 The controls and results are the same on desktop and mobile. Colleague can
 inspect redacted readiness and explain these steps; secret entry and connection
 consent remain your interaction in **AI Accounts**.

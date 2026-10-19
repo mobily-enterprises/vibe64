@@ -234,6 +234,11 @@
             >
               Open AI Accounts
             </v-btn>
+            <Vibe64SwitchWorkflowButton
+              v-if="assistantAccountUnavailable && !props.sessionSelectionArchived" :session="props.session"
+              :sessions-api-path="props.sessionsApiPath" :disabled="sourceOperationsSuspended"
+              @saved="reloadAssistantAccess(); props.retryAgentConnection()"
+            />
             <v-btn
               v-else
               variant="tonal"
@@ -1027,6 +1032,7 @@ import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64Agent
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
+import Vibe64SwitchWorkflowButton from "./Vibe64SwitchWorkflowButton.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
