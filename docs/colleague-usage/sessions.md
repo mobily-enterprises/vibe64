@@ -3,7 +3,8 @@
 Use **New session** (+), or **Create session** when there are no open sessions,
 to open **Start an AI session**. Choose an available orchestrator, review any
 branch choice, then select **Create session** (or **Create branch & session**).
-While **Creating session…** is shown, the dialog stays open: clicking outside,
+While **Creating session…** is shown, the dialog shows a progress bar and
+explains that it is copying the project source. It stays open: clicking outside,
 pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
 opens the new session. If creation fails, review the error and retry or dismiss
 the dialog. This works the same way on desktop and mobile.

@@ -69,6 +69,14 @@
         </template>
       </v-card-text>
 
+      <div v-if="submitting" class="vibe64-assistant-dialog__progress" role="status" aria-live="polite">
+        <v-progress-linear indeterminate color="primary" rounded />
+        <p class="text-body-small mb-0">
+          Copying the project source for the new session. This can take a little while for a large project.
+          Any connected projects and workspace setup then continue in the session, which shows their progress.
+        </p>
+      </div>
+
       <v-card-actions class="vibe64-assistant-dialog__actions">
         <v-btn :disabled="submitting" variant="text" @click="close">Cancel</v-btn>
         <v-btn
@@ -173,6 +181,12 @@ watch(submitting, async (running, wasRunning) => {
 </script>
 
 <style scoped>
+.vibe64-assistant-dialog__progress {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 1.5rem 0.5rem;
+}
+
 .vibe64-assistant-dialog {
   border: 1px solid rgba(var(--v-theme-outline), 0.18);
 }
