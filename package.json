@@ -151,9 +151,9 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.232",
+    "@jskit-ai/agent-docs": "0.1.234",
     "@jskit-ai/config-eslint": "0.1.241",
-    "@jskit-ai/jskit-catalog": "0.1.285",
+    "@jskit-ai/jskit-catalog": "0.1.287",
     "@jskit-ai/release": "0.1.1",
     "@playwright/test": "1.61.1",
     "@vitejs/plugin-vue": "^6.0.9",
