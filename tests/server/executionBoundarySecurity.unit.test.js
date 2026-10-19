@@ -143,6 +143,31 @@ test("the daemon's generic commands admit only exact private Colleague workspace
 });
 
 
+test("the daemon's generic commands admit only exact Learning source scratch directories", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-training-sources-security-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = path.join(root, "home");
+  const sources = path.join(home, ".local/state/vibe64/training-sources");
+  const scratch = path.join(sources, "topic-0f8fad5b-d9cb-469f-a165-70867728950e");
+  const catalogue = path.join(sources, "catalogue-7c9e6679-7425-40de-944b-e07fc1f90ae7");
+  const nested = path.join(scratch, "training");
+  const malformed = path.join(sources, "anything-0f8fad5b-d9cb-469f-a165-70867728950e");
+  const sibling = path.join(home, ".local/state/vibe64/training/content");
+  const outside = path.join(root, "outside");
+  for (const directory of [nested, catalogue, malformed, sibling, outside]) await mkdir(directory, { recursive: true });
+  const escaping = path.join(sources, "topic-11111111-2222-4333-8444-555555555555");
+  await symlink(outside, escaping);
+  const owner = { home, username: "v64d_workspace" };
+  const options = { operation: "vibe64-command", targetUser: owner };
+  assert.equal(resolveAllowedCwd(scratch, owner.username, options), scratch);
+  assert.equal(resolveAllowedCwd(catalogue, owner.username, options), catalogue);
+  for (const refused of [sources, nested, malformed, sibling, escaping]) {
+    assert.throws(() => resolveAllowedCwd(refused, owner.username, options), undefined, refused);
+  }
+  assert.throws(() => resolveAllowedCwd(scratch, "v64d_another", options));
+  assert.throws(() => resolveAllowedCwd(scratch, owner.username, { ...options, operation: "github-workflow-command" }));
+});
+
 test("workspace cache jobs use an exact daemon scratch directory without opening other private state", async (t) => {
   const home = await mkdtemp(path.join(os.tmpdir(), "cache-job-boundary-"));
   t.after(() => rm(home, { recursive: true, force: true }));

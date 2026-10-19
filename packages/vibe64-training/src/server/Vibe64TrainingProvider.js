@@ -12,6 +12,7 @@ import { registerLocalPracticeAdmission } from "@local/vibe64-core/server/projec
 import { registerRoutes as registerLearningSessionRoutes } from "@local/vibe64-sessions/server/routes";
 import { createTrainingActions } from "./actions.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
+import { createTrainingCourseInstaller } from "./courseInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
 import { createTrainingLearnerState } from "./learnerState.js";
 import { createTrainingTeachingBrief } from "./teachingBrief.js";
@@ -46,6 +47,9 @@ const Vibe64TrainingProvider = defineFeature({
     const projectContext = getStudioProjectContext();
     const systemRoot = projectContext.systemRoot;
     const catalogue = createInstalledTrainingCatalogue({ systemRoot });
+    // The official catalogue repository is server configuration, never a request input.
+    const courseInstaller = createTrainingCourseInstaller({ systemRoot, catalogue,
+      repository: env?.VIBE64_LEARNING_CATALOG_REPOSITORY });
     const content = createInstalledTrainingContent({ systemRoot });
     const learners = createTrainingLearnerState({ systemRoot, content });
     const brief = createTrainingTeachingBrief({ learners, content });
@@ -80,13 +84,14 @@ const Vibe64TrainingProvider = defineFeature({
     registerLocalPracticeAdmission(({ slug }) => admitLocalPracticeProject({ learners, actor: currentOsUser(), slug }));
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     if (sourceEditor) registerTrainingCodeEditorRoutes(http);
-    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
+    return { training: Object.freeze({ catalogue, courseInstaller, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
       codeAuthorship }) };
   },
   actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
-      teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions }),
+      teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions,
+      courseInstaller: training.courseInstaller }),
     ...createTrainingTeachingActions(),
     ...createTrainingPresentationActions({ learners: training.learners, content: training.content }),
     ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),

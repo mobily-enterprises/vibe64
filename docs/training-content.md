@@ -336,8 +336,8 @@ The exact schema-version-1 pin contains `topicId`, `release`, canonical `reposit
 40-character `commit` and trusted `topicHash`, as well as `schemaVersion`. Map the
 course lock's topic `manifestHash` to `topicHash` at that owning operation.
 This low-level service does not authenticate callers, fetch Git repositories,
-enable courses or grant access. No browser/assistant install action or terminal
-install command is exposed yet.
+enable courses or grant access. Its callers are the operator `install-topic`
+command, the owner author trial and the official catalogue installer below.
 
 Installation reuses the clean committed-source proof, original bundle command
 and installed reader. It checks the approved identity before and after bundling,
@@ -603,6 +603,66 @@ Project archives exclude `training/users`. Operators use the explicit
 which preserves private bytes and validates candidates through the existing
 reservation and installed-content readers. Its fixture proof does not establish
 live fleet stopping, off-host retention or power-loss durability.
+
+## Official catalogue installation
+
+`@local/vibe64-training/server/course-installer` exports
+`createTrainingCourseInstaller({systemRoot, catalogue, repository})`. It is the
+only in-app installation path and reads one GitHub repository, the official
+catalogue: `mobily-enterprises/vibe64-learning-catalog` by default, or the
+server's `VIBE64_LEARNING_CATALOG_REPOSITORY` (`owner/name`). The browser never
+supplies a repository, commit or path.
+
+Catalogue format (default branch):
+
+- `domains.json`: `{schemaVersion:1, domains:[{domainId,title}]}`. The UI calls
+  these **topics**.
+- `topics.json`: `{schemaVersion:1, topics:[{topicId, repository, domainId?,
+  releases:[{release,status,commit,manifestHash}]}]}`. The optional `domainId`
+  (one of `domains.json`) groups that topic's courses; a course is listed under
+  its first topic's domain, or under **Other courses** when none is declared.
+- `courses/<courseId>/course.json` and `course.lock.json`: the exact descriptor
+  and the `publish-manifest` lock. The directory name must equal `courseId`.
+
+`listAvailable()` shallow-fetches the default branch into a private scratch
+directory, reads the files with `git cat-file` (no checkout), validates them with
+the content schemas (strict fields, canonical `owner/learn-*` repositories,
+40-character commits, 64-character hashes, lock/course identity and order) and
+caches the result for 60 seconds. A fetch failure is
+`VIBE64_TRAINING_AVAILABLE_UNREACHABLE`; invalid content is
+`VIBE64_TRAINING_AVAILABLE_INVALID`. Reading never installs anything.
+
+`installCourse({courseId, release, actor})` rereads the catalogue, selects that
+exact course/lock, and for each locked topic not already installed and verified
+fetches its canonical repository at exactly the locked commit (`git init`,
+`fetch --depth=1 <commit>`, detached checkout, `HEAD` check) and calls the
+original `installTopic` with `topicHash = manifestHash`. That owner re-verifies
+the clean commit, canonical source and every byte. It then calls
+`enableCourse` with a fresh revision, retrying once on a revision conflict.
+Older enabled releases of the same course are then disabled with
+`disableCourse` (fresh revision; new starts only). Saved attempts keep their pin
+and resume. Installs run one at a time; repeated requests for the same release
+share one operation. Git runs through `runVibe64Command` as the daemon with
+hooks disabled; no fetched file is executed.
+
+Scratch sources live in `<systemRoot>/training-sources/(catalogue|topic)-<uuid>`
+(mode 0700), beside the `training/` namespace that `installTopic` keeps separate
+from sources, and are removed in `finally`. The managed exec helper admits the
+daemon's generic commands in exactly that one-level directory under
+`~/.local/state/vibe64/training-sources/`.
+
+An already enabled exact release is a no-op. A disabled release is re-enabled
+only for the workspace owner (`VIBE64_TRAINING_COURSE_DISABLED` otherwise). A new
+entry beyond the installed catalogue's 16 retained releases fails before any
+download with `VIBE64_TRAINING_COURSE_LIMIT`; nothing is deleted.
+
+The actions are `vibe64.training.available.list` (`GET
+/api/vibe64/training/available`) and `vibe64.training.course.install` (`POST
+/api/vibe64/training/courses/install`, input `{courseId, release}`). Any signed-in
+user may call them, as for `lesson.start`: they can only install hash-pinned
+releases from the official catalogue, and arbitrary sources remain operator
+commands. Hosts that compose `createTrainingActions` without a `courseInstaller`
+return `available:false`.
 
 ## Local operator provisioning
 

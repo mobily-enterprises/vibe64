@@ -2176,6 +2176,15 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
         return resolved;
       }
     }
+    // Official Learning catalogue/topic sources are fetched into one exact
+    // private scratch directory beside the training namespace, then verified.
+    const ownerTrainingSourcesRoot = path.join(targetUser.home, ".local", "state", "vibe64", "training-sources");
+    if (existsSync(ownerTrainingSourcesRoot)) {
+      const parts = relativePathParts(canonicalPath(ownerTrainingSourcesRoot), resolved);
+      if (parts.length === 1 && /^(catalogue|topic)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(parts[0])) {
+        return resolved;
+      }
+    }
   }
   if (operation === "codex-app-server" || operation === "opencode-app-server") {
     const resolved = canonicalPath(normalized);

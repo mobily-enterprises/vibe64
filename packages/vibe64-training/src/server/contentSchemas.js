@@ -63,4 +63,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, lessonSchema, topicSchema, visualSchema, validateContent, list };
+export { courseSchema, id, lessonSchema, list, text, topicSchema, visualSchema, validateContent };

@@ -180,7 +180,11 @@ original order as cards with "N of M lessons complete" and a progress ring.
 **View course** shows each topic and its lessons in order, with readable lesson
 titles beside the exact lesson codes, course/topic releases and lesson hashes,
 and a **Completed**, **In progress** or **Not started** status read from saved
-progress. It does not install or enable content. Disabled courses, preview courses
+progress. Opening a course does not install or enable content; the separate
+**Install a course** catalogue below the cards does, and Colleague may install or
+update an official catalogue course only on the person's direct request or
+accepted offer (see [Installing and updating Learning courses](learning-course-catalogue.md)).
+Disabled courses, preview courses
 and draft lessons stay labelled and unavailable for a new start. **Start** on a
 card, **Start next lesson** or **Start lesson** on the course page requests that
 exact published lesson from an enabled release; opening a course alone never

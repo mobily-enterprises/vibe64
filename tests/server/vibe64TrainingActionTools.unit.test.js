@@ -450,7 +450,7 @@ test("unconfirmed checkpoint and unavailable teaching preserve native causes and
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const api = await c.execute(name);
@@ -1163,7 +1163,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
-  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
   assert.equal(typeof training.teaching.prepareQuestion, "function");
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
@@ -1260,14 +1260,15 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
   ]);
   const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
-  assert.equal(originalRoutes.length, 12);
+  assert.equal(originalRoutes.length, 14);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
     route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
   "Online retains its one existing Main route registration; Training adds only its explicit Learning visual adapter");
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   assert.deepEqual(originalRoutes.map(route => [route.method, route.url]), [
-    ["GET", "/api/vibe64/training/courses"], ["POST", "/api/vibe64/training/courses"], ["GET", "/api/vibe64/training/learning"],
+    ["GET", "/api/vibe64/training/courses"], ["POST", "/api/vibe64/training/courses"],
+    ["GET", "/api/vibe64/training/available"], ["POST", "/api/vibe64/training/courses/install"], ["GET", "/api/vibe64/training/learning"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],

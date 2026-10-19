@@ -105,6 +105,18 @@ passes it to the picker, which shows **New course** only when `courses.list`
 reports `canCreateCourses`. The Learning content button and the root header read
 **Courses**; the internal `lessons` pane and `picker` navigation names are unchanged.
 
+In Learning only, the adapter also reads `available` (the official catalogue)
+and `installCourse` posts `{courseId, release}` to `course.install`, polling the
+catalogue for per-topic progress meanwhile, then rereads courses and catalogue;
+its failure stays on that course row as an actor-scoped install state. The
+picker renders `TrainingCourseCatalogue.vue` (catalogue domains as **topics**,
+their courses with Install/Update/View states) below the installed cards, offers
+**Update** on an installed card when a newer catalogue release exists, and hides
+a release an update disabled unless the saved lesson still uses it.
+`courseProgress` marks a lesson whose hash changed but whose earlier hash is
+completed as **Completed in <release> · updated since**, display only. Hosts that
+do not pass a catalogue keep the original installed-only empty state.
+
 The adapter serializes its UI operation only. Captured actor, API learner and
 route generation fence new follow-up requests and the selection callback.
 Changing mode, account or route does not undo or resend admitted work. Late

@@ -42,9 +42,13 @@ course page scrolls in the same pane.
 Choose **Resume saved lesson** on the saved lesson card (above the course cards,
 headed "Saved lesson · code" with the lesson title and, once reported, a ring of
 required assessments passed) for the exact saved attempt. Disabled,
-unavailable, loading and error states are shown on the same page. Choosing a
-release is not permission to install or enable it. **Refresh courses** rereads
-the catalogue and progress. A lesson without a practice project, such as local
+unavailable, loading and error states are shown on the same page. **Refresh
+courses** rereads installed courses, progress and the course catalogue.
+
+Below the course cards, **Course catalogue → Install a course** lists the
+official catalogue's topics and their courses with **Install** buttons; an
+installed course with a newer release shows **Update available** and **Update**.
+See [Installing and updating Learning courses](learning-course-catalogue.md). A lesson without a practice project, such as local
 Vibe64's Lesson 0 **Set yourself up**, opens only its Learning conversation; that
 lesson uses [Dashboard → Health](health-checks.md).
 Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.

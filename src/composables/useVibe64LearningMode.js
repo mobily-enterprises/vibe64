@@ -68,6 +68,8 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
 
   const coursesResource = readResource("courses");
   const learningResource = readResource("learning");
+  // The official catalogue is read from GitHub by the server, so only in Learning.
+  const availableResource = readResource("available", learningMode);
   const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
   const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", authorPreviewEnabled);
   // Colleague may admit an author trial while this route stays mounted in
@@ -129,7 +131,8 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
 
   async function refresh() {
     if (!actorKey.value || disposed) return null;
-    return Promise.all([coursesResource.reload(), learningResource.reload(), ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
+    return Promise.all([coursesResource.reload(), learningResource.reload(), availableResource.reload(),
+      ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
   }
 
   async function prepare(path, body, scope, { openConversation = true, attemptId = "" } = {}) {
@@ -216,6 +219,38 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     } finally { busy.value = false; }
   }
 
+  // Installs or updates one exact official catalogue release through the
+  // original course.install action. Its outcome stays visible on that course.
+  const installRecord = shallowRef(null);
+  const installState = computed(() => installRecord.value?.actor === actorKey.value ? installRecord.value : null);
+  async function installCourse({ courseId, release } = {}) {
+    if (busy.value) return null;
+    const scope = capture();
+    const target = Object.freeze({ actor: scope.actor, courseId, release });
+    busy.value = true;
+    installRecord.value = Object.freeze({ ...target, phase: "installing", message: "" });
+    // The server reports per-topic progress on the catalogue read meanwhile.
+    const poll = setInterval(() => { void availableResource.reload(); }, 1500);
+    try {
+      const result = await command.run({ path: `${TRAINING_PATH}/courses/install`, body: { courseId, release } });
+      if (result?.ok !== true || result.course?.courseId !== courseId || result.course.release !== release) {
+        throw new Error(result?.error || "The course installation was not confirmed. Refresh courses, then retry.");
+      }
+      if (installRecord.value?.courseId === courseId && installRecord.value.release === release) installRecord.value = null;
+      await Promise.all([coursesResource.reload(), availableResource.reload()]);
+      return result;
+    } catch (cause) {
+      if (current(scope)) {
+        installRecord.value = Object.freeze({ ...target, phase: "failed",
+          message: String(cause?.message || "The course installation was not confirmed. Refresh courses, then retry.") });
+      }
+      return null;
+    } finally {
+      clearInterval(poll);
+      busy.value = false;
+    }
+  }
+
   async function resumeAuthorPreview(attemptId, options = {}) {
     if (busy.value) return null;
     const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
@@ -227,6 +262,6 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
   }
 
   return Object.freeze({ learningMode, learningView, purposeFilter, setLearningMode, setLearningView,
-    coursesResource, learningResource, learnerId, busy, starting, startRetry,
+    coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
     refresh, startLesson, retryStart, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

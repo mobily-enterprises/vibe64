@@ -37,6 +37,10 @@ const resultOutput = {
     revision: { ...revision, required: false }, activeSummaryCurrent: { type: "boolean", required: false },
     courses: { type: "array", required: false, items: opaque },
     canCreateCourses: { type: "boolean", required: false }, course: { ...opaque, required: false },
+    domains: { type: "array", required: false, items: opaque },
+    repository: { ...text, required: false, maxLength: 256 }, catalogueCommit: { ...text, required: false, maxLength: 64 },
+    changed: { type: "boolean", required: false },
+    retired: { type: "array", required: false, maxLength: 16, items: { ...text, maxLength: 32 } },
     lessonProgress: { type: "array", required: false, items: opaque },
     sessions: { type: "array", required: false, maxLength: 16, items: learningSessionSummary },
     active: { ...opaque, required: false, nullable: true },
@@ -149,6 +153,13 @@ function operationError(cause) {
   });
 }
 
+function installError(cause) {
+  if (/^VIBE64_TRAINING_(COURSE|CATALOGUE|AVAILABLE|TOPIC|SOURCE)_/u.test(cause.code || "")) return cause;
+  return Object.assign(new Error(`The course could not be installed: ${String(cause.message || "unknown failure").slice(0, 300)} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`), {
+    code: cause.code || "VIBE64_TRAINING_COURSE_INSTALL_FAILED", ...(cause.statusCode ? { statusCode: cause.statusCode } : {}), cause
+  });
+}
+
 function pollingTaskSnapshot({ input, state, brief, sessions }) {
   const attempt = state.progress.attempts.find(value => value.attemptId === input.attemptId);
   if (!attempt || attempt.ended || state.progress.activeAttemptId !== attempt.attemptId || !state.activeSummaryCurrent) {
@@ -228,7 +239,8 @@ const prepared = result => {
 
 // Composition supplies the original readers and one exercise preparation owner.
 // This factory registers neither a teacher loop nor a standalone provisioner.
-function createTrainingActions({ catalogue, learners, attemptLearners = learners, teachingBrief, exercises = null, learningSessions = null } = {}) {
+function createTrainingActions({ catalogue, learners, attemptLearners = learners, teachingBrief, exercises = null, learningSessions = null,
+  courseInstaller = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function" || typeof teachingBrief?.readBrief !== "function") {
     throw new TypeError("Training actions require the installed catalogue, learner state and teaching brief owners.");
   }
@@ -236,7 +248,7 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
     id: `vibe64.training.${name}`, version: 1,
     kind: name.endsWith("read") || name.endsWith("list") ? "query" : "command",
     input: { mode: "create", schema: createSchema(fields) }, output: null,
-    idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].includes(name) ? "domain_native" : "none",
+    idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue", "course.install"].includes(name) ? "domain_native" : "none",
     extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput,
       ...(name === "learning.read" ? { transformResult(result) {
         // Own identity binds browser state, never the model's tool result.
@@ -258,6 +270,8 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
         // Course creation reports the catalogue owner's own corrective message.
         if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
+        // Catalogue reads and installs report their owner's corrective message.
+        if (["available.list", "course.install"].includes(name)) throw installError(cause);
         throw operationError(cause);
       }
     }
@@ -358,6 +372,27 @@ function createTrainingActions({ catalogue, learners, attemptLearners = learners
             title, topicId: topic.topicId, topicRelease: topic.release };
         }))
       })) };
+    }),
+    definition("available.list", {}, "Read the official course catalogue this server can install from: its topics (catalogue domains) and their courses, each with release, status, lesson count and whether it is installed and enabled here. When updateFrom is set, this listed release is a newer release of a course installed here at that release; course.install of it is the Update. This is read-only and installs nothing. A course that is not installed cannot be started until it is installed.", async () => {
+      if (typeof courseInstaller?.listAvailable !== "function") {
+        return { ok: false, available: false, error: "Installing courses from the catalogue is unavailable in this installation. Installed courses are unchanged." };
+      }
+      const result = await courseInstaller.listAvailable();
+      return { ok: true, available: true, repository: result.repository, catalogueCommit: result.commit,
+        domains: result.domains, courses: result.courses };
+    }),
+    definition("course.install", {
+      courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
+      release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+    }, "Install and enable one exact course release from the official catalogue only after the person's direct request or accepted offer. Read available.list first and use its exact courseId and release. The server downloads each pinned topic at its exact commit, verifies it byte for byte against the catalogue lock and enables the course; it runs no course code and starts no lesson. Repeating it for an installed, enabled course changes nothing. When available.list shows updateFrom, this same action is the course Update: the newer release is installed and enabled and older releases of that course are disabled for new starts only; saved lessons keep their pinned release and can still be resumed, and nothing is deleted. Courses from other sources remain an owner operation outside Vibe64.", async (input, actor) => {
+      if (typeof courseInstaller?.installCourse !== "function") {
+        return { ok: false, available: false, error: "Installing courses from the catalogue is unavailable in this installation. No course was installed." };
+      }
+      const result = await courseInstaller.installCourse({ ...pick(input, ["courseId", "release"]), actor });
+      return { ok: true, available: true, changed: result.changed === true, catalogueCommit: result.catalogueCommit,
+        retired: Array.isArray(result.retired) ? result.retired : [],
+        ...(Number.isSafeInteger(result.revision) ? { revision: result.revision } : {}),
+        course: { ...pick(result.course, ["courseId", "release", "title", "status"]), enabled: true } };
     }),
     definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. When this installation supplies learning sessions, this also lists only existing owned learning conversations; opening or listing them does not send a message. A missing conversation is absent, but invalid saved identity is an error. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor, learning) => {
       const owner = learning ? learning.trainingLearners : learners;

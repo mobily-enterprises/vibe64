@@ -66,8 +66,11 @@ confirmed checkpoint. These saves preserve the question and earlier assessments,
 and never grant a pass. If a concurrent assessment conflicts, read its saved
 result and retry its existing operation with the current revision.
 
-The application also has a server-only verified-snapshot installation facility.
-It has no visible control or Colleague tool; the local operator commands in **Author a lesson and publish its source**
+The application also has a server-side verified-snapshot installation facility.
+For official catalogue courses it is reached through **Install** and **Update**
+in Learning's **Courses** pane, or Colleague's `course.install` on a direct
+request (see [Installing and updating Learning courses](learning-course-catalogue.md)).
+For other content, the local operator commands in **Author a lesson and publish its source**
 invoke the original installation owner.
 An admitted owner operation must select the canonical local source and exact
 course pin. Colleague can explain this boundary and offer to help contact the
@@ -122,10 +125,13 @@ does not prepare an exercise, grant access or create learner progress. Colleague
 can explain this prerequisite and offer supported assistance contacting the owner;
 it cannot run the operator upgrade through its current tools.
 
-The server now also retains owner-approved course releases and their enablement.
-This is still an internal facility, with no course-enable control or Colleague
-tool. Colleague can explain the boundary and offer to help formulate an owner
-request through supported conversation actions; it cannot grant course access.
+The server now also retains approved course releases and their enablement.
+Official catalogue courses are enabled by **Install** or **Update**; there is no
+general course-enable or disable control. Colleague can explain the boundary and
+offer to help formulate an owner request through supported conversation actions;
+apart from installing an official catalogue course on request, it cannot grant
+course access. An update disables older releases of that course for new starts
+only.
 A fresh enabled catalogue read admits a new start. Disabling that release
 blocks later admissions without revoking already admitted work or saved attempts.
 Missing or corrupt installed material, even in a disabled release, requires the

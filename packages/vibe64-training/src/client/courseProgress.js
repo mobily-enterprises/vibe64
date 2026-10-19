@@ -12,8 +12,23 @@ function lessonStatus(lesson, lessonProgress) {
   return saved && (saved.open || saved.passed > 0) ? "in-progress" : "not-started";
 }
 
-function courseProgress(course, lessonProgress = [], active = null) {
-  const lessons = course.lessons.map(lesson => ({ lesson, status: lessonStatus(lesson, lessonProgress) }));
+// Display only: when a course update changed a lesson's content, its earlier
+// completed version is named by the release of a saved attempt of that version.
+function earlierCompletion(lesson, lessonProgress, attempts) {
+  const done = lessonProgress.filter(value => value.lessonCode === lesson.code && value.lessonHash !== lesson.hash && value.completed);
+  if (!done.length) return null;
+  const releases = done.flatMap(value => attempts.filter(attempt => attempt?.pin?.lesson?.code === value.lessonCode &&
+    attempt.pin.lesson.hash === value.lessonHash).map(attempt => attempt.pin.course?.release)).filter(Boolean);
+  return { release: releases.at(-1) || "" };
+}
+
+function courseProgress(course, lessonProgress = [], active = null, history = []) {
+  const attempts = [...history, ...(active ? [active] : [])];
+  const lessons = course.lessons.map(lesson => {
+    const status = lessonStatus(lesson, lessonProgress);
+    const earlier = status === "completed" ? null : earlierCompletion(lesson, lessonProgress, attempts);
+    return { lesson, status, ...(earlier ? { earlier } : {}) };
+  });
   const counted = lessons.some(value => value.lesson.required) ? lessons.filter(value => value.lesson.required) : lessons;
   const topics = course.topics.map(topic => ({ ...topic,
     lessons: lessons.filter(value => value.lesson.topicId === topic.topicId && value.lesson.topicRelease === topic.release) }));
@@ -33,4 +48,9 @@ function courseStatusLabel(course) {
   return !course.enabled ? "Disabled for new lessons" : course.status === "released" ? "Enabled" : "Preview course";
 }
 
-export { courseProgress, courseStatusLabel, lessonStatus, offered, statusLabels };
+// Display label for a lesson completed in an earlier release whose content changed since.
+function earlierCompletionLabel(earlier) {
+  return earlier ? `Completed in ${earlier.release || "an earlier release"} · updated since` : "";
+}
+
+export { courseProgress, courseStatusLabel, earlierCompletionLabel, lessonStatus, offered, statusLabels };

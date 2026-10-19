@@ -161,6 +161,12 @@ immutable. Check both the exact local lock and actual requested Git publication;
 
 ## Operator installation is separate
 
+Courses published in the official Vibe64 course catalogue are installed and
+updated from Learning's **Courses** pane by any signed-in person (see
+[Installing and updating Learning courses](learning-course-catalogue.md)). The
+operator steps below remain for content outside that catalogue, for an author's
+own snapshots, and for disabling a release.
+
 In supported hosted installations, ask Colleague to admit your exact clean
 committed snapshot from the authorized authoring session. Then turn on Learning
 mode in that project view and use **Resume author trial** under **Courses** to
@@ -181,9 +187,9 @@ terminal commands documented in [Local operator provisioning](../training-conten
 fresh catalogue revision; `enable-course` and `disable-course` change only the
 exact selected release against that revision. Creating a course lock does not
 install or enable it, and installation does not make it available to learners.
-Disabling blocks new starts while retaining existing attempts' pins. This is an
-OS-operator task on the selected installation, with no learner/mobile control or
-Colleague source/shell access. Colleague can explain the steps and offer to help
+Disabling blocks new starts while retaining existing attempts' pins. For content outside
+the official catalogue this is an OS-operator task on the selected installation,
+with no learner/mobile control or Colleague source/shell access. Colleague can explain the steps and offer to help
 formulate the operator request; it cannot run operator installation, enablement or deployment on
 that person's behalf. Requested Git source publication uses the native workflow above. Invalid content or an unconfirmed save requires owner
 inspection, not automatic replacement or blind retry.

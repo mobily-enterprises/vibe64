@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import TrainingCourseCreator from "./TrainingCourseCreator.vue";
 import TrainingCoursePage from "./TrainingCoursePage.vue";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
+import TrainingCourseCatalogue from "./TrainingCourseCatalogue.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 import { courseProgress, courseStatusLabel, offered } from "./courseProgress.js";
 import { trainingIcons as icons } from "./trainingIcons.js";
@@ -20,9 +21,14 @@ const props = defineProps({
   // Optional owner-only custom course request; resolves to the confirmed result or null.
   createCourse: { type: Function, default: null },
   starting: Boolean,
-  startUnconfirmed: Boolean
+  startUnconfirmed: Boolean,
+  // Optional official catalogue: supplied only where installation is composed.
+  availableResult: { type: Object, default: null },
+  availableLoading: Boolean,
+  availableError: { type: String, default: "" },
+  installState: { type: Object, default: null }
 });
-const emit = defineEmits(["refresh", "start", "resume"]);
+const emit = defineEmits(["refresh", "start", "resume", "install"]);
 const selectionId = ref("");
 const text = value => typeof value === "string" && value.length > 0;
 const revision = value => Number.isSafeInteger(value) && value >= 0;
@@ -108,8 +114,29 @@ function startLesson(course, lesson) {
 const courseKey = course => JSON.stringify([course.courseId, course.release]);
 const lessonProgress = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
   props.learningResult.available === true ? props.learningResult.lessonProgress || [] : []);
+const releaseOrder = (left, right) => {
+  const a = left.split(".").map(Number), b = right.split(".").map(Number);
+  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+};
+// A release that an update disabled stays installed for its saved attempts;
+// it is listed only while a saved lesson still uses it.
+const superseded = course => !course.enabled && courses.value.some(other => other.courseId === course.courseId && other.enabled &&
+  releaseOrder(other.release, course.release) > 0);
 const summaries = computed(() => courses.value.map(course => ({ course, key: courseKey(course),
-  progress: courseProgress(course, lessonProgress.value, savedAttempt.value) })));
+  progress: courseProgress(course, lessonProgress.value, savedAttempt.value, history.value) }))
+  .filter(summary => !superseded(summary.course) || summary.progress.activeHere));
+const availableCourses = computed(() => props.availableResult?.ok === true && Array.isArray(props.availableResult.courses)
+  ? props.availableResult.courses : []);
+// The newer catalogue release offered as this installed card's update.
+const updateFor = course => availableCourses.value.find(value => value.courseId === course.courseId &&
+  value.updateFrom === course.release && value.installed === "not-installed") || null;
+const showCatalogue = computed(() => Boolean(props.availableResult || props.availableLoading || props.availableError));
+function requestInstall(selection) {
+  if (!props.busy) emit("install", selection);
+}
+function viewInstalled({ courseId, release }) {
+  openCourseKey.value = courseKey({ courseId, release });
+}
 const openCourseKey = ref("");
 const openCourse = computed(() => summaries.value.find(summary => summary.key === openCourseKey.value) || null);
 watch(summaries, values => {
@@ -236,7 +263,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         <rect x="44" y="22" width="14" height="44" rx="3" class="tlp-empty__book tlp-empty__book--alt" />
         <rect x="70" y="40" width="16" height="26" rx="3" class="tlp-empty__book tlp-empty__book--ghost" transform="rotate(-12 78 53)" />
       </svg>
-      <p>No courses are installed. Ask the owner to install and enable a course; this page cannot install one.</p>
+      <p v-if="showCatalogue">No courses are installed yet. Choose a course in the catalogue below and select Install.</p>
+      <p v-else>No courses are installed. Ask the owner to install and enable a course; this page cannot install one.</p>
     </div>
 
     <TrainingCoursePage
@@ -260,6 +288,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
               <span v-if="progress.activeHere" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.bookmark" size="14" />Saved lesson</span>
               <span v-else-if="progress.total && progress.completed === progress.total" class="tlp-chip tlp-chip--success"><v-icon :icon="icons.trophy" size="14" />Course complete</span>
               <span class="tlp-chip" :class="`tlp-chip--${statusTone(course)}`"><v-icon :icon="statusIcon[statusTone(course)]" size="14" />{{ courseStatusLabel(course) }}</span>
+              <span v-if="updateFor(course)" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.update" size="14" />Update available: {{ updateFor(course).release }}</span>
             </div>
           </div>
           <div class="tlp-card__body">
@@ -283,6 +312,9 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
               :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
             <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!startPossible" @click="startLesson(course, progress.next)">Start</v-btn>
+            <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
+              :loading="installState?.phase === 'installing' && installState.courseId === course.courseId"
+              :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })">Update</v-btn>
             <v-btn variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight" @click="openCourseKey = key">View course</v-btn>
           </div>
         </article>
@@ -294,6 +326,9 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       </div>
       <TrainingCourseCreator v-if="creating && canCreateCourses" :topics="availableTopics" :busy="busy" @create="requestCreateCourse" @cancel="creating = false" />
       <div v-else-if="canCreateCourses && !courses.length"><v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
+      <TrainingCourseCatalogue v-if="showCatalogue && !creating" :available-result="availableResult" :available-loading="availableLoading"
+        :available-error="availableError" :install-state="installState" :busy="busy"
+        @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')" />
     </template>
     <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
       <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</span></p>

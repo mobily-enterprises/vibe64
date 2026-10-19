@@ -6,6 +6,9 @@ facilities install exact verified snapshots from admitted owner-selected local
 sources and check pinned reads. Private server-only state retains one exact lesson
 active reservation per learner, with bounded immutable ended-attempt history. An internal installed catalogue validates approved whole
 course locks and toggles enablement without changing their pinned release identity.
+An official catalogue installer lets any signed-in person browse the configured
+GitHub catalogue and install or update an exact hash-pinned course release through
+those same owners.
 Internal assessment and resume writes retain pinned evidence and derive lesson
 completion. The shared preparation coordinator composes these original state/content
 owners with existing project, repository, session and Workspace setup facilities.
@@ -18,6 +21,9 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/client/TrainingCoursePage.vue`
 - `packages/vibe64-training/src/client/TrainingCourseCreator.vue`
 - `packages/vibe64-training/src/client/courseProgress.js`
+- `packages/vibe64-training/src/client/TrainingCourseCatalogue.vue`
+- `packages/vibe64-training/src/server/courseInstaller.js`
+- `packages/vibe64-execution/src/host/execHelper.js`
 
 - `packages/vibe64-training/src/server/contentSchemas.js`
 - `packages/vibe64-training/src/server/content.js`
@@ -42,9 +48,12 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `docs/colleague-usage/teaching-content.md`
 - `docs/colleague-usage/learning-with-colleague.md`
 - `docs/colleague-usage/lesson-authoring.md`
+- `docs/colleague-usage/learning-course-catalogue.md`
 - `tests/server/vibe64TrainingContent.unit.test.js`
 - `tests/server/vibe64TrainingInstalledContent.unit.test.js`
 - `tests/server/vibe64TrainingContentInstaller.unit.test.js`
+- `tests/server/vibe64TrainingCourseInstaller.unit.test.js`
+- `tests/client/trainingCourseCatalogue.vitest.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
 - `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/studioProjectContext.unit.test.js`
@@ -215,13 +224,33 @@ private modes and expected revision. Stale writes conflict; matching current
 state is unchanged. A failed write is unconfirmed because rename may have succeeded;
 the caller must read before deliberately retrying. Locks are never unlinked.
 
-A future authenticated action admits a new start at a fresh enabled read. Later
+An authenticated start admits a new lesson at a fresh enabled read. Later
 disablement prevents future admissions, without revoking already admitted work or
 saved attempts. The catalogue does not coordinate cross-lock reservation writes;
 the existing resume owner reads its saved pin independently. No lazy seed, new
 validation framework, remote discovery, exercise execution or progress mutation
 is added. Existing whole-topic validation and installed-byte proof remain the
 original evidence; focused catalogue cases extend the real reservation fixture.
+
+## Official catalogue installation
+
+`courseInstaller.js` is the in-app installer. The catalogue repository is server
+configuration (`VIBE64_LEARNING_CATALOG_REPOSITORY`, default
+`mobily-enterprises/vibe64-learning-catalog`), never request input. Reading
+shallow-fetches it into `<systemRoot>/training-sources/catalogue-<uuid>`,
+validates `domains.json`, `topics.json` (optional per-topic `domainId`) and each
+`courses/<id>/course.json`/`course.lock.json` strictly, and caches for 60 seconds.
+Installing rereads it, fetches each missing locked topic at its exact commit into
+a `topic-<uuid>` scratch directory, and delegates to the original
+`installTopic` (clean-commit, canonical-source and byte proof, staging, per-pin
+lock) and `enableCourse` (catalogue lock, expected revision; one retry on
+conflict). Older releases of the course are then disabled for new starts through
+`disableCourse`; saved attempts resume from their pins and nothing is deleted.
+The 16-release limit fails closed before downloading. Installs are serialized in
+process and identical requests share one operation. Scratch directories are
+removed in `finally`; the managed exec helper admits Git only in exactly that
+one-level scratch shape. `available.list` and `course.install` are ordinary
+signed-in Training actions; only the owner may re-enable a disabled release.
 
 ## Private reservation authority
 

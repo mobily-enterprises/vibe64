@@ -1100,7 +1100,7 @@ it.each(["learning", "author-preview"])("refreshes only the owning %s progress r
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   releases.push(() => queryClient.clear());
   let mode, revision = 10, actor = "owner";
-  const reads = { courses: 0, learning: 0, "author-preview": 0 };
+  const reads = { courses: 0, learning: 0, "author-preview": 0, available: 0 };
   const f = fixture({ projectSlug: "", sessionId: `learning-${attempt}`, learningAttemptId: attempt,
     learnerId: "1000", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
     beforeMount(app) {
@@ -1111,6 +1111,7 @@ it.each(["learning", "author-preview"])("refreshes only the owning %s progress r
         if (!url.startsWith("/api/vibe64/training/") || !Object.hasOwn(reads, resource)) return readConversation(url, options);
         reads[resource] += 1;
         if (resource === "courses") return { ok: true, courses: [] };
+        if (resource === "available") return { ok: true, available: true, domains: [], courses: [] };
         return { ok: true, available: true, learnerId: "1000", authorPreview: resource === "author-preview",
           revision: resource === namespace ? revision : 0,
           active: { attemptId: actor === "owner" && resource === namespace ? attempt : other }, history: [] };

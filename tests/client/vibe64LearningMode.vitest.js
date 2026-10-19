@@ -68,7 +68,8 @@ it("uses original route flag and actor-scoped resources without requiring a proj
   expect(mode.learningView.value).toBe("workspace");
   expect(mode.purposeFilter.value).toBe("learning");
   expect(mode.learnerId.value).toBe("learner-owner");
-  expect(read.mock.calls.map(([path]) => path)).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning"]);
+  // The official catalogue is read only in Learning, beside the installed courses.
+  expect(read.mock.calls.map(([path]) => path)).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning", "/api/vibe64/training/available"]);
   await mode.setLearningView("learning");
   expect(harness.replace).toHaveBeenLastCalledWith({ path: "/app", hash: "#preview",
     query: { mode: "learning", session: "working-id", learningView: "learning" } });

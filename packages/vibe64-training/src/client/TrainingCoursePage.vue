@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from "vue";
-import { courseStatusLabel, offered, statusLabels } from "./courseProgress.js";
+import { courseStatusLabel, earlierCompletionLabel, offered, statusLabels } from "./courseProgress.js";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 
@@ -95,7 +95,7 @@ const path = computed(() => {
         <p v-if="!lessons.length" class="training-course-page__empty">This topic has no displayed lesson choices.</p>
         <ol class="training-course-page__path">
           <li
-            v-for="{ lesson, status, step, next } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
+            v-for="{ lesson, status, step, next, earlier } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
             class="training-course-page__lesson" :class="[`is-${status}`, { 'is-next': next && !progress.activeHere }]"
           >
             <span class="training-course-page__node" aria-hidden="true">
@@ -112,6 +112,7 @@ const path = computed(() => {
                   <span>{{ lesson.status === 'published' ? 'Published' : 'Draft — unavailable for new lessons' }}</span>
                   <span v-if="!lesson.required"> · Optional</span>
                 </p>
+                <p v-if="earlier" class="training-course-page__earlier">{{ earlierCompletionLabel(earlier) }}</p>
                 <details class="training-course-page__identity"><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
               </div>
               <v-btn
@@ -128,6 +129,7 @@ const path = computed(() => {
 </template>
 
 <style scoped>
+.training-course-page__earlier { margin: 2px 0 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant); }
 .training-course-page {
   --tcp-node: 40px;
   --tcp-done: rgb(var(--v-theme-success));

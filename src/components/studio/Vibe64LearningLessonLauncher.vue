@@ -13,6 +13,7 @@ const busy = computed(() => toValue(props.learning.busy));
 const retry = computed(() => toValue(props.learning.startRetry));
 const starting = computed(() => toValue(props.learning.starting) === true);
 const trial = computed(() => toValue(props.learning.savedAuthorPreview));
+const installState = computed(() => toValue(props.learning.installState) || null);
 const trialResource = computed(() => props.learning.authorPreviewResource);
 const trialEnabled = computed(() => toValue(props.learning.authorPreviewEnabled) === true);
 const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.learning.learnerId)
@@ -84,11 +85,16 @@ async function request(operation) {
       :can-start="canRequest"
       :can-resume="canRequest"
       :create-course="input => request(owner => owner.createCourse(input))"
+      :available-result="toValue(learning.availableResource?.data)"
+      :available-loading="toValue(learning.availableResource?.isLoading) === true"
+      :available-error="toValue(learning.availableResource?.loadError) || ''"
+      :install-state="installState"
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
       @start="request(owner => owner.startLesson($event))"
       @resume="request(owner => owner.resumeLesson($event.attemptId))"
+      @install="request(owner => owner.installCourse($event))"
     />
     <p class="vibe64-learning-launcher__status" role="status">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 9h2V7h-2m1 13a8 8 0 1 1 0-16 8 8 0 0 1 0 16m0-18a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1 15h2v-6h-2v6Z" /></svg>
