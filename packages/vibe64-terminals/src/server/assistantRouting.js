@@ -87,8 +87,15 @@ function withSelection(context, selection) {
 
 // The ordinary conversation owns delivery and history. This record only holds
 // the one request being prepared, its working plan snapshot and follow-up.
-function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {} }) {
+function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {},
+  onTiming = () => {} }) {
   const running = new Map();
+  // Sub-phase times of each send before native delivery, reported once.
+  const timings = new Map();
+  function mark(messageId, stage) {
+    const timing = timings.get(messageId);
+    if (timing) timing.stages[stage] = Math.round(performance.now() - timing.started);
+  }
   let closing = false;
   const liveFollowupRequests = new Map();
   const keyFor = (sessionId, context) => `${context.runtime.stateRoot}\0${sessionId}\0${context.routingConversationId || ""}`;
@@ -322,6 +329,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (followup && state.mode !== "auto") throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
     if (state.stopped) throw failure("This request was stopped. Send a new request to continue.");
     await validateDecision(context, state, followup);
+    mark(state.messageId, "deliver-validated");
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.deliverySelection : state.observedSelection;
     const { goal, pinned } = await currentGoal(sessionId, context);
@@ -334,7 +342,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (state.helper) throw failure("The routing helper still needs cleanup before this request can be delivered.");
     const native = await agent.sessionState(sessionId, context);
     if (native?.turn?.active) throw failure("Wait for the current turn to finish before sending a new request.");
-    if (followup && activeGoal((await currentGoal(sessionId, context)).goal)) {
+    // The goal read above is already inside this same exclusive section.
+    if (followup && activeGoal(goal)) {
       state.status = "waiting"; state.error = "Finish or cancel the goal before resuming this workflow."; await save(context, state);
       return { ok: true, skipped: true };
     }
@@ -364,11 +373,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (state.workflow || state.mode === "auto" && state.stage === "planning") message += "\n\n" + assistantWorkflowInstructions(state);
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
+    // Save the delivery selection before the session selection changes. The
+    // sending status adds no recovery meaning before dispatch, so one save
+    // records both.
+    state.status = "working"; state.delivery = "sending";
     await save(context, state);
     selectedContext.session.metadata = { ...context.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) };
     await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
-    state.status = "working"; state.delivery = "sending";
-    await save(context, state);
+    mark(state.messageId, "selection-saved");
     const result = await dispatch(sessionId, {
       ...(followup ? {} : state.input), messageId, message, displayMessage,
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
@@ -386,6 +398,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         await save(context, state);
       }
     }, selectedContext);
+    mark(state.messageId, "dispatched");
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
     state.status = "working"; state.delivery = "accepted";
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
@@ -408,6 +421,21 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   }
 
   async function send(sessionId, input, options) {
+    const owned = Boolean(input?.messageId) && !timings.has(input.messageId);
+    if (owned) timings.set(input.messageId, { started: performance.now(), stages: {} });
+    try {
+      return await route(sessionId, input, options);
+    } finally {
+      const timing = owned && timings.get(input.messageId);
+      if (timing) {
+        timings.delete(input.messageId);
+        onTiming({ sessionId, messageId: input.messageId, stages: timing.stages,
+          elapsedMs: Math.round(performance.now() - timing.started) });
+      }
+    }
+  }
+
+  async function route(sessionId, input, options) {
     if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
     const explicitDeslop = !options.purpose && (input.genesisTask === "deslop" || /^\s*deslop[.!]?\s*$/iu.test(input.message));
     let context;
@@ -416,6 +444,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const task = { cancelled: false, finished: Promise.withResolvers() };
     let key;
     await exclusive(sessionId, options, async (current) => {
+      mark(input.messageId, "lock-acquired");
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
       context = current; key = keyFor(sessionId, context);
       const preferences = assistantRoutingFromMetadata(context.session.metadata) || (options.purpose || explicitDeslop ? {
@@ -457,7 +486,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!preferences) { direct = true; return; }
       const store = context.runtime.store;
       state = await read(store, sessionId);
-      if (await store.conversationMessageIdExists(sessionId, input.messageId)) {
+      const duplicate = await store.conversationMessageIdExists(sessionId, input.messageId);
+      mark(input.messageId, "duplicate-checked");
+      if (duplicate) {
         if (state?.messageId === input.messageId && ["uncertain", "sending"].includes(state.delivery)) {
           state.status = "working"; state.delivery = "accepted"; delete state.error;
           await save(context, state);
@@ -471,6 +502,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         return;
       }
       const native = await agent.sessionState(sessionId, context);
+      mark(input.messageId, "native-state");
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
@@ -516,6 +548,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       } else {
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
+        mark(input.messageId, "goal-read");
         if (explicitDeslop && activeGoal(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
         if (!options.purpose && preferences.mode === "auto" && activeGoal(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
@@ -577,6 +610,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           ].join(" ")
         };
         state.decision = await resolve(context, state);
+        mark(input.messageId, "resolved");
         if (activeGoal(goal) && !pinnedGoal && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
           throw failure("Finish or cancel the current goal before changing its AI.");
         }
@@ -587,6 +621,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         state.assignments = Object.fromEntries(Object.entries(destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));
         await save(context, state);
+        mark(input.messageId, "route-saved");
       }
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
       task.close = async () => {
@@ -599,7 +634,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       running.set(key, task);
     });
     if (direct === true) return exclusive(sessionId, options, async (current) => {
+      mark(input.messageId, "dispatch-called");
       const result = await dispatch(sessionId, input, current);
+      mark(input.messageId, "dispatched");
       if (result?.delivered === true && task.steeringRequestId) {
         const persisted = await read(current.runtime.store, sessionId);
         if (persisted?.messageId === task.steeringRequestId &&
@@ -629,6 +666,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       if (task.cancelled) throw failure("Routing cancelled.");
       return await exclusive(sessionId, options, async (current) => {
+        mark(state.messageId, "delivery-lock-acquired");
         const persisted = await read(current.runtime.store, sessionId);
         if (task.cancelled || persisted?.stopped) throw failure("Routing cancelled.");
         return deliver(sessionId, current, state);

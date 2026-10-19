@@ -45,7 +45,12 @@ selected project through the original action wrapper in both modes.
 All three native engines use JSKIT's common delivery timing observer, separating
 preparation, provider readiness, dispatch, native acknowledgement, saved receipt,
 accepted delivery and first response. The application additionally records write
-lock wait and complete Send duration. Records contain identities and timings,
+lock wait and complete Send duration. Assistant routing reports one
+`vibe64.agent_message.routing_timing` event per Send with its lock, duplicate,
+native-state, goal, resolution, save, validation, selection and dispatch phases.
+Claude message preparation marks `git-actor` and `genesis-rendered` on JSKIT's
+delivery timing observer when JSKIT supplies one; otherwise it reports its own
+`vibe64.agent_message.preparation_timing` event with those phases. Records contain identities and timings,
 not prompts, output or credentials. Slow accepted sends and first responses are
 visible at the normal warning log level; faster milestones use information level.
 Observer results are not awaited and errors cannot fail native delivery.
@@ -853,6 +858,14 @@ atomic replacement. Messages, runtime metadata, tool receipts and per-turn
 attribution commit together, or a failed transaction leaves the previous record.
 The application retains attachment references, native message versions and
 integration setup decisions; decisions remain separate application records.
+The record is compact JSON validated as an object before publication. Its parsed
+form is reused while the file's device, inode, size and modification time are
+unchanged; Vibe64's own publication primes that cache and any other writer
+invalidates it. Read transactions answer message-ID existence from an index of
+that parsed record. The bound main transcript also supplies `findSubmittedTurn`
+and `readTurn`, so admission locates one conversation-log entry without reading
+the whole log; rewound turns stay hidden from both. Session reads reuse
+unchanged agent-run records the same way.
 Conversation Undo is not exposed in the UI, HTTP routes or action catalogue.
 Historical rewind markers remain readable and are not erased by this removal.
 The offline `20261003-conversation-undo-retirement` preflight inspects the same

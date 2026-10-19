@@ -103,7 +103,8 @@ While the status says **awaiting receipt**, wait for confirmation rather than
 submitting another copy. That wait can include preparation, native acknowledgement
 and saving the receipt. If it repeatedly takes a long time, give the operator the
 project/session URL and approximate send time. The operator can compare message
-delivery timings for Codex, Claude and OpenCode without reading the prompt or
+delivery timings for Codex, Claude and OpenCode, including the routing and
+message-preparation phases before native delivery, without reading the prompt or
 credentials. Colleague can explain this status; inspecting server logs requires
 the operator or a coding agent with authorized access.
 Clicking twice during a pending retry does not submit again; your separate

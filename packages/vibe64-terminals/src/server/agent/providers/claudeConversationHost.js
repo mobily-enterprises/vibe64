@@ -1,3 +1,4 @@
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { createClaudeConversationStorage } from "../../claudeConversationStorage.js";
 import { createClaudeConversationEnvironment } from "../../claudeConversationEnvironment.js";
 import { createClaudeConversationEvents } from "../../claudeConversationEvents.js";
@@ -55,7 +56,12 @@ function createClaudeConversationHost({
   const configRoot = env.CLAUDE_CONFIG_DIR || path.join(credentialHome.home, ".claude");
   const conversationStorage = createClaudeConversationStorage({ createError: error });
   const { metadata, ...nativeStorage } = conversationStorage;
-  const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged });
+  const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged,
+    onTiming(event) {
+      logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
+        event: "vibe64.agent_message.preparation_timing", component: "vibe64.agent_message", engineId: "claude", ...event
+      }, "Assistant message preparation timing.");
+    } });
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({ env, projectService, command, credentialHome, commandRunner, stopExecution,
       providerConnections, prepareCommandEnvironment, codexGitCommand, agentDatabaseCommand, agentEnvCommand,

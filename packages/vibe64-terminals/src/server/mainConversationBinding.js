@@ -700,16 +700,25 @@ function codexContextRefreshPending(session = {}) {
 
 // The existing Claude owner shares this application policy across its retained entries.
 // Main/scoped/renewal predicates remain the original distinct rules.
-export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged }) {
+export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming = () => {} }) {
   const error = claudeConversationError;
   const ENGINE = "claude";
   const text = value => String(value ?? "").trim();
-  async function prepareMessage(entry, input, { context: ctx, message, steering, renewal }) {
+  async function prepareMessage(entry, input, { context: ctx, message, steering, renewal, deliveryTiming }) {
     if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.");
+    // JSKIT's delivery observer records these marks when it supplies one.
+    const started = performance.now();
+    const stages = {};
+    const mark = stage => {
+      if (deliveryTiming) deliveryTiming(stage);
+      else stages[stage] = Math.round(performance.now() - started);
+    };
     const learningRoot = await learningSessionExecutionRoot(ctx.runtime, ctx.sessionId);
+    if (!deliveryTiming) mark("learning-root");
     if (!ctx.assistantScope && !entry.profile && !learningRoot) {
       const actor = await recordGitActor({ env, overwrite: !steering, reason: "agent-message", runtime: ctx.runtime,
         session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
+      mark("git-actor");
       if (actor?.ok === false) throw error(actor.error, actor.code);
     }
     let prompt = message;
@@ -718,7 +727,9 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
       !text(ctx.session?.metadata?.renewal_handover_delivered_at);
     if (!renewal && entry.main && !/^\/goal(?:\s|$)/u.test(message) && (needsOpeningPrompt || input.genesisTask)) {
       prompt = (await ctx.runtime.renderPrompt(ctx.sessionId, { input, request: message, task: input.genesisTask || "start" }))?.prompt || message;
+      mark("genesis-rendered");
     }
+    if (!deliveryTiming) onTiming({ sessionId: ctx.sessionId, messageId: input.messageId, stages, elapsedMs: Math.round(performance.now() - started) });
     // The attachment owner already added validated paths to the prompt.
     if (input.attachments?.length && (entry.profile || ctx.assistantScope)) {
       throw error("These attachments cannot be passed to Claude.");
@@ -1036,6 +1047,8 @@ export function createMainConversationBinding(store, sessionId, context) {
       readConversationLog: () => store.readConversationLog(sessionId),
       readConversationLogPage: query => store.readConversationLogPage(sessionId, query),
       hasMessage: (messageId) => store.conversationMessageIdExists(sessionId, messageId),
+      ...(store.findSubmittedConversationTurn ? { findSubmittedTurn: (messageId) => store.findSubmittedConversationTurn(sessionId, messageId) } : {}),
+      ...(store.readConversationLogTurn ? { readTurn: (turnId) => store.readConversationLogTurn(sessionId, turnId) } : {}),
       async writeUserMessage(message) {
         const current = context.readSession ? await context.readSession() : context.session;
         return store.writeConversationUserMessage(sessionId, {
