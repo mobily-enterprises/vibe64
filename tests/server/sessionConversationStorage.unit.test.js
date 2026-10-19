@@ -99,14 +99,14 @@ test("a missing transcript read remains a valid snapshot when its first record i
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
   const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
-  const realReadFile = fs.readFile;
+  const realOpen = fs.open;
   let intercepted = false;
   let saved;
-  fs.readFile = async (target, ...options) => {
-    if (target !== file || intercepted) return realReadFile(target, ...options);
+  fs.open = async (target, ...options) => {
+    if (target !== file || intercepted) return realOpen(target, ...options);
     intercepted = true;
     try {
-      return await realReadFile(target, ...options);
+      return await realOpen(target, ...options);
     } catch (error) {
       assert.equal(error.code, "ENOENT");
       saved = await f.store.writeConversationUserMessage("one", { text: "First receipt", messageId: "first-receipt" });
@@ -116,13 +116,41 @@ test("a missing transcript read remains a valid snapshot when its first record i
   syncBuiltinESMExports();
   try {
     assert.deepEqual(await f.store.readConversationLog("one"), []);
-  } finally { fs.readFile = realReadFile; syncBuiltinESMExports(); }
+  } finally { fs.open = realOpen; syncBuiltinESMExports(); }
   assert.equal(intercepted, true);
   const turns = await f.store.readConversationLog("one");
   assert.equal(turns.length, 1);
   assert.equal(turns[0].turnId, saved.turnId);
   assert.equal(turns[0].user.messageId, "first-receipt");
   assert.equal(turns[0].user.text, "First receipt");
+});
+
+test("unchanged transcripts are parsed once, written compactly and reread after an external change", async t => {
+  const f = await fixture(t);
+  await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
+  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
+  await f.store.writeConversationUserMessage("one", { text: "First", messageId: "first" });
+  const text = await readFile(file, "utf8");
+  assert.equal(text.includes("\n  "), false, "The transcript is compact JSON.");
+  assert.equal(JSON.parse(text).turns.length, 1);
+  const realParse = JSON.parse;
+  let transcriptParses = 0;
+  JSON.parse = (source, ...rest) => {
+    if (typeof source === "string" && source.startsWith('{"version":1')) transcriptParses += 1;
+    return realParse(source, ...rest);
+  };
+  try {
+    for (let index = 0; index < 3; index += 1) assert.equal((await f.store.readConversationLog("one")).length, 1);
+    assert.equal(await f.store.conversationMessageIdExists("one", "first"), true);
+    assert.equal(await f.store.conversationMessageIdExists("one", "missing"), false);
+    assert.equal(transcriptParses, 0, "The writer's record serves later reads.");
+    const changed = realParse(text);
+    changed.turns[0][1].messages[0].text = "Edited elsewhere";
+    await writeFile(file, JSON.stringify(changed));
+    assert.equal((await f.store.readConversationLog("one"))[0].user.text, "Edited elsewhere");
+    await f.store.readConversationLog("one");
+    assert.equal(transcriptParses, 1);
+  } finally { JSON.parse = realParse; }
 });
 
 test("an existing empty transcript is rejected as corrupt storage", async t => {

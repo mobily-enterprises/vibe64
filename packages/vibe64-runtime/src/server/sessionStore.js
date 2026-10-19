@@ -430,7 +430,11 @@ async function writeTextFile(filePath, text) {
   });
   try {
     await writeFile(tempPath, String(text), "utf8");
+    // Rename keeps this inode and modification time, so the result names the
+    // published file exactly.
+    const identity = fileIdentity(await stat(tempPath, { bigint: true }));
     await rename(tempPath, filePath);
+    return identity;
   } catch (error) {
     await rm(tempPath, {
       force: true
@@ -441,6 +445,54 @@ async function writeTextFile(filePath, text) {
 
 async function writeJsonFile(filePath, value) {
   await writeTextFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function fileIdentity(stats) {
+  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`;
+}
+
+// Parsed files reused while their identity is unchanged. Every writer here
+// publishes by rename, which gives the file a new inode; another writer
+// changes at least its size or modification time. Callers must not mutate the
+// shared parsed value.
+function createParsedFileCache(limit) {
+  const entries = new Map();
+  function remember(filePath, identity, value) {
+    entries.delete(filePath);
+    entries.set(filePath, { identity, value });
+    if (entries.size > limit) entries.delete(entries.keys().next().value);
+    return value;
+  }
+  return Object.freeze({
+    remember,
+    async read(filePath, parse) {
+      const handle = await open(filePath, "r");
+      try {
+        const identity = fileIdentity(await handle.stat({ bigint: true }));
+        const cached = entries.get(filePath);
+        if (cached?.identity === identity) return remember(filePath, identity, cached.value);
+        return remember(filePath, identity, parse(await handle.readFile("utf8")));
+      } finally {
+        await handle.close();
+      }
+    }
+  });
+}
+
+const conversationRecordCache = createParsedFileCache(8);
+const agentRunFileCache = createParsedFileCache(256);
+const conversationMessageIds = new WeakMap();
+
+function conversationRecordHasMessage(record, messageId) {
+  let ids = conversationMessageIds.get(record);
+  if (!ids) {
+    ids = new Set();
+    for (const turn of record.turns.values()) {
+      for (const message of turn.messages) if (message.messageId) ids.add(message.messageId);
+    }
+    conversationMessageIds.set(record, ids);
+  }
+  return Boolean(messageId) && ids.has(messageId);
 }
 
 async function runCommand(command, args = [], {
@@ -2308,12 +2360,20 @@ function createVibe64SessionStore({
 
   async function readAgentRunFromPath(sessionPaths, runId) {
     const normalizedRunId = assertSafeAgentRunId(runId);
-    const runText = await readTextIfExists(agentRunFilePath(sessionPaths, normalizedRunId));
-    if (!runText) {
+    let record;
+    try {
+      // Every session read lists every run; reuse unchanged parsed records.
+      record = await agentRunFileCache.read(agentRunFilePath(sessionPaths, normalizedRunId), (text) => text ? JSON.parse(text) : null);
+    } catch (error) {
+      if (isMissingPathError(error)) return null;
+      if (!(error instanceof SyntaxError)) throw error;
+      record = undefined;
+    }
+    if (record === null) {
       return null;
     }
     try {
-      const record = JSON.parse(runText);
+      if (record === undefined) throw new SyntaxError();
       return conversationAgentRunRecord(record, normalizedRunId, {
         normalizeState: normalizeVibe64AgentRunState,
         isActive: vibe64AgentRunStateIsActive
@@ -2732,6 +2792,11 @@ function createVibe64SessionStore({
     try { value = JSON.parse(source); } catch {
       throw vibe64Error("Conversation storage is not valid JSON. Restore it before continuing.", "vibe64_invalid_conversation_storage");
     }
+    return validateConversationDocument(value);
+  }
+
+  function validateConversationDocument(value) {
+    const turnIds = Array.isArray(value?.turns) ? new Set(value.turns.map((entry) => entry?.[0])) : new Set();
     if (value?.version !== 1 || !isPlainObject(value.metadata) || !Array.isArray(value.rewound) || !Array.isArray(value.turns) ||
         value.turns.some((entry) => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(entry[0]) ||
           !isPlainObject(entry[1]) || !Array.isArray(entry[1].messages) ||
@@ -2739,8 +2804,8 @@ function createVibe64SessionStore({
           entry[1].messages.some((message) => !isPlainObject(message) || !CONVERSATION_MESSAGE_ROLES.includes(message.role) ||
             typeof message.text !== "string" || typeof message.at !== "string" || !Number.isFinite(Date.parse(message.at)) ||
             (message.messageId !== undefined && typeof message.messageId !== "string"))) ||
-        new Set(value.turns.map(([id]) => id)).size !== value.turns.length ||
-        value.rewound.some((id) => !value.turns.some(([turnId]) => turnId === id))) {
+        turnIds.size !== value.turns.length ||
+        value.rewound.some((id) => !turnIds.has(id))) {
       throw vibe64Error("Conversation storage has an unsupported or damaged format. Restore it before continuing.", "vibe64_invalid_conversation_storage");
     }
     return { metadata: value.metadata, rewound: value.rewound, turns: new Map(value.turns) };
@@ -2748,7 +2813,7 @@ function createVibe64SessionStore({
 
   async function readConversationRecord(sessionPaths) {
     try {
-      return parseConversationRecord(await readFile(path.join(sessionPaths.conversationLogRoot, "transcript.json"), "utf8"));
+      return await conversationRecordCache.read(path.join(sessionPaths.conversationLogRoot, "transcript.json"), parseConversationRecord);
     } catch (error) {
       if (!isMissingPathError(error)) throw error;
     }
@@ -2768,12 +2833,19 @@ function createVibe64SessionStore({
       async readRecord() { record = await readConversationRecord(sessionPaths); return record; },
       async writeRecord(_scope, next) {
         const document = conversationRecordJson(next);
-        parseConversationRecord(JSON.stringify(document));
-        await writeJsonFile(path.join(sessionPaths.conversationLogRoot, "transcript.json"), document);
+        validateConversationDocument(document);
+        // Compact JSON: every reader parses it, and pretty printing a long
+        // transcript on each update costs more than the rest of the write.
+        const filePath = path.join(sessionPaths.conversationLogRoot, "transcript.json");
+        const identity = await writeTextFile(filePath, `${JSON.stringify(document)}\n`);
+        // JSKIT's write owns this draft and no longer changes it.
+        conversationRecordCache.remember(filePath, identity, { metadata: next.metadata, rewound: next.rewound, turns: next.turns });
       }
     });
     return storage[write ? "write" : "read"](sessionPaths.conversationLogRoot, (transaction) => callback({
       ...transaction,
+      // A read sees the saved record unchanged, so its message index applies.
+      ...(write ? {} : { async hasMessage(id) { return conversationRecordHasMessage(record, id); } }),
       async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
       async readTurn(id) {
         const turn = await transaction.readTurn(id);

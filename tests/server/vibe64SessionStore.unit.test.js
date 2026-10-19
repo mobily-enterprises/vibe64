@@ -447,6 +447,32 @@ for (const writeMethod of ["writeMetadataValue", "writeMetadataValueForRenewal"]
   });
 }
 
+test("session reads reuse unchanged agent-run records and reread changed ones", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ sessionId: "runs" });
+    await store.writeAgentRunEvent("runs", "codex", { event: { kind: "started" }, patch: { state: "active" } });
+    const file = path.join(store.paths("runs").agentRunsRoot, "codex.json");
+    const realParse = JSON.parse;
+    let runParses = 0;
+    JSON.parse = (source, ...rest) => {
+      if (typeof source === "string" && source.includes('"events"')) runParses += 1;
+      return realParse(source, ...rest);
+    };
+    try {
+      await store.readSession("runs");
+      const parsed = runParses;
+      for (let index = 0; index < 3; index += 1) assert.equal((await store.readSession("runs")).agentRuns[0].state, "active");
+      assert.equal(runParses, parsed, "An unchanged run file is not parsed again.");
+      const saved = realParse(await readFile(file, "utf8"));
+      await writeFile(file, JSON.stringify({ ...saved, state: "completed", note: "changed elsewhere" }));
+      const [run] = (await store.readSession("runs")).agentRuns;
+      assert.equal(run.state, "completed");
+      assert.equal(run.note, "changed elsewhere");
+    } finally { JSON.parse = realParse; }
+  });
+});
+
 test("failed metadata replacement preserves the saved value and removes the incomplete file", async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);
