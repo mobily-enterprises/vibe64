@@ -61,6 +61,11 @@ Recovery delegates the saved execution ID to that same owner rather than
 requiring an entry in the restarted adapter's memory. An absent process is not
 evidence of a successful exit; missing exit status stays unknown. Observation
 failure rejects the exit wait and does not acknowledge scope cleanup.
+Each host inspection starts the privileged helper, so while the gateway's
+reported process ID still exists the adapter checks it locally each second and
+inspects through the host only every 30 seconds. A vanished process ID only
+prompts the next host inspection, which still supplies the exit evidence.
+Without a process ID it inspects through the host each second.
 Startup rejects missing execution identities and retains the gateway's failure
 receipt and retryability. Native owners may supply their existing stop reason
 and termination grace period; the gateway still proves scope cleanup.

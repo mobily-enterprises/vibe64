@@ -120,6 +120,21 @@ test("managed execution exposes bounded native startup logs and its observed pro
   assert.equal(logs.stderr.includes("earlier logs"), false);
 });
 
+test("a running native process is not re-inspected through the host every second", { timeout: 10_000 }, async t => {
+  const inspections = { live: 0, unknown: 0 };
+  for (const [name, pid] of [["live", process.pid], ["unknown", undefined]]) {
+    const f = await fixture(t, {
+      commandRunner: async () => ({ ok: true, pid, execution: { id: `observation-${name}` } }),
+      inspectExecution: async () => { inspections[name] += 1; return { ok: true, running: true }; },
+      stopExecution: async () => ({ scopeEmpty: true })
+    });
+    await f.start();
+  }
+  await new Promise(resolve => setTimeout(resolve, 2_500));
+  assert.equal(inspections.live, 1);
+  assert.ok(inspections.unknown >= 2, "Without a process ID the host remains the only exit observation.");
+});
+
 test("startup failures keep the host receipt and retry policy and require an execution identity", async t => {
   for (const result of [
     { ok: false, output: " host capacity is busy ", code: "vibe64_opencode_start_failed", execution: { admitted: false }, retryable: true },

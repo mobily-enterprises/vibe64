@@ -10,6 +10,19 @@ import { runVibe64Command } from "./runVibe64Command.js";
 import { inspectVibe64Service, stopVibe64Execution } from "./managedExecution.js";
 
 const bridgePath = fileURLToPath(new URL("./engines/stdioBridge.js", import.meta.url));
+// Each inspection starts a privileged host helper. While the observed process
+// ID still exists, rely on that local check and inspect only this often.
+const INSPECTION_FALLBACK_MS = 30_000;
+
+function processExists(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
 
 /** Common native-conversation execution facility backed by Vibe64's policy gateway. */
 export function createVibe64ConversationExecution({
@@ -55,7 +68,9 @@ export function createVibe64ConversationExecution({
             ...(status.taskLimit ? { taskLimit: status.taskLimit } : {}) });
           return;
         }
-        await delay(1_000, undefined, { signal: entry.observation.signal });
+        const inspectBy = Date.now() + INSPECTION_FALLBACK_MS;
+        do await delay(1_000, undefined, { signal: entry.observation.signal });
+        while (processExists(entry.pid) && Date.now() < inspectBy);
       }
     } catch (error) {
       if (entry.observation.signal.aborted) return;
@@ -106,7 +121,7 @@ export function createVibe64ConversationExecution({
           throw error;
         }
         id = result.execution.id;
-        const entry = { root, socket: null, stopping: null, running: true,
+        const entry = { root, pid: result.pid, socket: null, stopping: null, running: true,
           observation: new AbortController(), exit: Promise.withResolvers() };
         // Startup can fail before the driver has received its handle.
         entry.exit.promise.catch(() => {});
