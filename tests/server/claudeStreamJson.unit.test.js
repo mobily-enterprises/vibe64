@@ -18,7 +18,6 @@ import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
-import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";

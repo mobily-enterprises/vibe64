@@ -23,7 +23,7 @@ function bridgeFrame({ fetchResult } = {}) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
     },
-    fetch: async (input, init = {}) => {
+    fetch: async (input) => {
       if (fetchResult instanceof Error) throw fetchResult;
       return fetchResult ?? { status: 400, statusText: "Bad Request", url: String(input?.url || input),
         headers: { get: () => "application/json" }, clone() { return { headers: this.headers, body: null, text: async () => "{\"error\":\"secret body\"}" }; } };

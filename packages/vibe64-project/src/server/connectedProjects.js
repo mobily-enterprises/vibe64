@@ -28,6 +28,7 @@ function normalizeConnectedProjects(value) {
     if (!isPlainObject(entry) || Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
       invalid("Each project must contain name, repository and relationship, with optional type and script.");
     }
+    // eslint-disable-next-line no-control-regex -- Display names must stay on one line without ASCII control characters.
     if (typeof entry.name !== "string" || !entry.name.trim() || entry.name.length > 100 || /[\x00-\x1f\x7f]/u.test(entry.name)) {
       invalid("Each project needs a name of 1–100 characters on one line.");
     }
@@ -44,6 +45,7 @@ function normalizeConnectedProjects(value) {
       invalid(`Type must be ${connectedPackageTypeListText()}, or omitted to use the consuming Stack default.`);
     }
     if (entry.script !== undefined && (typeof entry.script !== "string" || !entry.script.trim() || entry.script.length > 1024 ||
+        // eslint-disable-next-line no-control-regex -- Script paths must exclude ASCII control characters.
         /[\\:\x00-\x1f\x7f]/u.test(entry.script) ||
         entry.script.split("/").some(part => ["", ".", "..", ".git"].includes(part.toLowerCase())))) {
       invalid("Script must be a project-relative path outside .git, without absolute paths or traversal.");

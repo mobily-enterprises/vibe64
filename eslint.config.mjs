@@ -16,7 +16,9 @@ export default [
       ".vibe64/sessions/**",
       ".vibe64/runtime/**",
       ".ai[-]studio/sessions/**",
-      ".ai[-]studio/runtime/**"
+      ".ai[-]studio/runtime/**",
+      // Practical-lesson starter apps are deliberately incomplete learner code.
+      "tests/fixtures/training/*/app/**"
     ]
   },
   {
