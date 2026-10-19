@@ -928,7 +928,7 @@ function useVibe64AutopilotView(props, emit, {
           ? `Update still needs attention: ${operation?.error || saveWorkError.value || "The operation failed."}`
           : "Vibe64 could not confirm this Update result. Check the session's current Update status before trying again."
     };
-    if (confirmedFailure && (saveWorkCanResolveWithTemporaryAi.value || operation?.conflictRecovery)) {
+    if (confirmedFailure && (saveWorkConflictFailure.value || operation?.conflictRecovery)) {
       const failure = saveWorkFailure.value || operation;
       const recovery = failure?.details?.conflictRecovery || operation?.conflictRecovery;
       outcome.recoveryConflictId = recovery?.reviewId || "";
@@ -1496,11 +1496,14 @@ function useVibe64AutopilotView(props, emit, {
       message: operation.error
     };
   }, { immediate: true });
-  const saveWorkCanResolveWithTemporaryAi = computed(() => [
+  // Conflicts cannot succeed by retrying; they keep their dedicated recovery.
+  const saveWorkConflictFailure = computed(() => [
     "vibe64_session_save_history_diverged",
     "vibe64_session_update_conflict",
     "vibe64_session_update_history_diverged"
   ].includes(String(saveWorkFailure.value?.code || "")));
+  // Any reported Save or Update problem can be handed to temporary AI.
+  const saveWorkCanResolveWithTemporaryAi = computed(() => Boolean(saveWorkError.value));
   const updateConflictRecovery = computed(() => {
     const recovery = saveWorkFailure.value?.details?.conflictRecovery;
     return saveWorkFailure.value?.code === "vibe64_session_update_conflict" &&
@@ -1533,7 +1536,7 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkRetryable = computed(() => Boolean(
     saveWorkError.value &&
     !saveWorkDisabled.value &&
-    !saveWorkCanResolveWithTemporaryAi.value
+    !saveWorkConflictFailure.value
   ));
 
   async function updateBeforeSave(input = {}) {

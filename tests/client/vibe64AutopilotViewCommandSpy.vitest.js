@@ -933,7 +933,7 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("<Vibe64ConversationLog")
     );
     expect(component).toContain('#error-actions');
-    expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)");
+    expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)");
     expect(composable).toContain("const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,");
     expect(composable).toContain("const result = await props.updateSessionWork(input);");
     expect(composable).toContain("const saveWorkUnsaved = computed");

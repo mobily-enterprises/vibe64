@@ -5,11 +5,20 @@ are separate operations. A different session has its own worktree. Check which
 project, session and branch you are using before saving or creating a pull request.
 
 Open **Changes** in Dashboard to inspect the work. Use the session's **Save**
-control for its native review and save workflow. Managed Vibe64 Git saves a version;
+control for its native review and save workflow. When the selected session has
+unsaved changes, the **Save** button is red, matching the red save icon on that
+session's tab. Managed Vibe64 Git saves a version;
 GitHub workflows use your repository permissions and the project's direct-push or
 pull-request policy. **Update this session (rebase)** reconciles newer saved project
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain publication needs a state check before another request.
+
+Whenever Save or Update reports a problem, its activity panel offers **Fix it with
+AI**, which opens a temporary repair chat with the exact error and asks it to
+preserve all work. Ordinary failures also keep **Retry**; conflicts and diverged
+history offer only the repair, because retrying alone cannot succeed. Review the
+repair's result, then retry the operation. Selecting the button requires the
+person's interaction; Colleague can explain it.
 
 For Genesis projects, Save checks the selected Stack contracts before asking the
 assistant to name the version. If it reports a missing **Connected development**
