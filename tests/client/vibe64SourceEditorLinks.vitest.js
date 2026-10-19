@@ -4,6 +4,7 @@ import {
   parseLongTextInlineParts
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
+  markdownDocumentLinkTarget,
   sourceEditorLinkTarget
 } from "../../src/lib/vibe64SourceEditorLinks.js";
 
@@ -104,5 +105,18 @@ describe("source editor chat links", () => {
       href: "/tmp/session/root/src/app.js:12",
       text: "app.js"
     })).toBeNull();
+  });
+});
+
+describe("links inside a rendered Markdown file", () => {
+  it("opens files relative to the document or the source root, never outside the tree", () => {
+    expect(markdownDocumentLinkTarget("docs/guide/intro.md", "setup.md")).toBe("docs/guide/setup.md");
+    expect(markdownDocumentLinkTarget("docs/guide/intro.md", "./setup.md#install")).toBe("docs/guide/setup.md");
+    expect(markdownDocumentLinkTarget("docs/guide/intro.md", "../../README.md")).toBe("README.md");
+    expect(markdownDocumentLinkTarget("docs/guide/intro.md", "/src/app%20main.js")).toBe("src/app main.js");
+    expect(markdownDocumentLinkTarget("README.md", "../secret.txt")).toBe("");
+    for (const href of ["#install", "https://example.test/", "mailto:a@example.test", "javascript:alert(1)", ""]) {
+      expect(markdownDocumentLinkTarget("README.md", href)).toBe("");
+    }
   });
 });

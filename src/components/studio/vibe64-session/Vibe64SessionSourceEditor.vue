@@ -31,7 +31,8 @@
           {{ selectedFileName }}
         </h2>
       </div>
-      <v-btn v-if="editor.selectedPath.value && !lessonScoped" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
+      <v-btn v-if="editor.selectedPath.value && markdownRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
+      <v-btn v-else-if="editor.selectedPath.value && !lessonScoped" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
       <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
         <v-btn
           :disabled="!editor.dirty.value || editor.saving.value"
@@ -507,6 +508,17 @@
             </template>
           </Vibe64SourceInterface>
           <div
+            v-if="editor.selectedPath.value && !editor.loadingFile.value && filePresentation === 'rendered'"
+            class="vibe64-source-editor__markdown"
+            aria-label="Formatted document"
+            tabindex="0"
+          >
+            <!-- Links are handled here so they cannot navigate the editor itself. -->
+            <div @click="openMarkdownLink">
+              <GithubMarkdown :html="renderedMarkdownHtml" />
+            </div>
+          </div>
+          <div
             v-if="imagePreviewUrl"
             class="vibe64-source-editor__image-preview"
             aria-label="Image preview"
@@ -710,6 +722,9 @@ import {
 } from "@mdi/js";
 
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
+import { Marked } from "marked";
+import GithubMarkdown from "@/components/studio/GithubMarkdown.vue";
+import { markdownDocumentLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { useVibe64SystemGraph } from "@local/vibe64-system-graph/client";
 import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
@@ -857,7 +872,41 @@ function presentInterfaceSymbol(presentation, force = false) {
   if (!force && currentInterpretation('selection', symbol.id, presentation)) return;
   void editor.explainSelection({ scope: 'selection', symbolId: symbol.id, presentation, force, expectedHash: editor.savedHash.value, startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column });
 }
-watch(editor.selectedPath, () => { filePresentation.value = props.codeFocusMode || props.lessonScoped || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value ? 'code' : 'interface'; interfaceSymbolId.value = ''; symbolPresentation.value = 'description'; });
+// The file browser opens Markdown formatted; the header switches to its source.
+// GithubMarkdown sanitizes the HTML against its allowlist before display.
+// Embedded single-file views keep Interface/Code, which their host records.
+const markdownRenderable = computed(() => !props.singleFile && !props.lessonScoped && sourceEditorPathIsMarkdown(editor.selectedPath.value));
+const markdownRenderer = new Marked({
+  async: false,
+  gfm: true,
+  walkTokens(token) {
+    // Images in the document load from this session's files, like the image preview.
+    const path = token.type === 'image' && markdownDocumentLinkTarget(editor.selectedPath.value, token.href);
+    if (path) token.href = scopedDevelopmentApiUrl(
+      vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, path),
+      props.projectSlug
+    );
+  }
+});
+const renderedMarkdownHtml = computed(() => filePresentation.value === 'rendered' ? markdownRenderer.parse(editor.text.value) : '');
+watch(editor.selectedPath, () => {
+  const codeRequested = props.codeFocusMode || props.lessonScoped || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value;
+  filePresentation.value = codeRequested ? 'code' : markdownRenderable.value ? 'rendered' : 'interface';
+  interfaceSymbolId.value = ''; symbolPresentation.value = 'description';
+});
+function openMarkdownLink(event) {
+  const anchor = event.target?.closest?.('a[href]');
+  if (!anchor) return;
+  // Links must not navigate the editor page itself.
+  event.preventDefault();
+  const target = anchor.getAttribute('href').trim();
+  if (/^(?:https?:|mailto:)/iu.test(target)) {
+    globalThis.open?.(target, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  const path = markdownDocumentLinkTarget(editor.selectedPath.value, target);
+  if (path) void editor.openFile(path);
+}
 watch([interfaceSymbols, interfaceCurrent, () => props.openRequest], () => {
   if (props.openRequest?.path !== editor.selectedPath.value || !interfaceCurrent.value) return;
   const requested = interfaceSymbols.value.find(symbol => symbol.id === props.openRequest.symbolId || (props.openRequest.symbol && (symbol.qualifiedName === props.openRequest.symbol || symbol.name === props.openRequest.symbol)));
@@ -2102,6 +2151,19 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__workspace--with-explanation {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 27rem);
+}
+
+.vibe64-source-editor__markdown {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  padding: 1rem 1.25rem 2rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-source-editor__markdown > * {
+  max-inline-size: 52rem;
 }
 
 .vibe64-source-editor__image-preview {

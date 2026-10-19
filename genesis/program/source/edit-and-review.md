@@ -769,6 +769,16 @@ preferred file-list width and clamps it to leave room for the difference without
 discarding that preference when the pane narrows. Narrow panes stack the list
 above the difference. Resizing preserves the selected file and mounted diff.
 
+Files opens Markdown (`.md`, `.markdown`, todo files) in a formatted `rendered`
+presentation; its header switches between **Rendered** and **Markdown** (the
+CodeMirror source). `marked` (GFM) converts the current editor text, including
+unsaved edits, and the existing `GithubMarkdown` component sanitizes that HTML
+with its DOMPurify allowlist. Clicks are intercepted: web and mail links open a
+new tab, and `markdownDocumentLinkTarget` resolves other links relative to the
+document without leaving the source tree. Project images load through the source
+download route. Learning-scoped and embedded single-file views keep
+Interface/Code, whose presentation their host records.
+
 ## Implementation map
 
 - The source-editor service owns explanation cache lookup, temporary conversation

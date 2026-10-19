@@ -110,6 +110,29 @@ function sourceEditorLinkTarget({
   };
 }
 
+// A link inside a Markdown document names another file relative to that
+// document, or to the source root when it starts with "/". It never leaves the
+// source tree; external URLs, other schemes and in-page anchors return "".
+function markdownDocumentLinkTarget(documentPath = "", href = "") {
+  const [linkPath] = String(href || "").trim().split(/[?#]/u);
+  if (!linkPath || /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(linkPath)) {
+    return "";
+  }
+  const base = linkPath.startsWith("/") ? [] : String(documentPath || "").split("/").slice(0, -1);
+  const parts = [];
+  for (const part of [...base, ...safeDecodePath(linkPath).split("/")]) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (!parts.length) return "";
+      parts.pop();
+    } else {
+      parts.push(part);
+    }
+  }
+  return parts.join("/");
+}
+
 export {
+  markdownDocumentLinkTarget,
   sourceEditorLinkTarget
 };

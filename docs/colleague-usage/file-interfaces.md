@@ -3,6 +3,19 @@
 See [Where Architecture explanations come from](architecture-explanations.md)
 for authorship, cache ownership and freshness.
 
+## Read Markdown files formatted
+
+A Markdown file (`.md`, `.markdown`) opens formatted, as a readable document with
+headings, lists, tables, quotes and code blocks. Use the header button to switch:
+**Markdown** shows the source text for editing, and **Rendered** returns to the
+formatted document. The formatted view shows your unsaved edits too. Links to
+other files in the project open them in Files; web links open in a new browser
+tab. Images stored in the project are shown. Raw HTML in a document is limited to
+safe formatting, so scripts never run. This works the same on a phone.
+Architecture's single-file view keeps **Interface** and **Code**.
+
+## Read a source file's interface
+
 Open **Dashboard → Files → Repo**, then select a source file. The default view is
 **Interface**, showing **File exports** available from the
 project's selected language parser. Visibility follows that language's conventions.
