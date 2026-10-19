@@ -174,7 +174,7 @@
           </v-btn>
         </template>
         <template #hints>
-          <p v-if="activeTask.recentChatContext">
+          <p v-if="activeTask.recentChatContext && !activeTask.messages.length">
             Copied {{ activeTask.recentChatContext.messages.length }} messages from Main when this chat was created.
             <span v-if="activeTask.recentChatContext.truncated">Some text was omitted to fit the 64 KiB context limit.</span>
           </p>
@@ -204,8 +204,8 @@
           </div>
         </template>
         <template #composer>
-          <p v-if="activeTask.draftSaveState" class="text-caption" role="status" aria-live="polite">
-            {{ activeTask.draftSaveState === 'saving' ? 'Saving draft…' : activeTask.draftSaveState === 'saved' ? 'Draft saved' : 'Draft not saved; check the error and retry.' }}
+          <p v-if="activeTask.draftSaveState === 'failed'" class="text-caption" role="status" aria-live="polite">
+            Draft not saved; check the error and retry.
           </p>
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
@@ -381,6 +381,11 @@ const props = defineProps({
     default: "",
     type: String
   },
+  // Main has visible messages that a new temporary chat could copy.
+  mainHasMessages: {
+    default: false,
+    type: Boolean
+  },
   sessionsApiPath: {
     default: "",
     type: [String, Object, Function]
@@ -416,9 +421,23 @@ watch(() => [props.projectSlug, props.sessionId], () => {
 watch(newTaskOpen, value => {
   if (value) { includeRecentChatContext.value = false; createTaskError.value = ""; creatingTaskId.value = ""; }
 });
-function openNewTask() {
+async function openNewTask() {
   newTaskReturnsToMain.value = !activeTask.value && !hostConversation?.value?.selected;
+  if (props.mainHasMessages) {
+    newTaskOpen.value = true;
+    return;
+  }
+  // Nothing to copy: create directly, and show the dialog only for a failure.
+  includeRecentChatContext.value = false;
+  createTaskError.value = "";
+  creatingTaskId.value = "";
+  await createTask();
+  if (!createTaskError.value) return;
+  const failure = { message: createTaskError.value, taskId: creatingTaskId.value };
   newTaskOpen.value = true;
+  await nextTick();
+  createTaskError.value = failure.message;
+  creatingTaskId.value = failure.taskId;
 }
 function cancelNewTask() {
   if (creatingTask.value) return;
@@ -745,7 +764,7 @@ function showWorkspace() {
   hostConversation?.value?.close();
   if (!temporary.tasks.value.length) {
     temporary.open.value = true;
-    openNewTask();
+    void openNewTask();
     return null;
   }
   const task = temporary.showWorkspace();

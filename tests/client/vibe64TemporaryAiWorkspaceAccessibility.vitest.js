@@ -260,7 +260,8 @@ function testRenderer() {
 }
 
 function mountWorkspace(container, props, hostConversation = null, colleagueView = null) {
-  const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, props);
+  // The context-copy dialog is offered only when Main has messages to copy.
+  const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, { mainHasMessages: true, ...props });
   if (hostConversation) app.provide(VIBE64_HOST_CONVERSATION_KEY, hostConversation);
   if (colleagueView) app.provide(VIBE64_COLLEAGUE_VIEW_KEY, colleagueView);
   app.component("VAlert", defineComponent({
@@ -438,6 +439,25 @@ describe("Temporary AI recovery workspace accessibility", () => {
       await submitted;
       await nextTick();
       expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+    } finally { app.unmount(); }
+  });
+
+  it("creates directly without the context dialog when Main has no messages, showing it only for a failure", async () => {
+    const temporary = temporaryAiTestState();
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages: false });
+    try {
+      const settle = () => new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      workspace.showWorkspace();
+      await settle();
+      expect(temporary.createTask).toHaveBeenCalledWith({ includeRecentChatContext: false, taskId: "" });
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+      temporary.createTask.mockRejectedValueOnce(Object.assign(new Error("No capacity"), { taskId: "retry-me" }));
+      workspace.showWorkspace();
+      await settle();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeTruthy();
+      expect(findNode(container, node => nodeText(node) === "No capacity")).toBeTruthy();
     } finally { app.unmount(); }
   });
 

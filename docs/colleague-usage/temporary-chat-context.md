@@ -4,14 +4,17 @@ Open **Temporary AI** to create the first chat, or select **New temporary AI tas
 (the plus beside existing temporary chat tabs). Leave
 **Include recent chat context** unchecked for an empty conversation, or check it
 and select **Create chat** to copy recent context from Main in this session.
-Creating the chat sends no AI request. Enter your question and send it normally.
+When Main has no messages yet there is nothing to copy, so the chat opens
+directly without this choice; the dialog appears only if creation fails, with
+its error and **Create chat** to retry. Creating the chat sends no AI request. Enter your question and send it normally.
 The controls work the same way on desktop and compact screens.
 
 The copy contains up to forty visible user, assistant and progress messages at
 the time the server creates the chat. It includes text only, not attachment
 contents, hidden reasoning or internal role instructions. A 64 KiB text limit
-keeps the newest messages first; if text is omitted, the temporary chat displays
-that notice. Main continues independently. Later messages and edits in either
+keeps the newest messages first. Until the first message is sent, the temporary
+chat notes how many messages were copied and whether any text was omitted.
+Drafts save automatically; a note appears only if a draft could not be saved. Main continues independently. Later messages and edits in either
 conversation do not update the other. Both still work in the same session source,
 so edits made by either coding agent affect that shared working tree.
 

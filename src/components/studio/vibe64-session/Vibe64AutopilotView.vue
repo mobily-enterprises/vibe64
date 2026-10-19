@@ -632,6 +632,7 @@
         :preview-attachment-state="previewAttachmentState"
         :project-slug="projectSlug"
         :session-id="sessionId"
+        :main-has-messages="chatTurns.length > 0"
         :sessions-api-path="props.sessionsApiPath"
         :repository-busy="saveWorkOperationActive || saveWorkSending"
         :update-disabled="updateWorkDisabled"
