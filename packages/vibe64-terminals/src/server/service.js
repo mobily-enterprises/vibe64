@@ -302,6 +302,21 @@ import {
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
+
+// The runtime proved this message never reached the assistant. Say so in the
+// response, so the browser shows the failure instead of an uncertain receipt.
+// Only Vibe64's own coded failures keep their message; internal ones do not.
+function notSentDeliveryError(error, messageId) {
+  const delivery = { status: "not-sent", messageId };
+  const status = Number(error.status || error.statusCode);
+  const readable = error instanceof AppError || String(error.code || "").startsWith("vibe64_");
+  return new AppError(status >= 400 && status < 500 ? status : 422,
+    readable ? error.message : "The message was not sent because Vibe64 could not prepare it. Your chat is saved; try again.", {
+      code: readable ? error.code : "vibe64_assistant_message_not_sent",
+      details: { ...(readable && error.details && typeof error.details === "object" ? error.details : {}), delivery }
+    });
+}
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -4226,6 +4241,7 @@ function createService({
           nativeStartupStderr: error?.nativeStartupStderr,
           sessionId
         }, "Vibe64 assistant message delivery failed.");
+        if (error?.delivery === "not-sent") throw notSentDeliveryError(error, input.messageId);
         throw error;
       }
     },

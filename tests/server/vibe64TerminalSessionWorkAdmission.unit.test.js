@@ -2274,6 +2274,38 @@ test("Codex service retirement preserves an archived family before deletion and 
 });
 
 
+test("a message proven not sent returns a definite rejection so the chat shows it instead of an uncertain receipt", async t => {
+  const { AppError } = await import("@jskit-ai/kernel/server/runtime");
+  const f = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    codexAppServerProviderFactory() { assert.fail("A rejected message cannot reach a native provider"); }
+  });
+  const input = { messageId: "full-before-native", message: "Continue." };
+  let problem;
+  f.runtime.learningScope = { learnerId: "42", attemptId: "saved-attempt" };
+  f.runtime.learningTeaching = { async captureMessage() { throw problem; } };
+  const send = () => f.service.sendAgentMessage(f.session.sessionId, input, { runtime: f.runtime });
+  const delivery = { status: "not-sent", messageId: input.messageId };
+  problem = Object.assign(new Error("The assistant's memory is too full to receive this conversation."), {
+    code: "vibe64_assistant_context_full", statusCode: 409, delivery: "not-sent"
+  });
+  await assert.rejects(send(), error => {
+    assert.equal(error instanceof AppError, true);
+    assert.equal(error.status, 409);
+    assert.equal(error.code, "vibe64_assistant_context_full");
+    assert.equal(error.message, problem.message);
+    assert.deepEqual(error.details, { delivery });
+    return true;
+  });
+  problem = Object.assign(new Error("private storage path /srv/secret"), { statusCode: 500, delivery: "not-sent" });
+  await assert.rejects(send(), error => {
+    assert.equal(error.status, 422);
+    assert.equal(error.code, "vibe64_assistant_message_not_sent");
+    assert.doesNotMatch(error.message, /secret/u);
+    assert.deepEqual(error.details, { delivery });
+    return true;
+  });
+});
+
 test("Learning capture rejection retains an exact pre-admission receipt without exposing internal failures", async t => {
   const { AppError } = await import("@jskit-ai/kernel/server/runtime");
   const lock = agentWriteLockHarness();

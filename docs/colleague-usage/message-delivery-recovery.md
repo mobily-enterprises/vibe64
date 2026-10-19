@@ -16,6 +16,16 @@ and hides the previous failure controls while it is sending. If that attempt
 fails or its receipt becomes uncertain, the corresponding recovery controls
 return with its current delivery state.
 
+A message that fails before it reaches the assistant shows its error at once
+and is marked **failed**, not uncertain, for example when the assistant's memory
+is too full. Fix the cause and choose **Retry**; nothing was sent.
+
+The assistant is shown as working (the animated indicator and the **Assistant
+working** dot on a temporary chat tab) only while its turn is actually
+running. Sending, choosing a recipient, connecting and an unconfirmed delivery
+have their own labels and never show the assistant as working. **Stop** stays
+available while a request is being routed or sent.
+
 Accepted messages appear in timestamp order with the conversation, even while
 their saved history is loading. Pending, failed and uncertain messages retain
 their queue position and recovery controls. Loading older history replaces the

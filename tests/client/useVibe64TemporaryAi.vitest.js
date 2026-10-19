@@ -387,9 +387,10 @@ describe("useVibe64TemporaryAi", () => {
     mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(true);
-    expect(temporary.activeTask.value).toMatchObject({ busy: true, unread: true });
+    expect(temporary.activeTask.value).toMatchObject({ busy: true, unread: true, nativeWorking: true });
 
     const other = temporary.openTask();
+    expect(other.nativeWorking).toBe(false);
     await nextTick();
     expect(temporary.hasUnreadMessages.value).toBe(true);
     temporary.closeWorkspace();
@@ -412,6 +413,7 @@ describe("useVibe64TemporaryAi", () => {
     mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(true);
+    expect(temporary.tasks.value.find(candidate => candidate.id === task.id).nativeWorking).toBe(false);
     temporary.showWorkspace();
     await nextTick();
     expect(temporary.hasUnreadMessages.value).toBe(false);

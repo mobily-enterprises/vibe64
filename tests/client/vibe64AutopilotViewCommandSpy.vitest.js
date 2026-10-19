@@ -1084,6 +1084,9 @@ describe("Vibe64 direct session view", () => {
     const composerActions = fs.readFileSync(sharedComposerActionsPath, "utf8");
 
     expect(component).toContain(':stop-visible="agentStopVisible"');
+    // Only the live native turn can show the assistant as working; routing,
+    // sending and uncertain delivery keep Stop but never the working indicator.
+    expect(component.match(/:working="[^"]*"/gu)).toEqual([':working="agentWorking"']);
     expect(component).toContain(':stop-enabled="agentStopEnabled"');
     expect(component).toContain(':submit-aria-label="composerSubmitAriaLabel"');
     expect(component).toContain(':submit-mode="composerSubmitMode"');

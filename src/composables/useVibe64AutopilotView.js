@@ -414,6 +414,10 @@ function useVibe64AutopilotView(props, emit, {
   });
   const agentActive = computed(() => activeAgentTurn.value.active === true);
   const agentObservationLost = computed(() => activeAgentTurn.value.status === "observation_lost");
+  // The only source of the chat's working indicator: the server's live native
+  // turn. Routing, sending, uncertain delivery and connection states have their
+  // own labels and controls but can never show the assistant as working.
+  const agentWorking = computed(() => agentActive.value && !agentObservationLost.value);
   const composerConnectionStatus = computed(() => !agentActive.value && unref(assistantCanRouteChat) === true &&
     ["restricted", "unavailable", "failed"].includes(props.agentConnectionStatus)
     ? "connected" : props.agentConnectionStatus);
@@ -2286,6 +2290,7 @@ function useVibe64AutopilotView(props, emit, {
     systemReloadVersion,
     thinkingLabel,
     thinkingVisible,
+    agentWorking,
     assistantAccountMessage,
     assistantAccountUnavailable,
     connectionRecoveryVisible,

@@ -46,7 +46,7 @@
           >
             <span>{{ task.title }}</span>
             <span v-if="task.unread" class="vibe64-temporary-ai__unread" aria-hidden="true" />
-            <span v-if="task.busy" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
+            <span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
           </button>
           <v-btn
             :aria-label="`Close ${task.title}`"
@@ -149,7 +149,7 @@
         :adapter="activeTask.adapter"
         :recovery-message="activeTask.recoveryMessage"
         :routing-request="routingRequest"
-        :working="activeTask.busy && !activeTask.delivery.state.sending"
+        :working="activeTask.nativeWorking"
         :scroll-key="activeTask.id"
         :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
         @resend="sendTask(activeTask.id, { retryMessageId: $event })"

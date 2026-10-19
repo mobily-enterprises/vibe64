@@ -416,7 +416,7 @@
       <Vibe64ConversationLog
         ref="conversationView"
         :voice-runtime="props.active && !props.sessionSelectionArchived ? props.conversationRuntime : null"
-        :working="agentStopVisible"
+        :working="agentWorking"
         :integration-action-pending="props.conversationLog?.integrationActionPending"
         :integration-connections="props.conversationLog?.integrationConnections"
         :integration-action-error="props.conversationLog?.integrationActionError"
@@ -1375,6 +1375,7 @@ const {
   systemReloadVersion,
   thinkingLabel,
   thinkingVisible,
+  agentWorking,
   assistantAccountMessage,
   assistantAccountUnavailable,
   connectionRecoveryVisible,

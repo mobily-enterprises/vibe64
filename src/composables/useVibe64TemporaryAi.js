@@ -168,6 +168,11 @@ function useVibe64TemporaryAi({
           for (const field of ["routingMetadata", "purposes", "canSteer", "assistantSelection", "goal"]) {
             if (Object.hasOwn(observed, field)) update[field] = observed[field];
           }
+          // Only the server's turn report can show the assistant as working;
+          // local Send state and request fences never do.
+          if (!observed.readError && !observed.deferredReconciliation) {
+            update.nativeWorking = temporaryAiTurnIsActive(temporaryAiText(observed.status));
+          }
           const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
           // The old poll's captured turn/send fence remains product policy. A
           // pre-Send read cannot finish a newer request while preparation runs.
@@ -379,6 +384,7 @@ function useVibe64TemporaryAi({
           messages: record.messages || [],
           unread: false,
           busy: temporaryAiTurnIsActive(record.status),
+          nativeWorking: false,
           recoveryRetryKeys: record.recoveryRetryKeys || [],
           recoveryOutcome: record.recoveryOutcome === "checking" ? "unconfirmed" : record.recoveryOutcome,
           recoveryOutcomeMessage: record.recoveryOutcome === "checking"
@@ -452,6 +458,7 @@ function useVibe64TemporaryAi({
       apiPath: currentSessionsApiPath(),
       attachments: [],
       busy: false,
+      nativeWorking: false,
       completionMessage: temporaryAiText(completionMessage),
       conversationId: "",
       dedupeKey: temporaryAiText(dedupeKey),

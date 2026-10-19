@@ -1075,3 +1075,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     app.unmount();
   });
 });
+
+describe("temporary chat working indicator", () => {
+  it("shows the assistant as working only from the server's turn report", () => {
+    const component = fs.readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue", import.meta.url), "utf8");
+    expect(component.match(/:working="[^"]*"/gu)).toEqual([':working="activeTask.nativeWorking"']);
+    expect(component).toContain('<span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />');
+  });
+});
