@@ -144,6 +144,15 @@ function appendWorkspaceSetupTranscript(transcript = "", ...entries) {
   ].map((entry) => String(entry ?? "").trim()).filter(Boolean).join("\n"));
 }
 
+// One transcript line per connected checkout: updated, current or why not.
+function connectedUpdateLine({ repository = "", update = null } = {}) {
+  const name = `[Connected] ${normalizeText(repository).split("/").pop()}`;
+  if (update?.status === "updated") return `${name} updated to ${normalizeText(update.commit).slice(0, 7)}.`;
+  if (update?.status === "current") return `${name} is up to date.`;
+  if (update?.status === "skipped") return `${name} was not updated: ${normalizeText(update.reason)}`;
+  return "";
+}
+
 function stepStatus(label = "", status = "", secrets = []) {
   return `[${safeSetupLabel(label, secrets) || "Workspace preparation"}] ${status}.`;
 }
@@ -634,11 +643,13 @@ function createWorkspaceSetupRunner({
     migrationStartedAt, migrationTranscript, onProgress = null, projectContext, renewal, retry,
     runKey, runtime, session, sessionId, setup, sourcePath, stateBase
   }) {
+    let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
         if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
         const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
+        connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
         await onProgress?.("Checking connected sources");
         session = await runtime.getSession(sessionId, { inspectSource: false });
         setup = await inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
@@ -750,6 +761,7 @@ function createWorkspaceSetupRunner({
     const transcript = appendWorkspaceSetupTranscript(
       stateBase.transcript,
       attemptLabel,
+      ...connectedUpdates,
       stepStatus(currentLabel, "Running")
     );
     const state = await persist(runtime, sessionId, {

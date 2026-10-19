@@ -120,6 +120,16 @@
                 @click="retryWorkspaceSetup"
               />
               <v-list-item
+                v-if="connectedUpdateActionVisible"
+                data-vibe64-update-connected
+                min-height="48"
+                :disabled="workspaceSetupRetryDisabled"
+                :prepend-icon="mdiSourceBranchSync"
+                subtitle="Bring connected checkouts up to their branches, then prepare"
+                title="Update connected repositories"
+                @click="retryWorkspaceSetup"
+              />
+              <v-list-item
                 v-if="githubProject" min-height="48"
                 :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
                 :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
@@ -1040,6 +1050,7 @@ import {
   mdiPaperclip,
   mdiPlus,
   mdiSourcePull,
+  mdiSourceBranchSync,
   mdiWrenchOutline,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
@@ -1370,6 +1381,7 @@ const {
   updateComposerAttachments,
   updatePreviewAttachmentState,
   workspaceSetupActionVisible,
+  connectedUpdateActionVisible,
   workspaceSetupAskDisabled,
   workspaceSetupActivityKey,
   workspaceSetupCurrentLabel,

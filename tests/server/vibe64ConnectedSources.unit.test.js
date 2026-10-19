@@ -24,6 +24,9 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     let preparingSession = parent;
     let preparingProject = slug;
     let setupStarts = 0;
+    let receivingMatchesBranch = false;
+    let receivingUpdateStatus = "updated";
+    const receivingUpdates = [];
     const calls = [];
     let allowReceiver = false;
     let allowWrite = true;
@@ -102,8 +105,13 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       terminals: {
         async inspectSessionWork(id, { session }) {
           calls.push(`inspect work:${id}`);
-          return { ok: true, unsaved: false, ahead: 0,
+          return { ok: true, unsaved: false, ahead: 0, sessionMatchesCanonical: receivingMatchesBranch,
             destination: sessionRepositoryDestination(await project.readCurrentProject(), session) };
+        },
+        async updateSessionWork(id, { onRepositoryWriteAcquired }) {
+          receivingUpdates.push(id);
+          await onRepositoryWriteAcquired();
+          return { canonicalCommit: "e".repeat(40), reconciled: true, status: receivingUpdateStatus };
         },
         async saveSessionWork(id, input) {
           calls.push(`save work:${id}`);
@@ -213,6 +221,21 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal(unavailable.prepared[0].sourceReady, false);
     assert.equal(createCount, 1, "failed source remains owned by its original recovery session");
     received.sourceReady = true;
+
+    const updateOf = async () => (await prepare()).prepared[0].update;
+    assert.deepEqual(await updateOf(), { status: "skipped",
+      reason: "It has changes that are not on main yet. Save or update it from its own session." },
+      "a checkout holding work not on its branch is used as it is");
+    assert.equal(receivingUpdates.length, 0);
+    receivingMatchesBranch = true;
+    const startsBefore = setupStarts;
+    assert.deepEqual(await updateOf(), { status: "updated", commit: "e".repeat(40) });
+    assert.deepEqual(receivingUpdates, [binding.contribution.id]);
+    assert.equal(setupStarts, startsBefore + 1, "an updated checkout is rebuilt before the consumer links it");
+    receivingUpdateStatus = "already_current";
+    assert.deepEqual(await updateOf(), { status: "current", commit: "e".repeat(40) });
+    assert.equal(setupStarts, startsBefore + 1, "a checkout that was already current is not rebuilt");
+    receivingMatchesBranch = false;
 
     assert.equal(received.sessionName, "parent", "a receiving session carries its parent's name, not a random identity");
     parent.sessionName = "Payments";
@@ -351,6 +374,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     assert.equal((await prepare()).prepared[0].sessionId, successor.sessionId);
 
     const originalBindings = parent.metadata.connected_sources;
+    const setupStartsBeforeReturn = setupStarts;
     preparingProject = "library";
     preparingSession = successor;
     const returningContext = { ...context, requestMeta: { request: {
@@ -368,7 +392,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const returnedSource = sessionsByProject[slug].get(returnBinding.contribution.id);
     assert.equal(returnedSource.metadata.connected_sources, undefined);
     assert.equal(returnedSource.metadata.connected_submissions, undefined);
-    assert.equal(setupStarts, 0, "A→B→A configuration never automatically recurses into the next contribution's setup");
+    assert.equal(setupStarts, setupStartsBeforeReturn, "A→B→A configuration never automatically recurses into the next contribution's setup");
     assert.equal((await prepareReturn()).prepared[0].sessionId, returnBinding.contribution.id);
     assert.equal(createCount, 3, "retry reuses the newly reserved A contribution after acknowledgement loss");
     preparingProject = slug;

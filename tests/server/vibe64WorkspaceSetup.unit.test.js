@@ -212,7 +212,11 @@ test("a requested connected preparation returns at once and records each progres
         preparations += 1;
         await onProgress("Preparing connected projects: library (1 of 2 ready)");
         await gate;
-        return { ok: true };
+        return { ok: true, prepared: [
+          { repository: "example/jskit", update: { status: "updated", commit: "abcdef0123456789" } },
+          { repository: "example/genesis", update: { status: "current", commit: "1".repeat(40) } },
+          { repository: "example/vibe64", update: { status: "skipped", reason: "It has changes that are not on main yet." } }
+        ] };
       },
       projectService: {
         async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
@@ -237,6 +241,11 @@ test("a requested connected preparation returns at once and records each progres
     assert.equal(preparations, 1);
     assert.ok(labels.indexOf("Checking connected sources") > labels.indexOf("Preparing connected projects: library (1 of 2 ready)"),
       "the label names the access recheck after linking");
+    const transcript = (await stored()).transcript;
+    for (const line of ["[Connected] jskit updated to abcdef0.", "[Connected] genesis is up to date.",
+      "[Connected] vibe64 was not updated: It has changes that are not on main yet."]) {
+      assert.ok(transcript.includes(line), `transcript reports: ${line}`);
+    }
     assert.equal(runner.isRunning(session.sessionId), false);
     assert.equal((await stored()).status, "succeeded");
   });

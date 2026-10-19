@@ -749,6 +749,16 @@ function useVibe64AutopilotView(props, emit, {
   const workspaceSetupActionVisible = computed(() => Boolean(
     props.sourceWorkspaceAvailable && sessionId.value && workspaceSetupStatus.value !== "unconfigured"
   ));
+  // Preparation brings each connected repository up to its branch, so a
+  // consuming session offers it again under that name.
+  const connectedRepositoryCount = computed(() => {
+    try {
+      return JSON.parse(props.session?.metadata?.connected_sources || "null")?.sources?.length || 0;
+    } catch {
+      return 0;
+    }
+  });
+  const connectedUpdateActionVisible = computed(() => workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0);
   const workspaceSetupNeedsAttention = computed(() => (
     ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
   ));
@@ -2282,6 +2292,7 @@ function useVibe64AutopilotView(props, emit, {
     updateComposerAttachments,
     updatePreviewAttachmentState,
     workspaceSetupActionVisible,
+    connectedUpdateActionVisible,
     workspaceSetupAskDisabled,
     workspaceSetupActivityKey,
     workspaceSetupCurrentLabel,

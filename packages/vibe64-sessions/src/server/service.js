@@ -159,6 +159,15 @@ function sessionRuntimeOptions(terminals) {
 
 const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
 
+// The reported result of bringing one connected checkout up to date.
+function connectedUpdateOutcome(update, branch) {
+  if (update?.status === "updated" || update?.status === "current") {
+    return { status: update.status, commit: text(update.commit) };
+  }
+  if (update?.status === "skipped") return { status: "skipped", reason: text(update.reason) };
+  return { status: "skipped", reason: text(update?.error) || `It could not be updated to ${branch}.` };
+}
+
 function publicSession(session = {}, extra = {}) {
   return {
     ...session,
@@ -597,6 +606,8 @@ function createService({
       const session = await runtime.getSession(sessionId, { inspectSource: false });
       const setup = await setupRunner.start({ runtime, session });
       observeWorkspaceSetup(sessionId, setup.completion, options);
+      // A consumer reads this checkout next, so it waits for the rebuild.
+      if (options.wait) await setup.completion;
     } catch (error) {
       // Preparation cannot turn a completed repository update into a failed rebase.
       vibe64SessionDebugLog("server.sessions.workspaceSetup.afterUpdate.error", {
@@ -1028,24 +1039,40 @@ function createService({
           reservation = write.catch(() => {});
           await write;
         }
-        const result = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
+        const allocate = () => executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
           contribution: binding.contribution,
           workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId,
           sessionName: (text(session.sessionName) || sessionId).slice(0, 120)
         }, requestContext);
+        let result = await allocate();
+        let update = null;
+        if (result?.ok !== false && result?.sourceReady === true) {
+          // Bring the checkout up to its integration branch when that cannot
+          // affect anyone's work. A refusal never stops preparation; the
+          // checkout is used as it is and the outcome is reported.
+          report(`Updating connected project ${names[index]} to ${binding.contribution.integrationBranch}`);
+          try {
+            update = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.work.update",
+              { contribution: binding.contribution }, requestContext);
+          } catch (error) {
+            update = { ok: false, error: text(error?.message) };
+          }
+          if (update?.status === "updated") result = await allocate();
+        }
         remaining.delete(names[index]);
         if (remaining.size) {
           report(`Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`);
         }
-        return { repository, binding, result };
+        return { repository, binding, result, update };
       }));
       for (const [index, target] of targets.entries()) {
         preparingRepository = target.repository;
         if (allocated[index].status === "rejected") throw allocated[index].reason;
-        const { repository, binding, result } = allocated[index].value;
+        const { repository, binding, result, update } = allocated[index].value;
         if (result?.ok === false) return { ...result, prepared };
         prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: result.sessionId,
-          sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup });
+          sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup,
+          update: connectedUpdateOutcome(update, binding.contribution.integrationBranch) });
         if (result.sourceReady !== true) return {
           ok: false,
           code: "vibe64_connected_source_unavailable",
@@ -1067,6 +1094,26 @@ function createService({
       ...result, prepared,
       ...(preparingRepository ? { failedRepository: preparingRepository } : {})
     } : result;
+  }
+
+  // Brings a receiving checkout up to its integration branch through the normal
+  // Update, only when it holds nothing that is not already on that branch: no
+  // unsaved edits and no saved work still awaiting integration.
+  async function refreshConnectedContribution(session, branch) {
+    const sessionId = session.sessionId;
+    const skipped = reason => ({ ok: true, sessionId, status: "skipped", reason });
+    if (activeSaveOperations.has(sessionId) || activeUpdateOperations.has(sessionId)) {
+      return skipped("A Save or Update is already running in it.");
+    }
+    const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
+    if (work?.ok === false) return skipped(text(work.error) || "Its work could not be inspected.");
+    if (work.sessionMatchesCanonical !== true) {
+      return skipped(`It has changes that are not on ${branch} yet. Save or update it from its own session.`);
+    }
+    const updated = await service.updateSessionWork(sessionId, { connectedRefresh: true });
+    if (updated?.ok === false) return skipped(text(updated.error) || `It could not be updated to ${branch}.`);
+    return { ok: true, sessionId, status: updated.status === "already_current" ? "current" : "updated",
+      commit: text(updated.operation?.canonicalCommit || updated.canonicalCommit) };
   }
 
   async function inspectConnectedReplacement(session, input, requestContext) {
@@ -1181,6 +1228,7 @@ function createService({
         const session = await resolveConnectedSession(runtime, contribution,
           await runtime.getSession(contribution.id, { inspectSource: false }));
         if (operation === "inputs") return session;
+        if (operation === "update") return refreshConnectedContribution(session, contribution.integrationBranch);
         const work = operation === "incoming"
           ? await service.inspectIncomingContributions(session.sessionId, { id: contribution.id })
           : operation === "save"
@@ -2041,7 +2089,10 @@ function createService({
           const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, refreshedWork);
           // Keep the update active while automatic preparation is starting so
           // invalidation is presented as pending, not a manual setup failure.
-          await prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId });
+          // A connected refresh that changed nothing leaves its setup alone.
+          if (!(input.connectedRefresh === true && result.status === "already_current")) {
+            await prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId, wait: input.connectedRefresh === true });
+          }
           const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
             event: {
               kind: result.status,

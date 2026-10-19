@@ -65,6 +65,26 @@ preparation with an error and preserves both sources. Colleague can review and
 create a replacement through the same actions after an explicit request; it
 cannot silently discard or move unsaved edits.
 
+## Keeping connected repositories current
+
+Each workspace preparation of the consuming session also brings every connected
+checkout up to the latest commit of its integration branch. That happens when
+the session is created, after **Update this session (rebase)** and on **Prepare
+workspace**. A session with connected repositories also shows **Update connected
+repositories** in its session actions menu (**⋮** on a phone or narrow window).
+It runs the same preparation.
+
+A checkout is updated only when it holds nothing that is not already on its
+branch. One with unsaved edits, saved work still awaiting integration, or a Save
+or Update in progress is used as it is. The preparation output shows one line per
+repository: `[Connected] jskit updated to abc1234.`, `[Connected] genesis is up to
+date.`, or `[Connected] vibe64 was not updated:` followed by the reason.
+Preparation continues either way. To update a skipped checkout, finish or save its
+work from its own session in the receiving project, then choose **Update connected
+repositories** again. An updated checkout is prepared again before the consuming
+session links it. Colleague can run this preparation for the session on request
+and report each line; it does not resolve a skipped checkout's work.
+
 When a session has recorded submitted contributions, its normal Save checks those
 exact revisions before publishing, including when the main repository has no new
 file changes. If one is still pending, the error names the receiving repository,

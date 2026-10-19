@@ -1174,7 +1174,9 @@ describe("Vibe64 direct session view", () => {
     const preparationActions = component.slice(chatStart, activityStart);
     expect(preparationActions.match(/data-vibe64-prepare-workspace/gu)).toHaveLength(2);
     expect(preparationActions.match(/v-if="workspaceSetupActionVisible"/gu)).toHaveLength(2);
-    expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(2);
+    expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(3);
+    expect(preparationActions).toContain('v-if="connectedUpdateActionVisible"');
+    expect(composable).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");
     expect(component).not.toContain(':error-messages="composerError"');
     expect(composable).toContain("requestTemporaryAi({");
     expect(composable).not.toContain('policy: "workspace_write"');

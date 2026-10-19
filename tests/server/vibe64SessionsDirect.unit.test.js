@@ -255,6 +255,7 @@ test("sessions expose only direct chat and source actions", () => {
     "vibe64.sessions.connected.work.inputs",
     "vibe64.sessions.connected.work.incoming",
     "vibe64.sessions.connected.work.save",
+    "vibe64.sessions.connected.work.update",
     "vibe64.sessions.connected.allocate",
     ACTION_READ_CONVERSATION_CONTEXT,
     ACTION_PIN_SESSION,
