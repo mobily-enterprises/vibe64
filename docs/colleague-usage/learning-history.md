@@ -110,9 +110,11 @@ attempt still count. Only these record a pass: the automatic check run by the
 person's own action (pressing the App's control in the lesson's Preview, or
 **Check** on a code step after editing the files themselves), the server's answer
 comparison, or **Done** on a self-check step. When Colleague runs a step check,
-it can only report "not yet" or what the check found; it never records a pass,
-and it never sees or reveals choice answers. After a step passes, later answers
-or checks for it change nothing. An attempt keeps at most 64 step results; at
-that limit the owner must review it. The lesson remembers the last step and
+it only reports what the check found; nothing is saved, so it can neither record
+a pass nor use up the attempt's results. Colleague never sees or reveals choice
+answers. After a step passes, later answers or checks for it change nothing. An
+attempt keeps at most 64 step results and always keeps room for one pass of each
+step not yet passed: a "not yet" result that would use that room is shown but not
+saved, so retries never block a later pass. The lesson remembers the last step and
 scroll position across reloads. Earlier assessment-based lessons keep their
 original history and completion.

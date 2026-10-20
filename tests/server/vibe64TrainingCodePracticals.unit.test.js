@@ -41,7 +41,7 @@ async function writeTopic(root, change) {
 const codeStep = { id: "refuse-empty", title: "Refuse empty titles", body: "steps/refuse-empty.md",
   check: { kind: "auto", check: "notes-title-required", files: ["notes.mjs"] }, required: true };
 
-async function fixture(t, { check, timeoutSeconds, lessonVersion = 1 } = {}) {
+async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [codeStep] } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-code-practical-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = await writeTopic(root, async topic => {
@@ -61,7 +61,7 @@ async function fixture(t, { check, timeoutSeconds, lessonVersion = 1 } = {}) {
   await writeFile(path.join(snapshotRoot, "pin.json"), JSON.stringify(topic));
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "CODE-ONE", hash: bundle.lessons[0].hash } };
   const installed = createInstalledTrainingContent({ systemRoot });
-  const content = lessonVersion === 2 ? v2Content(installed, { steps: [codeStep] }) : installed;
+  const content = lessonVersion === 2 ? v2Content(installed, { steps }) : installed;
   const learners = createTrainingLearnerState({ systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   const reserved = await learners.reserveAttempt({ actor, expectedRevision: 0, requestId: "start", pin });
@@ -412,7 +412,8 @@ test("a v2 code step keys its ledger by the entered step and only the learner's 
   assert.deepEqual(entered.baseline.step, { stepId: "refuse-empty", enteredRevision: 0 });
   const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
   assert.equal(ledger.question, undefined);
-  assert.deepEqual(ledger.baseline, [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }]);
+  assert.deepEqual(ledger.steps, [{ stepId: "refuse-empty", enteredRevision: 0, entryStart: 0,
+    baseline: [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }] }]);
   await f.learnerSave(solved);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
   assert.equal((await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length, 1,
@@ -422,12 +423,13 @@ test("a v2 code step keys its ledger by the entered step and only the learner's 
   assert.deepEqual(direct.checkResult, { check: "notes-title-required", observationId: f.input.observationId, outcome: "passed" });
   assert.equal(direct.authorship, "learner");
   const stepProgress = path.join(f.systemRoot, "training/users/NDI/step-progress.json");
-  const byAssistant = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "colleague-check", trigger: "assistant" });
+  const byAssistant = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "colleague-check",
+    context: { channel: "automation" } });
   assert.equal(byAssistant.outcome, "passed");
   assert.equal(byAssistant.recorded, false, "an assistant-triggered check never writes a pass");
   await assert.rejects(readFile(stepProgress), { code: "ENOENT" });
   assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.completed, false);
-  const byLearner = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", trigger: "learner" });
+  const byLearner = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", context: { channel: "api" } });
   assert.deepEqual({ outcome: byLearner.outcome, recorded: byLearner.recorded }, { outcome: "passed", recorded: true });
   const saved = JSON.parse(await readFile(stepProgress, "utf8")).attempts[0].results[0];
   assert.equal(saved.origin, "check");
@@ -446,8 +448,65 @@ test("another writer in a v2 step's file breaks its chain: an automatic not pass
   assert.match(missing.reason, /this step has no recorded starting files/u);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
   await writeFile(f.learnerFile, solved);
-  const result = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", trigger: "learner" });
+  const result = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", context: { channel: "api" } });
   assert.deepEqual({ outcome: result.outcome, recorded: result.recorded }, { outcome: "not-yet-passed", recorded: true });
   assert.equal(result.reason, "needs an independent attempt: other edits detected in notes.mjs");
   assert.equal(f.calls.length, 0, "a broken chain never executes code");
+});
+
+// Code already present when a code step is first entered (written by the
+// coding agent, Colleague, Git or an earlier step) is the step's starting
+// point, never the learner's work for it.
+test("a v2 code step never passes on code written before it was entered; the learner must change each declared file", async t => {
+  const f = await fixture(t, { lessonVersion: 2 });
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  await writeFile(f.learnerFile, solved);
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  const untouched = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check-1",
+    context: { channel: "api" } });
+  assert.deepEqual({ outcome: untouched.outcome, recorded: untouched.recorded }, { outcome: "not-yet-passed", recorded: true });
+  assert.match(untouched.reason, /needs your own change: edit notes\.mjs/u);
+  assert.equal(f.calls.length, 0, "an unchanged file never executes code");
+  await f.learnerSave(`${solved}// mine\n`);
+  const changed = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check-2",
+    context: { channel: "api" } });
+  assert.deepEqual({ outcome: changed.outcome, recorded: changed.recorded }, { outcome: "passed", recorded: true });
+});
+
+test("each v2 code step keeps the baseline of its first entry when the learner moves between code steps", async t => {
+  const second = { ...codeStep, id: "refuse-empty-again", title: "Again" };
+  const f = await fixture(t, { lessonVersion: 2, steps: [codeStep, second] });
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  const start = sha256(await readFile(f.learnerFile));
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again" });
+  await writeFile(f.learnerFile, solved);
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again" });
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  assert.deepEqual(ledger.steps.map(step => [step.stepId, step.baseline[0].sha256]), [["refuse-empty", start], ["refuse-empty-again", start]],
+    "switching steps never adopts the intervening edit as a new start");
+  for (const stepId of ["refuse-empty", "refuse-empty-again"]) {
+    const result = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId, requestId: `check-${stepId}`, context: { channel: "api" } });
+    assert.equal(result.outcome, "not-yet-passed");
+    assert.equal(result.reason, "needs an independent attempt: other edits detected in notes.mjs");
+  }
+  assert.equal(f.calls.length, 0);
+});
+
+test("a v2 step entered after earlier learner saves starts at that point and counts only later saves", async t => {
+  const second = { ...codeStep, id: "refuse-empty-again", title: "Again" };
+  const f = await fixture(t, { lessonVersion: 2, steps: [codeStep, second] });
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  await f.learnerSave(solved);
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again" });
+  const learner = { context: { channel: "api" } };
+  assert.equal((await steps.runCheck({ ...learner, actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "first" })).outcome, "passed");
+  const again = await steps.runCheck({ ...learner, actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again", requestId: "second-1" });
+  assert.match(again.reason, /needs your own change/u, "the first step's save is the second step's starting point");
+  await f.learnerSave(`${solved}// again\n`);
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  assert.equal(ledger.entries.length, 2, "a save after a later step entry never collapses into an earlier link");
+  assert.equal((await steps.runCheck({ ...learner, actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again", requestId: "second-2" })).outcome, "passed");
 });

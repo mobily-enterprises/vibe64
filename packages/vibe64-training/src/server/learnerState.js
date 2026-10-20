@@ -109,17 +109,23 @@ const emptyActiveSchema = createSchema({
   attemptId: { ...text, nullable: true, maxLength: 36 }
 });
 
-const MAX_CODE_LEDGER_ENTRIES = 128;
+const MAX_CODE_LEDGER_ENTRIES = 256;
+const MAX_CODE_LEDGER_STEPS = 32;
+const MAX_CODE_LEDGER_BYTES = 256 * 1024;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const codeFileSchema = createSchema({ path: { ...text, maxLength: 512 }, sha256: { ...text, maxLength: 64 } });
 const codeLedgerSchema = createSchema({
   schemaVersion: version, learnerId: { ...text, maxLength: 128 }, attemptId: { ...text, maxLength: 36 },
-  // v1 code questions key on the issued question; v2 code steps key on the
-  // step and the step-progress revision at which the learner entered it.
+  // v1 code questions key on the issued question with one baseline. v2 code
+  // steps each keep their own baseline, keyed on the step and the
+  // step-progress revision at which the learner first entered it, and the
+  // index of the first save made after that entry; all saves share one log.
   question: { type: "object", required: false, schema: createSchema({ id: { ...text, maxLength: 64 },
     assessmentId: { ...text, maxLength: 64 }, issuedRevision: { ...revision, min: 1 } }) },
-  step: { type: "object", required: false, schema: createSchema({ stepId: { ...text, maxLength: 64 }, enteredRevision: revision }) },
-  baseline: list(codeFileSchema, 8),
+  baseline: { ...list(codeFileSchema, 8), required: false },
+  steps: { ...list(createSchema({ stepId: { ...text, maxLength: 64 }, enteredRevision: revision,
+    entryStart: { type: "integer", required: true, min: 0, max: MAX_CODE_LEDGER_ENTRIES },
+    baseline: list(codeFileSchema, 8) }), MAX_CODE_LEDGER_STEPS), required: false },
   entries: list(createSchema({ path: { ...text, maxLength: 512 }, baseHash: { ...text, maxLength: 64 },
     savedHash: { ...text, maxLength: 64 }, intendedHash: { ...text, maxLength: 64 },
     actorId: { ...text, maxLength: 128 }, at: { ...text, maxLength: 24 },
@@ -128,13 +134,18 @@ const codeLedgerSchema = createSchema({
 
 function validateCodeLedger(value) {
   const ledger = validateContent(codeLedgerSchema, value, "Code authorship ledger");
-  const hashes = [...ledger.baseline.map(file => file.sha256),
+  const baselines = ledger.question ? [ledger.baseline || []] : (ledger.steps || []).map(step => step.baseline);
+  const tracked = new Set(baselines.flat().map(file => file.path));
+  const hashes = [...baselines.flat().map(file => file.sha256),
     ...ledger.entries.flatMap(entry => [entry.baseHash, entry.savedHash, entry.intendedHash])];
-  if (!uuidPattern.test(ledger.attemptId) || Boolean(ledger.question) === Boolean(ledger.step) ||
-      ledger.question && (!requestPattern.test(ledger.question.id) || !idPattern.test(ledger.question.assessmentId)) ||
-      ledger.step && !idPattern.test(ledger.step.stepId) ||
-      hashes.some(hash => !sha256Pattern.test(hash)) || new Set(ledger.baseline.map(file => file.path)).size !== ledger.baseline.length ||
-      ledger.entries.some(entry => !ledger.baseline.some(file => file.path === entry.path) ||
+  if (!uuidPattern.test(ledger.attemptId) || Boolean(ledger.question) === Boolean(ledger.steps) ||
+      Boolean(ledger.question) !== Boolean(ledger.baseline) ||
+      ledger.question && (!requestPattern.test(ledger.question.id) || !idPattern.test(ledger.question.assessmentId) ||
+        ledger.entries.length > MAX_CODE_LEDGER_ENTRIES / 2) ||
+      ledger.steps && (!ledger.steps.length || new Set(ledger.steps.map(step => step.stepId)).size !== ledger.steps.length ||
+        ledger.steps.some(step => !idPattern.test(step.stepId) || step.entryStart > ledger.entries.length)) ||
+      hashes.some(hash => !sha256Pattern.test(hash)) || baselines.some(files => new Set(files.map(file => file.path)).size !== files.length) ||
+      ledger.entries.some(entry => !tracked.has(entry.path) ||
         !Number.isFinite(Date.parse(entry.at)) || new Date(entry.at).toISOString() !== entry.at)) {
     throw new Error("The code authorship ledger has an invalid identity, hash, file or record time.");
   }
@@ -206,7 +217,7 @@ function validateStepProgress(value, learnerId, progress) {
     for (const receipt of entry.receipts || []) {
       if (!idPattern.test(receipt.stepId) || receiptSteps.has(receipt.stepId) || !idPattern.test(receipt.checkId) ||
           !requestPattern.test(receipt.observationId) || ![receipt.instanceId, receipt.interactionId, receipt.requestId].every(id => uuidAnyPattern.test(id)) ||
-          receipt.sessionId !== `training-${entry.attemptId}` || !isoTime(receipt.observedAt)) {
+          !validSessionId(receipt.sessionId) || !isoTime(receipt.observedAt)) {
         throw new Error("Step receipts have an invalid step, interaction identity, session or time.");
       }
       receiptSteps.add(receipt.stepId);
@@ -216,6 +227,13 @@ function validateStepProgress(value, learnerId, progress) {
     throw new Error("Step progress exceeds its 1 MiB record limit. No result was removed or written.");
   }
   return record;
+}
+
+// Receipts bound only the session ID's format: the check runner compares it
+// with the attempt's own prepared session at use, so a later change in how
+// practice sessions are named never makes saved step progress unreadable.
+function validSessionId(sessionId) {
+  try { return assertValidVibe64SessionId(sessionId) === sessionId; } catch { return false; }
 }
 
 function lessonSteps(lesson) {
@@ -1208,7 +1226,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   // autosaves never advance the learning revision Main's writes compare against.
   // Its owner supplies the admitted question baseline and server-side saves.
   async function readCodeLedgerRecord(paths, attemptId) {
-    const value = await readRecord(paths.codeLedger);
+    const value = await readRecord(paths.codeLedger, MAX_CODE_LEDGER_BYTES);
     if (!value) return null;
     const ledger = validateCodeLedger(value);
     if (ledger.learnerId !== paths.learner.id) throw new Error("The code authorship ledger belongs to another learner.");

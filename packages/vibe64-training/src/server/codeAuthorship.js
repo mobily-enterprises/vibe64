@@ -7,6 +7,8 @@ import { canonicalJson } from "./content.js";
 const MAX_FILE_BYTES = 1024 * 1024;
 // One slot stays free so a save that cannot extend the previous entry still fits.
 const MAX_SEPARATE_ENTRIES = 127;
+// v2 code steps share one save log per attempt (the ledger holds 256).
+const MAX_SEPARATE_STEP_ENTRIES = 255;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, statusCode = 409) {
@@ -44,29 +46,44 @@ async function readDeclaredFiles(source, files) {
 // question's (v1) or entered step's (v2) baseline arrived through this learner's
 // own lesson editor saves.
 function verifyAuthorship(ledger, question, files) {
-  return verifyLedgerChain(ledger, Boolean(ledger?.question) && canonicalJson(ledger.question) === canonicalJson(questionKey(question)), files);
+  const matches = Boolean(ledger?.question) && canonicalJson(ledger.question) === canonicalJson(questionKey(question));
+  return verifyLedgerChain(matches ? ledger.baseline : null, ledger?.entries, files);
 }
 
+// v2 additionally requires that the learner's own saves changed every declared
+// file after the step was first entered: code already present at entry (from
+// the coding agent, Colleague, Git or an earlier step) is the starting point,
+// never the learner's work for this step.
 function verifyStepAuthorship(ledger, stepId, files) {
-  return verifyLedgerChain(ledger, Boolean(ledger?.step) && ledger.step.stepId === stepId, files);
+  const step = ledger?.steps?.find(value => value.stepId === stepId);
+  const verified = verifyLedgerChain(step?.baseline, ledger?.entries.slice(step?.entryStart), files);
+  if (!verified.intact) return verified;
+  const unchanged = files.filter(file => step.baseline.find(value => value.path === file.path).sha256 === file.sha256).map(file => file.path);
+  return unchanged.length ? { intact: false, files: unchanged, unchanged: true } : verified;
 }
 
-function verifyLedgerChain(ledger, matches, files) {
-  if (!ledger || !matches) {
+function verifyLedgerChain(baselineFiles, entries, files) {
+  if (!baselineFiles) {
     return { intact: false, files: files.map(file => file.path), missingBaseline: true };
   }
   const broken = [];
   for (const file of files) {
-    const baseline = ledger.baseline.find(value => value.path === file.path);
+    const baseline = baselineFiles.find(value => value.path === file.path);
     let current = baseline?.sha256;
     let intact = Boolean(baseline);
-    for (const entry of ledger.entries.filter(value => value.path === file.path)) {
+    for (const entry of entries.filter(value => value.path === file.path)) {
       if (entry.baseHash !== current || entry.savedHash !== entry.intendedHash) intact = false;
       current = entry.savedHash;
     }
     if (!intact || current !== file.sha256) broken.push(file.path);
   }
   return { intact: broken.length === 0, files: broken };
+}
+
+// Paths whose saves the ledger records: the v1 question's files, or the files
+// of every v2 code step entered so far in this attempt.
+function trackedPaths(ledger) {
+  return new Set((ledger.question ? ledger.baseline : ledger.steps.flatMap(step => step.baseline)).map(file => file.path));
 }
 
 // Training owns the authorship baseline and the save ledger for code questions.
@@ -134,24 +151,28 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     return code ? { attempt, lesson, ...code } : null;
   }
 
-  // Called when the learner enters a v2 code step. Re-entering the same step
-  // keeps its original baseline; entering another code step starts a new one.
+  // Called when the learner enters a v2 code step. Each code step keeps the
+  // baseline of its first entry for the whole attempt: returning to it, or
+  // moving between code steps, never adopts intervening edits as its start.
   async function recordStepBaseline({ actor, attemptId, stepId } = {}) {
     const open = await openCodeStep(actor, attemptId, stepId);
     if (!open) return { recorded: false };
     const { revision } = await learners.readStepProgress({ actor });
     const { ledger } = await learners.updateCodeLedger({ actor, attemptId }, async current => {
-      if (current?.step?.stepId === stepId) return null;
+      if (current?.question) throw failure("VIBE64_TRAINING_CODE_QUESTION_STALE", "This attempt records code questions, not code steps.");
+      if (current?.steps.some(step => step.stepId === stepId)) return null;
       const files = await liveFiles(open.attempt, open.files);
-      return { ledger: { step: { stepId, enteredRevision: revision },
-        baseline: files.map(file => ({ path: file.path, sha256: file.sha256 })), entries: [] } };
+      const entries = current?.entries || [];
+      return { ledger: { steps: [...(current?.steps || []), { stepId, enteredRevision: revision, entryStart: entries.length,
+        baseline: files.map(file => ({ path: file.path, sha256: file.sha256 })) }], entries } };
     });
-    return { recorded: true, step: structuredClone(ledger.step), baseline: structuredClone(ledger.baseline) };
+    const step = ledger.steps.find(value => value.stepId === stepId);
+    return { recorded: true, step: { stepId, enteredRevision: step.enteredRevision }, baseline: structuredClone(step.baseline) };
   }
 
   async function tracksLedger(actor, attemptId, current) {
     if (!current) return false;
-    if (current.step) return Boolean(await openCodeStep(actor, attemptId, current.step.stepId));
+    if (current.steps) return Boolean(await openCodeStep(actor, attemptId, current.steps[0].stepId));
     const open = await openCodeQuestion(actor, attemptId);
     return Boolean(open && canonicalJson(current.question) === canonicalJson(questionKey(open.question)));
   }
@@ -162,21 +183,23 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     const result = await learners.updateCodeLedger({ actor, attemptId }, async (current, { learnerId }) => {
       const tracking = await tracksLedger(actor, attemptId, current);
-      if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
-        throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", current.step
+      if (tracking && current.entries.length >= (current.steps ? MAX_SEPARATE_STEP_ENTRIES : MAX_SEPARATE_ENTRIES)) {
+        throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", current.steps
           ? "This code step recorded too many separate edits. Ask the lesson owner to review it."
           : "This code question recorded too many separate edits. Ask your teacher for a new question.");
       }
       const saved = await save();
       const savedPath = saved?.file?.path;
-      if (saved?.ok === false || !tracking || !current.baseline.some(file => file.path === savedPath)) return { value: saved };
+      if (saved?.ok === false || !tracking || !trackedPaths(current).has(savedPath)) return { value: saved };
       const entry = { path: savedPath, baseHash: String(input.baseHash || ""), savedHash: String(saved.file.hash || ""),
         intendedHash: sha256(Buffer.from(String(input.text ?? ""), "utf8")), actorId: learnerId,
         at: new Date().toISOString(), saves: 1 };
       const entries = current.entries;
       const last = entries.at(-1);
-      // Consecutive clean saves of one file collapse into one link of the chain.
-      if (last && last.path === entry.path && last.actorId === entry.actorId && last.savedHash === last.intendedHash &&
+      // Consecutive clean saves of one file collapse into one link of the
+      // chain, never across a later step entry (which starts at the next save).
+      const sealed = Math.max(0, ...(current.steps || []).map(step => step.entryStart));
+      if (last && entries.length > sealed && last.path === entry.path && last.actorId === entry.actorId && last.savedHash === last.intendedHash &&
           entry.baseHash === last.savedHash && entry.savedHash === entry.intendedHash) {
         Object.assign(last, { savedHash: entry.savedHash, intendedHash: entry.intendedHash, at: entry.at, saves: last.saves + 1 });
       } else {

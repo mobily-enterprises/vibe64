@@ -247,7 +247,9 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
         return result("not-yet-passed", { authorship: "other", files: checked,
           reason: authorship.missingBaseline
             ? missingBaseline
-            : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
+            : authorship.unchanged
+              ? `needs your own change: edit ${authorship.files.join(", ")} in this lesson's Code editor during this step, then Check again`
+              : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
       }
       const filesHash = sha256(canonicalJson(checked));
       await canonicalDirectory(paths.sessionRoot);

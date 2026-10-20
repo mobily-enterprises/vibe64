@@ -58,11 +58,35 @@ async function runCodeCheckObservation({ checks, context, failure, actor, attemp
   return checked;
 }
 
+// The learner's own browser reaches Learning only through the api channel;
+// Colleague's tools run on the automation channel and every server-side
+// re-entry on internal. The origin is derived here from the admitted action
+// context, never from caller input.
+function stepCheckTrigger(context) {
+  return context?.channel === "api" ? "learner" : "assistant";
+}
+
+function requireLearnerChannel(context, what) {
+  if (stepCheckTrigger(context) !== "learner") {
+    throw stepFailure(`Only the learner can ${what} in the lesson.`, "VIBE64_TRAINING_LEARNER_ONLY", 403);
+  }
+}
+
+// The choice comparator: the selection passes only when it names exactly the
+// authored answer indexes. Order is irrelevant. Same rule as contract C1's
+// installed-content comparator; the answer itself comes only from
+// content.readChoiceAnswer, never from a readLesson projection.
+function choiceMatches(answer, selected) {
+  return Array.isArray(answer) && answer.length > 0 && selected.length === answer.length &&
+    selected.every(index => answer.includes(index));
+}
+
 // Version 2 step results. Passes come only from: the automatic check runner
 // with learner-origin evidence (a browser-captured exercise interaction, or
 // learner-authored code per the authorship ledger) when the learner triggered
 // it, the choice comparator, or the learner's own self-check. A check the
-// assistant triggers records not-yet-passed or returns diagnostics only.
+// assistant triggers returns diagnostics only and records nothing, so
+// Colleague can never use up the attempt's result budget.
 // Verdicts are final: there is no rubric and no AI grader.
 function createTrainingStepChecks({ learners, content, checks, authorship, actions } = {}) {
   if (!learners?.readState || !learners?.readStepProgress || !learners?.updateStepProgress || !learners?.saveReader ||
@@ -115,12 +139,22 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
 
   // Append-only. A request ID replays its original result; a step that already
   // passed in this attempt keeps that pass and records nothing further.
-  async function record({ actor, attemptId, requestId, result, receipt, same }) {
+  // Capacity for one pass of every checkable step not yet passed is always
+  // reserved: a not-yet-passed result that would eat into it is returned but
+  // not saved, so retries never block the learner's real pass.
+  async function record({ actor, attemptId, requestId, result, receipt, same, lesson }) {
+    const checkable = (lessonSteps(lesson) || []).filter(step => step.check?.kind && step.check.kind !== "none").map(step => step.id);
     const { value } = await learners.updateStepProgress({ actor, attemptId }, async entry => {
       const existing = entry.results.find(saved => saved.requestId === requestId);
       if (existing) return { value: replayed(existing, result.stepId, same) };
-      const passed = entry.results.find(saved => saved.stepId === result.stepId && saved.outcome === "passed");
-      if (passed) return { value: { ok: true, stepId: result.stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true } };
+      const passedIds = new Set(entry.results.filter(saved => saved.outcome === "passed").map(saved => saved.stepId));
+      if (passedIds.has(result.stepId)) return { value: { ok: true, stepId: result.stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true } };
+      const outstanding = checkable.filter(id => !passedIds.has(id)).length;
+      if (result.outcome !== "passed" && entry.results.length + outstanding >= MAX_STEP_RESULTS) {
+        return { value: { ok: true, stepId: result.stepId, outcome: result.outcome, recorded: false, replayed: false,
+          ...(result.reason ? { reason: result.reason } : {}),
+          diagnostic: "Not saved: this attempt keeps its remaining history for passes. Try again when your work is ready." } };
+      }
       if (entry.results.length >= MAX_STEP_RESULTS) {
         throw stepFailure(`This attempt reached its ${MAX_STEP_RESULTS} saved step results. Its history is kept; ask the owner to review it.`,
           "VIBE64_TRAINING_STEP_RESULTS_FULL");
@@ -141,6 +175,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   // Browser only: the learner pressed the App's own control in visible Preview.
   // The receipt is learner-origin evidence; its declared check decides at once.
   async function observe({ actor, attemptId, stepId, observation, context = {}, targetInput } = {}) {
+    requireLearnerChannel(context, "record an App interaction");
     if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
     const input = validateContent(trainingStepObservationSchema, observation, "Step observation");
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
@@ -161,17 +196,19 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target, targetInput,
       attemptId, observationId, exercise: input.exercise, checkId: check.id, stepId });
     const reason = boundedReason(checked.reason);
-    return record({ actor, attemptId, requestId,
+    return record({ actor, attemptId, requestId, lesson,
       result: { stepId, kind: "auto", outcome: checked.checkResult.outcome, evidence: { checkId: check.id, observationId },
         origin: "check", ...(reason ? { reason } : {}) },
       receipt: { stepId, checkId: check.id, observationId, ...input.exercise, sessionId: target.sessionId, observedAt: new Date().toISOString() } });
   }
 
-  // Runs the step's declared check. trigger is the admitted caller channel:
-  // "learner" for the learner's own browser press, "assistant" for Colleague.
-  async function runCheck({ actor, attemptId, stepId, requestId, trigger, context = {}, targetInput } = {}) {
-    if (!["learner", "assistant"].includes(trigger) || !requestPattern.test(requestId || "")) {
-      throw stepFailure("Run a step check with a stable request ID and its admitted trigger.", "ACTION_VALIDATION_FAILED", 400);
+  // Runs the step's declared check. The trigger is derived from the admitted
+  // action channel: the learner's own browser press, or anything else
+  // (Colleague included), which only ever gets a diagnostic.
+  async function runCheck({ actor, attemptId, stepId, requestId, context = {}, targetInput } = {}) {
+    const trigger = stepCheckTrigger(context);
+    if (!requestPattern.test(requestId || "")) {
+      throw stepFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     const check = declaredCheck(lesson, step);
@@ -200,40 +237,46 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     }
     const outcome = checked.checkResult.outcome;
     const reason = boundedReason(checked.reason);
-    if (outcome === "passed" && trigger !== "learner") {
-      return { ok: true, stepId, outcome, recorded: false, replayed: false,
-        diagnostic: "The check verified this work. Only the learner's own Check in the lesson records the pass." };
+    if (trigger !== "learner") {
+      return { ok: true, stepId, outcome, recorded: false, replayed: false, ...(reason ? { reason } : {}),
+        diagnostic: outcome === "passed"
+          ? "The check verified this work. Only the learner's own Check in the lesson records the pass."
+          : "Diagnostic only: a check Colleague runs is never saved in the learner's results." };
     }
-    return record({ actor, attemptId, requestId,
+    return record({ actor, attemptId, requestId, lesson,
       result: { stepId, kind: "auto", outcome, evidence, origin: "check", ...(reason ? { reason } : {}) } });
   }
 
-  // The server comparator: the only reader of a choice step's answer.
-  async function answer({ actor, attemptId, stepId, selected, requestId } = {}) {
+  // The server comparator: the only reader of a choice step's answer, which
+  // never appears in readLesson (contract C1).
+  async function answer({ actor, attemptId, stepId, selected, requestId, context = {} } = {}) {
+    requireLearnerChannel(context, "answer a question");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Answer with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
-    const { step } = await openStep({ actor, attemptId, stepId });
+    const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind !== "choice") throw stepFailure("This step is not a choice question.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     const options = step.check.options?.length || 0;
     if (!Array.isArray(selected) || !selected.length || selected.length > options || new Set(selected).size !== selected.length ||
         selected.some(value => !Number.isSafeInteger(value) || value < 0 || value >= options)) {
       throw stepFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400);
     }
-    const expected = step.check.answer;
-    if (!Array.isArray(expected) || !expected.length) {
+    if (typeof content.readChoiceAnswer !== "function") {
       throw stepFailure("This installation cannot compare the answer for this step.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
+    const { answer: expected } = await content.readChoiceAnswer({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code,
+      lessonHash: attempt.pin.lesson.hash, stepId });
     const chosen = [...selected].sort((left, right) => left - right);
-    const outcome = canonicalJson(chosen) === canonicalJson([...expected].sort((left, right) => left - right)) ? "passed" : "not-yet-passed";
-    return record({ actor, attemptId, requestId, same: saved => canonicalJson(saved.evidence) === canonicalJson({ selected: chosen }),
+    const outcome = choiceMatches(expected, chosen) ? "passed" : "not-yet-passed";
+    return record({ actor, attemptId, requestId, lesson, same: saved => canonicalJson(saved.evidence) === canonicalJson({ selected: chosen }),
       result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" } });
   }
 
   // The learner's own self-check.
-  async function done({ actor, attemptId, stepId, requestId } = {}) {
+  async function done({ actor, attemptId, stepId, requestId, context = {} } = {}) {
+    requireLearnerChannel(context, "mark a step done");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
-    const { step } = await openStep({ actor, attemptId, stepId });
+    const { lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind !== "self") throw stepFailure("Only a self-check step can be marked done.", "VIBE64_TRAINING_CHECK_UNDECLARED");
-    return record({ actor, attemptId, requestId, result: { stepId, kind: "self", outcome: "passed", evidence: {}, origin: "learner" } });
+    return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: "self", outcome: "passed", evidence: {}, origin: "learner" } });
   }
 
   // Results of one attempt, plus the steps passed in any attempt pinned to the
@@ -257,8 +300,8 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         passed: required.filter(id => passed.has(id)).length, completed: required.every(id => passed.has(id)) } };
   }
 
-  // Entering a code step records its authorship baseline; re-entering the same
-  // step keeps it. Other steps, ended attempts and absent practice record none.
+  // Entering a code step records its authorship baseline once; every later
+  // entry keeps it. Other steps, ended attempts and absent practice record none.
   async function enterStep({ actor, attemptId, stepId } = {}) {
     if (typeof authorship?.recordStepBaseline !== "function") return { recorded: false };
     return authorship.recordStepBaseline({ actor, attemptId, stepId });
@@ -281,4 +324,4 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   return Object.freeze({ observe, runCheck, answer, done, read, enterStep, saveReader });
 }
 
-export { createTrainingStepChecks, runCodeCheckObservation, runExerciseResponseCheck };
+export { createTrainingStepChecks, runCodeCheckObservation, runExerciseResponseCheck, stepCheckTrigger };

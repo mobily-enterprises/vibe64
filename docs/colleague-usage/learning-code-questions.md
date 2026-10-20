@@ -57,11 +57,16 @@ these steps but cannot type, save or check code for you.
 ## Code steps in step-based lessons
 
 In newer, step-based lessons a code step names the files to change. Opening the
-step records their starting contents; reopening the same step keeps that start,
-while opening another code step starts a new one for that step. Only your own
-saves in **Dashboard → Files** since you opened the step count; any other change
-to a named file makes the check report "needs an independent attempt: other edits
-detected in `<file>`" without running. If the step has no recorded start, the
-check says so: open the step again, then make your change. The pass is recorded
-only when you press the step's **Check** yourself; a check Colleague runs reports
-the result without recording a pass. No explanation or grading is needed.
+step for the first time in an attempt records their starting contents; every
+code step keeps its own start for the rest of the attempt, so reopening it or
+moving between code steps never changes it. Code already in a file when you
+first opened the step (from the coding agent, Colleague, Git or an earlier step)
+is the start, not your work: you must change every named file yourself, through
+your own saves in **Dashboard → Files**, after opening the step. If you have not,
+the check reports "needs your own change: edit `<file>` …" without running. Any
+other change to a named file after that start makes it report "needs an
+independent attempt: other edits detected in `<file>`" without running. If the
+step has no recorded start, the check says so: open the step again, then make
+your change. The pass is recorded only when you press the step's **Check**
+yourself; a check Colleague runs only reports what it found and saves nothing.
+No explanation or grading is needed.

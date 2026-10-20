@@ -1276,8 +1276,11 @@ lesson learner state. New writes may add, per learner under
 per attempt at most 64 step results with request-ID replay, plus the latest
 learner-origin App receipt per step; 1 MiB bound) with its own
 `step-progress.lock`, and a last-write-wins `reader.json` with `reader.lock`.
-The code-authorship ledger may key on `{stepId, enteredRevision}` instead of a
-v1 question, and progress may retain up to 32 attempts (the 64 KiB progress bound
+The code-authorship ledger may hold, instead of a v1 question, one baseline per
+entered v2 code step (keyed on `{stepId, enteredRevision}` with the index of its
+first save) over one shared save log of at most 256 entries (256 KiB bound);
+App receipts bound only the session ID format, so practice-session naming may
+change without converting them, and progress may retain up to 32 attempts (the 64 KiB progress bound
 is unchanged). Existing schema-version-1 records stay valid and byte-for-byte
 unchanged; version 1 lessons keep their assessment completion path.
 
