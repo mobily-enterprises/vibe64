@@ -1,14 +1,15 @@
 <template>
-  <NativeProviderConnections v-if="['codex', 'claude'].includes(providerId)" :engine-id="providerId" v-model="modelProviderId" :actions-enabled="actionsEnabled" />
+  <NativeProviderConnections v-if="!embedded && ['codex', 'claude'].includes(providerId)" :engine-id="providerId" v-model="selectedModelProviderId" :actions-enabled="actionsEnabled" />
   <ProviderAccountsSetup
-    v-if="['openai', 'anthropic'].includes(modelProviderId)"
+    v-if="['openai', 'anthropic'].includes(selectedModelProviderId)"
     :accounts="accounts"
     :actions-disabled-message="actionsDisabledMessage"
     :actions-enabled="actionsEnabled"
     :account-rows="aiAccountRows"
     :back-label="backLabel"
     :continue-label="continueLabel"
-    :lede="lede"
+    :embedded="embedded"
+    :lede="embedded ? '' : lede"
     :needed-label="neededLabel"
     :ready-label="readyLabel"
     :show-continue="showContinue"
@@ -16,6 +17,7 @@
     :title="title"
     @back="emit('back')"
     @continue="emit('continue')"
+    @connected="emit('connected', $event)"
   />
 </template>
 
@@ -39,6 +41,9 @@ const props = defineProps({
     type: Object
   },
   providerId: { default: "codex", type: String },
+  // Fixed model provider for a single-purpose setup, such as onboarding.
+  modelProviderId: { default: "", type: String },
+  embedded: Boolean,
   backLabel: {
     default: "",
     type: String
@@ -69,9 +74,11 @@ const props = defineProps({
   }
 });
 
-const modelProviderId = ref("");
-watch(() => props.providerId, (id) => { modelProviderId.value = id === "claude" ? "anthropic" : "openai"; }, { immediate: true });
-const emit = defineEmits(["back", "continue"]);
+const selectedModelProviderId = ref("");
+watch(() => [props.providerId, props.modelProviderId], ([id, fixed]) => {
+  selectedModelProviderId.value = fixed || (id === "claude" ? "anthropic" : "openai");
+}, { immediate: true });
+const emit = defineEmits(["back", "continue", "connected"]);
 const accounts = useVibe64Accounts({
   client: props.accountsClient
 });

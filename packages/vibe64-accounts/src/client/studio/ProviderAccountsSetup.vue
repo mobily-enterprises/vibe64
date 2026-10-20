@@ -3,8 +3,9 @@
     <section class="accounts-setup">
       <header class="accounts-setup__header">
         <div class="accounts-setup__header-actions">
-          <h1 class="text-headline-small ma-0">{{ title }}</h1>
+          <h1 v-if="!embedded" class="text-headline-small ma-0">{{ title }}</h1>
           <v-chip
+            v-if="!embedded"
             :color="statusReady ? 'success' : undefined"
             size="small"
             variant="tonal"
@@ -32,7 +33,7 @@
             </v-btn>
           </template>
           <v-btn
-            v-if="backLabel && !authBusy"
+            v-if="backLabel && !authBusy && !embedded"
             color="primary"
             variant="text"
             @click="emit('back')"
@@ -40,7 +41,7 @@
             {{ backLabel }}
           </v-btn>
           <v-btn
-            v-if="!authBusy"
+            v-if="!authBusy && !embedded"
             :aria-busy="accountsLoading ? 'true' : undefined"
             color="primary"
             :disabled="accountsLoading"
@@ -51,7 +52,7 @@
             {{ accountsLoading ? "Refreshing…" : "Refresh" }}
           </v-btn>
           <v-btn
-            v-if="statusReady && showContinue"
+            v-if="statusReady && showContinue && !embedded"
             color="primary"
             :disabled="!accountsReadyForActions"
             variant="flat"
@@ -174,7 +175,7 @@
               {{ primaryAuthLabel(account) }}
             </v-btn>
             <v-btn
-              v-if="account.connected"
+              v-if="account.connected && !embedded"
               :aria-busy="logoutAccountId === account.id ? 'true' : undefined"
               color="error"
               variant="text"
@@ -501,6 +502,8 @@ const props = defineProps({
     default: "Continue",
     type: String
   },
+  // Inside another flow: no title, navigation, refresh or disconnect controls.
+  embedded: Boolean,
   lede: {
     default: "",
     type: String

@@ -8,6 +8,9 @@ import ModelRoutingForm from "./ModelRoutingForm.vue";
 const props = defineProps({
   actionsEnabled: { type: Boolean, default: true },
   adding: Boolean,
+  // Inside onboarding: no model chips, orchestrator note or Disconnect; the
+  // host reviews routing, so a successful save closes unless routing failed.
+  embedded: Boolean,
   engineId: { type: String, default: "codex" },
   selectProvider: { type: Boolean, default: true },
   showBack: Boolean,
@@ -55,10 +58,10 @@ async function save({ remove = false, useSavedKey = false } = {}) {
     visible.value = false;
     confirmRemove.value = false;
     emit("changed");
-    if (!remove) {
-      routingSetupError.value = result.routing?.ok === false ? result.routing.error : "";
-      routingProposal.value = true;
-    }
+    if (remove) return;
+    routingSetupError.value = result.routing?.ok === false ? result.routing.error : "";
+    if (props.embedded && !routingSetupError.value) emit("close");
+    else routingProposal.value = true;
   } catch {
     // The shared command feedback owns errors; retain the form for retry.
   }
@@ -89,10 +92,10 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         </div>
         <p class="text-body-medium mb-3">{{ provider.description }}.</p>
         <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
-        <p v-if="connectionStatus === 'connected'" class="text-body-small mb-3">
+        <p v-if="connectionStatus === 'connected' && !embedded" class="text-body-small mb-3">
           Saved for {{ engineLabel }} only. Each orchestrator has its own connection.
         </p>
-        <div class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
+        <div v-if="!embedded" class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
           <v-chip v-for="model in provider.models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>
         </div>
         <v-alert v-if="loadError" type="error" variant="tonal" class="mb-3">
@@ -118,7 +121,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
             <v-btn v-if="!adding && connectionStatus === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
             <v-btn :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
             <v-btn
-              v-if="!adding && connectionStatus !== 'not_connected'" variant="text"
+              v-if="!adding && !embedded && connectionStatus !== 'not_connected'" variant="text"
               :disabled="!actionsEnabled || busy" @click="confirmRemove = true"
             >
               Disconnect
