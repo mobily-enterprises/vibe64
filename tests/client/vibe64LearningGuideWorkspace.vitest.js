@@ -169,7 +169,9 @@ describe("one Preview | Dashboard header for Working and Learning", () => {
     expect(view.tabs().some(tab => tab.label === "Workspace")).toBe(false);
     // The teacher's guide overlay points at these real tabs by their guide ids.
     expect(view.tabs().map(tab => tab.node.props["data-vibe64-guide"])).toEqual(["preview", "dashboard", "learning"]);
-    expect(findAll(view.root, node => node.props["data-guide-overlay"] === "mounted")).toHaveLength(1);
+    // Learning v2 mounts the one guide overlay per host (App.vue / hosted
+    // AuthGate) with the Learning environment; the page no longer adds its own.
+    expect(findAll(view.root, node => node.props["data-guide-overlay"] === "mounted")).toHaveLength(0);
     expect(view.panel().props["data-learning-view"]).toBe("workspace");
 
     const event = { type: "click", isTrusted: true };

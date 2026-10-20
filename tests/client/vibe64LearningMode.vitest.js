@@ -311,3 +311,27 @@ it("refreshes a newly admitted author trial when returning from Working without 
   await mode.setLearningView("learning"); await flush();
   expect(read.mock.calls.filter(([path]) => path.endsWith("/author-preview"))).toHaveLength(1);
 });
+
+// Learning v2: the Learning environment (L) reuses these resources and
+// requests while L is open, without the route flag or its mode guard.
+it("serves the Learning environment from its open state without the route mode", async () => {
+  const active = ref(false);
+  let environment;
+  const second = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() { environment = useVibe64LearningMode({ active }); return () => null; } });
+  second.use(VueQueryPlugin, { queryClient }); second.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer); second.mount({});
+  try {
+    await flush();
+    expect(harness.guards).toHaveLength(1);
+    expect(environment.learningMode.value).toBe(false);
+    await expect(environment.startLesson(selection)).rejects.toThrow("Open Learning");
+    active.value = true;
+    await flush();
+    expect(environment.learningMode.value).toBe(true);
+    // Navigation behind L does not retire a start; L opens no teacher conversation.
+    harness.route.fullPath = "/app/project/other";
+    const outcome = await environment.startLesson(selection, { openConversation: false });
+    expect(outcome).toMatchObject({ attemptId: A, sessionId: "", current: true });
+    expect(harness.command.mock.calls.map(([path]) => path)).toEqual(["/api/vibe64/training/lessons/start"]);
+  } finally { second.unmount(); }
+});

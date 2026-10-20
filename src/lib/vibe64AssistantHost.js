@@ -30,3 +30,7 @@ export const VIBE64_TRAINING_LEARNER_GESTURE_KEY = Symbol("vibe64.training.learn
 
 // One actual general Colleague body; not Main's chat or another voice frame.
 export const VIBE64_COLLEAGUE_BODY_KEY = Symbol("vibe64.colleague.body");
+
+// The Learning environment (L) controller shared by every page of one host:
+// the L button, the L overlay and Colleague's focus and step card read it.
+export const VIBE64_LEARNING_KEY = Symbol("vibe64.learning");

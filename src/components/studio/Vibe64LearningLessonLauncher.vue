@@ -3,7 +3,19 @@ import { computed, ref, toValue, watch } from "vue";
 import { useRoute } from "vue-router";
 import TrainingLessonPicker from "@local/vibe64-training/client/lesson-picker";
 
-const props = defineProps({ learning: { type: Object, required: true } });
+const props = defineProps({
+  learning: { type: Object, required: true },
+  // In the Learning environment (L) a confirmed start or resume opens the
+  // lesson reader instead of a teacher conversation.
+  environment: Boolean
+});
+const emit = defineEmits(["opened"]);
+const conversation = computed(() => ({ openConversation: !props.environment }));
+async function opened(operation) {
+  const outcome = await request(operation);
+  if (props.environment && outcome?.attemptId && outcome.current !== false) emit("opened", outcome);
+  return outcome;
+}
 const route = useRoute();
 const error = ref("");
 const errorLearner = ref("");
@@ -48,7 +60,7 @@ async function request(operation) {
     <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="request(owner => owner.retryStart())">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="opened(owner => owner.retryStart(conversation))">
       Retry lesson start
     </v-btn>
     <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
@@ -65,7 +77,7 @@ async function request(operation) {
         <v-btn
           variant="tonal" rounded="pill" min-height="48" data-test="resume-author-trial"
           :disabled="busy || !canRequest || toValue(trialResource.isLoading) || !!toValue(trialResource.loadError)"
-          @click="request(owner => owner.resumeAuthorPreview(trial.attemptId))"
+          @click="opened(owner => owner.resumeAuthorPreview(trial.attemptId, conversation))"
         >
           Resume author trial
         </v-btn>
@@ -92,11 +104,11 @@ async function request(operation) {
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
-      @start="request(owner => owner.startLesson($event))"
-      @resume="request(owner => owner.resumeLesson($event.attemptId))"
+      @start="opened(owner => owner.startLesson($event, conversation))"
+      @resume="opened(owner => owner.resumeLesson($event.attemptId, conversation))"
       @install="request(owner => owner.installCourse($event))"
     />
-    <p class="vibe64-learning-launcher__status" role="status">
+    <p v-if="!environment" class="vibe64-learning-launcher__status" role="status">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 9h2V7h-2m1 13a8 8 0 1 1 0-16 8 8 0 0 1 0 16m0-18a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1 15h2v-6h-2v6Z" /></svg>
       You can switch back to Working without closing your lesson.
     </p>

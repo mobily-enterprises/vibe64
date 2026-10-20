@@ -1,17 +1,12 @@
 # Choosing lessons and Learning conversations
 
-Use the **L** button at the left of the app header to switch between Working and
-Learning. It is the same size as the other header icon buttons. While Learning
-is on it is a full yellow L (pressed, tooltip **Leave Learning mode**) and the
-header is tinted; in Working it is an outlined, untoggled L (tooltip **Enter
-Learning mode**). It is the first keyboard stop in the header: Enter or Space
-switches mode. In a lesson with saved practice projects, the **Practice
-project** menu sits beside it in place of Working's project switcher; on a phone
-it shrinks to its ▾ arrow. On the
-projectless app page, Working shows the original project picker; Learning shows
-installed courses without asking you to invent or choose a project; its header
-reads **Courses**. In a project
-view, the same control changes the existing session panel's purpose filter.
+The **L** button now opens the Learning environment above the current page;
+see [The Learning environment (L)](learning-environment.md). It no longer
+switches the header into Learning mode. The Learning mode described below is
+kept only for lessons opened by an earlier address (`?mode=learning`) and for
+reading earlier history; new lessons start and are read in the Learning
+environment, without a teacher conversation. Its **Courses** page is the same
+one described here.
 
 The **Courses** pane (called **Lessons** in earlier releases) opens with a
 **Courses** banner (with **Refresh courses**) and a list of course cards. Each card

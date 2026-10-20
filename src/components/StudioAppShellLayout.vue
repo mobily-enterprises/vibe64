@@ -11,21 +11,7 @@
     @touchend="endPaneSwipe"
     @touchcancel="cancelPaneSwipe"
   >
-    <v-btn
-      v-if="showLearningModeControl"
-      class="studio-app-shell-layout__learning-plate"
-      :class="{ 'studio-app-shell-layout__learning-plate--active': learningMode }"
-      aria-label="Learning mode"
-      :aria-pressed="learningMode"
-      :title="learningMode ? 'Leave Learning mode' : 'Enter Learning mode'"
-      density="comfortable"
-      icon
-      size="small"
-      :variant="learningMode ? 'flat' : 'outlined'"
-      @click="emit('update:learningMode', !learningMode)"
-    >
-      <span aria-hidden="true">L</span>
-    </v-btn>
+    <Vibe64LearningButton class="studio-app-shell-layout__learning-plate" :legacy-active="learningMode" />
     <slot name="top-left" />
     <v-spacer />
     <div class="studio-app-shell-layout__top-right">
@@ -61,6 +47,7 @@
 import { watch } from "vue";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
+import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
 const SWIPE_MIN_DISTANCE_PX = 64;
 const SWIPE_INTENT_DISTANCE_PX = 12;
@@ -71,6 +58,8 @@ const BROWSER_GESTURE_EDGE_PX = 24;
 const props = defineProps({
   mobilePaneSwipeEnabled: Boolean,
   chatCollapsed: Boolean,
+  // Retained for the legacy Learning mode callers; the L button now opens the
+  // Learning environment wherever a signed-in host binds it.
   showLearningModeControl: Boolean,
   learningMode: Boolean,
   fillViewport: Boolean
@@ -299,78 +288,7 @@ function endPaneSwipe(event) {
   background-color: var(--v64-learning-tint) !important;
 }
 
-/* The L plate: the mode switch. Off, it is a quiet outlined plate that warms
-   up on hover as a preview of the mode; on, it becomes a solid yellow learner
-   plate with a crisp ink edge, a soft glow and a small pop. Same footprint as
-   the neighbouring header icon buttons. */
-.studio-app-shell-layout__learning-plate {
-  --v64-plate-ink: #1d1600;
-  background: var(--v64-surface-container-low) !important;
-  border: 1.5px solid var(--v64-outline) !important;
-  border-radius: var(--v64-shape-sm);
-  color: var(--v64-on-surface-variant) !important;
-  flex: 0 0 auto;
-  font-family: system-ui, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 850;
-  line-height: 1;
-  margin-left: var(--v64-space-3);
-  transition:
-    background-color var(--v64-duration-short) var(--v64-ease-standard),
-    border-color var(--v64-duration-short) var(--v64-ease-standard),
-    box-shadow var(--v64-duration-medium) var(--v64-ease-standard),
-    color var(--v64-duration-short) var(--v64-ease-standard),
-    transform var(--v64-duration-short) var(--v64-ease-standard);
-}
-
-@media (hover: hover) {
-  .studio-app-shell-layout__learning-plate:hover {
-    background: var(--v64-learning-container) !important;
-    border-color: var(--v64-learning-strong) !important;
-    color: var(--v64-on-learning-container) !important;
-  }
-}
-
-.studio-app-shell-layout__learning-plate:active {
-  transform: scale(0.94);
-}
-
-.studio-app-shell-layout__learning-plate--active,
-.studio-app-shell-layout__learning-plate--active:hover {
-  animation: studio-app-shell-plate-pop var(--v64-duration-long) var(--v64-ease-emphasized-decelerate);
-  background: linear-gradient(150deg, #ffe680 0%, var(--v64-learning) 55%, #f0b400 100%) !important;
-  border-color: var(--v64-plate-ink) !important;
-  box-shadow: 0 0 0 3px var(--v64-learning-glow), var(--v64-elevation-1);
-  color: var(--v64-plate-ink) !important;
-}
-
-.studio-app-shell-layout__learning-plate:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
-  outline-offset: 3px;
-}
-
-@keyframes studio-app-shell-plate-pop {
-  0% { transform: scale(0.82) rotate(-8deg); }
-  60% { transform: scale(1.08) rotate(2deg); }
-  100% { transform: scale(1) rotate(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-app-shell-layout__learning-plate,
-  .studio-app-shell-layout__learning-plate--active {
-    animation: none;
-    transition: none;
-  }
-}
-
 @media (max-width: 600px) {
-  /* 40px touch target on phones. */
-  .studio-app-shell-layout__learning-plate {
-    height: 2.5rem;
-    margin-left: var(--v64-space-1);
-    width: 2.5rem;
-  }
-
   /* Phone bar budget: the passive realtime dot (a disabled indicator, not a
      touch target) and the account/Colleague buttons tighten so the project
      name keeps its readable minimum. */
