@@ -201,8 +201,10 @@ it("offers onboarding instead of a free starter until an AI of the person's own 
   const state = mount();
   expect(state.configuredAiGroups.map(group => group.id)).toEqual(["opencode"]);
   expect(state.hasOwnAi).toBe(false);
-  state.openOnboarding();
-  expect(mocks.requestOnboarding).toHaveBeenCalledExactlyOnceWith({ start: "choose" });
+  state.openOnboarding(false);
+  expect(mocks.requestOnboarding).toHaveBeenCalledExactlyOnceWith({ start: "choose", redo: false });
+  state.openOnboarding(true);
+  expect(mocks.requestOnboarding).toHaveBeenLastCalledWith({ start: "choose", redo: true });
   mocks.providers.connections.value = [{ id: "deepseek", connected: true, configuredEngines: ["codex"] }];
   expect(state.hasOwnAi).toBe(true);
   expect(mocks.providers.change).not.toHaveBeenCalled();

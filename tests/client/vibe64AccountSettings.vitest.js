@@ -141,10 +141,10 @@ describe("standalone personal AI profile settings", () => {
     await state.openDialog({ refresh: false });
     expect(requestVibe64AiOnboarding({ start: "choose" })).toBe(true);
     expect(state.dialogOpen).toBe(false);
-    expect(requests.at(-1)).toEqual({ start: "choose", returnFocus: activator });
+    expect(requests.at(-1)).toEqual({ start: "choose", redo: false, returnFocus: activator });
 
     state.redoOnboarding();
-    expect(requests.at(-1)).toEqual({ start: "choose", returnFocus: activator });
+    expect(requests.at(-1)).toEqual({ start: "choose", redo: true, returnFocus: activator });
 
     await state.openDialog({ refresh: false });
     state.aiConnectionsBusy = true;
