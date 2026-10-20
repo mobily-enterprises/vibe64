@@ -104,11 +104,13 @@ The practice project's ordinary Files editor saves through
 `vibe64.source-editor.file.save`; Training's save owner
 (`createTrainingCodeSaveOwner`, installed with `setFileSaveOwner`) routes a save
 in the actor's own practice project with an active attempt to the generic
-source-editor save under the ledger lock and records it in the private
-`code-ledger.json`. A save whose read-back bytes differ from the learner's text
-is recorded as foreign. A host with several stores (Online: normal and
-author-preview) passes `selectOwners({actor, attemptId})`, which returns the store
-holding that attempt, or null for a plain save.
+source-editor save under the ledger lock and records it in that practice
+project's private `code-ledgers/<practiceId>.json`, shared by every attempt that
+continues the project. A save whose read-back bytes differ from the learner's
+text is recorded as foreign. A host with several stores (Online: normal and
+author-preview) passes `selectOwners({actor, practiceId})`, which returns the
+store whose in-progress attempt works in that practice project, or null for a
+plain save.
 
 Opening a code step records its start (`recordStepBaseline`). `runCodeCheck`
 reads the declared files from the live source and verifies the chain start →

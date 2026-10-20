@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { bundleFiles, validateTopic } from "../../packages/vibe64-training/src/server/content.js";
+import { bundleFiles, canonicalJson, validateTopic } from "../../packages/vibe64-training/src/server/content.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { installVibe64ManagedExecutionProvider, runCaptureCommand } from "../../packages/vibe64-execution/src/server/index.js";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
@@ -209,21 +209,20 @@ test("released learning paths reject a draft prerequisite or sequence creator an
   await assert.rejects(() => validateTopic(f.root), /must precede/u);
 });
 
-test("authoring CLI validates without launching, bundles exact files and preserves existing output", async t => {
+test("authoring CLI refuses retired v1 lessons; bundling (the installer's path) keeps exact files and existing output", async t => {
   const f = await fixture(t);
   const output = `${f.root}-bundle`;
   t.after(() => rm(output, { recursive: true, force: true }));
-  const messages = [];
-  assert.equal(await runTrainingCli(["validate", f.root], { write: text => messages.push(JSON.parse(text)) }), 0);
-  assert.equal(messages[0].topicId, "test-topic");
+  await assert.rejects(() => runTrainingCli(["validate", f.root], { write() {} }), /Lesson LESSON-01 uses retired lesson format 1/u);
+  const { hash } = (await validateTopic(f.root)).bundles[0];
   await assert.rejects(() => runTrainingCli(["publish", f.root]), /Usage/u);
   await assert.rejects(() => runTrainingCli(["bundle", f.root, path.join(f.root, "output")]), /outside/u);
   await runTrainingCli(["bundle", f.root, output], { write() {} });
   const bundled = JSON.parse(await readFile(path.join(output, "bundle.json"), "utf8"));
-  assert.equal(bundled.lessons[0].hash, messages[0].lessons[0].hash);
+  assert.equal(bundled.lessons[0].hash, hash);
   assert.equal(await readFile(path.join(output, "files/training/exercises/app/server.mjs"), "utf8"), "// Exercise server\n");
   await assert.rejects(() => runTrainingCli(["bundle", f.root, output]), { code: "EEXIST" });
-  assert.equal(JSON.parse(await readFile(path.join(output, "bundle.json"), "utf8")).lessons[0].hash, messages[0].lessons[0].hash);
+  assert.equal(JSON.parse(await readFile(path.join(output, "bundle.json"), "utf8")).lessons[0].hash, hash);
 });
 
 test("source and output-parent symlink aliases cannot put generated output inside topic source", async t => {
@@ -329,9 +328,8 @@ test("pinned blob batches retain binary/newline identity, bounded execution and 
 });
 
 test("publish-manifest writes a pinned whole-topic lock without changing source or publishing remotely", async t => {
-  const f = await fixture(t);
-  const course = { schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview", topics: [{ topicId: "test-topic", release: "0.1.0" }] };
-  await f.write("package.json", { name: "learn-test-topic", version: "0.1.0", repository: { type: "git", url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  const f = await stepsTopic(t);
+  const course = { schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview", topics: [{ topicId: "steps", release: "0.1.0" }] };
   await f.write("course.json", course);
   const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "--initial-branch=main"); git("add", ".");
@@ -357,8 +355,10 @@ test("publish-manifest writes a pinned whole-topic lock without changing source 
   await assert.rejects(() => runTrainingCli(["publish-manifest", lockPath, f.root]), /must not replace its input/u);
   assert.deepEqual(JSON.parse(await readFile(lockPath, "utf8")), course);
   assert.equal(git("status", "--porcelain"), "", "Rejected output paths leave the source clean");
+  const v1 = await fixture(t);
+  await assert.rejects(() => runTrainingCli(["publish-manifest", filename, v1.root]), /retired lesson format 1/u,
+    "a course release never publishes a v1 lesson");
 });
-
 
 test("visual descriptor lists accept their exact bounds and reject valid excess items", async t => {
   const f = await fixture(t);
@@ -406,7 +406,8 @@ async function operatorFixture(t) {
     topics: [{ topicId: "test-topic", release: "0.1.0" }] };
   const coursePath = path.join(owner, "course.json"), lockPath = path.join(owner, "course.lock.json");
   await writeFile(coursePath, JSON.stringify(course));
-  await runTrainingCli(["publish-manifest", coursePath, f.root], { write() {} });
+  // An already-published lock of v1 content: operators still install existing releases.
+  await writeFile(lockPath, `${canonicalJson(createCourseLock(course, [await readPinnedTopic(f.root)]))}\n`);
   const outputs = [];
   const run = (...args) => runTrainingCli(args, { write: text => outputs.push(JSON.parse(text)) });
   return { ...f, git, owner, course, coursePath, lockPath, systemRoot: path.join(owner, "system"), outputs, run };

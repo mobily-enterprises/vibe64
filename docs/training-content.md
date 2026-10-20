@@ -36,12 +36,14 @@ entry declares `code`, `descriptor`, `status` (`draft` or `published`) and
 `required`. A released topic cannot contain required draft lessons. Draft content
 is validated but remains unavailable for teaching until published and installed.
 
-New lessons use lesson format v2 (see **Lesson format v2: steps** below).
-Schema version 1 remains valid for history: v1 lessons stay readable for
-earlier attempts, but they cannot be started. One topic may mix both versions;
-the topic manifest itself stays schema version 1.
+Lessons use lesson format v2 (see **Lesson format v2: steps** below). Format 1
+is retired: `vibe64-training validate` and `publish-manifest` refuse a v1 lesson
+("Lesson X uses retired lesson format 1. Author it in format 2 with steps."), so
+no new course release can contain one. Installed v1 lessons, and `bundle`, which
+the installer uses, still read and verify them so earlier results stay valid.
+The topic manifest itself stays schema version 1.
 
-A v1 lesson descriptor declares schema version 1, `code`, `title`, `document`,
+For reading existing content, a v1 lesson descriptor declares schema version 1, `code`, `title`, `document`,
 `estimatedMinutes`, `prerequisites` (`{code}` objects), `visuals` (`{id,descriptor}`)
 and `assessments`. Unknown fields and type coercion are rejected. IDs contain
 letters, digits or hyphens, begin with a letter and have at most 64 characters.
@@ -159,10 +161,9 @@ A code question is an `auto` step whose `check` names a code check and whose
 - `reuse:"attempt"` is the supported exercise mode for code checks.
 - The check result alone is the verdict; there is no explanation rubric.
 
-A v1 lesson declares the same check as `code` evidence of a practical assessment
-(`tests/fixtures/training/code-practical/`); only `code` evidence may name files
-or a code check, and an `exercise` check must not be a code check. V1 lessons
-cannot be started.
+A retired v1 lesson declared the same check as `code` evidence of a practical
+assessment (`tests/fixtures/training/code-practical/`); only `code` evidence may
+name files or a code check, and an `exercise` check must not be a code check.
 
 The check runs with Node in the managed execution owner on a private copy laid
 out like the topic: the pinned exercise at its topic path, with only the
@@ -188,8 +189,11 @@ explanation. stderr is ignored. Use plain `node:assert`-style logic rather than
 Authorship: when the learner first opens a code step in an attempt, Vibe64
 records the SHA-256 of each declared file in the live practice project as that
 step's starting point. Each save from the practice project's **Dashboard →
-Files** editor is recorded server-side with its base hash, intended hash and
-saved hash. At **Check now** the chain from the starting point through those
+Files** editor while a lesson is in progress in that project is recorded
+server-side with its base hash, intended hash and saved hash. The ledger belongs
+to the practice project (`training/users/<user-key>/code-ledgers/<practiceId>.json`),
+so code written before **Leave lesson** still counts after **Continue lesson** in
+the same project. Removing the practice project removes its ledger. At **Check now** the chain from the starting point through those
 saves must reach the current bytes exactly; otherwise the check is not run and
 reports "needs an independent attempt: other edits detected in `<file>`". There
 is no technical write-deny for agents: an agent edit in a declared file voids
@@ -551,8 +555,48 @@ revision and one active reservation; `active-lesson.json` is its derived summary
 The reservation contains a server UUID, exact pin, creation time, retry IDs,
 server-derived project slug and `reserved` phase. No project/session readiness,
 assessment outcome or grading evidence is fabricated. New directories use 0700,
-records 0600. Files are bounded to 64 KiB and the current pilot retains at most
-64 distinct reservation request IDs; it never silently drops retry history.
+records 0600. Files are bounded to 64 KiB and an attempt retains at most 64
+distinct reservation request IDs; it never silently drops retry history. A
+learner keeps at most 32 attempts: a new reservation at that cap removes the
+oldest ended attempt that no practice project still needs (with its reader
+position): one whose lesson has no exercise, an own attempt still `reserved`,
+one a later attempt in the same practice project supersedes (including the
+attempt being continued), or one whose practice project the host's optional
+`livePracticeIds` leaves out. The latest attempt of every practice project still
+in the learning space is kept; when no attempt qualifies the reservation is
+refused with `VIBE64_TRAINING_ATTEMPTS_FULL` and writes nothing. A pruned
+attempt's code ledger is forgotten only when the host reports its practice
+project gone and no retained attempt names it. Step results are never pruned
+with attempts.
+
+An attempt is in progress exactly while `progress.activeAttemptId` names it.
+`readLearningMode({actor,includeTitle?})` derives `{on:false}` or
+`{on:true,attemptId,lessonCode,practiceSlug,projectSlugs,lessonTitle?}` from that
+attempt alone; `practiceSlug` is empty until preparation begins. `endAttempt`
+takes reason `left`, `finished` or `discard`; saved `restart` ends stay readable.
+
+`reserveAttempt` accepts an optional `practiceId` to continue an existing
+practice project: the new attempt stores it (only when it differs from its own
+ID), its `projectSlug` is `training-<practiceId hex>`, and
+`beginPreparation({...,initialSessionId?})` may name the existing
+`training-<practiceId>` session instead of `training-<attemptId>`. A practice
+project belongs to one lesson pin, and another in-progress practice refuses.
+`activeAttemptForPractice({actor,practiceId})` returns the in-progress attempt
+of that practice project, or null.
+`readPracticeProjectScope({actor,practiceId,access})` returns the practice
+project's saved exercise identity (the version 2 `training` marker
+`{schemaVersion:2,learnerKey,practiceId,pin,exercise}`, project slug, initial
+session and `active`) from the in-progress attempt working in it, otherwise its
+latest retained attempt; `write` and `create` require that attempt to be in
+progress. `readExerciseProjectScope({actor,attemptId,access})` is frozen for the
+published `20261008-learning-practice-history` upgrade: one attempt's own
+project with the version 1 marker, refusing a continued attempt.
+
+Step results (`step-progress.json`, schema version 2) are stored per lesson
+content `{code,hash}`, not per attempt, and survive pruning. Every attempt of
+the same lesson content shares that content's 64 results. The record keeps at
+most 128 lesson contents (and 1 MiB); past either bound a write drops the
+oldest-written results of lesson content no retained attempt pins.
 
 The same internal store adds `beginPreparation({actor,attemptId,expectedRevision})`,
 `recordPreparationReady({actor,attemptId,initialSessionId,expectedRevision})` and
@@ -628,9 +672,9 @@ Core's existing project record can now retain optional trusted creation metadata
 ```json
 {
   "training": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "learnerKey": "NDI",
-    "attemptId": "12345678-1234-4234-8234-123456789abc",
+    "practiceId": "12345678-1234-4234-8234-123456789abc",
     "pin": {
       "course": { "courseId": "intro-course", "release": "0.1.0" },
       "topic": {
@@ -650,7 +694,7 @@ Core's existing project record can now retain optional trusted creation metadata
 
 These are illustrative identities, not an installed course. An admitted server
 owner must supply the canonical base64url learner key from authenticated identity,
-the saved attempt's exact pin, and the fresh installed reader's bundled source
+the practice project's ID, the saved attempt's exact pin, and the fresh installed reader's bundled source
 path. Core validates shape and bounded values; it does not authenticate this
 object or inspect installed content. The marker has no session field: learner
 state owns the initial session identity. It is copied at creation and cannot be

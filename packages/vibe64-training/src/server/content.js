@@ -81,7 +81,8 @@ function checkPrerequisiteCycles(lessons) {
   for (const lesson of lessons) visit(lesson.code);
 }
 
-// Lesson format v1: rubric anchors in the teaching document and assessment producers.
+// Lesson format v1 (retired; only installed snapshots still verify it): rubric
+// anchors in the teaching document and assessment producers.
 function bundleAssessments(lesson, document, include, checks) {
   include(document);
   const documentText = document.bytes.toString("utf8");
@@ -166,10 +167,13 @@ function validateSteps(lesson, visuals, checks, code) {
   }
 }
 
-async function bundleLesson(reader, entry) {
+async function bundleLesson(reader, entry, { authoring }) {
   const descriptor = await reader.json(entry.descriptor);
   const lesson = validateLesson(descriptor.value, entry.code);
   if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
+  if (authoring && lesson.schemaVersion === 1) {
+    throw new Error(`Lesson ${entry.code} uses retired lesson format 1. Author it in format 2 with steps.`);
+  }
   const base = path.dirname(descriptor.filename);
   const files = new Map();
   function include(file) {
@@ -280,7 +284,9 @@ async function bundleLesson(reader, entry) {
   return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served };
 }
 
-async function validateTopic(directory) {
+// authoring refuses retired v1 lessons: author commands never produce them,
+// while installed v1 snapshots still verify for the published upgrades.
+async function validateTopic(directory, { authoring = false } = {}) {
   const reader = await createTopicReader(directory);
   const packageFile = await reader.json("package.json");
   if (!/^learn-[a-z0-9-]+$/u.test(packageFile.value.name || "") || !/^\d+\.\d+\.\d+$/u.test(packageFile.value.version || "")) throw new Error("Topic package needs a learn- name and an exact release version.");
@@ -295,7 +301,7 @@ async function validateTopic(directory) {
   const served = new Set();
   for (const entry of topic.lessons) {
     // Draft descriptors are validated too; draft status never grants permission to teach them.
-    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry);
+    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry, { authoring });
     for (const file of lessonServed) served.add(file);
     bundles.push({ ...bundle, status: entry.status, required: entry.required });
   }

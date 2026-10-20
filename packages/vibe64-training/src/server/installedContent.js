@@ -270,6 +270,8 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       return { ...bundle, steps, ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text }, visuals };
     }
     if (bundle.lesson.schemaVersion !== 1) throw new Error(`Lesson ${bundle.lesson.code} uses an unsupported format.`);
+    // Retired v1: read only for already-installed snapshots and the published
+    // Learning upgrades that verify saved attempts of them.
     const document = await lessonText(bundle.lesson.document);
     const anchors = bundle.lesson.assessments.map(assessment => ({
       id: assessment.id,

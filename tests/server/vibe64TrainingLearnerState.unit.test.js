@@ -11,11 +11,10 @@ import { promisify } from "node:util";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { readProjectRecordMetadata, updateProjectRecordMetadata, writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
-import { admitLocalPracticeProject } from "../../packages/vibe64-training/src/server/practiceProjects.js";
 import { createTrainingContentInstaller } from "../../packages/vibe64-training/src/server/contentInstaller.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
-import { createTrainingLearnerState, passedAssessmentIds } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 
 async function fixture(t, { published = true, learning = false, noExercise = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
@@ -1521,452 +1520,123 @@ test("documented stopped-writer procedure detects real preparation lock contenti
   assert.match(result.stdout, /Reservation records and installed pins validated/u);
 });
 
-async function learningFixture(t) {
-  const f = await fixture(t, { learning: true });
+test("explicit end retains the pinned attempt and fresh reserve creates new project/session identities without resurrecting replays", async t => {
+  const f = await fixture(t);
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: 1 });
-  await f.state.recordPreparationReady({ actor: f.actor, attemptId, initialSessionId: `training-${attemptId}`, expectedRevision: 2 });
-  const checkpoint = (question, overrides = {}) => ({ stage: "practice", pendingQuestion: question
-    ? { id: `question-${question}`, assessmentId: question, text: "What did you observe?" } : null,
-    visuals: [{ visualId: "request", snapshot: { state: "arrived", paused: true, labels: { path: "/" } } }],
-    summary: "The learner reached the request diagram.", ...overrides });
-  const save = async (requestId, question, overrides = {}) => f.state.saveLessonResume({ actor: f.actor, attemptId,
-    expectedRevision: (await f.state.readState({ actor: f.actor })).revision, requestId, resume: checkpoint(question, overrides) });
-  const answer = (assessmentId, submissionId, overrides = {}) => ({ actor: f.actor, attemptId, expectedRevision: 0,
-    submissionId, assessmentId, outcome: "passed", assistance: "none", explanation: "The actual answer satisfies the declared rubric.",
-    evidence: { kind: "answer", learnerId: "42", attemptId, messageId: `message-${submissionId}`,
-      questionId: `question-${assessmentId}`, text: "The browser asks and displays the server's response." }, ...overrides });
-  const observation = (producer, submissionId, overrides = {}) => ({ actor: f.actor, attemptId, expectedRevision: 0,
-    submissionId, assessmentId: `${producer}-practice`, outcome: "passed", assistance: "hint", explanation: "The native observation satisfies the rubric.",
-    evidence: { kind: "observation", learnerId: "42", attemptId, observationId: `observation-${submissionId}`,
-      observedAt: "2026-10-06T01:00:00.000Z", projectSlug: reserved.attempt.projectSlug, sessionId: `training-${attemptId}`,
-      producer, operation: `${producer}-practice`, origin: "learner", text: "I followed the request and inspected its response.",
-      ...(producer === "exercise" ? { check: "response" } : {}) }, ...overrides });
-  const record = async input => f.state.recordAssessment({ ...input, expectedRevision: (await f.state.readState({ actor: f.actor })).revision });
-  return { ...f, attemptId, checkpoint, save, answer, observation, record };
-}
-
-test("question provenance is optional for untouched history and explicit bounded new writes retain it", async t => {
-  const f = await learningFixture(t);
-  await f.save("legacy-question", "answer-one");
-  let state = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(Object.hasOwn(state.active.learning.resume.pendingQuestion, "assistance"), false);
-  assert.equal(Object.hasOwn(state.active.learning.resume.pendingQuestion, "issuedRevision"), false);
-  await f.save("legacy-edited", null, { pendingQuestion: {
-    ...state.active.learning.resume.pendingQuestion, text: "Updated legacy question" } });
-  state = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(state.active.learning.resume.pendingQuestion.text, "Updated legacy question");
-  assert.equal(Object.hasOwn(state.active.learning.resume.pendingQuestion, "issuedRevision"), false);
-  const question = { id: "issued-question", assessmentId: "answer-one", text: "What did you observe?",
-    assistance: "hint", issuedRevision: state.revision + 1 };
-  await f.save("issued-question", null, { pendingQuestion: question });
-  state = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(state.active.learning.resume.pendingQuestion, question);
-  const before = await treeState(f.systemRoot);
-  for (const change of [{ text: "Changed question" }, { assessmentId: "answer-two" }, { assistance: "none" }]) {
-    await assert.rejects(f.save("reinterpret-question", null, { pendingQuestion: { ...question, ...change } }),
-      { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
-  }
-  await assert.rejects(f.save("invalid-assistance", null, { pendingQuestion: { ...question, assistance: "inferred" } }));
-  await assert.rejects(f.save("future-question", null, { pendingQuestion: { ...question, issuedRevision: state.revision + 2 } }));
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  const replacement = { ...question, text: "Explicit replacement", issuedRevision: state.revision + 1 };
-  await f.save("explicit-question-replacement", null, { pendingQuestion: replacement });
-  assert.deepEqual((await f.state.readState({ actor: f.actor, includeCompletion: true })).active.learning.resume.pendingQuestion, replacement);
-});
-
-test("lesson completion requires all three admitted answers and three learner practical observations at the saved pin", async t => {
-  const f = await learningFixture(t);
-  assert.deepEqual((await f.state.resumeAttempt({ actor: f.actor, attemptId: f.attemptId })).completion,
-    { lessonCode: "INTRO-01", lessonHash: f.pin.lesson.hash, required: 6, passed: 0, completed: false });
-  await f.save("question-1", "answer-one");
-  const notPassed = await f.record(f.answer("answer-one", "first-answer", { outcome: "not-yet-passed", assistance: "substantial", explanation: "The learner has not distinguished request from response." }));
-  assert.equal(notPassed.completion.completed, false);
-  assert.equal(notPassed.completion.passed, 0);
-  const corrected = await f.record(f.answer("answer-one", "corrected-answer"));
-  assert.equal(corrected.completion.passed, 1);
-  for (const id of ["answer-two", "answer-three"]) {
-    await f.save(`question-${id}`, id);
-    await f.record(f.answer(id, `submission-${id}`));
-  }
-  await f.record(f.observation("workspace", "workspace"));
-  await f.record(f.observation("exercise", "exercise"));
-  assert.equal((await f.state.resumeAttempt({ actor: f.actor, attemptId: f.attemptId })).completion.completed, false);
-  const finished = await f.record(f.observation("colleague", "colleague"));
-  assert.equal(finished.completion.completed, true);
-  assert.equal(finished.completion.passed, 6);
-  assert.equal(finished.attempt.learning.submissions.length, 7);
-  assert.equal(finished.attempt.learning.submissions[0].evidence.text, "The browser asks and displays the server's response.");
-  assert.equal(finished.attempt.learning.submissions[0].assistance, "substantial");
-  assert.equal(finished.attempt.learning.submissions.every(value => value.rubricRevision === f.pin.lesson.hash), true);
-  assert.equal(finished.attempt.learning.submissions.every(value => new Date(value.recordedAt).toISOString() === value.recordedAt), true);
-  const resumed = await createTrainingLearnerState({ systemRoot: f.systemRoot }).resumeAttempt({ actor: f.actor, attemptId: f.attemptId });
-  assert.deepEqual(resumed.attempt, finished.attempt);
-  assert.deepEqual(resumed.completion, finished.completion);
-  await assert.rejects(() => fs.lstat(path.join(f.systemRoot, "projects")), { code: "ENOENT" });
-});
-
-test("resume preserves question, teaching position and semantic snapshots without requiring content for backup validation", async t => {
-  const f = await learningFixture(t);
-  const saved = await f.save("checkpoint", "answer-one");
-  const before = await treeState(f.paths.root);
-  assert.deepEqual(await f.state.saveLessonResume({ actor: f.actor, attemptId: f.attemptId, expectedRevision: 0,
-    requestId: "checkpoint", resume: f.checkpoint("answer-one") }), { ...saved, replayed: true });
-  assert.deepEqual(await treeState(f.paths.root), before);
-  await assert.rejects(() => f.save("checkpoint", "answer-two"), { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
-  await fs.rename(path.join(f.systemRoot, "training/content"), path.join(f.root, "detached-content"));
-  const fresh = createTrainingLearnerState({ systemRoot: f.systemRoot });
-  const state = await fresh.readState({ actor: f.actor });
-  assert.deepEqual(state.active.learning.resume, saved.attempt.learning.resume);
-  assert.equal(state.active.learning.resume.pendingQuestion.text, "What did you observe?");
-  assert.deepEqual(state.active.learning.resume.visuals[0].snapshot, { state: "arrived", paused: true, labels: { path: "/" } });
-  const noWrite = await treeState(f.paths.root);
-  await assert.rejects(() => fresh.resumeAttempt({ actor: f.actor, attemptId: f.attemptId }));
-  await assert.rejects(() => fresh.recordAssessment(f.answer("answer-one", "missing-content")));
-  assert.deepEqual(await treeState(f.paths.root), noWrite);
-});
-
-test("assessment replay retains exact immutable evidence and cannot consume one message or observation twice", async t => {
-  const f = await learningFixture(t);
-  await f.save("question", "answer-one");
-  const input = f.answer("answer-one", "answer");
-  const result = await f.record(input);
-  await f.save("next-question", "answer-two");
-  const before = await treeState(f.paths.root);
-  const replay = await f.state.recordAssessment(input);
-  assert.equal(replay.replayed, true);
-  assert.deepEqual(replay.attempt.learning.submissions[0], result.attempt.learning.submissions[0]);
-  assert.deepEqual(await treeState(f.paths.root), before);
-  await assert.rejects(() => f.record({ ...input, explanation: "A changed grading reason" }), { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
-  const reused = f.answer("answer-two", "other-answer");
-  reused.evidence.messageId = input.evidence.messageId;
-  await assert.rejects(() => f.record(reused), { code: "VIBE64_TRAINING_EVIDENCE_CONFLICT" });
-  const observation = f.observation("workspace", "native");
-  await f.record(observation);
-  const consumed = f.observation("colleague", "other-native");
-  consumed.evidence.observationId = observation.evidence.observationId;
-  await assert.rejects(() => f.record(consumed), { code: "VIBE64_TRAINING_EVIDENCE_CONFLICT" });
-  const alien = { ...input, actor: { uid: 43 } };
-  await assert.rejects(() => f.state.recordAssessment(alien), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-  assert.equal((await f.state.readState({ actor: { uid: 43 } })).revision, 0);
-});
-
-test("practical writes require exact prepared identity and descriptor evidence; demonstration is not a learner pass", async t => {
-  const f = await learningFixture(t);
-  const good = f.observation("exercise", "practical");
-  const before = await treeState(f.paths.root);
-  for (const change of [{ learnerId: "43" }, { attemptId: randomUUID() }, { projectSlug: "other" }, { sessionId: "other" },
-    { producer: "workspace" }, { operation: "other" }, { check: "other" }, { observedAt: "yesterday" }, { origin: "demonstration" }, { text: "" }]) {
-    await assert.rejects(() => f.record({ ...good, evidence: { ...good.evidence, ...change } }));
-  }
-  await assert.rejects(() => f.record({ ...good, assessmentId: "not-declared" }));
-  assert.deepEqual(await treeState(f.paths.root), before);
-  const demo = await f.record({ ...good, outcome: "needs-review", assistance: "demonstration", evidence: { ...good.evidence, origin: "demonstration" } });
-  assert.equal(demo.completion.passed, 0);
-  await f.save("question", "answer-one");
-  const answer = f.answer("answer-one", "wrong-question");
-  await assert.rejects(() => f.record({ ...answer, evidence: { ...answer.evidence, questionId: "old-question" } }), /actual admitted learner message/u);
-  await assert.rejects(() => f.record({ ...answer, evidence: { ...answer.evidence, text: "", messageId: "" } }));
-  const other = f.answer("answer-two", "wrong-assessment");
-  await assert.rejects(() => f.record(other), /actual admitted learner message/u);
-});
-
-test("learning CAS, semantic bounds and immutable saved results reject conflicts without rewriting authority", async t => {
-  const f = await learningFixture(t);
-  await f.save("question", "answer-one");
-  const input = f.answer("answer-one", "result");
-  await assert.rejects(() => f.state.recordAssessment(input), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
-  const before = await treeState(f.paths.root);
-  for (const overrides of [
-    { pendingQuestion: { id: "question", assessmentId: "missing", text: "Question" } },
-    { visuals: [{ visualId: "missing", snapshot: { state: "arrived", paused: true, labels: {} } }] },
-    { visuals: [{ visualId: "request", snapshot: { state: "missing", paused: true, labels: {} } }] },
-    { visuals: [{ visualId: "request", snapshot: { state: "arrived", paused: true, labels: {}, extra: true } }] },
-    { visuals: [{ visualId: "request", snapshot: { state: "arrived", paused: true, labels: { oversized: "x".repeat(257) } } }] }
-  ]) await assert.rejects(() => f.save("invalid-resume", null, overrides));
-  assert.deepEqual(await treeState(f.paths.root), before);
-  const revision = (await f.state.readState({ actor: f.actor })).revision;
-  const results = await Promise.allSettled([
-    f.state.recordAssessment({ ...input, expectedRevision: revision }),
-    f.state.saveLessonResume({ actor: f.actor, attemptId: f.attemptId, expectedRevision: revision, requestId: "racing", resume: f.checkpoint("answer-two") })
-  ]);
-  assert.equal(results.filter(value => value.status === "fulfilled").length, 1);
-  assert.equal(results.filter(value => value.status === "rejected").length, 1);
-  assert.equal((await f.state.readState({ actor: f.actor })).revision, revision + 1);
-  const saved = JSON.parse(await fs.readFile(f.paths.progress));
-  saved.attempts[0].learning.resume.visuals[0].snapshot.labels.path = "x".repeat(257);
-  await fs.writeFile(f.paths.progress, JSON.stringify(saved));
-  const corrupt = await treeState(f.paths.root);
-  await assert.rejects(() => f.state.readState({ actor: f.actor }), /bounded semantic visual snapshot/u);
-  assert.deepEqual(await treeState(f.paths.root), corrupt);
-});
-
-test("learning summary failure and ambiguous progress rename recover by same identity without duplicate passes", async t => {
-  const f = await learningFixture(t);
-  await f.save("question", "answer-one");
-  const input = f.answer("answer-one", "result");
-  input.expectedRevision = (await f.state.readState({ actor: f.actor })).revision;
-  const rename = fs.rename;
-  const mock = t.mock.method(fs, "rename", async (...args) => {
-    if (args[1] === f.paths.active) throw new Error("Summary unavailable");
-    return rename(...args);
-  });
-  syncBuiltinESMExports();
-  try { await assert.rejects(() => f.state.recordAssessment(input), { code: "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED" }); }
-  finally { mock.mock.restore(); syncBuiltinESMExports(); }
-  const before = await treeState(f.paths.root);
-  const observed = await f.state.readState({ actor: f.actor });
-  assert.equal(observed.activeSummaryCurrent, false);
-  assert.equal(observed.active.learning.submissions.length, 1);
-  assert.deepEqual(await treeState(f.paths.root), before);
-  const retry = await f.state.recordAssessment(input);
-  assert.equal(retry.replayed, true);
-  assert.equal(retry.completion.passed, 1);
-  await f.save("next", "answer-two");
-  const second = f.answer("answer-two", "second");
-  second.expectedRevision = (await f.state.readState({ actor: f.actor })).revision;
-  const remove = fs.rm;
-  let interrupted = false;
-  const cleanup = t.mock.method(fs, "rm", async (...args) => {
-    if (!interrupted && String(args[0]).startsWith(path.join(f.paths.root, ".progress.json."))) {
-      interrupted = true;
-      throw new Error("Cleanup interrupted after rename");
-    }
-    return remove(...args);
-  });
-  syncBuiltinESMExports();
-  try { await assert.rejects(() => f.state.recordAssessment(second), { code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" }); }
-  finally { cleanup.mock.restore(); syncBuiltinESMExports(); }
-  const replay = await f.state.recordAssessment(second);
-  assert.equal(replay.replayed, true);
-  assert.equal(replay.completion.passed, 2);
-  assert.equal(replay.attempt.learning.submissions.length, 2);
-  assert.equal((await f.state.readState({ actor: f.actor })).activeSummaryCurrent, true);
-});
-
-test("learning receipt and serialized record limits refuse new writes without dropping prior evidence", async t => {
-  for (const boundary of ["receipts", "bytes"]) {
-    const f = await learningFixture(t);
-    await f.save("question", "answer-one");
-    await f.record(f.answer("answer-one", "seed"));
-    const progress = JSON.parse(await fs.readFile(f.paths.progress));
-    const template = progress.attempts[0].learning.submissions[0];
-    progress.attempts[0].learning.submissions = Array.from({ length: boundary === "receipts" ? 64 : 48 }, (_unused, index) => ({
-      ...template, submissionId: `saved-${index}`, evidence: { ...template.evidence, messageId: `message-${index}`, text: "x" }
-    }));
-    if (boundary === "bytes") {
-      const results = progress.attempts[0].learning.submissions;
-      while (Buffer.byteLength(`${JSON.stringify(progress, null, 2)}\n`) < 64000) {
-        const item = results.find(value => value.evidence.text.length < 2048);
-        assert.ok(item);
-        const remaining = 64000 - Buffer.byteLength(`${JSON.stringify(progress, null, 2)}\n`);
-        item.evidence.text += "x".repeat(Math.min(remaining, 2048 - item.evidence.text.length));
-      }
-    }
-    assert.ok(Buffer.byteLength(`${JSON.stringify(progress, null, 2)}\n`) < 65536);
-    const active = JSON.parse(await fs.readFile(f.paths.active));
-    active.learning = progress.attempts[0].learning;
-    await fs.writeFile(f.paths.progress, `${JSON.stringify(progress, null, 2)}\n`);
-    await fs.writeFile(f.paths.active, `${JSON.stringify(active, null, 2)}\n`);
-    assert.equal((await f.state.readState({ actor: f.actor })).activeSummaryCurrent, true);
-    const before = await treeState(f.paths.root);
-    const input = f.answer("answer-one", "overflow", { explanation: "e".repeat(1024) });
-    input.evidence.text = "x".repeat(2048);
-    await assert.rejects(() => f.record(input), error => boundary === "receipts"
-      ? /at most 64 items/u.test(JSON.stringify(error.fieldErrors))
-      : /64 KiB record limit/u.test(error.message));
-    assert.deepEqual(await treeState(f.paths.root), before);
-  }
-});
-
-test("opt-in completion reads verify the saved pin without writes while default backup reads remain content-independent", async t => {
-  const f = await learningFixture(t);
-  for (const id of ["answer-one", "answer-two", "answer-three"]) {
-    await f.save(`question-${id}`, id);
-    await f.record(f.answer(id, `submission-${id}`));
-  }
-  for (const producer of ["workspace", "exercise", "colleague"]) await f.record(f.observation(producer, producer));
-  const content = path.join(f.systemRoot, "training/content");
-  const detached = path.join(f.root, "detached-content");
-  await fs.rename(content, detached);
-  const before = await treeState(f.systemRoot);
-  const state = await f.state.readState({ actor: f.actor });
-  assert.equal(Object.hasOwn(state, "completion"), false);
-  assert.equal(state.active.learning.submissions.length, 6);
-  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), { code: "VIBE64_TRAINING_CONTENT_MISSING" });
-  assert.equal((await f.state.readState({ actor: { uid: 43 }, includeCompletion: true })).completion, null);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  await fs.rename(detached, content);
-  // Read-only verification must not reconcile even a reachable stale summary.
-  await fs.rm(f.paths.active);
-  const restored = await treeState(f.systemRoot);
-  const verified = await createTrainingLearnerState({ systemRoot: f.systemRoot }).readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(verified.completion, { lessonCode: "INTRO-01", lessonHash: f.pin.lesson.hash, required: 6, passed: 6, completed: true });
-  assert.deepEqual(verified.lessonCompletions, [{ ...verified.completion, open: true }], "the per-lesson summary repeats the same verified passes");
-  assert.equal(Object.hasOwn(state, "lessonCompletions"), false);
-  assert.equal(verified.activeSummaryCurrent, false);
-  assert.deepEqual(verified.active.learning, state.active.learning);
-  assert.deepEqual(await treeState(f.systemRoot), restored);
-});
-
-test("content-aware learning reads and writes refuse tampered pinned receipts and resume facts before summary repair", async t => {
-  const f = await learningFixture(t);
-  await f.save("question", "answer-one");
-  await f.record(f.answer("answer-one", "answer"));
-  await f.record(f.observation("exercise", "exercise"));
-  const original = JSON.parse(await fs.readFile(f.paths.progress));
-  await fs.rm(f.paths.active);
-  const changes = [
-    progress => { progress.attempts[0].learning.submissions[0].assessmentId = "missing"; },
-    progress => { progress.attempts[0].learning.submissions[0].rubric = "lesson.md#different"; },
-    progress => { progress.attempts[0].learning.submissions[0].assessmentId = "workspace-practice"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.producer = "workspace"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.operation = "other"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.check = "other"; },
-    progress => { progress.attempts[0].learning.resume.pendingQuestion.assessmentId = "missing"; },
-    progress => { progress.attempts[0].learning.resume.visuals[0].visualId = "missing"; },
-    progress => { progress.attempts[0].learning.resume.visuals[0].snapshot.state = "missing"; }
-  ];
-  for (const change of changes) {
-    const tampered = structuredClone(original);
-    change(tampered);
-    await fs.writeFile(f.paths.progress, JSON.stringify(tampered));
-    const before = await treeState(f.paths.root);
-    const structural = await f.state.readState({ actor: f.actor });
-    assert.equal(structural.activeSummaryCurrent, false);
-    for (const operation of [
-      () => f.state.readState({ actor: f.actor, includeCompletion: true }),
-      () => f.state.resumeAttempt({ actor: f.actor, attemptId: f.attemptId }),
-      () => f.state.recordAssessment(f.observation("workspace", "new-observation"))
-    ]) await assert.rejects(operation, /pinned|pending question|semantic state/u);
-    assert.deepEqual(await treeState(f.paths.root), before);
-  }
-  await fs.writeFile(f.paths.progress, JSON.stringify(original));
-  await f.save("different-question", "answer-two");
-  const revision = (await f.state.readState({ actor: f.actor })).revision;
-  await f.state.recordPreparationFailure({ actor: f.actor, attemptId: f.attemptId, expectedRevision: revision,
-    initialSessionId: `training-${f.attemptId}`, stage: "setup", code: "later-unavailable", message: "The earlier prepared environment is unavailable now." });
-  const before = await treeState(f.paths.root);
-  const legitimate = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(legitimate.active.preparation.phase, "preparing");
-  assert.equal(legitimate.active.learning.resume.pendingQuestion.assessmentId, "answer-two");
-  assert.equal(legitimate.completion.passed, 2);
-  assert.deepEqual(legitimate.active.learning.submissions, original.attempts[0].learning.submissions);
-  assert.deepEqual(await treeState(f.paths.root), before);
-});
-
-test("documented staged restore validates saved learning against live exact-pin content before publication", async t => {
-  const f = await learningFixture(t);
-  await f.save("question", "answer-one");
-  await f.record(f.answer("answer-one", "answer"));
-  await f.record(f.observation("exercise", "exercise"));
-  await f.save("next-question", "answer-two");
-  await fs.rm(f.paths.active);
-  const procedure = await recoveryProcedure(f);
-  const checkpoint = await procedure.copy();
-  const copiedUsers = path.join(checkpoint, "training/users");
-  const copiedProgress = path.join(copiedUsers, path.basename(f.paths.root), "progress.json");
-  const originalBytes = await fs.readFile(copiedProgress);
-  const original = JSON.parse(originalBytes);
-  // A legitimate historical answer need not match the current pending question.
-  await f.save("live-question", "answer-three");
-  const users = path.dirname(f.paths.root);
-  const liveBefore = await treeState(users);
-  const contentRoot = path.join(f.systemRoot, "training/content");
-  const contentBefore = await treeState(contentRoot);
-  const changes = [
-    progress => { progress.attempts[0].learning.submissions[0].assessmentId = "missing"; },
-    progress => { progress.attempts[0].learning.submissions[0].rubric = "lesson.md#different"; },
-    progress => { progress.attempts[0].learning.submissions[0].assessmentId = "workspace-practice"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.producer = "workspace"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.operation = "other"; },
-    progress => { progress.attempts[0].learning.submissions[1].evidence.check = "other"; },
-    progress => { progress.attempts[0].learning.resume.pendingQuestion.assessmentId = "missing"; },
-    progress => { progress.attempts[0].learning.resume.visuals[0].visualId = "missing"; },
-    progress => { progress.attempts[0].learning.resume.visuals[0].snapshot.state = "missing"; }
-  ];
-  for (const change of changes) {
-    const tampered = structuredClone(original);
-    change(tampered);
-    await fs.writeFile(copiedProgress, JSON.stringify(tampered));
-    const copiedBefore = await treeState(copiedUsers);
-    let rejected;
-    await assert.rejects(() => procedure.restore(checkpoint), error => {
-      rejected = error;
-      return /pinned|pending question|semantic state/u.test(error.stderr);
-    });
-    const stage = procedure.stagePath(rejected);
-    assert.ok(stage);
-    assert.deepEqual(await treeState(path.join(stage, "training/users")), copiedBefore);
-    await assert.rejects(() => fs.lstat(path.join(stage, "previous-users")), { code: "ENOENT" });
-    assert.deepEqual(await treeState(copiedUsers), copiedBefore);
-    assert.deepEqual(await treeState(users), liveBefore);
-    assert.deepEqual(await treeState(contentRoot), contentBefore);
-  }
-  await fs.writeFile(copiedProgress, originalBytes);
-  const checkpointBefore = await treeState(copiedUsers);
-  const restored = await procedure.restore(checkpoint);
-  assert.deepEqual(await treeState(users), checkpointBefore);
-  assert.deepEqual(await treeState(copiedUsers), checkpointBefore);
-  assert.deepEqual(await treeState(path.join(procedure.stagePath(restored), "previous-users")), liveBefore);
-  assert.deepEqual(await treeState(contentRoot), contentBefore);
-  const state = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(state.activeSummaryCurrent, false);
-  assert.equal(state.active.attemptId, f.attemptId);
-  assert.deepEqual(state.active.pin, f.pin);
-  assert.deepEqual(state.active.learning, original.attempts[0].learning);
-  assert.equal(state.completion.passed, 2);
-  assert.deepEqual(await treeState(users), checkpointBefore);
-});
-
-test("explicit end retains the pinned attempt and fresh reserve creates new project/session identities without resurrecting replays", async t => {
-  const f = await learningFixture(t);
-  await f.save("old-question", "answer-one");
-  await f.record(f.answer("answer-one", "old-answer"));
-  await f.record(f.observation("exercise", "old-exercise"));
+  const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
   const previous = await f.state.readState({ actor: f.actor });
   const attempt = previous.progress.attempts[0];
-  const input = { actor: f.actor, attemptId: f.attemptId, requestId: "end-first", expectedRevision: previous.revision, reason: "restart" };
+  const input = { actor: f.actor, attemptId, requestId: "end-first", expectedRevision: previous.revision, reason: "left" };
   const ended = await f.state.runPreparationExclusive(input, () => f.state.endAttempt(input));
   assert.equal(ended.replayed, false);
   assert.equal(ended.active, null);
-  assert.deepEqual(ended.attempt, { ...attempt, ended: { requestId: "end-first", revision: previous.revision + 1, reason: "restart" } });
+  assert.deepEqual(ended.attempt, { ...attempt, ended: { requestId: "end-first", revision: previous.revision + 1, reason: "left" } });
   assert.deepEqual(JSON.parse(await fs.readFile(f.paths.active, "utf8")), {
     schemaVersion: 1, learnerId: "42", progressRevision: ended.revision, attemptId: null
   });
-  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).completion, null);
   await assert.rejects(() => fs.lstat(path.join(f.systemRoot, "projects")), { code: "ENOENT" });
   const next = await f.reserve({ requestId: "new-exercise", expectedRevision: ended.revision });
-  assert.notEqual(next.attempt.attemptId, f.attemptId);
+  assert.notEqual(next.attempt.attemptId, attemptId);
   assert.notEqual(next.attempt.projectSlug, attempt.projectSlug);
-  assert.equal(next.attempt.learning, undefined);
-  const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId: next.attempt.attemptId, expectedRevision: next.revision });
-  assert.notEqual(prepared.attempt.preparation.initialSessionId, attempt.preparation.initialSessionId);
-  const current = await f.state.readState({ actor: f.actor, includeCompletion: true });
+  const nextPrepared = await f.state.beginPreparation({ actor: f.actor, attemptId: next.attempt.attemptId, expectedRevision: next.revision });
+  assert.notEqual(nextPrepared.attempt.preparation.initialSessionId, prepared.attempt.preparation.initialSessionId);
+  const current = await f.state.readState({ actor: f.actor });
   assert.deepEqual(current.progress.attempts[0], ended.attempt);
-  assert.deepEqual(current.active.preparation, prepared.attempt.preparation);
-  assert.equal(current.completion.passed, 2);
-  assert.equal(current.completion.completed, false);
   const before = await treeState(f.systemRoot);
   assert.deepEqual(await f.state.endAttempt({ ...input, expectedRevision: 0 }), {
     revision: current.revision, attempt: ended.attempt, active: current.active, replayed: true
   });
-  assert.equal((await f.reserve()).attempt.attemptId, f.attemptId);
-  assert.equal((await f.reserve()).attempt.ended.reason, "restart");
-  assert.equal((await f.state.readState({ actor: f.actor })).active.attemptId, next.attempt.attemptId);
+  assert.equal((await f.reserve()).attempt.attemptId, attemptId);
+  assert.equal((await f.reserve()).attempt.ended.reason, "left");
   await assert.rejects(() => f.state.endAttempt({ ...input, reason: "discard" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   await assert.rejects(() => f.state.endAttempt({ ...input, attemptId: next.attempt.attemptId }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   await assert.rejects(() => f.reserve({ requestId: "end-first" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
-  await assert.rejects(() => f.state.endAttempt({ ...input, requestId: "start-1" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   for (const operation of [
     () => f.state.resumeAttempt(input),
     () => f.state.beginPreparation({ ...input, expectedRevision: current.revision }),
-    () => f.state.runPreparationExclusive(input, () => assert.fail("Ended attempt must not admit project effects.")),
-    () => f.state.recordAssessment(f.answer("answer-one", "old-answer")),
-    () => f.state.saveLessonResume({ ...input, requestId: "old-question", resume: f.checkpoint("answer-one") })
+    () => f.state.runPreparationExclusive(input, () => assert.fail("Ended attempt must not admit project effects."))
   ]) await assert.rejects(operation, error => error.code === "VIBE64_TRAINING_ATTEMPT_MISSING");
   assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("continuing a practice project reserves a new attempt in the same practice and learning mode names it", async t => {
+  const f = await fixture(t);
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: false });
+  const first = await f.reserve();
+  const practiceId = first.attempt.attemptId;
+  assert.equal(first.attempt.practiceId, undefined, "a fresh attempt is its own practice");
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: true, attemptId: practiceId,
+    lessonCode: "INTRO-01", practiceSlug: "", projectSlugs: [] });
+  const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId: practiceId, expectedRevision: first.revision });
+  const mode = await f.state.readLearningMode({ actor: f.actor, includeTitle: true });
+  assert.deepEqual(mode, { on: true, attemptId: practiceId, lessonCode: "INTRO-01", practiceSlug: first.attempt.projectSlug,
+    projectSlugs: [first.attempt.projectSlug], lessonTitle: "Try the practice app" });
+  assert.equal((await f.state.activeAttemptForPractice({ actor: f.actor, practiceId })).attemptId, practiceId);
+  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: practiceId, requestId: "leave-1",
+    expectedRevision: prepared.revision, reason: "left" });
+  assert.equal(await f.state.activeAttemptForPractice({ actor: f.actor, practiceId }), null);
+  const otherPin = { ...f.pin, lesson: { ...f.pin.lesson, code: "INTRO-02" } };
+  await assert.rejects(() => f.reserve({ requestId: "wrong-lesson", expectedRevision: ended.revision, practiceId, pin: otherPin }));
+  const next = await f.reserve({ requestId: "continue-1", expectedRevision: ended.revision, practiceId });
+  assert.notEqual(next.attempt.attemptId, practiceId);
+  assert.equal(next.attempt.practiceId, practiceId);
+  assert.equal(next.attempt.projectSlug, first.attempt.projectSlug, "the same practice project continues");
+  await assert.rejects(() => f.reserve({ requestId: "continue-1", expectedRevision: 0 }), { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
+  await assert.rejects(() => f.reserve({ requestId: "other-practice", expectedRevision: next.revision, practiceId: randomUUID() }),
+    { code: "VIBE64_TRAINING_ATTEMPT_CONFLICT" });
+  const continued = await f.state.beginPreparation({ actor: f.actor, attemptId: next.attempt.attemptId, expectedRevision: next.revision,
+    initialSessionId: prepared.attempt.preparation.initialSessionId });
+  assert.equal(continued.attempt.preparation.initialSessionId, `training-${practiceId}`);
+  // The practice project resolves to the continued attempt, which admits work
+  // there; the attempt-keyed published-upgrade reader refuses it.
+  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" });
+  assert.equal(scope.practiceId, practiceId);
+  assert.equal(scope.scope.attemptId, next.attempt.attemptId);
+  assert.equal(scope.active, true);
+  assert.equal(scope.projectSlug, first.attempt.projectSlug);
+  assert.equal(scope.initialSessionId, `training-${practiceId}`);
+  assert.deepEqual(Object.keys(scope.training).sort(), ["exercise", "learnerKey", "pin", "practiceId", "schemaVersion"]);
+  assert.equal(scope.training.schemaVersion, 2);
+  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId: next.attempt.attemptId }),
+    { code: "VIBE64_TRAINING_ATTEMPT_CONFLICT" });
+  assert.equal((await f.state.activeAttemptForPractice({ actor: f.actor, practiceId })).attemptId, next.attempt.attemptId);
+  const left = await f.state.endAttempt({ actor: f.actor, attemptId: next.attempt.attemptId, requestId: "leave-2",
+    expectedRevision: continued.revision, reason: "left" });
+  const afterLeave = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "control" });
+  assert.equal(afterLeave.scope.attemptId, next.attempt.attemptId, "the latest retained attempt names the project");
+  assert.equal(afterLeave.active, false);
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" }),
+    { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: randomUUID() }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: "../practice" }));
+  assert.equal(left.active, null);
+});
+
+test("retired format-1 learning records stay readable and count toward completion at their exact pin", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-v1",
+    expectedRevision: reserved.revision, reason: "finished" });
+  const progress = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
+  const attemptId = progress.attempts[0].attemptId;
+  progress.attempts[0].learning = { submissions: [{ submissionId: "saved-answer", assessmentId: "explain", kind: "answer", rubric: "lesson.md#explain",
+    rubricRevision: f.pin.lesson.hash, outcome: "passed", assistance: "none", explanation: "The saved answer met the rubric.",
+    recordedAt: "2026-10-06T01:00:00.000Z", evidence: { kind: "answer", learnerId: "42", attemptId, messageId: "message-1",
+      questionId: "question-1", text: "The browser asks and the server answers." } }] };
+  await f.write("progress.json", progress, f.paths.root);
+  const state = await f.state.readState({ actor: f.actor, includeCompletion: true });
+  assert.deepEqual(state.progress.attempts[0].learning, progress.attempts[0].learning);
+  assert.deepEqual(state.lessonCompletions, [{ lessonCode: "INTRO-01", lessonHash: f.pin.lesson.hash, required: 1, passed: 1,
+    completed: true, open: false }]);
+  const next = await f.reserve({ requestId: "start-again", expectedRevision: ended.revision });
+  assert.equal((await f.state.resumeAttempt({ actor: f.actor, attemptId: next.attempt.attemptId })).completion.completed, true);
+  progress.attempts[0].learning.submissions[0].rubric = "lesson.md#other";
+  progress.attempts.push(...JSON.parse(await fs.readFile(f.paths.progress, "utf8")).attempts.slice(1));
+  Object.assign(progress, { revision: next.revision, activeAttemptId: next.attempt.attemptId });
+  await f.write("progress.json", progress, f.paths.root);
+  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exact pinned assessment/u);
 });
 
 test("attempt end refuses malformed, other-actor and stale admissions and composes with the original preparation exclusion", async t => {
@@ -2046,7 +1716,7 @@ test("end progress failures before and after atomic rename retry the original re
   for (const afterRename of [false, true]) {
     const f = await fixture(t);
     const reserved = await f.reserve();
-    const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "restart" };
+    const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "left" };
     const realRename = fs.rename;
     const mock = t.mock.method(fs, "rename", async (...args) => {
       if (args[1] === f.paths.progress) {
@@ -2073,23 +1743,27 @@ test("end progress failures before and after atomic rename retry the original re
   }
 });
 
-// D-e: v2 step results live outside progress.json, so the retained-attempt cap
-// rose from eight to 32; the progress byte bound is unchanged.
-test("32 retained attempts and the total byte bound refuse growth without evicting history or replay identities", async t => {
+// Step results live with the lesson content and code ledgers with the practice
+// project, so a new attempt beyond 32 drops only the oldest ended attempt.
+test("a 33rd attempt prunes the oldest ended attempt and the total byte bound still refuses growth", async t => {
   const f = await fixture(t, { learning: true });
   let state = await f.state.readState({ actor: f.actor });
   for (let index = 0; index < 32; index++) {
     const reserved = await f.reserve({ requestId: `start-${index}`, expectedRevision: state.revision });
     state = await f.state.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId,
-      requestId: `end-${index}`, expectedRevision: reserved.revision, reason: "restart" });
+      requestId: `end-${index}`, expectedRevision: reserved.revision, reason: "left" });
   }
   const valid = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
   assert.equal(valid.attempts.length, 32);
   assert.equal(valid.activeAttemptId, null);
-  const before = await treeState(f.systemRoot);
-  await assert.rejects(() => f.reserve({ requestId: "start-33", expectedRevision: state.revision }), /32 retained-attempt limit/u);
   assert.equal((await f.reserve({ requestId: "start-0", expectedRevision: 0 })).attempt.attemptId, valid.attempts[0].attemptId);
-  assert.deepEqual(await treeState(f.systemRoot), before);
+  const pruned = await f.reserve({ requestId: "start-33", expectedRevision: state.revision });
+  const kept = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
+  assert.equal(kept.attempts.length, 32);
+  assert.deepEqual(kept.attempts.map(value => value.attemptId), [...valid.attempts.slice(1).map(value => value.attemptId), pruned.attempt.attemptId]);
+  await f.write("reader.json", { schemaVersion: 1, learnerId: "42", attemptId: valid.attempts[0].attemptId, stepId: "explain", scroll: 0 }, f.paths.root);
+  assert.equal(await f.state.readReader({ actor: f.actor }), null, "a pruned attempt has no reader position");
+  await f.state.endAttempt({ actor: f.actor, attemptId: pruned.attempt.attemptId, requestId: "end-33", expectedRevision: pruned.revision, reason: "discard" });
   const ninth = randomUUID();
   const oversized = { ...valid, revision: valid.revision + 2, attempts: [...valid.attempts, {
     ...valid.attempts[0], attemptId: ninth, projectSlug: `training-${ninth.replaceAll("-", "")}`,
@@ -2145,7 +1819,7 @@ test("stale summaries across retirement remain tied to the retained attempt and 
   const first = await f.reserve();
   const oldSummary = JSON.parse(await fs.readFile(f.paths.active, "utf8"));
   const ended = await f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId,
-    requestId: "end-1", expectedRevision: first.revision, reason: "restart" });
+    requestId: "end-1", expectedRevision: first.revision, reason: "left" });
   const empty = JSON.parse(await fs.readFile(f.paths.active, "utf8"));
   const next = await f.reserve({ requestId: "start-2", expectedRevision: ended.revision });
   const canonical = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
@@ -2172,7 +1846,7 @@ test("stale summaries across retirement remain tied to the retained attempt and 
     const before = await treeState(f.systemRoot);
     for (const operation of [() => f.state.readState({ actor: f.actor }),
       () => f.state.resumeAttempt({ actor: f.actor, attemptId: next.attempt.attemptId }),
-      () => f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId, requestId: "end-1", expectedRevision: 0, reason: "restart" })]) {
+      () => f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId, requestId: "end-1", expectedRevision: 0, reason: "left" })]) {
       await assert.rejects(operation, error => error.code === "VIBE64_TRAINING_STATE_INVALID");
     }
     assert.deepEqual(await treeState(f.systemRoot), before);
@@ -2195,165 +1869,6 @@ test("stale summaries across retirement remain tied to the retained attempt and 
   await f.write("progress.json", canonical, f.paths.root);
   assert.deepEqual((await f.state.readState({ actor: f.actor })).active, next.active);
 });
-
-test("ended historical assessment contracts and installed pins are verified even without an active attempt", async t => {
-  const f = await learningFixture(t);
-  await f.save("question-old", "answer-one");
-  await f.record(f.answer("answer-one", "historical-answer"));
-  const previous = await f.state.readState({ actor: f.actor });
-  const input = { actor: f.actor, attemptId: f.attemptId, requestId: "end-old", expectedRevision: previous.revision, reason: "discard" };
-  await f.state.endAttempt(input);
-  const original = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
-  const changed = structuredClone(original);
-  changed.attempts[0].learning.submissions[0].rubric = "lesson.md#other";
-  await f.write("progress.json", changed, f.paths.root);
-  const before = await treeState(f.systemRoot);
-  assert.equal((await f.state.readState({ actor: f.actor })).active, null);
-  for (const operation of [() => f.state.readState({ actor: f.actor, includeCompletion: true }),
-    () => f.state.endAttempt(input), () => f.reserve({ requestId: "new-history", expectedRevision: original.revision })]) {
-    await assert.rejects(operation, /exact pinned assessment/u);
-  }
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  await f.write("progress.json", original, f.paths.root);
-  const content = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit);
-  await fs.rename(content, `${content}-retained`);
-  try {
-    const missingBefore = await treeState(f.systemRoot);
-    assert.equal((await f.state.readState({ actor: f.actor })).progress.attempts.length, 1);
-    await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), error => error.code === "VIBE64_TRAINING_CONTENT_MISSING");
-    await assert.rejects(() => f.state.endAttempt(input), error => error.code === "VIBE64_TRAINING_CONTENT_MISSING");
-    assert.deepEqual(await treeState(f.systemRoot), missingBefore);
-  } finally { await fs.rename(`${content}-retained`, content); }
-  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).completion, null);
-  assert.deepEqual((await f.state.readState({ actor: f.actor })).progress.attempts[0].learning, original.attempts[0].learning);
-});
-
-test("exact-pin completion unions historical passes without rebinding receipts and changed installed lesson content inherits none", async t => {
-  const f = await learningFixture(t);
-  await f.save("question-old", "answer-one");
-  await f.record(f.answer("answer-one", "old-pass"));
-  await f.record(f.observation("exercise", "old-practical"));
-  const old = await f.state.readState({ actor: f.actor });
-  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: f.attemptId, requestId: "end-old", expectedRevision: old.revision, reason: "restart" });
-  const second = await f.reserve({ requestId: "start-second", expectedRevision: ended.revision });
-  const secondId = second.attempt.attemptId;
-  const question = f.checkpoint("answer-one");
-  await f.state.saveLessonResume({ actor: f.actor, attemptId: secondId, requestId: "question-second", expectedRevision: second.revision, resume: question });
-  const input = f.answer("answer-one", "second-pass");
-  const recorded = await f.state.recordAssessment({ ...input, attemptId: secondId,
-    expectedRevision: (await f.state.readState({ actor: f.actor })).revision,
-    evidence: { ...input.evidence, attemptId: secondId } });
-  assert.equal(recorded.completion.passed, 2, "Repeated assessment counts once; historical practical pass stays at its old producer identity.");
-  const history = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(history.active.learning.submissions.length, 1);
-  assert.equal(history.active.learning.submissions[0].evidence.attemptId, secondId);
-  assert.equal(history.progress.attempts[0].learning.submissions[1].evidence.attemptId, f.attemptId);
-  assert.equal(history.progress.attempts[0].learning.submissions[1].evidence.projectSlug, old.active.projectSlug);
-  assert.equal(history.completion.passed, 2);
-  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const lesson = await content.readLesson({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
-  assert.deepEqual(passedAssessmentIds(history.active, lesson, history.progress.attempts), ["answer-one", "exercise-practice"]);
-  const anotherTopic = { ...history.active, pin: { ...history.active.pin,
-    topic: { ...history.active.pin.topic, commit: "b".repeat(40) } } };
-  assert.deepEqual(passedAssessmentIds(anotherTopic, lesson, history.progress.attempts), ["answer-one", "exercise-practice"]);
-  const anotherLesson = { ...history.active, pin: { ...history.active.pin,
-    lesson: { ...history.active.pin.lesson, code: "INTRO-02" } } };
-  assert.deepEqual(passedAssessmentIds(anotherLesson, lesson, history.progress.attempts), []);
-  const wrongRubric = structuredClone(history.progress.attempts);
-  for (const attempt of wrongRubric) {
-    for (const submission of attempt.learning?.submissions || []) submission.rubricRevision = "0".repeat(64);
-  }
-  assert.deepEqual(passedAssessmentIds(history.active, lesson, wrongRubric), []);
-  await f.state.endAttempt({ actor: f.actor, attemptId: secondId, requestId: "end-second", expectedRevision: history.revision, reason: "restart" });
-  const descriptor = JSON.parse(await fs.readFile(path.join(f.sourceRoot, "package.json"), "utf8"));
-  descriptor.version = "0.1.1";
-  await f.write("package.json", descriptor);
-  const lessonFile = path.join(f.sourceRoot, "training/lessons/INTRO-01/lesson.md");
-  await fs.appendFile(lessonFile, "\nAn independently revised introduction.\n");
-  execFileSync("git", ["-C", f.sourceRoot, "add", "."], { stdio: "ignore" });
-  execFileSync("git", ["-C", f.sourceRoot, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Revised pinned introduction"], { stdio: "ignore" });
-  const pinned = await readPinnedTopic(f.sourceRoot);
-  const topic = { schemaVersion: 1, topicId: pinned.topicId, release: pinned.release, repository: pinned.repository, commit: pinned.commit, topicHash: pinned.topicHash };
-  await createTrainingContentInstaller({ systemRoot: f.systemRoot }).installTopic({ sourceRoot: f.sourceRoot, pin: topic });
-  const newPin = { course: { ...f.pin.course }, topic, lesson: { code: f.pin.lesson.code, hash: pinned.topicManifest.lessons[0].hash } };
-  assert.notEqual(newPin.lesson.hash, f.pin.lesson.hash);
-  const revision = (await f.state.readState({ actor: f.actor })).revision;
-  const revised = await f.reserve({ requestId: "start-revised", expectedRevision: revision, pin: newPin });
-  const result = await f.state.resumeAttempt({ actor: f.actor, attemptId: revised.attempt.attemptId });
-  assert.equal(result.completion.passed, 0);
-  assert.equal(result.completion.completed, false);
-  const revisedLesson = await content.readLesson({ ...newPin.topic, lessonCode: newPin.lesson.code, lessonHash: newPin.lesson.hash });
-  const revisedState = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(passedAssessmentIds(revisedState.active, revisedLesson, revisedState.progress.attempts), []);
-  assert.deepEqual((await f.state.readState({ actor: f.actor })).progress.attempts[0], ended.attempt);
-});
-
-test("documented staged restore preserves ended history and its exact pinned receipts rather than manufacturing an active exercise", async t => {
-  const f = await learningFixture(t);
-  await f.save("question-backup", "answer-one");
-  await f.record(f.answer("answer-one", "backup-answer"));
-  const old = await f.state.readState({ actor: f.actor });
-  await f.state.endAttempt({ actor: f.actor, attemptId: f.attemptId, requestId: "backup-end", expectedRevision: old.revision, reason: "discard" });
-  const users = path.dirname(f.paths.root);
-  const before = await treeState(users);
-  const procedure = await recoveryProcedure(f);
-  const checkpoint = await procedure.copy();
-  const result = await procedure.restore(checkpoint);
-  assert.match(result.stdout, /Reservation records and installed pins validated/u);
-  assert.deepEqual(await treeState(users), before);
-  const restored = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(restored.active, null);
-  assert.equal(restored.activeSummaryCurrent, true);
-  assert.equal(restored.completion, null);
-  assert.deepEqual(restored.progress.attempts[0].learning, old.active.learning);
-  assert.equal(restored.progress.attempts[0].ended.reason, "discard");
-});
-
-
-test("unchanged lesson completion survives a new installed topic and course revision without rebinding evidence", async t => {
-  const f = await learningFixture(t);
-  await f.save("question-before-topic-update", "answer-one");
-  await f.record(f.answer("answer-one", "answer-before-topic-update"));
-  await f.record(f.observation("exercise", "practice-before-topic-update"));
-  const old = await f.state.readState({ actor: f.actor });
-  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: f.attemptId,
-    requestId: "end-before-topic-update", expectedRevision: old.revision, reason: "restart" });
-  const originalProgress = await fs.readFile(f.paths.progress, "utf8");
-  const descriptor = JSON.parse(await fs.readFile(path.join(f.sourceRoot, "package.json"), "utf8"));
-  descriptor.version = "0.1.1";
-  await f.write("package.json", descriptor);
-  await fs.appendFile(path.join(f.sourceRoot, "training/outline.md"), "\nA revised course introduction with the same lesson.\n");
-  execFileSync("git", ["-C", f.sourceRoot, "add", "."], { stdio: "ignore" });
-  execFileSync("git", ["-C", f.sourceRoot, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
-    "-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Revised topic, unchanged lesson"], { stdio: "ignore" });
-  const pinned = await readPinnedTopic(f.sourceRoot);
-  const topic = { schemaVersion: 1, topicId: pinned.topicId, release: pinned.release,
-    repository: pinned.repository, commit: pinned.commit, topicHash: pinned.topicHash };
-  const pin = { course: { courseId: "reordered-intro-course", release: "0.2.0" }, topic,
-    lesson: { code: f.pin.lesson.code, hash: pinned.topicManifest.lessons[0].hash } };
-  assert.notEqual(topic.commit, f.pin.topic.commit);
-  assert.notEqual(topic.topicHash, f.pin.topic.topicHash);
-  assert.equal(pin.lesson.hash, f.pin.lesson.hash, "Only the topic and course changed; assessment content is identical.");
-  await createTrainingContentInstaller({ systemRoot: f.systemRoot }).installTopic({ sourceRoot: f.sourceRoot, pin: topic });
-  assert.equal(await fs.readFile(f.paths.progress, "utf8"), originalProgress, "Installing new content cannot migrate learner records.");
-  const reserved = await f.reserve({ requestId: "start-new-topic", expectedRevision: ended.revision, pin });
-  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId });
-  assert.deepEqual(current.completion, { lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash,
-    required: 6, passed: 2, completed: false });
-  const saved = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(saved.progress.attempts[0], ended.attempt, "Earlier pins, rubric and exact answer/practical receipts remain immutable.");
-  assert.deepEqual(saved.active.learning?.submissions || [], [], "Historical evidence is counted, never copied to the fresh attempt.");
-  assert.notEqual(saved.active.attemptId, f.attemptId);
-  assert.notEqual(saved.active.projectSlug, old.active.projectSlug);
-  const beforeRead = await treeState(f.systemRoot);
-  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 2);
-  assert.deepEqual(await treeState(f.systemRoot), beforeRead, "Completion reads do not rewrite progress.");
-  const other = { uid: 43, username: "another-learner" };
-  const otherReserved = await f.state.reserveAttempt({ actor: other, requestId: "start-another-learner", expectedRevision: 0, pin });
-  const isolated = await f.state.resumeAttempt({ actor: other, attemptId: otherReserved.attempt.attemptId });
-  assert.equal(isolated.completion.passed, 0, "Identical content does not transfer another person's evidence.");
-});
-
 
 test("an isolated original store admits drafts only through its configured author-preview content reader", async t => {
   const f = await fixture(t, { published: false });
@@ -2381,147 +1896,21 @@ test("an isolated original store admits drafts only through its configured autho
   }
 });
 
-test("same actor and identical pinned lesson keep preview assessment receipts outside published learner progress", async t => {
-  const f = await learningFixture(t);
-  await f.save("learner-question", "answer-one");
-  await f.record(f.answer("answer-one", "learner-pass"));
-  const learnerBefore = await treeState(f.systemRoot);
-  const previewRoot = path.join(f.root, "author-preview");
-  await fs.mkdir(previewRoot, { mode: 0o700 });
-  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
-  const preview = createTrainingLearnerState({ systemRoot: previewRoot, content });
-  const reserved = await preview.reserveAttempt({ actor: f.actor, requestId: "preview-start", expectedRevision: 0, pin: f.pin });
-  const attemptId = reserved.attempt.attemptId;
-  assert.notEqual(attemptId, f.attemptId);
-  assert.deepEqual(reserved.attempt.pin, f.pin);
-  assert.equal((await preview.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 0);
-  const preparing = await preview.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
-  const ready = await preview.recordPreparationReady({ actor: f.actor, attemptId, expectedRevision: preparing.revision,
-    initialSessionId: preparing.attempt.preparation.initialSessionId });
-  const questioned = await preview.saveLessonResume({ actor: f.actor, attemptId, expectedRevision: ready.revision,
-    requestId: "preview-question", resume: { stage: "practice", pendingQuestion: { id: "preview-question", assessmentId: "answer-two", text: "What did you observe?" },
-      visuals: [], summary: "A preview-only question." } });
-  const result = await preview.recordAssessment({ actor: f.actor, attemptId, expectedRevision: questioned.revision,
-    submissionId: "preview-pass", assessmentId: "answer-two", outcome: "passed", assistance: "none", explanation: "Controlled store evidence for preview isolation.",
-    evidence: { kind: "answer", learnerId: "42", attemptId, messageId: "preview-message", questionId: "preview-question", text: "The browser displays a response." } });
-  assert.equal(result.completion.passed, 1);
-  const previewState = await preview.readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(previewState.active.learning.submissions.map(value => value.submissionId), ["preview-pass"]);
-  const learnerState = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.equal(learnerState.active.attemptId, f.attemptId);
-  assert.equal(learnerState.completion.passed, 1);
-  assert.deepEqual(learnerState.active.learning.submissions.map(value => value.submissionId), ["learner-pass"]);
-  const previewBefore = await treeState(previewRoot);
-  await assert.rejects(() => preview.recordAssessment({ ...f.answer("answer-one", "foreign-learner-receipt"), expectedRevision: previewState.revision }));
-  await assert.rejects(() => f.state.resumeAttempt({ actor: f.actor, attemptId }));
-  assert.deepEqual(await treeState(previewRoot), previewBefore);
-  assert.deepEqual(await treeState(f.systemRoot), learnerBefore);
-  const restored = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: f.systemRoot });
-  assert.deepEqual((await restored.readState({ actor: f.actor, includeCompletion: true })).progress, previewState.progress);
-});
-
-
-test("source-less learning scope comes from the real learner reservation and installed no-exercise pin without writes", async t => {
-  const f = await fixture(t, { noExercise: true });
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const before = await treeState(f.systemRoot);
-  const scope = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
-  assert.deepEqual(scope, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: true },
-    projectRuntimeRoot: path.join(f.paths.root, "learning-sessions", attemptId), systemRoot: f.systemRoot,
-    active: true, activeSummaryCurrent: true });
-  scope.scope.pin.lesson.code = "foreign";
-  assert.deepEqual((await f.state.readLearningSessionScope({ actor: f.actor, attemptId })).scope.pin, f.pin);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  await assert.rejects(() => fs.lstat(path.join(f.paths.root, "learning-sessions")), { code: "ENOENT" });
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: { uid: 43 }, attemptId }),
-    error => error.code === "VIBE64_TRAINING_ATTEMPT_MISSING");
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: {}, attemptId }));
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId: "../attempt" }));
-  assert.deepEqual(await treeState(f.systemRoot), before);
-});
-
-test("source-less scope admits exact chat identity without authorizing damaged teaching content", async t => {
-  const f = await fixture(t, { noExercise: true });
-  const reserved = await f.reserve();
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
-  const original = await f.state.readLearningSessionScope(input);
-  const files = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit, "files");
-  await fs.writeFile(path.join(files, "training/lessons/INTRO-01/lesson.md"), "Damaged teaching content");
-  assert.deepEqual(await f.state.readLearningSessionScope(input), original);
-  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-  await fs.writeFile(path.join(files, "training/lessons/INTRO-01/lesson.json"), "{}");
-  await assert.rejects(() => f.state.readLearningSessionScope(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-});
-
-test("learning scope refuses exercise lessons and aliases rather than substituting a private root", async t => {
-  const exercise = await fixture(t);
-  const reservedExercise = await exercise.reserve();
-  await assert.rejects(() => exercise.state.readLearningSessionScope({ actor: exercise.actor, attemptId: reservedExercise.attempt.attemptId }),
-    error => error.code === "VIBE64_TRAINING_EXERCISE_REQUIRED");
-  const f = await fixture(t, { noExercise: true });
-  const reserved = await f.reserve();
-  const link = path.join(f.paths.root, "learning-sessions");
-  await fs.symlink(f.sourceRoot, link);
-  const before = await treeState(f.systemRoot);
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId: reserved.attempt.attemptId }));
-  assert.deepEqual(await treeState(f.systemRoot), before);
-});
-
-test("learning scope reports ended and unconfirmed-summary state truthfully without repairing either", async t => {
-  const f = await fixture(t, { noExercise: true });
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  await fs.writeFile(f.paths.active, JSON.stringify({ schemaVersion: 1, learnerId: "42", progressRevision: 0, attemptId: null }));
-  const invalidBefore = await treeState(f.systemRoot);
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId }),
-    error => error.code === "VIBE64_TRAINING_STATE_INVALID");
-  assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
-  // Original recovery allows a missing summary; an invented end revision is invalid.
-  await fs.rm(f.paths.active);
-  const before = await treeState(f.systemRoot);
-  const unconfirmed = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
-  assert.equal(unconfirmed.active, true);
-  assert.equal(unconfirmed.activeSummaryCurrent, false);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  const ended = await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: reserved.revision,
-    requestId: "end-learning", reason: "restart" });
-  const endedBefore = await treeState(f.systemRoot);
-  const historical = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
-  assert.equal(historical.active, false);
-  assert.equal(historical.activeSummaryCurrent, true);
-  assert.deepEqual(historical.scope.pin, ended.attempt.pin);
-  assert.deepEqual(await treeState(f.systemRoot), endedBefore);
-});
-
-
-test("local practice admission maps only this learner's own saved practice slug to its exact training scope", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const slug = reserved.attempt.projectSlug;
-  const before = await treeState(f.systemRoot);
-  const admitted = await admitLocalPracticeProject({ learners: f.state, actor: f.actor, slug });
-  assert.deepEqual(admitted, { actor: f.actor, training: (await f.state.readExerciseProjectScope({
-    actor: f.actor, attemptId: reserved.attempt.attemptId })).training });
-  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: { uid: 43 }, slug }), null);
-  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: f.actor, slug: "working-app" }), null);
-  assert.equal(await admitLocalPracticeProject({ learners: f.state, actor: f.actor,
-    slug: `training-${"0".repeat(12)}4${"0".repeat(3)}8${"0".repeat(15)}` }), null);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  const withoutExercise = await fixture(t, { noExercise: true });
-  const sourceLess = await withoutExercise.reserve();
-  assert.equal(await admitLocalPracticeProject({ learners: withoutExercise.state, actor: withoutExercise.actor,
-    slug: sourceLess.attempt.projectSlug }), null);
-});
-
-test("exercise project scope reads the exact saved learner and installed exercise without writes or source-less substitution", async t => {
+test("exercise project scope reads the exact saved learner and installed exercise without writes", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
   const before = await treeState(f.systemRoot);
   const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  // The attempt-keyed reader stays the version 1 marker its published upgrade
+  // compares; the practice-keyed reader gives the learning-space marker.
   assert.deepEqual(saved, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
     training: { schemaVersion: 1, learnerKey: "NDI", attemptId, pin: f.pin,
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
+    projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
+  assert.deepEqual(await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" }), {
+    scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
+    practiceId: attemptId, training: { schemaVersion: 2, learnerKey: "NDI", practiceId: attemptId, pin: f.pin,
     exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
     projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
   saved.training.pin.lesson.hash = "e".repeat(64);
@@ -2529,7 +1918,6 @@ test("exercise project scope reads the exact saved learner and installed exercis
   await assert.rejects(() => f.state.readExerciseProjectScope({ actor: { uid: 43 }, attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId: "../attempt" }));
   await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "all" }));
-  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_REQUIRED" });
   assert.deepEqual(await treeState(f.systemRoot), before);
   const withoutExercise = await fixture(t, { noExercise: true });
   const noExerciseReservation = await withoutExercise.reserve();
@@ -2552,7 +1940,7 @@ test("exercise scope keeps ended history observable but denies fresh work and in
   await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
   assert.deepEqual(await treeState(f.systemRoot), unconfirmedBefore);
   const resumed = await f.state.resumeAttempt({ actor: f.actor, attemptId });
-  await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: resumed.revision, requestId: "practice-end", reason: "restart" });
+  await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: resumed.revision, requestId: "practice-end", reason: "left" });
   const endedBefore = await treeState(f.systemRoot);
   const historical = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "control" });
   assert.equal(historical.active, false);
@@ -2590,13 +1978,13 @@ test("actual saved exercise caller admits only its same original local Project r
   // Practice projects are ordinary projects: the saved exercise scope is read
   // fresh and the original local practice admission owns the callback.
   const practice = async ({ actor, attemptId: id, access = "observe" }, operation) => {
-    const saved = await f.state.readExerciseProjectScope({ actor, attemptId: id, access });
+    const saved = await f.state.readPracticeProjectScope({ actor, practiceId: id, access });
     return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access },
       operation && (() => operation({ projectSlug: saved.projectSlug })));
   };
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  const scope = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
   const progressBefore = await fs.readFile(f.paths.progress);
   const activeBefore = await fs.readFile(f.paths.active);
   let captured;
@@ -2631,138 +2019,11 @@ test("actual saved exercise caller admits only its same original local Project r
   // setup success, native teaching or Preview acceptance.
 });
 
-async function guardedLearningWriterFixture(t) {
-  const f = await learningFixture(t);
-  await f.save("guarded-original-question", "answer-one");
-  const revision = (await f.state.readState({ actor: f.actor })).revision;
-  const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const entered = Promise.withResolvers();
-  const continueRead = Promise.withResolvers();
-  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-    async readLesson(input) {
-      const lesson = await installed.readLesson(input);
-      entered.resolve();
-      await continueRead.promise;
-      return lesson;
-    }
-  } });
-  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active) };
-  const write = (kind, facilities) => kind === "question"
-    ? state.saveLessonResume({ actor: f.actor, attemptId: f.attemptId, expectedRevision: revision,
-      requestId: "guarded-next-question", resume: f.checkpoint("answer-two") }, facilities)
-    : state.recordAssessment({ ...f.answer("answer-one", "guarded-answer"), expectedRevision: revision }, facilities);
-  async function unchanged() {
-    assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
-    assert.deepEqual(await fs.readFile(f.paths.active), before.active);
-    const release = await tryAcquireExclusiveFileLock(f.paths.lock);
-    assert.equal(typeof release, "function", "refused original writer releases its same learner lock");
-    await release();
-  }
-  return { ...f, state, entered, continueRead, write, unchanged };
-}
-
-test("original learning writer refuses Stop after held installed verification for question and assessment", { timeout: 15_000 }, async t => {
-  for (const kind of ["question", "assessment"]) {
-    const f = await guardedLearningWriterFixture(t);
-    const abort = new AbortController();
-    const reason = new Error(`Stopped admitted ${kind}`);
-    const pending = f.write(kind, { signal: abort.signal });
-    const rejected = assert.rejects(pending, error => error === reason);
-    await f.entered.promise;
-    assert.equal(await tryAcquireExclusiveFileLock(f.paths.lock), null, "installed verification is inside the original learner writer lock");
-    abort.abort(reason);
-    f.continueRead.resolve();
-    await rejected;
-    await f.unchanged();
-  }
-});
-
-test("original learning writer refreshes revoked authority after held content and refuses without replay or progress", { timeout: 15_000 }, async t => {
-  for (const kind of ["question", "assessment"]) {
-    const f = await guardedLearningWriterFixture(t);
-    let authorized = true;
-    let refreshes = 0;
-    const revoked = new Error("Actual originating actor no longer has teaching WRITE authority");
-    const pending = f.write(kind, { async requireCurrent() {
-      refreshes++;
-      if (!authorized) throw revoked;
-    } });
-    const rejected = assert.rejects(pending, error => error === revoked);
-    await f.entered.promise;
-    assert.equal(refreshes, 0, "fresh effect admission belongs after the awaited original verification");
-    authorized = false;
-    f.continueRead.resolve();
-    await rejected;
-    assert.equal(refreshes, 1);
-    await f.unchanged();
-  }
-});
-
-test("original learning writer checks retired accepted request synchronously after awaited fresh authority", { timeout: 15_000 }, async t => {
-  for (const kind of ["question", "assessment"]) {
-    const f = await guardedLearningWriterFixture(t);
-    const authorityEntered = Promise.withResolvers();
-    const continueAuthority = Promise.withResolvers();
-    let current = true;
-    let checked = 0;
-    const retired = new Error("The actual admitted native request was retired while authority refreshed");
-    const pending = f.write(kind, { async requireCurrent() {
-      authorityEntered.resolve();
-      await continueAuthority.promise;
-    }, assertCurrent() {
-      checked++;
-      if (!current) throw retired;
-    } });
-    const rejected = assert.rejects(pending, error => error === retired);
-    await f.entered.promise;
-    f.continueRead.resolve();
-    await authorityEntered.promise;
-    assert.equal(checked, 0);
-    current = false;
-    continueAuthority.resolve();
-    await rejected;
-    assert.equal(checked, 1);
-    await f.unchanged();
-  }
-});
-
-test("original learning receipt replay refreshes authority and preserves exact saved question and assessment", async t => {
-  const f = await learningFixture(t);
-  const saved = await f.save("guarded-replay-question", "answer-one");
-  const answerInput = { ...f.answer("answer-one", "guarded-replay-answer"), expectedRevision: saved.revision };
-  const assessed = await f.state.recordAssessment(answerInput);
-  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active) };
-  const resumeInput = { actor: f.actor, attemptId: f.attemptId, expectedRevision: 0,
-    requestId: "guarded-replay-question", resume: f.checkpoint("answer-one") };
-  let authorized = false;
-  let refreshes = 0;
-  let checks = 0;
-  const revoked = new Error("Saved receipt does not grant current teaching WRITE authority");
-  const facilities = { async requireCurrent() {
-    refreshes++;
-    if (!authorized) throw revoked;
-  }, assertCurrent() { checks++; } };
-  await assert.rejects(f.state.saveLessonResume(resumeInput, facilities), error => error === revoked);
-  await assert.rejects(f.state.recordAssessment(answerInput, facilities), error => error === revoked);
-  assert.equal(checks, 0);
-  authorized = true;
-  const questionReplay = await f.state.saveLessonResume(resumeInput, facilities);
-  const assessmentReplay = await f.state.recordAssessment(answerInput, facilities);
-  assert.equal(questionReplay.replayed, true);
-  assert.equal(assessmentReplay.replayed, true);
-  assert.equal(questionReplay.revision, assessed.revision);
-  assert.deepEqual(assessmentReplay.attempt.learning.submissions, assessed.attempt.learning.submissions);
-  assert.equal(refreshes, 4);
-  assert.equal(checks, 2);
-  assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
-  assert.deepEqual(await fs.readFile(f.paths.active), before.active);
-});
-
 test("a practice session is an ordinary local project session that stays the learner's after the lesson ends", async t => {
   const f = await fixture(t);
   const [{ createStudioProjectContext }, { createService: createProject }, { createService: createSessions },
     { createManagedProjectRepositoryService }, { createSessionSource },
-    { assertProjectEffectAdmission, captureProjectRequestContext, registerLocalPracticeAdmission,
+    { assertProjectEffectAdmission, captureProjectRequestContext,
       runWithProjectRequestContext, runWithResolvedProjectRequestContext }] = await Promise.all([
     import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
     import("../../packages/vibe64-project/src/server/service.js"),
@@ -2778,7 +2039,7 @@ test("a practice session is an ordinary local project session that stays the lea
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
   await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
-  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  const saved = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
   const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
   const exercise = await installed.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
   const selection = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
@@ -2820,13 +2081,8 @@ test("a practice session is an ordinary local project session that stays the lea
   assert.equal(created.sourceReady, true);
   assert.equal(setupRuntime.learningScope, null, "the session runtime is an ordinary project runtime");
   // The ordinary project route admits the learner's own practice slug with write.
-  registerLocalPracticeAdmission(async ({ slug }) => {
-    const { admitLocalPracticeProject } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-    return admitLocalPracticeProject({ learners: f.state, actor: f.actor, slug });
-  });
-  t.after(() => registerLocalPracticeAdmission(async () => null));
-  const openProject = operation => runWithResolvedProjectRequestContext({ projectContext: core,
-    request: { params: { slug: saved.projectSlug } } }, operation);
+  const openProject = (operation, actor = f.actor) => runWithResolvedProjectRequestContext({ projectContext: core,
+    request: { params: { slug: saved.projectSlug }, headers: {}, vibe64User: actor } }, operation);
   let retained;
   await openProject(async () => {
     assert.doesNotThrow(assertProjectEffectAdmission);
@@ -2841,270 +2097,14 @@ test("a practice session is an ordinary local project session that stays the lea
   await runWithProjectRequestContext(retained, () => assert.doesNotThrow(assertProjectEffectAdmission));
   const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
   await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision,
-    requestId: "end-ordinary-practice", reason: "restart" });
+    requestId: "end-ordinary-practice", reason: "left" });
   await openProject(async () => {
     assert.doesNotThrow(assertProjectEffectAdmission, "the project stays writable after its lesson ends");
     const runtime = await project.createRuntime({ inspectSource: false });
     assert.equal((await runtime.store.readSession(created.sessionId)).sessionId, created.sessionId);
   });
   // Another person cannot open this learner's practice slug.
-  registerLocalPracticeAdmission(async ({ slug }) => {
-    const { admitLocalPracticeProject } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-    return admitLocalPracticeProject({ learners: f.state, actor: { uid: 43 }, slug });
-  });
-  await assert.rejects(openProject(() => assert.fail()), { code: "vibe64_project_route_unavailable" });
-});
-
-// Uses the original installed fixture, Core/Project/Git/Runtime source creator,
-// and saved preparation owner. No provider/native work or fabricated setup pass.
-async function historicalPracticeFixture(t, { archived = false } = {}) {
-  const f = await fixture(t);
-  const [{ createStudioProjectContext }, { createService: createProject }, { createManagedProjectRepositoryService },
-    { createSessionSource }, { upgradeLearningPracticeHistory }, { upgradeLearningPracticeSessionsOrdinary },
-    { createService: createSessions }, { createVibe64SessionStore }] = await Promise.all([
-    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
-    import("../../packages/vibe64-project/src/server/service.js"),
-    import("../../packages/vibe64-project/src/server/managedRepository.js"),
-    import("../../packages/vibe64-terminals/src/server/sessionSource.js"),
-    import("../../packages/vibe64-training/src/server/practiceHistoryUpgrade.js"),
-    import("../../packages/vibe64-training/src/server/practiceSessionsOrdinaryUpgrade.js"),
-    import("../../packages/vibe64-sessions/src/server/service.js"),
-    import("../../packages/vibe64-runtime/src/server/sessionStore.js")
-  ]);
-  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
-    explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
-  const project = createProject({ projectContext: core });
-  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project });
-  const reserved = await f.reserve();
-  await f.state.beginPreparation({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision });
-  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" });
-  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const exercise = await content.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
-  let legacyRuntime, initial, working, projectRecordPath, archiveOperation;
-  await core.runWithPracticeProjectScope({ actor: f.actor, training: saved.training, access: "create" }, async () => {
-    await repository.createManagedGitProject({ slug: saved.projectSlug, training: saved.training }, {
-      async initializeProject({ projectRoot }) {
-        for (const file of exercise.files) {
-          await fs.mkdir(path.dirname(path.join(projectRoot, file.path)), { recursive: true });
-          await fs.writeFile(path.join(projectRoot, file.path), file.bytes, { flag: "wx" });
-        }
-      }
-    });
-    const proof = await repository.verifyTrainingProjectSource({ slug: saved.projectSlug, training: saved.training }, { files: exercise.files });
-    projectRecordPath = core.projectRecordPathForSlug(saved.projectSlug);
-    await project.runInProjectContext(saved.projectSlug, async () => {
-      legacyRuntime = await project.createRuntime({ inspectSource: false,
-        createSessionSource: input => project.runProjectSourceExclusive(async () => createSessionSource({ ...input,
-          project: await project.readCurrentProject() }), { operation: "session-source-create" }) });
-      assert.equal(legacyRuntime.learningScope, null, "this is the original unflagged preparation source path");
-      initial = await legacyRuntime.createSession({ sessionId: saved.initialSessionId, sourceContext: { expectedCommit: proof.commit, vibe64User: f.actor } });
-      working = await legacyRuntime.createSession({ sessionId: "intentional-working", sourceContext: { expectedCommit: proof.commit, vibe64User: f.actor } });
-      await legacyRuntime.store.writeMetadataValue(initial.sessionId, "agent_identity_conversation_id", "retain-original-native-identity");
-      await legacyRuntime.store.writeConversationUserMessage(initial.sessionId, { text: "Retain these historical words" });
-      if (archived) {
-        // Actual original Sessions archive phases, original source recovery and
-        // original Runtime tar publication. This fixture has no native work.
-        let closes = 0;
-        const sessions = createSessions({ project, terminals: { async closeSessionTerminals() { closes++; } },
-          workspaceSetupRunner: { isRunning: () => false }, publishSessionChanged: async () => {} });
-        const result = await sessions.archiveSession(initial.sessionId);
-        assert.equal(result.ok, true, result.error);
-        assert.equal(closes, 1);
-        archiveOperation = (await legacyRuntime.store.readSession(initial.sessionId)).metadata.session_archive_operation;
-        assert.equal(JSON.parse(archiveOperation).status, "running");
-        assert.equal(JSON.parse(archiveOperation).phase, "source");
-      }
-    });
-  });
-  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261008-learning-practice-history");
-  const messages = [];
-  const run = (apply = false, report = (level, message) => messages.push({ level, message })) => upgradeLearningPracticeHistory({
-    systemRoot: f.systemRoot, backupRoot, apply, report });
-  // The 20261008 binding is verified through the original store reader for
-  // that saved scope (the Learning v1 practice store); Learning v2 removes it.
-  const boundStore = () => createVibe64SessionStore({ projectContextRoot: legacyRuntime.projectContextRoot,
-    projectRuntimeRoot: legacyRuntime.stateRoot, projectSessionSourceRoot: legacyRuntime.projectSessionSourceRoot, learningScope: saved.scope });
-  const ordinaryBackupRoot = path.join(f.systemRoot, "upgrades/backups/20261021-practice-sessions-ordinary/training");
-  const runOrdinary = (apply = false, report = (level, message) => messages.push({ level, message })) =>
-    upgradeLearningPracticeSessionsOrdinary({ systemRoot: f.systemRoot, backupRoot: ordinaryBackupRoot, apply, report });
-  return { ...f, core, project, repository, content, saved, legacyRuntime, initial, working, projectRecordPath, archiveOperation,
-    backupRoot, messages, run, boundStore, ordinaryBackupRoot, runOrdinary };
-}
-
-test("historical practice adoption validates the original saved initial source session without promoting preparation or rewriting progress", async t => {
-  const f = await historicalPracticeFixture(t);
-  const progress = await fs.readFile(f.paths.progress);
-  const active = await fs.readFile(f.paths.active);
-  const source = await fs.readFile(path.join(f.initial.sourcePath, "server.mjs"));
-  const working = await f.legacyRuntime.store.readSession(f.working.sessionId);
-  const native = await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).metadataRoot, "agent_identity_conversation_id"));
-  const before = await treeState(f.systemRoot);
-  await f.run();
-  assert.deepEqual(await treeState(f.systemRoot), before, "check writes no installation state");
-  await assert.rejects(f.boundStore().readSession(f.initial.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
-  await f.run(true);
-  assert.equal((await f.boundStore().readSession(f.initial.sessionId)).metadata.agent_identity_conversation_id, "retain-original-native-identity");
-  assert.equal((await f.boundStore().readSession(f.initial.sessionId)).sessionId, f.initial.sessionId);
-  assert.deepEqual(await f.legacyRuntime.store.readSession(f.working.sessionId), working);
-  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
-  assert.deepEqual(await fs.readFile(f.paths.active), active);
-  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), source);
-  assert.deepEqual(await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).metadataRoot, "agent_identity_conversation_id")), native);
-  assert.equal((await f.state.readState({ actor: f.actor })).active.preparation.phase, "preparing", "adoption is not a setup success or lesson proof");
-  const manifest = await fs.readFile(path.join(f.backupRoot, "manifest.json"));
-  await f.run(true);
-  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest, "retry preserves original publisher manifest");
-});
-
-test("historical archived practice retry revalidates the frozen binding against saved ownership and retains archive history", async t => {
-  const f = await historicalPracticeFixture(t, { archived: true });
-  const archivePath = path.join(f.legacyRuntime.store.paths().archivedSessionsRoot, `${f.initial.sessionId}.tar.gz`);
-  const original = await fs.readFile(archivePath);
-  await assert.rejects(f.run(true, (_level, message) => {
-    if (message.startsWith("Published state:") && message.endsWith(".tar.gz")) throw new Error("interrupted historical archive publication");
-  }), /interrupted historical archive publication/u);
-  const manifest = await fs.readFile(path.join(f.backupRoot, "manifest.json"));
-  const savedRecord = JSON.parse(await fs.readFile(f.projectRecordPath, "utf8"));
-  await updateProjectRecordMetadata(f.projectRecordPath, { ...savedRecord,
-    training: { ...savedRecord.training, learnerKey: Buffer.from("other-owner").toString("base64url") } });
-  const partial = await fs.readFile(archivePath);
-  await assert.rejects(f.run(true), /differs from its saved Training marker/u);
-  assert.deepEqual(await fs.readFile(archivePath), partial);
-  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
-  await updateProjectRecordMetadata(f.projectRecordPath, savedRecord);
-  await f.run(true);
-  const recordPath = path.join(f.legacyRuntime.store.paths().archivedSessionsRoot, `${f.initial.sessionId}.json`);
-  const record = JSON.parse(await fs.readFile(recordPath, "utf8"));
-  assert.deepEqual(JSON.parse(record.index.metadata.learning_session), { schemaVersion: 1, ...f.saved.scope, conversationId: f.initial.sessionId });
-  // The successful original archive keeps its running/source marker; migration
-  // validates published pair/status, not an invented cleared/completed marker.
-  const { createVibe64SessionStore } = await import("@local/vibe64-runtime/server");
-  const bound = createVibe64SessionStore({ projectContextRoot: f.legacyRuntime.projectContextRoot,
-    projectRuntimeRoot: f.legacyRuntime.stateRoot, projectSessionSourceRoot: f.legacyRuntime.projectSessionSourceRoot, learningScope: f.saved.scope });
-  assert.equal((await bound.readSession(f.initial.sessionId)).metadata.session_archive_operation, f.archiveOperation);
-  const beforeArchive = path.join(f.backupRoot, "before", path.relative(f.systemRoot, archivePath));
-  assert.deepEqual(await fs.readFile(beforeArchive), original);
-  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
-  const afterArchive = path.join(f.backupRoot, "after", path.relative(f.systemRoot, archivePath));
-  await fs.writeFile(afterArchive, "corrupt frozen archive");
-  await assert.rejects(f.run(true), /archive/u);
-  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
-});
-
-test("historical practice adoption rejects conflicting normal and author-preview claims and malformed production progress", async t => {
-  const f = await historicalPracticeFixture(t);
-  const previewRoot = path.join(f.systemRoot, "author-preview");
-  const previewUser = path.join(previewRoot, "training/users", Buffer.from("42").toString("base64url"));
-  await fs.mkdir(previewUser, { recursive: true, mode: 0o700 });
-  await fs.copyFile(f.paths.progress, path.join(previewUser, "progress.json"));
-  await fs.copyFile(f.paths.active, path.join(previewUser, "active-lesson.json"));
-  const before = await treeState(f.systemRoot);
-  await assert.rejects(f.run(true), /multiple saved learner namespaces/u);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  await fs.rm(previewRoot, { recursive: true });
-  await fs.writeFile(f.paths.progress, '{"schemaVersion":1,"retained":"invalid-original"}\n');
-  const invalid = await treeState(f.systemRoot);
-  await assert.rejects(f.run(true));
-  assert.deepEqual(await treeState(f.systemRoot), invalid);
-  await assert.rejects(fs.access(path.join(f.backupRoot, "manifest.json")), { code: "ENOENT" });
-});
-
-test("post-upgrade original Preparation resumes the same still-pending initial source session with no new session or pin", async t => {
-  const f = await historicalPracticeFixture(t);
-  const { createTrainingService } = await import("../../packages/vibe64-training/src/server/preparation.js");
-  const beforeManifest = await fs.readFile(f.legacyRuntime.store.paths(f.initial.sessionId).manifestPath);
-  const beforeSource = await fs.readFile(path.join(f.initial.sourcePath, "server.mjs"));
-  await f.run(true);
-  // Learning v2: the next numbered upgrade makes the adopted session ordinary.
-  await f.runOrdinary(true);
-  const preparation = createTrainingService({ catalogue: createInstalledTrainingCatalogue({ systemRoot: f.systemRoot }),
-    content: f.content, learners: f.state, projectContext: f.core, projectRepositoryService: f.repository,
-    project: f.project,
-    sessions: { createSession() { assert.fail("Resume must retain the already-adopted exact initial session"); } },
-    terminals: { workspaceSetupIsPrepared() { assert.fail("this fixture has no successful Workspace setup to claim"); } } });
-  const resumed = await preparation.prepareLesson({ actor: f.actor, attemptId: f.saved.scope.attemptId });
-  assert.equal(resumed.attempt.preparation.initialSessionId, f.initial.sessionId);
-  assert.equal(resumed.attempt.preparation.phase, "preparing");
-  assert.equal(resumed.previewReady, false);
-  assert.deepEqual(resumed.attempt.pin, f.pin);
-  assert.deepEqual(await fs.readFile(f.legacyRuntime.store.paths(f.initial.sessionId).manifestPath), beforeManifest);
-  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), beforeSource);
-  assert.deepEqual((await f.legacyRuntime.store.listSessions()).map(value => value.sessionId).sort(),
-    [f.initial.sessionId, f.working.sessionId].sort(), "both are ordinary sessions of the practice project");
-});
-
-test("saved ready historical preparation is adopted only at its original initial session and missing ready state is not replaced", async t => {
-  const f = await historicalPracticeFixture(t);
-  // Original owner writes a supported saved-ready fixture. This is schema and
-  // correlation evidence, not a claim that this fixture ran Workspace setup.
-  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId: f.saved.scope.attemptId });
-  await f.state.recordPreparationReady({ actor: f.actor, attemptId: f.saved.scope.attemptId,
-    initialSessionId: f.initial.sessionId, expectedRevision: current.revision });
-  const progress = await fs.readFile(f.paths.progress);
-  const active = await fs.readFile(f.paths.active);
-  await f.run(true);
-  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
-  assert.deepEqual(await fs.readFile(f.paths.active), active);
-  assert.equal((await f.state.readState({ actor: f.actor })).active.preparation.phase, "ready");
-  assert.equal((await f.boundStore().readSession(f.initial.sessionId)).sessionId, f.initial.sessionId);
-  await fs.rm(f.legacyRuntime.store.paths(f.initial.sessionId).sessionRoot, { recursive: true });
-  const missing = await treeState(f.systemRoot);
-  await assert.rejects(f.run(true), /no original state for its frozen replacement/u);
-  assert.deepEqual(await treeState(f.systemRoot), missing);
-  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
-});
-
-
-test("ordinary practice-session upgrade removes historical bindings from active and archived practice sessions with check, backup and retry", async t => {
-  for (const archived of [false, true]) {
-    const f = await historicalPracticeFixture(t, { archived });
-    await f.run(true);
-    const store = f.legacyRuntime.store;
-    const archivePath = path.join(store.paths().archivedSessionsRoot, `${f.initial.sessionId}.tar.gz`);
-    const working = await store.readSession(f.working.sessionId);
-    const before = await treeState(f.systemRoot);
-    await f.runOrdinary();
-    assert.deepEqual(await treeState(f.systemRoot), before, "check writes no installation state");
-    await assert.rejects(store.readSession(f.initial.sessionId), "the bound session is not yet an ordinary session");
-    await f.runOrdinary(true);
-    const ordinary = await store.readSession(f.initial.sessionId);
-    assert.equal(ordinary.metadata.learning_session, undefined);
-    assert.equal(ordinary.metadata.agent_identity_conversation_id, "retain-original-native-identity");
-    assert.deepEqual(await store.readSession(f.working.sessionId), working);
-    assert.deepEqual((await store.listSessions()).map(value => value.sessionId).sort(), [f.initial.sessionId, f.working.sessionId].sort());
-    await assert.rejects(f.boundStore().readSession(f.initial.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
-    if (archived) {
-      const record = JSON.parse(await fs.readFile(archivePath.replace(/\.tar\.gz$/u, ".json"), "utf8"));
-      assert.equal(record.index.metadata.learning_session, undefined, "the archive index loses the binding too");
-      assert.equal(ordinary.metadata.session_archive_operation, f.archiveOperation, "archive history is retained");
-      assert.ok(await fs.readFile(path.join(f.ordinaryBackupRoot, "before", path.relative(f.systemRoot, archivePath))));
-    }
-    const manifest = await fs.readFile(path.join(f.ordinaryBackupRoot, "manifest.json"));
-    await f.runOrdinary(true);
-    assert.deepEqual(await fs.readFile(path.join(f.ordinaryBackupRoot, "manifest.json")), manifest, "retry resumes the same backup");
-  }
-});
-
-test("ordinary practice-session upgrade retires source-less learning stores into durable training state and refuses a conflicting copy", async t => {
-  const f = await historicalPracticeFixture(t);
-  const userRoot = path.dirname(f.paths.progress);
-  const store = path.join(userRoot, "learning-sessions", "attempt-sourceless");
-  await fs.mkdir(path.join(store, "sessions"), { recursive: true });
-  await fs.writeFile(path.join(store, "sessions", "retained.txt"), "teacher history");
-  const before = await treeState(f.systemRoot);
-  await f.runOrdinary();
-  assert.deepEqual(await treeState(f.systemRoot), before, "check writes no installation state");
-  assert.ok(f.messages.some(entry => /1 source-less learning session store\(s\) to retire/u.test(entry.message)));
-  await f.runOrdinary(true);
-  await assert.rejects(fs.access(store), { code: "ENOENT" });
-  const retired = path.join(f.systemRoot, "training", "retired", "20261021-practice-sessions-ordinary", path.relative(f.systemRoot, store));
-  assert.equal(await fs.readFile(path.join(retired, "sessions", "retained.txt"), "utf8"), "teacher history");
-  assert.equal(path.relative(path.join(f.systemRoot, "upgrades"), retired).startsWith(".."), true,
-    "retired stores live outside the upgrade backups that retention removes");
-  await f.runOrdinary(true);
-  await fs.mkdir(store, { recursive: true });
-  await assert.rejects(f.runOrdinary(), /retired learning session store already exists/u);
-  await assert.rejects(fs.access(path.join(store, "sessions")), { code: "ENOENT" }, "the backup copy is never overwritten");
+  await assert.rejects(openProject(() => assert.fail(), { uid: 43 }), { code: "vibe64_practice_project_deleted" });
 });
 
 test("admitted exercise scope validates once per fresh read and refuses changed content or returned identity", async t => {
@@ -3162,7 +2162,7 @@ test("exercise scope preserves no-exercise pin inactive and unavailable-reader r
   await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
   assert.deepEqual(calls, ["lesson"]);
   await f.state.endAttempt({ actor: f.actor, attemptId: input.attemptId,
-    expectedRevision: reserved.revision, requestId: "validation-end", reason: "restart" });
+    expectedRevision: reserved.revision, requestId: "validation-end", reason: "left" });
   await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
   assert.deepEqual(calls, ["lesson", "lesson"]);
   const wrongPin = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
@@ -3182,7 +2182,7 @@ test("exercise scope preserves no-exercise pin inactive and unavailable-reader r
   await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
   assert.deepEqual(await treeState(absent.systemRoot), absentBefore);
   await absent.state.endAttempt({ actor: absent.actor, attemptId: absentInput.attemptId,
-    expectedRevision: noExercise.revision, requestId: "absent-validation-end", reason: "restart" });
+    expectedRevision: noExercise.revision, requestId: "absent-validation-end", reason: "left" });
   await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
   const progress = JSON.parse(await fs.readFile(absent.paths.progress, "utf8"));
   for (const changed of [{ release: "9.9.9" }, { repository: "different/learn-topic" }]) {
