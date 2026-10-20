@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +8,7 @@ import {
   commandCheck,
   createService
 } from "../../packages/studio-health/src/server/service.js";
+import { configureVibe64Host } from "@local/vibe64-execution/server";
 import {
   isValidPlaywrightBrowserLaunchOutput,
   playwrightBrowserLaunchCheckScript
@@ -32,7 +33,9 @@ function successfulCommandResult(command = "", args = []) {
     };
   }
   const outputByCommand = {
+    claude: "2.1.0 (Claude Code)",
     codex: "codex-cli 0.1.0",
+    opencode: "1.18.31",
     gh: "gh version 2.96.0",
     git: "git version 2.54.0",
     node: "v26.5.0",
@@ -40,13 +43,21 @@ function successfulCommandResult(command = "", args = []) {
   };
   return {
     ok: true,
-    output: outputByCommand[commandText] || "available"
+    output: outputByCommand[path.basename(commandText)] || "available"
   };
 }
 
-test("Studio Health reports explicit platform checks without repairs", async () => {
+// Health on a host with runtime packs checks the pinned tools.
+function withRuntimePacks(t, root) {
+  configureVibe64Host({ runtimePackRoot: path.join(root, "runtime-packs") });
+  t.after(() => configureVibe64Host(null));
+  return path.join(root, "runtime-packs");
+}
+
+test("Studio Health reports explicit platform checks without repairs", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-"));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
+  const packRoot = withRuntimePacks(t, studioRoot);
   const commandCalls = [];
   const service = createService({
     connectionsService: {
@@ -85,25 +96,35 @@ test("Studio Health reports explicit platform checks without repairs", async () 
   assert.equal(result.summary.failed, 0);
   assert.deepEqual(result.checks.map((check) => check.id), [
     "workspace",
+    "toolchain",
     "ai-auth",
     "github-auth",
     "node",
     "git",
     "github-cli",
     "ripgrep",
+    "claude",
     "codex",
+    "opencode",
     "genesis",
     "playwright",
     "playwright-browser"
   ]);
-  assert.equal(commandCalls.length, 8);
+  assert.equal(result.checks.find((check) => check.id === "toolchain").observed, "Pinned runtime packs.");
+  assert.equal(commandCalls.length, 10);
+  assert.deepEqual(commandCalls.filter((call) => call.args[0] === "--version").map((call) => call.command).slice(4), [
+    path.join(packRoot, "managed-bin", "claude"),
+    path.join(packRoot, "managed-bin", "codex"),
+    "opencode"
+  ]);
   assert.equal(commandCalls.every((call) => call.mode === "capture"), true);
   assert.equal(commandCalls.every((call) => call.purpose === "health"), true);
 });
 
-test("Studio Health reports unavailable checks without inventing readiness", async () => {
+test("Studio Health reports unavailable checks without inventing readiness", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-fail-"));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
+  withRuntimePacks(t, studioRoot);
   const service = createService({
     connectionsService: {
       async getStatus() {
@@ -125,13 +146,47 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
 
   assert.equal(result.ok, true);
   assert.equal(result.healthy, false);
-  assert.equal(result.summary.failed, result.summary.total);
+  assert.equal(result.summary.failed, result.summary.total - 1, "only the toolchain description passes");
   assert.match(result.checks.find((check) => check.id === "workspace").observed, /Catalog unavailable/u);
   assert.match(result.checks.find((check) => check.id === "accounts-auth").observed, /Account service unavailable/u);
   assert.match(result.checks.find((check) => check.id === "genesis").observed, /Runtime pack unavailable/u);
 });
 
-test("the browser health probe launches pinned headless Chromium within the health deadline", () => {
+test("without runtime packs Health checks the person's own tools and names missing AI tools", async () => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-own-"));
+  await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
+  const claude = path.join(studioRoot, "home", ".local", "bin", "claude");
+  await mkdir(path.dirname(claude), { recursive: true });
+  await writeFile(claude, "#!/bin/sh\n", "utf8");
+  await chmod(claude, 0o755);
+  const commands = [];
+  const service = createService({
+    connectionsService: { getStatus: async () => ({ ok: true, connections: [{ connected: true, id: "ai", status: "connected" }] }) },
+    env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
+    projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+    async runCommand({ args, command }) {
+      commands.push(command);
+      return command === "node" ? { ok: true, output: "v24.1.0" } : successfulCommandResult(command, args);
+    },
+    studioRoot
+  });
+
+  const { checks } = await service.inspect();
+  const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
+  assert.equal(byId.toolchain.observed, "Using your installed tools.");
+  assert.equal(byId.node.status, "fail");
+  assert.equal(byId.node.expected, "Node.js 26 is installed.");
+  assert.equal(byId.claude.status, "pass");
+  assert.ok(commands.includes(claude));
+  // Machine-wide folders are searched too, so only assert the shape of a missing tool.
+  for (const tool of ["codex", "opencode"].filter((id) => byId[id].status === "warn")) {
+    assert.match(byId[tool].observed, /isn't installed on this computer\.$/u);
+    assert.match(byId[tool].explanation, /^To use it, install it with: curl -fsSL https:\/\//u);
+  }
+});
+
+test("the browser health probe launches pinned headless Chromium within the health deadline", (t) => {
+  withRuntimePacks(t, os.tmpdir());
   const script = playwrightBrowserLaunchCheckScript();
   assert.match(script, /browser="\$headless_shell"/u);
   assert.match(script, /timeout 15s/u);

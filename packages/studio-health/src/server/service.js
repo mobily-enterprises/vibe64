@@ -1,11 +1,14 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  OPERATOR_CLIS,
   isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCommandArgs,
   playwrightRuntimeVersionCommandArgs,
+  resolveOperatorCli,
+  runtimePackRoot,
   runVibe64Command,
   summarizePlaywrightBrowserLaunchOutput,
   summarizePlaywrightRuntimeOutput
@@ -89,6 +92,58 @@ async function commandCheck({
     : failedCheck(check);
 }
 
+function toolchainCheck(packs) {
+  return passedCheck({
+    id: "toolchain",
+    label: "Tools",
+    group: "Runtime",
+    expected: packs ? "Vibe64 runs its pinned runtime packs." : "Vibe64 runs the tools installed on this computer.",
+    observed: packs ? "Pinned runtime packs." : "Using your installed tools.",
+    explanation: packs
+      ? "Node.js, Git and the AI tools come from versions this Vibe64 pins."
+      : "Node.js, Git and the AI tools are the ones on this computer; install or update them yourself."
+  });
+}
+
+// The Node.js major version Vibe64 declares in its package.json engines field.
+async function requiredNodeMajor(studioRoot) {
+  try {
+    const { engines } = JSON.parse(await readFile(path.join(studioRoot, "package.json"), "utf8"));
+    return /^\D*(\d+)/u.exec(String(engines?.node || ""))?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+async function operatorCliCheck(tool, { env, runCommand, studioRoot }) {
+  const { name, install } = OPERATOR_CLIS[tool];
+  const cli = resolveOperatorCli(tool, { env });
+  const check = {
+    id: tool,
+    label: name,
+    group: "AI tools",
+    expected: `${name} is installed on this computer.`,
+    explanation: `Vibe64 runs ${name} for conversations that use it.`
+  };
+  if (!cli.installed) {
+    return {
+      ...check,
+      observed: `${name} isn't installed on this computer.`,
+      explanation: `To use it, install it with: ${install}`,
+      status: "warn"
+    };
+  }
+  return commandCheck({
+    ...check,
+    command: cli.command,
+    args: ["--version"],
+    runtimes: ["operator-clis", "node26"],
+    runCommand,
+    studioRoot,
+    isValid: (output) => /\d+\.\d+/u.test(compactOutput(output))
+  });
+}
+
 async function inspectWorkspace({ projectService, studioRoot }) {
   try {
     await access(path.join(studioRoot, "package.json"));
@@ -145,6 +200,7 @@ async function inspectAccounts({ connectionsService, input }) {
 
 function createService({
   connectionsService,
+  env = process.env,
   projectService,
   runCommand = runVibe64Command,
   studioRoot
@@ -155,6 +211,8 @@ function createService({
 
   return Object.freeze({
     async inspect(input = {}) {
+      const packs = Boolean(runtimePackRoot());
+      const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
       const commandChecks = [
         commandCheck({
           id: "node",
@@ -164,9 +222,9 @@ function createService({
           runtimes: ["node26"],
           runCommand,
           studioRoot,
-          expected: "The pinned Node.js 26 runtime pack is available.",
-          isValid: (output) => /^v26\./u.test(compactOutput(output)),
-          explanation: "Vibe64 itself runs on its pinned Node.js runtime."
+          expected: packs ? "The pinned Node.js 26 runtime pack is available." : `Node.js ${nodeMajor || "(any version)"} is installed.`,
+          isValid: (output) => new RegExp(`^v${nodeMajor || "\\d+"}\\.`, "u").test(compactOutput(output)),
+          explanation: packs ? "Vibe64 itself runs on its pinned Node.js runtime." : "Vibe64 and your projects use the Node.js installed on this computer."
         }),
         commandCheck({
           id: "git",
@@ -176,7 +234,7 @@ function createService({
           runtimes: ["git"],
           runCommand,
           studioRoot,
-          expected: "The managed Git runtime pack is available.",
+          expected: packs ? "The managed Git runtime pack is available." : "Git is installed.",
           isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
           explanation: "Vibe64 owns Git credentials and repository operations."
         }),
@@ -188,7 +246,7 @@ function createService({
           runtimes: ["gh"],
           runCommand,
           studioRoot,
-          expected: "The managed GitHub CLI runtime pack is available.",
+          expected: packs ? "The managed GitHub CLI runtime pack is available." : "The GitHub CLI is installed.",
           isValid: (output) => /^gh version\s+/u.test(compactOutput(output)),
           explanation: "Vibe64 uses its pinned GitHub CLI for authenticated GitHub operations."
         }),
@@ -200,22 +258,11 @@ function createService({
           runtimes: ["ripgrep"],
           runCommand,
           studioRoot,
-          expected: "The managed ripgrep runtime pack is available.",
+          expected: packs ? "The managed ripgrep runtime pack is available." : "ripgrep is installed.",
           isValid: (output) => /^ripgrep\s+/u.test(compactOutput(output)),
           explanation: "Codex uses ripgrep for fast local source discovery."
         }),
-        commandCheck({
-          id: "codex",
-          label: "Codex CLI",
-          command: "codex",
-          args: ["--version"],
-          runtimes: ["operator-clis", "node26"],
-          runCommand,
-          studioRoot,
-          expected: "The managed operator CLI pack exposes Codex.",
-          isValid: (output) => /codex/iu.test(compactOutput(output)),
-          explanation: "Direct chat delegates project work to the pinned Codex command."
-        }),
+        ...Object.keys(OPERATOR_CLIS).map((tool) => operatorCliCheck(tool, { env, runCommand, studioRoot })),
         commandCheck({
           id: "genesis",
           label: "Genesis",
@@ -264,7 +311,7 @@ function createService({
         inspectAccounts({ connectionsService, input }),
         Promise.all(commandChecks)
       ]);
-      const checks = [workspace, ...accounts, ...commands];
+      const checks = [workspace, toolchainCheck(packs), ...accounts, ...commands];
       const failed = checks.filter((check) => check.status !== "pass").length;
       return {
         ok: true,

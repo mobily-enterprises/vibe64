@@ -41,6 +41,42 @@ Hosted connection changes require the workspace owner. A member's permitted mode
 can differ from the owner's subscription models; account connection alone does not
 grant every collaborator use of it.
 
+## Install Claude Code, Codex or opencode first
+
+Vibe64 talks to each AI through that AI's own program: **Claude Code** for Claude,
+**Codex** for ChatGPT and OpenAI keys, and **opencode** for providers connected through
+OpenCode. On your own computer these programs must be installed; Vibe64 uses the copy
+you installed and the sign-in you already have (Claude Code and Codex keep their
+logins in your home folder, so a login made in a terminal works in Vibe64 too).
+opencode is different: Vibe64 runs your installed opencode program but signs it in with
+the keys you add in AI Accounts, not with opencode's own login.
+
+When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
+a warning instead of the sign-in button:
+
+- **Claude Code isn't installed on this computer** (or Codex, or opencode). The warning
+  shows the official one-line install command with a **Copy** button and a link to
+  **Other ways to install** it. Open a terminal on this computer, paste the command,
+  press Enter, then choose **Check again**. You run the command yourself; Colleague
+  can explain it but cannot run it for you.
+  - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
+  - Codex: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
+  - opencode: `curl -fsSL https://opencode.ai/install | bash`
+- **Codex didn't start** means the program is installed but failed to run. Choose
+  **Check again**; if it keeps failing, reinstall it with the same command. The
+  program's own error output is under **Details**, collapsed.
+- A program that runs but isn't signed in shows the usual sign-in button.
+
+Vibe64 looks for these programs on your `PATH` and in the usual install folders
+(such as `~/.local/bin`, `~/.claude/local`, `~/.opencode/bin`, npm, Bun, Volta and nvm
+folders, `/opt/homebrew/bin` and `/usr/local/bin`), so it finds them even when it was
+started outside a terminal. When Vibe64 starts, it prints one line for each program it
+can't find, and **Dashboard → Health** shows a check for each. Where the host provides
+pinned versions of these programs, you never see an install command; a program that
+doesn't start there tells you to contact whoever runs that Vibe64.
+
+## Connect and check accounts
+
 Use the provider's displayed setup flow. API-key connections offer key entry and
 validation; subscription login can require an external browser, one-time code or
 authorization code. You perform provider consent and secret entry. Wait for the

@@ -6,6 +6,8 @@ import process from "node:process";
 import {
   createVibe64ConversationExecution,
   isolatedProcessEnv,
+  operatorCliCommand,
+  runtimePackRoot,
   runVibe64Command,
   stableHash,
   stopVibe64Execution,
@@ -536,12 +538,13 @@ async function createOpenCodeServerProcess({
   apiKey = "",
   cacheRoot = "",
   canonicalUrl = "",
-  command = "opencode",
+  command = "",
   commandRunner = runVibe64Command,
   dbPath = "",
   env = process.env,
   execution = {},
-  expectedVersion = OPENCODE_EXPECTED_VERSION,
+  // A host with runtime packs pins opencode; a person's own installation runs as installed.
+  expectedVersion = runtimePackRoot() ? OPENCODE_EXPECTED_VERSION : "",
   fetchImpl = globalThis.fetch,
   hostContextResolver = "",
   inspectExecution,
@@ -569,6 +572,7 @@ async function createOpenCodeServerProcess({
     mkdir(normalizedWorkdir, { recursive: true })
   ]);
   const logPath = path.join(normalizedPrivateRoot, "opencode-server.log");
+  const executable = text(command) || operatorCliCommand("opencode", { env });
   const credentialHome = Object.freeze({
     cacheRoot: text(cacheRoot) ? path.resolve(text(cacheRoot)) : path.join(normalizedPrivateRoot, "cache"),
     configRoot: path.join(normalizedPrivateRoot, "config"),
@@ -577,7 +581,7 @@ async function createOpenCodeServerProcess({
     stateRoot: path.join(normalizedPrivateRoot, "state")
   });
   const native = await startOpenCodeServer({
-    command, workdir: normalizedWorkdir, privateRoot: normalizedPrivateRoot, port: Number(port),
+    command: executable, workdir: normalizedWorkdir, privateRoot: normalizedPrivateRoot, port: Number(port),
     fetchImpl, expectedVersion, readinessTimeoutMs, allowAttachmentDirectories: true,
     env: safeOpenCodeEnvironment(env, { cacheRoot, canonicalUrl, dbPath: normalizedDbPath,
       hostContextResolver, managedEnv, modelProviderId, privateRoot: normalizedPrivateRoot,
@@ -596,7 +600,7 @@ async function createOpenCodeServerProcess({
           key: text(execution.operationId) === "opencode-catalog" ? "opencode-catalog-service" : "opencode-server",
           environment: "development",
           compatibilityKey: createHash("sha256").update(JSON.stringify({
-            command: text(command) || "opencode", version: OPENCODE_EXPECTED_VERSION,
+            command: executable, version: OPENCODE_EXPECTED_VERSION,
             platform: process.platform, architecture: process.arch, startup: OPENCODE_MANAGED_STARTUP_SCRIPT
           })).digest("hex")
         },
@@ -645,7 +649,7 @@ async function createOpenCodeServerProcess({
         allowedRoots: [directory, normalizedWorkdir],
         args: native.attachArguments({ conversationId: attachedSessionId, directory }),
         baseEnv: processEnv,
-        command: text(command) || "opencode",
+        command: executable,
         credentialHome,
         cwd: directory,
         envPolicy: "auth",
@@ -683,7 +687,7 @@ async function createOpenCodeServerProcess({
 
 async function readOpenCodeCatalog({
   cacheRoot = "",
-  command = "opencode",
+  command = "",
   commandRunner = runVibe64Command,
   createServerProcess = createOpenCodeServerProcess,
   env = process.env,
@@ -723,7 +727,7 @@ async function readOpenCodeCatalog({
 async function verifyOpenCodeApiKey({
   apiKey = "",
   cacheRoot = "",
-  command = "opencode",
+  command = "",
   commandRunner = runVibe64Command,
   env = process.env,
   modelId = "",
@@ -752,12 +756,13 @@ async function verifyOpenCodeApiKey({
           outputTokenMax,
           privateRoot: normalizedPrivateRoot
         });
+        const executable = text(command) || operatorCliCommand("opencode", { env });
         return (native) => commandRunner({
           actor: "app",
           allowedRoots: [normalizedWorkdir],
           args: native.args,
           baseEnv: processEnv,
-          command: text(command) || "opencode",
+          command: executable,
           credentialHome: {
             cacheRoot: text(cacheRoot)
               ? path.resolve(cacheRoot)
@@ -777,7 +782,7 @@ async function verifyOpenCodeApiKey({
             resourceProfile: {
               key: "opencode-key-verification", environment: "development",
               compatibilityKey: createHash("sha256").update(JSON.stringify({
-                command: text(command) || "opencode", version: OPENCODE_EXPECTED_VERSION,
+                command: executable, version: OPENCODE_EXPECTED_VERSION,
                 platform: process.platform, architecture: process.arch,
                 providerId, model: selectedModelId, outputTokenMax
               })).digest("hex")

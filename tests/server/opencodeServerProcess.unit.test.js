@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
+  configureVibe64Host,
   startSupervisedProcess,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "../../packages/vibe64-execution/src/server/index.js";
@@ -20,6 +21,12 @@ import {
   safeOpenCodeEnvironment,
   verifyOpenCodeApiKey
 } from "../../packages/vibe64-terminals/src/server/opencodeServerProcess.js";
+
+// A host with runtime packs pins opencode and runs it by name.
+function withRuntimePacks(t, root) {
+  configureVibe64Host({ runtimePackRoot: path.join(root, "runtime-packs") });
+  t.after(() => configureVibe64Host(null));
+}
 
 test("OpenCode Zen discovery reads its current public model ids without credentials", async () => {
   const requests = [];
@@ -458,6 +465,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const stops = [];
   const executionId = "11111111-1111-4111-8111-111111111111";
   t.after(() => rm(root, { force: true, recursive: true }));
+  withRuntimePacks(t, root);
 
   const server = await createOpenCodeServerProcess({
     inspectExecution: async id => {
@@ -586,6 +594,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
 test("shared OpenCode startup keeps Vibe64's timeout and version recovery errors", async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-opencode-startup-errors-"));
   t.after(() => rm(root, { recursive: true, force: true }));
+  withRuntimePacks(t, root);
   for (const failure of ["timeout", "version"]) {
     const privateRoot = path.join(root, failure);
     const stopped = [];
@@ -612,4 +621,24 @@ test("shared OpenCode startup keeps Vibe64's timeout and version recovery errors
     } }]);
     await assert.rejects(access(privateRoot), { code: "ENOENT" });
   }
+});
+
+test("without runtime packs OpenCode runs the person's own installed version", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-opencode-own-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const installed = path.join(root, "home", ".opencode", "bin", "opencode");
+  await mkdir(path.dirname(installed), { recursive: true });
+  await writeFile(installed, "#!/bin/sh\n", "utf8");
+  await chmod(installed, 0o755);
+  const requests = [];
+  const server = await createOpenCodeServerProcess({
+    dbPath: path.join(root, "opencode.db"), privateRoot: path.join(root, "private"), workdir: root, port: 43210,
+    env: { HOME: path.join(root, "home"), PATH: path.join(root, "empty") },
+    commandRunner: async (request) => { requests.push(request); return { ok: true, execution: { id: "own" }, pid: 4242 }; },
+    inspectExecution: async () => ({ ok: true, running: true }),
+    stopExecution: async () => ({ scopeEmpty: true }),
+    fetchImpl: async () => new Response(JSON.stringify({ healthy: true, version: "99.0.0" }))
+  });
+  assert.equal(requests[0].args[4], installed, "found in ~/.opencode/bin, and any opencode version is accepted");
+  await server.stop();
 });

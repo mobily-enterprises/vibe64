@@ -62,14 +62,16 @@ import {
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
+  OPERATOR_CLIS,
   USER_CREDENTIAL_SCOPE,
   githubCredentialContext,
+  operatorCliCommand,
+  operatorCliProblem,
+  resolveOperatorCli,
   runVibe64Command,
   shellQuote
 } from "@local/vibe64-execution/server";
 import {
-  STUDIO_MANAGED_CLAUDE_COMMAND,
-  STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -122,6 +124,7 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   })
 });
 const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "claude", "github"]);
+const OPERATOR_CLI_START_FAILURE_PATTERN = /\b(?:ENOENT|EACCES|spawn)\b|No such file|Permission denied|command not found/iu;
 
 function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -361,16 +364,17 @@ function githubGitIdentityFromInput(input = {}) {
   });
 }
 
-function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE) {
+function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE, env = process.env) {
+  const codex = operatorCliCommand("codex", { env });
   if (mode === API_KEY_AUTH_MODE) {
-    return codexApiKeyLoginCommandArgs();
+    return codexApiKeyLoginCommandArgs(codex);
   }
   return mode === DEVICE_AUTH_MODE
-    ? [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "--device-auth"]
-    : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login"];
+    ? [codex, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "--device-auth"]
+    : [codex, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login"];
 }
 
-function codexApiKeyLoginCommandArgs() {
+function codexApiKeyLoginCommandArgs(codex) {
   return [
     "bash",
     "-lc",
@@ -380,26 +384,26 @@ function codexApiKeyLoginCommandArgs() {
       "  printf '%s\\n' 'OpenAI API key is required.' >&2",
       "  exit 2",
       "fi",
-      `printf '%s\\n' "$${CODEX_API_KEY_ENV}" | ${shellQuote(STUDIO_MANAGED_CODEX_COMMAND)} -c ${shellQuote(STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG)} login --with-api-key`,
+      `printf '%s\\n' "$${CODEX_API_KEY_ENV}" | ${shellQuote(codex)} -c ${shellQuote(STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG)} login --with-api-key`,
       `unset ${CODEX_API_KEY_ENV}`
     ].join("\n")
   ];
 }
 
-function logoutCommandArgs(accountId) {
-  if (accountId === "claude") return [STUDIO_MANAGED_CLAUDE_COMMAND, "auth", "logout"];
+function logoutCommandArgs(accountId, env = process.env) {
+  if (accountId === "claude") return [operatorCliCommand("claude", { env }), "auth", "logout"];
   return accountId === "github"
     ? ["gh", "auth", "logout", "--hostname", "github.com"]
-    : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
+    : [operatorCliCommand("codex", { env }), "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
 }
 
-function terminalArgsForAuth(accountId, mode, hostCommandOptions = {}, gitIdentity = {}) {
-  if (accountId === "claude") return buildTerminalArgs([STUDIO_MANAGED_CLAUDE_COMMAND, "auth", "login", "--claudeai"], hostCommandOptions);
+function terminalArgsForAuth(accountId, mode, hostCommandOptions = {}, gitIdentity = {}, env = process.env) {
+  if (accountId === "claude") return buildTerminalArgs([operatorCliCommand("claude", { env }), "auth", "login", "--claudeai"], hostCommandOptions);
   if (accountId === "github") {
     return buildTerminalArgs(ghLoginCommandArgs(gitIdentity), hostCommandOptions);
   }
 
-  return buildTerminalArgs(codexLoginCommandArgs(mode), {
+  return buildTerminalArgs(codexLoginCommandArgs(mode, env), {
     ...hostCommandOptions
   });
 }
@@ -460,7 +464,7 @@ function accountCommandRuntimes(command = "") {
   if (normalized === "git") {
     return ["git", "gh"];
   }
-  if (normalized === STUDIO_MANAGED_CODEX_COMMAND) {
+  if (path.basename(normalized) === "codex") {
     return ["operator-clis", "node26", "git"];
   }
   return ["operator-clis", "node26", "git", "gh"];
@@ -1093,16 +1097,33 @@ function rememberedGithubIdentity(value = {}) {
   };
 }
 
+// A CLI that is missing or did not start is not a signed-out account.
+function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
+  const { install, ...problem } = operatorCliProblem(id, { installed });
+  return { ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
+    required: ACCOUNT_DEFINITIONS[id].required, ...(install ? { install } : {}) };
+}
+
+function operatorCliStartFailed(result = {}) {
+  return [126, 127].includes(result.exitCode) || OPERATOR_CLI_START_FAILURE_PATTERN.test(hostCommandResultOutput(result));
+}
+
 async function readCodexStatus({
   codexContext = null,
+  env = process.env,
   runHostToolCommand = runDefaultHostCommand
 } = {}) {
+  const cli = resolveOperatorCli("codex", { env });
+  if (!cli.installed) return operatorCliAccount("codex");
   await ensureToolHomeSource(codexContext);
   const result = await runHostToolCommand(
-    [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"],
+    [cli.command, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"],
     hostCommandOptionsForCredentialContext(codexContext)
   );
 
+  if (!result.ok && operatorCliStartFailed(result)) {
+    return operatorCliAccount("codex", { installed: true, observed: hostCommandResultOutput(result) });
+  }
   if (!result.ok) {
     const reconnectRequired = codexAuthOutputRequiresReconnect(result.output);
     return accountDisconnected({
@@ -1434,7 +1455,12 @@ function createService({
   }
 
   async function readClaudeStatus() {
+    if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
     const status = await readClaudeCodeAuthStatus({ env, credentialHome: resolvedAccountRuntime.claudeContext() });
+    // Native status reports an error only when Claude itself could not answer.
+    if (status.error && resolvedAccountRuntime.claudeContext().ok !== false) {
+      return operatorCliAccount("claude", { installed: true, observed: status.error });
+    }
     return { ...ACCOUNT_DEFINITIONS.claude, connected: status.loggedIn,
       username: status.email || "", authMethod: status.authMethod || "", subscriptionType: status.subscriptionType || "",
       status: status.loggedIn ? "connected" : "not_connected",
@@ -1617,6 +1643,7 @@ function createService({
       }
       const account = await readCodexStatus({
         codexContext,
+        env,
         runHostToolCommand: accountRunHostCommand
       });
       if (account?.status === "reconnect_required") {
@@ -1771,6 +1798,7 @@ function createService({
     const accounts = await Promise.all(accountIds.map(async (accountId) => {
       if (accountId === "claude") return readClaudeStatus();
       if (accountId === "codex") {
+        if (!resolveOperatorCli("codex", { env }).installed) return operatorCliAccount("codex");
         const localAccount = refresh ? null : await readCodexLocalStatus({
           codexContext: codexContextForInput(),
           systemRoot: resolvedSystemRoot
@@ -1810,6 +1838,9 @@ function createService({
     return {
       accounts,
       blockedReason: ready ? "" : blockedReason(accounts),
+      // Every AI tool this computer lacks, including opencode, which has no account row.
+      missingTools: Object.keys(OPERATOR_CLIS).filter((tool) => !resolveOperatorCli(tool, { env }).installed)
+        .map((tool) => ({ id: tool, label: OPERATOR_CLIS[tool].name, ...operatorCliProblem(tool) })),
       ok: true,
       credentialScopes: {
         claude: APP_CREDENTIAL_SCOPE,
@@ -2115,11 +2146,15 @@ function createService({
       // Reuse before the gateway reserves a new execution that would never start.
       return session;
     }
+    if (["claude", "codex"].includes(accountId) && !resolveOperatorCli(accountId, { env }).installed) {
+      const { code, message, install } = operatorCliProblem(accountId);
+      return authError(code, message, { install });
+    }
     const actorId = String(options.actorId || "");
     const providerContext = authCredentialContext(accountId, githubContext);
     await ensureToolHomeSource(providerContext);
     const hostCommandOptions = hostCommandOptionsForCredentialContext(providerContext);
-    const args = terminalArgsForAuth(accountId, mode, hostCommandOptions, gitIdentity);
+    const args = terminalArgsForAuth(accountId, mode, hostCommandOptions, gitIdentity, env);
     const command = String(args[0] || "").trim();
     if (!command) {
       return authError("account_auth_command_missing", "No auth command was provided.");
@@ -2588,7 +2623,7 @@ function createService({
         }
         const providerContext = authCredentialContext(accountId, githubContext);
         await ensureToolHomeSource(providerContext);
-        const result = await accountRunHostCommand(logoutCommandArgs(accountId), {
+        const result = await accountRunHostCommand(logoutCommandArgs(accountId, env), {
           ...hostCommandOptionsForCredentialContext(providerContext),
           timeout: 30_000
         });

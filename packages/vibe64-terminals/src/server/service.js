@@ -101,6 +101,7 @@ import {
   actorHomeEnv,
   appCredentialContext,
   createVibe64ConversationExecution,
+  operatorCliCommand,
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
@@ -111,7 +112,6 @@ import {
   assertCodexAuthPreflightReady,
   createCodexAppServerAgentProvider
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
-import { STUDIO_MANAGED_CLAUDE_COMMAND, STUDIO_MANAGED_CODEX_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
@@ -698,7 +698,7 @@ function createOpenCodeSessionRegistration({
   agentPreviewCommand = null,
   agentSessionCommand = null,
   codexGitCommand = null,
-  command = "opencode",
+  command = "",
   createServerProcess = createOpenCodeServerProcess,
   env = process.env,
   getAssistantManager = () => null,
@@ -1430,7 +1430,6 @@ function createService({
     agentPreviewCommand,
     agentSessionCommand,
     codexGitCommand,
-    command: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode",
     env,
     getAssistantManager: () => sessionAgent,
     listConnections: (context) => assistantRuntime.listConnections(context),
@@ -3905,9 +3904,9 @@ function createService({
         allowAccountChange: scope.allowAccountChange === true,
         env: { ...actorHomeEnv(credentialHome, env),
           CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex") },
-        commands: { codex: codexProviderOptions.codexCommand || STUDIO_MANAGED_CODEX_COMMAND,
-          claude: env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
-          opencode: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode" },
+        commands: { codex: codexProviderOptions.codexCommand || operatorCliCommand("codex", { env }),
+          claude: operatorCliCommand("claude", { env }),
+          opencode: opencodeTerminalController.command || operatorCliCommand("opencode", { env }) },
         execution: createVibe64ConversationExecution({ credentialHome, capturePurpose: "account",
           execution: { ownerId: scope.id }, operationId: "conversation", label: "Assistant conversation" }),
         opencode: input => opencode.hostPreparation.conversationHost(input),

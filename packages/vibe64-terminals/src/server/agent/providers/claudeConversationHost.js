@@ -10,12 +10,11 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { appCredentialContext, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
+import { appCredentialContext, operatorCliCommand, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { closeTerminalSessionsForNamespace, listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
-import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { createClaudeCodeProcess } from "../../claudeCodeProcess.js";
 import { createClaudeConversationOwner, claudeNativeMessageId as nativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
@@ -39,7 +38,7 @@ function createClaudeConversationHost({
   env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged = async () => {},
   publishConversation,
   runNativeDetachedConversation,
-  command = env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
+  command = operatorCliCommand("claude", { env }),
   credentialHome = appCredentialContext(), createProcess = createClaudeCodeProcess,
   commandRunner = runVibe64Command, stopExecution = stopVibe64Execution,
   connectionStatus = async () => false,

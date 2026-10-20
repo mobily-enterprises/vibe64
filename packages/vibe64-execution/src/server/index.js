@@ -199,3 +199,9 @@ export {
   agentEnvWrapperSource
 } from "./runtime/agentEnvWrapperSource.js";
 export { createVibe64ConversationExecution } from "./conversationExecution.js";
+export {
+  OPERATOR_CLIS,
+  operatorCliCommand,
+  operatorCliProblem,
+  resolveOperatorCli
+} from "./runtime/operatorCli.js";

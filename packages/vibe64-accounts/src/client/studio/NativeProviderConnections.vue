@@ -3,11 +3,16 @@ import { computed, ref, watch } from "vue";
 import { mdiArrowLeft, mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
+import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 
 const props = defineProps({
   actionsEnabled: { type: Boolean, default: true },
   adding: Boolean,
+  // The engine CLI's account status. Every provider here runs through that CLI,
+  // so a missing CLI is shown before the key form.
+  cliAccount: { type: Object, default: () => ({}) },
+  cliChecking: Boolean,
   // Inside onboarding: only the key form under `title`, without the engine
   // header, model chips, check note, key link or Disconnect; the host reviews
   // routing, so a successful save closes unless routing failed.
@@ -19,11 +24,12 @@ const props = defineProps({
   showClose: Boolean
 });
 const providerId = defineModel({ type: String, default: "openai" });
-const emit = defineEmits(["changed", "close", "back", "busy"]);
+const emit = defineEmits(["changed", "close", "back", "busy", "check-cli"]);
 const { connections, resource, busy, change, loadError } = useCodexProviderConnections({
   enabled: computed(() => props.actionsEnabled)
 });
 watch(busy, (value) => emit("busy", value), { immediate: true });
+const cliBlocked = computed(() => cliProblem(props.cliAccount));
 const provider = computed(() => curatedCodexProvider(providerId.value));
 const connection = computed(() => connections.value.find(({ id }) => id === providerId.value));
 const engineLabel = computed(() => props.engineId === "claude" ? "Claude Code" : "Codex");
@@ -104,8 +110,9 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         <v-alert v-if="loadError" type="error" variant="tonal" class="mb-3">
           {{ loadError }} <v-btn variant="text" @click="resource.reload()">Retry</v-btn>
         </v-alert>
+        <CliInstallNotice :account="cliAccount" :checking="cliChecking" class="mb-3" @check="emit('check-cli')" />
         <v-skeleton-loader v-if="resource.isInitialLoading.value" type="article, actions" />
-        <v-form v-else :disabled="!actionsEnabled || busy" @submit.prevent="save()">
+        <v-form v-else-if="!cliBlocked" :disabled="!actionsEnabled || busy" @submit.prevent="save()">
           <v-text-field
             v-if="!useExistingKey"
             v-model="apiKey" :label="connectionStatus === 'connected' ? 'Replace API key' : 'API key'" :type="visible ? 'text' : 'password'"

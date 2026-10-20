@@ -38,16 +38,17 @@ import {
   readCodexLoginId
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  operatorCliCommand,
   runVibe64Command as defaultCommandRunner,
   stableHash,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
   vibe64ManagedExecutionProvider,
+  vibe64ProcessUmask,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
 import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
-  STUDIO_MANAGED_CODEX_COMMAND,
   VIBE64_RUNTIME_NAMESPACE_ENV,
   runtimeNamespace
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -423,13 +424,13 @@ function codexAppServerRuntimeHost(options = {}) {
     runtimeTokenEnvironmentName: CODEX_APP_SERVER_PROCESS_RUNTIME_TOKEN_ENV,
     commandHashEnvironmentName: CODEX_APP_SERVER_PROCESS_COMMAND_HASH_ENV,
     socketPathHelp: "Configure VIBE64_AGENT_RUNTIME_DIR or XDG_RUNTIME_DIR to a shorter host runtime directory.",
-    umask: "0007"
+    umask: vibe64ProcessUmask()
   };
   const runtime = createCodexAppServerRuntime({ credentials, execution, configuration });
   const parameters = {
     accountIdentitySignature: options.accountIdentitySignature,
     authStateSignature: options.authStateSignature,
-    codexCommand: options.codexCommand === undefined ? STUDIO_MANAGED_CODEX_COMMAND : options.codexCommand,
+    codexCommand: options.codexCommand === undefined ? operatorCliCommand("codex") : options.codexCommand,
     env: options.env,
     executionRoot: options.executionRoot,
     executionMode: options.executionMode,
@@ -515,7 +516,7 @@ async function assertCodexAuthPreflightReady(options = {}, { reason = "codex-aut
 function codexCliResumeCommand(options = {}) {
   return nativeCodexCliResumeCommand({
     ...options,
-    codexCommand: normalizeAgentText(options.codexCommand) || STUDIO_MANAGED_CODEX_COMMAND
+    codexCommand: normalizeAgentText(options.codexCommand) || operatorCliCommand("codex")
   });
 }
 

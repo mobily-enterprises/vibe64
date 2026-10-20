@@ -2,7 +2,7 @@ import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/na
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -44,12 +44,13 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  configureVibe64Host,
   installVibe64ManagedExecutionProvider,
+  operatorCliCommand,
   runVibe64Command,
   stableHash,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -57,6 +58,12 @@ import {
 import {
   genesisCommandShimDirectory
 } from "@local/vibe64-genesis/server";
+
+// These tests describe a host with runtime packs and a shared project group.
+const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-codex-packs-"));
+process.on("exit", () => rmSync(RUNTIME_PACK_ROOT, { force: true, recursive: true }));
+configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT, sharedGroupAccess: true });
+const MANAGED_CODEX_COMMAND = path.join(RUNTIME_PACK_ROOT, "managed-bin", "codex");
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -310,7 +317,7 @@ function managedCodexAppServerArgs(call = {}) {
   ]);
   assert.ok(call.args[4].endsWith("/codexAppServerProcess.js"));
   assert.equal(call.args[5], path.dirname(call.logPath));
-  assert.equal(call.args[6], STUDIO_MANAGED_CODEX_COMMAND);
+  assert.equal(call.args[6], MANAGED_CODEX_COMMAND);
   return call.args.slice(7);
 }
 
@@ -1368,7 +1375,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     });
     assert.equal(envProbe.ok, true, envProbe.output);
     assert.deepEqual(JSON.parse(envProbe.stdout), {
-      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+      browsers: path.join(RUNTIME_PACK_ROOT, "playwright", "browsers"),
       dbHost: "127.0.0.1",
       dbName: "codex_app_server_db"
     });
@@ -2518,7 +2525,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
     );
 
     assert.equal(commandCalls.length, 1);
-    assert.equal(commandCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
+    assert.equal(commandCalls[0].command, MANAGED_CODEX_COMMAND);
     assert.deepEqual(commandCalls[0].args, [
       "-c",
       STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
@@ -3019,7 +3026,7 @@ test("codex provider builds the native Codex CLI resume command for the same thr
     }),
     {
       argv: [
-        STUDIO_MANAGED_CODEX_COMMAND,
+        MANAGED_CODEX_COMMAND,
         "-c",
         STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
         "--remote",
@@ -3027,9 +3034,23 @@ test("codex provider builds the native Codex CLI resume command for the same thr
         "resume",
         "019e865d-8108-7740-912b-42ece83a5c73"
       ],
-      command: `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
+      command: `${MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
     }
   );
+});
+
+test("without runtime packs the resume command runs the person's own Codex", () => {
+  configureVibe64Host(null);
+  try {
+    const { argv } = codexCliResumeCommand({
+      endpoint: "unix:///tmp/vibe64/codex-app-server/app-server.sock",
+      threadId: "019e865d-8108-7740-912b-42ece83a5c73"
+    });
+    assert.equal(argv[0], operatorCliCommand("codex"));
+    assert.notEqual(argv[0], MANAGED_CODEX_COMMAND);
+  } finally {
+    configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT, sharedGroupAccess: true });
+  }
 });
 
 test("codex provider keeps Unix endpoints unchanged for terminal clients", () => {

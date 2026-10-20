@@ -1,5 +1,9 @@
 <template>
-  <NativeProviderConnections v-if="!embedded && ['codex', 'claude'].includes(providerId)" :engine-id="providerId" v-model="selectedModelProviderId" :actions-enabled="actionsEnabled" />
+  <NativeProviderConnections
+    v-if="!embedded && ['codex', 'claude'].includes(providerId)" v-model="selectedModelProviderId" :engine-id="providerId"
+    :actions-enabled="actionsEnabled" :cli-account="aiAccountRows[0]" :cli-checking="Boolean(accounts.isLoading.value)"
+    @check-cli="accounts.refresh()"
+  />
   <ProviderAccountsSetup
     v-if="['openai', 'anthropic'].includes(selectedModelProviderId)"
     :accounts="accounts"

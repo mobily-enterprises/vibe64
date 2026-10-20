@@ -15,6 +15,10 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL
 } from "./service.js";
 import {
+  OPERATOR_CLIS,
+  resolveOperatorCli
+} from "@local/vibe64-execution/server";
+import {
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -106,6 +110,15 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
   });
 }
 
+// One plain line per AI tool this computer lacks.
+function warnMissingOperatorClis(logger) {
+  for (const [tool, { name, install }] of Object.entries(OPERATOR_CLIS)) {
+    if (!resolveOperatorCli(tool).installed) {
+      logger.warn(`${name} isn't installed on this computer, so Vibe64 can't use it. To install it, run: ${install}`);
+    }
+  }
+}
+
 const Vibe64AccountsFeature = defineFeature({
   id: "vibe64.accounts",
   domain: "vibe64-accounts",
@@ -118,6 +131,7 @@ const Vibe64AccountsFeature = defineFeature({
   },
   optional: {
     accountRuntime: "vibe64.accounts.runtime",
+    logger: "runtime.logger",
     terminals: "vibe64.terminals"
   },
   provides: {
@@ -128,7 +142,8 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  setup({ accountRuntime, env, events, fastify, http, project, terminals }, { actionCatalogue }) {
+  setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
+    warnMissingOperatorClis(logger || console);
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
     const projectContext = getStudioProjectContext();
@@ -172,8 +187,8 @@ const Vibe64AccountsFeature = defineFeature({
       });
     }
 
-    // A host-supplied account runtime also owns connection wiring, including
-    // Online's local mode. Do not register a second copy of its actions/store.
+    // A host-supplied account runtime also owns connection wiring. Do not
+    // register a second copy of its actions/store.
     const aiConnections = !accountRuntime && localRuntime && terminals && systemRoot
       ? createAiConnectionRuntime({
           systemRoot: resolvedAccountRuntime.systemRoot,

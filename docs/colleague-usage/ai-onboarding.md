@@ -100,10 +100,22 @@ normal AI Accounts setup directly:
   then **Connect**. Vibe64 checks it with one tiny free GLM-4.7 Flash request
   before saving it. This key is a regular Z.AI API key, not a Coding Plan key.
 
-If the sign-in tool itself cannot run on this machine, a warning says **[Claude
-or ChatGPT] sign-in isn't available here yet** with **Try again**, **Choose
-another AI** and the technical output under **Details**; the sign-in button
-stays disabled until it can run.
+Each choice runs through a program installed on this computer: Claude through
+**Claude Code**, Codex, DeepSeek and GLM through **Codex**, and the free GLM-4.7
+Flash through **opencode**. If that program is missing, Step 2 shows a warning
+instead of the sign-in or key form:
+
+- **[Claude Code, Codex or opencode] isn't installed on this computer**, with its
+  official one-line install command, a **Copy** button and **Other ways to install**.
+  Open a terminal on this computer, paste the command and press Enter, then choose
+  **Check again**. You run the command yourself.
+- **[Program] didn't start**: it is installed but failed to run. Choose **Check
+  again**; if it keeps failing, reinstall it. Its own error output is under
+  **Details**, collapsed.
+
+Both warnings also offer **Choose another AI**. See
+[AI accounts](ai-accounts-and-routing.md#install-claude-code-codex-or-opencode-first)
+for the install commands and where Vibe64 looks for these programs.
 
 DeepSeek and the GLM Coding Plan connect through Codex; the free GLM-4.7 Flash
 option connects through OpenCode and serves the whole workspace. Use **Back** (above the header on a

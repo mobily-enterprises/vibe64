@@ -3,7 +3,7 @@ import {
   codexInteractiveArguments,
   normalizeCodexThreadId
 } from "@jskit-ai/assistant-core/server/codex-configuration";
-import { STUDIO_MANAGED_CODEX_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { operatorCliCommand, vibe64ProcessUmask } from "@local/vibe64-execution/server";
 import { studioUserStartupScript } from "@local/studio-terminal-core/server/studioToolHome";
 import { terminalAppOwnerMetadata } from "@local/studio-terminal-core/server/terminalOwnership";
 import { effectiveVibe64AgentSettings } from "@local/vibe64-runtime/shared";
@@ -60,7 +60,7 @@ function codexStartupScript(codexThreadId = "", {
   const normalizedRemoteEndpoint = normalizeText(remoteEndpoint);
   const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);
   const codexCommand = codexInteractiveArguments({
-    command: STUDIO_MANAGED_CODEX_COMMAND,
+    command: operatorCliCommand("codex"),
     threadId: normalizedThreadId,
     remoteEndpoint: normalizedRemoteEndpoint,
     model: effectiveSettings.model,
@@ -69,9 +69,10 @@ function codexStartupScript(codexThreadId = "", {
     bypassApprovalsAndSandbox: true,
     bypassHookTrust: true
   });
+  const umask = vibe64ProcessUmask();
   return studioUserStartupScript(codexCommand, {
     setupLines: [
-      "umask 0007",
+      ...(umask ? [`umask ${umask}`] : []),
       ...codexGitCommandWrapperSetupLines()
     ]
   });

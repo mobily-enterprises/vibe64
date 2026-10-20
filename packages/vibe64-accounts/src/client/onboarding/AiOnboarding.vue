@@ -6,11 +6,13 @@ import {
   mdiClose, mdiFileTreeOutline, mdiInformationOutline, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiSitemapOutline
 } from "@mdi/js";
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
+import CliInstallNotice, { cliProblem } from "../studio/CliInstallNotice.vue";
 import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import { usesProvider } from "./useAiOnboarding.js";
+import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 
 const props = defineProps({
   open: Boolean,
@@ -76,6 +78,23 @@ const others = computed(() => cards.value.filter((card) => !card.crown));
 const connectedCards = computed(() => cards.value.filter((card) => card.connected));
 const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(props.onboarding.colleague.value, card)) || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
+// The chosen engine's CLI, when this computer lacks it or it did not start.
+const accounts = useVibe64Accounts();
+const missingTool = computed(() => {
+  const id = chosen.value?.connect.engineId;
+  const status = accounts.status.value || {};
+  return status.accounts?.find((account) => account.id === id && cliProblem(account)) ||
+    status.missingTools?.find((tool) => tool.id === id) || null;
+});
+const checkingTools = ref(false);
+async function checkTools() {
+  checkingTools.value = true;
+  try {
+    await accounts.refresh();
+  } finally {
+    checkingTools.value = false;
+  }
+}
 const changeWhere = computed(() => props.workspace ? "your account menu" : "Account settings → AI Accounts");
 // Set up later snoozes first-run onboarding; a redo just closes.
 const skippable = computed(() => !wasSetUp.value && !["success", "owner"].includes(screen.value));
@@ -518,6 +537,9 @@ function expanded(card) {
                     v-if="nativeLogin" embedded :provider-id="chosen.connect.engineId"
                     :model-provider-id="chosen.connect.modelProviderId" @connected="finish()" @back="go('choose', true)"
                   />
+                  <CliInstallNotice v-else-if="missingTool" :account="missingTool" :checking="checkingTools" @check="checkTools">
+                    <v-btn variant="text" @click="go('choose', true)">Choose another AI</v-btn>
+                  </CliInstallNotice>
                   <AiOnboardingKeyConnect
                     v-else-if="chosen.connect.engineId === 'opencode'" :model-provider-id="chosen.connect.modelProviderId"
                     :label="chosen.name" @busy="setupBusy = $event" @connected="finish()"

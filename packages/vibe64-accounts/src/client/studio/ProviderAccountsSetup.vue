@@ -111,25 +111,13 @@
             !accountsReadyForActions ? 'accounts-setup__item--busy' : ''
           ]"
         >
-          <!-- Embedded: a missing sign-in tool is a warning with its recovery; nothing is said before the first attempt. -->
-          <v-alert
-            v-if="!session && embedded && !account.connected && technicalStatus(account)"
-            :id="`accounts-setup-unavailable-${account.id}`" type="warning" variant="tonal" class="mb-4"
-            :title="`${signInName(account)} sign-in isn't available here yet`"
+          <CliInstallNotice
+            v-if="!session && cliProblem(account)" :account="account" :checking="accountsLoading" class="mb-4"
+            @check="refreshStatus"
           >
-            Vibe64 couldn't start the {{ signInName(account) }} sign-in tool on this machine. Try again, or choose another AI for now.
-            <details class="accounts-setup__details">
-              <summary>Details</summary>
-              <pre>{{ account.message }}</pre>
-            </details>
-            <div class="d-flex flex-wrap ga-2 mt-3">
-              <v-btn variant="flat" color="warning" :disabled="accountsLoading" :prepend-icon="mdiRefresh" @click="refreshStatus">
-                {{ accountsLoading ? "Checking…" : "Try again" }}
-              </v-btn>
-              <v-btn variant="text" @click="emit('back')">Choose another AI</v-btn>
-            </div>
-          </v-alert>
-          <div v-if="!session && (!embedded || account.connected)" class="accounts-setup__item-main">
+            <v-btn v-if="embedded" variant="text" @click="emit('back')">Choose another AI</v-btn>
+          </CliInstallNotice>
+          <div v-if="!session && !cliProblem(account) && (!embedded || account.connected)" class="accounts-setup__item-main">
             <v-icon
               :icon="account.connected ? mdiCheckCircle : mdiAccountCircleOutline"
               :color="account.connected ? 'success' : 'primary'"
@@ -156,7 +144,7 @@
           </div>
 
           <div
-            v-if="!session"
+            v-if="!session && !cliProblem(account)"
             class="accounts-setup__actions"
           >
             <div
@@ -191,8 +179,7 @@
               class="accounts-setup__pending-action"
               color="primary"
               :variant="apiKeyFormVisible(account) ? 'text' : 'flat'"
-              :disabled="!accountsReadyForActions || accountLoginDisabled(account) || embedded && technicalStatus(account)"
-              :aria-describedby="embedded && technicalStatus(account) ? `accounts-setup-unavailable-${account.id}` : undefined"
+              :disabled="!accountsReadyForActions || accountLoginDisabled(account)"
               @click="startAccountAuth(account)"
             >
               {{ primaryAuthLabel(account) }}
@@ -496,6 +483,7 @@ import {
 import codexDeviceAuthorizeImage from "/src/assets/codex-device-code-authorize.png";
 import codexDeviceSettingsImage from "/src/assets/codex-device-code-settings.png";
 import Vibe64Terminal from "/src/components/studio/Vibe64Terminal.vue";
+import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
 import {
   useProviderAccountsSetup
 } from "../composables/useProviderAccountsSetup.js";
@@ -603,9 +591,7 @@ const {
   updateAuthTerminalExpanded
 } = useProviderAccountsSetup(props, { onConnected: (account) => emit("connected", account) });
 
-// Embedded (onboarding): raw runtime output reads as product copy, details on request.
 const signInName = (account) => ({ claude: "Claude", codex: "ChatGPT" })[account.id] || account.label;
-const technicalStatus = (account) => /command failed|enoent|spawn|error:|\n/iu.test(account.message || "");
 const setupRows = computed(() => accountRows.value.map((account) => {
   const session = accountActiveSession(account);
   return {
