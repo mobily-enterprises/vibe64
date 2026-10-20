@@ -36,11 +36,12 @@ describe("practice projects from the learner's saved lessons", () => {
     expect(practiceProjectsFromLearning({ ok: true, available: true, attempts: [
       attempt("a1", "training-a1"), attempt("a2", ""), attempt("a3", "training-a1"), attempt("a4", "training-a4", { ended: { reason: "restart" } })
     ] })).toEqual([
-      { slug: "training-a1", attemptId: "a1", lessonCode: "V64-START-02", lessonTitle: "", ended: false, mine: true },
-      { slug: "training-a4", attemptId: "a4", lessonCode: "V64-START-02", lessonTitle: "", ended: true, mine: true }
+      { slug: "training-a1", attemptId: "a1", lessonCode: "V64-START-02", lessonTitle: "", ended: false, mine: true, deleteAvailable: true },
+      { slug: "training-a4", attemptId: "a4", lessonCode: "V64-START-02", lessonTitle: "", ended: true, mine: true, deleteAvailable: true }
     ]);
+    // A server without the v2 attempts list (and so without practice.delete) offers no rows or deletes.
     expect(practiceProjectsFromLearning({ ok: true, available: true, active: attempt("b1", "training-b1"),
-      history: [attempt("b2", "training-b2")] }).map(({ slug }) => slug)).toEqual(["training-b1", "training-b2"]);
+      history: [attempt("b2", "training-b2")] })).toEqual([]);
     expect(practiceProjectsFromLearning({ ok: false })).toEqual([]);
     expect(practiceProjectsFromLearning({ ok: true, available: false, attempts: [attempt("c", "training-c")] })).toEqual([]);
   });
@@ -60,6 +61,8 @@ describe("practice projects from the learner's saved lessons", () => {
     expect(command.options.messages.success).toBe("Practice project deleted.");
     expect(resource.reload).toHaveBeenCalledTimes(1);
     expect(practice.deletingSlug.value).toBe("");
+    expect(await practice.deletePracticeProject({ ...practice.practiceProjects.value[0], deleteAvailable: false })).toBe(false);
+    expect(command.calls).toHaveLength(1);
     scope.stop();
   });
 
@@ -74,7 +77,7 @@ describe("practice projects from the learner's saved lessons", () => {
 });
 
 describe("project picker Practice section", () => {
-  it("lists practice projects separately, opens them and deletes only the learner's own with one click", async () => {
+  it("lists practice projects separately, opens them and deletes only the learner's own, where its host offers delete, with one click", async () => {
     const deletePracticeProject = vi.fn(async () => true);
     const filename = new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url).pathname;
     const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
@@ -84,8 +87,9 @@ describe("project picker Practice section", () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { render: () => null } }] });
     await router.push("/app");
     const practiceProjects = Vue.ref([
-      { slug: "training-mine", attemptId: "a", lessonCode: "V64-START-02", lessonTitle: "First change", ended: false, mine: true },
-      { slug: "training-other", attemptId: "b", lessonCode: "", lessonTitle: "", ended: false, mine: false }
+      { slug: "training-mine", attemptId: "a", lessonCode: "V64-START-02", lessonTitle: "First change", ended: false, mine: true, deleteAvailable: true },
+      { slug: "training-other", attemptId: "b", lessonCode: "", lessonTitle: "", ended: false, mine: false, deleteAvailable: true },
+      { slug: "training-hosted", attemptId: "c", lessonCode: "", lessonTitle: "", ended: false, mine: true, deleteAvailable: false }
     ]);
     const ctx = Vue.reactive({ busy: false, deletingPracticeSlug: "", practiceProjects, projects: [], deletePracticeProject,
       mdiDeleteOutline: "icon", openPracticeProject: (slug) => router.push(`/app/project/${slug}`),
@@ -103,7 +107,7 @@ describe("project picker Practice section", () => {
     };
     walk(tree);
     const rows = nodes.filter((node) => node.props?.["data-practice-slug"]);
-    expect(rows.map((node) => node.props["data-practice-slug"])).toEqual(["training-mine", "training-other"]);
+    expect(rows.map((node) => node.props["data-practice-slug"])).toEqual(["training-mine", "training-other", "training-hosted"]);
     const deletes = nodes.filter((node) => String(node.props?.["aria-label"] || "").startsWith("Delete practice project"));
     expect(deletes.map((node) => node.props["aria-label"])).toEqual(["Delete practice project training-mine"]);
     await deletes[0].props.onClick();

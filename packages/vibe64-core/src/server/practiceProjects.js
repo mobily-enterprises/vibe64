@@ -43,12 +43,25 @@ function practiceProjectAccessBlock(project = null, user = null) {
   };
 }
 
+// The learner who owns a practice project, as the learner-state owner identifies
+// it. The acting learner is used as-is; for the workspace owner acting on
+// another learner's project, the saved key names that learner (learner state
+// keys on String(uid ?? username), so either field yields the same key).
+function practiceLearnerActor(learnerKey = "", actor = null) {
+  const key = String(learnerKey || "");
+  if (!key) return null;
+  if (actor && practiceLearnerKey(actor) === key) return actor;
+  const id = Buffer.from(key, "base64url").toString("utf8");
+  return id && Buffer.from(id).toString("base64url") === key ? Object.freeze({ username: id }) : null;
+}
+
 function practiceProjectAttemptId(slug = "") {
   const hex = /^training-([a-f0-9]{32})$/u.exec(String(slug || ""))?.[1];
   return hex ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` : "";
 }
 
 export {
+  practiceLearnerActor,
   practiceLearnerKey,
   practiceProjectAccessBlock,
   practiceProjectAttemptId,

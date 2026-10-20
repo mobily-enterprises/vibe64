@@ -97,7 +97,7 @@
             <span class="project-selection-gate__project-path">{{ practice.slug }}</span>
           </v-btn>
           <v-btn
-            v-if="practice.mine && practice.attemptId"
+            v-if="practice.mine && practice.deleteAvailable && practice.attemptId"
             class="project-selection-gate__practice-delete"
             :aria-label="`Delete practice project ${practice.slug}`"
             :title="`Delete practice project ${practice.slug}`"

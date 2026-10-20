@@ -120,7 +120,10 @@ function useProjectSelectionGate(emit, {
       lessonCode: "",
       lessonTitle: "",
       ended: false,
-      mine: project.practice.mine === true
+      mine: project.practice.mine === true,
+      // The hosted host owns its delete (Online management page); the shared
+      // picker only lists and opens these.
+      deleteAvailable: false
     })));
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);

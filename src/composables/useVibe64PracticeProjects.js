@@ -9,13 +9,15 @@ const LEARNING_PATH = "/api/vibe64/training/learning";
 const LEARNER_CHANGED_EVENT = "vibe64.training.learner.changed";
 
 // Local practice projects live in the learner's private namespace, so the
-// standalone source is the learner's own learning.read: each attempt that
-// still has a practice project names it with `practiceSlug`. This adapter owns
+// standalone source is the learner's own learning.read. This reads the Learning
+// v2 shape proposed to C3 (`attempts[]` with `attemptId`, `practiceSlug`,
+// optional `lessonTitle`, `pin.lesson.code`, `ended`); the v1 active/history
+// shape has no practice slug and yields no rows, so no delete is offered
+// against a server without vibe64.training.practice.delete. This adapter owns
 // no admission; the Training actions re-authorize every read and delete.
 function practiceProjectsFromLearning(result = null) {
-  if (result?.ok !== true || result.available !== true) return [];
-  const attempts = Array.isArray(result.attempts) ? result.attempts
-    : [result.active, ...(Array.isArray(result.history) ? result.history : [])];
+  if (result?.ok !== true || result.available !== true || !Array.isArray(result.attempts)) return [];
+  const attempts = result.attempts;
   const seen = new Set();
   const projects = [];
   for (const attempt of attempts) {
@@ -29,12 +31,14 @@ function practiceProjectsFromLearning(result = null) {
       lessonCode: String(attempt?.pin?.lesson?.code || attempt?.lessonCode || ""),
       lessonTitle: String(attempt?.lessonTitle || ""),
       ended: Boolean(attempt?.ended),
-      mine: true
+      mine: true,
+      deleteAvailable: true
     });
   }
   return projects;
 }
 
+// Follows the existing attempt route convention (/attempts/:attemptId/end).
 function practiceProjectDeletePath(attemptId = "") {
   return `/api/vibe64/training/attempts/${encodeURIComponent(String(attemptId || ""))}/practice/delete`;
 }
@@ -70,7 +74,7 @@ function useVibe64PracticeProjects({ enabled = true } = {}) {
   // D-b: the learner's own practice project is deleted with one click; the
   // command's snackbar reports the outcome. No archive is kept.
   async function deletePracticeProject(project = {}) {
-    if (!project?.attemptId || deletingSlug.value) return false;
+    if (!project?.attemptId || project.deleteAvailable !== true || deletingSlug.value) return false;
     deletingSlug.value = String(project.slug || "");
     try {
       const result = await deleteCommand.run({ attemptId: project.attemptId });

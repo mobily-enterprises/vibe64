@@ -12,9 +12,11 @@ const removalLocks = new Map();
 // has no managed resources or resource policy, so those steps have no
 // counterpart here. A local practice project lives in the learner's private
 // namespace, so every step runs inside the learner's own practice scope.
-// Ending the attempt belongs to the caller (vibe64.training.practice.delete).
+// The owning attempt is ended (reason `discard`) once the pinned check passes,
+// before anything is removed; callers do not end it again.
 function createLocalPracticeProjects({ learners, projectContext, project, terminals, removePath = rm } = {}) {
-  if (typeof learners?.readExerciseProjectScope !== "function" || typeof projectContext?.runWithPracticeProjectScope !== "function" ||
+  if (typeof learners?.readExerciseProjectScope !== "function" || typeof learners?.endAttempt !== "function" ||
+      typeof projectContext?.runWithPracticeProjectScope !== "function" ||
       typeof project?.runInProjectContext !== "function" || typeof terminals?.closeProjectRuntime !== "function") {
     throw new TypeError("Local practice project removal requires the learner, Project context, Project and terminal owners.");
   }
@@ -33,11 +35,11 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
       }
       if (saved.projectSlug !== slug) throw notPractice();
       return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access: "write", allowDeleting: true },
-        () => removeAdmitted(slug));
+        () => removeAdmitted(slug, () => endPracticeAttempt({ learners, actor, attemptId })));
     });
   }
 
-  async function removeAdmitted(slug) {
+  async function removeAdmitted(slug, endAttempt) {
     const state = await projectContext.readWorkspaceProjectState({ slug });
     const projectSessionSourceRoot = projectContext.projectSessionSourceRootForSlug(slug);
     if (!Object.keys(state.metadata).length) {
@@ -54,6 +56,7 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
         code: "vibe64_project_pinned", statusCode: 409
       });
     }
+    await endAttempt();
     const started = await projectContext.beginWorkspaceProjectDeletion({
       startedAt: state.metadata.deletion?.startedAt || new Date().toISOString(), slug
     });
@@ -95,6 +98,30 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
   return Object.freeze({ remove });
 }
 
+// End the practice project's attempt with reason `discard`, as lesson.end
+// does (preparation.endLesson: the preparation barrier, then the typed
+// retirement). Its session stop is not repeated here: deletion closes the
+// project runtime, which holds the attempt's practice session. Idempotent: an
+// ended, superseded or unknown attempt is left as it is, and the stable request
+// ID replays a confirmed end.
+async function endPracticeAttempt({ learners, actor, attemptId } = {}) {
+  if (!actor || !attemptId) return { ended: false };
+  for (let tries = 1; ; tries++) {
+    const state = await learners.readState({ actor });
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt || attempt.ended || state.progress.activeAttemptId !== attemptId) return { ended: false };
+    const input = { actor, attemptId, requestId: `practice-delete-${attemptId}`, expectedRevision: state.revision, reason: "discard" };
+    try {
+      const result = await learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
+      return { ended: Boolean(result?.attempt?.ended), revision: result?.revision };
+    } catch (error) {
+      // A concurrent learning write moved the revision or ended the attempt;
+      // reread once (an ended attempt then returns above).
+      if (!["VIBE64_TRAINING_STATE_REVISION_CONFLICT", "VIBE64_TRAINING_ATTEMPT_MISSING"].includes(error.code) || tries >= 2) throw error;
+    }
+  }
+}
+
 function notPractice() {
   return Object.assign(new Error("This is not one of your practice projects."), { code: "vibe64_project_not_practice", statusCode: 404 });
 }
@@ -119,4 +146,4 @@ async function withRemovalLock(key, operation) {
   }
 }
 
-export { createLocalPracticeProjects };
+export { createLocalPracticeProjects, endPracticeAttempt };

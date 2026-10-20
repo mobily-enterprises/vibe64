@@ -8,6 +8,7 @@ import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource,
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
+import { practiceProjectAccessBlock, projectPracticeForActor } from "@local/vibe64-core/server/practiceProjects";
 
 import {
   Vibe64SessionRuntime
@@ -147,6 +148,7 @@ function publicProject(project = {}, {
     ...(project.githubRepository ? { githubRepository: project.githubRepository } : {}),
     name: slug,
     path: projectRoot,
+    ...(project.practice ? { practice: { ...project.practice } } : {}),
     projectRecordPath: context?.projectRecordPath || project.projectRecordPath || "",
     projectRoot,
     projectRuntimeRoot: context?.projectRuntimeRoot || project.projectRuntimeRoot || "",
@@ -723,18 +725,35 @@ function createService({
     return readEnvState(input);
   }
 
-  async function listProjectsState() {
+  // Practice is split at presentation and owned by its learner. A listing for
+  // a viewer (the public projects.list action) adds the actor-relative `mine`
+  // and omits practice projects that viewer may not open (another learner's,
+  // unless the viewer is the owner). Internal system callers (runtime cleanup,
+  // goal recovery, health) list without a viewer and see every project. The
+  // current project already passed the request's own access check.
+  function presentedProjects(projects = [], viewer = undefined) {
+    if (viewer === undefined) return projects;
+    return projects
+      .filter((project) => !practiceProjectAccessBlock(project, viewer))
+      .map((project) => projectPracticeForActor(project, viewer));
+  }
+
+  function presentedProject(project = null, viewer = undefined) {
+    return project && viewer !== undefined ? projectPracticeForActor(project, viewer) : project;
+  }
+
+  async function listProjectsState({ viewer = undefined } = {}) {
     const requestContext = currentProjectRequestContext();
     if (!requestContext?.targetRoot || studioProjectContext.requestContextMatchesSelectedProject(requestContext)) {
       const listed = await studioProjectContext.listProjects();
       const currentProject = listed.currentProject
-        ? publicProject(listed.currentProject, {
+        ? presentedProject(publicProject(listed.currentProject, {
             selected: true
-          })
+          }), viewer)
         : null;
-      const projects = listed.projects.map((project) => publicProject(project, {
+      const projects = presentedProjects(listed.projects.map((project) => publicProject(project, {
         selected: project.selected
-      }));
+      })), viewer);
       if (currentProject && !projects.some((project) => project.slug === currentProject.slug)) {
         projects.push(currentProject);
         projects.sort((left, right) => left.slug.localeCompare(right.slug));
@@ -747,15 +766,15 @@ function createService({
     }
     const listed = await studioProjectContext.listWorkspaceProjects();
     const current = listed.projects.find((project) => project.slug === requestContext.slug) || {};
-    const projects = listed.projects.map((project) => publicProject(project, {
+    const projects = presentedProjects(listed.projects.map((project) => publicProject(project, {
       context: project.slug === requestContext.slug ? requestContext : null,
       selected: project.slug === requestContext.slug
-    }));
+    })), viewer);
     return {
-      currentProject: publicProject(current, {
+      currentProject: presentedProject(publicProject(current, {
         context: requestContext,
         selected: true
-      }),
+      }), viewer),
       hasSelection: true,
       ok: true,
       projects,
@@ -1374,8 +1393,10 @@ function createService({
       return currentDevelopmentDatabasePolicy(input);
     },
 
-    async listProjects() {
-      return projectResult(() => listProjectsState());
+    // `actor` (possibly null) asks for the viewer's presentation; internal
+    // callers omit it.
+    async listProjects(input = {}) {
+      return projectResult(() => listProjectsState(Object.hasOwn(input || {}, "actor") ? { viewer: input.actor ?? null } : {}));
     },
 
     async managedDevelopmentDatabaseDefaults(input = {}) {

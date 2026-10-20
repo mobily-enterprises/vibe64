@@ -1,6 +1,6 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
 import { onboardingReadTool, onboardingTemplateTool } from "./onboardingAssistantContracts.js";
@@ -266,7 +266,7 @@ function createProjectActions({ project } = {}) {
       id: ACTION_LIST_PROJECTS,
       kind: "query",
       input: projectsReadInputValidator,
-      execute: () => project.listProjects()
+      execute: (_input, context) => project.listProjects({ actor: authenticatedVibe64User(context) })
     }),
     action({
       id: ACTION_CREATE_PROJECT,
