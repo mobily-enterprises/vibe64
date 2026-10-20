@@ -478,6 +478,7 @@ protect host-owned values; stored-value inspection and secret reveal stay in Env
 - `genesis/program/projects/engineering-approach.md`
 - `genesis/program/projects/github-issues.md`
 - `genesis/program/projects/github-pull-requests.md`
+- `genesis/program/projects/project-archives.md`
 
 ### Data owned
 - Nothing.
