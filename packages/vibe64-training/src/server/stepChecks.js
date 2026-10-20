@@ -20,41 +20,38 @@ function requireResult(result, failure) {
   return result;
 }
 
-// Moved from practicalObservations.js: invoke the declared exercise response
-// check for one learner-origin App interaction in the exact ready App run.
-// v1 calls omit stepId; v2 names the step whose check the lesson declares.
-async function runExerciseResponseCheck({ actions, checks, context, failure, actor, target,
+// Invoke the step's declared exercise response check for one learner-origin
+// App interaction in the exact ready App run.
+async function runExerciseResponseCheck({ actions, checks, context, actor, target,
   attemptId, observationId, exercise, checkId, stepId }) {
   if (typeof checks?.runOrientationCheck !== "function") {
-    throw failure("The installed exercise response check is unavailable in this host.");
+    throw stepFailure("The installed exercise response check is unavailable in this host.");
   }
   const outputs = requireResult(await actions.execute({ actionId: "vibe64.terminals.outputs.read",
-    input: target, context }), failure);
+    input: target, context }), stepFailure);
   const terminalId = outputs?.activeTerminal?.id;
-  if (!terminalId) throw failure("Use the exact ready App run for this exercise before repeating the interaction.");
+  if (!terminalId) throw stepFailure("Use the exact ready App run for this exercise before repeating the interaction.");
   const checked = await checks.runOrientationCheck({ actor, signal: context.signal,
     attemptId, sessionId: target.sessionId, terminalId, observationId,
-    instanceId: exercise.instanceId, interactionId: exercise.interactionId, requestId: exercise.requestId,
-    ...(stepId ? { stepId } : {}) });
+    instanceId: exercise.instanceId, interactionId: exercise.interactionId, requestId: exercise.requestId, stepId });
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome)) {
-    throw failure("The declared check did not confirm this exact native observation.");
+    throw stepFailure("The declared check did not confirm this exact native observation.");
   }
   return checked;
 }
 
-// Moved from practicalObservations.js: invoke the declared code check and
-// accept only its bounded authorship-qualified result.
-async function runCodeCheckObservation({ checks, context, failure, actor, attemptId, sessionId, observationId, checkId, stepId }) {
+// Invoke the step's declared code check and accept only its bounded
+// authorship-qualified result.
+async function runCodeCheckObservation({ checks, context, actor, attemptId, sessionId, observationId, checkId, stepId }) {
   if (typeof checks?.runCodeCheck !== "function") {
-    throw failure("The installed code check is unavailable in this host.");
+    throw stepFailure("The installed code check is unavailable in this host.");
   }
-  const checked = await checks.runCodeCheck({ actor, signal: context.signal,
-    attemptId, sessionId, observationId, ...(stepId ? { stepId } : {}) });
+  const checked = await checks.runCodeCheck({ actor, signal: context.signal, attemptId, sessionId, observationId, stepId });
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome) || !["learner", "other"].includes(checked.authorship) ||
       checked.authorship === "other" && checked.checkResult.outcome !== "not-yet-passed") {
-    throw failure("The declared code check did not confirm this exact native observation.");
+    throw stepFailure("The declared code check did not confirm this exact native observation.");
   }
   return checked;
 }
@@ -185,7 +182,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const previous = (await savedEntry(actor, attemptId)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
     const observationId = randomUUID();
-    const checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target,
+    const checked = await runExerciseResponseCheck({ actions, checks, context, actor, target,
       attemptId, observationId, exercise: input.exercise, checkId: check.id, stepId });
     const reason = boundedReason(checked.reason);
     return record({ actor, attemptId, requestId, lesson,
@@ -212,7 +209,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     let checked;
     let evidence;
     if (check.kind === "code") {
-      checked = await runCodeCheckObservation({ checks, context, failure: stepFailure, actor, attemptId,
+      checked = await runCodeCheckObservation({ checks, context, actor, attemptId,
         sessionId: target.sessionId, observationId, checkId: check.id, stepId });
       evidence = { checkId: check.id, observationId,
         ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256(canonicalJson(checked.files)) } : {}) };
@@ -223,7 +220,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
           reason: "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first." };
       }
-      checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target,
+      checked = await runExerciseResponseCheck({ actions, checks, context, actor, target,
         attemptId, observationId, exercise: receipt, checkId: check.id, stepId });
       evidence = { checkId: check.id, observationId };
     }
@@ -317,4 +314,4 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   return Object.freeze({ observe, runCheck, answer, done, read, enterStep, saveReader });
 }
 
-export { createTrainingStepChecks, runCodeCheckObservation, runExerciseResponseCheck };
+export { createTrainingStepChecks };

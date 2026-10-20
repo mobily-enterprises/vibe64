@@ -32,7 +32,7 @@ const lessonFields = {
   checks: { ...list(createSchema({ id, file: text, assets: { ...list(text, 32), required: false },
     kind: { ...text, required: false, enum: ["response", "code"] },
     timeoutSeconds: { type: "integer", required: false, min: 1, max: 60 } }), 12), required: false },
-  // Learning watches keep a failed in-app request's path only when it matches one of these.
+  // Exercise data-changing routes: validated with the lesson; no current reader consumes them.
   appRoutes: { ...list(createSchema({ method: { ...text, enum: ["POST", "PUT", "PATCH", "DELETE"] },
     path: { ...text, maxLength: 128, pattern: "^/[A-Za-z0-9._~:/-]*$" } }), 16), required: false }
 };
@@ -103,4 +103,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, id, lessonSchema, lessonSchemaV2, list, text, topicSchema, visualSchema, validateContent, validateLesson };
+export { courseSchema, id, list, text, topicSchema, visualSchema, validateContent, validateLesson };
