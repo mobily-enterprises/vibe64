@@ -11,6 +11,7 @@ import {
   runWithResolvedProjectRequestContext,
   projectRequestErrorStatusCode
 } from "./projectRequestContext.js";
+import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
 
 function createVibe64FeatureRoutes(
   http,
@@ -48,10 +49,6 @@ function createVibe64FeatureRoutes(
         input: buildInput(request)
       });
     });
-  }
-
-  function serviceRoute(method, pathSuffix, options, handler) {
-    registerRoute(method, pathSuffix, options, handler);
   }
 
   function registerRoute(method, pathSuffix, options, handler) {
@@ -105,7 +102,7 @@ function createVibe64FeatureRoutes(
     requestBody: requestBodyObject,
     requestQuery: requestQueryObject,
     routeBase,
-    serviceRoute
+    serviceRoute: registerRoute
   };
 }
 
@@ -114,7 +111,7 @@ function isProjectRequestError(error = {}) {
     "vibe64_invalid_project_slug",
     "vibe64_project_route_unavailable",
     "vibe64_project_path_not_accessible",
-    "vibe64_practice_project_deleted",
+    PRACTICE_PROJECT_DELETED_CODE,
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"
   ].includes(error?.code);

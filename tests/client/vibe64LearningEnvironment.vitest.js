@@ -308,10 +308,10 @@ describe("useVibe64Learning controller", () => {
       expect(learning.colleagueRequest.value).toMatchObject({ actorKey: "member" });
     } finally { stop(); }
     const colleagueSource = readFileSync(path.resolve("packages/vibe64-colleague/src/client/Vibe64Colleague.vue"), "utf8");
-    expect(colleagueSource).toContain("watchColleagueLearningRequests({ learning");
     // One injection of the L controller feeds both the step card (E) and Teach me (D).
     expect(colleagueSource).toContain("const learningOwner = inject(VIBE64_LEARNING_KEY, null);");
-    expect(colleagueSource).toContain("const learning = unref(learningOwner);");
+    expect(colleagueSource).toContain("const learningController = computed(() => unref(learningOwner) || null);");
+    expect(colleagueSource).toContain("watchColleagueLearningRequests({ learning: learningController.value");
   });
 
   it("guides point-only without a practice project or at the L button", () => {

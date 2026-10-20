@@ -7,11 +7,9 @@ function guidedPlaceMatches(command, focus) {
   return focus?.pane === command.pane &&
     (!command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView);
 }
-// Moved from vibe64-training's presentationCoordination.js (Learning v2, C4):
-// Colleague owns navigation begin/ack/timeout and guide receipts. The retired
-// teacher's lesson presentation and cue receipts were removed with the teacher
-// model (Learning v2 phase 2). Consumers retain maps, admission, focus grammar
-// and every lifecycle call site.
+// One pending browser navigation per connection: begin waits for the browser's
+// acknowledgement (or times out), and acknowledge accepts only a receipt that
+// matches the command's Learning state, guided place and guide highlight.
 function createColleagueNavigationCoordination({ changed }) {
   function begin(connection, command) {
     connection.navigation = command;

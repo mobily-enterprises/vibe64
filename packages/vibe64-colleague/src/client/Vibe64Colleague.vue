@@ -603,7 +603,6 @@ async function sendMessage(message, options = {}, target = conversation.runtime.
 }
 // Teach me in L: reveal this conversation (voice stays as it is) and send L's
 // fixed message through the ordinary send with the current browser focus.
-const learning = unref(learningOwner);
 function waitForConversation(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     let stop = null;
@@ -638,7 +637,7 @@ async function revealForLearning() {
   return true;
 }
 watch(() => product.value.modelSetupRequired, required => { if (!required) teachNeedsModel.value = false; });
-const stopLearningRequests = watchColleagueLearningRequests({ learning, actorKey: () => actorKey.value,
+const stopLearningRequests = watchColleagueLearningRequests({ learning: learningController.value, actorKey: () => actorKey.value,
   reveal: revealForLearning, report: reportFailure,
   send: async message => sendMessage(message, { focus: { ...props.focus } }) });
 onBeforeUnmount(stopLearningRequests);
