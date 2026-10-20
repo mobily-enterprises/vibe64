@@ -144,6 +144,56 @@ describe("teacher guide overlay", () => {
     expect(await showTrainingGuide(erd)).toEqual({ shown: false, reason: "target-hidden" });
   });
 
+  it("on a phone already showing the place, rings its open pane instead of the pane switch", async () => {
+    vi.stubGlobal("innerWidth", 390);
+    vi.stubGlobal("innerHeight", 844);
+    mountOverlay();
+    const preview = trainingGuideCommand(trainingGuideRequest({ target: "preview" }), { id: "preview" }).guide;
+    const previewTab = control({ "data-vibe64-guide": "preview" });
+    const previewPane = control({ "data-vibe64-guide-pane": "preview" }, { top: 56, left: 0, width: 390, height: 788 });
+    const nextPane = control({ "data-vibe64-guide": "pane-switch" }, { top: 8, left: 290, width: 92, height: 40 });
+    previewTab.hidden = true; // the phone header hides the Preview tab
+    document.controls.push(previewTab, previewPane, nextPane);
+    expect(await showTrainingGuide(preview)).toEqual({ shown: true, step: "preview" });
+    await Vue.nextTick();
+    const node = overlay();
+    expect(node.props["data-guide-step"]).toBe("preview");
+    expect(trainingGuide.value.element).toBe(previewPane);
+    // The pane fills the screen, so the caption sits inside its top edge.
+    const caption = find(node, child => String(child.props.class || "").includes("training-guide-overlay__caption "))[0];
+    expect(String(caption.props.class)).toContain("training-guide-overlay__caption--inside");
+    expect(caption.props.style).toMatchObject({ top: "70px" });
+
+    // A visible control for the same step wins over its pane (desktop tabs).
+    previewTab.hidden = false;
+    await showTrainingGuide(preview);
+    expect(trainingGuide.value.element).toBe(previewTab);
+
+    // With the Dashboard open instead, the Preview pane is hidden: the switch is next.
+    previewTab.hidden = previewPane.hidden = true;
+    expect(await showTrainingGuide(preview)).toEqual({ shown: true, step: "pane-switch" });
+    expect(trainingGuide.value.element).toBe(nextPane);
+  });
+
+  it("on a phone, rings the Dashboard section select, then the open section's pane", async () => {
+    mountOverlay();
+    document.controls[0].hidden = true; // the phone header hides the Dashboard tab
+    const files = trainingGuideCommand(trainingGuideRequest({ target: "files" }), { id: "files" }).guide;
+    const sectionSelect = control({ "data-vibe64-guide-pane": "dashboard" });
+    const nextPane = control({ "data-vibe64-guide": "pane-switch" }, { top: 8, left: 290, width: 92, height: 40 });
+    document.controls.push(sectionSelect, nextPane);
+    expect(await showTrainingGuide(files)).toEqual({ shown: true, step: "dashboard" });
+    expect(trainingGuide.value.element).toBe(sectionSelect);
+    expect(trainingGuide.value.caption).toBe("Dashboard → Files");
+
+    // Files open: the Dashboard select is gone and its pane is the target.
+    sectionSelect.hidden = true;
+    const filesPane = control({ "data-vibe64-guide-pane": "files" }, { top: 56, left: 0, width: 390, height: 600 });
+    document.controls.push(filesPane);
+    expect(await showTrainingGuide(files)).toEqual({ shown: true, step: "files" });
+    expect(trainingGuide.value.element).toBe(filesPane);
+  });
+
   it("clears after its time limit", async () => {
     mountOverlay();
     await showTrainingGuide(erd);

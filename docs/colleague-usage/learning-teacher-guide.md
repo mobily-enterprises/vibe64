@@ -12,7 +12,9 @@ lesson's own caption. You then click it yourself.
   on the caption shows the time left.
 - The ring is on the next step from where you are. On **Preview**, a path to the
   ERD rings the **Dashboard** tab; once you are in **Dashboard → Database**, it
-  rings the **ERD** button.
+  rings the **ERD** button. When you are already at the place (for example
+  Preview or **Dashboard → Files** is open), the ring goes around that open
+  pane, with the caption inside its top edge when the pane fills the screen.
 - The ring lasts about 8 seconds, or until you click or press a key. It never
   blocks your click, and it holds still when your device asks for reduced motion.
 - If Learning is open above the app when Colleague points at an app place,
@@ -27,13 +29,21 @@ section the project does not show cannot be ringed.
 
 ## On a phone
 
-A phone shows the chat or one pane at a time, so the next tab is often hidden.
-Colleague's full-screen chat minimises itself first so the ring is visible. The
-ring then sits on the header's pane switch when the step itself is hidden: the
-arrow button that shows the project panes from the chat, or the next-pane button
-(for example **Dashboard ›**). The caption still shows the whole path. Tap the
-switch; when the next step becomes visible, Colleague can ring it directly.
-Reopen Colleague with its avatar button.
+A phone shows the chat or one pane at a time, so the Preview/Dashboard tabs and
+the Dashboard menu are hidden. Colleague's full-screen chat minimises itself
+first so the ring is visible. Then:
+
+- If the place's pane is already showing (for example Preview, or Files in the
+  Dashboard), the ring goes around that pane.
+- In the Dashboard, a Dashboard section that is not open rings the
+  **Dashboard section** select at the top; choose the section there.
+- Only when the place is in the other pane, or the chat is showing, does the
+  ring sit on the header's pane switch: the arrow button that shows the project
+  panes from the chat, or the next-pane button (for example **Dashboard ›**).
+  Tap it; when the next step becomes visible, Colleague can ring it directly.
+
+The caption always shows the whole path. Reopen Colleague with its avatar
+button.
 
 ## When nothing is ringed
 

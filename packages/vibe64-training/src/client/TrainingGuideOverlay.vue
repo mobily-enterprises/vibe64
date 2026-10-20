@@ -59,11 +59,15 @@ const ringStyle = computed(() => rect.value && {
 });
 // The caption sits below the control, or above it where the viewport ends;
 // its pointer tracks the control's centre even when the caption is clamped.
+// A ringed pane that fills a phone screen leaves no room outside it, so the
+// caption then sits inside the pane's top edge without a pointer.
+const captionRoom = 60;
 const captionPlacement = computed(() => {
   if (!rect.value) return "below";
   const viewport = globalThis.innerHeight || 0;
   const below = rect.value.top + rect.value.height + pad + gap;
-  return viewport && below + 60 > viewport ? "above" : "below";
+  if (!viewport || below + captionRoom <= viewport) return "below";
+  return rect.value.top - pad - gap - captionRoom >= 0 ? "above" : "inside";
 });
 const captionStyle = computed(() => {
   if (!rect.value) return null;
@@ -72,9 +76,11 @@ const captionStyle = computed(() => {
   const preferred = Math.max(8, rect.value.left - pad);
   const left = viewportWidth ? Math.max(8, Math.min(preferred, viewportWidth - 8 - width)) : preferred;
   const arrow = Math.max(20, Math.min(rect.value.left + rect.value.width / 2 - left, width - 20));
-  const vertical = captionPlacement.value === "above"
-    ? { bottom: `${Math.max(8, (globalThis.innerHeight || 0) - (rect.value.top - pad - gap))}px` }
-    : { top: `${rect.value.top + rect.value.height + pad + gap}px` };
+  const vertical = {
+    above: { bottom: `${Math.max(8, (globalThis.innerHeight || 0) - (rect.value.top - pad - gap))}px` },
+    below: { top: `${rect.value.top + rect.value.height + pad + gap}px` },
+    inside: { top: `${Math.max(8, rect.value.top) + gap}px` }
+  }[captionPlacement.value];
   return { ...vertical, left: `${left}px`, maxWidth: `${width}px`,
     "--training-guide-arrow": `${arrow}px`, "--training-guide-lifetime": `${lifetime.value}ms` };
 });
@@ -190,6 +196,9 @@ const captionStyle = computed(() => {
 .training-guide-overlay__caption--above::before {
   bottom: -5px;
   top: auto;
+}
+.training-guide-overlay__caption--inside::before {
+  display: none;
 }
 .training-guide-overlay__caption-icon {
   background: rgba(255, 255, 255, 0.22);

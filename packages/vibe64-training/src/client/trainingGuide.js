@@ -22,10 +22,21 @@ function cssString(value) {
   return String(value).replace(/["\\]/gu, "\\$&");
 }
 
-function stepSelector(step) {
-  return step.id === "file"
-    ? `[data-vibe64-guide-path="${cssString(step.path)}"]`
-    : `[data-vibe64-guide="${cssString(step.id)}"]`;
+// A step is a control (`data-vibe64-guide`) or, when that place is already
+// open, the pane showing it (`data-vibe64-guide-pane`): on a phone the header
+// tabs and Dashboard menu are hidden while the open pane fills the screen.
+function stepSelectors(step) {
+  if (step.id === "file") return [`[data-vibe64-guide-path="${cssString(step.path)}"]`];
+  const id = cssString(step.id);
+  return [`[data-vibe64-guide="${id}"]`, `[data-vibe64-guide-pane="${id}"]`];
+}
+
+function visibleStepElement(step, root) {
+  for (const selector of stepSelectors(step)) {
+    const element = [...root.querySelectorAll(selector)].find(guideElementVisible);
+    if (element) return element;
+  }
+  return null;
 }
 
 function guideElementVisible(element) {
@@ -35,18 +46,21 @@ function guideElementVisible(element) {
   return rect.width > 0 && rect.height > 0;
 }
 
-// The deepest visible step is the next control the learner must click.
+// The deepest visible step is the next control the learner must click, or
+// the open pane itself when the learner is already there. A step's control
+// wins over its pane.
 function findTrainingGuideStep(steps = [], root = globalThis.document) {
   if (!root) return null;
   for (let index = steps.length - 1; index >= 0; index -= 1) {
-    const element = [...root.querySelectorAll(stepSelector(steps[index]))].find(guideElementVisible);
+    const element = visibleStepElement(steps[index], root);
     if (element) return { step: steps[index], element, final: index === steps.length - 1 };
   }
   return null;
 }
 
-// On a phone the chat and each pane fill the screen, so no step on the path may
-// be visible. The header's pane switch is then the next real control to click;
+// On a phone the chat and each pane fill the screen, so when the place is in
+// the other pane (or the chat is showing) no step on the path is visible. The
+// header's pane switch is then the next real control to click;
 // the caption still names the whole path. Prefer the last visible switch: the
 // next-pane button follows the chat toggle in the header.
 const PANE_SWITCH = "pane-switch";

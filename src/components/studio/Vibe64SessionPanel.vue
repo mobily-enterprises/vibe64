@@ -115,6 +115,7 @@
         <div
           v-else
           class="studio-ai-sessions__preview-empty-pane"
+          data-vibe64-guide-pane="preview"
         >
           <div class="studio-ai-sessions__preview-empty-content">
             <p class="studio-ai-sessions__preview-empty-title">

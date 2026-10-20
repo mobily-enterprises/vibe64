@@ -669,6 +669,7 @@
         <div
           v-show="dashboardRouteVisible"
           class="studio-autopilot__right-pane-page"
+          :data-vibe64-guide-pane="vibe64SessionToolGuideId(rightPaneTab)"
           role="tabpanel"
         >
           <slot
@@ -693,6 +694,7 @@
 
       <section
         v-if="props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
+        :data-vibe64-guide-pane="vibe64SessionToolGuideId('changes')"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -706,6 +708,7 @@
 
       <section
         v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+        :data-vibe64-guide-pane="vibe64SessionToolGuideId('editor')"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -736,6 +739,7 @@
 
       <section
         v-show="props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+        :data-vibe64-guide-pane="vibe64SessionToolGuideId('database')"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -761,6 +765,7 @@
 
       <section
         v-show="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+        :data-vibe64-guide-pane="vibe64SessionToolGuideId('system')"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
@@ -817,6 +822,7 @@
       <div
         v-show="props.projectPane !== 'dashboard'"
         class="studio-autopilot__right-pane-page"
+        data-vibe64-guide-pane="preview"
         role="tabpanel"
       >
         <Vibe64ProjectOnboarding
@@ -1009,6 +1015,7 @@ import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64Sessi
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
+import { vibe64SessionToolGuideId } from "@/lib/vibe64SessionToolDefinitions.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";

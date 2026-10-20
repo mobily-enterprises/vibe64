@@ -124,7 +124,16 @@ a path of `data-vibe64-guide` ids on existing controls: the project page's
 Preview/Dashboard tabs, the L button, the real Dashboard section items
 (`guideId` in `vibe64SessionToolDefinitions.js`), the Database
 Overview/ERD/Data toggle, and file-tree rows (`data-vibe64-guide-path`). Lessons
-supply no selectors.
+supply no selectors. An open place's pane also carries
+`data-vibe64-guide-pane`: the Preview pane (and the no-session Preview pane),
+each session tool pane by its `guideId` (`vibe64SessionToolGuideId`), and the
+Dashboard section navigation (`SectionContainerShell` `navigationGuidePane`,
+its menu or, at phone width, its section select) as `dashboard`. For each step
+a visible control wins over its pane, so desktop still rings tabs; on a phone,
+where tabs and the Dashboard menu are hidden, Show me rings the real open pane.
+Only when no step is visible does the ring fall back to the last visible
+header `pane-switch`. A pane that fills the screen gets its caption inside its
+top edge (`inside` placement).
 
 The default (`navigate=false`, `highlight=true`) only points. The Colleague
 client (`Vibe64Colleague.vue`) and the Learning step reader (`vibe64Learning.js`)

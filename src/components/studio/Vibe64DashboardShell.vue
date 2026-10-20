@@ -51,7 +51,11 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
 </script>
 
 <template>
-  <SectionContainerShell :mobile-section-links="mobileDashboardSectionLinks" :navigation-collapsed="githubBrowserOpen">
+  <SectionContainerShell
+    :mobile-section-links="mobileDashboardSectionLinks"
+    :navigation-collapsed="githubBrowserOpen"
+    navigation-guide-pane="dashboard"
+  >
     <template #tabs>
       <span v-if="dashboardSectionLinks.length" class="vibe64-dashboard-nav-group-label">Project</span>
       <ShellOutlet target="app-dashboard:primary-menu" :context="dashboardContext" />
