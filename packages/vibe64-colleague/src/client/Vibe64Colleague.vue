@@ -16,6 +16,8 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64LearningStepDialog from "/src/components/learning/Vibe64LearningStepDialog.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
+import { AiOnboardingNudge } from "@local/vibe64-accounts/client";
+import { registerVibe64ColleagueModel, workflowModelSelection } from "./colleagueModelBridge.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
@@ -703,6 +705,18 @@ async function selectModel(assistantSelection) {
     return result;
   } catch (error) { if (expectedActor === actorKey.value) reportFailure(error); return { ok: false }; }
 }
+// AI onboarding reads and switches this Colleague's model through the bridge.
+const colleagueModel = {
+  current: () => product.value.assistantSelection || null,
+  async selectForWorkflow(engineId) {
+    try {
+      const catalog = await requestColleague(`/models?engineId=${encodeURIComponent(engineId)}&allConnectedModels=true&connectedOnly=true`, { method: "GET" });
+      const selection = workflowModelSelection(catalog, engineId);
+      return selection ? await selectModel(selection) : { ok: false, error: "This AI has no model ready for Colleague yet." };
+    } catch (error) { return { ok: false, error: error.message }; }
+  }
+};
+let unregisterModel = null;
 async function openModelSetup() {
   modelMenu.value = false;
   if (props.navigate) {
@@ -773,6 +787,7 @@ watch([actorKey, () => props.focus], ([actor], [previousActor]) => {
 onMounted(() => {
   if (voice) voice.launcher.value = launcher.value?.$el;
   void refresh();
+  unregisterModel = registerVibe64ColleagueModel(colleagueModel);
   window.addEventListener("blur", cancelAvatarPress);
   window.addEventListener("pagehide", cancelAvatarPress);
 });
@@ -780,6 +795,7 @@ onBeforeUnmount(() => {
   if (voice?.launcher.value === launcher.value?.$el) voice.launcher.value = null;
   realtimeSocket.off("connect", refresh);
   focusBinding.close();
+  unregisterModel?.();
   mounted = false;
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
   cancelAvatarPress();
@@ -842,6 +858,7 @@ onBeforeUnmount(() => {
   </ConversationDialog>
   <Teleport :to="voicePanelTarget || conversationTarget || 'body'" :disabled="!voicePanelTarget && !conversationTarget">
     <aside v-show="bodyVisible" class="vibe64-colleague" :aria-label="name">
+      <div v-if="!product.modelSetupRequired" class="vibe64-colleague__nudge"><AiOnboardingNudge /></div>
       <v-alert v-if="voiceSession && !voicePanelTarget && voice.controller.state.error" type="error" density="compact" role="alert">{{ voice.controller.state.error }}</v-alert>
       <v-alert v-if="pointerNotice" variant="tonal" type="info" role="status">
         <p>{{ pointerNotice }}</p>
@@ -1056,6 +1073,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .vibe64-colleague { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
+.vibe64-colleague__nudge { flex: 0 0 auto; padding: 12px 12px 0; }
+.vibe64-colleague__nudge:empty { display: none; }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
 .vibe64-colleague__conversation :deep(.assistant-conversation__avatar) { position: relative; align-self: flex-end; flex: 0 0 auto; }
