@@ -167,7 +167,11 @@ ordinary browser navigator and, for `filePath`, opens the file in Dashboard →
 Files. `TrainingGuideOverlay`, mounted once by the L overlay and teleported to
 the body, draws a ring, pulse and caption with `pointer-events: none`, keeps the
 ring still under `prefers-reduced-motion`, and clears after about 8 seconds, on
-the learner's first pointer or key press, or when the control disappears. The
+the learner's first pointer or key press, or when the control is hidden. A
+ringed control or pane that the navigated view removes and renders again (a
+phone opening another project's Preview replaces its pane just after the ring
+lands) is looked up again for the same step, so the ring stays for its full
+time; a control that is merely hidden means the learner's view changed. The
 ACK carries `guide: { shown, reason?, step? }`; the coordinator rejects a
 receipt that claims a drawn highlight without its step or an undrawn one without
 a reason (`highlight-off`, `target-hidden`, `overlay-unavailable`).

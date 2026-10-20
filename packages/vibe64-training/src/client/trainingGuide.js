@@ -69,6 +69,18 @@ function findPaneSwitch(root = globalThis.document) {
   return [...root.querySelectorAll(`[data-vibe64-guide="${PANE_SWITCH}"]`)].filter(guideElementVisible).at(-1) || null;
 }
 
+// A navigated view can re-render after the ring is drawn, replacing the ringed
+// control or pane with an identical new element (a phone opening another
+// project's Preview does this). Only a removed element is looked up again, for
+// the same step; a hidden one means the learner's view changed, and the ring
+// clears.
+function currentTrainingGuideElement(guide) {
+  const element = guide?.element;
+  if (!element || guideElementVisible(element)) return element || null;
+  if (element.isConnected || !guide.target) return null;
+  return guide.target.id === PANE_SWITCH ? findPaneSwitch() : visibleStepElement(guide.target, globalThis.document);
+}
+
 function clearTrainingGuide(id) {
   if (!id || trainingGuide.value?.id === id) trainingGuide.value = null;
 }
@@ -91,7 +103,7 @@ async function showTrainingGuide(guide, { settleMs = 0, durationMs = TRAINING_GU
   if (!found) return { shown: false, reason: "target-hidden" };
   if (overlays === 0) return { shown: false, reason: "overlay-unavailable" };
   sequence += 1;
-  trainingGuide.value = Object.freeze({ id: `guide-${sequence}`, element: found.element, step: found.step.id,
+  trainingGuide.value = Object.freeze({ id: `guide-${sequence}`, element: found.element, step: found.step.id, target: found.step,
     caption: String(guide.caption || ""), expiresAt: Date.now() + durationMs });
   return { shown: true, step: found.step.id };
 }
@@ -113,5 +125,5 @@ async function runTrainingGuideCommand(command, { navigateBrowser, view } = {}) 
   return { ...(focus ? { focus } : {}), guide: receipt };
 }
 
-export { TRAINING_GUIDE_DURATION_MS, clearTrainingGuide, findTrainingGuideStep, guideElementVisible,
+export { TRAINING_GUIDE_DURATION_MS, clearTrainingGuide, currentTrainingGuideElement, findTrainingGuideStep, guideElementVisible,
   registerTrainingGuideOverlay, runTrainingGuideCommand, showTrainingGuide, trainingGuide };
