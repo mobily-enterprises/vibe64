@@ -80,6 +80,7 @@ function createVibe64FeatureRoutes(
           if (isProjectRequestError(error)) {
             return reply.code(projectRequestErrorStatusCode(error)).send({
               ok: false,
+              code: error?.code || "vibe64_project_request_failed",
               errors: [
                 {
                   code: error?.code || "vibe64_project_request_failed",
@@ -113,6 +114,7 @@ function isProjectRequestError(error = {}) {
     "vibe64_invalid_project_slug",
     "vibe64_project_route_unavailable",
     "vibe64_project_path_not_accessible",
+    "vibe64_practice_project_deleted",
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"
   ].includes(error?.code);

@@ -279,6 +279,28 @@ of Training's `learning.read`/`lesson.read` (L's Practice section). The prepared
 attempt/session URL was removed with the lesson-scoped routes; practice
 onboarding uses the ordinary project read.
 
+A page left open on a deleted practice project is a clean not-found on both
+hosts: core `practiceProjectDeletedError` (`vibe64_practice_project_deleted`,
+404, "This practice project was deleted. Its lesson is still in Learning.") is
+thrown by the hosted catalogue `readWorkspaceProject` for a practice slug whose
+record is missing or carries the deletion marker (an exact delete request with
+`allowDeleting` still resumes), and by the standalone page admission
+(`resolveProjectRequestContext` passes `requireProject` to
+`runWithPracticeProjectScope`), checked before the ownership refusal so storage
+recreated by a late request is not a 500. Other practice scopes keep refusing
+unmarked leftover storage. Feature routes and the Online gate map the code to 404
+with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
+the routed project page. That page re-reads its selection without a reload on
+the project-changed event (the hosted delete publishes the catalogue change), on
+Learning's own `vibe64.training.learner.changed` notice with reason `practice`
+for this project's attempt (Learning's delete on both hosts), and whenever any
+other query of the page fails with the deleted code (a query-cache subscription
+in the gate). `ProjectSelectionGate` then shows **This practice project
+was deleted** with **Open Learning** (L on its course list) instead of the error.
+Evidence: `tests/server/studioProjectContext.unit.test.js`,
+`tests/server/vibe64FeatureRoutes.unit.test.js` and
+`tests/client/vibe64PracticeProjectDeleted.vitest.js`.
+
 Project metadata optionally stores `allowSharedDatabaseSessions`, defaulting to
 false without rewriting old records. The existing locked database settings action
 may change this override with open sessions while retaining the scope-change guard.

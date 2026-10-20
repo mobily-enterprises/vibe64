@@ -67,7 +67,20 @@ function practiceProjectAttemptId(slug = "") {
   return hex ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` : "";
 }
 
+// A learner's practice project that no longer has its record (deleted, or
+// being deleted) is not found to its open pages, on both hosts. The learner's
+// saved lesson remains in Learning; nothing is inspected or repaired here.
+const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
+
+function practiceProjectDeletedError() {
+  return Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
+    code: PRACTICE_PROJECT_DELETED_CODE, statusCode: 404
+  });
+}
+
 export {
+  PRACTICE_PROJECT_DELETED_CODE,
+  practiceProjectDeletedError,
   practiceLearnerActor,
   practiceLearnerKey,
   practiceProjectAccessBlock,

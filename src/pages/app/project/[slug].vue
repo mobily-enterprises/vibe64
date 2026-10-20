@@ -26,6 +26,7 @@ const {
   chatToggleTitle,
   dashboardRouteActive,
   emitPageTitle,
+  handleProjectSelectionDeleted,
   handleProjectSelectionError,
   handleProjectSelectionMissing,
   handleProjectSelectionReady,
@@ -197,6 +198,7 @@ const {
           :key="projectSlug"
           scope-selection-to-current-project
           @error="handleProjectSelectionError"
+          @deleted="handleProjectSelectionDeleted"
           @missing="handleProjectSelectionMissing"
           @ready="handleProjectSelectionReady"
         >
