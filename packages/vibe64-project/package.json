@@ -9,7 +9,8 @@
     "./server/actions": "./src/server/actions.js",
     "./server/managedProject": "./src/server/managedProject.js",
     "./server/resourceEnvironment": "./src/server/resourceEnvironment.js",
-    "./server/managedRepository": "./src/server/managedRepository.js"
+    "./server/managedRepository": "./src/server/managedRepository.js",
+    "./server/project-archive": "./src/server/projectArchive.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -59,6 +60,10 @@
           {
             "subpath": "./server/managedRepository",
             "summary": "Owns original managed project creation and exact training source proof; hosted defaults remain an explicit host facility."
+          },
+          {
+            "subpath": "./server/project-archive",
+            "summary": "Archives a project into a validated bundle, or removes a practice project, through one resumable deletion lifecycle; hosts add their own resources."
           }
         ],
         "capabilities": [
