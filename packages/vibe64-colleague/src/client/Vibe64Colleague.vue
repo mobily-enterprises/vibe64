@@ -16,8 +16,8 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64LearningStepDialog from "/src/components/learning/Vibe64LearningStepDialog.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
-import { AiOnboardingNudge } from "@local/vibe64-accounts/client";
-import { registerVibe64ColleagueModel, workflowModelSelection } from "./colleagueModelBridge.js";
+import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
+import { registerVibe64ColleagueModel, selectionLabels } from "./colleagueModelBridge.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
@@ -691,29 +691,50 @@ async function stop() {
   const target = conversation.runtime.value;
   if (await target?.cancel() === false && target.current.value && target.error.value) reportFailure(target.error.value);
 }
-async function selectModel(assistantSelection) {
-  if (freshOperation.value || freshBusy.value) return { ok: false };
+// `selection` is { assistantSelection } or { workflowEngineId, modelProviderId }
+// (that workflow's routed Senior). Only the model menu reports failures here.
+async function saveSelection(selection, { report = true } = {}) {
+  if (freshOperation.value || freshBusy.value) return { ok: false, error: "Colleague is busy; try again in a moment." };
   const expectedRevision = ++revision;
   const expectedActor = actorKey.value;
   try {
-    const result = await api.selectConversation(product.value.conversationId, { assistantSelection });
+    const result = await api.selectConversation(product.value.conversationId, selection);
     apply(result, expectedRevision, expectedActor);
     if (mounted && expectedActor === actorKey.value) {
       productError.value = "";
       conversation.runtime.value?.reload();
     }
     return result;
-  } catch (error) { if (expectedActor === actorKey.value) reportFailure(error); return { ok: false }; }
+  } catch (error) {
+    if (report && expectedActor === actorKey.value) reportFailure(error);
+    return { ok: false, error: String(error?.message || error) };
+  }
 }
+const selectModel = assistantSelection => saveSelection({ assistantSelection });
 // AI onboarding reads and switches this Colleague's model through the bridge.
+async function withLabels(selection) {
+  try {
+    const query = new URLSearchParams({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
+      allConnectedModels: "true", connectedOnly: "true" });
+    return { selection, ...selectionLabels(await requestColleague(`/models?${query}`, { method: "GET" }), selection) };
+  } catch { return { selection, ...selectionLabels(null, selection) }; }
+}
+// The bridge registers on mount, before the first read names the conversation.
+async function conversationReady() {
+  if (!product.value.conversationId) await refresh();
+  return Boolean(product.value.conversationId);
+}
 const colleagueModel = {
-  current: () => product.value.assistantSelection || null,
-  async selectForWorkflow(engineId) {
-    try {
-      const catalog = await requestColleague(`/models?engineId=${encodeURIComponent(engineId)}&allConnectedModels=true&connectedOnly=true`, { method: "GET" });
-      const selection = workflowModelSelection(catalog, engineId);
-      return selection ? await selectModel(selection) : { ok: false, error: "This AI has no model ready for Colleague yet." };
-    } catch (error) { return { ok: false, error: error.message }; }
+  async current() {
+    await conversationReady();
+    return product.value.assistantSelection ? withLabels(product.value.assistantSelection) : null;
+  },
+  async selectForWorkflow({ engineId, modelProviderId = "" } = {}) {
+    if (!await conversationReady()) return { ok: false, error: productError.value || "Colleague is not ready yet; try again in a moment." };
+    const result = await saveSelection({ workflowEngineId: engineId, modelProviderId }, { report: false });
+    const selection = result?.ok === false ? null : result?.assistantSelection;
+    if (!selection) return { ok: false, error: result?.error || "Colleague could not switch to this AI." };
+    return { ok: true, ...await withLabels(selection) };
   }
 };
 let unregisterModel = null;
@@ -867,6 +888,7 @@ onBeforeUnmount(() => {
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
         <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts (Lesson 0 shows how), then press Teach me again.</p>
         <p v-else>Colleague has no usable AI model, so nothing is sent yet and your draft is kept. Connect an AI and configure an available Senior model, then return and press Send.</p>
+        <v-btn variant="flat" color="primary" min-height="48" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
         <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>
       </v-alert>
       <div class="vibe64-colleague__conversation">

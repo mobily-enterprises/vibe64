@@ -86,8 +86,12 @@ const navigationOutput = {
   })
 };
 const clientId = presentationClientId;
+// An exact selection, or a workflow whose routed Senior Colleague should use,
+// optionally only when that Senior uses the given model provider.
 const modelSelectionFields = {
-  assistantSelection: { type: "object", additionalProperties: true, required: true }
+  assistantSelection: { type: "object", additionalProperties: true, required: false },
+  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
+  modelProviderId: text
 };
 const watchFields = {
   watchId: clientId, projectSlug: { ...text, required: true }, sessionId: { ...text, required: true }, conversationId: text,
