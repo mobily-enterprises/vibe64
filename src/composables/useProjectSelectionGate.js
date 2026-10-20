@@ -23,6 +23,8 @@ import {
 } from "@/composables/useVibe64PracticeProjects.js";
 
 const cachedProjectSelections = new Map();
+// The server's not-found code for a practice project deleted while its page is open.
+const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
 
 function useProjectSelectionGate(emit, {
   scopeSelectionToCurrentProject = false,
@@ -146,8 +148,16 @@ function useProjectSelectionGate(emit, {
     saveError.value ||
     ""
   ));
+  const practiceDeleted = computed(() => scopeSelectionToCurrentProject &&
+    selectionResource.query?.error?.value?.code === PRACTICE_PROJECT_DELETED_CODE);
 
-  watch([projectSelection, errorMessage], ([selection, error]) => {
+  watch([projectSelection, errorMessage, practiceDeleted], ([selection, error, deleted]) => {
+    if (deleted) {
+      // The open practice project was deleted: no cached selection reopens it.
+      cachedProjectSelections.delete(projectSlug.value);
+      emit("deleted");
+      return;
+    }
     if (selection && Object.keys(selection).length > 0) {
       cachedProjectSelections.set(projectSlug.value, selection);
     }
@@ -175,6 +185,7 @@ function useProjectSelectionGate(emit, {
     deletePracticeProject: practice.deletePracticeProject,
     deletingPracticeSlug: practice.deletingSlug,
     practiceDeleteError: practice.deleteError,
+    practiceDeleted,
     practiceProjects,
     projectSelection,
     projects,
@@ -243,6 +254,7 @@ function projectSelectionGateQueryKey({
 }
 
 export {
+  PRACTICE_PROJECT_DELETED_CODE,
   projectSelectionGateEndpoint,
   projectSelectionGateQueryKey,
   useProjectSelectionGate

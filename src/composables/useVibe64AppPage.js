@@ -328,6 +328,7 @@ function useVibe64AppPage() {
     closeProjectRuntimeForSlug,
     dashboardRouteActive,
     emitPageTitle,
+    handleProjectSelectionDeleted,
     handleProjectSelectionError,
     handleProjectSelectionMissing,
     handleProjectSelectionReady,
@@ -535,6 +536,13 @@ function useVibe64AppPage() {
     pageError.value = "";
     setProjectPaneNavigationReady(false);
     emitPageTitle("Choose project");
+  }
+
+  // The gate shows the deleted practice project's own notice; no page alert.
+  function handleProjectSelectionDeleted() {
+    pageError.value = "";
+    setProjectPaneNavigationReady(false);
+    emitPageTitle();
   }
 
   function handleProjectSelectionError(error) {

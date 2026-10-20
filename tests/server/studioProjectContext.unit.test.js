@@ -1988,7 +1988,7 @@ test("local mode opens only the admitted learner practice Project with full writ
   registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
   try {
     const context = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
-    assert.deepEqual(calls, [{ actor, training, access: "write" }]);
+    assert.deepEqual(calls, [{ actor, training, access: "write", requireProject: true }]);
     assert.equal(context.slug, slug);
     assert.equal(context.targetRoot, "/practice/root");
     assert.equal(context.learningScope, undefined);
@@ -2176,5 +2176,51 @@ test("public project listing carries practice for its viewer and omits other lea
     const scoped = await runWithProjectRequestContext(ordinary, () => service.listProjects({ actor: { uid: 43, role: "member" } }));
     assert.equal(scoped.currentProject.slug, "ordinary");
     assert.deepEqual(practiceOf(scoped), [["ordinary", null]], "a project-scoped hosted listing filters the same way");
+  });
+});
+
+test("a deleted practice project is not found to its open page on both hosts, not an ownership failure", async () => {
+  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
+  const { projectRequestErrorStatusCode } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const deleted = { code: "vibe64_practice_project_deleted", statusCode: 404,
+    message: "This practice project was deleted. Its lesson is still in Learning." };
+  assert.equal(projectRequestErrorStatusCode(deleted), 404);
+  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals }) => {
+    registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
+    try {
+      const open = () => resolveProjectRequestContext({ projectContext: context, request: { params: { slug } } });
+      assert.equal((await open()).slug, slug, "the existing practice project opens");
+      await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
+        () => context.beginWorkspaceProjectDeletion({ slug }));
+      await assert.rejects(open, deleted, "a practice project being deleted is not found to its page");
+      await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
+        () => context.completeWorkspaceProjectDeletionStep({ slug, step: "runtime-closed" }));
+      const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
+      assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
+      await assert.rejects(open, deleted);
+      // A late request from the open page recreated runtime storage: still not found, never a 500 ownership refusal.
+      await mkdir(paths.projectRuntimeRoot, { recursive: true });
+      await assert.rejects(open, deleted);
+      await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training }, () => assert.fail()),
+        { code: "vibe64_practice_scope_mismatch" }, "other practice scopes still refuse leftover unmarked storage");
+    } finally {
+      registerLocalPracticeAdmission(async () => null);
+    }
+  });
+  await withTemporaryRoot(async root => {
+    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "catalogue"),
+      explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root });
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const created = await context.createWorkspaceProjectRecord({ slug, training });
+    await context.beginWorkspaceProjectDeletion({ slug });
+    await assert.rejects(() => context.readWorkspaceProject({ slug }), deleted, "hosted: being deleted");
+    assert.equal((await context.readWorkspaceProject({ slug, allowDeleting: true })).project.slug, slug, "its exact delete request resumes");
+    for (const directory of [created.project.projectRoot, created.project.projectRuntimeRoot, created.project.projectSessionSourceRoot]) {
+      await rm(directory, { force: true, recursive: true });
+    }
+    await assert.rejects(() => context.readWorkspaceProject({ slug }), deleted, "hosted: deleted");
+    await assert.rejects(() => context.readWorkspaceProject({ slug: "ordinary-missing" }), { code: "vibe64_project_path_not_accessible" },
+      "an ordinary missing project keeps its original refusal");
   });
 });

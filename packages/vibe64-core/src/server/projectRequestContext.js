@@ -80,7 +80,7 @@ async function resolveProjectRequestContext({
     // write. Admission re-reads the saved attempt on every request.
     const admitted = localPracticeAdmission ? await localPracticeAdmission({ slug }) : null;
     if (admitted) {
-      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "write" },
+      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "write", requireProject: true },
         async () => retainPracticeContext("write"));
     }
     const error = new Error("Local editor mode only serves the selected project.");
@@ -295,7 +295,7 @@ function projectRequestErrorStatusCode(error = {}) {
   if (error?.code === "vibe64_project_route_unavailable") {
     return 404;
   }
-  if (error?.code === "vibe64_project_path_not_accessible") {
+  if (error?.code === "vibe64_project_path_not_accessible" || error?.code === "vibe64_practice_project_deleted") {
     return 404;
   }
   if (

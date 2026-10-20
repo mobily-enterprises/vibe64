@@ -45,7 +45,7 @@ import {
 import {
   normalizeProjectDeletion
 } from "./projectDeletion.js";
-import { projectPracticeFromTraining } from "./practiceProjects.js";
+import { practiceProjectAttemptId, practiceProjectDeletedError, projectPracticeFromTraining } from "./practiceProjects.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -781,8 +781,10 @@ function createStudioProjectContext({
 
   // allowDeleting admits only the learner's own light practice deletion: it
   // requires write access and lets that owner see and resume its deletion marker.
+  // requireProject is the ordinary page admission: a project without its
+  // record, or one being deleted, is a deleted practice project (not found).
   async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
-    allowDeleting = false } = {}, operation) {
+    allowDeleting = false, requireProject = false } = {}, operation) {
     if (projectCatalogEnabled || typeof operation !== "function") {
       throw new TypeError("Local practice access requires the original local Project context and an owning callback.");
     }
@@ -790,7 +792,7 @@ function createStudioProjectContext({
       throw new TypeError("Practice deletion requires explicit write access.");
     }
     return runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess,
-      allowDeleting: allowDeleting === true }, operation, false);
+      allowDeleting: allowDeleting === true, requireProject: requireProject === true }, operation, false);
   }
 
   async function runWithHostedTrainingProjectScope(input = {}, operation) {
@@ -800,8 +802,8 @@ function createStudioProjectContext({
     return runTrainingProjectScope(input, operation, true);
   }
 
-  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe", allowDeleting = false },
-    operation, hosted) {
+  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe", allowDeleting = false,
+    requireProject = false }, operation, hosted) {
     if (!["observe", "control", "write", "create"].includes(practiceAccess)) {
       throw new TypeError("Practice access requires an explicit supported operation scope.");
     }
@@ -837,6 +839,9 @@ function createStudioProjectContext({
     }
     const projectRecordPath = resolveProjectRecordPath({ projectRuntimeRoot });
     const metadata = await readProjectMetadata({ projectRecordPath });
+    if (requireProject && practiceAccess !== "create" && (!Object.keys(metadata).length || (metadata.deletion && !allowDeleting))) {
+      throw practiceProjectDeletedError();
+    }
     if (hosted && !Object.keys(metadata).length) {
       throw Object.assign(new Error("Hosted practice requires its existing owned Project record."), { code: "vibe64_practice_scope_mismatch" });
     }
@@ -1252,6 +1257,12 @@ function createStudioProjectContext({
     const slug = projectSlugFromInput(input);
     const projectContextRoot = projectContextRootForSlug(slug);
     if (scope) await readWorkspaceProjectState({ slug });
+    else if (practiceProjectAttemptId(slug)) {
+      // Hosted: a catalogue practice project without its record, or being
+      // deleted, is a deleted practice project to its open pages.
+      const metadata = await readProjectMetadata({ projectRecordPath: projectRecordPathForSlug(slug) });
+      if (!Object.keys(metadata).length || (metadata.deletion && input.allowDeleting !== true)) throw practiceProjectDeletedError();
+    }
     await assertDirectoryUsable(projectContextRoot);
     const project = await workspaceProjectRecordForPath({
       projectRecordPath: projectRecordPathForSlug(slug),

@@ -1,7 +1,28 @@
 <template>
   <div class="project-selection-gate">
+    <v-sheet
+      v-if="practiceDeleted"
+      class="project-selection-gate__deleted"
+      rounded="lg"
+      border
+      role="status"
+    >
+      <h2 class="project-selection-gate__title">This practice project was deleted</h2>
+      <p class="project-selection-gate__deleted-text">Its lesson is still in Learning. Start it again there to get a new practice project.</p>
+      <v-btn
+        v-if="learning"
+        class="project-selection-gate__deleted-learning"
+        color="primary"
+        variant="flat"
+        min-height="48"
+        @click="openLearning"
+      >
+        Open Learning
+      </v-btn>
+    </v-sheet>
+
     <StudioErrorNotice
-      v-if="displayError"
+      v-else-if="displayError"
       title="Project could not load"
       :error="displayError"
       compact
@@ -132,6 +153,7 @@ import { useRouter } from "vue-router";
 import { mdiDeleteOutline } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
   projectAppPath
 } from "@/lib/vibe64ProjectScope.js";
@@ -168,8 +190,10 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["missing", "ready", "error", "retry-runtime"]);
+const emit = defineEmits(["missing", "ready", "error", "deleted", "retry-runtime"]);
 const router = useRouter();
+// L, where the deleted practice project's lesson remains (null without a host shell).
+const learning = useVibe64Learning();
 const recovering = ref(false);
 const recoveryError = ref("");
 let disposed = false;
@@ -187,6 +211,7 @@ const {
   newProjectName,
   deletePracticeProject,
   deletingPracticeSlug,
+  practiceDeleted,
   practiceProjects,
   projectSelection,
   projects,
@@ -201,8 +226,12 @@ const {
 });
 
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
-const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker);
-const pickerVisible = computed(() => selectionReady.value && (props.forcePicker || !hasSelection.value));
+const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value);
+const pickerVisible = computed(() => !practiceDeleted.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
+
+function openLearning() {
+  return learning?.show({ surface: "courses" });
+}
 
 async function retryProject() {
   if (recovering.value) {
@@ -252,6 +281,21 @@ async function handleCreateProject() {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.project-selection-gate__deleted {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  margin-inline: auto;
+  max-width: min(36rem, 100%);
+  padding: 1.25rem;
+  width: 100%;
+}
+
+.project-selection-gate__deleted-text {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  margin: 0;
 }
 
 .project-selection-gate__loading {

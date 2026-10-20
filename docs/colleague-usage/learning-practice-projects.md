@@ -59,6 +59,14 @@ never deleted this way.
 Colleague can explain these steps. It deletes a practice project only when you
 ask it to and then confirm the exact project; an offer is not a request.
 
+If the deleted practice project is still open in another tab or window, that
+page shows **This practice project was deleted** instead of an error, with
+**Open Learning**, which opens Learning on its course list (desktop and phone
+alike). The lesson stays there; start it again for a new practice project. The
+page's requests answer not found with the code `vibe64_practice_project_deleted`
+from the moment deletion starts. Colleague can explain this; only you press
+**Open Learning**.
+
 ## Working in the practice project
 
 The practice project's session has an ordinary Vibe64 agent, without lesson

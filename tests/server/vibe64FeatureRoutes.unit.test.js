@@ -220,3 +220,31 @@ test("feature errors retain their JSON body while response hooks are asynchronou
     }
   }));
 });
+
+test("a deleted practice project's page requests are a clean not-found with its code", async () => {
+  await withLocalRequestBypass(async () => {
+    const app = testRouteApp();
+    let handled = 0;
+    const routes = createVibe64FeatureRoutes(app.http, {
+      localRequestMessage: "Local only.",
+      projectContext: {
+        projectCatalogEnabled: true,
+        projectsRoot: "/projects",
+        async readWorkspaceProject() {
+          throw Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
+            code: "vibe64_practice_project_deleted", statusCode: 404 });
+        }
+      },
+      routeRelativePath: "vibe64",
+      routeSurface: "app"
+    });
+    routes.serviceRoute("GET", "/ping", { summary: "Ping." }, async () => { handled += 1; return { ok: true }; });
+    const reply = testReply();
+    await app.registeredRoutes[0].handler({ params: routeProjectParams() }, reply);
+    assert.equal(reply.statusCode, 404);
+    assert.equal(reply.payload.code, "vibe64_practice_project_deleted");
+    assert.deepEqual(reply.payload.errors, [{ code: "vibe64_practice_project_deleted",
+      message: "This practice project was deleted. Its lesson is still in Learning." }]);
+    assert.equal(handled, 0);
+  });
+});
