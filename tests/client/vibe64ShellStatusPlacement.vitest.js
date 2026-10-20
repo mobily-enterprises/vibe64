@@ -214,6 +214,18 @@ describe("controlled Learning shell", () => {
     expect(html).toContain("vibe64-learning-button--minimised");
   });
 
+  it("labels the bar In a lesson only while a lesson is going", async () => {
+    const app = createSSRApp({ render: () => h(StudioAppShellLayout, null, {}) });
+    app.use(createVuetify());
+    app.provide(VIBE64_LEARNING_KEY, { state: reactive({ actorKey: "local", open: false, minimised: true }), inLesson: true, toggle() {} });
+    const html = await renderToString(app);
+    expect(html).toContain('data-test="learning-in-lesson"');
+    expect(html).toContain(">In a lesson</span>");
+    expect(html.indexOf('aria-label="Learning"')).toBeLessThan(html.indexOf('data-test="learning-in-lesson"'));
+    expect(html).toContain("studio-app-shell-layout__learning-plate");
+    expect(await renderLearningShell({ actorKey: "local", open: false, minimised: true })).not.toContain("learning-in-lesson");
+  });
+
   it("does not expose L without a signed-in Learning environment", async () => {
     expect(await renderLearningShell(null)).not.toContain('aria-label="Learning"');
     expect(await renderLearningShell({ actorKey: "", open: false, minimised: false })).not.toContain('aria-label="Learning"');

@@ -1,19 +1,25 @@
 <script setup>
 import { computed } from "vue";
+
+defineOptions({ inheritAttrs: false });
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // The L plate: opens and hides the Learning environment above the current page. It is
-// shown only where a host has a signed-in Learning overlay bound to it.
+// shown only where a host has a signed-in Learning overlay bound to it. While
+// a lesson is going, a short "In a lesson" label follows it (not on a phone,
+// where the yellow app bar and the amber dot say it).
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const active = computed(() => Boolean(learning?.state.open));
 const minimised = computed(() => Boolean(learning?.state.minimised));
+const inLesson = computed(() => Boolean(learning?.inLesson));
 const title = computed(() => active.value ? "Hide Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
 </script>
 
 <template>
   <v-btn
     v-if="available"
+    v-bind="$attrs"
     class="vibe64-learning-button"
     :class="{ 'vibe64-learning-button--active': active, 'vibe64-learning-button--minimised': minimised && !active }"
     aria-label="Learning"
@@ -30,6 +36,7 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   >
     <span aria-hidden="true">L</span>
   </v-btn>
+  <span v-if="available && inLesson" class="vibe64-learning-button__lesson" data-test="learning-in-lesson">In a lesson</span>
 </template>
 
 <style scoped>
@@ -96,6 +103,19 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   outline-offset: 3px;
 }
 
+.vibe64-learning-button__lesson {
+  background: var(--v64-learning-container);
+  border: 1px solid var(--v64-learning-strong);
+  border-radius: 999px;
+  color: var(--v64-on-learning-container);
+  flex: 0 0 auto;
+  font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
+  font-weight: 700;
+  margin-left: var(--v64-space-2);
+  padding: 2px var(--v64-space-2);
+  white-space: nowrap;
+}
+
 @keyframes vibe64-learning-button-pop {
   0% { transform: scale(0.82) rotate(-8deg); }
   60% { transform: scale(1.08) rotate(2deg); }
@@ -116,6 +136,10 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
     height: 2.5rem;
     margin-left: var(--v64-space-1);
     width: 2.5rem;
+  }
+
+  .vibe64-learning-button__lesson {
+    display: none;
   }
 }
 </style>

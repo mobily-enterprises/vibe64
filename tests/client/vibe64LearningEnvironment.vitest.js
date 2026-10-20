@@ -104,6 +104,33 @@ describe("useVibe64Learning controller", () => {
     expect(learning.minimised).toBe(true);
   });
 
+  it("is in a lesson while its attempt is read and not ended, with L open or hidden", async () => {
+    let ended = false;
+    const { learning } = controller({ reads: () => lessonResult({ attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one" } }),
+      posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT); return { ok: true, available: true }; } });
+    learning.setViewer("member");
+    expect(learning.inLesson).toBe(false);
+    await learning.show();
+    expect(learning.inLesson, "Courses alone is not a lesson").toBe(false);
+    await learning.show({ attemptId: ATTEMPT });
+    expect(learning.inLesson).toBe(true);
+    learning.toggle();
+    expect(learning.inLesson, "hidden L keeps the lesson going").toBe(true);
+    await learning.show();
+    await learning.endLesson({ expectedRevision: 1 });
+    expect(learning.inLesson, "an ended (or finished) lesson returns the app bar to normal").toBe(false);
+    learning.setViewer("someone-else");
+    expect(learning.inLesson).toBe(false);
+
+    // A reload in the same tab reads its restored attempt at once.
+    ended = false;
+    const again = controller({ reads: () => lessonResult() });
+    again.learning.setViewer("member");
+    await flush();
+    expect(again.calls[0].url).toBe(VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT));
+    expect(again.learning.inLesson).toBe(true);
+  });
+
   it("minimise keeps the place, L hides and reopens L at the exact step", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();
@@ -755,6 +782,10 @@ describe("Learning overlay", () => {
       "./Vibe64LearningPractice.vue": { default: { props: ["learning", "courses"],
         setup: props => () => Vue.h("aside", { "data-test": "practice", own: props.learning === learning && props.courses === courses }) } }
     });
+    const bodyClasses = new Set();
+    vi.stubGlobal("document", { activeElement: null, body: { classList: {
+      toggle: (name, on) => { if (on) bodyClasses.add(name); else bodyClasses.delete(name); },
+      remove: name => bodyClasses.delete(name) } } });
     const viewer = Vue.ref({ actorKey: "member" });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(overlay) });
@@ -793,6 +824,7 @@ describe("Learning overlay", () => {
       await learning.show();
       await flush();
       expect(learning.surface, "L returns to exactly where the learner was").toBe("lesson");
+      expect(bodyClasses.has("vibe64-in-lesson"), "the app bar stays yellow in a lesson").toBe(true);
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
       await flush();
       expect(learning.open).toBe(false);
@@ -803,8 +835,9 @@ describe("Learning overlay", () => {
       viewer.value = { actorKey: "someone-else" };
       await flush();
       expect(learning.attemptId).toBe("");
-    } finally { app.unmount(); }
+    } finally { app.unmount(); vi.unstubAllGlobals(); }
     expect(learning.state.actorKey).toBe("");
+    expect(bodyClasses.has("vibe64-in-lesson"), "leaving the host clears the yellow bar").toBe(false);
   });
 });
 

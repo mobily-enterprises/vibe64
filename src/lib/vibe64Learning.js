@@ -140,6 +140,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const focus = computed(() => ({ learningOpen: state.open, learningSurface: state.surface,
     ...(state.attemptId ? { learningAttemptId: state.attemptId } : {}),
     ...(state.attemptId && currentStep.value ? { learningStepId: currentStep.value.id } : {}) }));
+  // The learner is in a lesson while L's attempt is read and not ended (Finish
+  // and End this lesson end it), whether L is open or hidden.
+  const inLesson = computed(() => Boolean(state.actorKey && state.attemptId && lesson.value?.attempt &&
+    !lesson.value.attempt.ended));
 
   function remember() {
     if (!state.actorKey) return;
@@ -165,6 +169,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       loading: false, error: "", busy: "", hiddenBy: "", actorKey: next });
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
+    // A restored attempt is read at once, so the app bar shows whether it is still going.
+    if (state.attemptId) void loadLesson();
   }
 
   // lesson.read pages step text over 64 KiB; the reader shows every step, so
@@ -544,6 +550,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get attemptId() { return state.attemptId; },
     get stepId() { return currentStep.value?.id || ""; },
     get scroll() { return state.scroll; },
+    get inLesson() { return inLesson.value; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, minimise, toggle, selectStep, setScroll, flushReader, loadLesson,

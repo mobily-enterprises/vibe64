@@ -24,6 +24,13 @@ const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
 watch(actorKey, value => learning?.setViewer(value), { immediate: true });
 onBeforeUnmount(() => learning?.setViewer(""));
 
+// While a lesson is going, every app bar of this host stays Learning yellow,
+// with L open or hidden (vibe64-m3.css styles body.vibe64-in-lesson).
+const IN_LESSON_CLASS = "vibe64-in-lesson";
+watch(() => Boolean(learning?.inLesson), value => globalThis.document?.body?.classList.toggle(IN_LESSON_CLASS, value),
+  { immediate: true });
+onBeforeUnmount(() => globalThis.document?.body?.classList.remove(IN_LESSON_CLASS));
+
 const open = computed(() => Boolean(learning?.state.open));
 // Built on first open and kept while minimised, so its place stays as it was.
 const built = ref(false);

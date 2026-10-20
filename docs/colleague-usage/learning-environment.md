@@ -17,7 +17,17 @@ hides it and returns you to exactly that page. The app underneath keeps working 
 - It appears only for a signed-in person. Hosted Vibe64 shows it after the
   account prerequisites are complete.
 
-**L** is the one control that opens and hides Learning. An old
+**L** is the one control that opens and hides Learning.
+
+While a lesson is going (started and not yet finished or ended), the header
+stays Learning yellow, with a warm yellow wash and an amber line along its
+bottom, even after you hide Learning and work in the normal app. On a desktop
+an **In a lesson** label also follows the L; on a phone the yellow header and
+the amber dot on the L say it. The header returns to normal when you press
+**Finish** or **End this lesson**. In a new browser tab the header turns yellow once you open the lesson
+again (**Resume saved lesson**).
+
+An old
 `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
 

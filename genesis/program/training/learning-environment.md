@@ -45,7 +45,12 @@ guide overlay 3000 above L 2400 above Colleague.
   app and Colleague visible), `toggle()` (L is the one open/hide control: open
   L shows, hiding is `minimise("learner")`; there is no separate close); the
   overlay covers the app bar, so its header L plate is the same toggle button,
-  and Escape also calls `minimise("learner")`. `hiddenBy` is
+  and Escape also calls `minimise("learner")`. `inLesson` is true while the
+  controller's attempt is read and not ended (a restored per-tab attempt is
+  read when the viewer binds); the overlay then sets `body.vibe64-in-lesson`,
+  which `vibe64-m3.css` uses to give every `.shell-layout__app-bar` (Studio and
+  management shells, hosted included) the `--v64-learning-app-bar` wash and an
+  amber edge, and the L button adds an **In a lesson** label above phone width. `hiddenBy` is
   `"learner"` only when the learner's own L or Escape hid it (Colleague
   then returns a phone learner to its dialog), and `""` for Show me, Teach me,
   Open practice project and app navigation, `selectStep`, `setScroll`. The

@@ -134,3 +134,11 @@
     --v64-duration-long: 0ms;
   }
 }
+
+/* In a lesson (with Learning open or hidden), every app bar wears the Learning
+   header's warm yellow wash and amber edge, so the lesson is never forgotten.
+   The wash stays close to the surface, so on-surface text keeps its contrast. */
+body.vibe64-in-lesson .shell-layout__app-bar {
+  background: var(--v64-learning-app-bar) !important;
+  border-bottom: 2px solid var(--v64-learning) !important;
+}
