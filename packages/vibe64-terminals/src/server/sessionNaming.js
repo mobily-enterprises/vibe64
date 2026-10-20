@@ -60,10 +60,10 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
     try {
       // Learning v2 retired the lesson conversation teacher. A conversation
       // from the earlier lesson mode stays readable but is never renamed.
-      if (agentContext.runtime.learningScope) {
+      if (runtime.learningScope) {
         throw namingError("Lesson conversations from the earlier Learning mode are read-only and are not renamed.");
       }
-      const name = () => runSessionNamingHelper({
+      const result = await runSessionNamingHelper({
         agent,
         agentContext,
         taskId: TASK_ID,
@@ -80,7 +80,6 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
           first.text.slice(0, 16000) || "The first message contains only attachments."
         ].join("\n")
       });
-      const result = await name();
       // A manual rename always wins, even while the Helper is working.
       const sessionName = await runtime.store.writeSessionLabel(sessionId, parseSessionName(result.text), {
         onlyIfUnnamed: true

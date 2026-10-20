@@ -120,7 +120,7 @@ function createVibe64SessionsFeature() {
       return { sessions };
     },
     actions({ sessions }) {
-      return [...createSessionActions({ sessions })];
+      return createSessionActions({ sessions });
     },
     boot({ project }, { outputs }) {
       if (!String(project?.targetRoot || "").trim()) {

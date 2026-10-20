@@ -86,7 +86,7 @@ const ACTION_INSPECT_REPOSITORY_VERSION_FILES = "vibe64.repository.history.files
 const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.diff.inspect";
 
 // Only these declared operations may enter a learning scope. Setup, renewal,
-// saving and project operations retain project authority.
+// saving, Git history and project operations retain project authority.
 const learningAccess = {
   [ACTION_CREATE_SESSION]: "create",
   [ACTION_UPDATE_CURRENT_SESSION]: "control",
@@ -102,8 +102,6 @@ const learningAccess = {
   [ACTION_RENAME_SESSION]: "write",
   [ACTION_INTERRUPT_AGENT_TURN]: "control",
   [ACTION_UPDATE_SESSION_PRESENCE]: "control"
-  // Learning v2: a practice project's Git history and changes are read through
-  // its ordinary project routes; the source-less teacher has no source to read.
 };
 
 function action({

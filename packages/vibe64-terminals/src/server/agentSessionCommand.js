@@ -591,13 +591,14 @@ function createAgentSessionCommandService({
         "vibe64_agent_session_command_project_required"
       );
     }
+    const requestContext = currentProjectRequestContext();
     // Practice sessions are ordinary project sessions; no host binds a
     // learning-scoped session command any more, so one is refused.
-    if (currentProjectRequestContext()?.learningScope) {
+    if (requestContext?.learningScope) {
       throw vibe64Error("Session commands are unavailable in a Learning-scoped context.", "vibe64_agent_session_command_learning_unavailable");
     }
     const binding = {
-      actor: currentProjectRequestContext()?.vibe64User || null,
+      actor: requestContext?.vibe64User || null,
       projectContext: captureProjectRequestContext(),
       projectContextRoot: normalizedProjectContextRoot(project),
       projectSlug,
