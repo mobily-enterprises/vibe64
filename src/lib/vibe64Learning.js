@@ -14,6 +14,7 @@ const attemptPath = (attemptId, suffix = "") => `${TRAINING_PATH}/attempts/${enc
 // HTTP routes for the C3 actions (registerRoutes.js assembles their input).
 const VIBE64_LEARNING_ROUTES = Object.freeze({
   lessonRead: attemptId => attemptPath(attemptId, "/lesson"),
+  stepObserve: attemptId => attemptPath(attemptId, "/steps/observe"),
   stepCheck: attemptId => attemptPath(attemptId, "/steps/check"),
   stepAnswer: attemptId => attemptPath(attemptId, "/steps/answer"),
   stepDone: attemptId => attemptPath(attemptId, "/steps/done"),
@@ -31,6 +32,8 @@ const STORAGE_PREFIX = "vibe64:learning-environment:v1:";
 const READER_SAVE_DELAY_MS = 800;
 // How long a file guide waits for the navigated project view to publish itself.
 const PROJECT_VIEW_WAIT_MS = 5000;
+// Learner App presses whose observation is still being recorded.
+const MAX_EXERCISE_OBSERVATIONS = 8;
 // Teach me sends this exact text; the step itself travels in Colleague's focus.
 const VIBE64_LEARNING_TEACH_MESSAGE = "Teach me this step.";
 
@@ -110,6 +113,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const notes = shallowRef(null);
   const notesState = reactive({ loading: false, saving: false, error: "" });
   const pending = new Map();
+  const exerciseObservations = new Set();
   // viewer fences everything of one signed-in person; reads fences lesson reads.
   let viewer = 0;
   let reads = 0;
@@ -143,6 +147,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     reads += 1;
     clearTimeout(saveTimer);
     pending.clear();
+    exerciseObservations.clear();
     lesson.value = null;
     colleagueRequest.value = null;
     notes.value = null;
@@ -295,6 +300,64 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     } finally {
       if (state.busy === `${kind}:${stepId}`) state.busy = "";
     }
+  }
+
+  // Learner-origin App interaction (restored from the retired Learning gesture
+  // owner, adapted to the reader): the step a press in projectSlug's Preview
+  // answers. Only L's current step of its open, prepared, not-ended version 2
+  // attempt whose practice project is projectSlug, while L does not cover the
+  // app, and only when that step declares an automatic response check (code
+  // checks always name files). The server's step owner decides everything else.
+  function exerciseStep(projectSlug) {
+    const value = lesson.value;
+    const step = currentStep.value;
+    const attempt = value?.attempt;
+    if (!state.actorKey || !state.attemptId || state.open || !text(projectSlug) || value?.schemaVersion !== 2 ||
+        attempt?.attemptId !== state.attemptId || attempt.ended || attempt.preparation?.phase !== "ready" ||
+        value.practiceProjectSlug !== projectSlug || step?.check?.kind !== "auto" || step.check.files?.length) return null;
+    return { attemptId: state.attemptId, stepId: step.id };
+  }
+
+  // A press can begin only with a current response step; the ticket fences the
+  // signed-in viewer, attempt, step and practice project until it finishes.
+  function beginExercise(projectSlug) {
+    const target = exerciseStep(projectSlug);
+    if (!target || exerciseObservations.size >= MAX_EXERCISE_OBSERVATIONS) return null;
+    return Object.freeze({ ...target, projectSlug, actorKey: state.actorKey, viewer });
+  }
+
+  function exerciseCurrent(ticket) {
+    const target = ticket && ticket.viewer === viewer && ticket.actorKey === state.actorKey ? exerciseStep(ticket.projectSlug) : null;
+    return Boolean(target && target.attemptId === ticket.attemptId && target.stepId === ticket.stepId);
+  }
+
+  // step.observe: the browser-only receipt of the learner's own press, with the
+  // exact identities its declared check verifies against the App server.
+  async function finishExercise(ticket, { sessionId, instanceId, interactionId, requestId } = {}) {
+    if (!exerciseCurrent(ticket) || !text(sessionId) || exerciseObservations.has(requestId)) return null;
+    exerciseObservations.add(requestId);
+    const expected = viewer;
+    try {
+      const result = await request(VIBE64_LEARNING_ROUTES.stepObserve(ticket.attemptId), { method: "POST", body: {
+        stepId: ticket.stepId, observation: { control: "exercise-response",
+          exercise: { instanceId, interactionId, requestId },
+          workspace: { projectSlug: ticket.projectSlug, sessionId, projectVisible: true, pane: "preview", ready: true } } } });
+      if (result?.ok === false) throw new Error(result.error || "The App press was not recorded. Press the App's button again.");
+      if (expected === viewer && ticket.attemptId === state.attemptId) await loadLesson(ticket.attemptId);
+      return result;
+    } catch (cause) {
+      if (expected === viewer) state.error = String(cause?.message || "The App press was not recorded. Press the App's button again.");
+      return null;
+    } finally {
+      exerciseObservations.delete(requestId);
+    }
+  }
+
+  // After a reload L remembers its attempt but has not read it yet; a practice
+  // App announcing itself reads it so the learner's next press can count.
+  function prepareExercise(projectSlug) {
+    if (!text(projectSlug) || !state.actorKey || !state.attemptId || lesson.value || state.loading) return null;
+    return loadLesson(state.attemptId);
   }
 
   const runCheck = stepId => stepAction("check", VIBE64_LEARNING_ROUTES.stepCheck, stepId);
@@ -464,6 +527,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, minimise, close, toggle, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
+    exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes
   });
 }

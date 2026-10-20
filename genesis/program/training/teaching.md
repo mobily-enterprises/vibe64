@@ -59,6 +59,9 @@ host/content or capacity refusal retains history.
 a choice answer compared by the server, **Done** on a self-check step, or an
 automatic check started by the learner's App press or code-step **Check now**. A check
 Colleague runs through `step.check.run` reports its finding and saves nothing.
+The inner session-inspect and App-run reads of `step.observe` and
+`step.check.run` re-admit the learner's own request on the practice project's
+ordinary project target; practice sessions carry no learning-scoped input.
 
 ### Retired Main teacher
 

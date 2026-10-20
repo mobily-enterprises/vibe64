@@ -98,10 +98,17 @@ also has:
   is compared on the server; the result appears as the step's status. You can
   try again.
 - **Automatic check**: the step is checked when you do the task in your practice
-  project, for example by pressing a button in its Preview. **Check now** asks
-  the check to look again. When it has not passed, the reason appears under
-  **Check now** (for example that no press in the lesson's Preview was
-  captured yet); the status does not change.
+  project, for example by pressing a button in its Preview. For a button step,
+  open the step in Learning, then minimise Learning (**Show me** does this and
+  opens the Preview) and press the App's button yourself in the practice
+  project's visible Preview. Your press counts only for the lesson step
+  Learning currently shows, in that lesson's own practice session, while
+  Learning is not covering the app; the status updates when the check finishes.
+  In a new browser tab, open the lesson in Learning once before pressing.
+  Colleague cannot press for you, and Run or reloading the Preview is not a
+  press. **Check now** asks the check to look again. When it has not passed,
+  the reason appears under **Check now** (for example that no press in the
+  lesson's Preview was captured yet); the status does not change.
 - **Done**: for a step you check yourself; press it when you have done the step.
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control

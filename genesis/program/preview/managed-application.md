@@ -480,8 +480,19 @@ terminal routes and output stream, the Learning Stop and onboarding adapters,
 and the lesson presentation registration on the Onboarding Preview. A lesson's
 automatic check needs a receipt of the learner's own App press, recorded through
 Training's browser-only `step.observe`; Run or an iframe load is never a pass.
-Known gap: no current client sends `step.observe` from the Preview bridge, so a
-response check reports that no App interaction has been captured yet.
+The output surface (`useVibe64OutputControlsSurface.js`, both hosts) restores
+the orientation protocol of the original capture: the practice App's
+`orientation-available` announcement from the exact Preview frame and origin
+receives one MessageChannel bound to that frame request, session, App run and a
+fresh player identity; a trusted `button`, its `request` and the displayed
+`response-displayed` are correlated while the frame stays visible. The Learning
+controller (`src/lib/vibe64Learning.js`) begins a press only for L's current
+step of its prepared, not-ended version 2 attempt whose practice project is the
+open project, while L is not covering the app, when that step declares an
+automatic response check, and then sends `step.observe` with the attempt, step,
+project, session and App instance, interaction and request identities. The
+server re-admits its inner session and App-run reads on the ordinary practice
+project target.
 
 Opt-in browser Preview diagnostics use the existing terminal action boundary to
 record bounded failure/retry/readiness fields in the private operational logger.

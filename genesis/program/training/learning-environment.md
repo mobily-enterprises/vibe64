@@ -21,6 +21,7 @@ Training actions.
 - `packages/vibe64-training/src/client/TrainingVisualPlayer.vue`
 - `packages/vibe64-training/src/client/trainingGuide.js`
 - `packages/vibe64-training/src/shared/learnerEvents.js`
+- `src/composables/useVibe64OutputControlsSurface.js`
 
 ## Public contract
 
@@ -50,6 +51,17 @@ guide overlay 3000 above L 2400 above Colleague.
   `done(stepId)` (`step.done`) and `runCheck(stepId)` (`step.check.run`) are the
   learner's own browser actions with a stable request ID; `endLesson` ends an
   earlier-format attempt. Statuses come only from these results.
+- App press (`step.observe`): `exerciseStep(projectSlug)` names L's current
+  step only for its prepared, not-ended version 2 attempt whose practice
+  project is `projectSlug`, while L is not open over the app, when that step's
+  automatic check is a response check (an `auto` check without files).
+  `beginExercise` and `exerciseCurrent` fence the viewer, attempt, step and
+  project of one press (at most 8 in flight); `finishExercise` posts the
+  learner-origin receipt with the App instance, interaction and request
+  identities and the Preview session, then rereads the lesson.
+  `prepareExercise` reads a remembered but unread attempt when a practice App
+  announces itself. The Preview output surface
+  (`src/composables/useVibe64OutputControlsSurface.js`) is the only caller.
 - `showMe(stepId)` minimises L and runs the step's guide through the browser
   navigator and `runTrainingGuideCommand`; a `files` guide waits for the
   navigated project view and opens the file in Dashboard → Files. A place that
@@ -78,4 +90,6 @@ full-screen sheet with a row of numbered step circles. An earlier-format
 (version 1) attempt is shown as readable history with **End this lesson**.
 
 Evidence: `tests/client/vibe64LearningEnvironment.vitest.js` and
-`tests/client/vibe64LearningCourses.vitest.js`; live browser acceptance is a separate gate.
+`tests/client/vibe64LearningCourses.vitest.js`; the App press capture and its sent
+identities in `tests/client/vibe64OutputControlsSurface.vitest.js`; live browser
+acceptance is a separate gate.

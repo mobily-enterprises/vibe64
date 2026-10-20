@@ -167,13 +167,13 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   }
 
   // Inner actions (session inspect, App run outputs) are re-admitted with the
-  // learner's own request authority. Until practice sessions become ordinary
-  // sessions (phase 2, F1) they are reached through the learning-scoped input.
-  function stepContext(context, attempt) {
+  // learner's own request authority against the practice project's ordinary
+  // project route: practice sessions are ordinary sessions (Learning v2 F1), so
+  // no learning-scoped input remains.
+  function stepContext(context) {
     const { vibe64Action: _admitted, ...inner } = context;
     void _admitted;
-    const sessionId = attempt.preparation?.initialSessionId;
-    return { context: inner, ...(sessionId ? { targetInput: { learningAttemptId: attempt.attemptId, sessionId } } : {}) };
+    return { context: inner };
   }
 
 
@@ -226,17 +226,17 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     definition("step.observe", { attemptId, stepId: id,
       observation: { type: "object", required: true, schema: trainingStepObservationSchema } }, { browser: true },
     async (input, actor, context) => {
-      const { attempt } = await readAttempt(actor, input.attemptId);
+      await readAttempt(actor, input.attemptId);
       const result = await steps.observe({ actor, attemptId: input.attemptId, stepId: input.stepId,
-        observation: input.observation, ...stepContext(context, attempt) });
+        observation: input.observation, ...stepContext(context) });
       return recorded(result, actor, input.attemptId, "step");
     }),
     definition("step.check.run", { attemptId, stepId: id, requestId }, {
       description: "Run the declared automatic check of one step of the learner's active lesson (lesson.read shows which steps have one). Use a new requestId for a new check and the same one to retry. A check you run is a diagnostic only: it tells you whether the work is ready and is never saved, so the step stays unpassed until the learner presses Check in the lesson. A response check needs the learner's own press of the App's control in this lesson's Preview first. Report the outcome and reason as returned; never claim the step passed." },
     async (input, actor, context) => {
-      const { attempt } = await readAttempt(actor, input.attemptId);
+      await readAttempt(actor, input.attemptId);
       const result = await steps.runCheck({ actor, attemptId: input.attemptId, stepId: input.stepId, requestId: input.requestId,
-        ...stepContext(context, attempt) });
+        ...stepContext(context) });
       return recorded(result, actor, input.attemptId, "step");
     }),
     definition("step.answer", { attemptId, stepId: id, requestId,

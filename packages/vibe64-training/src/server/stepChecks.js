@@ -23,13 +23,13 @@ function requireResult(result, failure) {
 // Moved from practicalObservations.js: invoke the declared exercise response
 // check for one learner-origin App interaction in the exact ready App run.
 // v1 calls omit stepId; v2 names the step whose check the lesson declares.
-async function runExerciseResponseCheck({ actions, checks, context, failure, actor, target, targetInput,
+async function runExerciseResponseCheck({ actions, checks, context, failure, actor, target,
   attemptId, observationId, exercise, checkId, stepId }) {
   if (typeof checks?.runOrientationCheck !== "function") {
     throw failure("The installed exercise response check is unavailable in this host.");
   }
   const outputs = requireResult(await actions.execute({ actionId: "vibe64.terminals.outputs.read",
-    input: targetInput || target, context }), failure);
+    input: target, context }), failure);
   const terminalId = outputs?.activeTerminal?.id;
   if (!terminalId) throw failure("Use the exact ready App run for this exercise before repeating the interaction.");
   const checked = await checks.runOrientationCheck({ actor, signal: context.signal,
@@ -166,7 +166,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
 
   // Browser only: the learner pressed the App's own control in visible Preview.
   // The receipt is learner-origin evidence; its declared check decides at once.
-  async function observe({ actor, attemptId, stepId, observation, context = {}, targetInput } = {}) {
+  async function observe({ actor, attemptId, stepId, observation, context = {} } = {}) {
     requireLearnerChannel(context, "record an App interaction");
     if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
     const input = validateContent(trainingStepObservationSchema, observation, "Step observation");
@@ -180,12 +180,12 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (!input.workspace.projectVisible || input.workspace.pane !== "preview") {
       throw stepFailure("Press the App's control in the visible Preview of this lesson's practice project.");
     }
-    requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: targetInput || target, context }), stepFailure);
+    requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: target, context }), stepFailure);
     const requestId = input.exercise.requestId;
     const previous = (await savedEntry(actor, attemptId)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
     const observationId = randomUUID();
-    const checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target, targetInput,
+    const checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target,
       attemptId, observationId, exercise: input.exercise, checkId: check.id, stepId });
     const reason = boundedReason(checked.reason);
     return record({ actor, attemptId, requestId, lesson,
@@ -197,7 +197,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   // Runs the step's declared check. The trigger is derived from the admitted
   // action channel: the learner's own browser press, or anything else
   // (Colleague included), which only ever gets a diagnostic.
-  async function runCheck({ actor, attemptId, stepId, requestId, context = {}, targetInput } = {}) {
+  async function runCheck({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     const trigger = stepCheckTrigger(context);
     if (!requestPattern.test(requestId || "")) {
       throw stepFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -223,7 +223,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
           reason: "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first." };
       }
-      checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target, targetInput,
+      checked = await runExerciseResponseCheck({ actions, checks, context, failure: stepFailure, actor, target,
         attemptId, observationId, exercise: receipt, checkId: check.id, stepId });
       evidence = { checkId: check.id, observationId };
     }

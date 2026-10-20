@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRenderer, markRaw, nextTick, reactive, ref } from "vue";
+import { createRenderer, markRaw, nextTick, reactive, ref, shallowRef } from "vue";
+import { MessageChannel } from "node:worker_threads";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { createVibe64Learning } from "../../src/lib/vibe64Learning.js";
 
 const surfaceHost = vi.hoisted(() => ({ outputs: null, projectSlug: null }));
 vi.mock("@/composables/useVibe64OutputControls.js", async original => ({
@@ -732,7 +735,39 @@ afterEach(() => {
   for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
   vi.unstubAllGlobals();
 });
-function mountPreviewSurface() {
+const instanceId = "11111111-1111-4111-8111-111111111111";
+const interactionId = "22222222-2222-4222-8222-222222222222";
+const requestId = "33333333-3333-4333-8333-333333333333";
+const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+async function portFlush() {
+  await new Promise(resolve => setTimeout(resolve, 10));
+  await nextTick();
+}
+// A stand-in for the Learning controller's exercise owner: eligible while its
+// current step is a response step of the practice project's active attempt.
+function fakeLearningOwner() {
+  const eligible = ref(true);
+  const tickets = [];
+  const responses = [];
+  const owner = {
+    eligible, tickets, responses, prepareExercise: vi.fn(),
+    exerciseStep: projectSlug => eligible.value && projectSlug === "practice" ? { attemptId, stepId: "try-the-app" } : null,
+    beginExercise(projectSlug) {
+      const target = owner.exerciseStep(projectSlug);
+      if (!target) return null;
+      const ticket = { ...target, projectSlug };
+      tickets.push(ticket);
+      return ticket;
+    },
+    exerciseCurrent: ticket => Boolean(ticket && owner.exerciseStep(ticket.projectSlug)),
+    async finishExercise(ticket, response) {
+      responses.push({ ticket, response });
+      return { ok: true };
+    }
+  };
+  return owner;
+}
+function mountPreviewSurface({ learning = null, projectSlug = "project-a" } = {}) {
   // Supply the existing output owner's read state, not an alternate bridge.
   const outputs = Object.fromEntries([
     "launchButtonsDisabled", "loading", "loadError", "operationBusy", "launchError", "launchStarting", "launchWaiting",
@@ -748,7 +783,7 @@ function mountPreviewSurface() {
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
     launchActions: ref([{ href: "https://preview.example.test/" }]), requestPreviewIdentityGrant: vi.fn(), publishPreviewState: vi.fn(), publishPreviewDiagnostic: vi.fn(async () => true), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
-  surfaceHost.projectSlug = ref("project-a");
+  surfaceHost.projectSlug = ref(projectSlug);
   const windowListeners = new Map();
   const documentListeners = new Map();
   const windowObject = { innerWidth: 1280, innerHeight: 800, location: { href: "https://studio.example.test/app" },
@@ -758,36 +793,259 @@ function mountPreviewSurface() {
     removeEventListener(type) { documentListeners.delete(type); } };
   vi.stubGlobal("window", windowObject);
   vi.stubGlobal("document", documentObject);
+  vi.stubGlobal("MessageChannel", MessageChannel);
   const props = reactive({ embeddedPreview: true, previewDisplayed: true, windowDisplayed: true,
     session: { sessionId: "session-a" } });
+  // The host shell provides the controller itself or a ref holding it.
+  const owner = shallowRef(learning);
   let state;
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
   const app = renderer.createApp({ setup() {
     state = useVibe64OutputControlsSurface(props); return () => null;
   } });
+  if (learning) app.provide(VIBE64_LEARNING_KEY, owner);
   app.mount({});
   const posts = [];
-  const frame = markRaw({ dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
-    contentWindow: { postMessage(data, origin) { posts.push({ data, origin }); } } });
+  let rect = { left: 100, top: 100, right: 900, bottom: 700 };
+  let frame = markRaw({ dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
+    getBoundingClientRect: () => rect,
+    contentWindow: { postMessage(data, origin, ports = []) { posts.push({ data, origin, ports }); } } });
   state.previewFrame.value = frame;
-  function announce(data, source = frame.contentWindow, origin = "https://preview.example.test") {
+  function announce(data = { type: "orientation-available", protocolVersion: 1, instanceId }, source = frame.contentWindow, origin = "https://preview.example.test") {
     windowListeners.get("message")({ data, source, origin, ports: [] });
   }
   function load() {
     state.handlePreviewFrameLoad({ currentTarget: frame });
   }
-  const fixture = { state, props, outputs, posts, frame, windowListeners, documentListeners,
-    documentObject, windowObject, announce, load,
+  function init() { return posts.findLast(post => post.data.type === "orientation-init"); }
+  function packet(type, fields = {}) {
+    const message = init();
+    message.ports[0].postMessage({ type, protocolVersion: 1, instanceId,
+      playerInstanceId: message.data.playerInstanceId, ...fields });
+  }
+  function press() {
+    packet("button", { interactionId });
+    packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+    packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  }
+  const fixture = { state, props, outputs, posts, owner, get frame() { return frame; }, windowListeners, documentListeners,
+    documentObject, windowObject, announce, load, init, packet, press,
+    replaceFrame() {
+      frame = markRaw({ ...frame, dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
+        contentWindow: { postMessage(data, origin, ports = []) { posts.push({ data, origin, ports }); } } });
+      state.previewFrame.value = frame;
+    },
+    setRect(value) { rect = value; },
     dispose() {
       vi.stubGlobal("window", windowObject);
       vi.stubGlobal("document", documentObject);
       app.unmount();
+      for (const post of posts) for (const port of post.ports || []) port.close();
       expect(windowListeners.size).toBe(0);
       expect(documentListeners.size).toBe(0);
     } };
   mountedSurfaces.push(fixture);
   return fixture;
 }
+
+it("the original App frame keeps early readiness and transfers one real port before a correlated response", async () => {
+  const owner = fakeLearningOwner();
+  const f = mountPreviewSurface({ learning: owner, projectSlug: "practice" });
+  f.announce();
+  expect(f.init()).toBeUndefined();
+  f.load();
+  expect(f.init().origin).toBe("https://preview.example.test");
+  expect(f.init().data).toEqual({ type: "orientation-init", protocolVersion: 1, playerInstanceId: expect.any(String) });
+  f.announce();
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
+  expect(owner.prepareExercise).toHaveBeenCalledWith("practice");
+  f.packet("ready");
+  f.packet("button", { interactionId });
+  f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(1);
+  expect(owner.tickets).toEqual([{ attemptId, stepId: "try-the-app", projectSlug: "practice" }]);
+  expect(owner.responses[0].response).toEqual({ sessionId: "session-a", instanceId, interactionId, requestId });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(1);
+});
+
+it("the existing frame listener excludes other windows, origins, malformed phases and wrong identities", async () => {
+  const owner = fakeLearningOwner();
+  const f = mountPreviewSurface({ learning: owner, projectSlug: "practice" });
+  f.load();
+  f.announce(undefined, {});
+  f.announce(undefined, f.frame.contentWindow, "https://foreign.example.test");
+  f.announce({ type: "orientation-available", protocolVersion: 1, instanceId, assessmentPassed: true });
+  expect(f.init()).toBeUndefined();
+  f.announce();
+  f.packet("button", { interactionId });
+  await portFlush();
+  expect(owner.tickets).toHaveLength(0);
+  f.packet("ready");
+  f.packet("button", { interactionId });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+  for (const invalid of [{ instanceId: requestId }, { playerInstanceId: requestId }, { protocolVersion: 2 }, { unexpected: true }]) {
+    f.packet("button", { interactionId });
+    f.packet("request", { interactionId, method: "POST", path: "/api/greeting", ...invalid });
+    f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+    await portFlush();
+  }
+  expect(owner.responses).toHaveLength(0);
+});
+
+it("hiding App or document invalidates unfinished evidence but retains its single document port for a fresh press", async () => {
+  const owner = fakeLearningOwner();
+  const f = mountPreviewSurface({ learning: owner, projectSlug: "practice" });
+  f.load(); f.announce(); f.packet("ready");
+  await portFlush();
+  for (const hide of [() => { f.props.previewDisplayed = false; }, () => { f.props.windowDisplayed = false; },
+    () => { f.documentObject.visibilityState = "hidden"; f.documentListeners.get("visibilitychange")(); },
+    () => { owner.eligible.value = false; }]) {
+    f.packet("button", { interactionId });
+    await portFlush();
+    hide();
+    f.props.previewDisplayed = true; f.props.windowDisplayed = true; f.documentObject.visibilityState = "visible";
+    owner.eligible.value = true;
+    f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+    f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+    await portFlush();
+  }
+  expect(owner.responses).toHaveLength(0);
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
+  f.setRect({ left: -100, top: 100, right: -1, bottom: 200 });
+  f.packet("button", { interactionId });
+  await portFlush();
+  const count = owner.tickets.length;
+  f.setRect({ left: 100, top: 100, right: 900, bottom: 700 });
+  f.press();
+  await portFlush();
+  expect(owner.tickets).toHaveLength(count + 1);
+  expect(owner.responses).toHaveLength(1);
+});
+
+it("reload, service and session replacement fence old real ports while native diagnostics retain their request identity", async () => {
+  const owner = fakeLearningOwner();
+  const f = mountPreviewSurface({ learning: owner, projectSlug: "practice" });
+  f.load(); f.announce(); f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  const oldPeer = f.init().ports[0];
+  const oldPlayer = f.init().data.playerInstanceId;
+  const oldGeneration = f.state.previewFrameRequestId.value;
+  await f.state.reloadPreview();
+  expect(f.state.previewFrameRequestId.value).toBeGreaterThan(oldGeneration);
+  oldPeer.postMessage({ type: "request", protocolVersion: 1, instanceId, interactionId, playerInstanceId: oldPlayer,
+    method: "POST", path: "/api/greeting" });
+  oldPeer.postMessage({ type: "response-displayed", protocolVersion: 1, instanceId, interactionId, playerInstanceId: oldPlayer,
+    requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+  f.state.handlePreviewFrameLoad({ currentTarget: f.frame });
+  expect(f.state.previewFrameLoaded.value).toBe(false, "a stale native load cannot open the new generation");
+  f.replaceFrame();
+  f.load(); f.announce();
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(2);
+  f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  f.outputs.terminalSessionId.value = "terminal-b";
+  f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+  await f.state.reloadPreview();
+  f.replaceFrame(); f.load();
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
+  const diagnostics = f.state.requestPreviewDiagnostics();
+  const query = f.posts.at(-1).data;
+  expect(query.requestId).toEqual(expect.any(String));
+  f.announce({ type: PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE, requestId: query.requestId, diagnostics: { title: "Orientation app" } });
+  expect(await diagnostics).toEqual({ title: "Orientation app" });
+  f.announce(); f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  f.props.session = { sessionId: "session-b" };
+  f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+});
+
+it("without a Learning controller the App opens no channel, and an ineligible project or step begins no press", async () => {
+  const plain = mountPreviewSurface({ projectSlug: "practice" });
+  plain.load(); plain.announce(); await nextTick();
+  expect(plain.init()).toBeUndefined();
+  const owner = fakeLearningOwner();
+  const other = mountPreviewSurface({ learning: owner, projectSlug: "project-a" });
+  other.load(); other.announce(); other.packet("ready"); other.press();
+  await portFlush();
+  expect(owner.tickets).toEqual([]);
+  expect(owner.responses).toEqual([]);
+});
+
+// The real Learning controller decides which step a press answers and sends
+// step.observe with the exact identities the declared check verifies.
+function lessonRead({ ended = false, phase = "ready", practiceSlug = "practice" } = {}) {
+  return { ok: true, available: true,
+    attempt: { attemptId, pin: { lesson: { code: "V64-START-01", hash: "h" } }, preparation: { phase },
+      ...(practiceSlug ? { practiceSlug } : {}), ...(ended ? { ended: { revision: 3, reason: "finished" } } : {}) },
+    lesson: { schemaVersion: 2, code: "V64-START-01", title: "First steps", visuals: [], steps: [
+      { id: "try-the-app", title: "Press the button", required: true, check: { kind: "auto", check: "orientation-response", files: [] } },
+      { id: "edit-greeting", title: "Change it", required: true, check: { kind: "auto", check: "greeting-code", files: ["server.js"] } },
+      { id: "reflect", title: "Reflect", required: true, check: { kind: "self" } }] },
+    results: [], passedStepIds: [], reader: null, page: { index: 0, count: 1 } };
+}
+async function mountLearningSurface(read = lessonRead()) {
+  const calls = [];
+  const request = vi.fn(async (url, options = {}) => {
+    calls.push({ url, method: options.method, body: options.body === undefined ? undefined : structuredClone(options.body) });
+    return options.method === "POST" ? { ok: true, stepId: "try-the-app", outcome: "passed", recorded: true } : structuredClone(read);
+  });
+  const learning = createVibe64Learning({ request });
+  learning.setViewer("member");
+  await learning.show({ attemptId, stepId: "try-the-app" });
+  learning.minimise();
+  const f = mountPreviewSurface({ learning, projectSlug: "practice" });
+  f.load(); f.announce(); f.packet("ready");
+  await portFlush();
+  const observations = () => calls.filter(call => call.method === "POST" && call.url.endsWith("/steps/observe"));
+  return { f, learning, calls, observations };
+}
+
+it("sends step.observe for the learner's press with the exact attempt, step, project, session and App identities", async () => {
+  const { f, observations } = await mountLearningSurface();
+  f.press();
+  await portFlush();
+  expect(observations()).toEqual([{ url: `/api/vibe64/training/attempts/${attemptId}/steps/observe`, method: "POST", body: {
+    stepId: "try-the-app",
+    observation: { control: "exercise-response", exercise: { instanceId, interactionId, requestId },
+      workspace: { projectSlug: "practice", sessionId: "session-a", projectVisible: true, pane: "preview", ready: true } } } }]);
+});
+
+it("sends nothing while Learning covers the app, for a code or self-check step, or for an ended or unprepared attempt", async () => {
+  const open = await mountLearningSurface();
+  await open.learning.show();
+  open.f.press();
+  await portFlush();
+  expect(open.observations()).toEqual([]);
+  open.learning.minimise();
+  for (const stepId of ["edit-greeting", "reflect"]) {
+    open.learning.selectStep(stepId);
+    open.f.press();
+    await portFlush();
+  }
+  expect(open.observations()).toEqual([]);
+  for (const read of [lessonRead({ ended: true }), lessonRead({ phase: "preparing" }), lessonRead({ practiceSlug: "other" })]) {
+    const t = await mountLearningSurface(read);
+    t.f.press();
+    await portFlush();
+    expect(t.observations()).toEqual([]);
+  }
+});
 
 it("opt-in Preview diagnostics capture each failed module and retry without accepting a foreign iframe", async () => {
   vi.useFakeTimers();

@@ -208,8 +208,8 @@ test("Colleague's step check is a diagnostic only; the learner's App press and o
   const observed = await f.execute("step.observe", { ...base, observation: observation(attempt) });
   assert.deepEqual({ outcome: observed.outcome, recorded: observed.recorded }, { outcome: "not-yet-passed", recorded: true });
   assert.deepEqual(f.innerCalls.map(call => [call.actionId, call.input]), [
-    ["vibe64.sessions.inspect", { learningAttemptId: attempt.attemptId, sessionId: attempt.sessionId }],
-    ["vibe64.terminals.outputs.read", { learningAttemptId: attempt.attemptId, sessionId: attempt.sessionId }]]);
+    ["vibe64.sessions.inspect", { projectSlug: attempt.projectSlug, sessionId: attempt.sessionId }],
+    ["vibe64.terminals.outputs.read", { projectSlug: attempt.projectSlug, sessionId: attempt.sessionId }]]);
   assert.ok(f.innerCalls.every(call => call.context.channel === "api" && !Object.hasOwn(call.context, "vibe64Action")),
     "inner actions are re-admitted with the learner's own request, never the outer admission");
   f.outcome = "passed";
