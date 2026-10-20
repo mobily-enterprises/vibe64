@@ -19,6 +19,7 @@ import { createColleagueActions } from "../../packages/vibe64-colleague/src/serv
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
+import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
 // barrels need only presentation placeholders; all JavaScript stays installed.
@@ -2798,6 +2799,7 @@ for (const scenario of ["stable", "route", "replace-during-effect", "retire-main
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
     "@local/vibe64-training/client/presentation-operation": operations,
     "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
@@ -2877,6 +2879,7 @@ test("the local browser navigator returns plain settled focus for an ordinary Le
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
     "@local/vibe64-training/client/presentation-operation": operations,
     "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
@@ -2929,6 +2932,7 @@ test("the local Colleague host hands Colleague its own browser navigator", async
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
@@ -2968,6 +2972,7 @@ test("the local Colleague host reports the shared Learning state and opens its e
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
@@ -3027,6 +3032,7 @@ test("the local Colleague host refuses a Learning command when no Learning contr
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
@@ -3066,6 +3072,7 @@ test("the local Colleague host reports a project-less lesson's own session inste
     vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
       setup(props) { received = props; return () => null; } } },
     "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },

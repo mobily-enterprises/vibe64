@@ -73,15 +73,6 @@ function requireLearnerChannel(context, what) {
   }
 }
 
-// The choice comparator: the selection passes only when it names exactly the
-// authored answer indexes. Order is irrelevant. Same rule as contract C1's
-// installed-content comparator; the answer itself comes only from
-// content.readChoiceAnswer, never from a readLesson projection.
-// The content owner's comparator (exact set, any order); an empty answer never passes.
-function choiceMatches(answer, selected) {
-  return Array.isArray(answer) && answer.length > 0 && compareChoiceAnswer(answer, selected);
-}
-
 // Version 2 step results. Passes come only from: the automatic check runner
 // with learner-origin evidence (a browser-captured exercise interaction, or
 // learner-authored code per the authorship ledger) when the learner triggered
@@ -266,7 +257,8 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const { answer: expected } = await content.readChoiceAnswer({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code,
       lessonHash: attempt.pin.lesson.hash, stepId });
     const chosen = [...selected].sort((left, right) => left - right);
-    const outcome = choiceMatches(expected, chosen) ? "passed" : "not-yet-passed";
+    // The content owner's comparator: exactly the authored answer indexes, in any order.
+    const outcome = compareChoiceAnswer(expected, chosen) ? "passed" : "not-yet-passed";
     return record({ actor, attemptId, requestId, lesson, same: saved => canonicalJson(saved.evidence) === canonicalJson({ selected: chosen }),
       result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" } });
   }
@@ -325,4 +317,4 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   return Object.freeze({ observe, runCheck, answer, done, read, enterStep, saveReader });
 }
 
-export { createTrainingStepChecks, runCodeCheckObservation, runExerciseResponseCheck, stepCheckTrigger };
+export { createTrainingStepChecks, runCodeCheckObservation, runExerciseResponseCheck };

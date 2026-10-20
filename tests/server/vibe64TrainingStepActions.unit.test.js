@@ -12,7 +12,8 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { createTrainingStepActions } from "../../packages/vibe64-training/src/server/stepActions.js";
-import { createTrainingLearnerChangedPublisher, VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/server/learnerEvents.js";
+import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
+import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/shared/learnerEvents.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";

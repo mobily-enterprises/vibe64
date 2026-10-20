@@ -8,7 +8,7 @@ import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource,
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
-import { practiceProjectAccessBlock, projectPracticeForActor } from "@local/vibe64-core/server/practiceProjects";
+import { practiceProjectsForViewer, projectPracticeForActor } from "@local/vibe64-core/server/practiceProjects";
 
 import {
   Vibe64SessionRuntime
@@ -732,10 +732,7 @@ function createService({
   // goal recovery, health) list without a viewer and see every project. The
   // current project already passed the request's own access check.
   function presentedProjects(projects = [], viewer = undefined) {
-    if (viewer === undefined) return projects;
-    return projects
-      .filter((project) => !practiceProjectAccessBlock(project, viewer))
-      .map((project) => projectPracticeForActor(project, viewer));
+    return viewer === undefined ? projects : practiceProjectsForViewer(projects, viewer);
   }
 
   function presentedProject(project = null, viewer = undefined) {

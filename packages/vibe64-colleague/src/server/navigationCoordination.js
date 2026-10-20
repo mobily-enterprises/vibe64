@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { learningPanelMatches } from "../shared/learningFocus.js";
 
 function publicCue(cue) {
   const { generation, name, parameters, operation, projectSlug, sessionId, ...value } = cue;
@@ -19,17 +20,6 @@ function learningFocusMatches(command, focus) {
     : command.learningView === "learning" ? "lessons" : command.pane || "preview";
   if (focus.pane !== pane) return false;
   return !command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView;
-}
-// The Learning environment (L) sits above the app. A command that opens or
-// minimises it is confirmed only by the browser's reported L state; an
-// attempt/step selection must be the one actually shown.
-function learningPanelMatches(command, focus) {
-  const learning = command.learning;
-  if (!learning) return true;
-  if ((focus?.learningOpen === true) !== learning.open) return false;
-  if (!learning.open || !learning.attemptId) return true;
-  return focus.learningSurface === "lesson" && focus.learningAttemptId === learning.attemptId &&
-    (!learning.stepId || focus.learningStepId === learning.stepId);
 }
 // A guided "show me" names its own place; its pane and database view must be
 // the ones the browser settled on, as Learning-mode guides always required.

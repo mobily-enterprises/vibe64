@@ -2,7 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { lessonSteps } from "./learnerState.js";
-import { attemptSummary, operationError, practiceSlug } from "./actions.js";
+import { attemptId, attemptSummary, id, operationError, pick, practiceSlug, requestId, text } from "./actions.js";
 
 // Learning v2 (contract C3): the lesson reader, step results, reader position
 // and practice deletion. Admission is the existing action context; decisions
@@ -12,10 +12,6 @@ import { attemptSummary, operationError, practiceSlug } from "./actions.js";
 // excluded from Colleague's tools.
 const MAX_RESULT_BYTES = 128 * 1024;
 const MAX_PAGE_BODY_BYTES = 64 * 1024;
-const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
-const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
-const requestId = { ...text, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" };
-const attemptId = { ...text, maxLength: 36, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
 const opaque = { type: "object", additionalProperties: true, required: false };
 const BROWSER = Object.freeze({ channels: ["api"], surfaces: ["app"] });
 
@@ -49,10 +45,6 @@ const practiceOutput = {
     error: { ...text, required: false, maxLength: 512 }
   })
 };
-
-function pick(value = {}, fields) {
-  return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
-}
 
 function refusalText(reason, fallback) {
   return typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 512) : fallback;
@@ -308,4 +300,4 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   ]);
 }
 
-export { createTrainingStepActions, MAX_PAGE_BODY_BYTES };
+export { createTrainingStepActions };

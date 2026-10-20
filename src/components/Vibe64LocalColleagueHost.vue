@@ -2,6 +2,7 @@
 import { useRoute, useRouter } from "vue-router";
 import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watchEffect } from "vue";
 import { Vibe64Colleague } from "@local/vibe64-colleague/client";
+import { learningPanelMatches } from "@local/vibe64-colleague/shared/learning-focus";
 import { Vibe64ColleagueAvatar } from "@local/vibe64-voice/client";
 import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAvatarPreferences.js";
 import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "@local/vibe64-training/client/presentation-operation";
@@ -130,14 +131,6 @@ function waitForNavigation(predicate, isCurrent, failure) {
       else if (predicate()) finish();
     }, { flush: "post" });
   });
-}
-
-function learningPanelMatches(command, value) {
-  const learning = command.learning;
-  if (!learning) return true;
-  if ((value.learningOpen === true) !== learning.open) return false;
-  return !learning.open || !learning.attemptId || value.learningSurface === "lesson" &&
-    value.learningAttemptId === learning.attemptId && (!learning.stepId || value.learningStepId === learning.stepId);
 }
 
 function focusMatches(command, value) {

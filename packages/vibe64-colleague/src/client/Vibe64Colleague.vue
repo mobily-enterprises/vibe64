@@ -58,8 +58,7 @@ const learningStep = computed(() => {
   const index = steps.findIndex(step => step?.id === stepId);
   if (!attemptId || !stepId || index < 0) return null;
   const results = unref(controller.results);
-  const passed = (Array.isArray(results) ? results : Object.values(results || {}))
-    .some(result => result?.stepId === stepId && result.outcome === "passed");
+  const passed = Array.isArray(results) && results.some(result => result?.stepId === stepId && result.outcome === "passed");
   return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
     position: index + 1, total: steps.length, passed };
 });

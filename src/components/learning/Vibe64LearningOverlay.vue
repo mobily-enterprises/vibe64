@@ -2,6 +2,7 @@
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
+import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
@@ -11,7 +12,6 @@ import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 // The Learning environment (L), mounted once per host for the signed-in
 // viewer: public App.vue and hosted AuthGate's authenticated content. It also
 // mounts the one global teacher guide overlay of that host.
-const VIBE64_TRAINING_LEARNER_CHANGED_EVENT = "vibe64.training.learner.changed";
 const props = defineProps({
   // Owner-only author trial of draft lessons (hosted owner).
   authorPreview: { type: [Boolean, Object], default: false }

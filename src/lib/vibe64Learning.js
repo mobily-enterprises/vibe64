@@ -19,6 +19,7 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   stepDone: attemptId => attemptPath(attemptId, "/steps/done"),
   readerSave: attemptId => attemptPath(attemptId, "/reader"),
   lessonEnd: attemptId => attemptPath(attemptId, "/end"),
+  practiceDelete: attemptId => attemptPath(attemptId, "/practice/delete"),
   visual: (attemptId, visualId) => attemptPath(attemptId, `/visuals/${encodeURIComponent(visualId)}`)
 });
 const SURFACES = Object.freeze(["courses", "lesson"]);
@@ -49,12 +50,12 @@ function writePlace(actorKey, place) {
   try { storage()?.setItem(`${STORAGE_PREFIX}${actorKey}`, JSON.stringify(place)); } catch { /* per-tab convenience only */ }
 }
 
-// A v2 lesson.read result, tolerating the lesson either nested or at top level.
+// A lesson.read result as L displays it.
 function normalizeLesson(result) {
   if (!result || result.ok === false || result.available === false) return null;
-  const lesson = result.lesson && typeof result.lesson === "object" ? result.lesson : result;
+  const lesson = result.lesson || {};
   const steps = Array.isArray(lesson.steps) ? lesson.steps.filter(step => text(step?.id)) : [];
-  const attempt = result.attempt || lesson.attempt || null;
+  const attempt = result.attempt || null;
   return Object.freeze({
     schemaVersion: lesson.schemaVersion ?? (steps.length ? 2 : 1),
     code: lesson.code || attempt?.pin?.lesson?.code || "",
@@ -63,9 +64,9 @@ function normalizeLesson(result) {
     visuals: Array.isArray(lesson.visuals) ? lesson.visuals : [],
     steps,
     attempt,
-    practiceProjectSlug: attempt?.practiceSlug || attempt?.practice?.projectSlug || attempt?.practice?.slug || attempt?.practiceProjectSlug || "",
+    practiceProjectSlug: attempt?.practiceSlug || "",
     reader: result.reader && text(result.reader.stepId) ? result.reader : null,
-    results: Array.isArray(result.results) ? result.results : Array.isArray(lesson.results) ? lesson.results : []
+    results: Array.isArray(result.results) ? result.results : []
   });
 }
 

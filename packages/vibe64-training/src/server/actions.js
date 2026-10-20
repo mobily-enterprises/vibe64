@@ -44,7 +44,7 @@ const resultOutput = {
   })
 };
 
-function pick(value, fields) {
+function pick(value = {}, fields) {
   return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
 }
 
@@ -228,11 +228,7 @@ async function practiceSlug({ attempt, actor, practiceProjects }) {
 function attemptSummary(attempt, slug = "") {
   return {
     attemptId: attempt.attemptId,
-    pin: {
-      course: pick(attempt.pin.course, ["courseId", "release"]),
-      topic: pick(attempt.pin.topic, ["topicId", "release", "commit", "topicHash"]),
-      lesson: pick(attempt.pin.lesson, ["code", "hash"])
-    },
+    pin: pin(attempt.pin),
     preparation: pick(attempt.preparation || {}, ["phase", "observedAt"]),
     ...(slug ? { practiceSlug: slug } : {}),
     ...(attempt.ended ? { ended: pick(attempt.ended, ["revision", "reason"]) } : {})
@@ -520,4 +516,4 @@ function createTrainingAuthorPreviewActions({ preview } = {}) {
   ]);
 }
 
-export { attemptSummary, createTrainingActions, createTrainingAuthorPreviewActions, operationError, practiceSlug };
+export { attemptId, attemptSummary, createTrainingActions, createTrainingAuthorPreviewActions, id, operationError, pick, practiceSlug, requestId, text };

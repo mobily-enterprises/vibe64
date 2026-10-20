@@ -422,10 +422,12 @@ describe("Learning overlay", () => {
     const realtime = [];
     const modeOptions = [];
     const HostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+    const LearnerEvents = await import("../../packages/vibe64-training/src/shared/learnerEvents.js");
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
       vue: Vue,
       "@jskit-ai/realtime/client/composables/useRealtimeEvent": { useRealtimeEvent: options => realtime.push(options) },
       "@local/vibe64-training/client/guide-overlay": { default: { render: () => Vue.h("aside", { "data-guide-overlay": "mounted" }) } },
+      "@local/vibe64-training/shared/learner-events": LearnerEvents,
       "@/lib/vibe64AssistantHost.js": HostKeys,
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
       "@/composables/useVibe64LearningMode.js": { useVibe64LearningMode: options => { modeOptions.push(options);

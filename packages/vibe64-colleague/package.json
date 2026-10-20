@@ -8,7 +8,8 @@
     "./client": "./src/client/index.js",
     "./server": "./src/server/Vibe64ColleagueProvider.js",
     "./server/service": "./src/server/service.js",
-    "./server/conversationUpgrade": "./src/server/conversationUpgrade.js"
+    "./server/conversationUpgrade": "./src/server/conversationUpgrade.js",
+    "./shared/learning-focus": "./src/shared/learningFocus.js"
   },
   "jskit": {
     "kind": "runtime",

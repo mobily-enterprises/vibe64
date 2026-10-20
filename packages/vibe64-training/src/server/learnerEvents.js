@@ -25,4 +25,4 @@ function createTrainingLearnerChangedPublisher(events) {
   };
 }
 
-export { VIBE64_TRAINING_LEARNER_CHANGED_EVENT, createTrainingLearnerChangedPublisher };
+export { createTrainingLearnerChangedPublisher };

@@ -3,18 +3,18 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
+import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
+import { VIBE64_LEARNING_ROUTES } from "@/lib/vibe64Learning.js";
 
 const LEARNING_PATH = "/api/vibe64/training/learning";
-const LEARNER_CHANGED_EVENT = "vibe64.training.learner.changed";
 
 // Local practice projects live in the learner's private namespace, so the
-// standalone source is the learner's own learning.read. This reads the Learning
-// v2 shape proposed to C3 (`attempts[]` with `attemptId`, `practiceSlug`,
-// optional `lessonTitle`, `pin.lesson.code`, `ended`); the v1 active/history
-// shape has no practice slug and yields no rows, so no delete is offered
-// against a server without vibe64.training.practice.delete. This adapter owns
-// no admission; the Training actions re-authorize every read and delete.
+// standalone source is the learner's own learning.read: its `attempts[]` name
+// each attempt's `practiceSlug`, `pin.lesson.code` and `ended`. The v1
+// active/history shape has no practice slug and yields no rows, so no delete is
+// offered against a server without vibe64.training.practice.delete. This
+// adapter owns no admission; the Training actions re-authorize every read and delete.
 function practiceProjectsFromLearning(result = null) {
   if (result?.ok !== true || result.available !== true || !Array.isArray(result.attempts)) return [];
   const attempts = result.attempts;
@@ -28,7 +28,7 @@ function practiceProjectsFromLearning(result = null) {
     projects.push({
       slug,
       attemptId,
-      lessonCode: String(attempt?.pin?.lesson?.code || attempt?.lessonCode || ""),
+      lessonCode: String(attempt?.pin?.lesson?.code || ""),
       lessonTitle: String(attempt?.lessonTitle || ""),
       ended: Boolean(attempt?.ended),
       mine: true,
@@ -36,11 +36,6 @@ function practiceProjectsFromLearning(result = null) {
     });
   }
   return projects;
-}
-
-// Follows the existing attempt route convention (/attempts/:attemptId/end).
-function practiceProjectDeletePath(attemptId = "") {
-  return `/api/vibe64/training/attempts/${encodeURIComponent(String(attemptId || ""))}/practice/delete`;
 }
 
 function useVibe64PracticeProjects({ enabled = true } = {}) {
@@ -54,13 +49,13 @@ function useVibe64PracticeProjects({ enabled = true } = {}) {
     queryOptions: { retry: false },
     refreshOnPull: true,
     requestRecoveryLabel: "Practice projects",
-    realtime: { events: [LEARNER_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT] }
+    realtime: { events: [VIBE64_TRAINING_LEARNER_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT] }
   });
   const practiceProjects = computed(() => active.value ? practiceProjectsFromLearning(resource.data.value) : []);
   const deleteCommand = useCommand({
     access: "never",
     apiSuffix: "/vibe64/training",
-    buildCommandOptions: (_model, { context }) => ({ method: "POST", path: practiceProjectDeletePath(context.attemptId) }),
+    buildCommandOptions: (_model, { context }) => ({ method: "POST", path: VIBE64_LEARNING_ROUTES.practiceDelete(String(context.attemptId || "")) }),
     buildRawPayload: () => ({}),
     fallbackRunError: "Practice project could not be deleted.",
     messages: { error: "Practice project could not be deleted.", success: "Practice project deleted." },
@@ -88,4 +83,4 @@ function useVibe64PracticeProjects({ enabled = true } = {}) {
   return { deleteError, deletePracticeProject, deletingSlug, practiceProjects, reload: resource.reload, resource };
 }
 
-export { practiceProjectDeletePath, practiceProjectsFromLearning, useVibe64PracticeProjects };
+export { practiceProjectsFromLearning, useVibe64PracticeProjects };

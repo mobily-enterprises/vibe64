@@ -43,6 +43,13 @@ function practiceProjectAccessBlock(project = null, user = null) {
   };
 }
 
+// A listing as one viewer sees it: other learners' practice projects are
+// omitted (only the workspace owner may open them) and `mine` is added.
+function practiceProjectsForViewer(projects = [], viewer = null) {
+  return projects.filter((project) => !practiceProjectAccessBlock(project, viewer))
+    .map((project) => projectPracticeForActor(project, viewer));
+}
+
 // The learner who owns a practice project, as the learner-state owner identifies
 // it. The acting learner is used as-is; for the workspace owner acting on
 // another learner's project, the saved key names that learner (learner state
@@ -65,6 +72,7 @@ export {
   practiceLearnerKey,
   practiceProjectAccessBlock,
   practiceProjectAttemptId,
+  practiceProjectsForViewer,
   projectPracticeForActor,
   projectPracticeFromTraining
 };

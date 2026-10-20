@@ -64,9 +64,6 @@ const trainingPracticalField = { type: "object", required: false, schema: create
   checkReason: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 256 }
 }) };
 
-export { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField, trainingObservationFields,
-  trainingPracticalProgressField, trainingPracticalField };
-
 // A version 2 lesson step's learner-origin exercise receipt, captured by the
 // browser when the learner presses the App's own control in visible Preview.
 const trainingStepObservationSchema = createSchema({
@@ -79,4 +76,5 @@ const trainingStepObservationSchema = createSchema({
     ready: { type: "boolean", required: true } }) }
 });
 
-export { trainingStepObservationSchema };
+export { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField, trainingObservationFields,
+  trainingPracticalProgressField, trainingPracticalField, trainingStepObservationSchema };
