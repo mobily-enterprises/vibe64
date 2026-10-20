@@ -14,7 +14,10 @@ function registerTrainingRoutes(http) {
       const { actor: _actor, vibe64User: _user, ...input } = method === "POST" ? routes.requestBody(request) : {};
       void _actor;
       void _user;
-      return attempt ? { ...input, attemptId: request.params.attemptId } : input;
+      // The lesson reader pages long step text; the page is its only query input.
+      const query = operation === "lesson.read" ? routes.requestQuery(request) : {};
+      const page = /^[0-9]{1,2}$/u.test(String(query.page ?? "")) ? { page: Number(query.page) } : {};
+      return attempt ? { ...input, ...page, attemptId: request.params.attemptId } : { ...input, ...page };
     },
     summary: `Use the canonical Training ${operation} operation.`
   });
@@ -28,6 +31,15 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/resume", "lesson.resume", true);
   actionRoute("POST", "/attempts/:attemptId/end", "lesson.end", true);
   actionRoute("POST", "/attempts/:attemptId/continue", "lesson.continue", true);
+  // Learning v2 reader, step results and practice deletion (contract C3).
+  actionRoute("GET", "/lesson", "lesson.read");
+  actionRoute("GET", "/attempts/:attemptId/lesson", "lesson.read", true);
+  actionRoute("POST", "/attempts/:attemptId/steps/observe", "step.observe", true);
+  actionRoute("POST", "/attempts/:attemptId/steps/check", "step.check.run", true);
+  actionRoute("POST", "/attempts/:attemptId/steps/answer", "step.answer", true);
+  actionRoute("POST", "/attempts/:attemptId/steps/done", "step.done", true);
+  actionRoute("POST", "/attempts/:attemptId/reader", "reader.save", true);
+  actionRoute("POST", "/attempts/:attemptId/practice/delete", "practice.delete", true);
 }
 
 // Hosted snapshot admission stays with its existing owner. This adapter only

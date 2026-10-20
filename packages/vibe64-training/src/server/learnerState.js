@@ -1414,4 +1414,4 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader };
 }
 
-export { createTrainingLearnerState, evidenceSchema, lessonSteps, passedAssessmentIds, validateSnapshot, MAX_STEP_RESULTS };
+export { createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot, MAX_STEP_RESULTS };
