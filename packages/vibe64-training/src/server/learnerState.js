@@ -1257,8 +1257,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   }
 
   // The code-practical authorship ledger is a separate private record so that
-  // autosaves never advance the learning revision Main's writes compare against.
-  // Its owner supplies the admitted question baseline and server-side saves.
+  // autosaves never advance the learning revision. Its owner supplies the
+  // admitted baseline and server-side saves.
   async function readCodeLedgerRecord(paths, attemptId) {
     const value = await readRecord(paths.codeLedger, MAX_CODE_LEDGER_BYTES);
     if (!value) return null;

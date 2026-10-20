@@ -159,7 +159,6 @@ const prepared = result => {
 };
 
 // Composition supplies the original readers and one exercise preparation owner.
-// This factory registers neither a teacher loop nor a standalone provisioner.
 function createTrainingActions({ catalogue, learners, exercises = null, courseInstaller = null, practiceProjects = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function") {
     throw new TypeError("Training actions require the installed catalogue and learner state owners.");

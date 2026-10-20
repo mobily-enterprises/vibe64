@@ -6,10 +6,10 @@ import { practiceProjectAttemptId } from "@local/vibe64-core/server/practiceProj
 const removalLocks = new Map();
 
 // Standalone host facility practiceProjects.remove({ slug, actor }) (with its
-// read-only canRemove and exists). It mirrors
-// Online's light deletion (the hosted archive lifecycle minus its archive
-// steps): per-slug lock, pinned-session refusal, persisted deletion marker
-// with resumable steps, runtime close, source and runtime removal. Standalone
+// read-only canRemove and exists). It mirrors Online's light deletion (the
+// hosted archive lifecycle minus its archive steps): per-slug lock,
+// pinned-session refusal, persisted deletion marker with resumable steps,
+// runtime close, source and runtime removal. Standalone
 // has no managed resources or resource policy, so those steps have no
 // counterpart here. A local practice project lives in the learner's private
 // namespace, so every step runs inside the learner's own practice scope.
@@ -205,8 +205,8 @@ async function withRemovalLock(key, operation) {
 
 // Ordinary local Project pages open only this person's own saved lesson
 // Project; the slug is derived from the attempt and rechecked against it.
-// Moved from learningSessions.js: core grants the admitted scope full write
-// (the learner's own practice project is an ordinary project to them).
+// Core grants the admitted scope full write (the learner's own practice
+// project is an ordinary project to them).
 async function admitLocalPracticeProject({ learners, actor, slug }) {
   const attemptId = practiceProjectAttemptId(slug);
   if (!attemptId) return null;

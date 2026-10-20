@@ -87,8 +87,6 @@ function trackedPaths(ledger) {
   return new Set((ledger.question ? ledger.baseline : ledger.steps.flatMap(step => step.baseline)).map(file => file.path));
 }
 
-// Training owns the authorship baseline and the save ledger for code questions.
-// The generic source editor still performs every save; this wrapper only records it.
 // The code step of a v2 lesson: an automatic step whose declared check is a
 // code check. Its files are the step's declared exercise-relative files.
 function codeStepOf(lesson, stepId) {
@@ -99,6 +97,9 @@ function codeStepOf(lesson, stepId) {
   return { step, check, files: step.check.files };
 }
 
+// Training owns the authorship baseline and the save ledger for code questions
+// and code steps. The generic source editor still performs every save; this
+// owner only records it.
 function createTrainingCodeAuthorship({ learners, content, project } = {}) {
   if (!learners?.readState || !learners?.updateCodeLedger || !content?.readLesson || !project?.runInProjectContext || !project?.createRuntime) {
     throw new TypeError("Code authorship requires the original learner, installed content and Project owners.");
@@ -126,22 +127,6 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
       }
       return readDeclaredFiles(sessionSourcePath(session), files);
     });
-  }
-
-  // Called after a code question is saved. Replays keep the original baseline:
-  // a later read could otherwise adopt another writer's edits as the start.
-  async function recordBaseline({ actor, attemptId, question } = {}) {
-    const open = await openCodeQuestion(actor, attemptId);
-    if (!open || canonicalJson(questionKey(open.question)) !== canonicalJson(questionKey(question || {}))) {
-      throw failure("VIBE64_TRAINING_CODE_QUESTION_STALE", "The saved code question changed before its starting files were recorded.");
-    }
-    const { ledger } = await learners.updateCodeLedger({ actor, attemptId }, async current => {
-      if (current && canonicalJson(current.question) === canonicalJson(questionKey(open.question))) return null;
-      const files = await liveFiles(open.attempt, open.assessment.evidence.files);
-      return { ledger: { question: questionKey(open.question),
-        baseline: files.map(file => ({ path: file.path, sha256: file.sha256 })), entries: [] } };
-    });
-    return { baseline: structuredClone(ledger.baseline) };
   }
 
   async function openCodeStep(actor, attemptId, stepId) {
@@ -212,7 +197,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     return result.value;
   }
 
-  return Object.freeze({ recordBaseline, recordStepBaseline, saveLearnerFile, openCodeQuestion, openCodeStep });
+  return Object.freeze({ recordStepBaseline, saveLearnerFile });
 }
 
 export { codeStepOf, createTrainingCodeAuthorship, readDeclaredFiles, verifyAuthorship, verifyStepAuthorship };

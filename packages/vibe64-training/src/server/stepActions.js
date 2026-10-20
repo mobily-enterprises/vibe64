@@ -173,9 +173,8 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   function stepContext(context) {
     const { vibe64Action: _admitted, ...inner } = context;
     void _admitted;
-    return { context: inner };
+    return inner;
   }
-
 
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
@@ -228,7 +227,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     async (input, actor, context) => {
       await readAttempt(actor, input.attemptId);
       const result = await steps.observe({ actor, attemptId: input.attemptId, stepId: input.stepId,
-        observation: input.observation, ...stepContext(context) });
+        observation: input.observation, context: stepContext(context) });
       return recorded(result, actor, input.attemptId, "step");
     }),
     definition("step.check.run", { attemptId, stepId: id, requestId }, {
@@ -236,7 +235,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     async (input, actor, context) => {
       await readAttempt(actor, input.attemptId);
       const result = await steps.runCheck({ actor, attemptId: input.attemptId, stepId: input.stepId, requestId: input.requestId,
-        ...stepContext(context) });
+        context: stepContext(context) });
       return recorded(result, actor, input.attemptId, "step");
     }),
     definition("step.answer", { attemptId, stepId: id, requestId,

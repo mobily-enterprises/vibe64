@@ -68,18 +68,14 @@ function trainingGuideSteps(request) {
   return steps;
 }
 
-function guideWithSteps(request) {
-  const steps = trainingGuideSteps(request);
-  return { ...request, steps, caption: request.caption || steps.map(value => value.label).join(" → ") };
-}
-
-// The browser command for one normalized request (Learning v2). A point-only
-// command changes no view; its receipt carries only what the overlay actually
-// drew. "Show me" opens the real place in the exact project/session, or the
-// Learning environment (L) for the learning place.
+// The browser command for one normalized request. A point-only command changes
+// no view; its receipt carries only what the overlay actually drew. "Show me"
+// opens the real place in the exact project/session, or the Learning
+// environment (L) for the learning place.
 function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" }) {
   const place = TRAINING_GUIDE_PLACES[request.target];
-  const guide = guideWithSteps(request);
+  const steps = trainingGuideSteps(request);
+  const guide = { ...request, steps, caption: request.caption || steps.map(value => value.label).join(" → ") };
   if (!request.navigate) return { id, guide, status: "pending" };
   // Opening without a highlight is the ordinary navigation command.
   const highlighted = request.highlight ? { guide } : {};
@@ -88,5 +84,5 @@ function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" })
     ...(place.databaseView ? { databaseView: place.databaseView } : {}), ...highlighted, status: "pending" };
 }
 
-export { TRAINING_GUIDE_ALIASES, TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_PLACES, TRAINING_GUIDE_TARGETS,
+export { TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_PLACES, TRAINING_GUIDE_TARGETS,
   trainingGuideCommand, trainingGuideRequest, trainingGuideSteps };

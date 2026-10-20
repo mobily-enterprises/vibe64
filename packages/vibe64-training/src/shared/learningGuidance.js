@@ -34,4 +34,4 @@ function learningGuidancePresentation(message) {
   return { text: learningGuidanceSummary(evidence) };
 }
 
-export { LEARNING_GUIDANCE_MESSAGE_PREFIX, learningGuidanceSummary, learningGuidancePresentation };
+export { learningGuidancePresentation };

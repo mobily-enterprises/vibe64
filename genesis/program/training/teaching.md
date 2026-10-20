@@ -127,8 +127,9 @@ Otherwise it copies the pinned exercise (declared files replaced by the learner'
 bytes), check and assets into private session artifacts and runs `node <check>`
 through `runVibe64Command` (`training-code-check`, empty env, allowed root =
 scratch, lesson timeout default 15 s and at most 60 s, 4 KiB output), accepting
-only a result echoing the computed `filesHash`. The earlier question baseline
-(`recordBaseline`) remains but has no caller since the teacher was retired.
+only a result echoing the computed `filesHash`. An earlier question ledger is
+still verified for its saves, but no new question baseline is recorded since the
+teacher was retired.
 
 ### Preparation checkpoint and live Workspace setup
 
