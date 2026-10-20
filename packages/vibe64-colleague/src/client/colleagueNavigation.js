@@ -1,5 +1,6 @@
-// Original Colleague navigation/cache/ACK coordination. navigate reads its
-// existing host callback; beforeNavigate retains mobile presentation policy.
+// Runs one pending navigation command in this browser and acknowledges it,
+// caching the receipt so a failed acknowledgement retries without navigating
+// again. beforeNavigate applies the compact-screen policy first.
 function createColleagueNavigation({ scope, navigate, beforeNavigate, acknowledge, error }) {
   let navigating = null;
   let navigationReceipt = null;

@@ -251,7 +251,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       streamEpoch: randomUUID(), streamRevision: 0,
       generation: 0, connections: new Map(), requestContext: null, streamingReply: null,
       operationContext: null, operationRunId: "",
-      interimReply: null, projectReply: null, replyTurnId: "",
+      interimReply: null, projectReply: null,
       stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
       runtimeOwner: null, transfer: null, pendingMessages: [], nextConnection: null, workerAbort: null,
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
@@ -601,7 +601,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (!isCurrent()) return;
       if (event.type === "accepted" && event.messageId === messageId) {
         replyTurnId = event.turnId;
-        state.replyTurnId = replyTurnId;
       }
       if (!replyTurnId || event.turnId !== replyTurnId) return;
       if (event.type === "tool" && event.call?.status === "running" && !autonomous) {
@@ -748,7 +747,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           const messages = state.pendingMessages.splice(0);
           userMessageIds.push(...messages.map(message => message.messageId));
           if (messages.length) replyTurnId = messages.at(-1).turnId;
-          state.replyTurnId = replyTurnId;
           currentContext = await workerContext(state, connection, generation, autonomous, [...userMessageIds], isCurrent);
           if (!currentContext) return {};
           if (!feedback && previousResponse?.kind === "invalid") {
@@ -872,7 +870,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const generation = ++state.generation;
     const controller = new AbortController();
     state.workerAbort = controller;
-    state.replyTurnId = "";
     const admission = Promise.withResolvers();
     admission.promise.catch(() => {});
     state.record.status = "working";

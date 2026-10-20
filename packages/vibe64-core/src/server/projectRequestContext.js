@@ -8,6 +8,7 @@ import {
   resolveStudioProjectsRoot,
   resolveProjectContextRoot
 } from "./studioProjectContext.js";
+import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
@@ -209,12 +210,11 @@ function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];
   if (!grant) return context;
-  const ordinary = access === "write";
   const scope = Object.freeze({ ...grant.scope, access,
     vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
   return Object.freeze({ ...scope,
     ...(context.learningScope ? { learningScope: context.learningScope } : {}),
-    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(ordinary ? { ordinary: true } : {}) })
+    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(access === "write" ? { ordinary: true } : {}) })
   });
 }
 
@@ -295,7 +295,7 @@ function projectRequestErrorStatusCode(error = {}) {
   if (error?.code === "vibe64_project_route_unavailable") {
     return 404;
   }
-  if (error?.code === "vibe64_project_path_not_accessible" || error?.code === "vibe64_practice_project_deleted") {
+  if (error?.code === "vibe64_project_path_not_accessible" || error?.code === PRACTICE_PROJECT_DELETED_CODE) {
     return 404;
   }
   if (
