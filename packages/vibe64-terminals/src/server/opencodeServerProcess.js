@@ -418,6 +418,11 @@ function openCodeInlineConfig({
     throw new TypeError("OpenCode provider URL overrides require a provider id.");
   }
   const helperSubagents = openCodeHelperSubagents(providerConnections);
+  const applicationToolDenials = Object.fromEntries(openCodeApplicationToolSchemas.map(({ function: tool }) => [tool.name, "deny"]));
+  // OpenCode applies an agent's last matching rule, so "*": "ask" would override the
+  // global denials: the plugin's application tools would be offered and refused, and
+  // the repeated-call check would wait for an approval nobody can give.
+  const guardedAgentPermission = { "*": "ask", ...applicationToolDenials, doom_loop: "deny" };
   const conversationAgents = text(sessionEnvironmentRegistry) ? openCodeConversationAgents({ sessionEnvironmentRegistry }) : {};
   for (const agent of Object.values(conversationAgents)) {
     if (agent.permission.read === "allow") {
@@ -436,17 +441,17 @@ function openCodeInlineConfig({
         // from the provider request and Zen rejects that request on its free tier.
         [OPENCODE_EPHEMERAL_AGENT_ID]: {
           ...OPENCODE_INLINE_CONFIG_BASE.agent[OPENCODE_EPHEMERAL_AGENT_ID],
-          permission: { "*": "ask" }
+          permission: guardedAgentPermission
         },
         [OPENCODE_HELPER_AGENT_ID]: {
           ...OPENCODE_INLINE_CONFIG_BASE.agent[OPENCODE_HELPER_AGENT_ID],
-          permission: { "*": "ask" }
+          permission: guardedAgentPermission
         }
       } : {})
     },
     permission: {
       ...OPENCODE_INLINE_CONFIG_BASE.permission,
-      ...(text(sessionEnvironmentRegistry) ? Object.fromEntries(openCodeApplicationToolSchemas.map(({ function: tool }) => [tool.name, "deny"])) : {})
+      ...(text(sessionEnvironmentRegistry) ? applicationToolDenials : {})
     },
     ...(text(sessionEnvironmentRegistry)
       ? { plugin: [OPENCODE_SESSION_ENVIRONMENT_PLUGIN_URL] }

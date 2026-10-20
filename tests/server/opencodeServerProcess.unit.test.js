@@ -270,7 +270,14 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
     description: "Vibe64 bounded helper turns without tools.",
     hidden: true,
     mode: "primary",
-    permission: { "*": "ask" }
+    // OpenCode applies the agent's last matching rule: restate the global denials.
+    permission: {
+      "*": "ask",
+      assistant_action_search: "deny",
+      assistant_action_contract: "deny",
+      assistant_action_execute: "deny",
+      doom_loop: "deny"
+    }
   });
   assert.deepEqual(config.permission, {
     doom_loop: "deny",
@@ -290,7 +297,13 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
     assert.deepEqual(config.agent[name].permission.read, { "*": "allow", ...config.permission.read });
     assert.equal(config.agent[name].permission.bash, "allow");
   }
-  assert.deepEqual(config.agent["jskit-assistant"].permission, { "*": "ask" });
+  assert.deepEqual(config.agent["jskit-assistant"].permission, {
+    "*": "ask",
+    assistant_action_search: "deny",
+    assistant_action_contract: "deny",
+    assistant_action_execute: "deny",
+    doom_loop: "deny"
+  });
   assert.equal(config.agent["jskit-assistant-actions"].permission["*"], "ask");
 });
 
@@ -305,6 +318,15 @@ test("non-project OpenCode tools stay behind approval and require the execution 
   assert.equal(guarded.plugin.length, 1);
   assert.match(guarded.plugin[0], /opencodeSessionEnvironmentPlugin\.js$/u);
   assert.equal(guarded.agent[OPENCODE_HELPER_AGENT_ID].permission["*"], "ask");
+  // The session plugin registers the application tools for every session; agents
+  // that cannot use them must not be offered them after their "*": "ask" rule.
+  for (const agent of [OPENCODE_EPHEMERAL_AGENT_ID, OPENCODE_HELPER_AGENT_ID]) {
+    const permission = guarded.agent[agent].permission;
+    for (const name of ["assistant_action_search", "assistant_action_contract", "assistant_action_execute", "doom_loop"]) {
+      assert.equal(permission[name], "deny");
+      assert.equal(Object.keys(permission).indexOf(name) > Object.keys(permission).indexOf("*"), true);
+    }
+  }
 });
 
 test("OpenCode forces Z.AI API and Coding Senior through distinct canonical billing routes", () => {
