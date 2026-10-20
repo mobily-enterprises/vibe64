@@ -64,7 +64,6 @@ The same diagnostic record family separates slow conversation access checks into
 fresh user lookup, saved learning-attempt validation, practice scope, project
 access and project-context resolution. It records the elapsed phases even when
 access fails; repeated checks keep their existing authorization behavior.
-These access timings also apply to standalone Learning conversations.
 Concurrent Learning readers share verification of the same pinned course files
 while that verification is running. Completed results are not cached: later
 reads still reject missing or changed installed files, with the same reinstall

@@ -96,10 +96,6 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         if (!learningAccess || !learning || learning.learningScope.attemptId !== learningAttemptId) {
           throw actionContextError("vibe64_learning_authority_required", "Authorize this learner’s exact saved attempt before continuing.");
         }
-        // Main's learner-scoped coordinator already rechecks its exact saved
-        // session. Re-entering practice admission would reacquire its barrier
-        // inside those checks; retain the original omitted-ID execution path.
-        if (!projectScoped && context.trainingMain) return execute(trustedInput, context, deps);
         return runWithProjectRequestContext({ ...learning, vibe64User: user }, () => execute(trustedInput, context, deps));
       }
       if (!projectScoped) return execute(trustedInput, context, deps);
@@ -168,19 +164,15 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
           if (!scope.learningAccess || typeof resolveLearningContext !== "function") {
             throw actionContextError("vibe64_learning_unavailable", "This operation cannot access learning sessions.");
           }
-          // An admitted Main coordinator rechecks its server-owned session and
-          // native turn. Optional tool IDs may constrain that target, not select it.
-          learning = await measure("saved-attempt", () => context.trainingMain
-            ? context.trainingMain.requireAttempt(learningAttemptId, input.sessionId)
-            : resolveLearningContext({ actor: user, attemptId: learningAttemptId,
-              sessionId: input.sessionId, access: scope.learningAccess,
-              ...(diagnostic ? { onContextTiming(phase, durationMs) {
-                if (phase === "scope-selection" &&
-                    Number.isFinite(durationMs) && durationMs >= 0) {
-                  const key = `saved-attempt.${phase}`;
-                  timings[key] = (timings[key] || 0) + durationMs;
-                }
-              } } : {}) }));
+          learning = await measure("saved-attempt", () => resolveLearningContext({ actor: user,
+            attemptId: learningAttemptId, sessionId: input.sessionId, access: scope.learningAccess,
+            ...(diagnostic ? { onContextTiming(phase, durationMs) {
+              if (phase === "scope-selection" &&
+                  Number.isFinite(durationMs) && durationMs >= 0) {
+                const key = `saved-attempt.${phase}`;
+                timings[key] = (timings[key] || 0) + durationMs;
+              }
+            } } : {}) }));
           if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
               learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
             throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");

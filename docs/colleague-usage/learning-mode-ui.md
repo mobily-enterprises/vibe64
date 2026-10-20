@@ -45,8 +45,8 @@ Below the course cards, **Course catalogue → Install a course** lists the
 official catalogue's topics and their courses with **Install** buttons; an
 installed course with a newer release shows **Update available** and **Update**.
 See [Installing and updating Learning courses](learning-course-catalogue.md). A lesson without a practice project, such as local
-Vibe64's Lesson 0 **Set yourself up**, opens only its Learning conversation; that
-lesson uses [Dashboard → Health](health-checks.md).
+Vibe64's Lesson 0 **Set yourself up**, opens only the lesson in the Learning environment, with no project or
+conversation; that lesson uses [Dashboard → Health](health-checks.md).
 Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
 If Resume reports that the saved exercise is busy preparing or finishing a command, wait for that operation to settle and retry the same attempt. Do not create a replacement.
 
@@ -121,7 +121,7 @@ one retained session panel, so switching modes does not delete drafts or stop
 already admitted background work. A project that is still loading or failed
 keeps its original Working readiness gate while retaining the hidden panel.
 If the hidden Working project closes through ordinary inactivity cleanup, your
-selected Learning conversation stays open. Returning to Working reopens its
+Learning view stays open. Returning to Working reopens its
 original project through the usual access checks before showing it as ready.
 This does not restart stopped Working agents or outputs. Explicit project Close
 or deletion still leaves the project view; a missing runtime or revoked access

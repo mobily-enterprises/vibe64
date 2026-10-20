@@ -102,12 +102,11 @@ while you view Learning stays with its original project and does not replace the
 lesson you are viewing. Switching modes preserves hidden conversations and
 unsent drafts; it does not stop their work.
 
-If Learning updates fail temporarily, the last confirmed lesson conversations
-remain visible. Wait for a successful refresh before selecting another lesson.
-If access is denied or your account changes, another learner's conversations
-must not remain available. If a conflicting-conversation error appears, retain
-your work and ask the owner to inspect it. Colleague can explain these states;
-it cannot grant access or repair saved identities. Ordinary **New session** and
+Learning mode no longer lists lesson conversations: the lesson teacher
+conversation was retired and Colleague teaches every lesson from its steps in
+the Learning environment. A lesson's practice sessions are ordinary sessions of
+its practice project and appear in Working. Colleague can explain this; it
+cannot grant access or repair saved identities. Ordinary **New session** and
 **Archive session** are Working operations, not ways to start or end a lesson.
 These rules apply on desktop and mobile. Start, resume and end lessons through
 Learning → **Courses** and Colleague instead.

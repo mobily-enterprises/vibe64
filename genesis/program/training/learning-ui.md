@@ -175,9 +175,10 @@ visual without unmounting it. A practice workspace automatically reuses the
 existing exact-session opener before mounting outputs; failure exposes an
 explicit retry rather than an unrelated project. The captured Learning Host
 exports only its existing exact attempt ID;
-the wrapper refuses a different attempt and retires changed scope. Actor fences,
-resource pin verification, commands, cues and checkpoint receipts retain their
-original owners. No pin/progress reader or native receipt is invented.
+the wrapper refuses a different attempt and retires changed scope. Actor fences
+and resource pin verification retain their original owners; the server cue and
+checkpoint receipts were retired in F2. No pin/progress reader or native receipt
+is invented.
 
 For a saved practice App, the explicit App choice first uses the existing empty-body
 Learning Session Create operation. Its original opener freshly admits the exact
@@ -207,32 +208,19 @@ Host's existing sourceWorkspaceAvailable projection omits App/Onboarding/output
 owners and hides Save and Temporary/workspace tools. True/default keeps original
 Working controls, including suspended Working behavior. The original empty
 Learning pane uses the same host without a fake project, player or teaching
-message. A source-less saved Main identity can now register the same original
-Preview handle and use the original player through its captured learner, actor,
-attempt, session and exact Learning API path. Invalid or changed bindings retire
-selection and cannot read, open or checkpoint a diagram. The registration owner
-was moved from Onboarding unchanged; source-backed Onboarding immediately reuses
-it at the same active/presentationActive sites, while only an actual source-less
-Learning wrapper supplies the new registration. Hidden App still reports no
-setup screen. No extra bridge, renderer, progress reader or receipt writer is
-introduced. Main supplies its canonical question/cue/navigation/ACK integration through the
-same original owners. Actual installed/native/browser/device acceptance remains
-a separate gate.
+message. The registration owner was moved from Onboarding unchanged;
+source-backed Onboarding reuses it at the same active/presentationActive sites.
+Hidden App still reports no setup screen.
 
-A captured Learning checkpoint uses its exact attempt/session resource URL and
-omits a Working project selector, including when the lesson has a practice
-project. The existing Learning admission resolves and verifies that saved source,
-learner and pin before the original checkpoint writer. Ordinary Working visual
-saves retain their project selector. The same captured retry body, player/actor
-fences, fresh revision read and CAS writer remain unchanged.
-
-Original checkpoint/cue methods retain their implementation. Exact before-source
-runs exposed a prior hidden-pause race: a genuine second hide was dropped while
-an earlier pause waited for fresh checkpoint authority. The existing pause owner
-now compares a local shown-to-hidden revision when settling, and honours only a
-newer hide on the same alive selection still hidden. Phase events do not enqueue
-repeated pauses; no prior uncertain checkpoint/request is replayed. This is a
-necessary lifecycle correction, not a different player or progress protocol.
+Learning v2 phase 2 (F2) retired the server side of the Main lesson
+presentation: the `visual.checkpoint` action, its POST route, the
+learning-scoped visual resource route, the presentation cue and the Main
+question/cue/ACK coordinator no longer exist. A diagram is read only through the
+plain `/api/vibe64/training/attempts/:attemptId/visuals/:visualId` resource
+route (`visual-resource.read`); there is no lesson-scoped checkpoint writer.
+The source-less Main Preview registration, its Learning checkpoint client and
+its cue/pause methods have no server counterpart any more and are removed with
+the Learning mode client in F3. Ordinary Working visual saves are unchanged.
 
 Focused evidence retains the original app-index assertion, project-opening
 assertions and command/attention fixtures. Actual compiled setup/templates prove
@@ -252,12 +240,10 @@ facilities are its existing readonly scope, Preview handle, actual voice session
 one receipt transport and product error ref. Navigation, genuine gestures,
 question capture and workspace observations remain with their original owners.
 
-This move retains Colleague compatibility. Main supplies its canonical delivered
-question, cue and receipt transport through its existing selected presentation
-binding. No selected attempt, saved
-progress or flattened Main history is promoted into those facts. Main speech now reuses its original voice controller with the actual Learning
-transport scope described below; an empty project path cannot supply that scope. Native/source-less visual
-and installed/browser/audio acceptance remain open.
+The Main lesson cue, question and receipt transport were retired on the server
+in F2, so only Colleague's own cue use remains meaningful; the client cue
+module is removed in F3 apart from the navigation part, which already lives in
+Colleague.
 
 ## Retired lesson voice
 
@@ -275,9 +261,8 @@ mounted/actor/client scope, the original host callback getter, host mobile
 preparation, original acknowledgement operation and error ref. Its actor-reset
 order and unmount fence remain at the original consumer sites. Cached receipts
 retry acknowledgement without repeating navigation; mobile preparation remains
-outside that cache and only its original async branch yields. Main attaches the same navigation owner with its captured initiating client,
-typed browser/native identity and canonical cue/ACK fields from the original
-server coordinator. Actual browser/native acceptance remains separate.
+outside that cache and only its original async branch yields. Colleague is
+the only navigation coordinator; the Main server coordinator was retired in F2.
 
 
 ## Actual viewer and retained Learning identity
@@ -287,8 +272,8 @@ its composite actorKey for transport, draft and learner/attempt isolation. The
 Preview compares only that captured viewer field with the current global viewer,
 while retaining both keys in its selected-resource and held-read retirement fence.
 It does not parse or replace the composite key, mutate Working identities or
-infer authorization. The original server resource/checkpoint owners still check
-fresh learner/attempt/pin/session access. The compiled Preview regression receives
+infer authorization. The plain visual resource read still checks fresh
+learner/attempt access; the checkpoint owner was retired in F2. The compiled Preview regression receives
 the identity from the actual same Main runtime, with observation disabled in the
 fixture; this identity proof is separate from installed/native/browser acceptance.
 
@@ -524,11 +509,13 @@ project is the actor's own practice project with an active attempt; every other
 save is the editor's plain save. Agent or other-route writes stay unledgered and
 still void a code attempt. Hosted Online does not install the owner yet.
 
-Still lesson-scoped until F2/F3: the source-less teacher's Session routes,
-terminals `/agent-session`, the voice learning socket, the Training visual route
-and `featureRoutes` `learningActions`. Client code that still calls
-`/api/learning` for Database, Architecture or old Learning mode is dead transport
-removed in F3.
+F2 retired the remaining lesson-scoped server transport: the source-less
+teacher's Session routes, the voice learning socket, the learning-scoped Training
+visual route and the teacher actions. No server route registers an
+`/api/learning/<attempt>/…` path any more; the `learningAttemptId` reads left in
+the terminal socket and action context serve no route. Client code that still
+calls `/api/learning` for Database, Architecture or old Learning mode is dead
+transport removed in F3.
 
 Evidence: `tests/server/vibe64LearningDashboardRoutes.unit.test.js` (no Dashboard
 action declares lesson access; no lesson URLs), `vibe64TrainingCodePracticals`
