@@ -70,34 +70,36 @@ const {
         :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
       >
         <div class="studio-home-shell-title-area">
-          <v-menu location="bottom start">
-            <template #activator="{ props: menuProps }">
-              <v-btn
-                class="studio-home-shell-project-selector"
-                variant="text"
-                v-bind="menuProps"
-                :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
-              >
-                <span>{{ projectTitle || "Project" }}</span>
-                <v-icon :icon="mdiChevronDown" size="18" />
-              </v-btn>
-            </template>
-            <v-list density="compact" min-width="240">
-              <v-list-item
-                v-for="project in switcherProjects"
-                :key="project.slug"
-                :active="project.slug === projectSlug"
-                :title="projectDisplayName(project)"
-                :subtitle="project.projectRoot"
-                @click="openProject(project, $event)"
-              />
-              <v-list-item
-                v-if="switcherProjects.length === 0"
-                :subtitle="projectLoadError || 'No open projects found.'"
-                title="Projects"
-              />
-            </v-list>
-          </v-menu>
+          <div class="studio-home-shell-project-name">
+            <v-menu location="bottom start">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  class="studio-home-shell-project-selector"
+                  variant="text"
+                  v-bind="menuProps"
+                  :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
+                >
+                  <span>{{ projectTitle || "Project" }}</span>
+                  <v-icon :icon="mdiChevronDown" size="18" />
+                </v-btn>
+              </template>
+              <v-list density="compact" min-width="240">
+                <v-list-item
+                  v-for="project in switcherProjects"
+                  :key="project.slug"
+                  :active="project.slug === projectSlug"
+                  :title="projectDisplayName(project)"
+                  :subtitle="project.projectRoot"
+                  @click="openProject(project, $event)"
+                />
+                <v-list-item
+                  v-if="switcherProjects.length === 0"
+                  :subtitle="projectLoadError || 'No open projects found.'"
+                  title="Projects"
+                />
+              </v-list>
+            </v-menu>
+          </div>
           <div
             id="studio-home-shell-create-session"
             class="studio-home-shell-create-session-host"
@@ -314,6 +316,12 @@ const {
   gap: 0.42rem;
   min-width: 0;
   padding-left: 1rem;
+}
+
+.studio-home-shell-project-name {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .studio-home-shell-project-selector {
@@ -663,11 +671,46 @@ const {
     padding-inline: var(--v64-space-3) var(--v64-space-1);
   }
 
+  /* The session controls teleported beside the name keep their size; only
+     the name's own box is clipped and measured, so it gives way first. */
   .studio-home-shell-title-area {
+    flex: 1 1 auto;
+    padding-left: 0;
+  }
+
+  .studio-home-shell-project-name {
     container-type: inline-size;
     flex: 1 1 auto;
     overflow: hidden;
-    padding-left: 0;
+  }
+
+  /* The GitHub actor is a status chip: on phones it shows its icon, keeping
+     the account in its tooltip and accessible name, so the project name gets
+     the room. */
+  .studio-home-shell-github-actor-host {
+    flex: 0 0 auto;
+  }
+
+  .studio-home-shell-github-actor-host :deep(.studio-home-shell-session-github-actor) {
+    padding: 0;
+  }
+
+  .studio-home-shell-github-actor-host :deep(.studio-home-shell-session-github-actor span) {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  /* With the project pane shown, the bar belongs to the project's controls
+     (Preview's toolbar, the pane switch): the chat's session controls (new
+     session, Git branch, GitHub actor) come back with the chat pane. */
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-create-session-host,
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-local-remotes-host,
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-github-actor-host {
+    display: none;
   }
 
   .studio-home-shell-project-selector {

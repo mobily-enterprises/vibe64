@@ -89,9 +89,11 @@ V64-START-02**. Hover the header name on a computer to see the address too.
 Colleague uses the same name.
 
 On a phone the header name shortens with **…** so it never covers the other
-header buttons. While Preview's controls are showing on a very narrow phone
-there may be no room for it at all; the name is then hidden, and **Show chat**
-brings it back. On phones narrower than about 480px the button that switches
+header buttons. While Preview's controls are showing on a very narrow phone, or
+beside a local project's Git branch and GitHub controls on a phone narrower than
+about 540px, there may be no room for it at all; the name is then hidden rather
+than squeezed. With Preview shown, **Show chat** brings it back; otherwise turn
+the phone sideways or use a wider screen. On phones narrower than about 480px the button that switches
 between **Preview** and **Dashboard** shows that pane's icon instead of the word
 (its name is still **Go to dashboard** or **Go to preview**).
 

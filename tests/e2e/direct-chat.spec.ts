@@ -1777,6 +1777,7 @@ async function mockDirectChat(page: Page, {
   agentActive = false,
   agentTurn = null,
   conversationPage = null,
+  creation = {},
   conversationLog = [],
   includeWorktreePaths = false,
   onMessage = () => undefined,
@@ -1785,6 +1786,7 @@ async function mockDirectChat(page: Page, {
   onTemporaryDelete = () => undefined,
   onTemporaryPoll = () => null,
   onTemporaryTurn = () => undefined,
+  sessionMetadata = {},
   workspaceSetup = null,
   workState = {
     operation: null,
@@ -1800,6 +1802,7 @@ async function mockDirectChat(page: Page, {
     limit: number;
   }) => Record<string, unknown> | Promise<Record<string, unknown>>) | null;
   conversationLog?: Record<string, unknown>[];
+  creation?: Record<string, unknown>;
   includeWorktreePaths?: boolean;
   onMessage?: (body: Record<string, unknown>) => unknown | Promise<unknown>;
   onSave?: (body: Record<string, unknown>, sessionId: string) => unknown | Promise<unknown>;
@@ -1807,6 +1810,7 @@ async function mockDirectChat(page: Page, {
   onTemporaryDelete?: (conversationId: string) => unknown | Promise<unknown>;
   onTemporaryPoll?: () => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   onTemporaryTurn?: (body: Record<string, unknown>) => unknown | Promise<unknown>;
+  sessionMetadata?: Record<string, unknown>;
   workspaceSetup?: Record<string, unknown> | null;
   workState?: Record<string, unknown>;
 } = {}) {
@@ -1815,6 +1819,7 @@ async function mockDirectChat(page: Page, {
     agentActive,
     agentTurn,
     includeWorktreePaths,
+    metadata: sessionMetadata,
     workspaceSetup
   });
   const sessions = [
@@ -1964,7 +1969,8 @@ async function mockDirectChat(page: Page, {
     await fulfillJson(route, {
       creation: {
         canCreate: true,
-        mode: "direct"
+        mode: "direct",
+        ...creation
       },
       limits: {
         openSessionCount: 1
@@ -2041,6 +2047,7 @@ function directSession({
   agentActive = false,
   agentTurn = null,
   includeWorktreePaths = false,
+  metadata = {},
   sessionId = SESSION_ID,
   sessionName = "Direct chat",
   workspaceSetup = null
@@ -2048,6 +2055,7 @@ function directSession({
   agentActive?: boolean;
   agentTurn?: Record<string, unknown> | null;
   includeWorktreePaths?: boolean;
+  metadata?: Record<string, unknown>;
   sessionId?: string;
   sessionName?: string;
   workspaceSetup?: Record<string, unknown> | null;
@@ -2084,13 +2092,16 @@ function directSession({
       sessionId: SESSION_ID,
       updatedAt: createdAt
     },
-    metadata: includeWorktreePaths
-      ? {
-          source_kind: "session_clone",
-          source_path: sourcePath,
-          source_path_authority: "managed_session_source"
-        }
-      : {},
+    metadata: {
+      ...(includeWorktreePaths
+        ? {
+            source_kind: "session_clone",
+            source_path: sourcePath,
+            source_path_authority: "managed_session_source"
+          }
+        : {}),
+      ...metadata
+    },
     revision: 1,
     sessionId,
     sessionName,
@@ -2337,18 +2348,27 @@ for (const width of [320, 390, 820]) {
 }
 
 // A practice project is named by its lesson, not its training-<attempt> slug,
-// and on a phone the project name, the session controls, the pane switch and
-// the account/Colleague buttons share the app bar without overlapping, with the
-// chat shown and with the project pane shown.
+// and on a phone the project name, the open session's controls, the pane switch
+// and the account/Colleague buttons share the app bar without overlapping or
+// being clipped, with the chat shown and with the project pane shown. "session"
+// opens a practice session with its new-session button; "repository" adds the
+// local Git branch control and the GitHub actor, the fullest phone header.
 const PRACTICE_SLUG = `training-${"0123456789abcdef".repeat(2)}`;
-for (const width of [320, 360, 390, 540]) {
-  test(`@phone-header practice project name fits the phone app bar at ${width}px`, async ({ page }, info) => {
+for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "session"], [width, "repository"]] as const)) {
+  test(`@phone-header practice project name fits the phone app bar at ${width}px with the ${header} controls`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 800 });
-    await mockDirectChat(page);
+    const repository = header === "repository";
+    await mockDirectChat(page, {
+      creation: { showCreateAction: true },
+      sessionMetadata: repository ? { source_remote_url: "https://github.com/example/practice.git", session_git_command_actor_scope: "local" } : {}
+    });
     const practiceProject = { ...readyProjectSelectionPayload.projects[0], runtime: { open: true },
+      ...(repository ? { repositoryMode: "local_source" } : {}),
       practice: { learnerKey: "NDI", attemptId: "01234567-89ab-cdef-0123-456789abcdef", lessonCode: "REFUSE-EMPTY-TITLES", mine: true } };
     await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, { ...readyProjectSelectionPayload,
       currentProject: practiceProject, projects: [practiceProject] }));
+    await routeApiEndpoint(page, "/vibe64/repository/remote", route => fulfillJson(route, { ok: true, branch: "main",
+      remotes: [{ name: "origin" }], upstream: "origin/main", push: "origin/main", incoming: 2, outgoing: 1 }));
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -2356,26 +2376,67 @@ for (const width of [320, 360, 390, 540]) {
     const selector = page.locator(".studio-home-shell-project-selector");
     await expect(selector).toContainText("Practice: REFUSE-EMPTY-TITLES");
     await expect(selector).not.toContainText(PRACTICE_SLUG);
+    const sessionControls = {
+      create: page.locator("#studio-home-shell-create-session .studio-ai-sessions__create-button"),
+      ...(repository ? {
+        branch: page.locator("#studio-home-shell-local-remotes .local-remotes__branch"),
+        githubActor: page.locator("#studio-home-shell-github-actor .studio-home-shell-session-github-actor")
+      } : {})
+    };
     for (const pane of ["chat", "project"]) {
       if (pane === "project") await page.getByRole("button", { name: "Show project", exact: true }).click();
       await expect(page.locator(".studio-home-shell-chat-toggle")).toBeVisible();
+      // The chat's session controls are in the bar with the chat; the project
+      // pane gives the bar to Preview's controls and the pane switch.
+      for (const control of Object.values(sessionControls)) {
+        if (pane === "chat") await expect(control).toBeVisible();
+        else await expect(control).toBeHidden();
+      }
+      if (repository && pane === "chat") {
+        await expect(sessionControls.githubActor!).toHaveAttribute("title", "GitHub commands for this session run as local GitHub.");
+        await expect(sessionControls.githubActor!).toHaveAccessibleName(/local GitHub/u);
+      }
       const boxes = await page.evaluate(() => {
-        const bar = document.querySelector("[data-testid=jskit-shell-app-bar]");
-        // The title area clips the project selector, so its box is what must not overlap.
-        const selectors = [".studio-app-shell-layout__learning-plate", ".studio-home-shell-title-area",
-          ".studio-home-shell-create-session-host", ".studio-home-shell-local-remotes-host", ".studio-home-shell-github-actor-host",
-          ".studio-home-shell-chat-toggle", ".studio-home-shell-preview-toolbar-host", ".studio-home-shell-project-mobile-action",
-          ".studio-app-shell-layout__top-right"];
-        return selectors.flatMap(name => Array.from(bar?.querySelectorAll(name) || []).map(element => {
+        const bar = document.querySelector("[data-testid=jskit-shell-app-bar]")!;
+        // Each control's visible part: its rect cut by every clipping ancestor
+        // inside the bar. The project name is measured through the wrapper that
+        // clips it; the session controls must be shown whole.
+        const visibleRect = (element: Element) => {
           const rect = element.getBoundingClientRect();
-          return { name, left: rect.left, right: rect.right, width: rect.width, height: rect.height,
-            visible: rect.width > 0 && rect.height > 0 && getComputedStyle(element).display !== "none" };
-        })).filter(box => box.visible);
+          let { left, right } = rect;
+          for (let parent = element.parentElement; parent && parent !== bar.parentElement; parent = parent.parentElement) {
+            if (getComputedStyle(parent).overflowX === "visible") continue;
+            const clip = parent.getBoundingClientRect();
+            left = Math.max(left, clip.left);
+            right = Math.min(right, clip.right);
+          }
+          return { left: rect.left, right: rect.right, width: rect.width, height: rect.height,
+            visibleLeft: left, visibleRight: Math.max(left, right) };
+        };
+        const parts: Record<string, string> = {
+          plate: ".studio-app-shell-layout__learning-plate",
+          projectName: ".studio-home-shell-project-name",
+          create: "#studio-home-shell-create-session .studio-ai-sessions__create-button",
+          branch: "#studio-home-shell-local-remotes .local-remotes__branch",
+          githubActor: "#studio-home-shell-github-actor .studio-home-shell-session-github-actor",
+          chatToggle: ".studio-home-shell-chat-toggle",
+          previewToolbar: ".studio-home-shell-preview-toolbar-host",
+          paneSwitch: ".studio-home-shell-project-mobile-action",
+          account: ".studio-app-shell-layout__top-right"
+        };
+        return Object.entries(parts).flatMap(([name, query]) => Array.from(bar.querySelectorAll(query)).map(element => ({
+          name, ...visibleRect(element), shown: getComputedStyle(element).display !== "none"
+        }))).filter(box => box.shown && box.width > 0 && box.height > 0);
       });
       await page.screenshot({ path: info.outputPath(`practice-header-${pane}-${width}.png`), animations: "disabled" });
-      // The name is readable, or (only beside Preview's controls on the narrowest
-      // phones) hidden rather than squeezed to a sliver.
-      if (pane === "chat" || width >= 390) await expect(selector).toBeVisible();
+      for (const name of Object.keys(sessionControls)) {
+        expect(boxes.some(box => box.name === name), `${name} is in the app bar only with the chat pane`).toBe(pane === "chat");
+      }
+      // The name is readable, or (beside Preview's controls on the narrowest
+      // phones, or beside the full repository controls below 540px) hidden
+      // rather than squeezed to a sliver.
+      const nameShownFrom = pane === "project" ? 390 : repository ? 540 : 0;
+      if (width >= nameShownFrom) await expect(selector).toBeVisible();
       if (await selector.isVisible()) {
         const label = await selector.locator("span").first().evaluate(element => element.getBoundingClientRect().width);
         expect(label, `the project name stays readable with the ${pane} pane`).toBeGreaterThanOrEqual(44);
@@ -2383,10 +2444,15 @@ for (const width of [320, 360, 390, 540]) {
       for (const box of boxes) {
         expect(box.left, `${box.name} starts inside the phone app bar`).toBeGreaterThanOrEqual(0);
         expect(box.right, `${box.name} ends inside the phone app bar`).toBeLessThanOrEqual(width + 0.5);
+        if (Object.keys(sessionControls).includes(box.name)) {
+          expect(box.visibleLeft, `${box.name} is not clipped on the left with the ${pane} pane`).toBeLessThanOrEqual(box.left + 0.5);
+          expect(box.visibleRight, `${box.name} is not clipped on the right with the ${pane} pane`).toBeGreaterThanOrEqual(box.right - 0.5);
+        }
       }
-      for (const [index, left] of boxes.entries()) {
-        for (const right of boxes.slice(index + 1)) {
-          const overlap = Math.min(left.right, right.right) - Math.max(left.left, right.left);
+      const visible = boxes.filter(box => box.visibleRight - box.visibleLeft > 0.5);
+      for (const [index, left] of visible.entries()) {
+        for (const right of visible.slice(index + 1)) {
+          const overlap = Math.min(left.visibleRight, right.visibleRight) - Math.max(left.visibleLeft, right.visibleLeft);
           expect(overlap, `${left.name} and ${right.name} do not overlap with the ${pane} pane`).toBeLessThanOrEqual(0.5);
         }
       }

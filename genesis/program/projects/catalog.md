@@ -268,9 +268,13 @@ else "Practice project" for a bare practice slug. Headers, the project
 switcher, both Practice lists and Online Management use it; Colleague's
 protocol names practice projects the same way. On phones (≤600px) the project
 page heading takes only the room the header actions leave: the pane controls
-keep their size, the selector shortens with an ellipsis inside a clipped title
-area, a `@container` rule hides it below 4rem rather than show a sliver, and at
-≤480px the next-pane button becomes a pane icon that keeps its "Go to …" name. The workspace listing
+and the session controls teleported into the title area (new session, local Git
+branch, GitHub actor) keep their size and are never clipped; only the selector's
+own `.studio-home-shell-project-name` wrapper is clipped and is the `@container`
+that hides the selector below 4rem rather than show a sliver. The GitHub actor
+shows its icon (account kept in its title and accessible name), the session
+controls leave the bar while the project pane is shown, and at ≤480px the
+next-pane button becomes a pane icon that keeps its "Go to …" name. The workspace listing
 stays unfiltered for internal callers; a listing for a viewer omits other learners' practice
 projects (`practiceProjectsForViewer`), and the presentation splits Practice from
 ordinary projects. `practiceProjectAccessBlock` refuses a non-owner whose learner
