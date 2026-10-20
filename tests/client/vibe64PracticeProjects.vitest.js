@@ -93,8 +93,8 @@ describe("project picker Practice section", () => {
     ]);
     const ctx = Vue.reactive({ busy: false, deletingPracticeSlug: "", practiceProjects, projects: [], deletePracticeProject,
       mdiDeleteOutline: "icon", openPracticeProject: (slug) => router.push(`/app/project/${slug}`),
-      displayError: "", independentContent: false, loadingVisible: false, runtimeReady: true, pickerVisible: true,
-      retainIndependentContent: false, contentActive: false, projectsRoot: "~/vibe64", newProjectName: "", creating: false,
+      displayError: "", selectionInitialLoading: false, runtimeReady: true, selectedSlotVisible: false, pickerVisible: true,
+      projectsRoot: "~/vibe64", newProjectName: "", creating: false,
       selectingSlug: "", $props: {}, $slots: {} });
     const tree = render.call(null, ctx, [], ctx, ctx, ctx, ctx);
     const nodes = [];

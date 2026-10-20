@@ -83,31 +83,19 @@ address. If the error persists, report the project, session and exact error.
 On phones, open the chat pane to find the same control. Colleague can explain
 recovery and open the session; the person selects **Reload chat**.
 
-## Working and Learning session navigation
+## Lessons and session navigation
 
-The prepared mode filter uses the same session tabs and chat panel for Working
-and Learning sessions. Older sessions without a purpose remain Working. Hiding
-a session from navigation preserves its running work, mounted conversation and
-draft; it does not stop or archive anything. A selected session of the other
-purpose is hidden without opening a different session automatically. The yellow
-**L** plate in the app header switches the filter (see
-[Choosing lessons and Learning conversations](learning-mode-ui.md)). The filter does not create a lesson, authorize an
-attempt or turn an ordinary session into a teacher. Desktop and mobile use the
-same navigation contract. Colleague can explain the mode; changing it does not
-authorize starting or ending a lesson.
+The session tabs and chat panel list the project's ordinary sessions only; there
+is no Working/Learning filter and no Learning mode. The **L** button opens the
+Learning environment above the page without changing the selected session (see
+[Choosing lessons and courses](learning-mode-ui.md)).
 
-Each mode remembers
-its own selected conversation. A Working conversation that finishes opening
-while you view Learning stays with its original project and does not replace the
-lesson you are viewing. Switching modes preserves hidden conversations and
-unsent drafts; it does not stop their work.
-
-Learning mode no longer lists lesson conversations: the lesson teacher
+The lesson teacher
 conversation was retired and Colleague teaches every lesson from its steps in
 the Learning environment. A lesson's practice sessions are ordinary sessions of
-its practice project and appear in Working. Colleague can explain this; it
-cannot grant access or repair saved identities. Ordinary **New session** and
-**Archive session** are Working operations, not ways to start or end a lesson.
+its practice project and appear with its other sessions. Colleague can explain this; it
+cannot grant access or repair saved identities. **New session** and
+**Archive session** are ordinary session operations, not ways to start or end a lesson.
 These rules apply on desktop and mobile. Start, resume and end lessons through
 Learning → **Courses** and Colleague instead.
 
@@ -232,7 +220,7 @@ the reported error; it cannot grant another learner's access or silently replace
 the saved lesson with newer content.
 
 Start such a lesson from Learning → **Courses** (see
-[Choosing lessons and Learning conversations](learning-mode-ui.md)); the ordinary
+[Choosing lessons and courses](learning-mode-ui.md)); the ordinary
 **New session** control still creates a working session with source.
 
 ## Pin a source session

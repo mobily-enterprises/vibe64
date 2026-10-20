@@ -5,63 +5,42 @@ import { Vibe64Colleague } from "@local/vibe64-colleague/client";
 import { learningPanelMatches } from "@local/vibe64-colleague/shared/learning-focus";
 import { Vibe64ColleagueAvatar } from "@local/vibe64-voice/client";
 import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAvatarPreferences.js";
-import { executeTrainingPresentationOperation, trainingPresentationReceipt } from "@local/vibe64-training/client/presentation-operation";
-import { useTrainingWorkspaceObservation } from "@local/vibe64-training/client/workspace-observation";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import {
-  VIBE64_ASSISTANT_VIEWER_KEY,
   VIBE64_BROWSER_NAVIGATION_KEY,
   VIBE64_COLLEAGUE_DATABASE_KEY,
   VIBE64_COLLEAGUE_INTEGRATIONS_KEY,
   VIBE64_COLLEAGUE_LAYOUT_KEY,
   VIBE64_COLLEAGUE_PLAN_KEY,
-  VIBE64_COLLEAGUE_PREVIEW_KEY,
   VIBE64_COLLEAGUE_VIEW_KEY,
-  VIBE64_LEARNING_KEY,
-  VIBE64_LEARNING_NAVIGATION_KEY
+  VIBE64_LEARNING_KEY
 } from "@/lib/vibe64AssistantHost.js";
 
-const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY);
 const view = inject(VIBE64_COLLEAGUE_VIEW_KEY);
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY);
-const preview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY);
 const database = inject(VIBE64_COLLEAGUE_DATABASE_KEY);
 const integrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);
 const plan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
 const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null);
-const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
 // The shared Learning environment (L) controller; absent in hosts without it.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
-const actor = computed(() => viewer?.actorKey || "");
 const route = useRoute();
 const router = useRouter();
 const { avatars } = useVibe64LocalAvatarPreferences();
 const voiceVisual = ref(null);
 
 const focus = computed(() => {
-  const learningMode = route.query.mode === "learning";
-  const learning = learningMode ? view.value?.learningBinding : null;
-  // A Learning lesson owns the focus: a project-less lesson has no project,
-  // not the editor page's selected project.
-  const projectSlug = learning ? learning.noExercise === false ? learning.sourceProjectSlug : "" : projectSlugFromRoute(route);
+  const projectSlug = projectSlugFromRoute(route);
   const current = view.value?.projectSlug === projectSlug ? view.value : null;
   const pane = layout.value?.ready && layout.value.projectSlug === projectSlug
-    ? layout.value.projectVisible
-      ? learningMode ? current?.pane || (route.query.learningView === "learning" ? "lessons" : "")
-        : route.path.split("/dashboard/")[1]?.split("/")[0] || "preview"
-      : "chat"
+    ? layout.value.projectVisible ? route.path.split("/dashboard/")[1]?.split("/")[0] || "preview" : "chat"
     : "";
-  const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "",
-    pane, learningMode };
-  if (learningMode) {
-    result.learningView = current?.learningView || (route.query.learningView === "learning" ? "learning" : "workspace");
-    result.learningContent = learning ? "active" : "picker";
-    if (learning?.learningAttemptId) result.learningAttemptId = learning.learningAttemptId;
-  } else if (learningController.value) {
+  const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "", pane };
+  if (learningController.value) {
     // L above the app: open state, its surface, and the current lesson step
     // (kept while L is minimised so Colleague can teach that step).
     const controller = learningController.value;
@@ -94,8 +73,6 @@ const focus = computed(() => {
   return result;
 });
 
-const selection = { projectSlug: computed(() => projectSlugFromRoute(route)), restoring: ref(false), error: ref("") };
-const settleWorkspace = useTrainingWorkspaceObservation({ actor, view, layout, focus, selection });
 const request = (url, options) => getHttpWebClient().request(resolveStudioRequestUrl(url), options);
 
 const paneSuffix = Object.freeze({
@@ -135,21 +112,10 @@ function waitForNavigation(predicate, isCurrent, failure) {
 
 function focusMatches(command, value) {
   if (!learningPanelMatches(command, value)) return false;
-  if (command.learningMode !== undefined) {
-    if (value.learningMode !== command.learningMode) return false;
-    if (command.learningMode && (value.learningView !== command.learningView ||
-        command.learningContent && value.learningContent !== command.learningContent ||
-        command.learningAttemptId && value.learningAttemptId !== command.learningAttemptId)) return false;
-    // Outside Learning mode learningAttemptId is the Learning environment's lesson.
-    if (!command.learningMode && (value.learningView || value.learningContent)) return false;
-  }
-  if (command.projectSlug && command.learningContent !== "picker" && value.projectSlug !== command.projectSlug) return false;
+  if (command.projectSlug && value.projectSlug !== command.projectSlug) return false;
   if (command.sessionId && value.sessionId !== command.sessionId) return false;
   if (command.conversationId !== undefined && value.conversationId !== command.conversationId) return false;
-  const expectedPane = command.presentation
-    ? command.pane || "preview"
-    : command.learningView === "learning" ? "lessons" : command.pane ||
-      (!command.sessionId ? "preview" : "");
+  const expectedPane = command.pane || (!command.sessionId ? "preview" : "");
   if (expectedPane && command.projectSlug && value.pane !== expectedPane) return false;
   if (command.databaseView && (value.databaseScreen !== "workspace" || value.databaseView !== command.databaseView)) return false;
   if (command.databaseTable && value.databaseTable !== command.databaseTable) return false;
@@ -186,7 +152,7 @@ async function navigate(command = {}) {
   const suffix = command.pane && command.pane !== "preview" ? paneSuffix[command.pane] : "";
   if (command.pane && command.pane !== "preview" && !suffix) throw new Error("This project view is unavailable.");
   const query = { ...route.query };
-  if (command.sessionId && command.learningMode !== true) query.session = command.sessionId;
+  if (command.sessionId) query.session = command.sessionId;
   if (command.databaseView) query.databaseView = command.databaseView;
   if (command.pane === "integrations") {
     query.integrationEnvironment = command.integrationEnvironment || "development";
@@ -195,7 +161,6 @@ async function navigate(command = {}) {
   }
   await router.push({ path: projectAppPath(command.projectSlug, suffix), query });
   if (!isCurrent()) throw new Error("The browser navigation target changed before it opened.");
-  await learningNavigation?.value?.(command, isCurrent);
   await nextTick();
 
   const expectedSession = command.sessionId || "";
@@ -204,7 +169,7 @@ async function navigate(command = {}) {
       view.value?.sessionId === expectedSession && view.value?.ready, isCurrent,
     "The requested session did not become ready.");
   }
-  if (expectedSession && command.learningMode !== true) {
+  if (expectedSession) {
     await view.value?.openConversation(command.conversationId || "", isCurrent);
   }
   if (command.pane || !command.sessionId) layout.value?.showProject?.();
@@ -231,24 +196,9 @@ async function navigate(command = {}) {
     await plan.value.openPlan(command.planView, isCurrent);
   }
 
-  let presentation;
-  if (command.presentation) {
-    await waitForNavigation(() => preview.value?.projectSlug === command.projectSlug &&
-      preview.value?.sessionId === expectedSession && preview.value?.presentation, isCurrent,
-    "The requested lesson presentation did not become available.");
-    const handle = preview.value;
-    const player = handle.presentation;
-    const result = await executeTrainingPresentationOperation(player, command.presentation);
-    if (!isCurrent() || preview.value !== handle || preview.value?.presentation !== player) {
-      throw new Error("The lesson presentation changed while its operation was running.");
-    }
-    presentation = trainingPresentationReceipt(result);
-  }
   await waitForNavigation(() => focusMatches(command, focus.value), isCurrent,
     "The browser did not settle on the requested view.");
-  // Same contract as the hosted navigator: a presentation operation returns its
-  // focus with the player receipt; ordinary navigation returns the focus itself.
-  return presentation ? { focus: { ...focus.value }, presentation } : { ...focus.value };
+  return { ...focus.value };
 }
 
 if (browserNavigation) browserNavigation.value = navigate;
@@ -263,7 +213,6 @@ onBeforeUnmount(() => {
     :focus="focus"
     :navigate="navigate"
     :request="request"
-    :settle-workspace="settleWorkspace"
     @voice-visual="voiceVisual = $event"
   >
     <template #avatar="{ state }">

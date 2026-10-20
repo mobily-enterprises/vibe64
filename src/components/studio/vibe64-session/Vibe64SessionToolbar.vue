@@ -31,7 +31,6 @@
           />
           <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
           <v-icon
-            v-if="sessionItem.purpose !== 'learning'"
             class="studio-ai-sessions__repository-state studio-ai-sessions__repository-state--desktop"
             :class="`studio-ai-sessions__repository-state--${repositoryState(sessionItem)}`"
             :icon="repositoryStateIcon(sessionItem)"
@@ -50,7 +49,7 @@
           />
         </span>
         <span
-          v-if="sessionItem.sessionId === selectedSessionId && sessionItem.purpose !== 'learning'"
+          v-if="sessionItem.sessionId === selectedSessionId"
           class="studio-ai-sessions__tab-close-slot"
         >
           <v-btn
@@ -152,7 +151,6 @@ import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
 import { vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
-import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   visibleVibe64ToolbarSessions
@@ -206,7 +204,6 @@ const infoSessionId = ref("");
 const renamingSession = ref(null);
 const renamingSessionsApiPath = ref("");
 const sessionTooltip = inject(VIBE64_SESSION_TOOLTIP_KEY);
-const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -214,9 +211,7 @@ const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 function renameSession(session) {
-  const sessionsApiPath = session.purpose === "learning"
-    ? (session.learningAttemptId ? `/api/learning/${session.learningAttemptId}/vibe64/sessions` : "")
-    : (props.toolbar.workingSessionsApiPath || props.toolbar.sessionsApiPath);
+  const sessionsApiPath = props.toolbar.sessionsApiPath;
   if (!sessionsApiPath) return;
   renamingSessionsApiPath.value = sessionsApiPath;
   infoSessionId.value = "";
@@ -243,8 +238,7 @@ function sessionInfoFacts(sessionItem) {
   const selection = sessionItem.assistantSelection || {};
   const assistant = VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === selection.engineId);
   const details = vibe64SessionInfoFacts(sessionItem)
-    .filter((fact) => ["session", "branch", "created-at"].includes(fact.key) &&
-      (sessionItem.purpose !== "learning" || fact.key !== "branch"))
+    .filter((fact) => ["session", "branch", "created-at"].includes(fact.key))
     .map((fact) => {
       const createdAt = fact.key === "created-at" ? Date.parse(fact.value) : NaN;
       return {
@@ -264,21 +258,16 @@ function sessionInfoFacts(sessionItem) {
       value: assistant?.label || selection.engineId
     },
     { key: "model", label: "Model", value: selection.modelId },
-    ...(sessionItem.purpose === "learning" ? [] : [
-      { key: "saved-work", label: "Work", value: repositoryStateLabel(sessionItem) }
-    ]),
+    { key: "saved-work", label: "Work", value: repositoryStateLabel(sessionItem) },
     ...details
   ].filter((fact) => fact.value);
 }
 
-function selectSession(sessionId = "", event) {
-  const owner = learnerGestures?.value;
-  const ticket = props.active ? owner?.begin(event, "session-select", { sessionId }) : null;
+function selectSession(sessionId = "") {
   sessionTooltip.suppressedSessionId.value = sessionId;
   infoSessionId.value = "";
   emit("select-session", sessionId);
   props.toolbar.selectSession?.(sessionId);
-  if (ticket) void owner.finish(ticket);
 }
 
 function sessionTabLabel(sessionItem = {}) {
@@ -338,9 +327,6 @@ function repositoryStateIcon(sessionItem = {}) {
 function sessionTabAriaLabel(sessionItem = {}) {
   if (sessionItem.archiving) {
     return `${sessionTabLabel(sessionItem)}. Inactive. Archiving session.`;
-  }
-  if (sessionItem.purpose === "learning") {
-    return `${sessionTabLabel(sessionItem)}. Learning session.`;
   }
   return `${sessionTabLabel(sessionItem)}. ${repositoryStateLabel(sessionItem)}.`;
 }

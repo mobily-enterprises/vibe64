@@ -82,9 +82,6 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
   const sourceOperationsSuspended = computed(() => (
     readRefOrGetterValue(context.value.sourceOperationsSuspended) === true
   ));
-  // A practice lesson reads its Git log and current changes only; checking,
-  // applying updates and saving keep no lesson URL.
-  const lessonReadOnly = computed(() => context.value.lessonDashboard === true);
   let updateAccessRevision = 0;
 
   function requestContextKey() {
@@ -251,7 +248,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
         !disposed &&
         refresh.contextKey === requestContextKey() &&
         activeView.value === "changes" &&
-        (!sourceOperationsSuspended.value || lessonReadOnly.value)
+        !sourceOperationsSuspended.value
       ) {
         void requestChangesRefresh();
       }
@@ -431,7 +428,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
   }
 
   async function checkForUpdates({ force = true } = {}) {
-    if (!sessionId.value || updates.applying || sourceOperationsSuspended.value || lessonReadOnly.value) {
+    if (!sessionId.value || updates.applying || sourceOperationsSuspended.value) {
       return false;
     }
     const contextKey = updateCheckContextKey();
@@ -625,7 +622,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
           if (disposed || initialContext !== requestContextKey()) {
             return;
           }
-        } else if (!sourceOperationsSuspended.value || lessonReadOnly.value) {
+        } else if (!sourceOperationsSuspended.value) {
           await requestChangesRefresh();
           if (disposed || initialContext !== requestContextKey()) {
             return;
@@ -751,7 +748,6 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     selectVersionFile,
     sessionId,
     sourceOperationsSuspended,
-    lessonReadOnly,
     updates,
     versionDiff,
     versionFiles

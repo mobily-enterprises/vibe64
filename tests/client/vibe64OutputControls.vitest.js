@@ -830,22 +830,12 @@ it("Preview diagnostic browser payload passes the HTTP schema with project autho
   } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
 });
 
-it("practice output controls use captured Learning reads and named Stop while Working Ctrl-C keeps raw FIFO input", async () => {
+it("Working Ctrl-C sends raw FIFO input through the output terminal socket", async () => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
-  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { vibe64OutputTerminalWebSocketUrl } = await import("../../src/lib/vibe64SessionApi.js");
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const api = `/api/learning/${attemptId}/vibe64/sessions`;
-  const session = Vue.ref({ sessionId: "saved-initial", metadata: {
-    source_kind: "session_clone", source_path: "/controlled/practice/sessions/active/saved-initial/source", source_path_authority: "managed_session_source"
-  } });
-  const binding = Vue.ref({ actorKey: "learning-member-42", viewerActorKey: "member-42", learnerId: "42",
-    learningAttemptId: attemptId, sessionId: "saved-initial", noExercise: false,
-    sourceProjectSlug: "exact-practice", sessionsApiPath: api });
-  const viewer = Vue.ref({ actorKey: "member-42" });
   const requests = [];
   const sockets = [];
   class ControlledSocket {
@@ -856,96 +846,53 @@ it("practice output controls use captured Learning reads and named Stop while Wo
     send(message) { this.sent.push(JSON.parse(message)); }
     close() { this.readyState = 3; this.handlers.get("close")?.(); }
   }
-  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/working"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
   vi.stubGlobal("WebSocket", ControlledSocket);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   configureHttpWebClient({ request(url, options) {
     requests.push({ url, options });
-    return Promise.resolve(url.endsWith("/stop") ? { ok: true, id: "output-1", status: "exited", exitCode: 0 }
-      : { ok: true, outputTargets: [], preview: { state: "idle" } });
+    return Promise.resolve({ ok: true, outputTargets: [], preview: { state: "idle" } });
   } });
-  let controls;
   const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
     insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
-  const app = renderer.createApp({ setup() {
-    controls = useVibe64OutputControls({ session, learningBinding: binding }); return () => Vue.h("div");
+  let working;
+  const workingApp = renderer.createApp({ setup() {
+    working = useVibe64OutputControls({ session: Vue.ref({ sessionId: "working-one", metadata: { source_kind: "session_clone",
+      source_path: "/controlled/working/sessions/active/working-one/source", source_path_authority: "managed_session_source" } }) });
+    return () => Vue.h("div");
   } });
-  provideConversationFixture(app, { on() {}, off() {} }, "member-42");
-  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
-  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
-  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  provideConversationFixture(workingApp, { on() {}, off() {} }, "local");
+  workingApp.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  workingApp.use(VueQueryPlugin, { queryClient }); workingApp.mount({});
   try {
-    await vi.waitFor(() => expect(requests).toHaveLength(1));
-    expect(requests[0].url).toBe(`${api}/saved-initial/outputs`);
-    expect(controls.outputProjectSlug.value).toBe("exact-practice");
-    expect(controls.outputStorageScope.value).toBe(`learning:${JSON.stringify(["42", attemptId])}`);
-    expect(controls.practiceBindingCurrent.value).toBe(true);
-    expect(vibe64OutputTerminalWebSocketUrl("saved-initial", "output-1", api)).toContain(
-      `/api/learning/${attemptId}/vibe64/sessions/saved-initial/output-runs/output-1/terminal/ws`);
     expect(vibe64OutputTerminalWebSocketUrl("working", "output-1")).toContain("/vibe64/sessions/working/output-runs/output-1/terminal/ws");
-    await expect(controls.startNewlyConfiguredWorkspaceSetup()).resolves.toBe(false);
-    await expect(controls.publishPreviewState({ route: "/" })).resolves.toBe(false);
-    controls.terminal.applyTerminalSession({ id: "output-1", status: "running" });
-    expect(controls.terminal.sendCtrlC).toBe(controls.stopTerminal);
-    await expect(controls.stopTerminal()).resolves.toBe(true);
-    const stops = requests.filter(request => request.options.method === "POST");
-    expect(stops).toHaveLength(1);
-    expect(stops[0].url).toBe(`${api}/saved-initial/output-runs/output-1/stop`);
-    expect(stops[0].options.body).toEqual({});
-    expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input")).toEqual([]);
-    const confirmedRequestCount = requests.length;
-    viewer.value = { actorKey: "different-member" }; await Vue.nextTick();
-    expect(controls.practiceBindingCurrent.value).toBe(false);
-    await expect(controls.run({ id: "app", available: true })).resolves.toBe(false);
-    expect(requests).toHaveLength(confirmedRequestCount);
-    binding.value = { ...binding.value, sourceProjectSlug: "changed-row" };
-    viewer.value = { actorKey: "member-42" }; await Vue.nextTick();
-    expect(controls.practiceBindingCurrent.value).toBe(false);
-    expect(controls.outputProjectSlug.value).toBe("exact-practice");
-    await expect(controls.refresh()).resolves.toBeNull();
-    expect(requests).toHaveLength(confirmedRequestCount);
-    let working;
-    const workingApp = renderer.createApp({ setup() {
-      working = useVibe64OutputControls({ session: Vue.ref({ ...session.value, sessionId: "working-one", metadata: { ...session.value.metadata,
-        source_path: "/controlled/working/sessions/active/working-one/source" } }) });
-      return () => Vue.h("div");
-    } });
-    provideConversationFixture(workingApp, { on() {}, off() {} }, "local");
-    workingApp.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
-    workingApp.use(VueQueryPlugin, { queryClient }); workingApp.mount({});
-    try {
-      await vi.waitFor(() => expect(working.loading.value).toBe(false));
-      await Vue.nextTick();
-      working.terminal.applyTerminalSession({ id: "working-output", status: "running" });
-      await expect(working.terminal.sendCtrlC()).resolves.toBe(true);
-      expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input"))
-        .toEqual([{ type: "input", data: "\u0003" }]);
-      expect(requests.filter(request => request.options.method === "POST")).toHaveLength(1);
-    } finally { workingApp.unmount(); }
-  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+    await vi.waitFor(() => expect(working.loading.value).toBe(false));
+    await Vue.nextTick();
+    working.terminal.applyTerminalSession({ id: "working-output", status: "running" });
+    await expect(working.terminal.sendCtrlC()).resolves.toBe(true);
+    expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input"))
+      .toEqual([{ type: "input", data: "\u0003" }]);
+    expect(requests.filter(request => request.options.method === "POST")).toHaveLength(0);
+  } finally { workingApp.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
 });
 
 it.each([
   ["preparation admission refusal", "VIBE64_TRAINING_PREPARATION_BUSY", 409, true],
   ["unclassified conflict", "unclassified_conflict", 409, false],
   ["ordinary startup failure", "output_start_failed", 503, false]
-])("embedded practice auto-start handles %s without repeating unconfirmed work", async (_label, code, status, retry) => {
+])("embedded auto-start handles %s without repeating unconfirmed work", async (_label, code, status, retry) => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
   const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const api = `/api/learning/${attemptId}/vibe64/sessions`;
+  const api = "/api/vibe64/sessions";
   const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
   const session = Vue.ref({ sessionId: "saved-initial", metadata: {
     source_kind: "session_clone", source_path: "/controlled/practice/sessions/active/saved-initial/source", source_path_authority: "managed_session_source"
   } });
-  const binding = Vue.ref({ actorKey: "learning-member-42", viewerActorKey: "member-42", learnerId: "42",
-    learningAttemptId: attemptId, sessionId: "saved-initial", noExercise: false,
-    sourceProjectSlug: "exact-practice", sessionsApiPath: api });
   const requests = [];
   let starts = 0;
   class ControlledSocket {
@@ -976,7 +923,7 @@ it.each([
   const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
     insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
   const app = renderer.createApp({ setup() {
-    controls = useVibe64OutputControls({ session, learningBinding: binding, embeddedPreview: () => true,
+    controls = useVibe64OutputControls({ session, embeddedPreview: () => true,
       autoStartTargetId: () => "app" });
     return () => Vue.h("div");
   } });
@@ -1011,7 +958,6 @@ it.each([
     expect(posts.map(request => request.url)).toEqual(Array(starts).fill(`${api}/saved-initial/output-runs`));
     expect(posts.map(request => request.options.body.outputTargetId)).toEqual(Array(starts).fill("app"));
     expect(session.value.sessionId).toBe("saved-initial");
-    expect(binding.value.learningAttemptId).toBe(attemptId);
   } finally {
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); vi.useRealTimers();
   }
@@ -1024,13 +970,10 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
   const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
   const { launchPreviewInFlightText } = await import("../../src/composables/useVibe64OutputControlsSurface.js");
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const api = `/api/learning/${attemptId}/vibe64/sessions`;
+  const api = "/api/vibe64/sessions";
   const session = Vue.ref({ sessionId: "preparing", workspaceSetup: { status: "running" }, metadata: {
     source_kind: "session_clone", source_path: "/controlled/sessions/active/preparing/source", source_path_authority: "managed_session_source"
   } });
-  const binding = Vue.ref({ actorKey: "learning-member-42", learnerId: "42", viewerActorKey: "member-42", learningAttemptId: attemptId,
-    sessionId: "preparing", noExercise: false, sourceProjectSlug: "exact-practice", sessionsApiPath: api });
   const requests = [];
   vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
@@ -1044,7 +987,7 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
     insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
   const app = renderer.createApp({ setup() {
-    controls = useVibe64OutputControls({ session, learningBinding: binding }); return () => Vue.h("div");
+    controls = useVibe64OutputControls({ session }); return () => Vue.h("div");
   } });
   provideConversationFixture(app, { on() {}, off() {} }, "member-42");
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: "member-42" }));
@@ -1070,151 +1013,4 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   } finally {
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
   }
-});
-
-it("retains the captured LM25 ready preview through the exact saved practice binding", async () => {
-  const Vue = await import("vue");
-  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
-  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
-  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  // Captured /outputs and mounted binding, 2026-10-17T12:33:23Z. Only the
-  // ephemeral proxy credential is replaced. Unrelated terminal log/owner fields are omitted.
-  const capturedStatus = {
-  "ok": true,
-  "outputTargets": [
-    {
-      "available": true,
-      "default": true,
-      "disabledReason": "",
-      "downloads": [],
-      "id": "app",
-      "label": "Orientation application",
-      "mode": "interactive",
-      "presentation": {
-        "kind": "web"
-      }
-    }
-  ],
-  "output": {
-    "error": null,
-    "mode": "interactive",
-    "presentationKind": "web",
-    "state": "ready",
-    "targetId": "app"
-  },
-  "preview": {
-    "canRestart": true,
-    "canShowLog": true,
-    "canStart": false,
-    "href": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token",
-    "message": "Preview is ready.",
-    "reason": "",
-    "recovery": null,
-    "state": "ready",
-    "targetHref": "http://127.0.0.1:8080/",
-    "terminalId": "1e84c15e-062e-465c-bf32-88e31a575bc1"
-  },
-  "previewTarget": {
-    "available": true,
-    "disabledReason": "",
-    "href": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token",
-    "kind": "url",
-    "label": "Preview",
-    "targetHref": "http://127.0.0.1:8080/"
-  },
-  "openTarget": {
-    "available": true,
-    "disabledReason": "",
-    "href": "http://127.0.0.1:8080/",
-    "kind": "url",
-    "label": "Open browser",
-    "previewHref": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token"
-  },
-  "activeTerminal": {
-    "id": "1e84c15e-062e-465c-bf32-88e31a575bc1",
-    "status": "running",
-    "running": true,
-    "metadata": {
-      "actions": [
-        {
-          "href": "http://127.0.0.1:8080/",
-          "id": "url-0bc3c2f13ccd",
-          "kind": "url",
-          "label": "127.0.0.1:8080",
-          "previewHref": "http://127.0.0.1:49100/?vibe64_preview_token=fixture-token"
-        }
-      ],
-      "outputTargetId": "app",
-      "launchReady": true,
-      "port": 8080,
-      "targetUrl": "http://127.0.0.1:8080/",
-      "previewAuth": "",
-      "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
-      "projectScope": "learning:[\"1000\",\"9490f94a-c614-4581-9111-0debb2339ca8\"]"
-    }
-  }
-};
-  const capturedBinding = {
-  "actorKey": "[\"learning\",\"local\",\"1000\",\"9490f94a-c614-4581-9111-0debb2339ca8\"]",
-  "learnerId": "1000",
-  "learningAttemptId": "9490f94a-c614-4581-9111-0debb2339ca8",
-  "noExercise": false,
-  "projectSlug": "",
-  "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
-  "sessionsApiPath": "/api/learning/9490f94a-c614-4581-9111-0debb2339ca8/vibe64/sessions",
-  "sourceProjectSlug": "training-9490f94ac614458191110debb2339ca8",
-  "viewerActorKey": "local"
-};
-  const requests = [];
-  class ControlledSocket {
-    static OPEN = 1; static CLOSED = 3; static CLOSING = 2;
-    readyState = 1;
-    addEventListener() {} send() {} close() { this.readyState = 3; }
-  }
-  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:3107/app/project/vibe64-learning-ui-corrected-topic-20261017?mode=learning&learningView=workspace"),
-    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
-  vi.stubGlobal("WebSocket", ControlledSocket);
-  configureHttpWebClient({ request(url, options) {
-    requests.push({ url, options });
-    return Promise.resolve(capturedStatus);
-  } });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  let controls;
-  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
-    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
-  const app = renderer.createApp({ setup() {
-    // Session fields captured in browser; authority metadata read from retained files
-    // last modified at07:31:40, before this capture.
-    controls = useVibe64OutputControls({ session: Vue.ref({
-  "sessionId": "training-9490f94a-c614-4581-9111-0debb2339ca8",
-  "sessionRoot": "/tmp/vibe64-learning-public-corrected-e2e-20261017/state/projects/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8",
-  "source": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source",
-  "sourcePath": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source",
-  "sourceReady": true,
-  "status": "active",
-  "metadata": {
-    "source_kind": "session_clone",
-    "source_path_authority": "managed_session_source",
-    "source_path": "/tmp/vibe64-learning-public-corrected-e2e-20261017/sessions/training-9490f94ac614458191110debb2339ca8/sessions/active/training-9490f94a-c614-4581-9111-0debb2339ca8/source"
-  }
-}),
-      learningBinding: Vue.ref(capturedBinding), embeddedPreview: () => true });
-    return () => Vue.h("div");
-  } });
-  provideConversationFixture(app, { on() {}, off() {} }, "local");
-  // Evaluate the declared viewer identity. This is not a capture of live injected viewer state.
-  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, Vue.ref({ actorKey: capturedBinding.viewerActorKey }));
-  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
-  app.use(VueQueryPlugin, { queryClient }); app.mount({});
-  try {
-    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
-    expect(requests[0].url).toBe(`${capturedBinding.sessionsApiPath}/${capturedBinding.sessionId}/outputs`);
-    expect(controls.practiceBindingCurrent.value).toBe(true);
-    expect(controls.previewState.value).toBe("ready");
-    expect(controls.previewHref.value).toBe(capturedStatus.preview.href);
-    expect(controls.launchActions.value[0].previewHref).toBe(capturedStatus.preview.href);
-    expect(resolveLaunchPreviewDestination(controls.launchActions.value).embedHref).toBe(capturedStatus.preview.href);
-    expect(requests.every(request => request.options.method !== "POST")).toBe(true);
-  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
 });

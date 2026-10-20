@@ -1,5 +1,5 @@
 import { previewDiagnosticUrl } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
-import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -59,8 +59,6 @@ import {
 import {
   managedPreviewTarget
 } from "@local/studio-terminal-core/shared";
-
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
@@ -680,31 +678,11 @@ function useVibe64OutputControls({
   embeddedPreview = () => false,
   previewDisplayed = () => true,
   session = null,
-  learningBinding = null,
   sourceOperationsSuspended = () => false,
   windowDisplayed = () => true
 } = {}) {
   const paths = usePaths();
-  const workingProjectSlug = useVibe64ProjectSlug();
-  const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, null);
-  const capturedLearning = readRefOrGetterValue(learningBinding);
-  const practiceBinding = capturedLearning ? Object.freeze(Object.fromEntries([
-    "actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath", "noExercise", "sourceProjectSlug", "projectSlug"
-  ].map(key => [key, capturedLearning[key]]))) : null;
-  const practiceBindingCurrent = computed(() => {
-    if (!practiceBinding) return !readRefOrGetterValue(learningBinding);
-    const current = readRefOrGetterValue(learningBinding);
-    return current && Object.keys(practiceBinding).every(key => current[key] === practiceBinding[key]) &&
-      practiceBinding.noExercise === false && !practiceBinding.projectSlug && practiceBinding.actorKey && practiceBinding.learnerId &&
-      practiceBinding.viewerActorKey === readRefOrGetterValue(viewer)?.actorKey &&
-      /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(practiceBinding.learningAttemptId || "") &&
-      /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(practiceBinding.sourceProjectSlug || "") &&
-      practiceBinding.sessionId === selectedSession.value?.sessionId &&
-      practiceBinding.sessionsApiPath === `/api/learning/${practiceBinding.learningAttemptId}/vibe64/sessions`;
-  });
-  const projectSlug = computed(() => practiceBinding ? practiceBinding.sourceProjectSlug : workingProjectSlug.value);
-  const outputStorageScope = computed(() => practiceBinding
-    ? `learning:${JSON.stringify([practiceBinding.learnerId, practiceBinding.learningAttemptId])}` : projectSlug.value);
+  const projectSlug = useVibe64ProjectSlug();
   const operationBusy = ref(false);
   const launchError = ref("");
   const refusedAdmissionId = ref("");
@@ -734,7 +712,7 @@ function useVibe64OutputControls({
   const sessionRevision = computed(() => vibe64SessionRevision(selectedSession.value));
   let outputTargetsRefreshSessionId = sessionId.value;
   let outputTargetsRefreshRevision = sessionRevision.value;
-  const launchScopeKey = computed(() => launchControlScopeKey(practiceBindingCurrent.value ? outputStorageScope.value : "", practiceBindingCurrent.value ? sessionId.value : ""));
+  const launchScopeKey = computed(() => launchControlScopeKey(projectSlug.value, sessionId.value));
   const requestedAutoStartTargetId = computed(() => String(readRefOrGetterValue(autoStartTargetId) || "").trim());
   const autoStartRequestKey = computed(() => requestedAutoStartTargetId.value || (
     readRefOrGetterValue(autoStartManagedPreview) === true ? "managed-preview" : ""
@@ -743,29 +721,27 @@ function useVibe64OutputControls({
   const previewPaneDisplayed = computed(() => readRefOrGetterValue(previewDisplayed) !== false);
   const workspacePreparing = computed(() => selectedSession.value?.workspaceSetup?.status === "running");
   const launchSourceOperationsSuspended = computed(() => (
-    !practiceBindingCurrent.value || readRefOrGetterValue(sourceOperationsSuspended) === true || workspacePreparing.value
+    readRefOrGetterValue(sourceOperationsSuspended) === true || workspacePreparing.value
   ));
   const canLoadOutputs = computed(() => launchControlsCanLoadTargets({
     displayed: terminalDisplayed.value,
     session: selectedSession.value || {},
     sourceOperationsSuspended: launchSourceOperationsSuspended.value
   }));
-  const sessionsApiPath = computed(() => practiceBinding
-    ? practiceBindingCurrent.value ? practiceBinding.sessionsApiPath : ""
-    : paths.api(VIBE64_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID }));
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
   const outputTargetsPath = computed(() => {
     return sessionId.value ? vibe64OutputsPath(sessionsApiPath.value, sessionId.value) : "";
   });
   const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(
     selectedSession.value || {},
-    outputStorageScope.value
+    projectSlug.value
   ));
   const terminal = useVibe64Terminal({
-    readOnly: Boolean(practiceBinding),
     driver: createWebSocketTerminalDriver({
       webSocketUrl(terminalId) {
-        return practiceBindingCurrent.value
-          ? vibe64OutputTerminalWebSocketUrl(sessionId.value, terminalId, practiceBinding ? sessionsApiPath.value : undefined) : "";
+        return vibe64OutputTerminalWebSocketUrl(sessionId.value, terminalId);
       }
     })
   });
@@ -777,7 +753,7 @@ function useVibe64OutputControls({
     disposeTerminalUi,
     resetTerminalDisplay,
     resetTerminalSessionState,
-    sendCtrlC: sendTerminalCtrlC,
+    sendCtrlC,
     terminalCommandPreview,
     terminalError,
     terminalExited,
@@ -788,8 +764,6 @@ function useVibe64OutputControls({
     terminalStarting,
     terminalStatus
   } = terminal;
-  // Learning Stop uses the original named process control, not a raw PTY key.
-  if (practiceBinding) terminal.sendCtrlC = stopTerminal;
   let disposed = false;
 
   const outputTargetsResource = useEndpointResource({
@@ -804,7 +778,7 @@ function useVibe64OutputControls({
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       sessionId.value,
-      outputStorageScope.value
+      projectSlug.value
     )),
     refreshOnPull: true,
     requestRecovery: false,
@@ -1151,7 +1125,7 @@ function useVibe64OutputControls({
   ));
 
   function parameterStorageKey(target) {
-    return vibe64ProjectScopedStorageKey(`vibe64.output-parameters.${target.id}`, outputStorageScope.value);
+    return vibe64ProjectScopedStorageKey(`vibe64.output-parameters.${target.id}`, projectSlug.value);
   }
 
   function parametersRemembered(target) {
@@ -1159,7 +1133,6 @@ function useVibe64OutputControls({
   }
 
   function rememberParameters(target, values, remember) {
-    if (practiceBinding && !practiceBindingCurrent.value) return;
     writeLocalStorageJson(parameterStorageKey(target), remember ? values : null);
   }
 
@@ -1325,7 +1298,6 @@ function useVibe64OutputControls({
   }
 
   async function startNewlyConfiguredWorkspaceSetup() {
-    if (practiceBinding) return false;
     if (
       String(selectedSession.value?.workspaceSetup?.status || "").trim() !== "unconfigured" ||
       !sessionId.value
@@ -1351,7 +1323,7 @@ function useVibe64OutputControls({
   }
 
   async function publishPreviewDiagnostic(record) {
-    if (practiceBinding || !sessionId.value || !projectSlug.value) return false;
+    if (!sessionId.value || !projectSlug.value) return false;
     try {
       const result = await getHttpWebClient().request(
         vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/preview-diagnostics"),
@@ -1363,8 +1335,6 @@ function useVibe64OutputControls({
   }
 
   async function publishPreviewState(previewState = {}) {
-    // The practical producer needs its own Learning admission; do not publish through Working.
-    if (practiceBinding) return false;
     const currentSessionId = sessionId.value;
     const currentProjectSlug = projectSlug.value;
     if (!currentSessionId || !currentProjectSlug || !String(previewState?.route || "").trim()) {
@@ -1397,7 +1367,6 @@ function useVibe64OutputControls({
     identityName = "",
     mode = "identity"
   } = {}) {
-    if (practiceBinding && !practiceBindingCurrent.value) throw new Error("This Learning preview binding changed. Reopen its saved conversation.");
     if (!sessionId.value || previewIdentity.value.available !== true) {
       throw new Error(
         previewIdentity.value.disabledReason || "This preview does not support application identity switching."
@@ -1573,8 +1542,6 @@ function useVibe64OutputControls({
   }
 
   async function stopTerminal() {
-    if (practiceBinding && !practiceBindingCurrent.value) return false;
-    const stoppedScopeKey = launchScopeKey.value;
     if (!sessionId.value || (!terminalCanStop.value && !terminalSessionId.value)) {
       return false;
     }
@@ -1584,7 +1551,6 @@ function useVibe64OutputControls({
         sessionId: sessionId.value,
         terminalSessionId: terminalSessionId.value
       });
-      if (practiceBinding && (!practiceBindingCurrent.value || stoppedScopeKey !== launchScopeKey.value)) return false;
       applyLaunchTerminalSession(stopped);
       await refresh();
       return await waitForStoppedTerminal();
@@ -1633,7 +1599,6 @@ function useVibe64OutputControls({
   }
 
   async function closeTerminal() {
-    if (practiceBinding && !practiceBindingCurrent.value) return false;
     if (!sessionId.value || !terminalCanClose.value) {
       return false;
     }
@@ -1666,7 +1631,7 @@ function useVibe64OutputControls({
   }
 
   function openAction(action = {}) {
-    return openLaunchBrowserTarget(action, selectedSession.value, null, outputStorageScope.value);
+    return openLaunchBrowserTarget(action, selectedSession.value, null, projectSlug.value);
   }
 
   watch(activeTerminal, (nextTerminal) => {
@@ -1965,9 +1930,6 @@ function useVibe64OutputControls({
     terminalPreviewProxyPending,
     publishPreviewState,
     publishPreviewDiagnostic,
-    outputProjectSlug: projectSlug,
-    outputStorageScope,
-    practiceBindingCurrent,
     requestPreviewIdentityGrant,
     refresh,
     restartTerminal,
@@ -1976,7 +1938,7 @@ function useVibe64OutputControls({
     parametersRemembered,
     rememberParameters,
     run,
-    sendCtrlC: () => practiceBinding ? stopTerminal() : sendTerminalCtrlC(),
+    sendCtrlC,
     stopTerminal,
     startNewlyConfiguredWorkspaceSetup,
     terminal,

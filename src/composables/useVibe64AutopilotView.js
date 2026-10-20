@@ -50,10 +50,6 @@ import {
 import {
   VIBE64_WELCOME_NAME_KEY
 } from "@/lib/vibe64WelcomeName.js";
-import {
-  LESSON_DASHBOARD_PROJECT_SECTIONS,
-  LESSON_DASHBOARD_SESSION_TOOLS
-} from "@/lib/vibe64LessonDashboard.js";
 
 const DIRECT_SESSION_TOOL_IDS = new Set([
   "info",
@@ -71,7 +67,6 @@ const STANDALONE_SESSION_TOOL_IDS = new Set([
   "system"
 ]);
 const EMPTY_CONVERSATION_WELCOME = "Hi! 👋 I’m excited to build something with you. Tell me what you have in mind—even a half-formed idea is perfect. We’ll shape it together.";
-const LEARNING_CONVERSATION_WELCOME = "Hi! 👋 Ask me to teach this lesson. We'll take it one step at a time.";
 const EXISTING_PROJECT_CONVERSATION_WELCOME = "Hi! 👋 This is an existing project. Tell me what you’d like to change, check, or improve, and we’ll work through it together.";
 const RENEWED_SESSION_CONVERSATION_WELCOME = "Hi! 👋 I’ve received the handover from the previous session and I’m ready to continue. Tell me what you’d like to do next.";
 const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";
@@ -103,20 +98,10 @@ const vibe64AutopilotViewEmits = [
   "project-attention"
 ];
 const vibe64AutopilotViewProps = {
-  hiddenByWorkspaceMode: { default: false, type: Boolean },
   active: {
     default: true,
     type: Boolean
   },
-  sourceWorkspaceAvailable: { default: true, type: Boolean },
-  outputWorkspaceAvailable: { default: null, type: Boolean },
-  lessonsAvailable: Boolean,
-  learningView: {
-    default: "workspace",
-    type: String,
-    validator: value => ["workspace", "learning"].includes(value)
-  },
-  learningAttemptId: { default: "", type: String },
   agentConnectionError: {
     default: "",
     type: String
@@ -235,13 +220,10 @@ const vibe64AutopilotViewProps = {
 
 function emptyConversationWelcomeText({
   existingProject = false,
-  learning = false,
   preferredName = "",
   renewedSession = false
 } = {}) {
-  const message = learning
-    ? LEARNING_CONVERSATION_WELCOME
-    : renewedSession
+  const message = renewedSession
       ? RENEWED_SESSION_CONVERSATION_WELCOME
       : existingProject
         ? EXISTING_PROJECT_CONVERSATION_WELCOME
@@ -402,12 +384,6 @@ function useVibe64AutopilotView(props, emit, {
     String(props.githubActorTeleportTarget || "").trim()
   ));
   const sessionSourceRoot = computed(() => vibe64SessionSourcePath(props.session || {}));
-  // A practice lesson shows the ordinary Dashboard for its lesson session,
-  // limited to the sections whose actions have lesson URLs.
-  const practiceLesson = computed(() => Boolean(
-    !props.sourceWorkspaceAvailable && props.learningAttemptId && props.outputWorkspaceAvailable === true &&
-    props.conversationRuntime?.identity?.noExercise === false
-  ));
   const activeAgentTurn = computed(() => {
     const turn = props.session?.agentSession?.turn;
     return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};
@@ -752,7 +728,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const workspaceSetupRunning = computed(() => ["pending", "running"].includes(workspaceSetupStatus.value));
   const workspaceSetupActionVisible = computed(() => Boolean(
-    props.sourceWorkspaceAvailable && sessionId.value && workspaceSetupStatus.value !== "unconfigured"
+    sessionId.value && workspaceSetupStatus.value !== "unconfigured"
   ));
   // Preparation brings each connected repository up to its branch, so a
   // consuming session offers it again under that name.
@@ -1354,7 +1330,7 @@ function useVibe64AutopilotView(props, emit, {
       : "Review selected session changes"
   ));
   const saveWorkHeaderVisible = computed(() => Boolean(
-    props.sourceWorkspaceAvailable !== false && props.active && sessionId.value
+    props.active && sessionId.value
   ));
   const saveWorkTitle = computed(() => {
     if (!repositoryAssistantStateSettled.value) {
@@ -1739,7 +1715,6 @@ function useVibe64AutopilotView(props, emit, {
     !chatTurns.value.length
       ? emptyConversationWelcomeText({
           existingProject: workspaceSetupStatus.value !== "unconfigured",
-          learning: Boolean(normalizedAgentTurnText(props.learningAttemptId)),
           preferredName: preferredName.value,
           renewedSession: Boolean(normalizedAgentTurnText(
             props.session?.metadata?.renewed_from
@@ -1801,20 +1776,10 @@ function useVibe64AutopilotView(props, emit, {
     const toolId = vibe64SessionToolIdFromRouteSegment(segment);
     return DIRECT_SESSION_TOOL_IDS.has(toolId) ? toolId : "";
   });
-  // A lesson route to a Dashboard page without lesson actions (for example
-  // Project settings) would show the Working project's data; send it to Env.
-  const routeOutsideLessonDashboard = computed(() => {
-    if (!practiceLesson.value) return false;
-    const dashboardPrefix = `${normalizeProjectRoutePath(projectAppPath(projectSlug.value, "/dashboard"))}/`;
-    const routePath = `${normalizeProjectRoutePath(route.path)}/`;
-    if (!routePath.startsWith(dashboardPrefix)) return false;
-    const segment = routePath.slice(dashboardPrefix.length).split("/")[0] || "";
-    return Boolean(segment) && !LESSON_DASHBOARD_PROJECT_SECTIONS.includes(segment) && !routeSessionToolId.value;
-  });
   const sourceToolLoading = computed(() => Boolean(
     projectPaneValue.value === "dashboard" &&
     STANDALONE_SESSION_TOOL_IDS.has(routeSessionToolId.value) &&
-    !sessionSourceRoot.value && !practiceLesson.value &&
+    !sessionSourceRoot.value &&
     props.page?.launchBusy
   ));
   const dashboardShellVisible = computed(() => Boolean(
@@ -1846,10 +1811,9 @@ function useVibe64AutopilotView(props, emit, {
       return { disabled: !props.session, title: "Browse repository files, Drop Zone and session files" };
     }
     if (["database", "system"].includes(toolId)) {
-      const sourceAvailable = Boolean(sessionSourceRoot.value || practiceLesson.value);
       return {
-        disabled: !sourceAvailable,
-        title: sourceAvailable
+        disabled: !sessionSourceRoot.value,
+        title: sessionSourceRoot.value
           ? (
               toolId === "database"
                 ? "Query and map the active session database"
@@ -1862,8 +1826,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   const sessionToolControls = computed(() => VIBE64_SESSION_TOOL_DEFINITIONS
-    .filter((definition) => definition.navigationScope !== "project" && DIRECT_SESSION_TOOL_IDS.has(definition.id) &&
-      (!practiceLesson.value || LESSON_DASHBOARD_SESSION_TOOLS.includes(definition.id)))
+    .filter((definition) => definition.navigationScope !== "project" && DIRECT_SESSION_TOOL_IDS.has(definition.id))
     .map((definition) => ({
       ...definition,
       ...sessionToolRuntimeState(definition.id)
@@ -1953,7 +1916,6 @@ function useVibe64AutopilotView(props, emit, {
       disabledReason: tool.disabled ? tool.title || "" : "",
       to: sessionToolRoutePath(tool.id)
     })),
-    ...(practiceLesson.value ? { lesson: true } : {}),
     visible: Boolean(props.session)
   }));
   const dashboardSessionContext = computed(() => ({
@@ -1961,7 +1923,6 @@ function useVibe64AutopilotView(props, emit, {
     activeSessionNav: activeSessionNav.value,
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
     embeddedShell: true,
-    ...(practiceLesson.value ? { lessonDashboard: true, learningAttemptId: props.learningAttemptId } : {}),
     projectContext: props.projectContext || {},
     refreshSessionWork: props.refreshSessionWork,
     refreshConversation: () => props.conversationLog?.reload?.(),
@@ -2079,7 +2040,6 @@ function useVibe64AutopilotView(props, emit, {
     projectPaneValue.value,
     route.path,
     routeSessionToolId.value,
-    routeOutsideLessonDashboard.value,
     sessionSourceRoot.value,
     sourceToolLoading.value,
     assistantAccessPending.value,
@@ -2092,8 +2052,8 @@ function useVibe64AutopilotView(props, emit, {
       emit("project-attention");
       return;
     }
-    if (routeSessionToolId.value || routeOutsideLessonDashboard.value) {
-      if (routeSessionToolId.value && selectSessionTool(routeSessionToolId.value, { navigate: false })) {
+    if (routeSessionToolId.value) {
+      if (selectSessionTool(routeSessionToolId.value, { navigate: false })) {
         return;
       }
       const fallbackPath = projectAppPath(projectSlug.value, "/dashboard/env");
@@ -2277,7 +2237,6 @@ function useVibe64AutopilotView(props, emit, {
     sessionGithubActor,
     sessionGithubActorHeaderVisible,
     sessionSourceRoot,
-    practiceLesson,
     sessionToolControls,
     sessionToolbarVisible,
     selectedAnswerChoice,

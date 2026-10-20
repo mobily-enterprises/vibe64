@@ -820,38 +820,6 @@ describe("useVibe64RepositoryWorkspace", () => {
     ]);
   });
 
-  it("reads a practice lesson's current changes on its lesson URL but never checks, applies or saves", async () => {
-    const { useVibe64RepositoryWorkspace } = await import(
-      "../../src/composables/useVibe64RepositoryWorkspace.js"
-    );
-    const requestSaveWork = vi.fn(async () => ({ ok: true }));
-    const requestUpdateWork = vi.fn(async () => ({ ok: true }));
-    const lessonPath = "/api/learning/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/vibe64/sessions";
-    mocks.changes = { unsaved: true };
-    const workspace = useVibe64RepositoryWorkspace(ref({
-      lessonDashboard: true,
-      requestSaveWork,
-      requestUpdateWork,
-      sessionId: "training-own",
-      sessionsApiPath: lessonPath,
-      // A lesson session's source operations stay suspended for Working.
-      sourceOperationsSuspended: true
-    }), { view: ref("changes") });
-
-    await nextTick();
-    await flushPromises();
-    expect(mocks.requestCalls.map(({ path }) => path)).toEqual([`${lessonPath}/training-own/changes`]);
-    expect(workspace.lessonReadOnly.value).toBe(true);
-
-    mocks.requestCalls.length = 0;
-    await expect(workspace.checkForUpdates()).resolves.toBe(false);
-    await expect(workspace.applyUpdates()).resolves.toBe(false);
-    await expect(workspace.saveWork()).resolves.toBe(false);
-    expect(mocks.requestCalls).toEqual([]);
-    expect(requestSaveWork).not.toHaveBeenCalled();
-    expect(requestUpdateWork).not.toHaveBeenCalled();
-  });
-
   it("discards an in-flight write-boundary collision and performs one current check after renewal", async () => {
     let finishFirstCheck;
     mocks.updateCheckHandler = vi.fn(() => new Promise((resolve) => {

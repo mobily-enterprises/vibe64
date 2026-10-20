@@ -3,9 +3,7 @@ import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import * as vue from "vue";
-import { useTrainingPresentationCue } from "../../packages/vibe64-training/src/client/useTrainingPresentationCue.js";
-import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
-import { createTrainingNavigation } from "../../packages/vibe64-training/src/client/createTrainingNavigation.js";
+import { createColleagueNavigation } from "../../packages/vibe64-colleague/src/client/colleagueNavigation.js";
 import * as trainingGuideModule from "../../packages/vibe64-training/src/client/trainingGuide.js";
 import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 import { routeLocationKey } from "vue-router";
@@ -162,7 +160,7 @@ test("Teach me from the Learning environment opens Colleague and sends its fixed
     requests.push({ url, options });
     if (url.endsWith("/messages")) return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
     return { ok: true, messages: [], status: "ready" };
-  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, null, null, null, { learning });
+  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, { learning });
   await flush();
   assert.equal(view.state.open.value, false);
   colleagueRequest.value = Object.freeze({ id: "teach-1", kind: "teach", message: "Teach me this step.", actorKey: "member",
@@ -768,7 +766,7 @@ function conversationSnapshot(response = {}, streamRevision = response.streamRev
   };
 }
 
-function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null, { learning = null, companionView = null } = {}) {
+function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, voiceHost = null, { learning = null, companionView = null } = {}) {
   const notices = [];
   const events = [];
   const requests = [];
@@ -868,9 +866,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
-    "@local/vibe64-training/client/presentation-cue": { useTrainingPresentationCue },
-    "@local/vibe64-training/client/navigation": { createTrainingNavigation },
-    "@local/vibe64-training/client/learner-gestures": { useTrainingLearnerGestures },
+    "./colleagueNavigation.js": { createColleagueNavigation },
     "@local/vibe64-training/client/guide": trainingGuideModule,
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
@@ -878,7 +874,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body"),
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), 
       VIBE64_COLLEAGUE_VIEW_KEY: Symbol("view"), VIBE64_LEARNING_KEY: Symbol("learning") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
@@ -926,9 +922,6 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   } } });
   app.provide("jskit.shell-web.runtime.web-placement.client", placement);
   if (viewer) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_ASSISTANT_VIEWER_KEY, viewer);
-  if (preview) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
-  if (gestureChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestureChannel);
-  if (bodyChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_BODY_KEY, bodyChannel);
   if (learning) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_LEARNING_KEY, learning);
   if (companionView) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_VIEW_KEY, companionView);
   app.provide(routeLocationKey, vue.reactive({ path: "/" }));
@@ -1464,97 +1457,6 @@ test("Colleague reload restores the original uncertain tab record without resend
 });
 
 
-test("an armed cue buffers only unclassified speech, then forwards actual final correlation/playback and one exact terminal receipt", async t => {
-  const cue = vue.ref(null);
-  const observed = [];
-  const playback = [];
-  const retired = [];
-  const preview = vue.shallowRef({ presentation: {
-    get state() { return { cue: cue.value && { ...cue.value } }; },
-    observeCue(value, options) { observed.push({ value, options }); cue.value = { ...cue.value, ...value, phase: "awaiting-audio" }; return true; },
-    playback(value) { playback.push(value); },
-    retireCue(reason) { retired.push(reason); }
-  } });
-  const acknowledgements = [];
-  const response = { conversationId: "conversation", messages: [{ id: "turn-user", role: "user", text: "Explain." }], status: "working", assistantSelection: {} };
-  const viewer = vue.ref({ actorKey: "member" });
-  const view = mount(t, async (url, options) => {
-    if (url.endsWith("/navigation/ack")) { acknowledgements.push(options.body); return { ok: true }; }
-    return structuredClone(response);
-  }, vue.reactive({ name: "Colleague" }), viewer, null, preview);
-  await flush();
-  await view.state.openVoice();
-  const binding = view.state.voice.controller.state.binding;
-  const identity = { clientId: view.state.clientId, conversationId: "conversation", turnId: "turn-user",
-    attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", visualId: "request", playerInstanceId: "player-one",
-    cueId: "cue-one", commandId: "transition-one", navigationId: "navigation-one" };
-  cue.value = { ...identity, phase: "armed", outputId: "", canonicalFinal: false };
-  const stream = view.setConversation({ conversationId: "conversation", messages: response.messages,
-    status: "working", streamingReply: { id: "prelude", outputId: "prelude", role: "assistant", text: "Let me check one thing.", status: "inProgress" } }, 1);
-  view.publish({ type: "message", ...stream.streaming.messages[0], streaming: stream.streaming });
-  await flush();
-  assert.ok(view.state.adapter.value.conversation.turns.at(-1)?.assistant, JSON.stringify({
-    stream, snapshot: view.state.conversation.runtime.value.snapshot.value, turns: view.state.adapter.value.conversation.turns
-  }));
-  assert.equal(view.state.adapter.value.conversation.turns.at(-1).assistant.text, "Let me check one thing.", "the original transcript still streams");
-  assert.equal(binding.state.streamingReply, null, "only this armed cue's speech waits for actual classification");
-  view.publish({ type: "message", turnId: "turn-user", messageId: "prelude", role: "commentary", status: "complete",
-    text: "Let me check one thing.", streaming: { revision: 2, messages: [] } });
-  await flush();
-  assert.equal(observed.length, 0);
-  const final = { ...identity, phase: "bound", outputId: "actual-final", canonicalFinal: true };
-  response.messages.push({ id: "answer", role: "assistant", text: "The server receives your request." });
-  response.status = "ready";
-  const completed = view.setConversation(response, 3);
-  view.publish({ type: "message", turnId: "turn-user", messageId: "answer", outputId: "actual-final", role: "assistant",
-    status: "complete", text: "The server receives your request.", presentationCue: final,
-    streaming: completed.streaming });
-  view.publish({ type: "settled", turnId: "turn-user", status: "complete" });
-  await flush();
-  assert.equal(observed.length, 1);
-  assert.deepEqual(observed[0], { value: final, options: { readAloud: true } });
-  assert.equal(binding.state.streamingReply?.text || binding.state.messages.at(-1).text, "The server receives your request.");
-  const event = { conversationId: "conversation", outputId: "actual-final", phase: "started" };
-  binding.onPlayback(event);
-  assert.deepEqual(playback, [event]);
-  cue.value = { ...identity, outputId: "actual-final", canonicalFinal: true, phase: "completed", audioPhase: "completed",
-    visualPhase: "completed", state: "shown", description: "One request shown.", error: "" };
-  await flush();
-  assert.equal(acknowledgements.length, 1);
-  assert.deepEqual(acknowledgements[0], { clientId: identity.clientId, commandId: "navigation-one", ok: true, cue: cue.value });
-  cue.value = { ...cue.value };
-  await flush();
-  assert.equal(acknowledgements.length, 1, "reactive rereads do not repeat terminal delivery");
-  viewer.value = { actorKey: "another-member" };
-  await flush();
-  assert.ok(retired.some(reason => reason.includes("learner changed")));
-  assert.equal(acknowledgements.length, 1, "old-target cue facts never post under the new actor");
-});
-
-test("a mobile presentation open minimises the original Colleague frame without ending its voice session or draft", async t => {
-  const calls = [];
-  const view = mount(t, async (url, options) => {
-    if (url.endsWith("/navigation/ack")) { calls.push(options.body); return { ok: true }; }
-    return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
-  });
-  await flush();
-  view.state.xs.value = true;
-  await view.state.openVoice();
-  view.state.adapter.value.actions.setDraft("Keep my separate question.");
-  const binding = view.state.voice.controller.state.binding;
-  const session = view.state.voice.controller.state.session;
-  view.state.props.navigate = async () => ({ focus: { projectSlug: "practice", sessionId: "session-1", pane: "preview" },
-    presentation: { attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", visualId: "request", playerInstanceId: "player-one", phase: "ready" } });
-  await view.state.handleNavigation({ id: "navigation-one", status: "pending", presentation: { operation: "open" } });
-  assert.equal(view.state.shown.value, false);
-  assert.equal(view.state.voice.controller.state.binding, binding);
-  assert.equal(view.state.voice.controller.state.session, session);
-  assert.equal(view.state.draft.value, "Keep my separate question.");
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].presentation.phase, "ready");
-});
-
-
 // Learning v2 (C4): the shared navigate wrapper runs guide commands in both hosts.
 test("Colleague guide commands point without navigating and show me through the host navigator, reporting only what was drawn", async t => {
   const acks = [];
@@ -1590,7 +1492,7 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   const view = mount(t, async (url, options) => {
     if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
     return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
-  }, undefined, null, null, null, null, null, null, { learning });
+  }, undefined, null, null, null, { learning });
   await flush();
   view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.open });
   await view.state.handleNavigation({ id: "open-preview", status: "pending", projectSlug: "alpha", sessionId: "", pane: "preview" });
@@ -1624,7 +1526,7 @@ test("the pinned step card follows the shared Learning controller and reopens it
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
     results: [], show(input) { calls.push(input); }, minimise() {}, close() {} });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
-    undefined, null, null, null, null, null, null, { learning: controller });
+    undefined, null, null, null, { learning: controller });
   await flush();
   assert.equal(view.state.learningStep.value, null, "no attempt, no card");
   controller.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -1644,409 +1546,6 @@ test("the pinned step card follows the shared Learning controller and reopens it
   await flush();
   assert.equal(view.state.learningStep.value, null, "an unknown step shows no card");
 });
-
-test("deliberate diagram retirement stops only its still-audible output, never drawer minimise or a successor", async t => {
-  const cue = vue.ref(null);
-  const preview = vue.shallowRef({ presentation: {
-    get state() { return { cue: cue.value && { ...cue.value } }; }, observeCue() {}, playback() {}, retireCue() {}
-  } });
-  const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
-    vue.reactive({ name: "Colleague" }), null, null, preview);
-  await flush();
-  await view.state.openVoice();
-  const binding = view.state.voice.controller.state.binding;
-  const identity = { conversationId: "conversation", clientId: view.state.clientId, outputId: "cue-output", audioPhase: "started", phase: "playing" };
-  cue.value = { ...identity };
-  binding.onPlayback({ conversationId: "conversation", outputId: "cue-output", phase: "started" });
-  await view.state.toggleConversation();
-  assert.equal(view.events.filter(event => event[0] === "voice-stop-speech").length, 0, "drawer minimise preserves ongoing voice");
-  cue.value.phase = "interrupted";
-  assert.equal(view.events.filter(event => event[0] === "voice-stop-speech").length, 1);
-  cue.value = { ...identity };
-  binding.onPlayback({ conversationId: "conversation", outputId: "cue-output", phase: "started" });
-  binding.onPlayback({ conversationId: "conversation", outputId: "newer-output", phase: "started" });
-  cue.value.phase = "interrupted";
-  assert.equal(view.events.filter(event => event[0] === "voice-stop-speech").length, 1, "a newer audible output is not the retired cue");
-  cue.value = { ...identity };
-  binding.onPlayback({ conversationId: "conversation", outputId: "cue-output", phase: "started" });
-  view.state.voice.controller.state.binding = { id: "main", conversationId: "other-conversation", socketUrl: "main" };
-  cue.value.phase = "interrupted";
-  assert.equal(view.events.filter(event => event[0] === "voice-stop-speech").length, 1, "another conversation owns voice now");
-});
-
-const authoredQuestion = { attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", questionId: "question-one", assessmentId: "help-or-change",
-  issuedRevision: 3, topicHash: "a".repeat(64), lessonHash: "b".repeat(64) };
-
-test("typed and spoken queued followers retain their authored question reference when a newer question becomes visible", async t => {
-  const requests = [];
-  const response = { messages: [], status: "working", capabilities: { steering: false }, trainingQuestion: structuredClone(authoredQuestion) };
-  const view = mount(t, async (url, options) => {
-    if (!url.endsWith("/messages")) return structuredClone(response);
-    requests.push(structuredClone(options.body));
-    view.setConversation({ messages: requests.map(message => ({ id: message.messageId, role: "user", text: message.text })),
-      status: "working", capabilities: { steering: false } });
-    view.publish({ type: "accepted" });
-    return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
-  });
-  await flush();
-  view.state.props.focus = { projectSlug: "captured-project" };
-  await view.state.openVoice();
-  const { binding, session } = view.state.voice.controller.state;
-  const captured = binding.captureContext();
-  assert.deepEqual(captured, { projectSlug: "captured-project", trainingQuestion: authoredQuestion });
-  view.state.draft.value = "Typed answer.";
-  const typed = view.state.submit();
-  const spoken = binding.submitText("Spoken answer.", { messageId: "spoken-question-answer", context: captured });
-  await flush();
-  const [a, b] = view.state.conversation.runtime.value.delivery.state.messages;
-  assert.equal(requests.length, 0);
-  assert.deepEqual(a.payload.request.data.trainingQuestion, authoredQuestion);
-  assert.deepEqual(b.payload.request.data.trainingQuestion, authoredQuestion);
-  response.trainingQuestion = { ...authoredQuestion, questionId: "question-two", issuedRevision: 8 };
-  await view.state.refresh();
-  assert.deepEqual(binding.captureContext().trainingQuestion, response.trainingQuestion, "the next utterance sees the newly issued question");
-  captured.trainingQuestion.questionId = "incidental-context-mutation";
-  view.state.props.focus.projectSlug = "later-project";
-  view.setConversation({ status: "ready", capabilities: { steering: false } });
-  view.publish({ type: "settled" });
-  await typed;
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].messageId, a.id);
-  assert.deepEqual(requests[0].data.trainingQuestion, authoredQuestion);
-  view.setConversation({ messages: [{ id: a.id, role: "user", text: a.text }], status: "ready", capabilities: { steering: false } });
-  view.publish({ type: "settled" });
-  await spoken;
-  assert.equal(requests[1].messageId, "spoken-question-answer");
-  assert.equal(requests[1].text, "Spoken answer.");
-  assert.deepEqual(requests[1].data, { clientId: view.state.clientId, focus: { projectSlug: "captured-project" }, trainingQuestion: authoredQuestion });
-  assert.equal(view.state.voice.controller.state.binding, binding);
-  assert.equal(view.state.voice.controller.state.session, session);
-  assert.equal(view.requests.some(({ url }) => url.endsWith("/cancel")), false);
-});
-
-test("speech authored before issuance remains unassociated and a definite failed retry keeps its original reference", async t => {
-  let reference = null;
-  const submitted = [];
-  const view = mount(t, async (url, options) => {
-    if (!url.endsWith("/messages")) return { messages: [], status: "ready", trainingQuestion: reference };
-    submitted.push(structuredClone(options.body));
-    if (submitted.length === 1) throw Object.assign(new Error("Known pre-admission rejection."), { code: "ACTION_VALIDATION_FAILED" });
-    return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
-  });
-  await flush();
-  await view.state.openVoice();
-  const binding = view.state.voice.controller.state.binding;
-  const earlier = binding.captureContext();
-  reference = structuredClone(authoredQuestion);
-  await view.state.refresh();
-  assert.equal((await binding.submitText("Earlier words.", { messageId: "before-question", context: earlier })).ok, false);
-  assert.equal(submitted[0].data.trainingQuestion, undefined, "submission never substitutes the newly visible question");
-  const captured = binding.captureContext();
-  await binding.submitText("Answer words.", { messageId: "question-answer", context: captured });
-  assert.deepEqual(submitted[1].data.trainingQuestion, authoredQuestion);
-  reference = { ...authoredQuestion, questionId: "question-two", issuedRevision: 9 };
-  await view.state.refresh();
-  await binding.submitText("Earlier words.", { messageId: "before-question", context: binding.captureContext() });
-  assert.equal(submitted[2].messageId, "before-question");
-  assert.equal(submitted[2].data.trainingQuestion, undefined, "same authored UUID retry uses the original payload, not a later capture");
-});
-
-test("changing learner retires a queued question-bearing draft without dispatch or carrying the reference to the new actor", async t => {
-  const viewer = vue.ref({ actorKey: "person-a" });
-  const view = mount(t, async () => ({ messages: [], status: "working", capabilities: { steering: false }, trainingQuestion: authoredQuestion }),
-    vue.reactive({ name: "Colleague" }), viewer);
-  await flush();
-  view.state.draft.value = "Only person A's answer.";
-  const sending = view.state.submit();
-  await flush();
-  const original = view.state.conversation.runtime.value;
-  const pending = original.delivery.state.messages[0];
-  assert.deepEqual(pending.payload.request.data.trainingQuestion, authoredQuestion);
-  viewer.value = { actorKey: "person-b" };
-  await flush();
-  await sending;
-  assert.notEqual(view.state.conversation.runtime.value, original);
-  assert.equal(view.state.draft.value, "");
-  assert.equal(view.state.conversation.runtime.value.delivery.state.messages.length, 0);
-  assert.equal(nonFocusPosts(view.requests).length, 0);
-});
-
-
-// Unit fixtures exercise the native owner contract; real isTrusted event
-// forwarding is separately proved by the original mounted browser test.
-const nativeClick = { type: "click", isTrusted: true };
-const workspaceQuestion = { ...authoredQuestion, assessmentId: "workspace-navigation" };
-const nativeWorkspace = { projectSlug: "practice", sessionId: "practice-session", mainChatVisible: true,
-  projectVisible: true, pane: "preview", ready: true };
-
-test("native lesson controls retain one exact delivered question across three settled steps without changing drafts or voice", async t => {
-  const channel = vue.shallowRef(null);
-  const observations = [];
-  const settled = [];
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async (target, current) => {
-    assert.equal(current(), true);
-    settled.push(target);
-    return { ...nativeWorkspace };
-  } });
-  const view = mount(t, async (url, options) => {
-    if (!url.endsWith("/training/observations")) return { messages: [], status: "ready", trainingQuestion: workspaceQuestion };
-    observations.push(structuredClone(options.body));
-    return { ok: true, gestureId: options.body.gestureId, assessmentId: workspaceQuestion.assessmentId,
-      phase: observations.length === 3 ? "completed" : "collecting", acceptedSteps: observations.length };
-  }, props, vue.ref({ actorKey: "member" }), null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session" };
-  view.state.draft.value = "My ordinary typed draft stays here.";
-  await view.state.openVoice();
-  const session = view.state.voice.controller.state.session;
-  const binding = view.state.voice.controller.state.binding;
-  await view.state.toggleConversation(nativeClick);
-  await flush();
-  assert.equal(view.state.bodyVisible.value, false);
-  await view.state.toggleConversation(nativeClick);
-  await flush();
-  assert.equal(view.state.bodyVisible.value, true);
-  assert.deepEqual(settled, [], "ordinary lesson launcher visibility is not a workspace assessment step");
-  assert.deepEqual(observations, [], "trusted hide/show allocates no observation request for this question");
-  assert.deepEqual(view.notices, [], "normal launcher use never reports a false practical failure");
-  assert.equal(view.state.draft.value, "My ordinary typed draft stays here.");
-  assert.equal(view.state.voice.controller.state.session, session);
-  assert.equal(view.state.voice.controller.state.binding, binding);
-  for (const [control, target] of [["project-select", { projectSlug: "practice" }],
-    ["session-select", { sessionId: "practice-session" }], ["preview-select", {}]]) {
-    const ticket = channel.value.begin(nativeClick, control, target);
-    assert.ok(ticket);
-    assert.equal(Object.isFrozen(ticket.reference), true);
-    assert.equal(Object.isFrozen(ticket.target), true);
-    const result = await channel.value.finish(ticket);
-    assert.equal(result.gestureId, ticket.gestureId);
-    assert.equal(await channel.value.finish(ticket), false, "a consumed native ticket cannot send twice");
-  }
-  assert.deepEqual(settled.map(step => step.control), ["project-select", "session-select", "preview-select"]);
-  assert.equal(new Set(observations.map(step => step.gestureId)).size, 3);
-  for (const body of observations) {
-    assert.deepEqual(Object.keys(body).sort(), ["clientId", "control", "conversationId", "gestureId", "reference", "workspace"]);
-    assert.deepEqual(body.reference, workspaceQuestion);
-    assert.equal(body.conversationId, view.state.product.value.conversationId);
-    assert.deepEqual(body.workspace, { ...nativeWorkspace, colleagueVisible: true });
-    assert.equal(body.clientId, view.state.clientId);
-  }
-  assert.equal(view.state.draft.value, "My ordinary typed draft stays here.");
-  assert.equal(view.state.voice.controller.state.session, session);
-  assert.equal(view.state.voice.controller.state.binding, binding);
-});
-
-test("native observations reject synthetic and programmatic controls and never treat another assistant's visible frame as Colleague", async t => {
-  const channel = vue.shallowRef(null);
-  const question = { ...workspaceQuestion, assessmentId: "return-to-colleague" };
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async () => ({ ...nativeWorkspace }) });
-  const view = mount(t, async () => ({ messages: [], status: "ready", trainingQuestion: question }),
-    props, null, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session" };
-  for (const event of [undefined, { type: "click", isTrusted: false }, { type: "pointerdown", isTrusted: true }]) {
-    assert.equal(channel.value.begin(event, "project-select"), null);
-  }
-  assert.equal(channel.value.begin(nativeClick, "teacher-navigation"), null);
-  await view.state.toggleConversation();
-  await view.state.toggleConversation();
-  assert.equal(view.requests.some(request => request.url.endsWith("/training/observations")), false);
-  assert.equal(view.state.product.value.trainingQuestion.assessmentId, "return-to-colleague",
-    "body-ownership refusal is tested with an assessment that admits visibility gestures");
-  const controller = view.state.voice.controller;
-  controller.state.binding = { socketUrl: "/another-assistant/voice/ws", presentation: "dialog", conversationId: "another" };
-  controller.state.visible = true;
-  assert.equal(view.state.shown.value, true);
-  assert.equal(view.state.bodyVisible.value, false);
-  assert.equal(channel.value.begin(nativeClick, "colleague-minimize"), null);
-  assert.equal(view.requests.some(request => request.url.endsWith("/training/observations")), false);
-});
-
-test("original Colleague minimize and restore observations use the actual body and keep the same voice session", async t => {
-  const channel = vue.shallowRef(null);
-  const observations = [];
-  const question = { ...workspaceQuestion, assessmentId: "return-to-colleague" };
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async () => ({ ...nativeWorkspace }) });
-  const view = mount(t, async (url, options) => {
-    if (!url.endsWith("/training/observations")) return { messages: [], status: "ready", trainingQuestion: question };
-    observations.push(structuredClone(options.body));
-    return { ok: true, gestureId: options.body.gestureId, assessmentId: question.assessmentId,
-      phase: "collecting", acceptedSteps: 1 };
-  }, props, null, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session" };
-  await view.state.openVoice();
-  const session = view.state.voice.controller.state.session;
-  await view.state.toggleConversation(nativeClick);
-  await flush();
-  assert.equal(view.state.bodyVisible.value, false);
-  const use = channel.value.begin(nativeClick, "preview-select");
-  await channel.value.finish(use);
-  await view.state.toggleConversation(nativeClick);
-  await flush();
-  assert.equal(view.state.bodyVisible.value, true);
-  assert.deepEqual(observations.map(body => [body.control, body.workspace.colleagueVisible]),
-    [["colleague-minimize", false], ["preview-select", false], ["colleague-restore", true]]);
-  assert.equal(view.state.voice.controller.state.session, session);
-  assert.ok(observations.every(body => JSON.stringify(body.reference) === JSON.stringify(question)));
-});
-
-test("changed native question, actor or conversation fences a held workspace observation before HTTP", async t => {
-  const viewer = vue.ref({ actorKey: "member-a" });
-  const channel = vue.shallowRef(null);
-  let reference = workspaceQuestion;
-  let resolveWorkspace;
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: () => new Promise(resolve => { resolveWorkspace = resolve; }) });
-  const view = mount(t, async () => ({ conversationId: "colleague-native", messages: [], status: "ready", trainingQuestion: reference }),
-    props, viewer, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session" };
-  for (const change of [async () => { reference = { ...reference, issuedRevision: reference.issuedRevision + 1 }; await view.state.refresh(); },
-    async () => { viewer.value = { actorKey: "member-b" }; await flush(); },
-    async () => { view.state.product.value = { ...view.state.product.value, conversationId: "other-current" }; }]) {
-    const ticket = channel.value.begin(nativeClick, "preview-select");
-    assert.ok(ticket);
-    const pending = channel.value.finish(ticket);
-    await change();
-    resolveWorkspace({ ...nativeWorkspace });
-    assert.equal(await pending, false);
-  }
-  assert.equal(view.requests.some(request => request.url.endsWith("/training/observations")), false);
-  assert.deepEqual(view.notices, []);
-});
-
-test("failed lesson observation leaves the successful workspace action and typed draft alone, with bounded transient tickets", async t => {
-  const channel = vue.shallowRef(null);
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async () => ({ ...nativeWorkspace }) });
-  const view = mount(t, async (url) => {
-    if (url.endsWith("/training/observations")) throw new Error("Connection lost.");
-    return { messages: [], status: "ready", trainingQuestion: workspaceQuestion };
-  }, props, null, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session" };
-  view.state.draft.value = "Do not submit or discard this.";
-  const tickets = Array.from({ length: 8 }, () => channel.value.begin(nativeClick, "project-select"));
-  assert.ok(tickets.every(Boolean));
-  assert.equal(channel.value.begin(nativeClick, "project-select"), null);
-  assert.equal(await channel.value.finish(tickets[0]), false);
-  assert.equal(view.state.draft.value, "Do not submit or discard this.");
-  assert.match(view.notices.at(-1).message, /observation was not confirmed.*workspace action was not undone/u);
-  assert.ok(channel.value.begin(nativeClick, "project-select"), "finishing releases only its own slot");
-});
-
-
-const exerciseQuestion = { ...authoredQuestion, assessmentId: "try-the-application" };
-const exerciseFrame = { projectSlug: "practice", sessionId: "practice-session", frameRequestId: 7,
-  instanceId: "11111111-1111-4111-8111-111111111111", interactionId: "22222222-2222-4222-8222-222222222222",
-  playerInstanceId: "33333333-3333-4333-8333-333333333333" };
-const exerciseResponse = { requestId: "44444444-4444-4444-8444-444444444444" };
-
-test("exercise channel captures the delivered practical and sends only exact verified-frame identities", async t => {
-  const channel = vue.shallowRef(null);
-  const observations = [];
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async (target, current) => {
-    assert.equal(current(), true);
-    assert.deepEqual(target, { projectSlug: "practice", sessionId: "practice-session", control: "exercise-response" });
-    return { ...nativeWorkspace };
-  } });
-  const view = mount(t, async (url, options) => {
-    if (!url.endsWith("/training/observations")) return { messages: [], status: "ready", trainingQuestion: exerciseQuestion };
-    observations.push(structuredClone(options.body));
-    return { ok: true, gestureId: options.body.gestureId, assessmentId: "try-the-application", phase: "completed", acceptedSteps: 1 };
-  }, props, vue.ref({ actorKey: "member" }), null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session", pane: "preview" };
-  view.state.draft.value = "My explanation is not silently submitted.";
-  assert.equal(channel.value.begin(nativeClick, "preview-select"), null, "workspace controls cannot substitute for the application practical");
-  const ticket = channel.value.beginExercise(exerciseFrame, () => true);
-  assert.ok(ticket);
-  assert.equal(Object.isFrozen(ticket.exercise), true);
-  const result = await channel.value.finishExercise(ticket, exerciseResponse);
-  assert.equal(result.phase, "completed");
-  assert.deepEqual(observations, [{ clientId: view.state.clientId, conversationId: view.state.product.value.conversationId,
-    gestureId: ticket.gestureId, control: "exercise-response", reference: exerciseQuestion,
-    workspace: { ...nativeWorkspace, colleagueVisible: false },
-    exercise: { instanceId: exerciseFrame.instanceId, interactionId: exerciseFrame.interactionId,
-      playerInstanceId: exerciseFrame.playerInstanceId, frameRequestId: 7, requestId: exerciseResponse.requestId } }]);
-  assert.equal(await channel.value.finishExercise(ticket, exerciseResponse), false, "same UI ticket cannot execute another check");
-  assert.equal(view.state.draft.value, "My explanation is not silently submitted.");
-});
-
-test("retiring hidden App, changed frame, or full-screen Colleague permanently fences that unfinished exercise ticket", async t => {
-  const channel = vue.shallowRef(null);
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async () => ({ ...nativeWorkspace }) });
-  const view = mount(t, async () => ({ messages: [], status: "ready", trainingQuestion: exerciseQuestion }),
-    props, null, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session", pane: "preview" };
-  let frameVisible = true;
-  const retired = channel.value.beginExercise(exerciseFrame, () => frameVisible);
-  frameVisible = false;
-  assert.equal(await channel.value.finishExercise(retired), false);
-  frameVisible = true;
-  assert.equal(await channel.value.finishExercise(retired, exerciseResponse), false);
-  const hidden = channel.value.beginExercise(exerciseFrame, () => true);
-  props.focus = { ...props.focus, pane: "chat" };
-  props.focus = { ...props.focus, pane: "preview" };
-  assert.equal(await channel.value.finishExercise(hidden, exerciseResponse), false);
-  await view.state.openVoice();
-  view.state.xs.value = true;
-  assert.equal(view.state.bodyVisible.value, true);
-  assert.equal(channel.value.beginExercise(exerciseFrame, () => true), null, "phone Colleague covers the actual App");
-  await view.state.toggleConversation();
-  const minimized = channel.value.beginExercise(exerciseFrame, () => true);
-  assert.ok(minimized);
-  await channel.value.finishExercise(minimized);
-  assert.equal(channel.value.beginExercise({ ...exerciseFrame, sessionId: "foreign" }, () => true), null);
-  assert.equal(view.requests.some(request => request.url.endsWith("/training/observations")), false);
-});
-
-test("exercise observation cannot outlive a held question, learner, frame or workspace visibility change", async t => {
-  const viewer = vue.ref({ actorKey: "member-a" });
-  const channel = vue.shallowRef(null);
-  let reference = exerciseQuestion;
-  let resolveWorkspace;
-  let frameCurrent = true;
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: () => new Promise(resolve => { resolveWorkspace = resolve; }) });
-  const view = mount(t, async () => ({ messages: [], status: "ready", trainingQuestion: reference }),
-    props, viewer, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session", pane: "preview" };
-  for (const change of [async () => { reference = { ...reference, issuedRevision: reference.issuedRevision + 1 }; await view.state.refresh(); },
-    async () => { viewer.value = { actorKey: "member-b" }; await flush(); },
-    async () => { frameCurrent = false; }, async () => { props.focus = { ...props.focus, pane: "chat" }; }]) {
-    frameCurrent = true;
-    props.focus = { ...props.focus, pane: "preview" };
-    const ticket = channel.value.beginExercise(exerciseFrame, () => frameCurrent);
-    assert.ok(ticket);
-    const pending = channel.value.finishExercise(ticket, exerciseResponse);
-    await change();
-    resolveWorkspace({ ...nativeWorkspace });
-    assert.equal(await pending, false);
-  }
-  assert.equal(view.requests.some(request => request.url.endsWith("/training/observations")), false);
-  assert.deepEqual(view.notices, []);
-});
-
-test("exercise check rejection preserves pending learner explanation and releases only its own bounded ticket", async t => {
-  const channel = vue.shallowRef(null);
-  const props = vue.reactive({ name: "Colleague", settleWorkspace: async () => ({ ...nativeWorkspace }) });
-  const view = mount(t, async url => {
-    if (url.endsWith("/training/observations")) throw new Error("Request expired; press again.");
-    return { messages: [], status: "ready", trainingQuestion: exerciseQuestion };
-  }, props, null, null, null, channel);
-  await flush();
-  props.focus = { projectSlug: "practice", sessionId: "practice-session", pane: "preview" };
-  view.state.draft.value = "I pressed the button and saw a greeting.";
-  const tickets = Array.from({ length: 8 }, () => channel.value.beginExercise(exerciseFrame, () => true));
-  assert.ok(tickets.every(Boolean));
-  assert.equal(channel.value.beginExercise(exerciseFrame, () => true), null);
-  assert.equal(await channel.value.finishExercise(tickets[0], exerciseResponse), false);
-  assert.match(view.notices.at(-1).message, /application observation was not confirmed.*Press Ask the server again/u);
-  assert.equal(view.state.draft.value, "I pressed the button and saw a greeting.");
-  assert.ok(channel.value.beginExercise(exerciseFrame, () => true));
-});
-
 
 test("previous-conversation list offers explicit fresh recovery after a terminal provider failure without uncertain delivery", async t => {
   let current = "failed-conversation";
@@ -2134,7 +1633,7 @@ test("fresh recovery binds a new paused original voice session without transport
     }
     const state = { conversationId: current, messages: [], status: "ready" };
     return url.startsWith("/api/assistant/") ? conversationSnapshot(state) : { ok: true, ...state };
-  }, vue.reactive({ name: "Colleague" }), null, null, null, null, voiceHost);
+  }, vue.reactive({ name: "Colleague" }), null, null, voiceHost);
   await flush();
   await view.state.openVoice();
   const old = controller.state.session;
@@ -2380,212 +1879,6 @@ test("watch details preserve the conversation and use existing resume/cancel adm
 });
 
 
-test("an active Learning watch hands the lesson's declared app routes to the gesture owner", async t => {
-  const attemptId = "33333333-3333-4333-8333-333333333333";
-  const task = { attemptId, projectSlug: "practice", sessionId: "practice-session",
-    conversationId: "learning-main", learningClientId: "learning-client" };
-  const appRoutes = [{ method: "POST", path: "/api/notes" }];
-  const installed = [];
-  const gestureChannel = vue.shallowRef({ pollingTask: () => task, setPollingWatch(value) { installed.push(value); }, clearPollingWatch() {} });
-  const props = vue.reactive({ name: "Colleague", focus: { projectSlug: "practice", sessionId: "practice-session",
-    pane: "preview", learningAttemptId: attemptId, learningView: "workspace" } });
-  const watch = { watchId: "learning-watch", source: "learning-task", status: "active", projectSlug: "practice",
-    sessionId: "practice-session", condition: "reply", question: "Add one note.",
-    learningTask: { attemptId, sessionId: "practice-session", appRoutes } };
-  mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], watches: [watch], status: "ready" }),
-    props, vue.ref({ actorKey: "person-a" }), null, null, gestureChannel);
-  await flush();
-  assert.equal(installed.at(-1)?.watchId, "learning-watch");
-  assert.deepEqual(installed.at(-1).appRoutes, appRoutes);
-  assert.equal(typeof installed.at(-1).observe, "function");
-});
-
-// Genuine new Main native saved-block timing. The SAME shared cue/voice owners
-// run here; synthesis/playback transport is controlled, not acoustic acceptance.
-test("Main holds saved native blocks before checkpoint; failed A never speaks after proven B", async t => {
-  const { useVoiceConversation } = await import(new URL("./voiceConversation.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
-  const { useVoiceTransport } = await import(new URL("./voiceTransport.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
-  const scope = vue.effectScope(); t.after(() => scope.stop());
-  const cue = vue.ref(null); const turns = vue.ref([]); const spoken = []; const receipts = [];
-  const target = "actual-learning-main"; const actor = { mounted: true, actorKey: "own-viewer", clientId: "own-client",
-    conversationId: target, runtimeConversationId: target };
-  let shared; let session;
-  const presentation = { get state() { return { cue: cue.value }; }, playback(event) { receipts.push(event); },
-    observeCue() {}, retireCue() {} };
-  const makeCue = (turnId, cueId) => ({ clientId: actor.clientId, conversationId: target, turnId, cueId,
-    navigationId: `navigation-${cueId}`, outputId: "", canonicalFinal: false, phase: "armed" });
-  const user = id => ({ role: "user", messageId: id, text: `Request ${id}`, receipt: true });
-  scope.run(() => {
-    shared = useTrainingPresentationCue({ scope: () => actor, presentation: () => presentation,
-      voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref(""), holdMainReplies: true });
-    session = useVoiceConversation({ id: "same-main-binding", conversationId: target, defaults: { readAloud: true },
-      get state() { return shared.voiceState(projectConversationVoiceState({ turns: turns.value }), target, turns.value); },
-      get narration() { return shared.narration({ turns: turns.value, loading: false, working: true,
-        eligible: true, vocalizeThinking: true, vocalizeInterimTurns: true, thinkingSounds: false }, target); },
-      onPlayback(event) { shared.playback(event, target); }, submitText: async () => ({ delivered: true }) }, {
-      createTransport(configuration) {
-        const transport = useVoiceTransport(configuration);
-        transport.speak = async (text, turnId) => { spoken.push(text); transport.activeSpeechTurnId.value = turnId;
-          configuration.onPlayback({ turnId, phase: "started" }); return true; };
-        transport.appendSpeech = text => { spoken.push(text); return true; };
-        transport.endSpeech = () => { const turnId = transport.activeSpeechTurnId.value;
-          configuration.onPlayback({ turnId, phase: "completed" }); transport.activeSpeechTurnId.value = ""; };
-        return transport;
-      }
-    });
-  });
-  t.after(() => session.close());
-  await flush();
-  cue.value = makeCue("000001", "cue-a");
-  turns.value = [{ turnId: "000001", user: user("request-a"), assistant: {
-    role: "assistant", messageId: "native-block-a", outputId: "native-block-a", text: "Do not speak this unfinished A." } }];
-  await flush(); assert.deepEqual(spoken, [], "saved patch before checkpoint is held, not merely its stream overlay");
-  turns.value = [{ ...turns.value[0], thinking: [{ role: "thinking", messageId: "thinking-a", text: "Unconfirmed thinking A." }],
-    commentary: [{ role: "commentary", messageId: "commentary-a", text: "Unconfirmed interim A." }] }];
-  await flush();
-  await new Promise(resolve => setTimeout(resolve, 800));
-  assert.deepEqual(spoken, [], "optional narration cannot bypass the final hold at its original settle deadline");
-  cue.value = { ...cue.value, phase: "interrupted" };
-  await flush(); assert.deepEqual(spoken, [], "Stop does not release an unconfirmed saved reply");
-  session.stopSpeech(); session.inviteSpeech("request-b");
-  cue.value = makeCue("000002", "cue-b");
-  turns.value = [...turns.value, { turnId: "000002", user: user("request-b"), assistant: {
-    role: "assistant", messageId: "native-block-b", outputId: "native-block-b", text: "Hold B until its exact final." } }];
-  await flush(); assert.deepEqual(spoken, [], "a new invitation/cue must not expose the failed older A");
-  turns.value = [turns.value[0], { ...turns.value[1], assistant: { role: "assistant", messageId: "native-final-b",
-    outputId: "native-final-b", text: "The verified final B." } }];
-  await flush(); assert.deepEqual(spoken, [], "saving the final text alone is not native checkpoint proof");
-  cue.value = { ...cue.value, canonicalFinal: true, outputId: "native-final-b", phase: "bound" };
-  await flush();
-  assert.deepEqual(spoken, ["The verified final B."], "the exact proven B reaches the original queue once");
-  assert.deepEqual(receipts.map(event => [event.outputId, event.phase]), [["native-final-b", "started"], ["native-final-b", "completed"]]);
-  turns.value = turns.value.map(turn => ({ ...turn })); await flush();
-  assert.deepEqual(spoken, ["The verified final B."], "history/state refresh does not speak B twice");
-});
-
-test("Main saved-reply hold is opt-in; original Colleague projection is unchanged", t => {
-  const scope = vue.effectScope(); t.after(() => scope.stop());
-  const cue = vue.ref({ clientId: "own", conversationId: "original", turnId: "000001", phase: "armed", canonicalFinal: false });
-  const saved = { messages: [{ id: "saved", role: "assistant", text: "Original saved reply." }],
-    streamingReply: { id: "stream", role: "assistant", text: "Original stream." }, status: "working" };
-  let shared;
-  scope.run(() => { shared = useTrainingPresentationCue({ scope: () => ({ mounted: true, actorKey: "actor", clientId: "own", conversationId: "original" }),
-    presentation: () => ({ state: { cue: cue.value } }), voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref("") }); });
-  assert.deepEqual(shared.voiceState(saved, "original"), { ...saved, streamingReply: null });
-  assert.equal(shared.voiceState(saved, "other"), saved);
-});
-
-test("Main origin ceiling refuses prospectively through the original navigation ACK before player or audio effects", async t => {
-  const owner = vue.effectScope(); t.after(() => owner.stop());
-  const value = vue.ref(null), receipts = [], effects = [];
-  const current = { mounted: true, actorKey: "own", clientId: "client", conversationId: "main", runtimeConversationId: "main" };
-  let cue, navigation;
-  owner.run(() => {
-    cue = useTrainingPresentationCue({ scope: () => current, presentation: () => ({ state: { cue: value.value } }),
-      voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref(""), holdMainReplies: true });
-    navigation = createTrainingNavigation({ scope: () => current, beforeNavigate: () => undefined,
-      navigate: () => async command => { cue.requireCueCapacity(); effects.push(command.id); return {}; },
-      acknowledge: async receipt => { receipts.push(receipt); }, error: vue.ref("") });
-  });
-  for (let index = 0; index < 128; index += 1) {
-    value.value = { clientId: "client", conversationId: "main", turnId: `turn-${index}`, cueId: `cue-${index}`,
-      phase: "failed", canonicalFinal: false };
-  }
-  await flush();
-  const command = { id: "after-128", status: "pending", presentation: { operation: "cue" } };
-  await navigation.handle(command);
-  assert.deepEqual(effects, [], "capacity is checked inside the original effect before armCue/playback");
-  assert.equal(receipts.length, 1);
-  assert.equal(receipts[0].ok, false);
-  assert.match(receipts[0].error, /128 interrupted explanations/u);
-  await navigation.handle(command);
-  assert.equal(receipts.length, 2, "same original navigation receipt can be acknowledged again without another effect");
-  assert.deepEqual(receipts[1], receipts[0]);
-  // New cue and missing loaded pages do not clear old origins.
-  value.value = { clientId: "client", conversationId: "main", turnId: "new", phase: "armed", canonicalFinal: false };
-  assert.throws(() => cue.requireCueCapacity(), /128/u);
-  const saved = { messages: [{ id: "old-output", role: "assistant", text: "Old suppressed reply." }], streamingReply: null };
-  const turn = { turnId: "turn-0", assistant: { outputId: "old-output" } };
-  assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, []);
-  cue.voiceState({ messages: [], streamingReply: null }, "main", []);
-  assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, [], "page omission cannot evict suppression");
-});
-
-
-test("the actual general Colleague body delegates its trusted minimize/restore to selected Main without replacing its owner", async t => {
-  const observations = [], body = vue.shallowRef(null);
-  const main = { begin(event, control) { return event === nativeClick ? { control } : null; },
-    async finish(ticket) { observations.push({ control: ticket.control, visible: body.value.visible,
-      actor: body.value.actorKey, conversationId: body.value.conversationId }); } };
-  const channel = vue.shallowRef(main);
-  const view = mount(t, async () => ({ conversationId: "general-same", messages: [], status: "ready" }),
-    vue.reactive({ name: "Colleague" }), vue.ref({ actorKey: "member" }), null, null, channel, null, body);
-  await flush();
-  const owner = body.value;
-  assert.equal(channel.value, main);
-  view.state.draft.value = "Keep the supervisor draft";
-  await view.state.toggleConversation(nativeClick); await flush();
-  const voice = view.state.voice.controller.state.session;
-  await view.state.toggleConversation(nativeClick); await flush();
-  await view.state.toggleConversation(nativeClick); await flush();
-  assert.equal(body.value, owner);
-  assert.equal(channel.value, main);
-  assert.deepEqual(observations.map(value => [value.control, value.visible]),
-    [["colleague-restore", true], ["colleague-minimize", false], ["colleague-restore", true]]);
-  assert.ok(observations.every(value => value.actor === "member" && value.conversationId === "general-same"));
-  assert.equal(view.state.voice.controller.state.session, voice);
-  assert.equal(view.state.draft.value, "Keep the supervisor draft");
-  assert.equal(view.requests.some(value => value.url.endsWith("/training/observations")), false);
-});
-
-function mountMainGestureOwner(t, question = { ...workspaceQuestion, assessmentId: "return-to-colleague" }) {
-  const product = vue.ref({ conversationId: "actual-typed-main", trainingQuestion: question });
-  const actor = vue.ref("member"), current = vue.ref(true), visible = vue.ref(true), owner = vue.shallowRef({ body: "A" });
-  const conversationId = vue.ref("general-A"), requests = [], notices = [];
-  const scope = { actorKey: actor, product, clientId: "actual-client", current: () => current.value, preserveDrawer: true };
-  let gestures;
-  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const app = renderer.createApp({ setup() {
-    gestures = useTrainingLearnerGestures({ scope,
-      workspace: { focus: { projectSlug: "practice", sessionId: "practice-session", pane: "preview" }, settle: async () => ({ ...nativeWorkspace }) },
-      drawer: { bodyVisible: visible, xs: vue.ref(false), owner, conversationId },
-      observe: async request => { requests.push(structuredClone(request.body)); return { ok: true }; }, failure: error => notices.push(error.message) });
-    return () => null;
-  } });
-  app.mount({}); t.after(() => app.unmount());
-  return { gestures, product, actor, current, visible, owner, conversationId, requests, notices };
-}
-
-test("Main return practical retains the actual general body across collapse but refuses A-to-fresh-B evidence until a repeated question", async t => {
-  const f = mountMainGestureOwner(t);
-  const first = f.gestures.begin(nativeClick, "colleague-minimize"); assert.ok(first);
-  f.visible.value = false; assert.equal((await f.gestures.finish(first)).ok, true);
-  f.current.value = false; f.gestures.clear(); f.current.value = true;
-  const use = f.gestures.begin(nativeClick, "preview-select"); assert.ok(use);
-  assert.equal((await f.gestures.finish(use)).ok, true);
-  f.conversationId.value = "general-B";
-  f.product.value = { ...f.product.value, trainingQuestion: null };
-  f.product.value = { ...f.product.value, trainingQuestion: { ...workspaceQuestion, assessmentId: "return-to-colleague" } };
-  assert.equal(f.gestures.begin(nativeClick, "colleague-restore"), null);
-  assert.equal(f.requests.length, 2);
-  assert.match(f.notices[0], /Colleague changed.*repeat the question/u);
-  f.product.value = { ...f.product.value, trainingQuestion: { ...f.product.value.trainingQuestion, questionId: "genuine-repeat" } };
-  const restore = f.gestures.begin(nativeClick, "colleague-restore"); assert.ok(restore);
-  f.visible.value = true; assert.equal((await f.gestures.finish(restore)).ok, true);
-  assert.equal(f.requests.length, 3);
-  assert.equal(f.requests[2].reference.questionId, "genuine-repeat");
-});
-
-test("Main's selected lifetime and actual body handle fence held receipts; synthetic events still allocate no ticket", async t => {
-  const f = mountMainGestureOwner(t);
-  assert.equal(f.gestures.begin({ type: "click", isTrusted: false }, "colleague-minimize"), null);
-  const ticket = f.gestures.begin(nativeClick, "colleague-minimize"); assert.ok(ticket);
-  f.visible.value = false; f.owner.value = { body: "new body, same conversation" };
-  assert.equal(await f.gestures.finish(ticket), false);
-  assert.deepEqual(f.requests, []);
-  assert.equal(f.gestures.begin(nativeClick, "colleague-restore"), null);
-});
-
 test("Colleague application completion refreshes its canonical ready state after an earlier native settlement", async t => {
   const response = { conversationId: "conversation", status: "working", capabilities: { steering: false },
     messages: [{ id: "question", role: "user", text: "Remember this reply." }] };
@@ -2638,61 +1931,6 @@ test("window focus and clicks never refresh Colleague while explicit refresh sti
 });
 
 
-test("the local browser navigator returns plain settled focus for an ordinary Learning workspace view", async t => {
-  const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const attemptId = "9490f94a-c614-4581-9111-0debb2339ca8";
-  const identity = { actorKey: "learning-local", learnerId: "1000", learningAttemptId: attemptId,
-    sourceProjectSlug: "training-9490f94ac614458191110debb2339ca8", sessionId: `training-${attemptId}`,
-    sessionsApiPath: `/api/learning/${attemptId}/vibe64/sessions`, noExercise: false };
-  const route = vue.reactive({ path: `/app/project/${identity.sourceProjectSlug}`, query: { mode: "learning", learningView: "learning" } });
-  const view = vue.ref({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId, ready: true,
-    pane: "lessons", learningView: "learning", learningBinding: identity });
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "c78-workspace-view" }).content, { format: "cjs" });
-  const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
-    "@local/vibe64-training/client/presentation-operation": operations,
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
-      projectSlugFromRoute: () => identity.sourceProjectSlug },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => false },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const navigation = vue.shallowRef(null);
-  const host = renderer.createApp({ ...module.exports.default, render: () => null });
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: identity.actorKey });
-  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, view);
-  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: identity.sourceProjectSlug,
-    projectVisible: true, showProject() {}, showChat() {} }));
-  // The retained Learning owner applies the workspace view, as vibe64.training.view.open does.
-  host.provide(hostKeys.VIBE64_LEARNING_NAVIGATION_KEY, vue.ref(async command => {
-    view.value = { ...view.value, pane: command.pane, learningView: command.learningView };
-  }));
-  host.mount({}); t.after(() => host.unmount());
-  await flush();
-  const result = await navigation.value({ id: "workspace-preview", status: "pending", projectSlug: identity.sourceProjectSlug,
-    sessionId: identity.sessionId, pane: "preview", learningMode: true, learningView: "workspace", learningAttemptId: attemptId });
-  assert.equal(Object.hasOwn(result, "focus"), false, "only presentation operations wrap their focus");
-  assert.equal(result.pane, "preview");
-  assert.equal(result.learningView, "workspace");
-  // Phase 2 retired Main's presentation acknowledgement action that validated this focus.
-});
-
 test("the local Colleague host hands Colleague its own browser navigator", async t => {
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
@@ -2705,10 +1943,8 @@ test("the local Colleague host hands Colleague its own browser navigator", async
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
       setup(props) { received = props; return () => null; } } },
-    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
     "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
     "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
@@ -2745,10 +1981,8 @@ test("the local Colleague host reports the shared Learning state and opens its e
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
       setup(props) { received = props; return () => null; } } },
-    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
     "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
     "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
@@ -2787,10 +2021,6 @@ test("the local Colleague host reports the shared Learning state and opens its e
     [true, "lesson", attemptId, "two"]);
   const minimised = await navigation.value({ id: "minimise", status: "pending", learning: { open: false } });
   assert.equal(minimised.learningOpen, false);
-  // Outside Learning mode the held lesson is the Learning environment's, so a
-  // retired Learning-mode exit still settles while it is reported.
-  const left = await navigation.value({ id: "leave", status: "pending", projectSlug: "demo", learningMode: false });
-  assert.deepEqual([left.learningMode, left.pane, left.learningAttemptId], [false, "preview", attemptId]);
 });
 
 test("the local Colleague host refuses a Learning command when no Learning controller is provided", async t => {
@@ -2805,10 +2035,8 @@ test("the local Colleague host refuses a Learning command when no Learning contr
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
       setup(props) { received = props; return () => null; } } },
-    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
     "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
     "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
@@ -2832,45 +2060,3 @@ test("the local Colleague host refuses a Learning command when no Learning contr
   await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Learning is unavailable/u);
 });
 
-test("the local Colleague host reports a project-less lesson's own session instead of the page project", async t => {
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "colleague-sourceless-focus", inlineTemplate: true }).content, { format: "cjs" });
-  let received = null;
-  const attemptId = "8813ab97-f478-4d43-a492-7e7961fc0090";
-  const route = vue.reactive({ path: "/app/project/editor-project", query: { mode: "learning", learningView: "learning" } });
-  const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
-      setup(props) { received = props; return () => null; } } },
-    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "editor-project" },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
-    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const host = renderer.createApp(module.exports.default);
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
-  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, vue.ref({ projectSlug: "", sessionId: `learning-${attemptId}`, ready: true,
-    pane: "lessons", learningView: "learning", learningBinding: { noExercise: true, learningAttemptId: attemptId, sourceProjectSlug: "" } }));
-  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: "", projectVisible: true }));
-  host.mount({}); t.after(() => host.unmount());
-  await flush();
-  assert.equal(received.focus.projectSlug, "");
-  assert.equal(received.focus.sessionId, `learning-${attemptId}`);
-  assert.equal(received.focus.learningAttemptId, attemptId);
-  assert.equal(received.focus.pane, "lessons");
-});

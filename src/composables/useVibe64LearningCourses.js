@@ -1,43 +1,25 @@
 import { computed, inject, onScopeDispose, ref, shallowRef, toValue, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import { projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
 
 const TRAINING_PATH = "/api/vibe64/training";
 
-// This UI adapter owns neither admission nor progress. Original Training and
-// Sessions actions reauthorize every captured attempt before changing anything.
-// `active` (a ref or getter) selects the Learning environment (L) instead of the
-// legacy route mode: the same resources, admission and requests are used while
-// L is open, without the route flag or its mode guard.
-export function useVibe64LearningMode({ onConversationOpened = null, authorPreview = false, active = null } = {}) {
-  const route = useRoute();
-  const router = useRouter();
+// The Learning environment's (L) Courses adapter. It owns neither admission nor
+// progress: original Training actions reauthorize every captured attempt before
+// changing anything. `active` (a ref or getter) is L's open state; requests are
+// made only while L is open, and L stays above the app, so app navigation
+// behind it does not retire them.
+export function useVibe64LearningCourses({ authorPreview = false, active } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
-  const environment = active !== null;
-  const learningMode = computed(() => environment ? toValue(active) === true : route.query.mode === "learning");
-  const learningView = computed(() => route.query.learningView === "learning" ? "learning" : "workspace");
-  const purposeFilter = computed(() => learningMode.value ? "learning" : "working");
+  const open = computed(() => toValue(active) === true);
   let generation = 0;
   let disposed = false;
-  // L stays above the app, so app navigation behind it does not retire its requests.
-  watch(() => [actorKey.value, environment ? "" : route.fullPath, learningMode.value], () => { generation += 1; }, { flush: "sync" });
-  // Learning is a page mode: ordinary navigation inside the same project (the
-  // Dashboard's section links and back buttons) keeps it. Leaving Learning
-  // replaces the same path without the flag, so it is never re-added.
-  const removeModeGuard = !environment && typeof router?.beforeEach === "function" ? router.beforeEach((to, from) => {
-    if (from.query?.mode !== "learning" || Object.hasOwn(to.query || {}, "mode") || to.path === from.path) return true;
-    const slug = projectSlugFromPathname(from.path);
-    if (!slug || projectSlugFromPathname(to.path) !== slug) return true;
-    return { path: to.path, hash: to.hash, query: { ...to.query, mode: "learning",
-      ...(from.query.learningView ? { learningView: from.query.learningView } : {}) } };
-  }) : null;
-  onScopeDispose(() => { disposed = true; generation += 1; removeModeGuard?.(); });
+  watch(() => [actorKey.value, open.value], () => { generation += 1; }, { flush: "sync" });
+  onScopeDispose(() => { disposed = true; generation += 1; });
 
   function readResource(name, enabled = null) {
     const client = getHttpWebClient();
@@ -73,15 +55,14 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
 
   const coursesResource = readResource("courses");
   const learningResource = readResource("learning");
-  // The official catalogue is read from GitHub by the server, so only in Learning.
-  const availableResource = readResource("available", learningMode);
+  // The official catalogue is read from GitHub by the server, so only while L is open.
+  const availableResource = readResource("available", open);
   const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
   const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", authorPreviewEnabled);
-  // Colleague may admit an author trial while this route stays mounted in
-  // Working. Entering Learning must reread the saved attempt, not reuse that
-  // earlier empty picker result. This remains the existing authorized query.
-  watch(learningMode, (active, previous) => {
-    if (active && !previous) void refresh();
+  // Colleague may admit an author trial while L is closed. Opening L must
+  // reread the saved attempt, not reuse that earlier empty picker result.
+  watch(open, (value, previous) => {
+    if (value && !previous) void refresh();
   });
   const savedAuthorPreview = computed(() => {
     const result = authorPreviewResource?.data.value;
@@ -105,32 +86,14 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     fallbackRunError: "The lesson request was not confirmed. Retry the same request before starting another lesson."
   });
 
-  async function setLearningMode(value) {
-    const query = { ...route.query };
-    if (value) query.mode = "learning";
-    else {
-      delete query.mode;
-      delete query.learningView;
-    }
-    return router.replace({ path: route.path, hash: route.hash, query });
-  }
-
-  async function setLearningView(value) {
-    if (!learningMode.value || !["workspace", "learning"].includes(value)) {
-      throw new Error("Open Learning mode before changing its workspace view.");
-    }
-    return router.replace({ path: route.path, hash: route.hash,
-      query: { ...route.query, learningView: value } });
-  }
-
   function capture() {
-    if (disposed || !actorKey.value || !learningMode.value || !learnerId.value) {
-      throw new Error("Open Learning mode and read your saved lessons before making a lesson request.");
+    if (disposed || !actorKey.value || !open.value || !learnerId.value) {
+      throw new Error("Open Learning and read your saved lessons before making a lesson request.");
     }
     return Object.freeze({ actor: actorKey.value, learnerId: learnerId.value, generation });
   }
   const current = scope => !disposed && scope.actor === actorKey.value && scope.learnerId === learnerId.value
-    && scope.generation === generation && learningMode.value
+    && scope.generation === generation && open.value
     && (!scope.authorPreviewAttemptId || (authorPreviewEnabled.value &&
       savedAuthorPreview.value?.attemptId === scope.authorPreviewAttemptId && !authorPreviewResource.loadError.value));
 
@@ -140,7 +103,7 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
       ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
   }
 
-  async function prepare(path, body, scope, { openConversation = true, attemptId = "" } = {}) {
+  async function prepare(path, body, scope, { attemptId = "" } = {}) {
     const result = await command.run({ path, body });
     if (!result || result.ok !== true || result.available !== true) {
       throw new Error("The lesson request did not return a confirmed saved attempt. Retry the same request.");
@@ -151,27 +114,15 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     if (!admitted?.attemptId || (attemptId && admitted.attemptId !== attemptId)) {
       throw new Error("The lesson response did not confirm the requested attempt.");
     }
-    let conversation = null;
-    if (openConversation && !admitted.ended && current(scope)) {
-      conversation = await command.run({
-        path: `/api/learning/${encodeURIComponent(admitted.attemptId)}/vibe64/sessions`, body: {}
-      });
-      if (conversation?.ok !== true || !conversation?.sessionId) {
-        throw new Error("The saved lesson conversation was not confirmed. Resume this exact attempt to open it again.");
-      }
-    }
     if (current(scope)) {
       await learningResource.reload();
       if (scope.authorPreviewAttemptId) await authorPreviewResource.reload();
-      if (conversation && current(scope)) {
-        onConversationOpened?.({ attemptId: admitted.attemptId, sessionId: conversation.sessionId, learnerId: scope.learnerId });
-      }
     }
     return { result, attemptId: admitted.attemptId, learnerId: scope.learnerId,
-      sessionId: conversation?.sessionId || "", ended: Boolean(admitted.ended), current: current(scope) };
+      ended: Boolean(admitted.ended), current: current(scope) };
   }
 
-  async function startLesson(selection, options = {}) {
+  async function startLesson(selection) {
     if (busy.value) return null;
     const scope = capture();
     const input = Object.freeze({ courseId: selection.courseId, release: selection.release,
@@ -188,23 +139,23 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     starting.value = true;
     try {
       const outcome = await prepare(`${TRAINING_PATH}/lessons/start`,
-        { ...request.input, requestId: request.requestId }, scope, options);
+        { ...request.input, requestId: request.requestId }, scope);
       if (pendingStart.value === request) pendingStart.value = null;
       return { ...outcome, requestId: request.requestId };
     } finally { busy.value = false; starting.value = false; }
   }
 
-  function retryStart(options = {}) {
+  function retryStart() {
     if (!startRetry.value) throw new Error("There is no unconfirmed lesson start for this account.");
-    return startLesson(startRetry.value, options);
+    return startLesson(startRetry.value);
   }
 
-  async function resumeLesson(attemptId, options = {}) {
+  async function resumeLesson(attemptId) {
     if (busy.value) return null;
     const scope = capture();
     busy.value = true;
     try {
-      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { ...options, attemptId });
+      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId });
     } finally { busy.value = false; }
   }
 
@@ -256,17 +207,17 @@ export function useVibe64LearningMode({ onConversationOpened = null, authorPrevi
     }
   }
 
-  async function resumeAuthorPreview(attemptId, options = {}) {
+  async function resumeAuthorPreview(attemptId) {
     if (busy.value) return null;
     const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
     if (!attemptId || !current(scope)) throw new Error("Read this owner's exact saved author trial before reopening it.");
     busy.value = true;
     try {
-      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { ...options, attemptId });
+      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId });
     } finally { busy.value = false; }
   }
 
-  return Object.freeze({ learningMode, learningView, purposeFilter, setLearningMode, setLearningView,
+  return Object.freeze({ active: open,
     coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
     refresh, startLesson, retryStart, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

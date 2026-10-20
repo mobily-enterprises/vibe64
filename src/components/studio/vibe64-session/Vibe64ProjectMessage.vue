@@ -50,7 +50,7 @@ const sessions = useEndpointResource({
   queryOptions: { refetchOnMount: false, refetchOnWindowFocus: false },
   realtime: {
     events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
-    matches: ({ payload = {} } = {}) => !payload.learningAttemptId &&
+    matches: ({ payload = {} } = {}) =>
       (!payload.projectSlug || payload.projectSlug === project.value) && (!payload.reason || payload.reason === "session-renamed")
   }
 });

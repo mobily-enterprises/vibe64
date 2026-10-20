@@ -16,17 +16,9 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
-import { mdiSchoolOutline } from "@mdi/js";
-import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
-import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
-import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
-import { VIBE64_LEARNING_NAVIGATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
-const LEARNING_TAB = Object.freeze({ id: "learning", label: "Learning", icon: mdiSchoolOutline,
-  title: "Learning: courses and lesson" });
 
 const {
   chatCollapsed,
@@ -57,102 +49,15 @@ const {
   retryProjectRuntime,
   selectProjectPane,
   setChatCollapsed,
-  showProjectPane: showWorkingProjectPane,
+  showProjectPane,
   switcherProjects,
   targetFolderName
 } = useVibe64AppPage();
-
-const panel = ref(null);
-const learning = useVibe64LearningMode({ onConversationOpened(identity) {
-  panel.value?.selectLearningConversation(identity);
-} });
-const { learningMode, learningView, purposeFilter, learningResource } = learning;
-const learningWorkspaceAvailable = computed(() => panel.value?.learningWorkspaceAvailable === true);
-const learningPaneActive = computed(() => learningMode.value &&
-  (learningView.value === "learning" || !learningWorkspaceAvailable.value));
-function showProjectPane() {
-  if (learningMode.value) {
-    if (!learningWorkspaceAvailable.value) return;
-    void learning.setLearningView("workspace");
-  }
-  showWorkingProjectPane();
-}
-// One header for both modes: Learning only adds its graduation-cap option to
-// the same Preview | Dashboard group; selecting it shows the Learning panes.
-const headerTabs = computed(() => learningMode.value ? [...projectTabs, LEARNING_TAB] : projectTabs);
-const activeHeaderTab = computed(() => learningPaneActive.value ? "learning" : projectPane.value);
-const headerTabDisabled = id => learningMode.value && id !== "learning" && !learningWorkspaceAvailable.value;
-async function selectHeaderTab(id, event) {
-  if (headerTabDisabled(id)) return;
-  if (id === "learning") return learning.setLearningView("learning");
-  if (learningMode.value && learningView.value !== "workspace") await learning.setLearningView("workspace");
-  selectProjectPane(id, event);
-}
-// The phone header keeps Working's single "next pane" button; Learning's cap is
-// one more stop in that cycle.
-const mobileHeaderAction = computed(() => {
-  if (!learningMode.value) return mobileProjectAction.value;
-  const ids = headerTabs.value.map(tab => tab.id).filter(id => !headerTabDisabled(id));
-  const next = headerTabs.value.find(tab => tab.id === ids[(ids.indexOf(activeHeaderTab.value) + 1) % ids.length]);
-  return next.id === activeHeaderTab.value ? null
-    : { ariaLabel: `Go to ${next.label.toLowerCase()}`, label: next.label, pane: next.id };
-});
-
-const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
-function waitForLearningPanel(action, isCurrent, failure) {
-  return new Promise((resolve, reject) => {
-    let stop;
-    const timer = setTimeout(() => finish(new Error(failure)), 12000);
-    function finish(error) {
-      clearTimeout(timer);
-      if (stop) stop();
-      else queueMicrotask(() => stop?.());
-      if (error) reject(error);
-      else resolve();
-    }
-    stop = watchEffect(() => {
-      if (!isCurrent()) finish(new Error("The Learning navigation target changed before it opened."));
-      else if (action()) finish();
-    }, { flush: "post" });
-  });
-}
-async function navigateLearning(command, isCurrent = () => true) {
-  if (command.learningMode === false) {
-    if (learningMode.value) await learning.setLearningMode(false);
-    return;
-  }
-  if (command.learningMode !== true) return;
-  if (!learningMode.value) await learning.setLearningMode(true);
-  if (!isCurrent()) throw new Error("The Learning navigation target changed before it opened.");
-  await nextTick();
-  if (command.learningContent === "picker") {
-    await waitForLearningPanel(() => panel.value?.showLearningPicker() === true, isCurrent,
-      "The lesson picker did not become available.");
-  } else if (command.learningAttemptId || command.sessionId) {
-    const identity = { attemptId: command.learningAttemptId, sessionId: command.sessionId,
-      learnerId: learning.learnerId.value };
-    await waitForLearningPanel(() => panel.value?.selectLearningConversation(identity) === true, isCurrent,
-      "The requested Learning session did not become available.");
-  }
-  if (command.learningView && learningView.value !== command.learningView) {
-    if (command.learningView === "workspace" && panel.value?.learningWorkspaceAvailable !== true) {
-      throw new Error("This lesson has no project workspace.");
-    }
-    await learning.setLearningView(command.learningView);
-  }
-}
-if (learningNavigation) learningNavigation.value = navigateLearning;
-onBeforeUnmount(() => {
-  if (learningNavigation?.value === navigateLearning) learningNavigation.value = null;
-});
 
 </script>
 
 <template>
   <StudioAppShellLayout
-    show-learning-mode-control
-    :learning-mode="learningMode"
-    @update:learning-mode="learning.setLearningMode"
     :chat-collapsed="chatCollapsed"
     :mobile-pane-swipe-enabled="mobilePaneSwipeEnabled"
     @update:chat-collapsed="setChatCollapsed"
@@ -163,8 +68,7 @@ onBeforeUnmount(() => {
         :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
       >
         <div class="studio-home-shell-title-area">
-          <Vibe64LearningPracticeProjectSelector v-if="learningMode" :panel="panel" />
-          <v-menu v-else location="bottom start">
+          <v-menu location="bottom start">
             <template #activator="{ props: menuProps }">
               <v-btn
                 class="studio-home-shell-project-selector"
@@ -233,45 +137,39 @@ onBeforeUnmount(() => {
           />
 
           <div
-            v-if="projectPaneNavigationVisible || learningMode"
+            v-if="projectPaneNavigationVisible"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"
           >
             <button
-              v-for="tab in headerTabs"
+              v-for="tab in projectTabs"
               :key="tab.id"
               class="studio-home-shell-project-tab"
-              :class="{ 'studio-home-shell-project-tab--active': activeHeaderTab === tab.id }"
+              :class="{ 'studio-home-shell-project-tab--active': projectPane === tab.id }"
               role="tab"
               type="button"
               :data-vibe64-guide="tab.id"
-              :aria-label="tab.icon ? tab.label : undefined"
-              :aria-selected="activeHeaderTab === tab.id ? 'true' : 'false'"
-              :aria-disabled="headerTabDisabled(tab.id) ? 'true' : undefined"
-              :disabled="headerTabDisabled(tab.id)"
-              :title="headerTabDisabled(tab.id) ? 'This lesson has no project workspace' : tab.title"
-              @click="selectHeaderTab(tab.id, $event)"
+              :aria-selected="projectPane === tab.id ? 'true' : 'false'"
+              @click="selectProjectPane(tab.id, $event)"
             >
-              <v-icon v-if="tab.icon" :icon="tab.icon" size="18" />
-              <template v-else>{{ tab.label }}</template>
+              {{ tab.label }}
             </button>
           </div>
           <div
             v-if="previewToolbarHostVisible"
-            v-show="!learningPaneActive"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
           />
           <button
-            v-if="mobileProjectActionVisible && mobileHeaderAction"
+            v-if="mobileProjectActionVisible && mobileProjectAction"
             class="studio-home-shell-project-mobile-action"
             data-vibe64-guide="pane-switch"
             type="button"
-            :aria-label="mobileHeaderAction.ariaLabel"
-            @click="selectHeaderTab(mobileHeaderAction.pane, $event)"
+            :aria-label="mobileProjectAction.ariaLabel"
+            @click="selectProjectPane(mobileProjectAction.pane, $event)"
           >
-            {{ mobileHeaderAction.label }}
+            {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
         </div>
@@ -282,7 +180,7 @@ onBeforeUnmount(() => {
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert
-        v-if="pageError && (!learningMode || !learningPaneActive)"
+        v-if="pageError"
         type="error"
         variant="tonal"
         border="start"
@@ -293,8 +191,6 @@ onBeforeUnmount(() => {
 
       <div class="studio-screen__gate-scroll">
         <ProjectSelectionGate
-          retain-independent-content
-          :independent-content="learningMode"
           :runtime-ready="projectRuntimeReady"
           :runtime-error="projectRuntimeError"
           @retry-runtime="retryProjectRuntime"
@@ -306,7 +202,7 @@ onBeforeUnmount(() => {
         >
           <template #default="projectSelectionSlotProps">
             <Teleport
-              v-if="!learningMode && projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
+              v-if="projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
               to="#studio-home-shell-local-remotes"
               defer
             >
@@ -315,24 +211,16 @@ onBeforeUnmount(() => {
               />
             </Teleport>
             <Vibe64SessionPanel
-              ref="panel"
-              :active="projectSelectionSlotProps.contentActive"
-              :learning-resource="learningResource"
-              :learning-view="learningPaneActive ? 'learning' : 'workspace'"
-              :purpose-filter="purposeFilter"
               :chat-collapsed="chatCollapsed"
               create-session-teleport-target="#studio-home-shell-create-session"
               :github-actor-teleport-target="githubActorTeleportTarget"
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
-              :preview-toolbar-teleport-target="learningPaneActive ? '' : previewToolbarTeleportTarget"
-              :project-pane="learningPaneActive ? 'dashboard' : projectPane"
+              :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
+              :project-pane="projectPane"
               @title-change="emitPageTitle"
               @chat-attention="setChatCollapsed(false)"
               @project-attention="showProjectPane"
             >
-              <template #learning>
-                <Vibe64LearningLessonLauncher v-if="learningMode" :learning="learning" />
-              </template>
               <template #dashboard="dashboardSlotProps">
                 <RouterView
                   v-if="dashboardRouteActive"
@@ -550,8 +438,7 @@ onBeforeUnmount(() => {
 
 /* M3 segmented button: an outlined pill of equal-width segments split by
    hairlines. The selected segment fills with the secondary container and
-   gains a check that slides in; the graduation cap is a full, equal segment
-   whose selected state is the warm Learning container. */
+   gains a check that slides in. */
 .studio-home-shell-project-tabs {
   border: 1px solid var(--v64-outline);
   border-radius: var(--v64-shape-full);
@@ -633,15 +520,6 @@ onBeforeUnmount(() => {
   --studio-home-shell-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
 }
 
-.studio-home-shell-project-tab[data-vibe64-guide="learning"] {
-  color: var(--v64-on-learning-container);
-}
-
-.studio-home-shell-project-tab--active[data-vibe64-guide="learning"] {
-  background: var(--v64-learning-container);
-  box-shadow: inset 0 -2px 0 var(--v64-learning-strong);
-}
-
 .studio-home-shell-project-tab:disabled {
   color: color-mix(in srgb, var(--v64-on-surface) 38%, transparent);
   cursor: not-allowed;
@@ -665,8 +543,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-/* Phone "next pane" control: an M3 tonal pill button with a 40px target;
-   heading to Learning it takes the warm Learning container. */
+/* Phone "next pane" control: an M3 tonal pill button with a 40px target. */
 .studio-home-shell-project-mobile-action {
   align-items: center;
   background: var(--v64-secondary-container);
@@ -695,11 +572,6 @@ onBeforeUnmount(() => {
 .studio-home-shell-project-mobile-action:focus-visible {
   outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
   outline-offset: var(--v64-focus-ring-offset);
-}
-
-.studio-home-shell-project-mobile-action[aria-label="Go to learning"] {
-  background: var(--v64-learning-container);
-  color: var(--v64-on-learning-container);
 }
 
 @media (prefers-reduced-motion: reduce) {

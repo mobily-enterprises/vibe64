@@ -37,7 +37,6 @@ vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
   })
 }));
 
-import { VIBE64_LESSON_DASHBOARD_KEY, lessonDashboardScope } from "../../src/lib/vibe64LessonDashboard.js";
 import {
   useVibe64SystemGraph
 } from "../../packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js";
@@ -114,30 +113,21 @@ describe("Genesis City client resources", () => {
     const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];
     expect(binding).toBeDefined();
-    const childActive = new Function("props", "rightPaneTab", "normalWorkspaceActive", `return (${binding});`);
+    const childActive = new Function("props", "rightPaneTab", `return (${binding});`);
     const props = reactive({ active: true, projectPane: "dashboard" });
     const rightPaneTab = ref(pane);
-    const normalWorkspaceActive = ref(true);
     const sessionId = ref("session/a");
     const scope = effectScope();
     try {
       scope.run(() => useTool({
-        active: computed(() => childActive(props, rightPaneTab.value, normalWorkspaceActive.value)),
+        active: computed(() => childActive(props, rightPaneTab.value)),
         sessionId
       }));
       expect(endpointMocks.calls).toHaveLength(resources);
       expect(endpointMocks.calls[0].enabled.value).toBe(true);
       const paths = endpointMocks.calls.map((call) => call.path.value);
       const keys = endpointMocks.calls.map((call) => call.queryKey.value);
-      const enabled = endpointMocks.calls.map((call) => unref(call.enabled));
       expect(paths[0]).toContain("/sessions/session%2Fa");
-
-      normalWorkspaceActive.value = false;
-      await nextTick();
-      expect(endpointMocks.calls.every((call) => unref(call.enabled) === false)).toBe(true);
-      normalWorkspaceActive.value = true;
-      await nextTick();
-      expect(endpointMocks.calls.map((call) => unref(call.enabled))).toEqual(enabled);
 
       props.active = false;
       await nextTick();
@@ -194,33 +184,6 @@ describe("Genesis City client resources", () => {
     expect(unref(status.enabled)).toBe(true);
     expect(endpointMocks.resources[0].reload).toHaveBeenCalled();
     scope.stop();
-  });
-
-  it("reads a practice lesson's Architecture on its lesson URL and follows only that attempt's refresh events", () => {
-    const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-    let graph;
-    const app = createRenderer({ createComment: () => ({}), insert() {}, nextSibling: () => null,
-      parentNode: () => null, remove() {} }).createApp({ setup() {
-      graph = useVibe64SystemGraph({ active: ref(true), sessionId: ref("training-own") });
-      return () => null;
-    } });
-    app.provide(routeLocationKey, reactive({ path: "/app/project/working", fullPath: "/app/project/working",
-      params: { slug: "working" }, query: {} }));
-    app.provide(VIBE64_LESSON_DASHBOARD_KEY, ref(lessonDashboardScope(attemptId, "training-own")));
-    app.mount({});
-    try {
-      expect(graph).toBeTruthy();
-      const paths = endpointMocks.calls.map(call => unref(call.path));
-      expect(paths).toHaveLength(8);
-      for (const path of paths) expect(path.startsWith(`/api/learning/${attemptId}/vibe64/system-graph/sessions/training-own/`)).toBe(true);
-      // The Working project's cache entries are never reused for the lesson.
-      for (const call of endpointMocks.calls) expect(JSON.stringify(unref(call.queryKey))).not.toContain("working");
-      const status = endpointMocks.calls.find(call => call.realtime);
-      const event = payload => status.realtime.matches({ payload: { sessionId: "training-own", reason: "architecture-refresh", ...payload } });
-      expect(event({ learningAttemptId: attemptId, projectSlug: "" })).toBe(true);
-      expect(event({ learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", projectSlug: "" })).toBe(false);
-      expect(event({ projectSlug: "working" })).toBe(false);
-    } finally { app.unmount(); }
   });
 
   it("reads status and native Cities, then refreshes synchronously", async () => {

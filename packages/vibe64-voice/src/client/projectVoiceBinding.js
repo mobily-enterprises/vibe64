@@ -10,11 +10,6 @@ export function projectVoiceState(runtime) {
 
 export function createProjectVoiceBinding(runtime, view = {}) {
   const identity = runtime.identity;
-  // Learning v2 retired the lesson teacher's conversation; Colleague voice
-  // teaches lessons. A project conversation is the only voice target here.
-  if (identity.learningAttemptId !== undefined) {
-    throw new TypeError("Lesson conversations have no voice. Use Colleague voice to learn with a lesson.");
-  }
   let retained;
   return {
     preferenceTarget: "coding",

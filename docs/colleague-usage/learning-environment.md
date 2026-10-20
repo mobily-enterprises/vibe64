@@ -18,11 +18,9 @@ to exactly that page. The app underneath keeps working and is never replaced.
   account prerequisites are complete.
 
 Pressing **L** again while Learning is open closes it. The old Learning mode
-(tinted header, graduation-cap tab, teacher conversation) is no longer opened
-by L; earlier lesson history stays readable. If a page is still in the old
-mode (an earlier `?mode=learning` address or a Colleague request), L is lit
-and titled **Leave Learning mode and open Learning**: pressing it leaves that
-mode and opens the Learning environment.
+(tinted header, graduation-cap tab, teacher conversation) has been retired; an
+earlier `?mode=learning` address opens the ordinary project page, and earlier
+lesson history stays readable in Learning.
 
 ## The Learning screen
 
@@ -48,7 +46,7 @@ below them.
 **Course catalogue** with **Install** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)) and,
 for the workspace owner, **New course** (see
-[Choosing lessons and Learning conversations](learning-mode-ui.md)).
+[Choosing lessons and courses](learning-mode-ui.md)).
 
 - **Start**, **Start next lesson**, **Start lesson** or **Try preview** start
   the lesson and open it straight away in the lesson tab. No teacher chat is

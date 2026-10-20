@@ -79,10 +79,8 @@
           />
         </div>
         <Vibe64TemporaryAiWorkspace
-          v-if="hostConversation" v-show="props.purposeFilter !== 'learning'"
-          class="studio-ai-sessions__empty-host-conversation"
-          :active="props.active && props.purposeFilter !== 'learning'"
-          @select-main-chat="closeEmptyHostConversation"
+          v-if="hostConversation" class="studio-ai-sessions__empty-host-conversation" active
+          @select-main-chat="hostConversation.close()"
         />
         <div class="studio-ai-sessions__empty-chat-body">
           <div
@@ -112,10 +110,7 @@
           v-if="dashboardProjectActive"
           class="studio-ai-sessions__dashboard-empty-pane"
         >
-          <TrainingPreviewPresentation v-if="props.purposeFilter === 'learning'" :active="props.active" learning-pane-active :workspace-active="false" lessons-available :app-available="false" project-slug="" session-id="">
-            <template #lessons><slot name="learning" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" /></template>
-          </TrainingPreviewPresentation>
-          <slot v-else name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
+          <slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
         </div>
         <div
           v-else
@@ -165,10 +160,9 @@
         v-for="runtimeSessionId in runtimeHostSessionIds"
         v-show="runtimeSessionId === selection.selectedSessionId"
         :key="runtimeSessionId"
-        :active="props.active && runtimeSessionId === selection.selectedSessionId"
+        :active="runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
         :session-id="runtimeSessionId"
-        :workspace-purpose="props.purposeFilter"
         :chat-collapsed="chatCollapsed"
         :create-session-teleport-target="!emptyLayoutVisible && !selectedSessionArchiving && runtimeSessionId === selection.selectedSessionId ? props.createSessionTeleportTarget : ''"
         :github-actor-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''"
@@ -176,8 +170,6 @@
         :preview-toolbar-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.previewToolbarTeleportTarget : ''"
         :prompt-hint-policy="promptHintPolicy"
         :project-pane="projectPane"
-        :lessons-available="props.purposeFilter === 'learning'"
-        :learning-view="props.learningView"
         :toolbar-sessions="toolbar.sessions"
         :refresh-repository-state="toolbar.refreshRepositoryState"
         @busy-change="setRuntimeBusy"
@@ -195,12 +187,6 @@
             :dashboard-context="{ ...(dashboardSlotProps?.dashboardContext || {}), sessionToolbar: toolbar }"
           />
         </template>
-        <template #learning="learningSlotProps">
-          <slot
-            name="learning"
-            :dashboard-context="{ ...(learningSlotProps?.dashboardContext || {}), sessionToolbar: toolbar }"
-          />
-        </template>
       </Vibe64SessionRuntimeHost>
     </div>
   </v-sheet>
@@ -208,13 +194,12 @@
 
 <script setup>
 import { computed, inject, provide } from "vue";
-import { VIBE64_HOST_CONVERSATION_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64SessionArchiveDialog from "@/components/studio/vibe64-session/Vibe64SessionArchiveDialog.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
-import TrainingPreviewPresentation from "@local/vibe64-training/client/preview-presentation";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {
@@ -269,54 +254,6 @@ const {
   toolbar,
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
-
-function closeEmptyHostConversation() {
-  if (props.active && props.purposeFilter !== "learning") hostConversation?.close();
-}
-
-function selectLearningConversation({ sessionId, attemptId, learnerId } = {}) {
-  if (props.purposeFilter !== "learning" || learnerId !== sessionData.learningLearnerId.value) return false;
-  const row = sessionData.availableSessions.value.find(value => value.sessionId === sessionId);
-  if (!row || row.purpose !== "learning" || row.learningAttemptId !== attemptId) return false;
-  sessionData.selectSessionId(sessionId);
-  return sessionData.selectedSessionId.value === sessionId;
-}
-function showLearningPicker() {
-  if (props.purposeFilter !== "learning") return false;
-  sessionData.selectSessionId("");
-  return sessionData.selectedSessionId.value === "";
-}
-const learningSelection = computed(() => {
-  const row = sessionData.selectedSession.value;
-  return props.purposeFilter === "learning" && row?.purpose === "learning" && row.learningAttemptId
-    ? Object.freeze({ sessionId: row.sessionId, attemptId: row.learningAttemptId,
-      learnerId: sessionData.learningLearnerId.value, projectSlug: row.projectSlug || "" }) : null;
-});
-const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-const learningPracticeChoices = computed(() => props.purposeFilter === "learning" && sessionData.learningLearnerId.value
-  ? sessionData.availableSessions.value.filter(row => row.purpose === "learning" && row.noExercise === false &&
-      row.projectSlug && row.learningAttemptId && row.archived !== true)
-    .map(row => Object.freeze({ sessionId: row.sessionId, attemptId: row.learningAttemptId,
-      learnerId: sessionData.learningLearnerId.value, projectSlug: row.projectSlug })) : []);
-const learningWorkspaceAvailable = computed(() => props.purposeFilter === "learning" &&
-  sessionData.selectedSession.value?.noExercise === false && Boolean(sessionData.selectedSession.value?.projectSlug));
-function selectLearningPracticeProject(choice, event) {
-  const actual = learningPracticeChoices.value.find(row => ["sessionId", "attemptId", "learnerId", "projectSlug"]
-    .every(key => row[key] === choice?.[key]));
-  if (!props.active || !actual) return false;
-  const owner = learnerGestures?.value;
-  const ticket = owner?.begin(event, "project-select", { projectSlug: actual.projectSlug, sessionId: actual.sessionId });
-  const selected = selectLearningConversation(actual);
-  if (ticket) {
-    if (selected) void owner.finish(ticket);
-    else owner.discard(ticket);
-  }
-  return selected;
-}
-defineExpose({ selectLearningConversation, selectLearningPracticeProject, showLearningPicker,
-  get learningSelection() { return learningSelection.value; },
-  get learningPracticeChoices() { return learningPracticeChoices.value; },
-  get learningWorkspaceAvailable() { return learningWorkspaceAvailable.value; } });
 
 async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
   const response = await toolbar.createSession?.(assistantSelection, options);

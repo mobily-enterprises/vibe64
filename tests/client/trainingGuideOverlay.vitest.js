@@ -6,7 +6,7 @@ import * as Vue from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TrainingGuideOverlay from "../../packages/vibe64-training/src/client/TrainingGuideOverlay.vue";
 import { runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
-import { trainingGuideCommand, trainingGuideRequest, trainingLearningModeGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 
 const overlayFile = path.resolve("packages/vibe64-training/src/client/TrainingGuideOverlay.vue");
 {
@@ -180,7 +180,7 @@ describe("teacher guide overlay", () => {
 describe("teacher guide commands in the Main browser", () => {
   it("points without navigating, and shows me by navigating first and opening a lesson file", async () => {
     mountOverlay();
-    const navigateBrowser = vi.fn(async () => ({ pane: "files", learningView: "workspace" }));
+    const navigateBrowser = vi.fn(async () => ({ pane: "files" }));
     const pointed = trainingGuideCommand(trainingGuideRequest({ target: "files", filePath: "src/app.js" }),
       { id: "point", projectSlug: "practice", sessionId: "session", attemptId: "attempt" });
     expect(await runTrainingGuideCommand(pointed, { navigateBrowser })).toEqual({ guide: { shown: true, step: "dashboard" } });
@@ -193,7 +193,7 @@ describe("teacher guide commands in the Main browser", () => {
       return true;
     }) };
     expect(await runTrainingGuideCommand(shown, { navigateBrowser, view }))
-      .toEqual({ focus: { pane: "files", learningView: "workspace" }, guide: { shown: true, step: "file" } });
+      .toEqual({ focus: { pane: "files" }, guide: { shown: true, step: "file" } });
     const { guide, ...navigation } = shown;
     expect(navigateBrowser).toHaveBeenCalledWith(navigation);
     expect(view.openFile).toHaveBeenCalledWith("src/app.js");
@@ -206,7 +206,7 @@ describe("teacher guide commands in the Main browser", () => {
 });
 
 describe("Learning v2 guide commands", () => {
-  it("opens real places without a Learning mode, opens Learning for its button, and keeps Main's retired command unchanged", () => {
+  it("opens real places, and opens Learning for its button", () => {
     expect(trainingGuideCommand(trainingGuideRequest({ target: "database-data", navigate: true }), { id: "data", projectSlug: "alpha", sessionId: "one" }))
       .toEqual({ id: "data", projectSlug: "alpha", sessionId: "one", conversationId: "", pane: "database", databaseView: "data", status: "pending",
         guide: { target: "database-data", navigate: true, highlight: true, caption: "Dashboard → Database → Data",
@@ -216,9 +216,6 @@ describe("Learning v2 guide commands", () => {
     expect(trainingGuideCommand(trainingGuideRequest({ target: "learning", caption: "Your lessons live here" }), { id: "point" }))
       .toEqual({ id: "point", status: "pending", guide: { target: "learning", navigate: false, highlight: true,
         caption: "Your lessons live here", steps: [{ id: "learning", label: "Learning" }] } });
-    const legacy = trainingLearningModeGuideCommand(trainingGuideRequest({ target: "preview", navigate: true }),
-      { id: "main", projectSlug: "practice", sessionId: "session", attemptId: "attempt" });
-    expect(legacy).toMatchObject({ learningMode: true, learningView: "workspace", learningAttemptId: "attempt", pane: "preview" });
   });
 
   it("bounds a lesson caption", () => {

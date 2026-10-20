@@ -384,29 +384,19 @@ const mountedHostRenderer = createRenderer({
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {},
   parentNode() {}, nextSibling() {}
 });
-function mountedHostFixture({ learning = false, learnerId = "learner-one", workingLoadError } = {}) {
-  const attemptId = "314cdfd8-182f-4e15-8f79-71381e4a89b4";
-  const session = { sessionId: learning ? `learning-${attemptId}` : "working-one",
-    ...(learning ? { purpose: "learning", learningAttemptId: attemptId } : {}),
-    agentSession: { turn: {} } };
-  const state = reactive({ sessions: [session], learnerId, apiPath: "/api/projects/one/vibe64/sessions" });
+function mountedHostFixture() {
+  const session = { sessionId: "working-one", agentSession: { turn: {} } };
+  const state = reactive({ sessions: [session], apiPath: "/api/projects/one/vibe64/sessions" });
   const props = reactive({ active: true, sessionId: session.sessionId, projectContext: { slug: "one" } });
-  props.sessionData = {
-    sessions: computed(() => state.sessions),
-    sessionsApiPath: computed(() => state.apiPath),
-    learningLearnerId: computed(() => state.learnerId),
-    learningLoadError: ref(""), sessionList: { loadError: "working list temporarily unavailable" },
-    shortSessionId: id => id, refreshSessionData: vi.fn(async () => {}),
-    canCreateSession: true, createSessionVisible: true,
-    archive: { command: { isRunning: false }, request: vi.fn() }
-  };
   // Props in the actual component are shallow: preserve the same ref contract.
   const hostProps = { get active() { return props.active; }, get sessionId() { return props.sessionId; },
     get projectContext() { return props.projectContext; }, sessionData: {
-      ...props.sessionData,
-      ...(workingLoadError === undefined ? {} : { workingLoadError: ref(workingLoadError) }),
       sessions: computed(() => state.sessions),
-      sessionsApiPath: computed(() => state.apiPath), learningLearnerId: computed(() => state.learnerId)
+      sessionsApiPath: computed(() => state.apiPath),
+      sessionList: reactive({ loadError: "" }),
+      shortSessionId: id => id, refreshSessionData: vi.fn(async () => {}),
+      canCreateSession: true, createSessionVisible: true,
+      archive: { command: { isRunning: false }, request: vi.fn() }
     } };
   mountedHostMocks.conversation.mockClear(); mountedHostMocks.renewal.mockClear();
   mountedHostMocks.request.mockClear(); mountedHostMocks.events.mockClear();
@@ -422,10 +412,10 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one", worki
     host = useVibe64SessionRuntimeHost(hostProps, vi.fn()); return () => h("div");
   } });
   app.mount({});
-  return { app, host, props, hostProps, state, attemptId, send };
+  return { app, host, props, hostProps, state, send };
 }
 
-describe("same keyed Main host across purpose filters", () => {
+describe("mounted Main host", () => {
   it("forwards the reviewed connected destinations through the existing Save endpoint", async () => {
     const f = mountedHostFixture();
     try {
@@ -441,58 +431,10 @@ describe("same keyed Main host across purpose filters", () => {
     } finally { f.app.unmount(); }
   });
 
-  it("retains a learning record's exact target when visible project, selection and filter change", async () => {
-    const f = mountedHostFixture({ learning: true });
-    try {
-      const captured = mountedHostMocks.conversation.mock.calls[0][0];
-      const readTarget = () => ({ sessionId: toValue(captured.sessionId), projectSlug: toValue(captured.projectSlug),
-        learnerId: toValue(captured.learnerId), learningAttemptId: toValue(captured.learningAttemptId),
-        sessionsApiPath: toValue(captured.sessionsApiPath) });
-      const expected = { sessionId: `learning-${f.attemptId}`, projectSlug: "", learnerId: "learner-one",
-        learningAttemptId: f.attemptId, sessionsApiPath: `/api/learning/${f.attemptId}/vibe64/sessions` };
-      expect(readTarget()).toEqual(expected);
-      f.props.active = false; f.props.projectContext = { slug: "two" }; f.props.sessionId = "working-two";
-      f.state.apiPath = "/api/projects/two/vibe64/sessions"; f.state.learnerId = "different-learner";
-      await nextTick();
-      expect(readTarget()).toEqual(expected);
-      expect(toValue(captured.active)).toBe(false);
-      expect(mountedHostMocks.conversation).toHaveBeenCalledTimes(1);
-      expect(f.host.selection.selectedSessionId).toBe(expected.sessionId);
-      expect(f.host.guardedPage.value.error).toBe("");
-      expect(f.host.autopilotSessionToolbar.canCreateSession).toBe(false);
-      expect(f.host.autopilotSessionToolbar.createSessionVisible).toBe(false);
-      expect(f.host.autopilotSessionToolbar.workingSessionsApiPath).toBe("/api/projects/two/vibe64/sessions");
-      expect(f.host.runtimeProjectContext.value).toEqual({});
-      expect(f.host.sourceWorkspaceAvailable.value).toBe(false);
-      expect(f.host.codexTerminalCanStart.value).toBe(false);
-      await expect(f.host.sendAgentMessage({ message: "same captured request" })).resolves.toBe(true);
-      expect(f.send).toHaveBeenCalledWith({ message: "same captured request" });
-    } finally { f.app.unmount(); }
-  });
-
-  it("does not inspect or mutate a project workspace for a source-less learning host", async () => {
-    const f = mountedHostFixture({ learning: true });
-    try {
-      const renewal = mountedHostMocks.renewal.mock.calls[0][0];
-      expect(toValue(renewal.sessionsApiPath)).toBe("");
-      expect(toValue(renewal.selectedSessionId)).toBe("");
-      await f.host.refreshWorkState();
-      await expect(f.host.retryWorkspaceSetup()).resolves.toBe(false);
-      await expect(f.host.saveSessionWork()).resolves.toBe(false);
-      await expect(f.host.updateSessionWork()).resolves.toBe(false);
-      expect(f.host.workState.value.loading).toBe(false);
-      expect(mountedHostMocks.request).not.toHaveBeenCalled();
-      const event = mountedHostMocks.events.mock.calls[0][0];
-      expect(event.matches({ payload: { projectSlug: "one", repositoryWorkflow: { requirePullRequest: true } } })).toBe(false);
-    } finally { f.app.unmount(); }
-  });
-
   it("preserves original reactive Working targets and source facilities", async () => {
     const f = mountedHostFixture();
     try {
       const captured = mountedHostMocks.conversation.mock.calls[0][0];
-      expect(Object.hasOwn(captured, "learningAttemptId")).toBe(false);
-      expect(Object.hasOwn(captured, "learnerId")).toBe(false);
       expect(toValue(captured.projectSlug)).toBe("one");
       expect(toValue(captured.sessionsApiPath)).toBe("/api/projects/one/vibe64/sessions");
       f.props.projectContext = { slug: "two" }; f.state.apiPath = "/api/projects/two/vibe64/sessions";
@@ -500,7 +442,6 @@ describe("same keyed Main host across purpose filters", () => {
       expect(toValue(captured.projectSlug)).toBe("two");
       expect(toValue(captured.sessionsApiPath)).toBe("/api/projects/two/vibe64/sessions");
       expect(f.host.autopilotSessionToolbar.canCreateSession).toBe(true);
-      expect(f.host.sourceWorkspaceAvailable.value).toBe(true);
       expect(f.host.codexTerminalCanStart.value).toBe(true);
       await f.host.refreshWorkState();
       expect(mountedHostMocks.request.mock.calls.some(([path]) => path === "/api/projects/two/vibe64/sessions/working-one/work")).toBe(true);
@@ -509,81 +450,13 @@ describe("same keyed Main host across purpose filters", () => {
 });
 
 
-describe("captured host list errors", () => {
-  it("keeps a Working chat tied to its Working reader while Learning is visible", () => {
-    const f = mountedHostFixture({ workingLoadError: "" });
+describe("host list errors", () => {
+  it("shows the session list load error on the guarded page", () => {
+    const f = mountedHostFixture();
     try {
-      f.hostProps.sessionData.sessionList.loadError = "Learning unavailable";
       expect(f.host.guardedPage.value.error).toBe("");
-      f.hostProps.sessionData.workingLoadError.value = "Working unavailable";
-      expect(f.host.guardedPage.value.error).toBe("Working unavailable");
+      f.hostProps.sessionData.sessionList.loadError = "Sessions unavailable";
+      expect(f.host.guardedPage.value.error).toBe("Sessions unavailable");
     } finally { f.app.unmount(); }
   });
-});
-
-
-it("captures a confirmed practice Learning source slug separately without enabling unadapted App or source controls", async () => {
-  const f = mountedHostFixture({ learning: true });
-  f.app.unmount();
-  const attemptId = f.attemptId;
-  const session = { sessionId: `training-${attemptId}`, purpose: "learning", learningAttemptId: attemptId,
-    noExercise: false, projectSlug: "practice-confirmed", agentSession: { turn: {} } };
-  f.state.sessions = [session]; f.props.sessionId = session.sessionId;
-  mountedHostMocks.conversation.mockImplementation(() => shallowRef({
-    mounted: { session: ref(session), detailState: ref({}), agentConnectionError: ref(""),
-      agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) }, sendAgentMessage: f.send
-  }));
-  let host;
-  const app = mountedHostRenderer.createApp({ setup() {
-    host = useVibe64SessionRuntimeHost(f.hostProps, vi.fn()); return () => h("div");
-  } });
-  mountedHostMocks.conversation.mockClear(); app.mount({});
-  try {
-    const captured = mountedHostMocks.conversation.mock.calls[0][0];
-    expect(toValue(captured.sessionId)).toBe(session.sessionId);
-    expect(toValue(captured.projectSlug)).toBe("");
-    expect(captured.noExercise).toBe(false); expect(captured.sourceProjectSlug).toBe("practice-confirmed");
-    expect(captured.learningAttemptId).toBe(attemptId);
-    expect(toValue(captured.sessionsApiPath)).toBe(`/api/learning/${attemptId}/vibe64/sessions`);
-    f.state.sessions = [{ ...session, projectSlug: "wrong-later-row" }];
-    f.props.projectContext = { slug: "unrelated-working" }; f.props.sessionId = "unrelated-working-session";
-    f.state.apiPath = "/api/projects/unrelated-working/vibe64/sessions"; await nextTick();
-    expect(toValue(captured.sessionId)).toBe(session.sessionId);
-    expect(captured.sourceProjectSlug).toBe("practice-confirmed"); expect(toValue(captured.projectSlug)).toBe("");
-    expect(host.runtimeProjectContext.value).toEqual({});
-    expect(host.sourceWorkspaceAvailable.value).toBe(false); expect(host.codexTerminalCanStart.value).toBe(false);
-    await expect(host.saveSessionWork()).resolves.toBe(false);
-    await expect(host.updateSessionWork()).resolves.toBe(false);
-    await expect(host.retryWorkspaceSetup()).resolves.toBe(false);
-    expect(mountedHostMocks.request).not.toHaveBeenCalled();
-  } finally { app.unmount(); }
-});
-
-it("only captured source-bearing Learning exposes App while all source tools remain unavailable", async () => {
-  const trueFixture = mountedHostFixture({ learning: true });
-  try { expect(trueFixture.host.outputWorkspaceAvailable.value).toBe(false); }
-  finally { trueFixture.app.unmount(); }
-  const f = mountedHostFixture(); f.app.unmount();
-  const session = { sessionId: "saved-initial", purpose: "learning", learningAttemptId: f.attemptId,
-    noExercise: false, projectSlug: "practice-confirmed", agentSession: { turn: {} } };
-  f.state.sessions = [session]; f.props.sessionId = session.sessionId;
-  mountedHostMocks.conversation.mockImplementation(() => shallowRef({ mounted: {
-    session: ref(session), detailState: ref({}), agentConnectionError: ref(""), agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {})
-  }, sendAgentMessage: f.send }));
-  let host;
-  const app = mountedHostRenderer.createApp({ setup() { host = useVibe64SessionRuntimeHost(f.hostProps, vi.fn()); return () => h("div"); } });
-  app.mount({});
-  try {
-    expect(host.outputWorkspaceAvailable.value).toBe(true);
-    expect(host.sourceWorkspaceAvailable.value).toBe(false);
-    expect(host.codexTerminalCanStart.value).toBe(false);
-    f.props.projectContext = { slug: "unrelated-working" }; f.props.sessionId = "working-later";
-    f.state.sessions = [{ ...session, projectSlug: "wrong-later-row" }]; await nextTick();
-    expect(host.outputWorkspaceAvailable.value).toBe(true);
-    expect(host.sourceWorkspaceAvailable.value).toBe(false);
-    expect(toValue(mountedHostMocks.conversation.mock.calls.at(-1)[0].sessionsApiPath))
-      .toBe(`/api/learning/${f.attemptId}/vibe64/sessions`);
-    await expect(host.saveSessionWork()).resolves.toBe(false);
-    await expect(host.retryWorkspaceSetup()).resolves.toBe(false);
-  } finally { app.unmount(); }
 });

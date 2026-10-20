@@ -1,6 +1,6 @@
 # Installing and updating Learning courses
 
-Learning mode can install courses from the official Vibe64 course catalogue
+Learning (the **L** button) can install courses from the official Vibe64 course catalogue
 straight from the **Courses** pane. Nobody needs a terminal for official
 courses.
 

@@ -2,7 +2,6 @@ import { computed, proxyRefs, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
-import { lessonDashboardApiPath, useVibe64LessonDashboard } from "@/lib/vibe64LessonDashboard.js";
 import { useRoute } from "vue-router";
 import {
   mdiArchiveOutline,
@@ -69,10 +68,9 @@ const archivedVibe64SessionsProps = {
 function useArchivedVibe64Sessions(emit) {
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
-  // A practice lesson lists its own lesson sessions through the saved attempt.
-  const lessonDashboard = useVibe64LessonDashboard();
-  const sessionsApiPath = computed(() => lessonDashboardApiPath(lessonDashboard.value,
-    paths.api(VIBE64_ARCHIVED_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID })));
+  const sessionsApiPath = computed(() => paths.api(VIBE64_ARCHIVED_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
 
   const sessionListResource = useEndpointResource({
     fallbackLoadError: "Archived sessions could not be loaded.",
@@ -81,7 +79,7 @@ function useArchivedVibe64Sessions(emit) {
       ...vibe64SessionsQueryKey(
         VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
-        lessonDashboard.value ? `lesson:${lessonDashboard.value.attemptId}` : projectSlug.value
+        projectSlug.value
       ),
       "archived"
     ]),
@@ -142,9 +140,9 @@ function useArchivedVibe64SessionDetail() {
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug(route);
   const sessionId = computed(() => firstRouteParam(route.params.sessionId));
-  const lessonDashboard = useVibe64LessonDashboard();
-  const sessionsApiPath = computed(() => lessonDashboardApiPath(lessonDashboard.value,
-    paths.api(VIBE64_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID })));
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
   const sessionPath = computed(() => sessionId.value
     ? vibe64SessionPath(sessionsApiPath.value, sessionId.value)
     : "");
@@ -156,12 +154,12 @@ function useArchivedVibe64SessionDetail() {
       ...vibe64SessionQueryKey(
         VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
-        lessonDashboard.value ? `lesson:${lessonDashboard.value.attemptId}` : projectSlug.value
+        projectSlug.value
       ),
       "archive-detail",
       sessionId.value
     ]),
-    readQuery: computed(() => (projectSlug.value && !lessonDashboard.value
+    readQuery: computed(() => (projectSlug.value
       ? {
           projectSlug: projectSlug.value
         }
@@ -184,9 +182,7 @@ function useArchivedVibe64SessionDetail() {
   }));
   const conversationLog = proxyRefs(useVibe64ConversationLog({
     active: computed(() => Boolean(session.value)),
-    session,
-    sessionsApiPath,
-    learningAttemptId: lessonDashboard.value?.attemptId
+    session
   }));
 
   return {

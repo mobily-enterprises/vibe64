@@ -41,17 +41,14 @@ function vibe64SessionsQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "sessions"];
 }
 
-function vibe64SessionQueryKey(surfaceId, ownershipFilter, projectSlug, { learningAttemptId, learnerId } = {}) {
-  const scope = learningAttemptId === undefined ? vibe64ProjectQueryScope(projectSlug)
-    : ["learning", String(learnerId || ""), String(learningAttemptId || "")];
-  return ["vibe64", ...scope, surfaceId, ownershipFilter, "session"];
+function vibe64SessionQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "session"];
 }
 
-// Event identity is a transport fence, never lesson/account authorization.
-function vibe64SessionEventMatchesScope(payload = {}, { projectSlug = "", learningAttemptId } = {}) {
-  return learningAttemptId === undefined
-    ? !payload.learningAttemptId && (!payload.projectSlug || payload.projectSlug === projectSlug)
-    : payload.learningAttemptId === learningAttemptId && !payload.projectSlug;
+// Event identity is a transport fence, never account authorization. Server
+// events for a lesson attempt carry no project and never reach a project reader.
+function vibe64SessionEventMatchesScope(payload = {}, { projectSlug = "" } = {}) {
+  return !payload.learningAttemptId && (!payload.projectSlug || payload.projectSlug === projectSlug);
 }
 
 function vibe64AssistantCapabilitiesQueryKey(

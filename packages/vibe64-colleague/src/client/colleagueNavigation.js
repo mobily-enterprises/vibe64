@@ -1,6 +1,6 @@
 // Original Colleague navigation/cache/ACK coordination. navigate reads its
 // existing host callback; beforeNavigate retains mobile presentation policy.
-function createTrainingNavigation({ scope, navigate, beforeNavigate, acknowledge, error }) {
+function createColleagueNavigation({ scope, navigate, beforeNavigate, acknowledge, error }) {
   let navigating = null;
   let navigationReceipt = null;
 
@@ -16,8 +16,7 @@ function createTrainingNavigation({ scope, navigate, beforeNavigate, acknowledge
         try {
           const result = await navigate()(command);
           receipt = { commandId: command.id, clientId: scope().clientId, ok: true,
-            ...(command.presentation ? { focus: result.focus, presentation: result.presentation }
-              : command.guide ? { ...(result.focus ? { focus: result.focus } : {}), guide: result.guide } : { focus: result }) };
+            ...(command.guide ? { ...(result.focus ? { focus: result.focus } : {}), guide: result.guide } : { focus: result }) };
         }
         catch (error) { receipt = { commandId: command.id, clientId: scope().clientId, ok: false, error: error.message }; }
         if (!scope().mounted || expectedActor !== scope().actorKey) return;
@@ -33,4 +32,4 @@ function createTrainingNavigation({ scope, navigate, beforeNavigate, acknowledge
   return { handle, reset };
 }
 
-export { createTrainingNavigation };
+export { createColleagueNavigation };

@@ -69,16 +69,11 @@ Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the
 identified active query when asked. It acknowledges actual view/table selection;
 that is not proof a query succeeded. It does not receive rows or write SQL itself.
-In a practice lesson, **Dashboard → Database** (a session tool of the lesson's
-ordinary Dashboard) shows the practice app's ERD, tables and data. It is
-editable like any project's database: cell edits, **Add row**, row deletion,
-confirmed data-changing SQL, snippets and ERD arrangement work as described
-above and change only that lesson's practice database. The database
-**Copilot** is not available there; ask Colleague instead. See
-[Choosing lessons and Learning conversations](learning-mode-ui.md).
-For an active lesson, Colleague can reveal the exact exercise session's **ERD**
-while Learning stays on. The initiating browser must confirm the same project,
-session and attempt; this demonstration never counts as the learner's own ERD
+A practice lesson's project is an ordinary project, so its **Dashboard →
+Database** (including the **Copilot**) works exactly as described above. See
+[Practice projects in standalone lessons](learning-practice-projects.md).
+Colleague can open a practice session's **ERD** like any other session's;
+this demonstration never counts as the learner's own ERD
 task or a pass.
 Ask it to send database investigation or a requested change to a coding conversation
 and report the evidence. Data-changing work retains its existing confirmation

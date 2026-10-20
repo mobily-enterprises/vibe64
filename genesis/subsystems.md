@@ -249,10 +249,10 @@ read-only per-lesson progress and the owner's custom-course form, and emits
 explicit start/resume/create intent through the original Training operations. It owns
 neither API reads, permission/pin/progress rules nor writes. One shared client
 Learning UI adapter supplies actor-scoped original Training reads and captured
-Start/Resume/Open coordination; server owners retain admission and progress.
-The same original Panel retains Learning Main and Preview views; the host supplies
-actual viewer, layout and selected saved-session context. Live learner acceptance
-remains a separate gate.
+Start/Resume coordination for the Learning environment (L); server owners retain
+admission and progress. Learning mode, its Panel views, learner gestures,
+presentation cues and workspace observation were retired in Learning v2 phase 2
+(F3). Live learner acceptance remains a separate gate.
 Owns the shared fresh-actor lesson operations (course list/create/install,
 learning read, start, resume, end and retained-pin continuation) and the step
 operations (lesson read, step observe/check/answer/done, reader position and
@@ -706,8 +706,8 @@ No-exercise scopes retain private native identity; explicit practice scopes reus
 the original actual-source creator, descriptor, Genesis environment and Git owner.
 It preserves the existing supported storage format, archive history and native
 state readers; it does not authorize Training content or create a parallel
-runtime. Historical learning reads cannot acquire an executable root. Main
-Learning mode creation/selection/renewal and browser adoption remain incomplete.
+runtime. Historical learning reads cannot acquire an executable root. The Main
+Learning mode client was retired (F3); no browser selects a Learning session.
 Sessions exposes the open/archive actions and bounded discovery; Runtime retains the stored descriptors, archival history, Git workspaces and native state readers. It does not own teaching content or UI presentation.
 
 ### Source

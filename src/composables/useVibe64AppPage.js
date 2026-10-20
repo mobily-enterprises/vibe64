@@ -9,7 +9,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -74,7 +74,6 @@ function useVibe64AppPage() {
   const projectRuntimeError = computed(() => projectOpenFailure.value?.key === projectOpenKey.value
     ? projectOpenFailure.value.message : "");
   let attemptedProjectOpenKey = "";
-  let dormantWorkingProjectSlug = "";
   const projectSelection = useVibe64ProjectsResource({
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
@@ -166,10 +165,6 @@ function useVibe64AppPage() {
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
-  const selectedCompanionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-  let pageMounted = false;
-  let learningLayoutWasSelected = false;
-  const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
     get ready() { return projectPaneNavigationVisible.value; },
@@ -257,15 +252,7 @@ function useVibe64AppPage() {
     { immediate: true }
   );
 
-  watch(projectSlug, () => {
-    dormantWorkingProjectSlug = "";
-    retryProjectRuntime();
-  }, { flush: "sync" });
-  watch(() => route.query.mode, mode => {
-    if (mode === "learning" || !dormantWorkingProjectSlug || dormantWorkingProjectSlug !== projectSlug.value) return;
-    dormantWorkingProjectSlug = "";
-    retryProjectRuntime();
-  }, { flush: "sync" });
+  watch(projectSlug, retryProjectRuntime, { flush: "sync" });
   watch(
     [projectOpenKey, () => openProjectRuntimeCommand.canRun, () => openProjectRuntimeCommand.isRunning],
     ([key, canRun, running]) => {
@@ -284,7 +271,6 @@ function useVibe64AppPage() {
   });
 
   onMounted(() => {
-    pageMounted = true;
     setHomeShellActive(true);
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
@@ -295,11 +281,10 @@ function useVibe64AppPage() {
         mobilePaneMediaQuery.addListener?.(syncMobilePaneLayout);
       }
     }
-    if (colleagueLayout && !selectedCompanionView?.value?.learningBinding) colleagueLayout.value = layoutOwner;
+    if (colleagueLayout) colleagueLayout.value = layoutOwner;
   });
 
   onBeforeUnmount(() => {
-    pageMounted = false;
     if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
     clearSelfTargetAutoSelectTimer();
@@ -311,16 +296,6 @@ function useVibe64AppPage() {
     }
     mobilePaneMediaQuery = null;
   });
-
-  // Only release of a new Learning display returns this already-mounted
-  // Working page's original layout. No source/project authority changes.
-  watch(() => selectedCompanionView?.value?.learningBinding, binding => {
-    if (binding) learningLayoutWasSelected = true;
-    else if (pageMounted && learningLayoutWasSelected && colleagueLayout) {
-      learningLayoutWasSelected = false;
-      colleagueLayout.value = layoutOwner;
-    }
-  }, { flush: "sync" });
 
   watch(() => [
     projectSlug.value,
@@ -397,34 +372,29 @@ function useVibe64AppPage() {
     setPageTitle(title);
   }
 
-  function selectProjectPane(pane = "", event) {
-    const owner = learnerGestures?.value;
-    const ticket = pane === "preview" ? owner?.begin(event, "preview-select") : null;
+  function selectProjectPane(pane = "") {
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
     }
-    const path = pane === "dashboard" ? dashboardReturnPath({
-      dashboardBasePath: dashboardBasePath.value,
-      lastDashboardRoutePath: lastDashboardRoutePath.value
-    }) : developmentBasePath.value;
-    void router.push(route.query.mode === "learning"
-      ? { path, query: { ...route.query } }
-      : path);
-    if (ticket) void owner.finish(ticket);
+    if (pane === "dashboard") {
+      void router.push(dashboardReturnPath({
+        dashboardBasePath: dashboardBasePath.value,
+        lastDashboardRoutePath: lastDashboardRoutePath.value
+      }));
+      return;
+    }
+    void router.push(developmentBasePath.value);
   }
 
-  function openProject(project = {}, event) {
+  function openProject(project = {}) {
     const slug = String(project.slug || "").trim();
     if (!slug) {
       return;
     }
-    const owner = learnerGestures?.value;
-    const ticket = owner?.begin(event, "project-select", { projectSlug: slug });
     if (slug === projectSlug.value && route.path !== projectAppPath(slug)) {
       retryProjectRuntime();
     }
     void router.push(projectAppPath(slug));
-    if (ticket) void owner.finish(ticket);
   }
 
   async function closeProjectRuntimeForSlug(slug = "", {
@@ -478,10 +448,10 @@ function useVibe64AppPage() {
       if (result?.ok !== true || result?.runtime?.open !== true) {
         throw new Error(result?.error || "Project could not open. Try again.");
       }
-      if (key === projectOpenKey.value && dormantWorkingProjectSlug !== project) openedProjectKey.value = key;
+      if (key === projectOpenKey.value) openedProjectKey.value = key;
       return result;
     } catch (error) {
-      if (key === projectOpenKey.value && dormantWorkingProjectSlug !== project) {
+      if (key === projectOpenKey.value) {
         projectOpenFailure.value = { key, message: String(error?.message || "Project could not open. Try again.") };
       }
       vibe64SessionDebugLog("client.projectRuntime.open.error", {
@@ -499,13 +469,6 @@ function useVibe64AppPage() {
 
   function handleProjectRuntimeClosed(payload = {}) {
     const closedSlug = String(payload.projectSlug || projectSlug.value || "").trim();
-    if (payload.runtimeDormantClose === true && payload.runtimeCloseReason === "idle-timeout" && route.query.mode === "learning" &&
-        selectedCompanionView?.value?.learningBinding && closedSlug === projectSlug.value) {
-      dormantWorkingProjectSlug = closedSlug;
-      openedProjectKey.value = "";
-      return;
-    }
-    dormantWorkingProjectSlug = "";
     pageError.value = String(payload.message || "Project is closed.");
     void router.push({
       path: "/app/manage/projects",
@@ -547,19 +510,14 @@ function useVibe64AppPage() {
     selfTargetAutoSelectTimer = 0;
   }
 
-  function showProjectPane(event) {
+  function showProjectPane() {
     if (mobilePaneLayout.value) {
-      setChatCollapsed(true, event);
+      setChatCollapsed(true);
     }
   }
 
-  function setChatCollapsed(collapsed = false, event) {
-    const owner = learnerGestures?.value;
-    const control = !collapsed ? "chat-show"
-      : mobilePaneLayout.value && !chatCollapsed.value && projectPane.value === "preview" ? "preview-select" : "";
-    const ticket = control ? owner?.begin(event, control) : null;
+  function setChatCollapsed(collapsed = false) {
     chatCollapsed.value = Boolean(collapsed);
-    if (ticket) void owner.finish(ticket);
   }
 
   function syncMobilePaneLayout() {

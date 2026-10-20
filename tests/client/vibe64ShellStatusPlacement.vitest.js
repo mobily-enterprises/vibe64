@@ -163,19 +163,16 @@ describe("Vibe64 custom shell status placement", () => {
 });
 
 
-// Learning uses the same shell and stored-selection owners. These additions do
-// not replace the original placement assertions above.
-import { effectScope, nextTick, reactive, ref } from "vue";
-import { afterEach, beforeEach } from "vitest";
+// Learning uses the same shell. These additions do not replace the original
+// placement assertions above.
+import { reactive } from "vue";
 import { createVuetify } from "vuetify";
 import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
-import { useVibe64SessionSelection } from "../../src/composables/useVibe64SessionSelection.js";
-import { selectedSessionStorageKey } from "../../src/lib/vibe64SessionRequestConfig.js";
 
-async function renderLearningShell(learningMode, environment = { actorKey: "local", open: false, minimised: false }) {
+async function renderLearningShell(environment = { actorKey: "local", open: false, minimised: false }) {
   const app = createSSRApp({
     render() {
-      return h(StudioAppShellLayout, { learningMode, showLearningModeControl: true }, {
+      return h(StudioAppShellLayout, null, {
         "top-left": () => h("span", { "data-test": "unchanged-project-identity" }),
         "top-right": () => h("button", { "data-test": "unchanged-main-controls" }, "Main"),
         default: () => h("main", { "data-test": "retained-workspace" })
@@ -188,14 +185,13 @@ async function renderLearningShell(learningMode, environment = { actorKey: "loca
 }
 
 // Learning v2: the L button opens the Learning environment above the page. It
-// keeps the plate's footprint and position; legacy route mode only warms it.
+// keeps the plate's footprint and position in the app bar.
 describe("controlled Learning shell", () => {
   it.each([
-    [false, false, "false", "Open Learning"],
-    [false, true, "true", "Close Learning"],
-    [true, false, "true", "Leave Learning mode and open Learning"]
-  ])("renders the actual L button with truthful state (legacy mode %s, open %s)", async (mode, open, pressed, title) => {
-    const html = await renderLearningShell(mode, { actorKey: "local", open, minimised: false });
+    [false, "false", "Open Learning"],
+    [true, "true", "Close Learning"]
+  ])("renders the actual L button with truthful state (open %s)", async (open, pressed, title) => {
+    const html = await renderLearningShell({ actorKey: "local", open, minimised: false });
     expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
     expect(html).toContain(`aria-pressed="${pressed}"`);
     expect(html).toContain(`title="${title}"`);
@@ -210,18 +206,17 @@ describe("controlled Learning shell", () => {
     expect(html).toContain('data-test="unchanged-main-controls"');
     expect(html).toContain('data-test="unchanged-project-identity"');
     expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
-    expect(html.includes("studio-app-shell-layout--learning")).toBe(mode);
   });
 
   it("marks a minimised lesson on the closed L button", async () => {
-    const html = await renderLearningShell(false, { actorKey: "local", open: false, minimised: true });
+    const html = await renderLearningShell({ actorKey: "local", open: false, minimised: true });
     expect(html).toContain('title="Return to your lesson"');
     expect(html).toContain("vibe64-learning-button--minimised");
   });
 
   it("does not expose L without a signed-in Learning environment", async () => {
-    expect(await renderLearningShell(false, null)).not.toContain('aria-label="Learning"');
-    expect(await renderLearningShell(false, { actorKey: "", open: false, minimised: false })).not.toContain('aria-label="Learning"');
+    expect(await renderLearningShell(null)).not.toContain('aria-label="Learning"');
+    expect(await renderLearningShell({ actorKey: "", open: false, minimised: false })).not.toContain('aria-label="Learning"');
   });
 
   it("leads management page headers with the same L button", async () => {
@@ -232,121 +227,5 @@ describe("controlled Learning shell", () => {
     expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
     expect(html.indexOf('aria-label="Learning"')).toBeLessThan(html.indexOf('data-test="page-title"'));
     expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
-  });
-});
-
-describe("separate remembered Working and Learning selections", () => {
-  let scopes;
-  let saved;
-  beforeEach(() => {
-    scopes = [];
-    saved = new Map();
-    vi.stubGlobal("window", {
-      sessionStorage: {
-        getItem: (key) => saved.get(key) || null,
-        setItem: (key, value) => saved.set(key, value),
-        removeItem: (key) => saved.delete(key)
-      }
-    });
-  });
-  afterEach(() => {
-    for (const scope of scopes) scope.stop();
-    vi.unstubAllGlobals();
-  });
-
-  function remember(options) {
-    const scope = effectScope();
-    scopes.push(scope);
-    return scope.run(() => useVibe64SessionSelection({ projectSlug: "project-one", ...options }));
-  }
-
-  it("retains the exact Working key and route while Learning remembers its own selection", async () => {
-    const route = reactive({ query: { session: "work-a", learningAttempt: "attempt-one", learningSession: "lesson-a" } });
-    const working = remember({ route });
-    const learning = remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-one" });
-    expect(working.selectedId.value).toBe("work-a");
-    expect(learning.selectedId.value).toBe("lesson-a");
-    working.select("work-b");
-    learning.select("lesson-b");
-    await nextTick();
-    expect(working.selectedId.value).toBe("work-b");
-    expect(learning.selectedId.value).toBe("lesson-b");
-    expect(saved.get(selectedSessionStorageKey("project-one"))).toBe("work-b");
-    expect(saved.size).toBe(2);
-    expect(remember({ route: { query: {} } }).selectedId.value).toBe("work-b");
-    expect(remember({ route: { query: {} }, learnerId: "learner-one", learningAttemptId: "attempt-one" }).selectedId.value).toBe("lesson-b");
-  });
-
-  it("does not borrow a Working session or another attempt's Learning route", async () => {
-    const route = reactive({ query: { session: "work-a", learningAttempt: "attempt-one", learningSession: "lesson-a" } });
-    const first = remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-one" });
-    first.select("lesson-remembered");
-    const second = remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-two" });
-    expect(second.selectedId.value).toBe("");
-    route.query.learningAttempt = "attempt-two";
-    route.query.learningSession = "second-lesson";
-    await nextTick();
-    expect(second.selectedId.value).toBe("second-lesson");
-    expect(first.selectedId.value).toBe("lesson-remembered");
-    delete route.query.learningAttempt;
-    route.query.learningSession = "unscoped-lesson";
-    await nextTick();
-    expect(first.selectedId.value).toBe("lesson-remembered");
-    expect(second.selectedId.value).toBe("second-lesson");
-  });
-
-  it("separates personal selections and exact attempts even when session IDs collide", () => {
-    const route = { query: {} };
-    remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-one" }).select("same-id");
-    const otherLearner = remember({ route, learnerId: "learner-two", learningAttemptId: "attempt-one" });
-    const otherAttempt = remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-two" });
-    expect(otherLearner.selectedId.value).toBe("");
-    expect(otherAttempt.selectedId.value).toBe("");
-    otherLearner.select("other-personal-id");
-    otherAttempt.select("other-attempt-id");
-    expect(remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-one" }).selectedId.value).toBe("same-id");
-    expect(remember({ route, learnerId: "learner-two", learningAttemptId: "attempt-one" }).selectedId.value).toBe("other-personal-id");
-    expect(remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-two" }).selectedId.value).toBe("other-attempt-id");
-  });
-
-  it("reconciles only actual Learning rows without clearing the Working selection", () => {
-    const route = { query: { session: "work-a" } };
-    const working = remember({ route });
-    working.select("work-a");
-    const learning = remember({ route, learnerId: "learner-one", learningAttemptId: "attempt-one" });
-    learning.select("expired-lesson");
-    learning.selectAvailableId([{ id: "real-lesson" }], { fallbackId: "real-lesson" });
-    expect(learning.selectedId.value).toBe("real-lesson");
-    learning.selectAvailableId([]);
-    expect(learning.selectedId.value).toBe("");
-    expect(working.selectedId.value).toBe("work-a");
-    expect(saved.get(selectedSessionStorageKey("project-one"))).toBe("work-a");
-  });
-
-  it("refuses partial claimed Learning scope instead of sharing Working memory", () => {
-    expect(() => remember({ route: { query: {} }, learningAttemptId: "attempt-one" })).toThrow("exact learner and attempt");
-    expect(() => remember({ route: { query: {} }, learnerId: "learner-one" })).toThrow("exact learner and attempt");
-    expect(saved.size).toBe(0);
-  });
-
-  it("reuses the original remembered-selection owner across explicit scope changes", async () => {
-    const learnerId = ref("learner-one");
-    const learningAttemptId = ref("attempt-one");
-    const route = reactive({ query: {} });
-    const selection = remember({ route, learnerId, learningAttemptId });
-    selection.select("first-lesson");
-    learningAttemptId.value = "attempt-two";
-    await nextTick();
-    expect(selection.selectedId.value).toBe("");
-    selection.select("second-lesson");
-    learningAttemptId.value = "attempt-one";
-    await nextTick();
-    expect(selection.selectedId.value).toBe("first-lesson");
-    learnerId.value = "learner-two";
-    await nextTick();
-    expect(selection.selectedId.value).toBe("");
-    learnerId.value = "learner-one";
-    await nextTick();
-    expect(selection.selectedId.value).toBe("first-lesson");
   });
 });

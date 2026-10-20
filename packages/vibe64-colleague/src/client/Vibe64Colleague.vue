@@ -1,8 +1,5 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
-import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
-import { useTrainingPresentationCue } from "@local/vibe64-training/client/presentation-cue";
-import { createTrainingNavigation } from "@local/vibe64-training/client/navigation";
 import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
@@ -10,7 +7,7 @@ import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, unref, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
@@ -19,6 +16,7 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
+import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
 
 const props = defineProps({
@@ -26,7 +24,6 @@ const props = defineProps({
   holdToTalk: Boolean,
   request: { type: Function, required: true },
   navigate: { type: Function, default: null },
-  settleWorkspace: { type: Function, default: null },
   focus: { type: Object, default: () => ({}) }
 });
 const emit = defineEmits(["message-submit", "voice-visual"]);
@@ -41,9 +38,6 @@ const minimizedVoice = computed(() => Boolean(voice?.controller.state.session &&
 const listeningVoice = computed(() => Boolean(minimizedVoice.value && voice.controller.state.session.voice.listening.value && !voice.controller.state.session.microphoneMuted.value));
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const voiceTranscript = ref(null);
-const displayedPreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
-const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-const colleagueBody = inject(VIBE64_COLLEAGUE_BODY_KEY, null);
 const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 // The shared Learning environment (L) controller, when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
@@ -72,9 +66,7 @@ const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAva
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
   open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
 });
-async function toggleConversation(event) {
-  const owner = learnerGestures?.value || nativeGestureOwner;
-  const ticket = owner.begin(event, bodyVisible.value ? "colleague-minimize" : "colleague-restore");
+async function toggleConversation() {
   const opening = !shown.value;
   if (shown.value) {
     voice?.controller.minimize();
@@ -86,7 +78,6 @@ async function toggleConversation(event) {
     await openVoice();
   } else open.value = true;
   if (opening && bodyVisible.value) await focusConversationComposer();
-  if (ticket) void owner.finish(ticket);
 }
 async function openVoice() {
   if (!voice || freshOperation.value || freshBusy.value) return false;
@@ -101,8 +92,7 @@ async function openVoice() {
     conversationId: target.identity.conversationId,
     get label() { return props.name; },
     get state() {
-      const state = projectConversationVoiceState({ turns: target.turns.value, status: target.snapshot.value?.status, interimReply: target.snapshot.value?.interimReply });
-      return presentationCue.voiceState(state, target.identity.conversationId);
+      return projectConversationVoiceState({ turns: target.turns.value, status: target.snapshot.value?.status, interimReply: target.snapshot.value?.interimReply });
     },
     get available() { return mounted && target.current.value; },
     get adapter() { return conversation.runtime.value === target ? adapter.value : null; },
@@ -110,20 +100,13 @@ async function openVoice() {
     retain() { retained = target.retain(); },
     release() { retained?.release(); retained = null; },
     socketUrl: "/api/vibe64/colleague/voice/ws",
-    captureContext: () => ({
-      ...props.focus,
-      ...(product.value.trainingQuestion ? { trainingQuestion: { ...product.value.trainingQuestion } } : {})
-    }),
+    captureContext: () => ({ ...props.focus }),
     submitText(text, { messageId, context }) {
-      const { trainingQuestion, ...focus } = context || {};
-      return sendMessage(text, { messageId, focus, trainingQuestion }, target);
+      return sendMessage(text, { messageId, focus: context || {} }, target);
     },
     cancelWork: () => target.cancel(),
     onTranscript(value, { canTake = false } = {}) {
       if (mounted && conversation.runtime.value === target) voiceTranscript.value = value ? { ...value, canTake } : null;
-    },
-    onPlayback(event) {
-      presentationCue.playback(event, target.identity.conversationId);
     },
     onVisual(value) { emit("voice-visual", value); },
     onError: reportFailure
@@ -170,14 +153,8 @@ const clientId = crypto.randomUUID();
 const working = computed(() => conversation.runtime.value?.snapshot.value?.status === "working");
 const watches = computed(() => (product.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
 const operations = computed(() => product.value.operations || (product.value.operation ? [product.value.operation] : []));
-const conversationWatches = computed(() => watches.value.filter(item => item.source !== "learning-task"));
 const assignments = computed(() => (product.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
-const learningTask = computed(() => learnerGestures?.value?.pollingTask?.() || null);
-const learningWatch = computed(() => learningTask.value ? watches.value.find(item => item.source === "learning-task" &&
-  item.learningTask?.attemptId === learningTask.value.attemptId && item.sessionId === learningTask.value.sessionId) || null : null);
-const pollingCriterion = ref("");
-const pollingBusy = ref(false);
-const watchControlCount = computed(() => watches.value.length + assignments.value.length + (learningTask.value && !learningWatch.value ? 1 : 0));
+const watchControlCount = computed(() => watches.value.length + assignments.value.length);
 let mounted = true;
 let revision = 0;
 
@@ -207,9 +184,8 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   // before its binding changes; actor changes never enter this copy path.
   const savedDraft = changingConversation && runtime?.current.value && runtime.identity.actorKey === expectedActor
     ? runtime.draft.value : null;
-  const { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error, cue, trainingQuestion } = result;
-  product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error, cue, trainingQuestion };
-  observePresentationCue(cue);
+  const { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error } = result;
+  product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error };
   if (savedDraft !== null && actorKey.value === expectedActor) conversation.adapter.value.actions.setDraft(savedDraft);
   pointerNotice.value = "";
   void handleNavigation(navigation);
@@ -231,18 +207,17 @@ async function navigateBrowser(command) {
       typeof view.openFile === "function" && view.openFile(path) === true;
   } } });
 }
-const trainingNavigation = createTrainingNavigation({
+const colleagueNavigation = createColleagueNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
   navigate: () => props.navigate ? navigateBrowser : null,
   beforeNavigate(command) {
     // A phone shows one surface: reveal the app, Learning or the guide ring.
-    if (xs.value && shown.value && (["open", "cue"].includes(command.presentation?.operation) ||
-        command.guide || command.learning)) return toggleConversation();
+    if (xs.value && shown.value && (command.guide || command.learning)) return toggleConversation();
   },
   acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
   error: productError
 });
-const handleNavigation = trainingNavigation.handle;
+const handleNavigation = colleagueNavigation.handle;
 const realtimeSocket = useRealtimeSocket();
 const api = createAssistantApi({
   request: (url, options) => props.request(url, options),
@@ -271,12 +246,8 @@ const conversation = useAssistantConversation({
         key: `vibe64:colleague-composer:v1:${JSON.stringify([actorKey.value, product.value.conversationId])}` } : null;
     } catch { return null; }
   },
-  data: () => ({
-    clientId, focus: { ...props.focus },
-    ...(product.value.trainingQuestion ? { trainingQuestion: { ...product.value.trainingQuestion } } : {})
-  }),
+  data: () => ({ clientId, focus: { ...props.focus } }),
   onEvent(event) {
-    if (event.presentationCue) observePresentationCue(event.presentationCue);
     if (event.type === "application") {
       void conversation.runtime.value?.reload();
       void refresh();
@@ -299,15 +270,6 @@ const voiceSession = computed(() => {
     state.binding.conversationId === identity?.conversationId &&
     state.binding.id === JSON.stringify(["colleague", identity?.actorKey]) ? state.session : null;
 });
-const presentationCue = useTrainingPresentationCue({
-  scope: () => ({ mounted, actorKey: actorKey.value, clientId, conversationId: product.value.conversationId,
-    runtimeConversationId: conversation.runtime.value?.identity.conversationId }),
-  presentation: () => displayedPreview?.value?.presentation,
-  voiceSession,
-  acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
-  error: productError
-});
-function observePresentationCue(value) { return presentationCue.observe(value); }
 
 function voicePreviewActionsAllowed(messageId) {
   const transcript = voiceTranscript.value;
@@ -384,12 +346,6 @@ const voicePreviews = computed(() => {
 const voicePreview = computed(() => voicePreviews.value.find(preview => preview.id === voiceTranscript.value?.id)
   || voicePreviews.value[0] || null);
 const bodyVisible = computed(() => open.value || Boolean(voiceSession.value && voice.controller.state.visible));
-const bodyOwner = Object.freeze({ get visible() { return mounted && bodyVisible.value; },
-  get actorKey() { return actorKey.value; }, get conversationId() { return product.value.conversationId; },
-  get compact() { return xs.value; } });
-const nativeGestureOwner = useTrainingLearnerGestures({ scope: { actorKey, product, clientId },
-  workspace: { get focus() { return props.focus; }, get settle() { return props.settleWorkspace; } },
-  drawer: { bodyVisible, xs }, observe: options => requestColleague("/training/observations", options), failure: reportFailure });
 
 const adapter = computed(() => {
   const supplied = conversation.adapter.value;
@@ -617,8 +573,7 @@ async function refresh(options = {}) {
 }
 async function sendMessage(message, options = {}, target = conversation.runtime.value) {
   if (!target?.available.value) return false;
-  return target.send({ message, data: { clientId, focus: options.focus,
-    ...(options.trainingQuestion ? { trainingQuestion: options.trainingQuestion } : {}) } }, { messageId: options.messageId });
+  return target.send({ message, data: { clientId, focus: options.focus } }, { messageId: options.messageId });
 }
 // Teach me in L: reveal this conversation (voice stays as it is) and send L's
 // fixed message through the ordinary send with the current browser focus.
@@ -699,15 +654,7 @@ async function openModelSetup() {
 async function changeWatch(item, operation) {
   try {
     const watch = typeof item === "string" ? watches.value.find(value => value.watchId === item) || { watchId: item } : item;
-    const body = { watchId: watch.watchId };
-    if (operation === "resume" && watch.source === "learning-task") {
-      const task = learningTask.value;
-      if (!task || task.attemptId !== watch.learningTask?.attemptId || task.sessionId !== watch.sessionId) {
-        throw new Error("Return to this exact Learning task before resuming its watch.");
-      }
-      Object.assign(body, { browserClientId: clientId, learningClientId: task.learningClientId });
-    }
-    await requestColleague(`/watches/${operation}`, { method: "POST", body });
+    await requestColleague(`/watches/${operation}`, { method: "POST", body: { watchId: watch.watchId } });
     await refresh();
   } catch (error) { reportFailure(error); }
 }
@@ -735,34 +682,6 @@ function prepareOperationRecovery(item) {
   operationDetails.value = false;
   return true;
 }
-async function startLearningWatch() {
-  const task = learningTask.value;
-  if (!task || pollingBusy.value) return false;
-  const criterion = pollingCriterion.value.trim();
-  if (!task.reference && !criterion) {
-    reportFailure("Name the current task to watch.");
-    return false;
-  }
-  pollingBusy.value = true;
-  try {
-    const { projectSlug: targetProjectSlug, ...binding } = task;
-    await requestColleague("/learning-watches/start", { method: "POST", body: {
-      ...binding, targetProjectSlug, browserClientId: clientId, watchId: crypto.randomUUID(), ...(criterion ? { criterion } : {})
-    } });
-    pollingCriterion.value = "";
-    await refresh();
-    return true;
-  } catch (error) { reportFailure(error); return false; }
-  finally { pollingBusy.value = false; }
-}
-watch([() => learnerGestures?.value, learningWatch], ([owner, item], previous) => {
-  const oldOwner = previous?.[0], oldWatch = previous?.[1];
-  if (oldOwner && oldWatch && (oldOwner !== owner || oldWatch.watchId !== item?.watchId)) oldOwner.clearPollingWatch?.(oldWatch.watchId);
-  if (owner && item?.status === "active") owner.setPollingWatch?.({ watchId: item.watchId,
-    appRoutes: Array.isArray(item.learningTask?.appRoutes) ? item.learningTask.appRoutes : [],
-    observe: body => requestColleague("/learning-watches/observations", { method: "POST", body }) });
-  else if (owner && item) owner.clearPollingWatch?.(item.watchId);
-}, { immediate: true });
 watch(open, value => { if (value) void refresh(); });
 watch(actorKey, () => {
   revision += 1;
@@ -775,27 +694,20 @@ watch(actorKey, () => {
   product.value = { conversationId: "", error: "" };
   productError.value = "";
   pointerNotice.value = "";
-  presentationCue.retire("The signed-in learner changed.");
-  presentationCue.reset();
-  trainingNavigation.reset();
+  colleagueNavigation.reset();
   voiceTranscript.value = null;
   void refresh();
 }, { flush: "sync" });
 const focusBinding = createColleagueFocusBinding({ socket: realtimeSocket,
-  readFocus: () => ({ clientId, focus: props.focus, ...(learningTask.value ? { learningTask: learningTask.value } : {}) }),
+  readFocus: () => ({ clientId, focus: props.focus }),
   onError: message => { if (mounted) productError.value = message; }
 });
-watch([actorKey, () => props.focus, learningTask], ([actor], [previousActor]) => {
+watch([actorKey, () => props.focus], ([actor], [previousActor]) => {
   if (previousActor !== undefined && actor !== previousActor) focusBinding.release();
   focusBinding.update();
 }, { deep: true, immediate: true });
-watch(() => learnerGestures?.value, owner => {
-  if (mounted && learnerGestures && !owner) learnerGestures.value = nativeGestureOwner;
-});
 onMounted(() => {
   if (voice) voice.launcher.value = launcher.value?.$el;
-  if (colleagueBody) colleagueBody.value = bodyOwner;
-  if (learnerGestures && !learnerGestures.value) learnerGestures.value = nativeGestureOwner;
   void refresh();
   window.addEventListener("blur", cancelAvatarPress);
   window.addEventListener("pagehide", cancelAvatarPress);
@@ -804,11 +716,6 @@ onBeforeUnmount(() => {
   if (voice?.launcher.value === launcher.value?.$el) voice.launcher.value = null;
   realtimeSocket.off("connect", refresh);
   focusBinding.close();
-  presentationCue.retire("Colleague left this browser view.");
-  if (learnerGestures?.value === nativeGestureOwner) learnerGestures.value = null;
-  if (colleagueBody?.value === bodyOwner) colleagueBody.value = null;
-  nativeGestureOwner.clear();
-  learnerGestures?.value?.clearPollingWatch?.();
   mounted = false;
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
   cancelAvatarPress();
@@ -929,7 +836,7 @@ onBeforeUnmount(() => {
                       Operations {{ operations.length }}
                     </v-btn>
                     <v-btn
-                      v-if="learningTask || watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
+                      v-if="watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
                       :aria-label="`Watches and assignments (${watchControlCount})`" title="Watches and assignments"
                       aria-haspopup="dialog" :aria-expanded="watchDetails" @click="watchDetails = true"
                     >
@@ -976,64 +883,10 @@ onBeforeUnmount(() => {
         <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__watch-details">
-        <section v-if="learningTask" class="vibe64-colleague__watch-card vibe64-colleague__watch-card--learning" aria-label="Current learning task polling">
-          <p class="text-title-medium">Current learning task</p>
-          <template v-if="learningWatch">
-            <p><strong class="vibe64-colleague__watch-chip" :data-status="learningWatch.status">{{ learningWatch.availability || learningWatch.status }}</strong> · {{ learningWatch.question }}</p>
-            <p class="vibe64-colleague__watch-meta">{{ learningWatch.projectSlug || 'Source-less lesson' }} · {{ learningWatch.sessionId }}</p>
-            <p v-if="learningWatch.latestObservation">
-              Latest: {{ learningWatch.latestObservation.control }} · {{ learningWatch.latestObservation.workspace?.learningView }}
-              · {{ learningWatch.latestObservation.workspace?.pane || 'no pane' }}
-              · {{ learningWatch.latestObservation.observedAt }}
-            </p>
-            <p v-if="learningWatch.lastGuidance">
-              Last help: {{ learningWatch.lastGuidance.status }} after {{ learningWatch.lastGuidance.control }}
-              · {{ learningWatch.lastGuidance.deliveredAt }}
-            </p>
-            <p v-if="learningWatch.assessmentEvidence?.available">
-              Saved assessment outcome: {{ learningWatch.assessmentEvidence.outcome }}
-              · {{ learningWatch.assessmentEvidence.supportsRequestedOutcome ? 'supports' : 'does not yet support' }} the requested outcome.
-            </p>
-            <p v-else>No saved assessment outcome yet; polling observations are not proof of completion.</p>
-            <p v-if="learningWatch.error" class="text-error">{{ learningWatch.error }}</p>
-            <div class="d-flex flex-wrap ga-1">
-              <v-btn
-                v-if="learningWatch.status === 'active' || learningWatch.status === 'pending'" variant="tonal" color="primary" min-height="48"
-                @click="changeWatch(learningWatch, 'pause')"
-              >
-                Pause
-              </v-btn>
-              <v-btn
-                v-if="learningWatch.status === 'paused'" variant="tonal" color="primary" min-height="48"
-                @click="changeWatch(learningWatch, 'resume')"
-              >
-                Resume
-              </v-btn>
-              <v-btn variant="text" min-height="48" @click="changeWatch(learningWatch, 'cancel')">Stop</v-btn>
-            </div>
-            <details v-if="learningWatch.learningTask?.criterion" class="vibe64-colleague__watch-criteria">
-              <summary>Task criteria</summary>
-              <p>{{ learningWatch.learningTask.criterion }}</p>
-            </details>
-          </template>
-          <template v-else>
-            <p v-if="learningTask.reference">Watch the current delivered lesson question and report meaningful progress.</p>
-            <v-text-field
-              v-else v-model="pollingCriterion" label="Task to watch" maxlength="2000"
-              hint="Describe one bounded outcome for this current lesson." persistent-hint
-            />
-            <v-btn
-              color="primary" min-height="48" :disabled="pollingBusy || (!learningTask.reference && !pollingCriterion.trim())"
-              @click="startLearningWatch"
-            >
-              {{ pollingBusy ? 'Starting…' : 'Start polling' }}
-            </v-btn>
-          </template>
-        </section>
-        <section v-if="conversationWatches.length" class="vibe64-colleague__watch-card" aria-label="Conversation watches">
-          <p class="text-title-medium">Conversation watches ({{ conversationWatches.length }})</p>
+        <section v-if="watches.length" class="vibe64-colleague__watch-card" aria-label="Conversation watches">
+          <p class="text-title-medium">Conversation watches ({{ watches.length }})</p>
           <ul>
-            <li v-for="item in conversationWatches" :key="item.watchId">
+            <li v-for="item in watches" :key="item.watchId">
               <div>
                 <strong>{{ item.projectSlug || 'Workspace' }}</strong> · <span class="vibe64-colleague__watch-chip" :data-status="item.status">{{ item.status }}</span>
                 <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
@@ -1054,7 +907,7 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </section>
-        <p v-if="!learningTask && !watches.length && !assignments.length" class="vibe64-colleague__watch-empty" role="status">No ongoing watches or assignments.</p>
+        <p v-if="!watches.length && !assignments.length" class="vibe64-colleague__watch-empty" role="status">No ongoing watches or assignments.</p>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -1159,7 +1012,6 @@ onBeforeUnmount(() => {
 .vibe64-colleague__watch-details { padding: 8px 24px 24px; min-height: 0; overflow: auto; overflow-wrap: anywhere; font: var(--v64-type-body-md, inherit); }
 .vibe64-colleague__watch-details p { margin-block: 0 8px; }
 .vibe64-colleague__watch-card { padding: 16px; border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), .12)); border-radius: var(--v64-shape-lg, 16px); background: rgb(var(--v-theme-surface)); }
-.vibe64-colleague__watch-card--learning { border-color: color-mix(in srgb, var(--v64-learning, #f5c518) 45%, rgb(var(--v-theme-surface))); background: var(--v64-learning-tint, rgb(var(--v-theme-surface))); }
 .vibe64-colleague__watch-card > .text-title-medium { margin-bottom: 12px; }
 .vibe64-colleague__watch-details section + section { margin-top: 12px; }
 .vibe64-colleague__watch-details ul { list-style: none; padding: 0; margin: 0; }
@@ -1172,9 +1024,6 @@ onBeforeUnmount(() => {
 .vibe64-colleague__watch-chip[data-status="paused"]::before { background: var(--v64-learning, #f5c518); }
 .vibe64-colleague__watch-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
 .vibe64-colleague__watch-empty { padding: 24px 0; text-align: center; color: var(--v64-on-surface-variant); }
-.vibe64-colleague__watch-criteria { margin-top: 12px; }
-.vibe64-colleague__watch-criteria summary { min-height: 40px; align-content: center; cursor: pointer; }
-.vibe64-colleague__watch-criteria p { white-space: pre-wrap; }
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }

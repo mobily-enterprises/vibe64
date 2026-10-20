@@ -16,7 +16,6 @@ import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix
 } from "./lib/vibe64SessionToolDefinitions.js";
-import { lessonDashboardSectionVisible } from "./lib/vibe64LessonDashboard.js";
 
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
@@ -126,11 +125,9 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
       scopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
       title: tool.title,
       toolId: tool.id,
-      unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
-      ...(projectTool ? { visibleWhen: context => lessonDashboardSectionVisible(context, tool.routeSegment) } : {})
+      unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
     },
-    when: projectTool ? context => lessonDashboardSectionVisible(context, tool.routeSegment)
-      : context => activeSessionNavPlacementVisible(context) && activeSessionToolOffered(context, tool.id)
+    when: projectTool ? undefined : activeSessionNavPlacementVisible
   });
 }
 
@@ -138,18 +135,12 @@ function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
   return activeSessionNav?.visible === true;
 }
 
-// A lesson's session navigation offers only the tools its Dashboard declares.
-function activeSessionToolOffered({ activeSessionNav } = {}, toolId = "") {
-  return activeSessionNav?.lesson !== true ||
-    (Array.isArray(activeSessionNav.tools) && activeSessionNav.tools.some(tool => tool?.id === toolId));
+function githubProjectVisible({ projectContext = {} } = {}) {
+  return githubProjectAvailable(projectContext);
 }
 
-function githubProjectVisible(context = {}) {
-  return githubProjectAvailable(context?.projectContext || {}) && lessonDashboardSectionVisible(context, "issues");
-}
-
-function incomingVisible(context = {}) {
-  return context?.projectContext?.repositoryMode === "github" && lessonDashboardSectionVisible(context, "incoming");
+function incomingVisible({ projectContext = {} } = {}) {
+  return projectContext.repositoryMode === "github";
 }
 
 addPlacement({
@@ -184,7 +175,6 @@ addPlacement({
     icon: mdiCogOutline,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/settings",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "settings"),
     unscopedSuffix: "/project/[slug]/dashboard/settings",
     to: ""
   }
@@ -204,7 +194,6 @@ addPlacement({
       icon: mdiFileCogOutline,
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/env",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "env"),
       unscopedSuffix: "/project/[slug]/dashboard/env",
       to: "",
     },
@@ -222,7 +211,6 @@ addPlacement({
     icon: mdiConnection,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/integrations",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "integrations"),
     unscopedSuffix: "/project/[slug]/dashboard/integrations",
     to: ""
   }
@@ -239,7 +227,6 @@ addPlacement({
     icon: mdiAccountKeyOutline,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/access",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "access"),
     unscopedSuffix: "/project/[slug]/dashboard/access",
     to: ""
   }
@@ -258,7 +245,6 @@ addPlacement({
       icon: mdiHistory,
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/history",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "history"),
       unscopedSuffix: "/project/[slug]/dashboard/history",
       to: "",
     },
@@ -276,7 +262,6 @@ addPlacement({
     icon: mdiHeartPulse,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/health",
-    visibleWhen: context => lessonDashboardSectionVisible(context, "health"),
     unscopedSuffix: "/project/[slug]/dashboard/health",
     to: ""
   }

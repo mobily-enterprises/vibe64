@@ -406,7 +406,8 @@ describe("Vibe64 project client scope", () => {
     const slug = "shared-query-project";
     const fixture = mountProjectQueries(slug);
     try {
-      expect(fixture.learningRequests).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning"]);
+      // The project page reads no Learning resources; L reads them only while open.
+      expect(fixture.learningRequests).toEqual([]);
       expect(fixture.requests.map(({ url }) => url)).toEqual([
         `/api/app/${slug}/vibe64/projects`
       ]);
@@ -593,11 +594,7 @@ describe("Vibe64 project client scope", () => {
     expect(source).toContain("const selected = await createProject();");
     expect(source).toContain("const selected = await selectProject(slug);");
     expect(source).toContain("router.push(projectAppPath(selected))");
-    expect(source).toContain('v-if="loadingVisible"');
-    expect(source).toContain('const loadingVisible = computed(() => !props.independentContent && !displayError.value &&');
-    expect(source).toContain('(selectionInitialLoading.value || !props.runtimeReady));');
-    expect(source).toContain(':inert="!contentActive"');
-    expect(source).toContain(`:aria-hidden="!contentActive ? 'true' : undefined"`);
+    expect(source).toContain('v-if="!displayError && (selectionInitialLoading || !runtimeReady)"');
     expect(source).toContain("<v-skeleton-loader");
   });
 });

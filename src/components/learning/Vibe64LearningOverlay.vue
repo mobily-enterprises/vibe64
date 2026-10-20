@@ -5,8 +5,8 @@ import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
-import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
-import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
+import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
+import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
@@ -37,9 +37,9 @@ watch(open, async value => {
   if (typeof element?.focus === "function" && !element.contains?.(globalThis.document?.activeElement)) element.focus({ preventScroll: true });
 });
 
-const mode = useVibe64LearningMode({ authorPreview: computed(() => toValue(props.authorPreview) === true), active: open });
+const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true), active: open });
 const learningRevision = computed(() => {
-  const value = mode.learningResource.data.value;
+  const value = courses.learningResource.data.value;
   return value?.ok === true && Number.isSafeInteger(value.revision) ? value.revision : null;
 });
 const surface = computed(() => learning?.state.surface || "courses");
@@ -51,7 +51,7 @@ useRealtimeEvent({
   onEvent: ({ payload } = {}) => {
     void learning?.learnerChanged(payload || {});
     // A notes change touches no course, attempt or practice project.
-    if (open.value && payload?.reason !== "notes") void mode.learningResource.reload();
+    if (open.value && payload?.reason !== "notes") void courses.learningResource.reload();
   }
 });
 
@@ -101,7 +101,7 @@ function keydown(event) {
     </header>
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__courses">
-        <Vibe64LearningLessonLauncher :learning="mode" environment @opened="lessonOpened" />
+        <Vibe64LearningCourses :learning="courses" @opened="lessonOpened" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>

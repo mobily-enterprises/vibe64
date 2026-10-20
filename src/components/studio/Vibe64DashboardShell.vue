@@ -27,7 +27,6 @@ const incomingQuery = computed(() => ({ sessionId: props.dashboardContext.sessio
 const incoming = useEndpointResource({ path: incomingPath, readQuery: incomingQuery,
   queryKey: computed(() => ["vibe64.incoming", incomingPath.value, "badge", incomingQuery.value]),
   enabled: computed(() => props.dashboardContext.active !== false && Boolean(props.dashboardContext.sessionId) &&
-    !props.dashboardContext.lessonDashboard &&
     props.dashboardContext.projectContext?.repositoryMode === "github"),
   queryOptions: { retry: false, staleTime: 30_000, refetchInterval: 60_000 }
 });

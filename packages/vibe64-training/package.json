@@ -6,7 +6,6 @@
   "description": "Vibe64 teaching content validation, deterministic bundles and verified pinned snapshot installation and reads.",
   "exports": {
     "./client/lesson-picker": "./src/client/TrainingLessonPicker.vue",
-    "./client/preview-presentation": "./src/client/TrainingPreviewPresentation.vue",
     "./server/actions": "./src/server/actions.js",
     "./server/declared-check": "./src/server/declaredCheck.js",
     "./server/cli": "./src/server/cli.js",
@@ -22,8 +21,6 @@
     "./server/practiceSessionsOrdinaryUpgrade": "./src/server/practiceSessionsOrdinaryUpgrade.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
-    "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js",
-    "./client/navigation": "./src/client/createTrainingNavigation.js",
     "./server/step-checks": "./src/server/stepChecks.js",
     "./server/code-authorship": "./src/server/codeAuthorship.js",
     "./server/code-save-owner": "./src/server/codeEditorActions.js",
@@ -33,13 +30,8 @@
     "./shared/learner-events": "./src/shared/learnerEvents.js",
     "./server/step-progress-upgrade": "./src/server/stepProgressUpgrade.js",
     "./shared/practical-schemas": "./src/shared/practicalSchemas.js",
-    "./client/main-presentation": "./src/client/useTrainingMainPresentation.js",
-    "./client/learner-gestures": "./src/client/useTrainingLearnerGestures.js",
-    "./client/workspace-observation": "./src/client/useTrainingWorkspaceObservation.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
-    "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js",
-    "./client/presentation-operation": "./src/client/presentationOperation.js",
     "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
     "./shared/learning-guidance": "./src/shared/learningGuidance.js",
     "./shared/guide-targets": "./src/shared/guideTargets.js",
@@ -78,16 +70,8 @@
       "apiSummary": {
         "surfaces": [
           {
-            "subpath": "./client/preview-presentation",
-            "summary": "Retains the App preview beside the exact lesson's controlled SVG presentation."
-          },
-          {
             "subpath": "./client/lesson-picker",
             "summary": "Displays supplied installed courses with read-only lesson progress, emitting explicit start, resume or owner custom-course intent without state writes."
-          },
-          {
-            "subpath": "./client/presentation-cue",
-            "summary": "Coordinates original exact-output cue speech and terminal receipts with the existing Preview and voice owners."
           }
         ]
       }

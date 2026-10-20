@@ -352,36 +352,6 @@ describe("Vibe64 direct session view", () => {
     } finally { if (!unmounted) main.app.unmount(); vi.unstubAllGlobals(); }
   });
 
-  it.each([[true, true], [false, true], [true, false]])("opens Learning Main narration once by itself only with read-aloud on (%s) and a configured speech service (%s), never Working voice", async (readAloud, configured) => {
-    const main = mountMainConversationLog(configured ? {} : { speech: null });
-    try {
-      main.voice.readAloudFor.mockImplementation(() => readAloud);
-      await vue.nextTick();
-      expect(main.voice.open).not.toHaveBeenCalled();
-      const attempt = "9490f94a-c614-4581-9111-0debb2339ca8";
-      const learning = { ...main.runtime("", `training-${attempt}`), prepareVoice: vi.fn(async () => {}),
-        conversationLog: vue.reactive({ turns: [], loading: true }),
-        identity: { actorKey: "learner", projectSlug: "", sessionId: `training-${attempt}`, learningAttemptId: attempt,
-          learnerId: "1000", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions` } };
-      main.props.voiceRuntime = learning;
-      await vue.nextTick();
-      // The Learning voice gate requires the loaded conversation first.
-      expect(main.voice.open).not.toHaveBeenCalled();
-      learning.conversationLog.loading = false;
-      await vue.nextTick(); await new Promise(resolve => setTimeout(resolve, 0)); await vue.nextTick();
-      if (!readAloud || !configured) { expect(main.voice.open).not.toHaveBeenCalled(); return; }
-      expect(main.voice.open).toHaveBeenCalledTimes(1);
-      expect(main.voice.open.mock.calls[0][0].conversationId).toBe(main.state.voiceBinding.value.conversationId);
-      const session = main.voice.controller.state.session;
-      for (const capture of ["toggleHandsFree", "startPushToTalk"]) expect(session[capture]).not.toHaveBeenCalled();
-      // Ending voice is respected for this lesson conversation and page.
-      main.voice.controller.state.session = null;
-      main.voice.controller.state.binding = null;
-      await vue.nextTick(); await vue.nextTick();
-      expect(main.voice.open).toHaveBeenCalledTimes(1);
-    } finally { main.app.unmount(); }
-  });
-
   it("edits Main's unsent speech in its bubble without changing its native draft and gates uncertain admission", async () => {
     const main = mountMainConversationLog();
     try {
@@ -874,7 +844,7 @@ describe("Vibe64 direct session view", () => {
 
     expect(component).toContain("<Vibe64ConversationLog");
     expect(component).toContain(':welcome-message="emptyConversationWelcome"');
-    expect(component).toContain(':source-operations-suspended="props.sourceWorkspaceAvailable ? sourceOperationsSuspended : agentActive"');
+    expect(component).toContain(':source-operations-suspended="sourceOperationsSuspended"');
     expect(component).not.toContain(':source-operations-suspended="sourceOperationsSuspended || agentActive"');
     expect(component).toContain(':busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"');
     expect(component).toContain("<Vibe64AutopilotPromptTextarea");
@@ -1200,7 +1170,7 @@ describe("Vibe64 direct session view", () => {
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"props.sourceWorkspaceAvailable && assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");
@@ -1229,32 +1199,15 @@ describe("Vibe64 direct session view", () => {
 
 });
 
-it("projects actual source availability without suppressing suspended Working controls", () => {
+it("shows Save work for an active selected session even while source operations are suspended", () => {
   const source = fs.readFileSync(composablePath, "utf8");
   const expression = source.match(/const saveWorkHeaderVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n {2}\)\);/u)?.[1];
   expect(expression).toBeTruthy();
   const visible = new Function("props", "sessionId", `return Boolean(${expression});`);
   for (const suspended of [true, false]) {
-    const props = { active: true, sourceOperationsSuspended: suspended };
-    expect(visible(props, vue.ref("working"))).toBe(true);
-    expect(visible({ ...props, sourceWorkspaceAvailable: true }, vue.ref("working"))).toBe(true);
-    expect(visible({ ...props, sourceWorkspaceAvailable: false }, vue.ref("learning"))).toBe(false);
+    expect(visible({ active: true, sourceOperationsSuspended: suspended }, vue.ref("working"))).toBe(true);
   }
   expect(visible({ active: false }, vue.ref("working"))).toBe(false);
-  const component = fs.readFileSync(componentPath, "utf8");
-  expect(component).toContain('v-if="props.sourceWorkspaceAvailable || props.sessionRenewal?.visible"');
-  const temporary = component.slice(component.indexOf('<Vibe64TemporaryAiWorkspace'), component.indexOf('/>', component.indexOf('<Vibe64TemporaryAiWorkspace')));
-  expect(temporary).toContain('v-if="props.sourceWorkspaceAvailable"');
-  const presentation = component.slice(component.indexOf('<TrainingPreviewPresentation'), component.indexOf('</TrainingPreviewPresentation>'));
-  expect(presentation).toContain('v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"');
-  expect(presentation).toContain(':app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"');
-  expect(presentation).toContain(':learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"');
-  expect(presentation).toContain(':attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"');
-  expect(presentation).toContain(':learning-pane-active="learningPaneActive"');
-  expect(presentation).toContain(':workspace-active="normalWorkspaceActive && props.projectPane === \'preview\'"');
-  expect(presentation).toMatch(/<template #lessons>\s*<slot name="learning"/u);
-  expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Courses"');
-  expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
 });
 
 it("opens native plan history from its system-message link without treating it as source or changing chat", () => {

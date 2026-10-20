@@ -3821,27 +3821,11 @@ and private namespace; source operations retain their original refusal.
 
 ## Learning shell and separate remembered selection
 
-The original app shell accepts a controlled Learning state and emits a requested
-mode change through its optional yellow Australian L plate. The accessible
-name stays `Learning mode`; pressed state and the next-action hover label follow
-the supplied state. The active header and background use a restrained yellow
-blend of the current light/dark surface. Reduced motion removes the plate's
-transition. Slots, status placement, Main/Colleague controls and pane swipe
-behavior keep their existing owners. The control is hidden by default: the host
-must attach actual mode navigation before showing it, rather than expose a dead
-or simulated lesson control.
-
-The original stored-selection owner continues to use the exact Working project
-key and `session` URL preference. An explicitly supplied Learning learner and
-attempt use a separate key. Their `learningSession` URL preference is followed
-only when `learningAttempt` matches that exact attempt; an old retained instance
-never follows another attempt's selection. Partial claimed scope is refused.
-These browser fields are navigation identity, not lesson or account authority.
-Only reconciliation against actual authorized rows selects an available session;
-empty lists produce no fabricated lesson row. This increment adds no session
-list/API switch, request routing, Main conversation or Preview player. The host
-still needs its authenticated attempt and captured original panel/API owners to
-keep background Working sessions mounted during real mode navigation.
+Retired in Learning v2 phase 2 (F3). The app shell's yellow L plate now only
+opens the Learning environment overlay; it no longer switches a Learning mode or
+tints the header. The stored-selection owner again keeps only the Working
+project key and `session` URL preference; there is no separate Learning learner
+and attempt key or `learningSession` preference.
 
 The existing Core action contributor has a closed server-construction
 `admissionScope`: its default `all` retains the hosted global authority path.
@@ -3858,27 +3842,12 @@ gates. Unsupported construction scopes fail before registration.
 
 ## Learning Main client transport prerequisite
 
-The original `useVibe64ConversationRuntime` can select an actual Main learning
-attempt/session through the same supplied retained conversation and app endpoint.
-The composing host supplies each immutable record's attempt, exact Learning
-session API path and the API-returned own learner identity; current mode/query
-flags and source metadata cannot provide that contract. No project is invented.
-The optional Main binding actor key combines the original nonempty viewer actor,
-own learner and exact attempt; sign-out or a changed learner/attempt immediately
-blocks old new-work admission. Already-accepted work keeps its captured target
-without automatic resend. Global viewer identity, Working bindings and Colleague
-history remain unchanged. Learning drafts have that same isolated identity;
-omitted scope retains original Working storage keys.
-
-Original Mounted and AssistantAccess readers reuse the Session query-key owner
-with an optional learner/attempt namespace and the actual registered Learning
-route. Detail refresh, activity overlays, assistant-selection, access and goal
-notifications require the exact learning attempt and reject mixed project events.
-Working events retain each channel's original matching and reject learning
-notifications. The original resource/actor fences, provider reconciliation,
-submission/steering, goal and receipt owners remain authoritative. No second
-chat, provider, store or controller is added. Actual mode attachment, native
-teaching and browser/device acceptance remain separate open requirements.
+Retired with Learning mode (F3). `useVibe64ConversationRuntime`, the Mounted
+and AssistantAccess readers and the session request config select only
+project-scoped Working sessions; no client builds a learner/attempt binding,
+draft key or `/api/learning/...` path. Session realtime matchers still refuse
+events that carry a `learningAttemptId`, because the server can still emit
+lesson-scoped session events without a project.
 
 Opted source-less learning Codex bindings retain the shared native application
 tool schema hash in their original identity transaction. Early readiness can
@@ -3899,28 +3868,9 @@ admitted parent receipt and cancellation/close coordination before using it.
 
 ## Keyed Learning chat retention
 
-The original mounted runtime host captures each saved Learning record's session,
-attempt and API-returned own learner when constructed. Its Main conversation and
-session HTTP path remain attached to that tuple when the visible purpose filter,
-selection or Working project changes. The Vue host passes that captured path and
-empty project context to the same Autopilot view. Hiding the keyed host changes
-its active presentation without constructing a replacement conversation.
-
-Source-less Learning has no project work inspection, Workspace setup mutation,
-Save/update request, renewal resource target or native PTY launch. Its supported
-Main chat Send/Stop and refresh still use their original owner. Ordinary Working
-targets retain their original reactive project/path and source facilities. This
-mounted-host increment does not establish the Main teacher catalogue, completed
-mode UI, native teaching, physical audio or browser acceptance.
-
-The same Panel forwards the live Learning resource and purpose filter into its
-one original Data owner. Toolbar shortcuts use the selected saved session's own
-scoped path. Its original repository registry keeps the full collection while
-excluding source-less Learning from source inspection. Working hosts read their
-Working list errors independently of the visible Learning list; failed Working
-refresh retains background Working hosts without preserving removed Learning
-hosts. Default unconfigured Working retention remains unchanged. These attachment
-checks do not prove the visible launcher, Preview or actual teacher admission.
+Retired with Learning mode (F3): the session panel mounts only the project's
+Working hosts, with no purpose filter, keyed Learning records or separate
+Working/Learning load errors.
 
 The original Codex callback context owner also restores a captured Learning
 scope without a source root. Its existing notification queue can then invoke

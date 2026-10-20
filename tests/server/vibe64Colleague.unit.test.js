@@ -1845,93 +1845,6 @@ test("project navigation carries bounded panes and exact conversation targets, w
   await assert.rejects(execute(input), { statusCode: 403 });
 });
 
-test("Learning navigation retains exact mode, pane and attempt until its initiating browser confirms them", async t => {
-  const f = await fixture(t, [], { watching: true });
-  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
-  const context = { ...f.context, colleague: { clientId: "tab-a" } };
-  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
-  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  for (const input of [
-    { projectSlug: "practice", learningMode: true },
-    { learningMode: true, learningView: "workspace", projectSlug: "practice", sessionId: "lesson-session" },
-    { projectSlug: "practice", learningMode: true, learningView: "learning" },
-    { projectSlug: "practice", learningMode: true, learningView: "learning", learningContent: "picker", sessionId: "lesson-session" },
-    { projectSlug: "practice", learningMode: false, learningView: "learning", learningContent: "picker" }
-  ]) {
-    assert.equal((await execute(input)).ok, false);
-    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
-  }
-  const input = { learningMode: true, learningView: "workspace", learningTargetAttemptId: attemptId,
-    projectSlug: "practice", sessionId: "lesson-session", pane: "database", databaseView: "erd" };
-  const pending = execute(input);
-  let state;
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation?.status === "pending") break;
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  assert.equal(state.navigation.learningAttemptId, attemptId);
-  for (const key of Object.keys(input).filter(key => key !== "learningTargetAttemptId")) assert.equal(state.navigation[key], input[key]);
-  for (const focus of [
-    { ...input, pane: "database", databaseScreen: "workspace", learningView: "learning" },
-    { ...input, pane: "database", databaseScreen: "workspace", learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
-    { ...input, pane: "database", databaseScreen: "workspace", databaseView: "overview" }
-  ]) {
-    assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-      ok: true, focus }, f.context)).ok, false);
-  }
-  const { learningTargetAttemptId: _learningTargetAttemptId, ...focusInput } = input;
-  const focus = { ...focusInput, learningAttemptId: attemptId, databaseScreen: "workspace" };
-  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus }, f.context)).ok, true);
-  assert.deepEqual(await pending, { ok: true, focus });
-
-  const picker = execute({ projectSlug: "practice", learningMode: true, learningView: "learning", learningContent: "picker" });
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation?.status === "pending" && state.navigation.learningContent === "picker") break;
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  const pickerFocus = { projectSlug: "", sessionId: "", conversationId: "", pane: "lessons",
-    learningMode: true, learningView: "learning", learningContent: "picker" };
-  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus: pickerFocus }, f.context);
-  assert.deepEqual(await picker, { ok: true, focus: pickerFocus });
-  assert.deepEqual(f.observations.starts, []);
-  assert.deepEqual(f.observations.mutations, []);
-
-  const leave = execute({ projectSlug: "practice", learningMode: false });
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation?.status === "pending" && state.navigation.learningMode === false) break;
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  const workingFocus = { projectSlug: "practice", sessionId: "lesson-session", conversationId: "",
-    pane: "preview", learningMode: false };
-  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus: { ...workingFocus, learningView: "workspace" } }, f.context)).ok, false);
-  // Learning v2: outside Learning mode, the Learning environment (L) still
-  // reports its current lesson; leaving Learning mode must not wait for it.
-  const heldFocus = { ...workingFocus, learningOpen: false,
-    learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", learningStepId: "one" };
-  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus: heldFocus }, f.context)).ok, true);
-  assert.deepEqual(await leave, { ok: true, focus: heldFocus });
-});
-
-test("leaving Learning mode is confirmed while the Learning environment holds a lesson", async () => {
-  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const held = { projectSlug: "alpha", sessionId: "", conversationId: "", pane: "preview", learningMode: false,
-    learningOpen: false, learningAttemptId: attemptId, learningStepId: "one" };
-  const coordination = createColleagueNavigationCoordination({ changed() {} });
-  const connection = {};
-  const leaving = coordination.begin(connection, { id: "leave", status: "pending", projectSlug: "alpha", learningMode: false });
-  assert.equal(coordination.acknowledge(connection, { commandId: "leave", ok: true,
-    focus: { ...held, learningView: "workspace" } }).ok, false);
-  coordination.acknowledge(connection, { commandId: "leave", ok: true, focus: held });
-  assert.deepEqual(await leaving, { ok: true, focus: held });
-});
-
 // Learning v2 (C4): navigation coordination moved from vibe64-training's
 // presentationCoordination.js. These port the original Main guide receipt
 // assertions (vibe64TrainingTeaching) onto Colleague's own navigate/ack path.
@@ -1960,8 +1873,7 @@ test("Colleague guide points at a real control without navigating and reports on
     [{ guide: { target: "preview", navigate: true } }, /exact project/u],
     [{ guide: { target: "files", navigate: true }, projectSlug: "alpha" }, /exact session/u],
     [{ guide: { target: "learning", navigate: true }, projectSlug: "alpha" }, /opens Learning, not a project/u],
-    [{ guide: { target: "preview" }, pane: "settings", projectSlug: "alpha" }, /derives its own view/u],
-    [{ guide: { target: "preview" }, learningMode: true, learningView: "learning", learningContent: "picker", projectSlug: "alpha" }, /retired Learning mode/u]
+    [{ guide: { target: "preview" }, pane: "settings", projectSlug: "alpha" }, /derives its own view/u]
   ]) {
     const result = await (input.projectSlug ? execute : learningAction)(input);
     assert.equal(result.ok, false, JSON.stringify(input));
@@ -1974,6 +1886,9 @@ test("Colleague guide points at a real control without navigating and reports on
     "the project-less action accepts no project");
   await assert.rejects(execute({ learning: { open: true }, projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
     "Learning is opened through the project-less action");
+  await assert.rejects(execute({ guide: { target: "preview" }, learningMode: true, learningView: "learning", projectSlug: "alpha" }),
+    { code: "ACTION_VALIDATION_FAILED" }, "the retired Learning mode is no navigation field");
+  assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
 
   const pointed = learningAction({ guide: { target: "learning", caption: "Open Learning here" } });
   const command = await pendingNavigation(f, "tab-a");
@@ -2030,10 +1945,9 @@ test("Colleague opens or minimises Learning above the app until its initiating b
     assert.equal((await execute(input)).ok, false, JSON.stringify(input));
     assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
   }
-  for (const input of [{ learning: { open: true }, learningMode: true, learningView: "learning", learningContent: "picker" }]) {
-    assert.equal((await f.service.navigate(input, context)).ok, false, "retired Learning mode fields cannot accompany Learning");
-    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
-  }
+  await assert.rejects(execute({ learning: { open: true }, learningMode: true, learningView: "learning" }), { code: "ACTION_VALIDATION_FAILED" },
+    "retired Learning mode fields cannot accompany Learning");
+  assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
   await assert.rejects(execute({ learning: { attemptId } }), { code: "ACTION_VALIDATION_FAILED" });
   await assert.rejects(execute({ learning: { open: true, attemptId: "not-an-attempt" } }), { code: "ACTION_VALIDATION_FAILED" });
   const opening = execute({ learning: { open: true, attemptId, stepId: "open-preview" } });

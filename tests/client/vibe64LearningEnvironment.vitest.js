@@ -472,7 +472,8 @@ describe("Learning overlay", () => {
   it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and closes on Escape", async () => {
     const { learning } = controller();
     const realtime = [];
-    const modeOptions = [];
+    const coursesOptions = [];
+    const courses = { learningResource: { data: Vue.ref({ ok: true, revision: 9 }), reload: vi.fn() } };
     const HostKeys = await import("../../src/lib/vibe64AssistantHost.js");
     const LearnerEvents = await import("../../packages/vibe64-training/src/shared/learnerEvents.js");
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
@@ -482,10 +483,9 @@ describe("Learning overlay", () => {
       "@local/vibe64-training/shared/learner-events": LearnerEvents,
       "@/lib/vibe64AssistantHost.js": HostKeys,
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
-      "@/composables/useVibe64LearningMode.js": { useVibe64LearningMode: options => { modeOptions.push(options);
-        return { learningResource: { data: Vue.ref({ ok: true, revision: 9 }), reload: vi.fn() } }; } },
-      "@/components/studio/Vibe64LearningLessonLauncher.vue": { default: { props: { learning: Object, environment: Boolean }, emits: ["opened"],
-        setup: (props, { emit }) => () => Vue.h("section", { "data-test": "courses", environment: props.environment,
+      "@/composables/useVibe64LearningCourses.js": { useVibe64LearningCourses: options => { coursesOptions.push(options); return courses; } },
+      "./Vibe64LearningCourses.vue": { default: { props: { learning: Object }, emits: ["opened"],
+        setup: (props, { emit }) => () => Vue.h("section", { "data-test": "courses", own: props.learning === courses,
           onClick: () => emit("opened", { attemptId: ATTEMPT }) }) } },
       "./Vibe64LearningReader.vue": { default: { props: ["learning", "learningRevision"],
         setup: props => () => Vue.h("article", { "data-test": "reader", revision: props.learningRevision }) } },
@@ -504,13 +504,13 @@ describe("Learning overlay", () => {
       expect(nodes(root).filter(node => node.props?.["data-guide-overlay"])).toHaveLength(1);
       expect(byTest(root, "courses")).toBeUndefined();
       expect(realtime[0].event).toBe("vibe64.training.learner.changed");
-      expect(modeOptions[0].active.value).toBe(false);
+      expect(coursesOptions[0].active.value).toBe(false);
       await learning.show();
       await flush();
-      expect(modeOptions[0].active.value).toBe(true);
+      expect(coursesOptions[0].active.value).toBe(true);
       const layer = nodes(root).find(node => node.props?.role === "dialog");
       expect(layer.props["aria-label"]).toBe("Learning");
-      expect(byTest(root, "courses").props.environment).toBe(true);
+      expect(byTest(root, "courses").props.own, "the courses surface reads L's own courses adapter").toBe(true);
       expect(byTest(root, "teacher-notes").props.own, "the courses surface shows this learner's teacher notes").toBe(true);
       byTest(root, "courses").props.onClick();
       await flush();

@@ -178,30 +178,9 @@ function runtimeHostWorkTaskState(session = {}) {
 }
 
 function useVibe64SessionRuntimeHost(props, emit) {
-  // The panel retains this keyed host while its purpose is hidden. Its lesson
-  // identity belongs to the saved record, never the currently visible filter.
-  const initialSession = (unref(props.sessionData.sessions) || []).find(
-    session => session.sessionId === String(props.sessionId || "").trim()
-  );
-  const learningScope = initialSession?.purpose === "learning" ? {
-    learningAttemptId: String(initialSession.learningAttemptId || "").trim(),
-    learnerId: String(readRefOrGetterValue(props.sessionData.learningLearnerId) || "").trim(),
-    sessionId: initialSession.sessionId,
-    noExercise: initialSession.noExercise !== false,
-    sourceProjectSlug: initialSession.noExercise === false ? String(initialSession.projectSlug || "").trim() : ""
-  } : null;
-  if (learningScope && (
-    !learningScope.learnerId || !learningScope.learningAttemptId ||
-    (learningScope.noExercise ? learningScope.sessionId !== `learning-${learningScope.learningAttemptId}`
-      : !learningScope.sessionId || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(learningScope.sourceProjectSlug))
-  )) {
-    throw new Error("This learning conversation has no confirmed learner and attempt.");
-  }
-  const selectedSessionId = computed(() => learningScope?.sessionId || String(props.sessionId || "").trim());
-  const sessionsApiPath = learningScope
-    ? `/api/learning/${encodeURIComponent(learningScope.learningAttemptId)}/vibe64/sessions`
-    : props.sessionData.sessionsApiPath;
-  const runtimeProjectContext = computed(() => learningScope ? {} : props.projectContext || {});
+  const selectedSessionId = computed(() => String(props.sessionId || "").trim());
+  const sessionsApiPath = props.sessionData.sessionsApiPath;
+  const runtimeProjectContext = computed(() => props.projectContext || {});
   const selectedListSession = computed(() => {
     const sessions = unref(props.sessionData.sessions) || [];
     return sessions.find((session) => session.sessionId === selectedSessionId.value) || null;
@@ -211,12 +190,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     projectSlug: computed(() => runtimeProjectContext.value.slug || ""),
     sessionId: selectedSessionId,
     sessionsApiPath,
-    ...(learningScope ? {
-      learningAttemptId: learningScope.learningAttemptId,
-      learnerId: learningScope.learnerId,
-      noExercise: learningScope.noExercise,
-      sourceProjectSlug: learningScope.sourceProjectSlug
-    } : {}),
     summarySession: selectedListSession
   });
   const mounted = {
@@ -241,13 +214,13 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const workState = ref({
     checkedAt: "",
     error: "",
-    loading: !learningScope,
+    loading: true,
     operation: null,
     unsaved: null
   });
   useRealtimeEvent({
     event: VIBE64_PROJECT_CHANGED_EVENT,
-    matches: ({ payload = {} } = {}) => !learningScope && payload.projectSlug === props.projectContext?.slug &&
+    matches: ({ payload = {} } = {}) => payload.projectSlug === props.projectContext?.slug &&
       typeof payload.repositoryWorkflow?.requirePullRequest === "boolean",
     onEvent: ({ payload }) => {
       workState.value = {
@@ -370,14 +343,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
     refreshSessionData: props.sessionData.refreshSessionData,
     selectSession: props.sessionData.selectSessionId,
     selectedSession,
-    // Source-less lessons have no renewal workspace. Keep the original owner
-    // present, with no resource target or background request.
-    selectedSessionId: learningScope ? "" : selectedSessionId,
-    sessionsApiPath: learningScope ? "" : sessionsApiPath
+    selectedSessionId,
+    sessionsApiPath
   });
-  const sourceOperationsSuspended = computed(() => Boolean(
-    learningScope || unref(renewalModel.sourceOperationsSuspended)
-  ));
+  const sourceOperationsSuspended = renewalModel.sourceOperationsSuspended;
   const dialogs = proxySessionDialogs({
     archive: props.sessionData.archive,
     renewal: renewalModel
@@ -394,7 +363,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
   const autopilotSessionToolbar = proxyRefs({
     sessionsApiPath,
-    workingSessionsApiPath: props.sessionData.sessionsApiPath,
     refreshSessionData,
     projectContext: runtimeProjectContext,
     refreshRepositoryState: props.refreshRepositoryState,
@@ -403,7 +371,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     createSessionCommand: props.sessionData.createSessionCommand,
     createSessionRunning: props.sessionData.createSessionRunning,
     createSessionVisible: props.sessionData.createSessionVisible,
-    ...(learningScope ? { canCreateSession: false, createSessionVisible: false } : {}),
     createSessionTitle: props.sessionData.createSessionTitle,
     selectSession: props.sessionData.selectSessionId,
     sessions: computed(() => runtimeHostToolbarSessions({
@@ -417,8 +384,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
   const pageError = computed(() => String(
     mounted.detailState.value?.error ||
-    (learningScope ? readRefOrGetterValue(props.sessionData.learningLoadError)
-      : readRefOrGetterValue(props.sessionData.workingLoadError ?? props.sessionData.sessionList?.loadError)) ||
+    props.sessionData.sessionList?.loadError ||
     ""
   ));
   const guardedPage = computed(() => ({
@@ -475,9 +441,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function retryWorkspaceSetup() {
-    if (learningScope) {
-      return false;
-    }
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -501,9 +464,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function saveSessionWork({ destinationReview, connectedReview } = {}) {
-    if (learningScope) {
-      return false;
-    }
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -535,9 +495,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function updateSessionWork({ reviewedConflictId = "", historyReview = undefined, requestId = "" } = {}) {
-    if (learningScope) {
-      return false;
-    }
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -682,7 +639,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     autopilotSessionToolbar,
     cancelAgentMessage,
     codexTerminalCanStart: computed(() => Boolean(
-      !learningScope && props.active && selectedSession.value?.sessionId === selectedSessionId.value
+      props.active && selectedSession.value?.sessionId === selectedSessionId.value
     )),
     conversationLog,
     conversationRuntime,
@@ -698,9 +655,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionRenewal: dialogs.renewal,
     saveSessionWork,
     sessionsApiPath,
-    sourceWorkspaceAvailable: computed(() => !learningScope),
-    outputWorkspaceAvailable: computed(() => !learningScope || learningScope.noExercise === false),
-    learningAttemptId: learningScope?.learningAttemptId || "",
     selectedAgentTerminalId,
     selection,
     sendAgentMessage,

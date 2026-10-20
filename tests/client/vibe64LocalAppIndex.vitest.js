@@ -20,10 +20,9 @@ describe("Vibe64LocalAppIndex", () => {
   });
 });
 
-// Actual app-index and launcher setup/templates; only saved native sessions and
-// presentation widgets are bounded fixtures. No teacher/runtime is fabricated.
+// Actual Learning Courses and shell-context setup/templates; only the courses
+// adapter and presentation widgets are bounded fixtures.
 import * as Vue from "vue";
-import * as mdi from "@mdi/js";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import * as LearningEnvironment from "../../src/lib/vibe64Learning.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
@@ -63,226 +62,89 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountLearningIndex({ gestures = null, practiceChoices = [], authorTrial = null } = {}) {
-  const route = Vue.reactive({ fullPath: "/app?mode=learning" });
-  const calls = { panels: 0, unmounts: 0, gateProps: null, pickerProps: null, select: [] };
-  const owner = { learningMode: Vue.ref(true), purposeFilter: Vue.ref("learning"), learnerId: Vue.ref("learner"),
-    busy: Vue.ref(false), startRetry: Vue.ref(null),
+async function mountCourses({ authorTrial = null } = {}) {
+  const route = Vue.reactive({ fullPath: "/app" });
+  const calls = { pickerProps: null, opened: [] };
+  const owner = { active: Vue.ref(true), learnerId: Vue.ref("learner"), busy: Vue.ref(false), startRetry: Vue.ref(null),
     learningResource: { data: Vue.ref({ ok: true, available: true, learnerId: "learner", sessions: [] }), isLoading: Vue.ref(false), loadError: Vue.ref("") },
     coursesResource: { data: Vue.ref({ ok: true, available: true, courses: [] }), isLoading: Vue.ref(false), loadError: Vue.ref("") } };
-  owner.setLearningMode = async value => { owner.learningMode.value = value; owner.purposeFilter.value = value ? "learning" : "working"; };
   owner.refresh = async () => null;
-  let opened;
-  owner.startLesson = async input => { calls.start = input; opened({ attemptId: "attempt", learnerId: "learner", sessionId: "learning-session" }); };
-  owner.resumeLesson = async attempt => { calls.resume = attempt; };
+  owner.startLesson = async input => { calls.start = input; return { attemptId: "attempt", current: true }; };
+  owner.resumeLesson = async attempt => { calls.resume = attempt; return { attemptId: attempt, current: true }; };
   owner.retryStart = async () => { calls.retry = true; };
   if (authorTrial) {
     owner.authorPreviewEnabled = Vue.ref(true);
     owner.authorPreviewResource = { data: Vue.ref({ ok: true, available: true, authorPreview: true }), isLoading: Vue.ref(false), loadError: Vue.ref("") };
     owner.savedAuthorPreview = Vue.ref(authorTrial);
-    owner.resumeAuthorPreview = async attemptId => { calls.authorPreview = attemptId; };
+    owner.resumeAuthorPreview = async attemptId => { calls.authorPreview = attemptId; return { attemptId, current: true }; };
   }
   const picker = { props: ["canStart", "canResume", "learningResult"], emits: ["start", "resume", "refresh"], setup(props, { emit }) {
     calls.pickerProps = props;
     return () => Vue.h("button", { "data-test": "start-lesson", onClick: () => emit("start", { courseId: "course", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 3 }) });
   } };
-  const launcher = compiledUi(path.resolve("src/components/studio/Vibe64LearningLessonLauncher.vue"), {
+  const component = compiledUi(path.resolve("src/components/learning/Vibe64LearningCourses.vue"), {
     vue: Vue, "vue-router": { useRoute: () => route }, "@local/vibe64-training/client/lesson-picker": { default: picker }
   });
-  // The L button opens the Learning environment through the shell's one
-  // controller; from the legacy route mode it leaves that mode first.
-  calls.environment = [];
-  const environment = { state: Vue.reactive({ actorKey: "local", open: false, minimised: false }),
-    show() { calls.environment.push("show"); environment.state.open = true; },
-    toggle() { calls.environment.push("toggle"); environment.state.open = !environment.state.open; } };
-  const button = compiledUi(path.resolve("src/components/learning/Vibe64LearningButton.vue"), {
-    vue: Vue, "@/composables/useVibe64Learning.js": { useVibe64Learning: () => environment }
-  });
-  const shell = compiledUi(path.resolve("src/components/StudioAppShellLayout.vue"), {
-    vue: Vue, "@jskit-ai/shell-web/client/components/ShellOutlet": { default: uiWidget },
-    "./Vibe64ColleagueLauncherTarget.vue": { default: uiWidget },
-    "./learning/Vibe64LearningButton.vue": { default: button }
-  });
-  const panel = { props: ["learningResource", "learningView", "purposeFilter", "chatCollapsed", "projectPane", "active"], setup(props, { slots, expose }) {
-    calls.panels++; calls.panelProps = props; Vue.onUnmounted(() => { calls.unmounts++; });
-    expose({ selectLearningConversation(identity) { calls.select.push(identity); return true; },
-      learningPracticeChoices: practiceChoices,
-      selectLearningPracticeProject(choice, event) { calls.practice = { choice, event }; return true; } });
-    return () => Vue.h("article", { "data-test": "retained-panel" }, slots.learning?.() || slots.dashboard?.());
-  } };
-  const gate = { props: { forcePicker: Boolean, navigateOnSelect: Boolean }, setup(props) { calls.gateProps = props; return () => Vue.h("aside"); } };
-  const component = compiledUi(path.resolve("src/components/studio/Vibe64LocalAppIndex.vue"), {
-    vue: Vue,
-    "./Vibe64LearningPracticeProjectSelector.vue": { default: compiledUi(path.resolve("src/components/studio/Vibe64LearningPracticeProjectSelector.vue"), { vue: Vue, "@mdi/js": mdi }) },
-    "@/lib/vibe64AssistantHost.js": HostKeys,
-    "@/components/StudioAppShellLayout.vue": { default: shell },
-    "@/components/studio/ProjectSelectionGate.vue": { default: gate },
-    "@/components/studio/Vibe64AuthSettingsButton.vue": { default: uiWidget },
-    "@/components/studio/Vibe64SessionPanel.vue": { default: panel },
-    "@/components/studio/Vibe64LearningLessonLauncher.vue": { default: launcher },
-    "@/composables/useVibe64LearningMode.js": { useVibe64LearningMode(options) { opened = options.onConversationOpened; return owner; } }
-  });
-  const root = { children: [] }; const app = uiRenderer().createApp(component);
-  if (gestures) app.provide(HostKeys.VIBE64_TRAINING_LEARNER_GESTURE_KEY, Vue.shallowRef(gestures));
-  for (const tag of ["v-app-bar", "v-btn", "v-icon", "v-spacer", "v-main", "v-container", "v-alert", "v-menu", "v-list", "v-list-item"]) app.component(tag, uiWidget);
+  const root = { children: [] };
+  const app = uiRenderer().createApp({ render: () => Vue.h(component, { learning: owner, onOpened: outcome => calls.opened.push(outcome) }) });
+  for (const tag of ["v-btn", "v-alert", "v-skeleton-loader"]) app.component(tag, uiWidget);
   app.mount(root); await Vue.nextTick();
   return { app, root, owner, calls, route };
 }
 
-it("mounts actual L/root lesson controls without a project and retains one original panel across mode transitions", async () => {
-  const view = await mountLearningIndex();
+it("starts a lesson through the supplied courses owner and opens its actual returned attempt in the reader", async () => {
+  const view = await mountCourses();
   try {
-    expect(view.calls.panels).toBe(1);
-    expect(view.calls.panelProps.learningResource).toBe(view.owner.learningResource);
-    expect(view.calls.panelProps.purposeFilter).toBe("learning");
-    expect(view.calls.gateProps.forcePicker).toBe(true);
-    expect(view.calls.gateProps.navigateOnSelect).toBe(true);
-    // Learning v2: the L plate opens the Learning environment. In a legacy
-    // route mode (URL or Colleague navigation) it warms the plate, and pressing
-    // it leaves that mode through the original owner before opening L.
-    const plate = nodes(view.root).find(node => node.props?.["aria-label"] === "Learning");
-    expect(plate.props["aria-pressed"]).toBe(true);
-    expect(plate.props["data-vibe64-guide"]).toBe("learning");
-    expect(plate.props.title).toBe("Leave Learning mode and open Learning");
-    plate.props.onClick(); await Vue.nextTick();
-    expect(view.calls.environment).toEqual(["show"]);
-    expect(view.calls.panelProps.purposeFilter).toBe("working");
-    expect(view.calls.panelProps.active).toBe(false);
-    expect(plate.props["aria-pressed"]).toBe(true);
-    plate.props.onClick(); await Vue.nextTick();
-    expect(view.calls.environment).toEqual(["show", "toggle"]);
-    expect(plate.props["aria-pressed"]).toBe(false);
-    // The plate never enters the legacy mode; its original owner still can.
-    await view.owner.setLearningMode(true); await Vue.nextTick();
-    expect(view.calls.panelProps.purposeFilter).toBe("learning");
-    expect(view.calls.panelProps.active).toBe(true);
-    expect(view.calls.panels).toBe(1); expect(view.calls.unmounts).toBe(0);
-  } finally { view.app.unmount(); }
-});
-
-it("routes a direct Lesson0 start through the supplied original owner and selects its actual returned conversation", async () => {
-  const view = await mountLearningIndex();
-  try {
+    expect(view.calls.pickerProps.canStart).toBe(true);
     nodes(view.root).find(node => node.props?.["data-test"] === "start-lesson").props.onClick();
     await Vue.nextTick(); await Vue.nextTick();
     expect(view.calls.start).toEqual({ courseId: "course", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 3 });
-    expect(view.calls.select).toEqual([{ attemptId: "attempt", learnerId: "learner", sessionId: "learning-session" }]);
-    expect(view.calls.panelProps.chatCollapsed).toBe(false);
-    expect(view.calls.panels).toBe(1);
+    expect(view.calls.opened).toEqual([{ attemptId: "attempt", current: true }]);
+    view.owner.startLesson = async () => ({ attemptId: "stale", current: false });
+    nodes(view.root).find(node => node.props?.["data-test"] === "start-lesson").props.onClick();
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(view.calls.opened, "a start that is no longer current opens no reader").toHaveLength(1);
+    view.owner.active.value = false; await Vue.nextTick();
+    expect(view.calls.pickerProps.canStart).toBe(false);
   } finally { view.app.unmount(); }
 });
 
-it("delegates exposed Learning selection only for the actual loaded own-learner row and confirmed original selection", async () => {
-  const source = readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
-  const method = source.match(/function selectLearningConversation\([\s\S]*?\n\}/u)?.[0]; expect(method).toBeTruthy();
-  const pickerMethod = source.match(/function showLearningPicker\([\s\S]*?\n\}/u)?.[0]; expect(pickerMethod).toBeTruthy();
-  const props = { purposeFilter: "learning" };
-  const sessionData = { learningLearnerId: Vue.ref("learner"), selectedSessionId: Vue.ref(""), availableSessions: Vue.ref([
-    { sessionId: "learning-session", purpose: "learning", learningAttemptId: "attempt" },
-    { sessionId: "working-session", purpose: "working" }
-  ]), selectSessionId(id) { this.selectedSessionId.value = id; } };
-  const select = new Function("props", "sessionData", `${method}\nreturn selectLearningConversation;`)(props, sessionData);
-  const identity = { sessionId: "learning-session", attemptId: "attempt", learnerId: "learner" };
-  for (const patch of [{ learnerId: "foreign" }, { attemptId: "other" }, { sessionId: "working-session" }, { sessionId: "unknown" }]) {
-    expect(select({ ...identity, ...patch })).toBe(false); expect(sessionData.selectedSessionId.value).toBe("");
-  }
-  expect(select(identity)).toBe(true); expect(sessionData.selectedSessionId.value).toBe("learning-session");
-  const showPicker = new Function("props", "sessionData", `${pickerMethod}\nreturn showLearningPicker;`)(props, sessionData);
-  expect(showPicker()).toBe(true); expect(sessionData.selectedSessionId.value).toBe("");
-  sessionData.selectedSessionId.value = ""; sessionData.selectSessionId = () => {};
-  expect(select(identity)).toBe(false);
-  sessionData.selectedSessionId.value = "learning-session";
-  expect(showPicker()).toBe(false);
-  props.purposeFilter = "working"; expect(select(identity)).toBe(false);
-  expect(showPicker()).toBe(false);
-});
-
-
-it("retires local lesson errors when mode, route or learner changes, including late failures", async () => {
-  const view = await mountLearningIndex();
+it("retires local lesson errors when Learning closes, the route or the learner changes, including late failures", async () => {
+  const view = await mountCourses();
   const messages = () => nodes(view.root).map(node => node.text || "").join(" ");
   const start = () => nodes(view.root).find(node => node.props?.["data-test"] === "start-lesson").props.onClick();
   try {
     let reject;
     view.owner.startLesson = () => new Promise((_resolve, fail) => { reject = fail; });
     start();
-    view.owner.learningMode.value = false; await Vue.nextTick();
-    view.owner.learningMode.value = true; await Vue.nextTick();
+    view.owner.active.value = false; await Vue.nextTick();
+    view.owner.active.value = true; await Vue.nextTick();
     reject(new Error("retired operation")); await Vue.nextTick(); await Vue.nextTick();
     expect(messages()).not.toContain("retired operation");
     view.owner.startLesson = async () => { throw new Error("current operation"); };
     start(); await Vue.nextTick(); await Vue.nextTick();
     expect(messages()).toContain("current operation");
-    view.route.fullPath = "/app?mode=learning&other=route"; await Vue.nextTick();
+    view.route.fullPath = "/app/project/other"; await Vue.nextTick();
     expect(messages()).not.toContain("current operation");
     start(); await Vue.nextTick(); await Vue.nextTick();
     expect(messages()).toContain("current operation");
     view.owner.learnerId.value = "another-learner"; await Vue.nextTick();
     expect(messages()).not.toContain("current operation");
-    expect(messages()).not.toContain("still being completed");
+    expect(view.calls.opened).toEqual([]);
   } finally { view.app.unmount(); }
 });
 
-
-it("keeps the original empty Temporary host out of Learning and fences its late selection callback", async () => {
-  const source = readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
-  expect(source).toContain("v-if=\"hostConversation\" v-show=\"props.purposeFilter !== 'learning'\"");
-  expect(source).toContain(":active=\"props.active && props.purposeFilter !== 'learning'\"");
-  const method = source.match(/function closeEmptyHostConversation\([\s\S]*?\n\}/u)?.[0];
-  expect(method).toBeTruthy();
-  const props = { active: true, purposeFilter: "learning" };
-  let closed = 0;
-  const close = new Function("props", "hostConversation", `${method}\nreturn closeEmptyHostConversation;`)(props, { close() { closed++; } });
-  close(); expect(closed).toBe(0);
-  props.purposeFilter = "working"; props.active = false; close(); expect(closed).toBe(0);
-  props.active = true; close(); expect(closed).toBe(1);
-});
-
-
-it("actual root Learning controls forward the real click and keep teacher chat visible without inventing a show gesture", async () => {
-  const event = { type: "click", isTrusted: true };
-  const choice = { sessionId: "saved-initial", attemptId: "saved-attempt", learnerId: "learner", projectSlug: "practice" };
-  const effects = [];
-  const ticket = Object.freeze({ id: "person-show-chat" });
-  const view = await mountLearningIndex({ practiceChoices: [choice], gestures: {
-    begin(actual, control) { effects.push([actual, control]); return ticket; },
-    finish(actual) { effects.push([actual]); return true; }
-  } });
+it("adds one saved author-trial control beside the courses without released-course start", async () => {
+  const view = await mountCourses({ authorTrial: { attemptId: "saved-preview",
+    pin: { topic: { release: "0.1.8", commit: "f".repeat(40) }, lesson: { code: "DRAFT-ONE" } } } });
   try {
-    expect(effects).toEqual([]);
-    const project = nodes(view.root).find(node => node.props?.title === "practice");
-    expect(project).toBeTruthy(); project.props.onClick(event);
-    expect(view.calls.practice).toEqual({ choice, event });
-    const show = nodes(view.root).find(node => node.props?.onClick && nodes(node).some(child => child.text?.trim() === "Show chat"));
-    expect(show).toBeUndefined();
-    expect(view.calls.panelProps.chatCollapsed).toBe(false);
-    expect(effects).toEqual([], "Learning chat is already visible; automatic opening cannot count a human Show chat gesture.");
+    const button = nodes(view.root).find(node => node.props?.["data-test"] === "resume-author-trial");
+    expect(button).toBeTruthy(); expect(button.props.disabled).toBeFalsy();
+    button.props.onClick(); await Vue.nextTick(); await Vue.nextTick();
+    expect(view.calls.authorPreview).toBe("saved-preview"); expect(view.calls.start).toBeUndefined();
+    expect(view.calls.opened).toEqual([{ attemptId: "saved-preview", current: true }]);
+    expect(view.calls.pickerProps.learningResult).toBe(view.owner.learningResource.data.value);
   } finally { view.app.unmount(); }
-});
-
-it("prepared project person choice revalidates the original loaded row before native selection and observation", () => {
-  const source = readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
-  const original = source.match(/function selectLearningConversation\([\s\S]*?\n\}/u)?.[0];
-  const method = source.match(/function selectLearningPracticeProject\([\s\S]*?\n\}/u)?.[0];
-  expect(original).toBeTruthy(); expect(method).toBeTruthy();
-  const choice = { sessionId: "saved", attemptId: "attempt", learnerId: "own", projectSlug: "practice" };
-  const calls = [], props = { purposeFilter: "learning", active: true };
-  const sessionData = { learningLearnerId: Vue.ref("own"), selectedSessionId: Vue.ref(""),
-    availableSessions: Vue.ref([{ sessionId: "saved", purpose: "learning", learningAttemptId: "attempt" }]),
-    selectSessionId(id) { calls.push(["select", id]); this.selectedSessionId.value = id; } };
-  const ticket = Object.freeze({ id: "person-project" });
-  const learnerGestures = Vue.ref({ begin(event, control, target) { calls.push(["begin", event, control, target]); return event?.isTrusted ? ticket : null; },
-    finish(value) { calls.push(["finish", value]); }, discard(value) { calls.push(["discard", value]); } });
-  const select = new Function("props", "sessionData", "learningPracticeChoices", "learnerGestures",
-    `${original}\n${method}\nreturn selectLearningPracticeProject;`)(props, sessionData, Vue.ref([choice]), learnerGestures);
-  const event = { type: "click", isTrusted: true };
-  expect(select({ ...choice, learnerId: "foreign" }, event)).toBe(false); expect(calls).toEqual([]);
-  expect(select(choice, event)).toBe(true);
-  expect(calls).toEqual([["begin", event, "project-select", { projectSlug: "practice", sessionId: "saved" }], ["select", "saved"], ["finish", ticket]]);
-  calls.length = 0; props.active = false;
-  expect(select(choice, event)).toBe(false); expect(calls).toEqual([]);
-  props.active = true; sessionData.selectedSessionId.value = ""; sessionData.selectSessionId = () => {};
-  expect(select(choice, event)).toBe(false); expect(calls.at(-1)).toEqual(["discard", ticket]);
 });
 
 const appSource = () => readFileSync(path.resolve("src/App.vue"), "utf8");
@@ -299,7 +161,7 @@ it("shared original shell refs are per mount and only local composition supplies
   try {
     expect(local.captured.VIBE64_ASSISTANT_VIEWER_KEY).toEqual({ actorKey: "local" });
     expect(hosted.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
-    for (const key of ["VIBE64_COLLEAGUE_BODY_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY", "VIBE64_LEARNING_NAVIGATION_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY"]) {
+    for (const key of ["VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY"]) {
       expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
       expect(local.captured[key]).not.toBe(hosted.captured[key]);
     }
@@ -316,21 +178,5 @@ it("shared original shell refs are per mount and only local composition supplies
     // A template auto-unwraps the injected ref, so Colleague receives the local navigator itself.
     expect(localSource).toContain(':navigate="navigate"');
     expect(localSource).not.toContain("createConversationRuntime");
-    const projectSource = readFileSync(path.resolve("src/pages/app/project/[slug].vue"), "utf8");
-    expect(projectSource).toContain("if (learningNavigation) learningNavigation.value = navigateLearning;");
   } finally { local.app.unmount(); hosted.app.unmount(); }
-});
-
-
-it("adds one saved author-trial control to the SAME launcher and retained Panel without released-course start", async () => {
-  const view = await mountLearningIndex({ authorTrial: { attemptId: "saved-preview",
-    pin: { topic: { release: "0.1.8", commit: "f".repeat(40) }, lesson: { code: "DRAFT-ONE" } } } });
-  try {
-    const button = nodes(view.root).find(node => node.props?.["data-test"] === "resume-author-trial");
-    expect(button).toBeTruthy(); expect(button.props.disabled).toBeFalsy();
-    button.props.onClick(); await Vue.nextTick();
-    expect(view.calls.authorPreview).toBe("saved-preview"); expect(view.calls.start).toBeUndefined();
-    expect(view.calls.panels).toBe(1); expect(view.calls.unmounts).toBe(0);
-    expect(view.calls.pickerProps.learningResult).toBe(view.owner.learningResource.data.value);
-  } finally { view.app.unmount(); }
 });

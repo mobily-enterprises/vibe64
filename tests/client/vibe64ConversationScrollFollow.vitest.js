@@ -244,7 +244,6 @@ function mountConversation({
     followLatestKey: ref(followLatestKey),
     hasMoreBefore: ref(hasMoreBefore),
     scrollKey: ref("session-1"),
-    hiddenByWorkspaceMode: ref(false),
     visible: ref(true),
     turns: ref(turns)
   };
@@ -264,7 +263,6 @@ function mountConversation({
         onLoadMore: (request) => loadMoreRequests.push(request),
         scrollKey: state.scrollKey.value,
         turns: state.turns.value,
-        hiddenByWorkspaceMode: state.hiddenByWorkspaceMode.value,
         visible: state.visible.value
       });
     }
@@ -999,53 +997,6 @@ describe("Vibe64 conversation scroll following", () => {
     expect(nodeText(container)).not.toContain("Conversation failed.");
     expect(conversationBody(container).scrollTop).toBe(1_200);
 
-    app.unmount();
-  });
-
-  it("retains a mode-hidden reader and restores ordinary hiding afterward", async () => {
-    const { app, container, state } = mountConversation();
-    await flushScrollWork();
-    const body = conversationBody(container);
-    body.props.onWheelPassive({});
-    body.scrollTop = 260;
-    body.props.onScrollPassive({ currentTarget: body });
-    state.hiddenByWorkspaceMode.value = true;
-    state.visible.value = false;
-    await flushScrollWork();
-    expect(conversationBody(container)).toBe(body);
-    body.scrollTop = 0;
-    state.hiddenByWorkspaceMode.value = false;
-    state.visible.value = true;
-    await flushScrollWork();
-    expect(conversationBody(container)).toBe(body);
-    expect(body.scrollTop).toBe(260);
-
-    state.visible.value = false;
-    await flushScrollWork();
-    expect(conversationBody(container)).toBeNull();
-    state.visible.value = true;
-    await flushScrollWork();
-    expect(conversationBody(container).scrollTop).toBe(1_200);
-    app.unmount();
-  });
-
-  it("uses the original initial scroll after identity changes in a mode-hidden reader", async () => {
-    const { app, container, state } = mountConversation();
-    await flushScrollWork();
-    const body = conversationBody(container);
-    body.props.onWheelPassive({});
-    body.scrollTop = 260;
-    body.props.onScrollPassive({ currentTarget: body });
-    state.hiddenByWorkspaceMode.value = true;
-    state.visible.value = false;
-    await flushScrollWork();
-    state.scrollKey.value = "different-session";
-    state.turns.value = [agentTurn("different-session-turn")];
-    await flushScrollWork();
-    state.hiddenByWorkspaceMode.value = false;
-    state.visible.value = true;
-    await flushScrollWork();
-    expect(conversationBody(container).scrollTop).toBe(1_200);
     app.unmount();
   });
 });

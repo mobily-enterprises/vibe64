@@ -75,7 +75,7 @@
           <span role="status">Checking…</span>
         </v-tooltip>
         <Vibe64SessionPin
-          v-if="props.session?.sourceReady && !props.sessionSelectionArchived && props.session.purpose !== 'learning'"
+          v-if="props.session?.sourceReady && !props.sessionSelectionArchived"
           :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}`"
           :session="props.session"
           :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
@@ -83,7 +83,6 @@
         />
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
           <v-menu
-            v-if="props.sourceWorkspaceAvailable || props.sessionRenewal?.visible"
             location="bottom end"
           >
             <template #activator="{ props: menuProps }">
@@ -146,7 +145,6 @@
                 @click="requestSessionRenewal(sessionActionsTrigger)"
               />
               <v-list-item
-                v-if="props.sourceWorkspaceAvailable"
                 class="studio-autopilot__session-action-item"
                 data-vibe64-temporary-ai-action
                 :disabled="!sessionId || props.sessionSelectionArchived"
@@ -205,7 +203,7 @@
               @click="requestSessionRenewal($event.currentTarget)"
             />
           </v-badge>
-          <v-badge v-if="props.sourceWorkspaceAvailable" color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
+          <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
             <v-btn
               :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
               :disabled="!sessionId || props.sessionSelectionArchived"
@@ -435,7 +433,6 @@
         :scroll-key="conversationScrollKey"
         :source-root="sessionSourceRoot"
         :turns="chatTurns"
-        :hidden-by-workspace-mode="props.hiddenByWorkspaceMode"
         :visible="conversationLogVisible && !chatCollapsed && !temporaryAiWorkspace?.visible"
         :welcome-message="emptyConversationWelcome"
         @cancel-turn="cancelOptimisticMessage"
@@ -632,7 +629,6 @@
       </Vibe64ConversationLog>
 
       <Vibe64TemporaryAiWorkspace
-        v-if="props.sourceWorkspaceAvailable"
         ref="temporaryAiWorkspace"
         :active="props.active && !chatCollapsed"
         :session-selected="props.active"
@@ -659,14 +655,14 @@
 
     <section class="studio-autopilot__project-panel" aria-label="Project">
       <Vibe64AsyncModuleState
-        v-if="dashboardAvailable && sourceToolLoading"
+        v-if="sourceToolLoading"
         class="studio-autopilot__right-pane-page"
         label="session source"
         loading
       />
       <Vibe64DashboardShell
-        v-if="dashboardAvailable && props.projectPane === 'dashboard'"
-        v-show="dashboardShellVisible && normalWorkspaceActive"
+        v-if="props.projectPane === 'dashboard'"
+        v-show="dashboardShellVisible"
         class="studio-autopilot__dashboard-shell"
         :dashboard-context="dashboardContext"
       >
@@ -688,7 +684,7 @@
           role="tabpanel"
         >
           <slot
-            v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('ai-terminal')"
+            v-if="rightPaneTabMounted('ai-terminal')"
             name="ai-terminal"
             :active="rightPaneTab === 'ai-terminal'"
           />
@@ -696,8 +692,7 @@
       </Vibe64DashboardShell>
 
       <section
-        v-if="dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
-        v-show="normalWorkspaceActive"
+        v-if="props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -710,7 +705,7 @@
       </section>
 
       <section
-        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -722,8 +717,8 @@
         <Vibe64SessionFiles
           :key="assistantAccessScopeKey"
           :repo-available="Boolean(sessionSourceRoot)"
-          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('editor')"
-          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+          v-if="rightPaneTabMounted('editor')"
+          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           :agent-active="agentActive"
           :file-bookmarks="fileBookmarks"
           :assistant-available="assistantCanUsePurpose('source_explanation')"
@@ -737,26 +732,10 @@
           @ask-codex-about-file="askCodexAboutSourceEditorFile"
           @open-program="architectureProgramRequest = { id: $event }; selectSessionTool('system')"
         />
-        <!-- A lesson's Files is the source editor on its saved attempt; only
-             these saves are ledgered as the learner's own code. -->
-        <Vibe64SessionSourceEditor
-          v-if="practiceLesson && rightPaneTabMounted('editor')"
-          lesson-scoped
-          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
-          :agent-active="agentActive"
-          :assistant-available="false"
-          assistant-unavailable-message="Ask your lesson teacher in Learning about this code."
-          class="studio-autopilot__session-tool-content"
-          :file-bookmarks="fileBookmarks"
-          :open-request="sourceEditorOpenRequest"
-          :project-slug="props.conversationRuntime.identity.sourceProjectSlug"
-          :session-id="sessionId"
-          :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
-        />
       </section>
 
       <section
-        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'database'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -768,13 +747,12 @@
         <Vibe64DatabaseWorkspace
           :key="assistantAccessScopeKey"
           :open-request="databaseOpenRequest"
-          v-if="dashboardAvailable && rightPaneTabMounted('database')"
-          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
-          :assistant-available="!practiceLesson && assistantCanUsePurpose('junior')"
-          :assistant-unavailable-message="practiceLesson ? 'Ask your lesson teacher in Learning about this data.' : assistantJuniorRestrictionMessage"
+          v-if="rightPaneTabMounted('database')"
+          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+          :assistant-available="assistantCanUsePurpose('junior')"
+          :assistant-unavailable-message="assistantJuniorRestrictionMessage"
           class="studio-autopilot__session-tool-content"
-          :learning-attempt-id="practiceLesson ? props.learningAttemptId : ''"
-          :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug"
+          :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
           @request-overview-assistant="assistantCanUsePurpose('junior') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
@@ -782,14 +760,14 @@
       </section>
 
       <section
-        v-show="normalWorkspaceActive && dashboardAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__architecture-pane"
         role="tabpanel"
       >
         <Vibe64ArchitectureView
-          :assistant-available="!practiceLesson && assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
-          v-if="dashboardAvailable && rightPaneTabMounted('system')"
-          :active="props.active && normalWorkspaceActive && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+          :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
+          v-if="rightPaneTabMounted('system')"
+          :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
@@ -808,13 +786,13 @@
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
           <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
-            <Vibe64SessionSourceEditor single-file :lesson-scoped="practiceLesson" :active="props.active && active" :agent-active="agentActive"
+            <Vibe64SessionSourceEditor single-file :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture"
               :file-bookmarks="fileBookmarks"
               :ask-codex-available="sourceEditorAskCodexAvailable"
               @ask-codex-about-file="askCodexAboutSourceEditorFile"
               @open-program="openProgram"
-              :open-request="request" :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug" :session-id="sessionId"
+              :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openFile"
               @interface-location="updateLocation"
@@ -825,9 +803,9 @@
         <v-dialog :model-value="Boolean(architectureFileRequest)" max-width="1100" @update:model-value="!$event && (architectureFileRequest = null)">
           <section class="studio-autopilot__architecture-file" aria-label="Architecture file viewer">
             <header><strong>{{ architectureFileRequest?.path }}</strong><v-btn variant="text" aria-label="Close file viewer" @click="architectureFileRequest = null">Close</v-btn></header>
-            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file :lesson-scoped="practiceLesson"
+            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file
               :key="architectureFileRequest.path" :active="props.active" :agent-active="agentActive"
-              :open-request="architectureFileRequest" :project-slug="practiceLesson ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug" :session-id="sessionId"
+              :open-request="architectureFileRequest" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openSourceEditorFile"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
@@ -837,87 +815,39 @@
       </section>
 
       <div
-        v-show="!dashboardAvailable || learningPaneActive || (normalWorkspaceActive && props.projectPane !== 'dashboard')"
+        v-show="props.projectPane !== 'dashboard'"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
-        <TrainingPreviewPresentation
-          :agent-connection-status="props.agentConnectionStatus"
-          :lessons-available="props.lessonsAvailable"
-          :app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
-          :attempt-id="props.learningAttemptId"
-          :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
-          :learning-pane-active="learningPaneActive"
-          :workspace-active="normalWorkspaceActive && props.projectPane === 'preview'"
-          :active="props.active && (props.lessonsAvailable || props.projectPane === 'preview') && !props.sessionSelectionArchived"
-          :project-slug="props.conversationRuntime?.identity?.noExercise === false ? props.conversationRuntime.identity.sourceProjectSlug : projectSlug"
+        <Vibe64ProjectOnboarding
+          :active="props.active && props.projectPane === 'preview'"
+          :archived="props.sessionSelectionArchived"
+          :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
+          :can-ask="assistantJuniorAllowed"
+          :request-temporary-ai="startTemporaryAiTask"
           :session-id="selectedAssistantSessionId"
         >
-          <template #lessons>
-            <slot name="learning" :dashboard-context="dashboardContext" />
-            <!-- Check my code docks at the bottom of the Learning pane so the pane opens on the Courses hero. -->
-            <div v-if="practiceLesson" class="studio-autopilot__learning-code-check" :class="`is-${learningCodeState}`">
-              <span class="studio-autopilot__learning-code-badge" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path :d="learningCodeIcons[learningCodeState]" /></svg>
-              </span>
-              <div class="studio-autopilot__learning-code-status" role="status" aria-live="polite">
-                <p class="studio-autopilot__learning-code-title">{{ learningCodeTitles[learningCodeState] }}</p>
-                <p class="studio-autopilot__learning-code-message">
-                  {{ learningCodeChecking ? "Running this lesson's check on your saved files…" : learningCodeResult?.message || "For a code question, edit the files your teacher names in Dashboard → Files, then press Check my code. Only your own edits there count." }}
-                </p>
-              </div>
-              <v-btn
-                class="studio-autopilot__learning-code-button"
-                color="primary"
-                :disabled="learningCodeChecking"
-                :loading="learningCodeChecking"
-                min-height="44"
-                rounded="pill"
-                :variant="learningCodeState === 'passed' ? 'tonal' : 'flat'"
-                @click="checkLearningCode"
-              >
-                Check my code
-              </v-btn>
-              <v-progress-linear v-if="learningCodeChecking" class="studio-autopilot__learning-code-progress" color="primary" indeterminate rounded />
-            </div>
-          </template>
-          <template #default="{ appVisible, presentation }">
-            <Vibe64ProjectOnboarding
-              v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
-              :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
-              :active="props.active && (props.lessonsAvailable ? appVisible : props.projectPane === 'preview')"
-              :presentation-active="props.active && props.lessonsAvailable && !props.sessionSelectionArchived"
-              :archived="props.sessionSelectionArchived"
-              :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-              :can-ask="assistantJuniorAllowed"
-              :request-temporary-ai="startTemporaryAiTask"
-              :session-id="selectedAssistantSessionId"
-              :presentation="presentation"
-            >
-              <Vibe64OutputControls
-                :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
-                :ask-codex-to-fix-preview-identity="props.sourceWorkspaceAvailable && assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
-                :attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"
-                :prepare-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFileProducer : null"
-                :auto-start-managed-preview="!props.sessionSelectionArchived"
-                button-label="Run"
-                button-size="small"
-                button-variant="tonal"
-                :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-                :preview-goal-state="props.conversationRuntime?.goalState"
-                class="studio-autopilot__preview-launch"
-                embedded-preview
-                :preview-displayed="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible"
-                :session="props.session"
-                :source-operations-suspended="props.sourceWorkspaceAvailable ? sourceOperationsSuspended : agentActive"
-                :toolbar-teleport-target="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible ? props.previewToolbarTeleportTarget : ''"
-                :window-displayed="props.active"
-                @preview-attachment-state="updatePreviewAttachmentState"
-                @test-approval="updateTestApproval"
-              />
-            </Vibe64ProjectOnboarding>
-          </template>
-        </TrainingPreviewPresentation>
+          <Vibe64OutputControls
+            :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
+            :attach-preview-file="attachPreviewFile"
+            :prepare-preview-file="attachPreviewFileProducer"
+            :auto-start-managed-preview="!props.sessionSelectionArchived"
+            button-label="Run"
+            button-size="small"
+            button-variant="tonal"
+            :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
+            :preview-goal-state="props.conversationRuntime?.goalState"
+            class="studio-autopilot__preview-launch"
+            embedded-preview
+            :preview-displayed="props.projectPane === 'preview'"
+            :session="props.session"
+            :source-operations-suspended="sourceOperationsSuspended"
+            :toolbar-teleport-target="props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
+            :window-displayed="props.active"
+            @preview-attachment-state="updatePreviewAttachmentState"
+            @test-approval="updateTestApproval"
+          />
+        </Vibe64ProjectOnboarding>
       </div>
     </section>
 
@@ -1028,12 +958,11 @@
 import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, provide, reactive, ref, useId, watch, watchEffect } from "vue";
-import { VIBE64_LESSON_DASHBOARD_KEY, lessonDashboardScope } from "@/lib/vibe64LessonDashboard.js";
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -1058,7 +987,6 @@ import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
-import TrainingPreviewPresentation from "@local/vibe64-training/client/preview-presentation";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
@@ -1088,7 +1016,6 @@ import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
-import { vibe64SessionToolRouteSegment } from "@/lib/vibe64SessionToolDefinitions.js";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -1364,7 +1291,6 @@ const {
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
   sessionSourceRoot,
-  practiceLesson,
   sessionToolbarVisible,
   selectedAnswerChoice,
   sourceEditorAskCodexAvailable,
@@ -1660,7 +1586,6 @@ function copyActivityOutput(output = "") {
 }
 
 function openTemporaryAi() {
-  if (!props.sourceWorkspaceAvailable) return;
   if (!sessionId.value || props.sessionSelectionArchived) {
     return false;
   }
@@ -1812,120 +1737,15 @@ function requestSessionRenewal(returnFocusTarget = null) {
   return true;
 }
 
-// A practice lesson shows the ordinary Dashboard for its lesson session. Its
-// sections address the saved attempt's lesson URLs, provided here once.
-const dashboardAvailable = computed(() => props.sourceWorkspaceAvailable || practiceLesson.value);
-provide(VIBE64_LESSON_DASHBOARD_KEY, computed(() => practiceLesson.value
-  ? lessonDashboardScope(props.learningAttemptId, sessionId.value) : null));
-const learningCodeChecking = ref(false);
-const learningCodeResult = ref(null);
-// Display state of the last real check: idle, checking, passed, not-yet or blocked.
-const learningCodeState = computed(() => learningCodeChecking.value ? "checking"
-  : learningCodeResult.value?.outcome || (learningCodeResult.value?.error ? "blocked" : "idle"));
-const learningCodeTitles = Object.freeze({ idle: "Code check", checking: "Checking your code…", passed: "Check passed",
-  "not-yet": "Not yet", blocked: "Could not check" });
-const learningCodeIcons = Object.freeze({
-  idle: "M8 3a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2H3v2h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2v-2H8v-5a2 2 0 0 0-2-2 2 2 0 0 0 2-2V5h2V3m6 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5h-2V3h2Z",
-  checking: "M12 4V1L8 5l4 4V6a6 6 0 0 1 6 6c0 1-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12a8 8 0 0 0-8-8m0 14a6 6 0 0 1-6-6c0-1 .25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12a8 8 0 0 0 8 8v3l4-4-4-4v3Z",
-  passed: "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17Z",
-  "not-yet": "M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2 1 21Z",
-  blocked: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59Z"
-});
-watch(practiceLesson, available => { if (!available) learningCodeResult.value = null; });
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
-const learningViewRef = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-const learningLayoutRef = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
-const learningPreviewRef = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
-const learningIdentity = computed(() => props.conversationRuntime?.identity?.learningAttemptId ? props.conversationRuntime.identity : null);
-const learningWorkspaceAvailable = computed(() => props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable);
-const learningPaneActive = computed(() => props.lessonsAvailable &&
-  (props.learningView === "learning" || !learningWorkspaceAvailable.value));
-const normalWorkspaceActive = computed(() => !props.lessonsAvailable || !learningPaneActive.value);
-// Check my code sits in the Learning pane beside Preview | Dashboard; only the
-// learner's own saves in Dashboard → Files count for a code question.
-const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
-// A teacher "show me" for one practice file opens it in this lesson's own
-// Dashboard → Files editor (the attempt-scoped source editor).
-function openLearningFile(path) {
-  if (!practiceLesson.value || typeof path !== "string" || !path) return false;
-  openSourceEditorFile({ path, presentation: "code" });
-  return sourceEditorOpenRequest.value?.path === path;
-}
 // A Learning environment "Show me" for one file opens it in this session's
 // ordinary Dashboard -> Files editor, as a source link does.
 function openWorkingFile(path) {
-  if (!props.sourceWorkspaceAvailable || typeof path !== "string" || !path) return false;
+  if (typeof path !== "string" || !path) return false;
   openSourceEditorFile({ path, presentation: "code" });
   return sourceEditorOpenRequest.value?.path === path;
 }
-async function checkLearningCode(event) {
-  const owner = learningGestures?.value;
-  if (learningCodeChecking.value) return;
-  // Only Main's owner for this exact lesson carries its code question; the
-  // Colleague owner that fills an empty channel must not take the press.
-  if (!owner?.submitCode || owner.matchesLearning?.(props.conversationRuntime?.identity) !== true) {
-    learningCodeResult.value = { error: true, message: "Open this lesson's Learning conversation, then press Check my code again." };
-    return;
-  }
-  learningCodeChecking.value = true;
-  try {
-    const response = await owner.submitCode(event);
-    if (!response) throw new Error("Your code could not be checked. Press Check my code again.");
-    learningCodeResult.value = response.checkOutcome === "passed"
-      ? { outcome: "passed", message: "Your code passed the check. Now tell your teacher in Learning, in your own words, what you changed and why." }
-      : { outcome: "not-yet", message: response.checkReason || "The check did not pass." };
-  } catch (error) {
-    learningCodeResult.value = { error: true, message: String(error?.message || error || "Your code could not be checked.") };
-  } finally {
-    learningCodeChecking.value = false;
-  }
-}
-const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
-  props.conversationRuntime?.available?.value));
-const learningLayout = Object.freeze({
-  get projectSlug() { return learningIdentity.value?.sourceProjectSlug || ""; },
-  get learningAttemptId() { return learningIdentity.value?.learningAttemptId; },
-  get learnerId() { return learningIdentity.value?.learnerId; },
-  get ready() { return learningSelected.value && Boolean(props.conversationRuntime?.conversationReady?.value); },
-  get projectVisible() { return true; },
-  get chatVisible() { return !chatCollapsed.value; }
-});
-const learningView = Object.freeze({
-  get projectSlug() { return learningLayout.projectSlug; }, get sessionId() { return learningIdentity.value?.sessionId || ""; },
-  get learningBinding() { return learningIdentity.value; }, get ready() { return learningLayout.ready; },
-  get learningView() { return props.learningView; },
-  get hostConversationSelected() { return false; }, get temporarySelected() { return false; },
-  get conversationId() { return ""; },
-  openFile: openLearningFile,
-  get pane() {
-    if (!learningLayout.projectVisible) return "chat";
-    if (props.learningView === "workspace") {
-      if (props.projectPane !== "dashboard") return "preview";
-      // A Dashboard section page (Env, Git log, Session history, Health) is
-      // "dashboard", never "preview", so a Preview step cannot be satisfied there.
-      return vibe64SessionToolRouteSegment(rightPaneTab.value) || "dashboard";
-    }
-    const preview = learningPreviewRef?.value;
-    const binding = learningIdentity.value;
-    return binding && preview?.sessionId === binding.sessionId && preview.learningAttemptId === binding.learningAttemptId &&
-      preview.learnerId === binding.learnerId && (preview.projectSlug || "") === (binding.sourceProjectSlug || "") &&
-      (preview.appVisible === true || preview.presentation?.state?.visible === true) ? "preview" : "lessons";
-  }
-});
-watchEffect(() => {
-  if (learningSelected.value) {
-    if (learningLayoutRef) learningLayoutRef.value = learningLayout;
-    if (learningViewRef) learningViewRef.value = learningView;
-  } else {
-    if (learningViewRef?.value === learningView) learningViewRef.value = null;
-    if (learningLayoutRef?.value === learningLayout) learningLayoutRef.value = null;
-  }
-}, { flush: "sync" });
-onBeforeUnmount(() => {
-  if (learningViewRef?.value === learningView) learningViewRef.value = null;
-  if (learningLayoutRef?.value === learningLayout) learningLayoutRef.value = null;
-});
 const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
@@ -2280,113 +2100,6 @@ onBeforeUnmount(() => {
 .studio-autopilot__session-tool-pane {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-}
-
-/* Check my code: a compact "run check" bar docked at the bottom of the Learning
-   pane (like a code-school Run bar); its tone follows the real result. */
-.studio-autopilot__learning-code-check {
-  --code-check-tone: rgb(var(--v-theme-primary));
-  --code-check-container: color-mix(in srgb, var(--v64-surface-container-high, rgb(var(--v-theme-surface))) 92%, transparent);
-  align-items: center;
-  backdrop-filter: blur(8px);
-  background: var(--code-check-container);
-  border: 1px solid var(--v64-outline-variant, rgba(var(--v-theme-on-surface), 0.12));
-  border-radius: var(--v64-shape-lg, 16px);
-  bottom: var(--v64-space-3, 12px);
-  box-shadow: var(--v64-elevation-3, 0 4px 12px rgba(0, 0, 0, 0.16));
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--v64-space-2, 8px) var(--v64-space-3, 12px);
-  margin: var(--v64-space-2, 8px) var(--v64-space-4, 16px) var(--v64-space-3, 12px);
-  overflow: hidden;
-  padding: var(--v64-space-2, 8px) var(--v64-space-2, 8px) var(--v64-space-2, 8px) var(--v64-space-3, 12px);
-  position: sticky;
-  z-index: 2;
-  transition: background-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease),
-    border-color var(--v64-duration-medium, 300ms) var(--v64-ease-standard, ease);
-}
-.studio-autopilot__learning-code-check.is-checking { --code-check-container: var(--v64-primary-container, rgba(var(--v-theme-primary), 0.14)); }
-.studio-autopilot__learning-code-check.is-passed {
-  --code-check-tone: rgb(var(--v-theme-success));
-  --code-check-container: var(--v64-success-container, rgba(var(--v-theme-success), 0.14));
-  border-color: rgba(var(--v-theme-success), 0.45);
-}
-.studio-autopilot__learning-code-check.is-not-yet {
-  --code-check-tone: var(--v64-on-learning-container, #6b5000);
-  --code-check-container: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
-  border-color: rgba(245, 197, 24, 0.6);
-}
-.studio-autopilot__learning-code-check.is-blocked {
-  --code-check-tone: rgb(var(--v-theme-error));
-  --code-check-container: var(--v64-error-container, rgba(var(--v-theme-error), 0.12));
-  border-color: rgba(var(--v-theme-error), 0.4);
-}
-
-.studio-autopilot__learning-code-badge {
-  background: var(--code-check-tone);
-  border-radius: var(--v64-shape-md, 12px);
-  color: rgb(var(--v-theme-surface));
-  display: grid;
-  flex: 0 0 auto;
-  height: 36px;
-  place-items: center;
-  width: 36px;
-}
-.studio-autopilot__learning-code-check.is-not-yet .studio-autopilot__learning-code-badge {
-  background: var(--v64-learning, #f5c518);
-  color: var(--v64-on-learning, #2b2100);
-}
-.studio-autopilot__learning-code-badge svg { fill: currentColor; height: 20px; width: 20px; }
-.studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-badge svg {
-  animation: studio-autopilot-code-spin 1.2s linear infinite;
-}
-.studio-autopilot__learning-code-check.is-passed .studio-autopilot__learning-code-badge {
-  animation: studio-autopilot-code-pop var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out);
-}
-
-.studio-autopilot__learning-code-status {
-  flex: 1 1 14rem;
-  margin: 0;
-  min-width: 0;
-}
-.studio-autopilot__learning-code-status p { margin: 0; overflow-wrap: anywhere; }
-.studio-autopilot__learning-code-title {
-  color: color-mix(in srgb, var(--code-check-tone) 62%, rgb(var(--v-theme-on-surface)));
-  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
-  font-weight: 600;
-}
-.studio-autopilot__learning-code-check.is-idle .studio-autopilot__learning-code-title,
-.studio-autopilot__learning-code-check.is-checking .studio-autopilot__learning-code-title { color: inherit; }
-.studio-autopilot__learning-code-message {
-  color: var(--v64-on-surface-variant, rgba(var(--v-theme-on-surface), 0.72));
-  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
-  font-weight: 400;
-}
-.studio-autopilot__learning-code-check:not(.is-idle):not(.is-checking) .studio-autopilot__learning-code-message { color: rgb(var(--v-theme-on-surface)); }
-.studio-autopilot__learning-code-button { letter-spacing: 0; padding-inline: 20px; text-transform: none; }
-.studio-autopilot__learning-code-progress { bottom: 0; left: 0; position: absolute !important; right: 0; }
-
-@keyframes studio-autopilot-code-spin { to { transform: rotate(360deg); } }
-@keyframes studio-autopilot-code-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
-@media (max-width: 599px) {
-  /* Phone: one compact row; an idle hint is clamped, real results are shown in full. */
-  .studio-autopilot__learning-code-check {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    margin-inline: var(--v64-space-2, 8px);
-  }
-  .studio-autopilot__learning-code-button { padding-inline: 14px; }
-  .studio-autopilot__learning-code-check.is-idle .studio-autopilot__learning-code-message {
-    -webkit-box-orient: vertical;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .studio-autopilot__learning-code-check,
-  .studio-autopilot__learning-code-check .studio-autopilot__learning-code-badge,
-  .studio-autopilot__learning-code-check .studio-autopilot__learning-code-badge svg { animation: none !important; transition: none; }
 }
 
 .studio-autopilot__architecture-pane {

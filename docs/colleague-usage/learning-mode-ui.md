@@ -1,13 +1,11 @@
-# Choosing lessons and Learning conversations
+# Choosing lessons and courses
 
-The **L** button now opens the Learning environment above the current page;
-see [The Learning environment (L)](learning-environment.md). It no longer
-switches the header into Learning mode. The Learning mode described below is
-kept only for lessons opened by an earlier address (`?mode=learning`) or a
-Colleague request, and for reading earlier history; pressing the lit **L** there
-leaves Learning mode and opens the Learning environment; new lessons start and are read in the Learning
-environment, without a teacher conversation. Its **Courses** page is the same
-one described here.
+The **L** button opens the Learning environment above the current page; see
+[The Learning environment (L)](learning-environment.md). Its **Courses** page is
+described here. Learning mode, its graduation-cap pane, **Check my code** and
+the practice selector have been retired: an old `?mode=learning` address opens
+the ordinary project page, and earlier lesson history is read from the Learning
+environment.
 
 The **Courses** pane (called **Lessons** in earlier releases) opens with a
 **Courses** banner (with **Refresh courses**) and a list of course cards. Each card
@@ -47,7 +45,7 @@ installed course with a newer release shows **Update available** and **Update**.
 See [Installing and updating Learning courses](learning-course-catalogue.md). A lesson without a practice project, such as local
 Vibe64's Lesson 0 **Set yourself up**, opens only the lesson in the Learning environment, with no project or
 conversation; that lesson uses [Dashboard → Health](health-checks.md).
-Returning from Working to Learning rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
+Opening L again rereads saved lessons and any admitted author trial; a newly admitted trial does not require reloading the page.
 If Resume reports that the saved exercise is busy preparing or finishing a command, wait for that operation to settle and retry the same attempt. Do not create a replacement.
 
 ### Creating a custom course
@@ -83,53 +81,17 @@ It does not stop or close the practice project: that project and its session
 are ordinary and stay yours. An ended lesson cannot be resumed; ask Colleague to
 continue it in a fresh exercise (see [Lesson history and resume](learning-history.md)).
 
-The lesson Main teacher conversation has been retired: Colleague teaches every
-lesson from its steps in the Learning environment. Learning uses the same header as Working: the session row on the left, the
-collapse-chat arrow, the **Preview** | **Dashboard** tab group and, while
-Preview is shown, the same Preview toolbar (address, reload, pause, copy and
-status). Learning adds exactly one thing: a graduation-cap option at the end of
-that same tab group (**Preview** | **Dashboard** | 🎓, tooltip "Learning:
-courses and lesson"). Selecting the graduation-cap button beside Preview and
-Dashboard shows the Learning panes (**Courses**, **Check my code**, the lesson
-and its history); Preview and Dashboard then appear unselected, exactly as one
-option of three. Selecting **Preview** or **Dashboard** deselects the cap. The
-collapse-chat arrow hides or shows the chat exactly as it hides or shows
-the Working chat. A practice lesson's project is an ordinary project of yours
-and its session is an ordinary session of that project: open it with **Open
-practice project** in Learning (or from **Practice** in the project list). Its
-chat, **Preview** and every **Dashboard** section (including **Files**, **Env**,
-**Database**, **Architecture**, **Current changes** and **Git log**) are the
+Colleague teaches every lesson from its steps in the Learning environment;
+there is no lesson teacher conversation. A practice lesson's project is an
+ordinary project of yours and its session an ordinary session of that project:
+open it with **Open practice project** in Learning (or from **Practice** in the
+project list). Its chat, **Preview** and every **Dashboard** section are the
 ordinary ones, with full access, during and after the lesson; see
-[Practice projects in standalone lessons](learning-practice-projects.md). Moving between Dashboard sections keeps Learning
-on. Switching between Preview, Dashboard and Learning keeps Learning mode on and
-retains the same selected session; it does not switch to your last
-Working session. The graduation-cap **Learning** option shows the **Courses** | **Presentation**
-switch. Returning to it keeps the selected Courses or
-Presentation content visible without requiring another click. A supervised
-project opens on its Preview by default.
-A source-less lesson disables **Preview** and **Dashboard** (their tooltip says
-the lesson has no project workspace) and keeps the graduation cap selected,
-instead of showing a remembered Working project. On phones and tablets Learning
-behaves like Working: the chat and the right-hand pane are shown one at
-a time; the arrow button or a horizontal swipe switches between them, and the
-header's next-pane button (shown while the right-hand pane is open) steps through
-**Dashboard**, **Learning** and **Preview**. On the projectless **Courses** page,
-which has no right-hand project pane, chat and lessons are stacked instead.
-
-Working and Learning share one chat-collapse choice. Both modes use
-one retained session panel, so switching modes does not delete drafts or stop
-already admitted background work. A project that is still loading or failed
-keeps its original Working readiness gate while retaining the hidden panel.
-If the hidden Working project closes through ordinary inactivity cleanup, your
-Learning view stays open. Returning to Working reopens its
-original project through the usual access checks before showing it as ready.
-This does not restart stopped Working agents or outputs. Explicit project Close
-or deletion still leaves the project view; a missing runtime or revoked access
-is not treated as ordinary inactivity.
+[Practice projects in standalone lessons](learning-practice-projects.md).
 
 While a start is in progress, the Courses pane says **Starting the selected
-lesson and preparing its practice project. Its teacher conversation opens when
-this finishes.** Every **Start**, **Start next lesson** and **Start lesson**
+lesson and preparing its practice project. The lesson opens when this
+finishes.** Every **Start**, **Start next lesson** and **Start lesson**
 button stays disabled until the request settles; the lesson then
 opens by itself. A practice project's Workspace setup can continue afterwards;
 the lesson becomes ready by itself when setup succeeds, so you do not need
@@ -141,14 +103,12 @@ installation** appears only when the installation cannot start lessons.
 If Start is unconfirmed, the pane says **The last lesson start was not confirmed**
 and a **Retry lesson start** button appears above it. It keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.
-An ended replay is history; it does not select a different current attempt. If
-opening the saved conversation is unconfirmed, the exact Start retry or Resume
-uses the original server opener. A page unload does not preserve this temporary
+An ended replay is history; it does not select a different current attempt. A page unload does not preserve this temporary
 UI retry identity; read saved progress before making another request afterward.
 
 An account change immediately hides the previous person's progress. Changing
-account, mode or route during a request does not undo admitted lesson work; a
-late result cannot open a new conversation or select the new view. Local request
+account or route during a request does not undo admitted lesson work; a
+late result cannot open the lesson in the new view. Local request
 errors are cleared when their view is retired. Colleague can explain this flow
 and offer existing actions; a how-to question alone does not authorize execution.
 Private provider key entry remains a human-only step. A diagram belongs to its

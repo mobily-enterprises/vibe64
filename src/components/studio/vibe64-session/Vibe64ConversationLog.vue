@@ -136,22 +136,6 @@
     </template>
   </AssistantConversationElement>
 </template>
-<script>
-import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-
-// Learning narration opens at most once per lesson conversation and page, so a
-// learner who ends voice is not reconnected when Main remounts.
-const autoOpenedLearningVoice = new Set();
-// Lessons speak unprompted only where a speech service is configured; one
-// catalogue read per page keeps speechless installs as quiet text lessons.
-let speechCatalogue = null;
-function speechServiceConfigured() {
-  speechCatalogue ||= getHttpWebClient().request("/api/vibe64/voice/voices", { method: "GET" })
-    .then(result => Array.isArray(result?.voices) && result.voices.length > 0, () => false);
-  return speechCatalogue;
-}
-</script>
-
 <script setup>
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
@@ -170,7 +154,6 @@ import { learningGuidancePresentation } from "@local/vibe64-training/shared/lear
 
 const props = defineProps({
   voiceRuntime: { type: Object, default: null },
-  hiddenByWorkspaceMode: { type: Boolean, default: false },
   working: { type: Boolean, default: undefined },
   integrationConnections: { default: () => ({}), type: Object },
   integrationActionPending: { default: null, type: Object },
@@ -452,15 +435,6 @@ function presentationMessage(message, turn) {
   return integrationRequest ? { ...message, text: integrationRequest.text, integrationRequest } : message;
 }
 
-// Keep only a mode-hidden reader; ordinary tab/collapse hiding keeps its policy.
-const retainedByWorkspaceMode = ref(false);
-watch(() => [props.hiddenByWorkspaceMode, props.visible, props.scrollKey],
-  ([hiddenByMode, visible, scrollKey], [, , previousScrollKey] = []) => {
-    if (scrollKey !== previousScrollKey) retainedByWorkspaceMode.value = false;
-    if (hiddenByMode) retainedByWorkspaceMode.value = true;
-    else if (!visible) retainedByWorkspaceMode.value = false;
-  }, { flush: "post" });
-
 const adapter = computed(() => ({
   conversation: {
     cancellableDelivery: true,
@@ -478,7 +452,6 @@ const adapter = computed(() => ({
     reloading: props.reloading,
     scrollKey: props.scrollKey,
     variant: props.variant,
-    retainWhenHidden: props.hiddenByWorkspaceMode || retainedByWorkspaceMode.value,
     visible: props.visible,
     welcomeMessage: props.welcomeMessage,
     progressPreviewLimit: usesCommentaryForThinking(props.turns.at(-1)?.metadata?.assistantSelection) ? 1 : 2,
@@ -525,23 +498,6 @@ const adapter = computed(() => ({
     }
   }
 }));
-// Lessons are spoken by default: with read-aloud on and no other voice owner,
-// open the visible Learning teacher's narration once. Capture stays off until
-// Talk; Working conversations keep opt-in voice.
-watch(() => {
-  const binding = voiceBinding.value;
-  const state = voice?.controller.state;
-  const narration = binding?.narration;
-  // Narration readiness covers chat access and the loaded conversation that
-  // the Learning voice gate requires.
-  return binding && props.voiceRuntime?.identity?.learningAttemptId !== undefined && narration?.eligible &&
-    !narration.loading && !state.session && !state.busy && voice.readAloudFor(binding) &&
-    !autoOpenedLearningVoice.has(binding.id) ? binding : null;
-}, async binding => {
-  if (!binding) return;
-  autoOpenedLearningVoice.add(binding.id);
-  if (await speechServiceConfigured() && voiceBinding.value === binding && !voice.controller.state.session) void openVoice();
-}, { immediate: true });
 </script>
 
 <style scoped>
@@ -604,91 +560,5 @@ watch(() => {
 @keyframes vibe64-conversation-arrive { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) {
   :deep(.assistant-transcript__turn:last-of-type) { animation: none; }
-}
-</style>
-
-<style>
-/* Learning: the same conversation as a warm tutor dialogue. The teacher speaks
-   from a lit card with a yellow badge; the learner answers in the primary
-   container; teacher status lines (Watching: …) become quiet tonal chips. */
-.studio-app-shell-layout--learning .vibe64-conversation-log {
-  --vibe64-tutor-card: color-mix(in srgb, var(--v64-learning, #f5c518) 9%, rgb(var(--v-theme-surface)));
-  --vibe64-tutor-edge: color-mix(in srgb, var(--v64-learning, #f5c518) 38%, rgb(var(--v-theme-surface)));
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__body { gap: 1.1rem; }
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__avatar--assistant {
-  background: var(--v64-learning, #f5c518);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v64-learning, #f5c518) 25%, transparent);
-  color: var(--v64-on-learning, #2b2100);
-  height: 1.75rem;
-  width: 1.75rem;
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-row--assistant .assistant-transcript__message-header {
-  color: var(--v64-on-learning-container, #4d3a00);
-  font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif);
-  font-size: .9rem;
-  letter-spacing: .01em;
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--assistant {
-  background: var(--vibe64-tutor-card);
-  border: 1px solid var(--vibe64-tutor-edge);
-  box-shadow: var(--v64-elevation-1);
-  color: rgb(var(--v-theme-on-surface));
-  font: var(--v64-type-body-lg, 400 1rem/1.5rem system-ui, sans-serif);
-  margin-left: 2.4rem;
-  max-width: calc(100% - 2.4rem);
-  padding: .9rem 1.1rem;
-}
-/* The teacher's opening greeting is the same tutor card as its replies. */
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__welcome {
-  background: var(--vibe64-tutor-card);
-  border: 1px solid var(--vibe64-tutor-edge);
-  box-shadow: var(--v64-elevation-1);
-  color: rgb(var(--v-theme-on-surface));
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--assistant .studio-long-text-review__paragraph { line-height: 1.6; }
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message--user {
-  background: var(--v64-primary-container, rgba(var(--v-theme-primary), .14));
-  color: var(--v64-on-primary-container, rgb(var(--v-theme-on-surface)));
-  font: var(--v64-type-body-lg, 400 1rem/1.5rem system-ui, sans-serif);
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-footer { color: var(--v64-on-surface-variant); font-size: .75rem; }
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__message-footer--assistant { margin-left: 2.4rem; }
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__system:not(:has(.vibe64-project-message)) {
-  align-items: center;
-  background: var(--v64-surface-container, rgba(var(--v-theme-primary), .05));
-  border: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, .12));
-  border-radius: var(--v64-shape-lg, 16px);
-  font: var(--v64-type-label-lg, 500 .875rem/1.25rem system-ui, sans-serif);
-  justify-self: center;
-  margin-inline: auto;
-  padding: .4rem .85rem .4rem .55rem;
-  width: fit-content;
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__system:not(:has(.vibe64-project-message)) .assistant-transcript__system-icon {
-  background: var(--v64-learning-container, #fdf3c4);
-  border-radius: 50%;
-  box-sizing: content-box;
-  color: var(--v64-on-learning-container, #4d3a00);
-  margin-top: 0;
-  padding: 4px;
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-transcript__thinking {
-  border-left-color: var(--vibe64-tutor-edge);
-  margin-left: 2.4rem;
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .vibe64-main-conversation__voice-disc,
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-conversation__avatar-size-disc {
-  background: var(--v64-learning-container, #fdf3c4);
-  color: var(--v64-on-learning-container, #4d3a00);
-}
-.studio-app-shell-layout--learning .vibe64-conversation-log .v-btn[aria-pressed="true"] .vibe64-main-conversation__voice-disc {
-  background: var(--v64-learning, #f5c518);
-  color: var(--v64-on-learning, #2b2100);
-}
-/* A soft stage behind the (unchanged) avatar artwork. */
-.studio-app-shell-layout--learning .vibe64-conversation-log .assistant-conversation__avatar-visual {
-  background: radial-gradient(circle at 50% 58%, color-mix(in srgb, var(--v64-learning, #f5c518) 30%, transparent) 0 52%, transparent 53%);
-  border-radius: 50%;
 }
 </style>

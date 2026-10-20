@@ -3,17 +3,14 @@ import { computed, ref, toValue, watch } from "vue";
 import { useRoute } from "vue-router";
 import TrainingLessonPicker from "@local/vibe64-training/client/lesson-picker";
 
+// L's Courses surface: a confirmed start or resume opens the lesson reader.
 const props = defineProps({
-  learning: { type: Object, required: true },
-  // In the Learning environment (L) a confirmed start or resume opens the
-  // lesson reader instead of a teacher conversation.
-  environment: Boolean
+  learning: { type: Object, required: true }
 });
 const emit = defineEmits(["opened"]);
-const conversation = computed(() => ({ openConversation: !props.environment }));
 async function opened(operation) {
   const outcome = await request(operation);
-  if (props.environment && outcome?.attemptId && outcome.current !== false) emit("opened", outcome);
+  if (outcome?.attemptId && outcome.current !== false) emit("opened", outcome);
   return outcome;
 }
 const route = useRoute();
@@ -29,10 +26,10 @@ const installState = computed(() => toValue(props.learning.installState) || null
 const trialResource = computed(() => props.learning.authorPreviewResource);
 const trialEnabled = computed(() => toValue(props.learning.authorPreviewEnabled) === true);
 const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.learning.learnerId)
-  && toValue(props.learning.learningMode)));
-const canRequest = computed(() => Boolean(toValue(props.learning.learnerId) && toValue(props.learning.learningMode)));
+  && toValue(props.learning.active)));
+const canRequest = computed(() => Boolean(toValue(props.learning.learnerId) && toValue(props.learning.active)));
 let feedbackGeneration = 0;
-watch(() => [toValue(props.learning.learnerId), toValue(props.learning.learningMode), route.fullPath, trialEnabled.value], () => {
+watch(() => [toValue(props.learning.learnerId), toValue(props.learning.active), route.fullPath, trialEnabled.value], () => {
   feedbackGeneration += 1;
   error.value = "";
   errorLearner.value = "";
@@ -60,7 +57,7 @@ async function request(operation) {
     <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="opened(owner => owner.retryStart(conversation))">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="opened(owner => owner.retryStart())">
       Retry lesson start
     </v-btn>
     <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
@@ -77,7 +74,7 @@ async function request(operation) {
         <v-btn
           variant="tonal" rounded="pill" min-height="48" data-test="resume-author-trial"
           :disabled="busy || !canRequest || toValue(trialResource.isLoading) || !!toValue(trialResource.loadError)"
-          @click="opened(owner => owner.resumeAuthorPreview(trial.attemptId, conversation))"
+          @click="opened(owner => owner.resumeAuthorPreview(trial.attemptId))"
         >
           Resume author trial
         </v-btn>
@@ -104,32 +101,15 @@ async function request(operation) {
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
-      @start="opened(owner => owner.startLesson($event, conversation))"
-      @resume="opened(owner => owner.resumeLesson($event.attemptId, conversation))"
+      @start="opened(owner => owner.startLesson($event))"
+      @resume="opened(owner => owner.resumeLesson($event.attemptId))"
       @install="request(owner => owner.installCourse($event))"
     />
-    <p v-if="!environment" class="vibe64-learning-launcher__status" role="status">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 9h2V7h-2m1 13a8 8 0 1 1 0-16 8 8 0 0 1 0 16m0-18a10 10 0 1 0 0 20 10 10 0 0 0 0-20m-1 15h2v-6h-2v6Z" /></svg>
-      You can switch back to Working without closing your lesson.
-    </p>
   </div>
 </template>
 
 <style scoped>
 .vibe64-learning-launcher { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); }
-/* A quiet footnote: the pane opens on the Courses hero, not on utility text. */
-.vibe64-learning-launcher__status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--v64-space-2, 8px);
-  margin: var(--v64-space-5, 24px) 0 0;
-  color: var(--v64-on-surface-variant, rgba(var(--v-theme-on-surface), 0.72));
-  font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif);
-  font-weight: 400;
-  text-align: center;
-}
-.vibe64-learning-launcher__status svg { flex: 0 0 auto; width: 16px; height: 16px; fill: currentColor; opacity: 0.8; }
 .vibe64-learning-launcher__retry { margin-bottom: var(--v64-space-3, 12px); letter-spacing: 0; text-transform: none; }
 .vibe64-learning-launcher__trial {
   display: flex;

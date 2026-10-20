@@ -57,6 +57,6 @@ minimised, the current step card stays pinned at the top of Colleague's chat;
 
 ## Earlier lessons
 
-Lessons started before Learning v2 kept a separate Main teacher in Learning mode.
+Lessons started before Learning v2 kept a separate Main teacher in the retired Learning mode.
 Those attempts can be read and ended but not continued; earlier completions keep
 counting.

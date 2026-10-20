@@ -600,10 +600,6 @@ const props = defineProps({
     default: "",
     type: String
   },
-  learningAttemptId: {
-    default: "",
-    type: String
-  },
   sessionId: {
     default: "",
     type: String
@@ -633,7 +629,6 @@ function requestOverviewAssistant({ abstraction = "balanced", scope = "all", tab
 
 const database = useVibe64DatabaseTools({
   active: computed(() => props.active),
-  learningAttemptId: computed(() => props.learningAttemptId),
   projectSlug: computed(() => props.projectSlug),
   sessionId: computed(() => props.sessionId)
 });
@@ -721,15 +716,13 @@ const databaseScopeLabel = computed(() => (
       : "Resolved database"
 ));
 const assistantConfigured = computed(() => Boolean(state.value?.assistant?.available));
-// A lesson has no Copilot route; its teacher answers database questions instead.
-const assistantCanRun = computed(() => assistantConfigured.value && !props.learningAttemptId);
+const assistantCanRun = computed(() => assistantConfigured.value);
 const assistantStatusLabel = computed(() => {
   const assistant = state.value?.assistant;
-  if (!assistantCanRun.value) return "Unavailable";
+  if (!assistantConfigured.value) return "Unavailable";
   return `${vibe64AssistantSelectionLabel({ engineId: assistant.engineId, modelId: assistant.model, variantId: assistant.variantId })}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
 const assistantUnavailableCopy = computed(() => {
-  if (props.learningAttemptId && props.assistantUnavailableMessage) return props.assistantUnavailableMessage;
   return state.value?.assistant?.message || "Ask the owner to configure Helper in Model routing. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);

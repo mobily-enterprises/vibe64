@@ -88,20 +88,5 @@ function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" })
     ...(place.databaseView ? { databaseView: place.databaseView } : {}), ...highlighted, status: "pending" };
 }
 
-// The retired Main teacher's Learning-mode command, kept unchanged for Main
-// until the teacher model is removed (Learning v2 phase 2).
-function trainingLearningModeGuideCommand(request, { id, projectSlug, sessionId, attemptId }) {
-  const place = TRAINING_GUIDE_PLACES[request.target];
-  const guide = guideWithSteps(request);
-  if (!request.navigate) return { id, guide, learningAttemptId: attemptId, status: "pending" };
-  const learning = request.target === "learning";
-  return { id, projectSlug, sessionId, conversationId: "", pane: learning ? "preview" : place.pane,
-    ...(place.databaseView ? { databaseView: place.databaseView } : {}),
-    learningMode: true, learningView: learning ? "learning" : "workspace",
-    ...(learning ? { learningContent: "active" } : {}), learningAttemptId: attemptId,
-    // Opening without a highlight is the ordinary navigation command.
-    ...(request.highlight ? { guide } : {}), status: "pending" };
-}
-
 export { TRAINING_GUIDE_ALIASES, TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_PLACES, TRAINING_GUIDE_TARGETS,
-  trainingGuideCommand, trainingGuideRequest, trainingGuideSteps, trainingLearningModeGuideCommand };
+  trainingGuideCommand, trainingGuideRequest, trainingGuideSteps };

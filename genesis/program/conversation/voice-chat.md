@@ -23,7 +23,6 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/App.vue`
-- `packages/vibe64-training/src/client/useTrainingMainPresentation.js`
 
 ## Public contract
 

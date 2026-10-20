@@ -1626,7 +1626,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     const retryWorkspaceSetup = vi.fn(async () => true);
     const { view, props } = await createViewWithProps({
       retryWorkspaceSetup,
-      sourceWorkspaceAvailable: true,
       session: {
         ...viewProps().session,
         workspaceSetup: {
@@ -1652,7 +1651,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.workspaceSetupDismissed.value).toBe(false);
     expect(view.workspaceSetupError.value).toBe("Another assistant operation is starting.");
     expect(view.workspaceSetupActionVisible.value).toBe(true);
-    const reloaded = await createView({ sourceWorkspaceAvailable: true, session: props.session });
+    const reloaded = await createView({ session: props.session });
     expect(reloaded.workspaceSetupDismissed.value).toBe(false);
 
     props.sessionSelectionArchived = true;

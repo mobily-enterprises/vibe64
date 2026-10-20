@@ -332,7 +332,6 @@ function useVibe64ConversationLog({
   active = true,
   projectSlug: projectSlugInput,
   sessionsApiPath: sessionsApiPathInput,
-  learningAttemptId,
   session,
   conversation = null
 } = {}) {
@@ -360,7 +359,7 @@ function useVibe64ConversationLog({
       matches: context => (["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
         .includes(context?.payload?.reason) || conversationLogCompletedTurnKey(context?.payload)) &&
         conversationLogRealtimeShouldRefresh(context, sessionId.value) &&
-        vibe64SessionEventMatchesScope(context?.payload, { projectSlug: projectSlug.value, learningAttemptId }),
+        vibe64SessionEventMatchesScope(context?.payload, { projectSlug: projectSlug.value }),
       onEvent: ({ payload = {} } = {}) => {
         realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
         return payload.reason === "session-assistant-selection-updated"

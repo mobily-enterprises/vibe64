@@ -4,8 +4,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import {
-  blockingVibe64SessionPageError,
-  vibe64SessionMatchesPurpose
+  blockingVibe64SessionPageError
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionDebugLog
@@ -38,21 +37,6 @@ const vibe64SessionPanelEmits = [
   "project-attention"
 ];
 const vibe64SessionPanelProps = {
-  active: { default: true, type: Boolean },
-  learningResource: {
-    default: null,
-    type: Object
-  },
-  learningView: {
-    default: "workspace",
-    type: String,
-    validator: value => ["workspace", "learning"].includes(value)
-  },
-  purposeFilter: {
-    default: "",
-    type: String,
-    validator: value => ["", "working", "learning"].includes(value)
-  },
   createSessionTeleportTarget: {
     default: "",
     type: String
@@ -93,8 +77,6 @@ function useVibe64SessionPanel(props, emit) {
   const mountedRuntimeSessionIds = ref([]);
   const runtimeStateBySessionId = reactive({});
   const sessionData = useVibe64SessionData({
-    learningResource: () => props.learningResource,
-    purposeFilter: () => props.purposeFilter,
     onTitleChange(title) {
       emit("title-change", title);
     }
@@ -124,49 +106,31 @@ function useVibe64SessionPanel(props, emit) {
       ready: Boolean(promptHints && !projectSettings.loadError.value)
     };
   });
-  const canonicalSelection = proxyRefs({
+  const selection = proxyRefs({
     isArchived: sessionData.isSelectedSessionArchived,
     selectedSession: sessionData.selectedSession,
     selectedSessionId: sessionData.selectedSessionId
-  });
-  const selectedPurposeVisible = computed(() => vibe64SessionMatchesPurpose(
-    canonicalSelection.selectedSession || (sessionData.sessions.value || []).find(
-      session => session.sessionId === canonicalSelection.selectedSessionId
-    ),
-    props.purposeFilter
-  ));
-  // Only the visible selection is filtered; the original owner retains its ID,
-  // conversation, drafts and mounted work until authoritative removal.
-  const selection = proxyRefs({
-    isArchived: computed(() => selectedPurposeVisible.value && canonicalSelection.isArchived),
-    selectedSession: computed(() => selectedPurposeVisible.value ? canonicalSelection.selectedSession : null),
-    selectedSessionId: computed(() => selectedPurposeVisible.value ? canonicalSelection.selectedSessionId : "")
   });
   let repositoryStatusRegistry = {
     observe: () => null
   };
   repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
     onState: applyRuntimeWorkState,
-    selectedSessionId: () => canonicalSelection.selectedSessionId,
+    selectedSessionId: () => selection.selectedSessionId,
     sessionSourceOperationsSuspended: (sessionId) => (
-      (sessionData.sessions.value || []).some(session => session.sessionId === sessionId && session.purpose === "learning") ||
       runtimeStateBySessionId[sessionId]?.sourceOperationsSuspended === true
     ),
     sessions: sessionData.sessions,
     sessionsApiPath: sessionData.sessionsApiPath
   });
-  const canonicalToolbarSessions = computed(() => sessionPanelToolbarSessions({
+  const toolbarSessions = computed(() => sessionPanelToolbarSessions({
     runtimeStateBySessionId,
-    selectedSession: canonicalSelection.selectedSession,
-    selectedSessionId: canonicalSelection.selectedSessionId,
+    selectedSession: selection.selectedSession,
+    selectedSessionId: selection.selectedSessionId,
     sessions: sessionData.sessions.value || []
   }));
-  const toolbarSessions = computed(() => canonicalToolbarSessions.value.filter(
-    session => vibe64SessionMatchesPurpose(session, props.purposeFilter)
-  ));
   const toolbar = proxyRefs({
-    sessionsApiPath: sessionData.selectedSessionsApiPath || sessionData.sessionsApiPath,
-    workingSessionsApiPath: sessionData.sessionsApiPath,
+    sessionsApiPath: sessionData.sessionsApiPath,
     refreshSessionData: sessionData.refreshSessionData,
     refreshRepositoryState: repositoryStatusRegistry.refresh,
     canCreateSession: sessionData.canCreateSession,
@@ -191,22 +155,17 @@ function useVibe64SessionPanel(props, emit) {
   ).trim());
   const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
   const sessionLoadError = computed(() => Boolean(sessionData.sessionList.loadError));
-  const workingSessionLoadError = computed(() => Boolean(
-    unref(sessionData.workingLoadError ?? sessionData.sessionList.loadError)
-  ));
   const runtimeHostSessionIds = computed(() => {
-    const visibleSessionIds = new Set(canonicalToolbarSessions.value.filter((session) => !session.archiving).map((session) => session.sessionId));
-    if (canonicalSelection.selectedSessionId) {
-      visibleSessionIds.add(canonicalSelection.selectedSessionId);
+    const visibleSessionIds = new Set(toolbarSessions.value.filter((session) => !session.archiving).map((session) => session.sessionId));
+    if (selection.selectedSessionId) {
+      visibleSessionIds.add(selection.selectedSessionId);
     }
-    if (workingSessionLoadError.value) {
+    if (sessionLoadError.value) {
       for (const mountedSessionId of mountedRuntimeSessionIds.value) {
-        if (!props.learningResource || runtimeStateBySessionId[mountedSessionId]?.purpose !== "learning") {
-          visibleSessionIds.add(mountedSessionId);
-        }
+        visibleSessionIds.add(mountedSessionId);
       }
     }
-    const archivingIds = new Set(canonicalToolbarSessions.value.filter((session) => session.archiving).map((session) => session.sessionId));
+    const archivingIds = new Set(toolbarSessions.value.filter((session) => session.archiving).map((session) => session.sessionId));
     return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId) && !archivingIds.has(sessionId));
   });
   const emptyStateActivity = computed(() => sessionPanelEmptyStateActivity({
@@ -268,43 +227,36 @@ function useVibe64SessionPanel(props, emit) {
     mountedRuntimeSessionIds: mountedRuntimeSessionIds.value,
     runtimeHostSessionIds: runtimeHostSessionIds.value,
     runtimeStateBySessionId,
-    selectedSessionId: canonicalSelection.selectedSessionId,
+    selectedSessionId: selection.selectedSessionId,
     sessionLoadError: sessionLoadError.value,
-    sessions: canonicalToolbarSessions.value
+    sessions: toolbarSessions.value
   }));
 
   watch(sessionData.sessions, (sessions = []) => {
-    if (workingSessionLoadError.value && !props.learningResource) {
-      if (canonicalSelection.selectedSessionId) {
-        ensureRuntimeHost(canonicalSelection.selectedSessionId);
+    if (sessionLoadError.value) {
+      if (selection.selectedSessionId) {
+        ensureRuntimeHost(selection.selectedSessionId);
       }
       return;
     }
     const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
-    if (workingSessionLoadError.value) {
-      for (const mountedSessionId of mountedRuntimeSessionIds.value) {
-        if (runtimeStateBySessionId[mountedSessionId]?.purpose !== "learning") {
-          visibleSessionIds.add(mountedSessionId);
-        }
-      }
-    }
     mountedRuntimeSessionIds.value = mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
     for (const sessionId of Object.keys(runtimeStateBySessionId)) {
       if (!visibleSessionIds.has(sessionId)) {
         delete runtimeStateBySessionId[sessionId];
       }
     }
-    if (canonicalSelection.selectedSessionId) {
-      ensureRuntimeHost(canonicalSelection.selectedSessionId);
+    if (selection.selectedSessionId) {
+      ensureRuntimeHost(selection.selectedSessionId);
     }
   });
 
   watch(() => [
-    canonicalSelection.selectedSessionId,
-    canonicalSelection.selectedSessionId ? "selected" : "empty"
+    selection.selectedSessionId,
+    selection.selectedSessionId ? "selected" : "empty"
   ].join("|"), () => {
-    if (canonicalSelection.selectedSessionId) {
-      ensureRuntimeHost(canonicalSelection.selectedSessionId);
+    if (selection.selectedSessionId) {
+      ensureRuntimeHost(selection.selectedSessionId);
     }
   }, {
     immediate: true
@@ -373,7 +325,6 @@ function useVibe64SessionPanel(props, emit) {
     }
     if (!runtimeStateBySessionId[key]) {
       runtimeStateBySessionId[key] = {
-        purpose: (sessionData.sessions.value || []).find(session => session.sessionId === key)?.purpose || "working",
         toolbarControls: null,
         agentThinking: false,
         busy: false,
@@ -548,14 +499,13 @@ function sessionPanelDashboardContext(projectContext = {}, sessionsApiPath = "")
 }
 
 function sessionPanelToolbarSessions({
-  purposeFilter = "",
   runtimeStateBySessionId = {},
   selectedSession = null,
   selectedSessionId = "",
   sessions = []
 } = {}) {
   const normalizedSelectedSessionId = String(selectedSessionId || "").trim();
-  return sessions.filter(session => vibe64SessionMatchesPurpose(session, purposeFilter)).map((session) => {
+  return sessions.map((session) => {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       return session;

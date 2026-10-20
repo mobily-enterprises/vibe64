@@ -32,7 +32,7 @@
         </h2>
       </div>
       <v-btn v-if="editor.selectedPath.value && markdownRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
-      <v-btn v-else-if="editor.selectedPath.value && !lessonScoped" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
+      <v-btn v-else-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
       <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
         <v-btn
           :disabled="!editor.dirty.value || editor.saving.value"
@@ -798,12 +798,6 @@ const props = defineProps({
   sourcePathClickWithoutModifier: {
     default: false,
     type: Boolean
-  },
-  // A lesson's Files tab: lesson routes have no architecture reader, so files
-  // open as code without the Interface view. Everything else is the ordinary editor.
-  lessonScoped: {
-    default: false,
-    type: Boolean
   }
 });
 const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location", "open-program"]);
@@ -823,12 +817,12 @@ const editor = useVibe64SourceEditor({
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
-const filePresentation = ref(props.lessonScoped ? 'code' : 'interface');
+const filePresentation = ref('interface');
 const interfaceSymbolId = ref('');
 const symbolPresentation = ref('description');
 // Architecture supplies its existing snapshot at mount. Only
 // standalone file browsing owns another graph reader.
-const interfaceGraph = props.architectureFacts || props.lessonScoped ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
+const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
 const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
 const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
 const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);
@@ -875,7 +869,7 @@ function presentInterfaceSymbol(presentation, force = false) {
 // The file browser opens Markdown formatted; the header switches to its source.
 // GithubMarkdown sanitizes the HTML against its allowlist before display.
 // Embedded single-file views keep Interface/Code, which their host records.
-const markdownRenderable = computed(() => !props.singleFile && !props.lessonScoped && sourceEditorPathIsMarkdown(editor.selectedPath.value));
+const markdownRenderable = computed(() => !props.singleFile && sourceEditorPathIsMarkdown(editor.selectedPath.value));
 const markdownRenderer = new Marked({
   async: false,
   gfm: true,
@@ -890,7 +884,7 @@ const markdownRenderer = new Marked({
 });
 const renderedMarkdownHtml = computed(() => filePresentation.value === 'rendered' ? markdownRenderer.parse(editor.text.value) : '');
 watch(editor.selectedPath, () => {
-  const codeRequested = props.codeFocusMode || props.lessonScoped || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value;
+  const codeRequested = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value;
   filePresentation.value = codeRequested ? 'code' : markdownRenderable.value ? 'rendered' : 'interface';
   interfaceSymbolId.value = ''; symbolPresentation.value = 'description';
 });

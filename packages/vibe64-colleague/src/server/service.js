@@ -1449,10 +1449,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async navigate(input, context) {
       const state = await stateFor(context);
-      const learningFields = input.learningView || input.learningContent || input.learningTargetAttemptId;
-      if ((input.learning || input.guide) && (input.learningMode !== undefined || learningFields)) {
-        return { ok: false, error: "Use learning or guide without the retired Learning mode fields." };
-      }
       if (input.learning && input.learning.open !== true && (input.learning.attemptId || input.learning.stepId)) {
         return { ok: false, error: "Minimising Learning cannot also select a lesson or step." };
       }
@@ -1477,27 +1473,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         } else if (trainingGuideCommand(guided, { id: "" }).pane !== "preview" && !input.sessionId) {
           return { ok: false, error: "Choose the exact session before opening this guided session view." };
         }
-      }
-      if (learningFields && input.learningMode !== true) {
-        return { ok: false, error: "Choose Learning mode before selecting its view or lesson content." };
-      }
-      if (input.learningMode === true && !input.learningView) {
-        return { ok: false, error: "Choose the exact Learning workspace or Learning pane to display." };
-      }
-      if (input.learningMode === false && learningFields) {
-        return { ok: false, error: "Leaving Learning cannot also select Learning content." };
-      }
-      if (input.learningView === "workspace" && (!input.projectSlug || !input.sessionId || input.learningContent || !input.learningTargetAttemptId)) {
-        return { ok: false, error: "Choose the exact active lesson project/session and normal workspace pane." };
-      }
-      if (input.learningView === "learning" && !input.learningContent) {
-        return { ok: false, error: "Choose the lesson picker or this active lesson content." };
-      }
-      if (input.learningContent === "picker" && (!input.projectSlug || input.learningTargetAttemptId || input.sessionId || input.conversationId)) {
-        return { ok: false, error: "The lesson picker does not select or start an attempt." };
-      }
-      if (input.learningContent === "active" && (!input.learningTargetAttemptId || !input.sessionId || input.conversationId)) {
-        return { ok: false, error: "Choose the exact active lesson attempt and session without a temporary conversation." };
       }
       if (input.planView && (!input.sessionId || input.pane || input.conversationId)) {
         return { ok: false, error: "Choose the exact session's Main chat, without another pane or conversation, to open its plan viewer." };
@@ -1530,10 +1505,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
         ...(input.planView ? { planView: input.planView } : {}),
-        ...(input.learningMode !== undefined ? { learningMode: input.learningMode } : {}),
-        ...(input.learningView ? { learningView: input.learningView } : {}),
-        ...(input.learningContent ? { learningContent: input.learningContent } : {}),
-        ...(input.learningTargetAttemptId ? { learningAttemptId: input.learningTargetAttemptId } : {}),
         ...(input.learning ? { learning: { open: input.learning.open === true,
           ...(input.learning.attemptId ? { attemptId: input.learning.attemptId } : {}),
           ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),

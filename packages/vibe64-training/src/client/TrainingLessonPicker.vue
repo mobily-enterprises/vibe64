@@ -338,7 +338,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
     </template>
     <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
       <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</span></p>
-      <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. Its teacher conversation opens when this finishes.</span></p>
+      <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. The lesson opens when this finishes.</span></p>
       <p v-else-if="startUnconfirmed" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
       <p v-else-if="!canStart" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Starting lessons is unavailable in this installation.</span></p>
     </div>

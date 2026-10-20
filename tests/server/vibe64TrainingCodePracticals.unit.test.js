@@ -16,8 +16,6 @@ import { createTrainingStepChecks } from "../../packages/vibe64-training/src/ser
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeEditorActions.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
-import * as vue from "vue";
-import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
 
 // A fixture code lesson executed through the actual bounded native gateway.
 // Project/session seams are explicit fixtures; the learner and agent writes are
@@ -272,70 +270,6 @@ test("a host with several learner stores selects the store holding the practice 
   assert.equal(plainSaves, 3, "an invalid selected store never saves");
   assert.throws(() => createTrainingCodeSaveOwner({ selectOwners: "normal" }), TypeError);
 });
-
-test("Check my code sends one genuine code-submit press for the current delivered question", async t => {
-  const question = { attemptId: randomUUID(), questionId: "code-question", assessmentId: "require-note-title", issuedRevision: 4,
-    topicHash: "a".repeat(64), lessonHash: "b".repeat(64), extra: "not sent" };
-  const product = vue.ref({ conversationId: "main", trainingQuestion: question });
-  const requests = [];
-  let gestures;
-  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const app = renderer.createApp({ setup() {
-    gestures = useTrainingLearnerGestures({ scope: { actorKey: vue.ref("learner"), product, clientId: "client" },
-      workspace: { focus: { projectSlug: "practice", sessionId: "practice-session", pane: "dashboard" },
-        settle: async target => ({ projectSlug: target.projectSlug, sessionId: target.sessionId, mainChatVisible: true,
-          projectVisible: true, pane: "dashboard", ready: true }) },
-      drawer: { bodyVisible: vue.ref(false), xs: vue.ref(false) },
-      observe: async request => { requests.push(structuredClone(request.body)); return { ok: true, checkOutcome: "passed" }; },
-      failure() {} });
-    return () => null;
-  } });
-  app.mount({}); t.after(() => app.unmount());
-  await assert.rejects(gestures.submitCode({ isTrusted: false, type: "click" }), /Press Check my code yourself/u, "a synthetic press is not the learner's");
-  assert.equal((await gestures.submitCode({ isTrusted: true, type: "click" })).checkOutcome, "passed");
-  const { extra: _extra, ...reference } = question;
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].control, "code-submit");
-  assert.deepEqual(requests[0].reference, reference);
-  product.value = { conversationId: "main", trainingQuestion: null };
-  await assert.rejects(gestures.submitCode({ isTrusted: true, type: "click" }), /no open lesson question/u);
-});
-
-// After a server restart (or page reload) the Main conversation re-reads its
-// delivered question from saved state. Until that read arrives, a press must
-// say so instead of telling the learner there is no question to answer.
-test("Check my code before the lesson conversation has re-read its saved question says it is still loading", async t => {
-  const question = { attemptId: randomUUID(), questionId: "code-question", assessmentId: "require-note-title", issuedRevision: 4,
-    topicHash: "a".repeat(64), lessonHash: "b".repeat(64) };
-  const product = vue.ref({ conversationId: "main", trainingQuestion: null, loaded: false });
-  const requests = [];
-  let gestures;
-  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const app = renderer.createApp({ setup() {
-    gestures = useTrainingLearnerGestures({ scope: { actorKey: vue.ref("learner"), product, clientId: "client" },
-      workspace: { focus: { projectSlug: "practice", sessionId: "practice-session", pane: "dashboard" },
-        settle: async target => ({ projectSlug: target.projectSlug, sessionId: target.sessionId, mainChatVisible: true,
-          projectVisible: true, pane: "dashboard", ready: true }) },
-      drawer: { bodyVisible: vue.ref(false), xs: vue.ref(false) },
-      observe: async request => { requests.push(structuredClone(request.body)); return { ok: true, checkOutcome: "passed" }; },
-      failure() {} });
-    return () => null;
-  } });
-  app.mount({}); t.after(() => app.unmount());
-  await assert.rejects(gestures.submitCode({ isTrusted: true, type: "click" }), error =>
-    /still loading/u.test(error.message) && !/no open lesson question/u.test(error.message));
-  assert.equal(requests.length, 0);
-  product.value = { conversationId: "main", trainingQuestion: question, loaded: true };
-  assert.equal((await gestures.submitCode({ isTrusted: true, type: "click" })).checkOutcome, "passed",
-    "the same saved question is answered once the conversation has re-read it");
-  assert.equal(requests[0].reference.questionId, "code-question");
-  product.value = { conversationId: "main", trainingQuestion: null, loaded: true };
-  await assert.rejects(gestures.submitCode({ isTrusted: true, type: "click" }), /no open lesson question/u);
-});
-
-// The code question, its starting-file baseline and the learner's ledgered
-// saves are saved state. Owners recreated over the same state (a restarted
-// server) keep the question open and Check my code evaluates it unchanged.
 
 test("a v2 code step keys its ledger by the entered step and only the learner's own Check records the pass", async t => {
   const f = await fixture(t, { lessonVersion: 2 });

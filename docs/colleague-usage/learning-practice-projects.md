@@ -3,7 +3,7 @@
 Some lessons need a practice application. In Learning → **Courses**, use
 **Start**, **Start next lesson** or **Start lesson** for a new lesson, or
 **Continue**/**Resume saved lesson** for your saved one (see
-[Choosing lessons and Learning conversations](learning-mode-ui.md)). If the installation reports that exercise preparation is
+[Choosing lessons and courses](learning-mode-ui.md)). If the installation reports that exercise preparation is
 unavailable, keep the saved attempt and ask the owner to provide preparation
 support before retrying. That refusal means preparation did not start.
 
@@ -70,7 +70,7 @@ the change belongs and how you will check it). Then check the result yourself in
 Work an agent does for you never counts as your practical evidence. While a code
 question or code step is open, make the edits to its files yourself in
 **Dashboard → Files**: your saves there are recorded for the lesson, and any
-other writer's edit in those files means **Check my code** asks for an
+other writer's edit in those files means the step's **Check** asks for an
 independent attempt (see [Answering a code question in a lesson](learning-code-questions.md)).
 On a hosted workspace, **Files** saves are not yet recorded for lessons.
 

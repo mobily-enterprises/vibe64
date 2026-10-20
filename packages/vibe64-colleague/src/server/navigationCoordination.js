@@ -1,24 +1,9 @@
 import { learningPanelMatches } from "../shared/learningFocus.js";
 
-function learningFocusMatches(command, focus) {
-  if (command.learningMode === undefined) return true;
-  if (focus?.learningMode !== command.learningMode) return false;
-  // Learning mode reports learningView/learningContent; outside it, learningAttemptId
-  // names the Learning environment's current lesson (Learning v2), not Learning mode.
-  if (command.learningMode === false) return !focus.learningView && !focus.learningContent;
-  if (focus.learningView !== command.learningView ||
-      command.learningContent && focus.learningContent !== command.learningContent ||
-      command.learningAttemptId && focus.learningAttemptId !== command.learningAttemptId) return false;
-  if (command.projectSlug && command.learningContent !== "picker" && focus.projectSlug !== command.projectSlug ||
-      command.sessionId && focus.sessionId !== command.sessionId) return false;
-  const pane = command.learningView === "learning" ? "lessons" : command.pane || "preview";
-  if (focus.pane !== pane) return false;
-  return !command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView;
-}
 // A guided "show me" names its own place; its pane and database view must be
-// the ones the browser settled on, as Learning-mode guides always required.
+// the ones the browser settled on.
 function guidedPlaceMatches(command, focus) {
-  if (!command.guide?.navigate || command.learningMode !== undefined || !command.pane) return true;
+  if (!command.guide?.navigate || !command.pane) return true;
   return focus?.pane === command.pane &&
     (!command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView);
 }
@@ -51,9 +36,6 @@ function createColleagueNavigationCoordination({ changed }) {
   function acknowledge(connection, input) {
     if (!connection || connection.navigation?.id !== input.commandId || !connection.acknowledge) {
       return { ok: false, error: "This navigation command is no longer pending." };
-    }
-    if (input.ok && !learningFocusMatches(connection.navigation, input.focus)) {
-      return { ok: false, error: "The browser has not confirmed this exact Learning mode, view and lesson selection." };
     }
     if (input.ok && !learningPanelMatches(connection.navigation, input.focus)) {
       return { ok: false, error: "The browser has not confirmed this exact Learning state, lesson and step." };

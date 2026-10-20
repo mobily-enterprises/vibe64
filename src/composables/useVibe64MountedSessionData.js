@@ -31,8 +31,7 @@ import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
-  vibe64SessionQueryKey,
-  vibe64SessionEventMatchesScope
+  vibe64SessionQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   vibe64SessionDebugDurationMs,
@@ -58,16 +57,12 @@ function refetchMountedSessionResource(resource) {
 
 function useVibe64MountedSessionData({
   active = false,
-  learningAttemptId: learningAttemptInput,
-  learnerId: learnerInput,
   projectSlug: projectSlugInput,
   sessionId,
   sessionsApiPath,
   summarySession = null
 } = {}) {
-  const learningAttemptId = computed(() => readRefOrGetterValue(learningAttemptInput));
-  const learnerId = computed(() => String(readRefOrGetterValue(learnerInput) || ""));
-  const projectSlug = projectSlugInput === undefined && learningAttemptInput === undefined ? useVibe64ProjectSlug()
+  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
     : computed(() => readRefOrGetterValue(projectSlugInput));
   const detailRecord = ref(null);
   const agentTurnOverlay = ref(null);
@@ -76,20 +71,9 @@ function useVibe64MountedSessionData({
   const mountedActive = computed(() => readRefOrGetterValue(active) === true);
   const activeSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const activeSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
-  const learningScopeReady = computed(() => learningAttemptId.value === undefined || Boolean(
-    learningAttemptId.value && learnerId.value && !projectSlug.value &&
-    activeSessionsApiPath.value === `/api/learning/${learningAttemptId.value}/vibe64/sessions`
-  ));
-  const eventMatchesScope = payload => learningScopeReady.value && vibe64SessionEventMatchesScope(payload, {
-    projectSlug: projectSlug.value, learningAttemptId: learningAttemptId.value
-  });
-  // Working activity previously matched its fixed session ID without a project
-  // filter. Preserve that policy; only the new Learning carrier is excluded.
-  const activityEventMatchesScope = payload => learningAttemptId.value === undefined
-    ? !payload.learningAttemptId : eventMatchesScope(payload);
   const listSession = computed(() => {
     const session = readRefOrGetterValue(summarySession);
-    return learningScopeReady.value && session?.sessionId === activeSessionId.value ? session : null;
+    return session?.sessionId === activeSessionId.value ? session : null;
   });
   const detailPath = computed(() => (
     activeSessionId.value && activeSessionsApiPath.value
@@ -100,13 +84,13 @@ function useVibe64MountedSessionData({
     ...vibe64SessionQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value, { learningAttemptId: learningAttemptId.value, learnerId: learnerId.value }
+      projectSlug.value
     ),
     activeSessionId.value,
     "detail"
   ]);
   const detailResource = useEndpointResource({
-    enabled: computed(() => Boolean(learningScopeReady.value && activeSessionId.value && activeSessionsApiPath.value)),
+    enabled: computed(() => Boolean(activeSessionId.value && activeSessionsApiPath.value)),
     fallbackLoadError: "Vibe64 session could not be loaded.",
     path: detailPath,
     queryKey: detailQueryKey,
@@ -123,7 +107,7 @@ function useVibe64MountedSessionData({
     readMethod: "GET",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => eventMatchesScope(payload) && mountedSessionRealtimeShouldRefresh(
+      matches: ({ payload = {} } = {}) => (!payload.projectSlug || payload.projectSlug === projectSlug.value) && mountedSessionRealtimeShouldRefresh(
         { payload },
         activeSessionId.value
       )
@@ -175,7 +159,7 @@ function useVibe64MountedSessionData({
 
   async function refresh(options = {}) {
     const reason = typeof options === "string" ? options : String(options?.reason || "");
-    if (!learningScopeReady.value || !activeSessionId.value || !activeSessionsApiPath.value) {
+    if (!activeSessionId.value || !activeSessionsApiPath.value) {
       return null;
     }
     if (refreshInFlight) {
@@ -219,10 +203,9 @@ function useVibe64MountedSessionData({
     enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => Boolean(
-      activityEventMatchesScope(payload) && agentTurnRealtimeOverlayFromPayload(payload, activeSessionId.value)
+      agentTurnRealtimeOverlayFromPayload(payload, activeSessionId.value)
     ),
     onEvent: ({ payload = {} } = {}) => {
-      if (!activityEventMatchesScope(payload)) return;
       const overlay = agentTurnRealtimeOverlayFromPayload(payload, activeSessionId.value);
       if (!overlay) {
         return;
@@ -273,7 +256,7 @@ function useVibe64MountedSessionData({
   // view starts its provider before the first message, while a reconnect also
   // resumes any provider thread that still has active work.
   async function reconcileMountedAgentSession(reason = "realtime-connect") {
-    if (disposed || !realtimeSocket.connected || !learningScopeReady.value || !activeSessionId.value || !activeSessionsApiPath.value) {
+    if (disposed || !realtimeSocket.connected || !activeSessionId.value || !activeSessionsApiPath.value) {
       return null;
     }
     if (reconciliationInFlight) {
@@ -415,8 +398,7 @@ function useVibe64MountedSessionData({
     enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => (
-      eventMatchesScope(payload) &&
-      (learningAttemptId.value !== undefined || payload.projectSlug === projectSlug.value) &&
+      payload.projectSlug === projectSlug.value &&
       payload.sessionId === activeSessionId.value &&
       payload.reason === "session-assistant-selection-updated"
     ),

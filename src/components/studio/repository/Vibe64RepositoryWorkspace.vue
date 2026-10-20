@@ -9,7 +9,7 @@
       :title="pageTitle"
     >
       <template #actions>
-        <div v-if="!lessonReadOnly" class="vibe64-repository-workspace__actions">
+        <div class="vibe64-repository-workspace__actions">
           <v-btn
             :disabled="repositoryOperationBusy"
             :loading="updates.checking"
@@ -56,7 +56,7 @@
     </v-dialog>
     <section class="vibe64-repository-workspace__changes-area">
       <v-sheet
-        v-if="view === 'history' && !lessonReadOnly"
+        v-if="view === 'history'"
         aria-live="polite"
         border
         class="vibe64-repository-workspace__update-status"
@@ -96,7 +96,7 @@
           <strong>{{ repositorySummaryTitle }}</strong>
           <span>{{ repositorySummaryDetail }}</span>
         </div>
-        <div v-if="!lessonReadOnly" class="vibe64-repository-workspace__actions">
+        <div class="vibe64-repository-workspace__actions">
           <v-btn
             v-if="repositoryStatus?.updateAvailable || updates.canonicalChangePending"
             :disabled="repositoryOperationBusy"
@@ -438,7 +438,6 @@ const {
   selectVersionFile,
   sessionId,
   sourceOperationsSuspended,
-  lessonReadOnly,
   updates,
   versionDiff,
   versionFiles

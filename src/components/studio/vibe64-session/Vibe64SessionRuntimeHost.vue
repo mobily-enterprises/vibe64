@@ -5,13 +5,7 @@
     :data-vibe64-session-runtime-id="props.sessionId"
   >
     <Vibe64AutopilotView
-      :source-workspace-available="sourceWorkspaceAvailable"
-      :output-workspace-available="outputWorkspaceAvailable"
-      :lessons-available="props.lessonsAvailable"
-      :learning-view="props.learningView"
-      :learning-attempt-id="learningAttemptId"
       :active="autopilotModeActive"
-      :hidden-by-workspace-mode="Boolean(props.workspacePurpose && selection.selectedSession && !vibe64SessionMatchesPurpose(selection.selectedSession, props.workspacePurpose))"
       :agent-connection-error="agentConnectionError"
       :agent-connection-status="agentConnectionStatus"
       :retry-agent-connection="retryAgentConnection"
@@ -47,7 +41,7 @@
     >
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64CodexSession
-          v-if="sourceWorkspaceAvailable && selectedAssistantEngineId === 'codex'"
+          v-if="selectedAssistantEngineId === 'codex'"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive && codexTerminalCanStart"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -60,7 +54,7 @@
           @session-update="agentTerminal.sessionUpdate"
         />
         <Vibe64NativeAgentSession
-          v-else-if="sourceWorkspaceAvailable && ['claude', 'opencode'].includes(selectedAssistantEngineId)"
+          v-else-if="['claude', 'opencode'].includes(selectedAssistantEngineId)"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -81,9 +75,6 @@
           }"
         />
       </template>
-      <template #learning="learningSlotProps">
-        <slot name="learning" v-bind="learningSlotProps || {}" />
-      </template>
     </Vibe64AutopilotView>
 
     <Vibe64SessionRenewalDialog :renewal="dialogs.renewal" />
@@ -92,7 +83,6 @@
 
 <script setup>
 import { computed } from "vue";
-import { vibe64SessionMatchesPurpose } from "@/lib/vibe64SessionPanelModel.js";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64CodexSession from "@/components/studio/Vibe64CodexSession.vue";
 import Vibe64NativeAgentSession from "@/components/studio/Vibe64NativeAgentSession.vue";
@@ -102,12 +92,6 @@ import {
 } from "@/composables/useVibe64SessionRuntimeHost.js";
 
 const props = defineProps({
-  lessonsAvailable: Boolean,
-  learningView: {
-    default: "workspace",
-    type: String
-  },
-  workspacePurpose: { default: "", type: String },
   refreshRepositoryState: {
     default: null,
     type: Function
@@ -196,9 +180,6 @@ const {
   runtimeProjectContext,
   saveSessionWork,
   sessionsApiPath,
-  sourceWorkspaceAvailable,
-  outputWorkspaceAvailable,
-  learningAttemptId,
   sessionRenewal,
   selectedAgentTerminalId,
   selection,

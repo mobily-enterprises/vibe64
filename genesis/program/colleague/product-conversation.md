@@ -53,7 +53,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `docs/colleague-usage/learning-with-colleague.md`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
-- `packages/vibe64-training/src/client/createTrainingNavigation.js`
+- `packages/vibe64-colleague/src/client/colleagueNavigation.js`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/StudioAppShellLayout.vue`

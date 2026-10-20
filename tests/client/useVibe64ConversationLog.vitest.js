@@ -1490,8 +1490,9 @@ describe("useVibe64ConversationLog", () => {
     } finally { scope.stop(); }
   });
 
-  for (const scopeIdentity of [{ projectSlug: "project-a" }, { projectSlug: "", learningAttemptId: "attempt-a" }]) {
-    it(`retargets supplied Main observation only for its own selection invalidation (${scopeIdentity.learningAttemptId || "Working"})`, async () => {
+  {
+    const scopeIdentity = { projectSlug: "project-a" };
+    it("retargets supplied Main observation only for its own selection invalidation", async () => {
       const scope = effectScope();
       const session = ref({ sessionId: "session-1" });
       const draft = ref("Keep these unsent words");
@@ -1505,12 +1506,8 @@ describe("useVibe64ConversationLog", () => {
         const listener = realtimeMocks.events.find(entry => entry.matches({ payload }));
         expect(listener).toBeDefined();
         expect(listener.matches({ payload: { ...payload, sessionId: "another" } })).toBe(false);
-        expect(listener.matches({ payload: scopeIdentity.learningAttemptId
-          ? { ...payload, learningAttemptId: "another-attempt" }
-          : { ...payload, projectSlug: "another-project" } })).toBe(false);
-        expect(listener.matches({ payload: scopeIdentity.learningAttemptId
-          ? { ...payload, learningAttemptId: undefined, projectSlug: "project-a" }
-          : { ...payload, projectSlug: "", learningAttemptId: "attempt-a" } })).toBe(false);
+        expect(listener.matches({ payload: { ...payload, projectSlug: "another-project" } })).toBe(false);
+        expect(listener.matches({ payload: { ...payload, projectSlug: "", learningAttemptId: "attempt-a" } })).toBe(false);
         await listener.onEvent({ payload });
         expect(conversation.reload).toHaveBeenCalledExactlyOnceWith({ resubscribe: true });
         expect(draft.value).toBe("Keep these unsent words");

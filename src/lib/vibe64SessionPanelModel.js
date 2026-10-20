@@ -6,15 +6,9 @@ import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 
-function vibe64SessionMatchesPurpose(session, purposeFilter = "") {
-  if (!purposeFilter) return true;
-  if (purposeFilter !== "working" && purposeFilter !== "learning") return false;
-  return Boolean(session) && (session.purpose || "working") === purposeFilter;
-}
-
-function visibleVibe64Sessions(sessions = [], purposeFilter = "") {
+function visibleVibe64Sessions(sessions = []) {
   return sessions
-    .filter(session => isOpenVibe64Session(session) && vibe64SessionMatchesPurpose(session, purposeFilter))
+    .filter(isOpenVibe64Session)
     .sort((left, right) => String(
       left.createdAt || left.manifest?.createdAt || left.sessionId || ""
     ).localeCompare(String(
@@ -76,6 +70,5 @@ export {
   enrichVibe64SessionForDisplay,
   shortVibe64SessionId,
   vibe64SessionLimits,
-  vibe64SessionMatchesPurpose,
   visibleVibe64Sessions
 };

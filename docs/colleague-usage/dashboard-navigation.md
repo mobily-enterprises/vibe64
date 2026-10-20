@@ -42,17 +42,10 @@ agent to investigate or update it
 is separate from opening the view. Do not mistake an unavailable/loading tool for
 an empty successful result.
 
-In a practice lesson (Learning mode), **Dashboard** is this same Dashboard for the
-lesson's practice project and lesson session. It shows **Git log**, **Env**,
-**Session History** and **Health**, and the session tools **Session info**,
-**Current changes**, **Files**, **Database** and **Architecture**; all of them
-read and change only the lesson's practice project. Git log and Current changes
-are read-only there (no update, check or save buttons), Env offers no secret
-**Reveal**, and the Database Copilot and Architecture **Ask** are off. **Project
-settings**, **Integrations**, **App access**, **Incoming changes**, **Issues/PR**
-and **AI Terminal** are not shown in a lesson; opening one of their addresses
-shows **Env** instead. Moving between Dashboard sections keeps Learning mode on.
-See [Choosing lessons and Learning conversations](learning-mode-ui.md).
+A practice lesson's project is an ordinary project of yours, so its
+**Dashboard** is this same Dashboard with every section and the usual access; it
+has no separate lesson Dashboard. See
+[Practice projects in standalone lessons](learning-practice-projects.md).
 
 Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”

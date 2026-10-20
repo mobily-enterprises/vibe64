@@ -82,25 +82,15 @@ earlier left-hand lesson teacher conversation, its lesson watches, quizzes,
 practical grading and lesson presentations have been retired; lessons started
 that way stay readable in history but cannot continue. Using lesson or exercise
 content still requires full validation of the pinned snapshot.
-A yellow learner plate with a black L enters Learning mode,
-with a yellow-ish active appearance and learning-session navigation. Working
-sessions are hidden from that view while their work, drafts and histories remain
-intact. Learning keeps the teacher chat visible throughout the lesson. The right
-side keeps the normal Preview | Dashboard tabs and adds a toggleable Learning tab
-beside them, containing the Courses pane (course cards and progress, course
-pages and the owner's custom-course form, and Check my code during a practice
-lesson) and the Presentation player. A practice lesson's Dashboard is the normal
-Dashboard for its practice project and lesson session, showing the sections that
-stay inside it (Git log, Env, Session History, Health, Session info, Current
-changes, Files, Database and Architecture); sections that save, publish, change
-settings or reach outside the practice project are not offered. A supervised project defaults to its Preview; a
-source-less lesson honestly stays in Learning. Both views retain their application, Dashboard and interactive
-visual state in the same session/conversation implementation, on desktop and
-phones. Hidden visuals pause without being treated as completed teaching.
-Colleague can open Courses, the active lesson or exact supervised Workspace view
-and waits for the same browser's settled selection. Showing a view is a
-demonstration, not learner evidence, and leaving Learning does not end the saved
-attempt.
+A yellow learner plate with a black L opens the Learning environment above the
+current page: Courses (course cards and progress, course pages, the catalogue
+and the owner's custom-course form) and the open lesson, read without AI.
+Learning mode (its tinted header, Learning tab, teacher chat and lesson session
+filter) has been retired. A practice lesson's project is an ordinary project of
+the learner, opened with the ordinary project page, chat, Preview and complete
+Dashboard. Colleague can open Courses, a lesson step or an ordinary project view;
+showing a view is a demonstration, not learner evidence, and closing Learning
+does not end the saved attempt.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 Online or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,

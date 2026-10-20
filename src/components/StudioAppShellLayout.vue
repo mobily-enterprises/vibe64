@@ -2,7 +2,6 @@
   <v-app-bar
     border
     class="shell-layout__app-bar bg-surface"
-    :class="{ 'studio-app-shell-layout--learning': learningMode }"
     density="comfortable"
     elevation="0"
     data-testid="jskit-shell-app-bar"
@@ -11,11 +10,7 @@
     @touchend="endPaneSwipe"
     @touchcancel="cancelPaneSwipe"
   >
-    <Vibe64LearningButton
-      class="studio-app-shell-layout__learning-plate"
-      :legacy-active="learningMode"
-      @leave-legacy="emit('update:learningMode', false)"
-    />
+    <Vibe64LearningButton class="studio-app-shell-layout__learning-plate" />
     <slot name="top-left" />
     <v-spacer />
     <div class="studio-app-shell-layout__top-right">
@@ -27,11 +22,7 @@
 
   <v-main
     class="bg-background"
-    :class="{
-      'studio-app-shell-layout--learning': learningMode,
-      'studio-app-shell-layout--learning-stacked': learningMode && !mobilePaneSwipeEnabled,
-      'studio-app-shell-layout--fill-viewport': fillViewport
-    }"
+    :class="{ 'studio-app-shell-layout--fill-viewport': fillViewport }"
   >
     <v-container
       fluid
@@ -62,17 +53,12 @@ const BROWSER_GESTURE_EDGE_PX = 24;
 const props = defineProps({
   mobilePaneSwipeEnabled: Boolean,
   chatCollapsed: Boolean,
-  // Retained for the legacy Learning mode callers; the L button now opens the
-  // Learning environment wherever a signed-in host binds it, leaving a legacy
-  // mode (update:learningMode false) first.
-  showLearningModeControl: Boolean,
-  learningMode: Boolean,
   fillViewport: Boolean
 });
-const emit = defineEmits(["update:chatCollapsed", "update:learningMode"]);
+const emit = defineEmits(["update:chatCollapsed"]);
 let paneSwipe = null;
 
-watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed, props.learningMode], cancelPaneSwipe);
+watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed], cancelPaneSwipe);
 
 function cancelPaneSwipe() {
   paneSwipe = null;
@@ -245,52 +231,9 @@ function endPaneSwipe(event) {
   padding: 0;
 }
 
-/* M3 small top app bar: surface at rest with a hairline outline-variant
-   divider. Learning fades in a warm amber wash and a thin amber rule along
-   the bottom edge, so the mode is unmistakable without shouting. */
+/* M3 small top app bar: surface at rest with a hairline outline-variant divider. */
 .shell-layout__app-bar {
   border-bottom-color: var(--v64-outline-variant) !important;
-  transition: border-color var(--v64-duration-medium) var(--v64-ease-standard);
-}
-
-.shell-layout__app-bar::before,
-.shell-layout__app-bar::after {
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-  transition: opacity var(--v64-duration-long) var(--v64-ease-standard);
-}
-
-.shell-layout__app-bar::before {
-  background: var(--v64-learning-app-bar);
-  inset: 0;
-}
-
-.shell-layout__app-bar::after {
-  background: linear-gradient(90deg, var(--v64-learning-strong), var(--v64-learning) 45%, transparent);
-  bottom: 0;
-  height: 2px;
-  left: 0;
-  right: 0;
-}
-
-.shell-layout__app-bar :deep(.v-toolbar__content) {
-  position: relative;
-  z-index: 1;
-}
-
-.shell-layout__app-bar.studio-app-shell-layout--learning {
-  border-bottom-color: transparent !important;
-}
-
-.shell-layout__app-bar.studio-app-shell-layout--learning::before,
-.shell-layout__app-bar.studio-app-shell-layout--learning::after {
-  opacity: 1;
-}
-
-.v-main.studio-app-shell-layout--learning {
-  background-color: var(--v64-learning-tint) !important;
 }
 
 @media (max-width: 600px) {
@@ -330,23 +273,5 @@ function endPaneSwipe(event) {
   flex: 0 0 auto;
   gap: 0.25rem;
   min-width: 0;
-}
-
-/* Only where Learning has no chat/project pane switching (the Courses page
-   without a project) are chat and lessons stacked; a project page in Learning
-   uses the Working arrow and swipe unchanged. */
-@media (max-width: 980px) {
-  .studio-app-shell-layout--learning-stacked :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed)),
-  .studio-app-shell-layout--learning-stacked :deep(.studio-ai-sessions__empty-layout) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
-    gap: 0.5rem;
-  }
-
-  .studio-app-shell-layout--learning-stacked :deep(.studio-autopilot:not(.studio-autopilot--chat-collapsed) .studio-autopilot__project-panel),
-  .studio-app-shell-layout--learning-stacked :deep(.studio-ai-sessions__empty-project-panel) {
-    display: grid;
-    visibility: visible;
-  }
 }
 </style>

@@ -2,7 +2,7 @@
 
 After an interruption, choose **Resume saved lesson** (or **Continue** on its
 course) in Learning → **Courses**, or ask Colleague to resume the exact saved
-lesson; see [Choosing lessons and Learning conversations](learning-mode-ui.md).
+lesson; see [Choosing lessons and courses](learning-mode-ui.md).
 Ending or restarting learning requires your request to Colleague; it retains earlier progress and does
 not delete the practice project. These rules apply to desktop and phone.
 

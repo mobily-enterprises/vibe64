@@ -25,7 +25,6 @@ function databaseSessionPath(apiPath = "", sessionId = "", suffix = "") {
 
 function useVibe64DatabaseTools({
   active = true,
-  learningAttemptId = "",
   projectSlug = "",
   sessionId = ""
 } = {}) {
@@ -35,9 +34,9 @@ function useVibe64DatabaseTools({
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
   const normalizedProjectSlug = computed(() => String(unref(projectSlug) || "").trim());
   const enabled = computed(() => Boolean(unref(active) && normalizedSessionId.value && actorKey.value));
-  const apiPath = computed(() => String(unref(learningAttemptId) || "")
-    ? `/api/learning/${encodeSegment(unref(learningAttemptId))}${DATABASE_API_SUFFIX}`
-    : paths.api(DATABASE_API_SUFFIX, { surface: DATABASE_SURFACE }));
+  const apiPath = computed(() => paths.api(DATABASE_API_SUFFIX, {
+    surface: DATABASE_SURFACE
+  }));
   const sessionPath = computed(() => databaseSessionPath(apiPath.value, normalizedSessionId.value));
 
   const stateResource = useEndpointResource({

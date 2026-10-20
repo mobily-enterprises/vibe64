@@ -120,7 +120,7 @@ starts anything. A missing title reports **Lesson titles are unavailable**; use
 substitute an invented title or another lesson. The host's original lesson action
 must still authorize and admit it; unavailable support or a failed read is not a
 successful start. The owner's **New course** form is described in
-[Choosing lessons and Learning conversations](learning-mode-ui.md).
+[Choosing lessons and courses](learning-mode-ui.md).
 
 **Resume saved lesson** requests only the displayed saved attempt. Its retained
 pin can be older than the currently enabled catalogue. This button is available
