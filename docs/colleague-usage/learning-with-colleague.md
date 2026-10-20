@@ -22,6 +22,12 @@ about your lesson, and Colleague teaches the current step:
 - When you say you have done a task, Colleague can run that step's declared
   automatic check and tells you its actual result; that run is only a
   diagnostic, and the pass is saved when you press **Check now** in Learning.
+- Before asking you to press **Done**, answer a question or press **Check now**,
+  it looks at that step's saved result. A step that already passed is not asked
+  for again: Colleague says it passed and moves on to the next unpassed step.
+- It tells you in plain words what it opened or highlighted, without receipt
+  fields or IDs. If it could not open or point at a step's place (for example the
+  control is hidden), it says so plainly and describes the path in words.
 
 Colleague never judges. A step passes only through its automatic check, your
 answer to a choice question, or your own **Done** for a self-check. Colleague's

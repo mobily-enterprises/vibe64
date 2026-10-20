@@ -2023,6 +2023,12 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   // A learner hears what the guide actually did, never raw receipt fields.
   assert.match(colleagueInstructions, /Report a guide or navigation result truthfully in plain words/u);
   assert.match(colleagueInstructions, /never quote receipt fields/u);
+  assert.match(colleagueInstructions, /or attempt, step or request IDs, to the person/u);
+  // A failed guide is reported as failed, with the path in words.
+  assert.match(colleagueInstructions, /When opening or pointing at a step's guide fails or is refused, say plainly that it did not open and why/u);
+  // A step already passed in lesson.read is never asked for again.
+  assert.match(colleagueInstructions, /Before asking the person to press Done, answer a question or press Check now, look at that step's saved result in lesson\.read/u);
+  assert.match(colleagueInstructions, /never ask them to repeat a passed step/u);
   assert.match(colleagueInstructions, /You never judge/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
   assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);
