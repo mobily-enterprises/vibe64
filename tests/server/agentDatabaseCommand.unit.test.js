@@ -211,25 +211,3 @@ test("agent database wrapper authenticates to its session socket", async () => {
     await rm(root, { force: true, recursive: true });
   }
 });
-
-test("agent database command re-enters its session's helper admission for every run", async () => {
-  const project = projectService();
-  const admitted = [];
-  let inside = false;
-  const command = createAgentDatabaseCommandService({ projectService: project,
-    async runSessionOperation(input, operation) {
-      admitted.push(input.sessionId);
-      inside = true;
-      try { return await operation(); } finally { inside = false; }
-    } });
-  command.setDatabaseToolsProvider({
-    async refreshSchema() {
-      assert.equal(inside, true, "The schema refresh runs inside the session admission");
-      return { ok: true, schema: { refreshedAt: "2026-10-18T00:00:00.000Z", tables: [] } };
-    }
-  });
-  await command.bindSession("lesson-session");
-  const result = await command.run({ args: ["refresh"], sessionId: "lesson-session" });
-  assert.equal(result.ok, true);
-  assert.deepEqual(admitted, ["lesson-session"]);
-});

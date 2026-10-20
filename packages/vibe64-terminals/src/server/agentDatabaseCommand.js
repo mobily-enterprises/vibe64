@@ -175,7 +175,6 @@ if (positionals[0]?.trim().toLowerCase() === "erd" && positionals[1] === "apply"
 const responseText = await requestSocket({
   args,
   changes,
-  parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
   sessionId,
   token
 }).catch((error) => fail(error?.message || error));
@@ -284,7 +283,7 @@ async function ensureCommandServer({ commandService, sessionId = "", wrapperHost
   }
 }
 
-function createAgentDatabaseCommandService({ logger = null, projectService, runSessionOperation = null } = {}) {
+function createAgentDatabaseCommandService({ logger = null, projectService } = {}) {
   if (!projectService || typeof projectService.readCurrentProject !== "function" || typeof projectService.runInProjectContext !== "function") {
     throw new TypeError("createAgentDatabaseCommandService requires the Vibe64 Project API.");
   }
@@ -401,10 +400,7 @@ function createAgentDatabaseCommandService({ logger = null, projectService, runS
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
   }
 
-  // A Learning helper re-enters its saved lesson admission; its socket may
-  // outlive the practice grant that was current when it was created.
-  return Object.freeze({ bindSession, closeAllForSession, setDatabaseToolsProvider,
-    run: input => typeof runSessionOperation === "function" ? runSessionOperation(input, () => run(input)) : run(input) });
+  return Object.freeze({ bindSession, closeAllForSession, run, setDatabaseToolsProvider });
 }
 
 async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wrapperHostDir = "" } = {}) {

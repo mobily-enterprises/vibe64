@@ -563,14 +563,9 @@ function createAgentPreviewCommandService({
   stopManagedExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions,
   resourceProvider = vibe64ManagedExecutionProvider,
-  publishSessionChanged = async () => {},
-  runSessionOperation = null
+  publishSessionChanged = async () => {}
 } = {}) {
   const browserWorkers = new Map();
-  // A Learning helper re-enters its saved lesson admission; its socket may
-  // outlive the practice grant that was current when it was created.
-  const inSession = (input, operation) => typeof runSessionOperation === "function"
-    ? runSessionOperation(input, operation) : operation();
   const browserTestRuns = new Map();
 
   async function runBrowserCommand(request) {
@@ -1147,25 +1142,25 @@ function createAgentPreviewCommandService({
     testApprovalStatus,
     resumeTestApproval,
     cancelTestApproval,
-    browserStart: (sessionId, input) => inSession({ ...input, sessionId }, () => startRegisteredBrowserWorker(sessionId, input, {
+    browserStart: (sessionId, input) => startRegisteredBrowserWorker(sessionId, input, {
       browserWorkers,
       runCommand: runBrowserCommand,
       stopExecution: stopManagedExecution,
       stopOwnedExecutions
-    })),
-    browserStop: (sessionId, input) => inSession({ ...input, sessionId }, () => stopRegisteredBrowserWorkerForInput(sessionId, input, {
+    }),
+    browserStop: (sessionId, input) => stopRegisteredBrowserWorkerForInput(sessionId, input, {
       browserWorkers,
       stopExecution: stopManagedExecution,
       stopOwnedExecutions
-    })),
+    }),
     stopBrowsersForSession,
     closeAllForSession,
     playwrightStatus,
     cancelPlaywrightRun,
-    playwrightRun: (sessionId, input, options) => inSession({ ...input, sessionId }, () => playwrightRun(sessionId, input, options)),
+    playwrightRun,
     registerBrowserWorker,
     releaseControlForSession,
-    run: input => inSession(input, () => run(input))
+    run
   });
 }
 

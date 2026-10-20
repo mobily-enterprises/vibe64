@@ -591,19 +591,14 @@ function createAgentSessionCommandService({
         "vibe64_agent_session_command_project_required"
       );
     }
-    const requestContext = currentProjectRequestContext();
-    const learning = Boolean(requestContext?.learningScope);
-    // Learning v2 F1: practice sessions are ordinary project sessions, so no
-    // host supplies runLearningOperation any more and a learning-scoped binding
-    // is refused here. Remove this branch with the source-less teacher (F2).
-    if (learning && typeof requestContext.runLearningOperation !== "function") {
-      throw vibe64Error("Managed practice commands require the saved lesson's original admission owner.", "vibe64_agent_session_command_learning_unavailable");
+    // Practice sessions are ordinary project sessions; no host binds a
+    // learning-scoped session command any more, so one is refused.
+    if (currentProjectRequestContext()?.learningScope) {
+      throw vibe64Error("Session commands are unavailable in a Learning-scoped context.", "vibe64_agent_session_command_learning_unavailable");
     }
     const binding = {
-      actor: requestContext?.vibe64User || null,
-      learning,
+      actor: currentProjectRequestContext()?.vibe64User || null,
       projectContext: captureProjectRequestContext(),
-      runLearningOperation: learning ? requestContext.runLearningOperation : null,
       projectContextRoot: normalizedProjectContextRoot(project),
       projectSlug,
       wrapperHostDir: path.resolve(normalizedWrapperHostDir)
@@ -616,7 +611,7 @@ function createAgentSessionCommandService({
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation, access = "write", admission = {}) {
+  async function runInSessionProject(sessionId = "", operation) {
     const normalizedSessionId = normalizeText(sessionId);
     const binding = sessionBindings.get(normalizedSessionId);
     if (!binding?.projectSlug) {
@@ -664,14 +659,12 @@ function createAgentSessionCommandService({
         sourceRoot: path.resolve(sourceRoot)
       });
     });
-    return binding.learning
-      ? binding.runLearningOperation(run, access, admission)
-      : runWithProjectRequestContext(binding.projectContext || {}, run);
+    return runWithProjectRequestContext(binding.projectContext || {}, run);
   }
 
   async function messageProject(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
-      if (binding.learning || typeof sendProjectMessage !== "function") {
+      if (typeof sendProjectMessage !== "function") {
         throw vibe64Error("Project messaging is unavailable in this session.", "vibe64_project_message_unavailable");
       }
       const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
@@ -741,7 +734,7 @@ function createAgentSessionCommandService({
           ? "Correct the project environment declaration and retry."
           : ""
       };
-    }, "observe");
+    });
   }
 
   async function managePlan(sessionId, input) {
@@ -762,30 +755,10 @@ function createAgentSessionCommandService({
       return { ok: true, ...result, ...(input.operation === "read" ? { workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
         messageId: request.messageId, turnId: request.turnId || "", stage: request.stage, status: request.status
       } : null } : {}) };
-    }, ["read", "history"].includes(input.operation) ? "observe" : "write");
+    });
   }
 
-  async function runHelperOperation(input, operation) {
-    const sessionId = normalizeText(input.sessionId);
-    const binding = sessionBindings.get(sessionId);
-    if (!binding?.learning) return operation({});
-    const parent = normalizeText(input.parentExecutionId);
-    // The execution owner allocates its identity during launch. A fast child
-    // may reach this socket before runCommand has returned that identity.
-    if (parent) await Promise.all([...(sessionRuns.get(sessionId) || [])].map(value => value.launch?.promise));
-    const run = parent && [...(sessionRuns.get(sessionId) || [])].find(value => value.executionId === parent);
-    if (!run) return runInSessionProject(sessionId, () => operation({}), "write", { waitForAdmission: true });
-    run.abortController.signal.throwIfAborted();
-    if (!run.acceptingHelpers) {
-      throw vibe64Error("The owning session command has finished.", "vibe64_agent_session_command_finished");
-    }
-    const child = Promise.resolve().then(() => runWithProjectRequestContext(run.projectContext,
-      () => operation({ signal: run.abortController.signal })));
-    run.helpers.add(child);
-    try { return await child; } finally { run.helpers.delete(child); }
-  }
-
-  async function execute(input = {}, context = {}, run) {
+  async function execute(input = {}, context = {}) {
     input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
     if (!command) {
@@ -858,8 +831,6 @@ function createAgentSessionCommandService({
       timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
     });
     const executionId = normalizeText(started?.execution?.id);
-    run.executionId = executionId;
-    run.launch.resolve();
     if (started?.ok !== true || !executionId) {
       await rm(runRoot, { force: true, recursive: true }).catch(() => null);
       return responseError(
@@ -901,8 +872,7 @@ function createAgentSessionCommandService({
     const sessionId = normalizeText(input.sessionId);
     const abortController = new AbortController();
     const runs = sessionRuns.get(sessionId) || new Set();
-    const activeRun = { abortController, executionId: "", projectContext: null, acceptingHelpers: false, helpers: new Set() };
-    runs.add(activeRun);
+    runs.add(abortController);
     sessionRuns.set(sessionId, runs);
     const abort = () => abortController.abort(input.signal?.reason);
     input.signal?.addEventListener?.("abort", abort, { once: true });
@@ -917,20 +887,7 @@ function createAgentSessionCommandService({
       }
       result = await runInSessionProject(
         sessionId,
-        async (context) => {
-          activeRun.launch = Promise.withResolvers();
-          activeRun.projectContext = currentProjectRequestContext();
-          activeRun.acceptingHelpers = true;
-          try {
-            return await execute({ ...input, signal: abortController.signal }, context, activeRun);
-          } finally {
-            // End cannot acquire WRITE until this command's admitted children drain.
-            activeRun.acceptingHelpers = false;
-            activeRun.launch.resolve();
-            await Promise.allSettled([...activeRun.helpers]);
-            activeRun.projectContext = null;
-          }
-        }, "write", { signal: abortController.signal, waitForAdmission: true }
+        (context) => execute({ ...input, signal: abortController.signal }, context)
       );
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {
@@ -940,7 +897,7 @@ function createAgentSessionCommandService({
       result = responseError(payload.error, payload.code);
     } finally {
       input.signal?.removeEventListener?.("abort", abort);
-      runs.delete(activeRun);
+      runs.delete(abortController);
       if (sessionRuns.get(sessionId) === runs && runs.size === 0) {
         sessionRuns.delete(sessionId);
       }
@@ -962,8 +919,8 @@ function createAgentSessionCommandService({
     const normalizedSessionId = normalizeText(sessionId);
     const binding = sessionBindings.get(normalizedSessionId);
     sessionBindings.delete(normalizedSessionId);
-    for (const run of sessionRuns.get(normalizedSessionId) || []) {
-      run.abortController.abort();
+    for (const abortController of sessionRuns.get(normalizedSessionId) || []) {
+      abortController.abort();
     }
     sessionRuns.delete(normalizedSessionId);
     const executions = [...(sessionExecutions.get(normalizedSessionId) || [])];
@@ -1005,7 +962,6 @@ function createAgentSessionCommandService({
   return Object.freeze({
     logger,
     bindSession,
-    runHelperOperation,
     closeAllForSession,
     renameSession,
     messageProject,

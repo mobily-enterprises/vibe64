@@ -79,7 +79,21 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     });
     const app = testRouteApp();
     registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
-    assert.equal(actions.listDefinitions().length, 48);
+    assert.deepEqual(actions.listDefinitions().map(({ id }) => id).sort(), [
+      "agent-attachment.delete", "agent-attachment.read", "agent-attachment.upload", "agent-goal.canonical.read",
+      "agent-goal.canonical.update", "agent-goal.read", "agent-goal.update", "agent-plan-usage.read",
+      "agent-session.prepare", "agent-sessions.reconcile", "agent-terminal.close", "agent-terminal.control.check-text",
+      "agent-terminal.control.key", "agent-terminal.control.snapshot", "agent-terminal.control.text", "agent-terminal.read",
+      "agent-terminal.start", "global-terminal.close", "global-terminal.control.check-text", "global-terminal.control.key",
+      "global-terminal.control.snapshot", "global-terminal.control.text", "global-terminal.read", "global-terminal.start",
+      "global-terminal.status", "main-goal.block", "main-goal.pause", "output-result.read",
+      "output-target.open", "output-target.start", "output-target.stop", "output-terminal.close",
+      "output-terminal.read", "outputs.read", "preview-diagnostics.record", "preview-identity.select",
+      "project-runtime.close", "project-runtime.open", "prompt-hints.cancel", "prompt-hints.generate",
+      "temporary-conversation.create", "temporary-conversation.delete", "temporary-conversation.list", "temporary-conversation.read",
+      "temporary-conversation.stop", "temporary-conversation.turn.start", "temporary-conversation.update", "work-plan.archive",
+      "work-plan.read", "work-plan.restore"
+    ].map((operation) => `vibe64.terminals.${operation}`));
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });

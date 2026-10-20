@@ -314,7 +314,6 @@ const response = await requestSocket({
     cwd: process.cwd(),
     generationId,
     inputBase64,
-    parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
     sessionId,
     token
   }
@@ -678,7 +677,6 @@ function createCodexGitCommandService({
   env = process.env,
   logger = null,
   projectService,
-  runSessionOperation = null,
   runGatewayCommand = runVibe64Command
 } = {}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
@@ -998,9 +996,7 @@ function createCodexGitCommandService({
 
   return {
     logger,
-    run: input => typeof runSessionOperation === "function"
-      ? runSessionOperation(input, options => run({ ...input, ...options }))
-      : run(input),
+    run,
     sessionWorkSaveContext
   };
 }

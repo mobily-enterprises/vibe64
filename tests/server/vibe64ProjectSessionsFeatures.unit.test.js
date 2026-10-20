@@ -204,6 +204,9 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.repository.history.diff.inspect",
     "vibe64.repository.history.files.inspect",
     "vibe64.repository.history.inspect",
+    "vibe64.repository.incoming.change",
+    "vibe64.repository.incoming.inspect",
+    "vibe64.repository.incoming.review",
     "vibe64.sessions.agent-message.send",
     "vibe64.sessions.agent-turn.interrupt",
     "vibe64.sessions.archive",
@@ -212,6 +215,18 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.assistant-selection.update",
     "vibe64.sessions.changes.diff.inspect",
     "vibe64.sessions.changes.inspect",
+    "vibe64.sessions.connected.allocate",
+    "vibe64.sessions.connected.inputs.inspect",
+    "vibe64.sessions.connected.prepare",
+    "vibe64.sessions.connected.replace",
+    "vibe64.sessions.connected.replacement.inspect",
+    "vibe64.sessions.connected.source",
+    "vibe64.sessions.connected.work.check",
+    "vibe64.sessions.connected.work.incoming",
+    "vibe64.sessions.connected.work.inputs",
+    "vibe64.sessions.connected.work.inspect",
+    "vibe64.sessions.connected.work.save",
+    "vibe64.sessions.connected.work.update",
     "vibe64.sessions.conversation-log.read",
     "vibe64.sessions.conversation.context.read",
     "vibe64.sessions.create",
@@ -240,8 +255,21 @@ test("project and sessions register routes and captured actions during setup", a
   const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
   assert.deepEqual(contextRead.channels, ["internal"]);
   assert.equal(contextRead.extensions?.assistant, undefined);
-  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 1,
-    "the internal conversation access query has no HTTP route");
+  const internalActionIds = sessionActions[0].actions.filter(action => action.channels?.join() === "internal").map(({ id }) => id).sort();
+  assert.deepEqual(internalActionIds, [
+    "vibe64.sessions.connected.allocate",
+    "vibe64.sessions.connected.inputs.inspect",
+    "vibe64.sessions.connected.source",
+    "vibe64.sessions.connected.work.check",
+    "vibe64.sessions.connected.work.incoming",
+    "vibe64.sessions.connected.work.inputs",
+    "vibe64.sessions.connected.work.inspect",
+    "vibe64.sessions.connected.work.save",
+    "vibe64.sessions.connected.work.update",
+    "vibe64.sessions.conversation.context.read"
+  ]);
+  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - internalActionIds.length,
+    "internal actions, including the conversation access query, have no HTTP route");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
   const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
     turnId: "000001", requestId: "a".repeat(64)

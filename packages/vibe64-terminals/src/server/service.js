@@ -1157,7 +1157,6 @@ function createService({
     authorizeActorAccess: authorizeCodexGitActorAccess,
     env,
     logger,
-    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation),
     projectService
   });
   let agentPreviewCommand;
@@ -1179,8 +1178,7 @@ function createService({
     launchTarget: outputTarget,
     logger,
     projectService,
-    publishSessionChanged: publishSessionChanged.outputTarget,
-    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation)
+    publishSessionChanged: publishSessionChanged.outputTarget
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
@@ -1188,8 +1186,7 @@ function createService({
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
     logger,
-    projectService,
-    runSessionOperation: (input, operation) => agentSessionCommand.runHelperOperation(input, operation)
+    projectService
   });
   const agentSessionCommand = createAgentSessionCommandService({
     sendProjectMessage: input => sendProjectMessage(input, {

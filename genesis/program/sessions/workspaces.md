@@ -697,33 +697,17 @@ Sources: `packages/vibe64-runtime/src/server/runtime.js`,
 
 ### Saved practice Learning admission
 
-New source-bearing Learning sessions receive immutable `noExercise:false` facts
-only during original lesson preparation's actual initial-session create block.
-The server-supplied Training coordinator overlays these facts within the original
-Core practice grant while the original preparation barrier is already held; it
-never reacquires that non-reentrant lock. Source creator, expected commit, Git,
-account/routing, policy and async setup owners remain original.
-
-Both local and hosted Training enter the same private Core grant validation,
-callback expiry and captured CONTROL implementation. The hosted internal entry
-requires an existing exact managed_git marker and actual original Project ALS
-identity/derived catalogue roots; the local entry retains its existing
-catalogue-enabled refusal/private namespace and atomic creation policy. Captured
-CONTROL permits accepted setup/native observation and cleanup, not fresh user
-work, metadata/deletion or global selection effects. Fresh false Main operations
-use the one `runLearningOperation` facility to read the saved actor/attempt/pin
-and reenter the original scope; the exact Create action delegates directly to the
-existing saved-session opener, which already holds its one preparation barrier.
-Working and source-less defaults remain unchanged.
-
-Main transport retains the existing Learning attempt/session tuple and HTTP
-namespace with the actual saved initialSessionId. The physical Project/source
-identity stays separate and real. Browser collection adds bounded actual project
-slug and `noExercise:false`, never source/native paths. Host/Preview and actual
-native teacher adoption remain separate composed acceptance requirements.
-Historical ready unflagged sessions refuse; this source does not backfill them.
-Their supported adoption requires a separately reviewed numbered stopped-service
-upgrade, preserving old source, history and published upgrade immutability.
+Learning v2 practice projects are ordinary projects and their sessions are
+ordinary sessions: no host constructs a `noExercise:false` scope, and session
+commands, Git, Preview and Database helpers run in the session's captured
+ordinary project request context. The former per-lesson helper admission
+(`runLearningOperation`, parent-execution helper re-entry) is retired.
+The session store still accepts a `noExercise:false` scope with its actual
+project session source root only so that the published
+`20261008-learning-practice-history` readers and their tests can verify an
+adopted historical binding; the store refuses that scope without a source root.
+Sources: `packages/vibe64-terminals/src/server/agentSessionCommand.js`,
+`packages/vibe64-runtime/src/server/sessionStore.js`.
 
 
 ### Offline historical practice binding

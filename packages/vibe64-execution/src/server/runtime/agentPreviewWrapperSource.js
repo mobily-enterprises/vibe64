@@ -112,7 +112,7 @@ async function controlRequest(requestPath, input = {}) {
   try {
     response = await requestSocket({
       body: {
-        // A Learning helper joins its parent command's lesson admission.
+        // The parent command identity scopes workflow approval waits.
         parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
         ...input,
         generationId: controlGeneration,

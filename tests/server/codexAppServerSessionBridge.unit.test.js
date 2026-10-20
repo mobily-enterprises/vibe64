@@ -2648,56 +2648,6 @@ const boundLearningSchemaIdentity = toolSchemaHash("sha256").update(JSON.stringi
   type: "function", name: tool.name, description: tool.description, inputSchema: tool.parameters
 })))).digest("hex");
 
-test("learning Codex schemas use the original identity transaction and retained thread mismatch refusal", async () => {
-  const runtime = fakeRuntime();
-  runtime.learningScope = { learnerId: "owner", attemptId: "exact-attempt" };
-  const metadata = {};
-  let inMutation = false;
-  const mutate = runtime.store.mutateSession;
-  runtime.store.mutateSession = async (id, callback) => mutate(id, async () => {
-    inMutation = true;
-    try { return await callback(); } finally { inMutation = false; }
-  });
-  const write = runtime.store.writeMetadataValue;
-  runtime.store.writeMetadataValue = async (id, name, value) => {
-    assert.equal(inMutation, true, "schema and original native identity share the existing mutation");
-    metadata[name] = value;
-    return write(id, name, value);
-  };
-  runtime.store.readMetadata = async () => ({ ...metadata });
-  const calls = [];
-  const provider = {
-    ...contextTurnProviderParts(calls),
-    ensureRuntime: async () => appServerRuntime(),
-    async startThread(params) { calls.push({ method: "start", params }); return { id: "learning-thread" }; },
-    async resumeThread(id, params) { calls.push({ method: "resume", params, id }); return { id }; }
-  };
-  const options = { observeThread() {}, provider, runtime, workdir: "/learning/native", applicationTools: boundLearningSchemas,
-    session: { sessionId: "learning-session", metadata: {} },
-    providerReady({ threadId }) { calls.push({ method: "ready", threadId }); } };
-  await ensureCodexAppServerThreadForSession(options);
-  assert.equal(metadata.codex_conversation_tool_schema_identity, boundLearningSchemaIdentity);
-  assert.equal(metadata.agent_identity_conversation_id, "learning-thread");
-  assert.deepEqual(calls.map(row => row.method), ["ready", "start", "ready"]);
-  assert.equal(calls[0].threadId, "");
-  assert.equal(calls[2].threadId, "learning-thread");
-  assert.equal(calls[1].params.dynamicTools[0].name, "learning_read");
-  const resumed = { ...options, session: { sessionId: "learning-session", metadata: { ...metadata } } };
-  calls.length = 0;
-  await ensureCodexAppServerThreadForSession(resumed);
-  assert.deepEqual(calls.map(row => row.method), ["ready", "resume", "ready"]);
-  assert.deepEqual(calls[1].params.dynamicTools, boundLearningSchemas.schemas.map(({ function: tool }) => ({
-    type: "function", name: tool.name, description: tool.description, inputSchema: tool.parameters
-  })));
-  delete metadata.codex_conversation_tool_schema_identity;
-  const savedWrites = runtime.writes.length;
-  calls.length = 0;
-  await assert.rejects(ensureCodexAppServerThreadForSession(resumed), /different application tool entry points/);
-  assert.deepEqual(calls, [], "old bindings are not resumed or replaced to retrofit tools");
-  assert.equal(runtime.writes.length, savedWrites);
-  assert.equal(metadata.agent_identity_conversation_id, "learning-thread");
-});
-
 test("learning Codex schema reads stay fresh and refuse a changed native identity", async () => {
   const session = { sessionId: "learning-session", metadata: {
     agent_identity_provider: "codex", agent_identity_conversation_id: "same-thread", agent_identity_status: "ready",
@@ -2721,8 +2671,10 @@ test("learning Codex schema reads stay fresh and refuse a changed native identit
 
 test("optional Codex schema identity cannot widen ordinary Main or write malformed metadata", async () => {
   const runtime = fakeRuntime();
-  assert.throws(() => codexAppServerThreadPreparationForSession({ runtime, applicationTools: boundLearningSchemas }),
-    /admitted learning session/);
+  // Learning v2 retired the teacher's Codex application tools: no session
+  // forwards them to the native thread any more.
+  assert.equal(Object.hasOwn(codexAppServerThreadPreparationForSession({ runtime, applicationTools: boundLearningSchemas }),
+    "applicationTools"), false);
   await assert.rejects(writeCodexAppServerIdentityMetadata({ runtime, sessionId: "normal-session", threadId: "thread",
     workdir: "/normal/native", toolSchemaIdentity: boundLearningSchemaIdentity }), /admitted learning session/);
   assert.deepEqual(runtime.writes, []);
