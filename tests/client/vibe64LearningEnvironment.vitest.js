@@ -462,6 +462,27 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("keeps the current step in view in the phone's scrolling step row", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const view = await mountReader(learning);
+    try {
+      const stepButtons = nodes(view.root).filter(node => node.props?.["data-step-id"]);
+      for (const button of stepButtons) button.scrollIntoView = vi.fn();
+      stepButtons[3].props.onClick();
+      await flush();
+      expect(stepButtons[3].scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+      expect(stepButtons[0].scrollIntoView).not.toHaveBeenCalled();
+      // Reopening L brings the current step back into view as well.
+      learning.minimise();
+      await flush();
+      await learning.show();
+      await flush();
+      expect(stepButtons[3].scrollIntoView).toHaveBeenCalledTimes(2);
+    } finally { view.app.unmount(); }
+  });
+
   it("shows why an automatic check did not pass without changing the step status", async () => {
     const reason = "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first.";
     const { learning, calls } = controller({ posts: () => ({ ok: true, stepId: "preview", outcome: "not-yet-passed", recorded: false, reason }) });

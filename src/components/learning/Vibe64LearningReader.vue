@@ -58,6 +58,17 @@ function requestAnimationFrameSafe(callback) {
 }
 // Separate sources: a realtime lesson reread keeps the step ID and must not jump the scroll back.
 watch([() => step.value?.id, () => props.learning.state.open], ([, open]) => { if (open) void restoreScroll(); }, { immediate: true });
+// On a phone the steps are one scrolling row: keep the current step's circle in view.
+const stepButtons = new Map();
+function setStepButton(stepId, element) {
+  if (element) stepButtons.set(stepId, element);
+  else stepButtons.delete(stepId);
+}
+watch([() => step.value?.id, () => props.learning.state.open], async ([stepId, open]) => {
+  if (!open || !stepId) return;
+  await nextTick();
+  stepButtons.get(stepId)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+}, { immediate: true });
 let scrollTimer = null;
 function onScroll() {
   if (restoring || !body.value) return;
@@ -224,6 +235,7 @@ async function finishLesson() {
               :class="[`is-${statusOf(value.id)}`, { 'is-current': value.id === step?.id }]"
               :aria-current="value.id === step?.id ? 'step' : undefined"
               :data-step-id="value.id"
+              :ref="element => setStepButton(value.id, element)"
               @click="learning.selectStep(value.id)"
             >
               <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>

@@ -93,7 +93,8 @@ status),
 `sessionId`, which both hosts require for a Database view; from another page it
 opens the practice project first), **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
-full-screen sheet with a row of numbered step circles. An earlier-format
+full-screen sheet with a row of numbered step circles that scrolls the current
+step into view when it changes or L reopens. An earlier-format
 (version 1) attempt is shown as readable history with **End this lesson**; a
 version 2 lesson whose required steps all passed offers **Finish lesson**. Both
 call `lesson.end` with reason `restart` (results kept), emit `ended` so the
