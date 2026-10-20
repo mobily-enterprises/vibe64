@@ -58,8 +58,10 @@ after a start settles unconfirmed. `retryStart` does not rebase the revision or
 admit changed intent. `resumeLesson` targets the requested attempt.
 `continueLesson({attemptId, expectedRevision})` posts `lesson.continue`
 (`/attempts/:id/continue`) for the picker's **Continue lesson** on a left
-lesson (`courseProgress` `continueFrom`: the latest ended attempt of the same
-lesson code and hash as the course's next lesson), retaining one request ID per
+lesson (`courseProgress` gives each lesson not completed a `continueFrom`: its
+latest ended attempt of the same code and hash; the course's main button uses
+the next lesson's, and that lesson's own row shows **Continue lesson** instead
+of **Start lesson**), retaining one request ID per
 attempt until confirmed. All use the original Training HTTP actions; a confirmed result opens the lesson reader in L
 (`Vibe64LearningCourses` emits `opened`). No session or conversation is created
 or selected by the client. `createCourse` posts the owner's custom-course name,

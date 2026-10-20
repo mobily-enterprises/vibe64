@@ -1335,7 +1335,7 @@ describe("Lesson finished screen", () => {
     it(`${action === "archive" ? "archives" : "deletes"} the practice project with one click and returns to Courses`, async () => {
       const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
       const { learning } = controller({ reads: () => lessonResult({ results: passed,
-        attempt: { attemptId: OTHER, practiceId: ATTEMPT, ended: { reason: "finished" }, practiceSlug: "training-1111", pin } }) });
+        attempt: { attemptId: OTHER, ended: { reason: "finished" }, practiceSlug: "training-1111", pin } }) });
       learning.setViewer("member");
       await learning.show({ attemptId: OTHER });
       await learning.showFinished();
@@ -1355,9 +1355,12 @@ describe("Lesson finished screen", () => {
         await flush();
         expect(byTest(root, "learning-finished-next"), "no next lesson in an unknown course").toBeUndefined();
         expect(textOf(byTest(root, "learning-finished-keep"))).toBe("Keep");
+        // The continued attempt's project is still listed, so it is offered, not reported deleted.
+        expect(textOf(root)).not.toContain("The practice project is deleted.");
         await byTest(root, test).props.onClick();
         await flush();
-        // A continued lesson's practice project is the one its first attempt created.
+        // A continued lesson (attempt OTHER) acts on the practice project its first attempt created,
+        // found in the Practice list by slug.
         expect(practice[action]).toHaveBeenCalledWith({ practiceId: ATTEMPT });
         expect(textOf(root)).toContain(outcome);
         await byTest(root, "learning-finished-courses").props.onClick();

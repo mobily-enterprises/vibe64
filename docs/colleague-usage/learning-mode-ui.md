@@ -31,7 +31,9 @@ the course page: a header with the cover and a ring of lessons complete, an
 and code and a status of **Completed** (green tick), **In progress** (yellow; an
 open attempt or some passes) or **Not started** (numbered). **Up next** has one
 main action, **Continue lesson** or **Start next lesson** (with the next lesson
-named beside it), and each available lesson has a **Start lesson** button. **Back to
+named beside it). Each available lesson has a **Start lesson** button, or
+**Continue lesson** when you left that lesson earlier: it starts the lesson
+again in its own practice project rather than making a second one. **Back to
 courses** returns to the list. On a phone the cards stack in one column and the
 course page scrolls in the same pane.
 

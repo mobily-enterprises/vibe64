@@ -89,8 +89,6 @@ function normalizeLesson(result) {
     steps,
     attempt,
     practiceProjectSlug: attempt?.practiceSlug || "",
-    // The practice project's identity in the learning space (the attempt that created it).
-    practiceId: attempt?.practiceSlug ? attempt.practiceId || attempt.attemptId || "" : "",
     reader: result.reader && text(result.reader.stepId) ? result.reader : null,
     results: Array.isArray(result.results) ? result.results : [],
     // Steps passed in any attempt of this same lesson content (they count toward completion).

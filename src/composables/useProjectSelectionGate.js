@@ -52,7 +52,7 @@ function useProjectSelectionGate(emit, {
     refreshOnPull: true,
     requestRecoveryLabel: "Projects",
     // A routed practice page also re-reads its selection on the learner's
-    // Learning changes (Practice archive or delete), so an open page turns into
+    // Practice archive or delete notice (reason "practice"), so an open page turns into
     // the deleted notice without a reload.
     realtime: scopeSelectionToCurrentProject ? {
       events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_TRAINING_LEARNER_CHANGED_EVENT],
@@ -252,10 +252,11 @@ function useProjectSelectionGate(emit, {
   }
 }
 
-// Any Learning change of the learner except their notes may have archived or
-// deleted the practice project a page shows; ordinary project pages ignore it.
+// Only the learner's practice.* commands (reason "practice") archive or delete
+// the practice project a page shows; reading, step and learning-mode changes
+// never do, and ordinary project pages ignore every Learning change.
 function isPracticeNoticeForProject(payload = {}, slug = "") {
-  return payload?.reason !== "notes" && isPracticeProjectSlug(slug);
+  return payload?.reason === "practice" && isPracticeProjectSlug(slug);
 }
 
 function projectSelectionGateEndpoint({

@@ -285,7 +285,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       @back="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
       @resume="requestResume"
-      @continue="requestContinue(openCourse.progress.continueFrom)"
+      @continue="requestContinue"
     />
     <template v-else>
       <div v-if="courses.length" class="tlp-grid training-lesson-picker__courses">

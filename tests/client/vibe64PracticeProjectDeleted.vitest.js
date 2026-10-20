@@ -89,8 +89,10 @@ describe("an open practice project deleted elsewhere", () => {
     const learner = (payload) => realtime.matches({ event: "vibe64.training.learner.changed", payload });
     // Practice archive or delete, also of a continued lesson whose attempt differs from the project.
     expect(learner({ attemptId, reason: "practice" })).toBe(true);
-    expect(learner({ attemptId: "87654321-1234-4234-8234-123456789abc" })).toBe(true);
-    expect(learner({ reason: "notes" }), "notes never touch a practice project").toBe(false);
+    expect(learner({ attemptId: "87654321-1234-4234-8234-123456789abc", reason: "practice" })).toBe(true);
+    for (const reason of ["notes", "reader", "step", "learning-mode", undefined]) {
+      expect(learner({ attemptId, reason }), `${reason} never archives or deletes a practice project`).toBe(false);
+    }
     expect(realtime.matches({ event: "vibe64.project.changed", payload: {} })).toBe(true);
     expect(isPracticeNoticeForProject({ attemptId, reason: "practice" }, "my-app")).toBe(false);
     // The delivered notice invalidates the selection, which now reads deleted.

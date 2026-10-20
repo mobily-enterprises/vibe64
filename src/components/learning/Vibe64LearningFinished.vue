@@ -43,15 +43,18 @@ watch([() => props.learning.state.attemptId, () => props.learningRevision, ended
 }, { immediate: true });
 
 // The practice project: archived or deleted with one click, or kept (it stays
-// in L's Practice tab).
+// in L's Practice tab). Its Practice row is found by slug: a continued lesson
+// has a new attempt, while the project keeps the identity of the attempt that
+// created it.
 const practice = useVibe64PracticeProjects({ enabled: computed(() => Boolean(props.learning.state.open)) });
-const practiceId = computed(() => lesson.value?.practiceId || "");
-const practiceListed = computed(() => practice.projects.value.some(project => project.practiceId === practiceId.value));
+const practiceSlug = computed(() => lesson.value?.practiceProjectSlug || "");
+const practiceRow = computed(() => practice.projects.value.find(project => project.slug === practiceSlug.value) || null);
 const practiceBusy = computed(() => practice.busy.value);
 const practiceChoice = ref("");
 watch(() => props.learning.state.attemptId, () => { practiceChoice.value = ""; });
 async function changePractice(action, outcome) {
-  if (await practice[action]({ practiceId: practiceId.value })) practiceChoice.value = outcome;
+  const row = practiceRow.value;
+  if (row && await practice[action]({ practiceId: row.practiceId })) practiceChoice.value = outcome;
 }
 
 // The next lesson: the first lesson of this course not completed yet that can be started.
@@ -105,18 +108,18 @@ const backToCourses = () => props.learning.show({ surface: "courses" });
       <template #append><v-btn variant="text" min-height="48" :disabled="Boolean(busy)" data-test="learning-finished-retry" @click="finish">Finish lesson</v-btn></template>
     </v-alert>
 
-    <div v-if="practiceId && ended" class="vibe64-learning-finished__card" data-test="learning-finished-practice">
+    <div v-if="practiceSlug && ended" class="vibe64-learning-finished__card" data-test="learning-finished-practice">
       <h3>Practice project</h3>
       <p v-if="practiceChoice === 'archived'">The practice project is archived. It is listed under Practice → Archived.</p>
-      <p v-else-if="practiceChoice === 'deleted' || (practice.loaded.value && !practiceListed && !practiceBusy && !practiceChoice)">The practice project is deleted.</p>
+      <p v-else-if="practiceChoice === 'deleted' || (practice.loaded.value && !practiceRow && !practiceBusy && !practiceChoice)">The practice project is deleted.</p>
       <p v-else-if="practiceChoice === 'kept'">The practice project is kept. You can open, archive or delete it later from Learning → Practice.</p>
       <template v-else>
         <p>Archive it (a copy is kept, without rebuildable dependencies), delete it for good, or keep it to work on later.</p>
         <p v-if="practice.error.value" class="vibe64-learning-finished__error" role="alert">{{ practice.error.value }}</p>
         <div class="vibe64-learning-finished__actions">
-          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('archive:')" :disabled="Boolean(practiceBusy)"
+          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('archive:')" :disabled="Boolean(practiceBusy) || !practiceRow"
             data-test="learning-finished-archive" @click="changePractice('archive', 'archived')">Archive practice project</v-btn>
-          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('delete:')" :disabled="Boolean(practiceBusy)"
+          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('delete:')" :disabled="Boolean(practiceBusy) || !practiceRow"
             data-test="learning-finished-delete" @click="changePractice('remove', 'deleted')">Delete practice project</v-btn>
           <v-btn variant="text" rounded="pill" min-height="48" :disabled="Boolean(practiceBusy)" data-test="learning-finished-keep" @click="practiceChoice = 'kept'">Keep</v-btn>
         </div>

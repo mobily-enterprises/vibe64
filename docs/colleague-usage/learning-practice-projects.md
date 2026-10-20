@@ -101,7 +101,7 @@ If an archived or deleted practice project is still open in another tab or
 window, that page switches by itself (no reload needed) to **This practice
 project is gone** instead of an error. **Open Learning** there opens Learning on
 its course list (desktop and phone alike), where **Continue lesson** starts the
-lesson again with a new practice project. The page's requests answer not found
+lesson again, with a new practice project if the old one was deleted. The page's requests answer not found
 with the code `vibe64_practice_project_deleted`. Colleague can explain this;
 only you press **Open Learning**.
 

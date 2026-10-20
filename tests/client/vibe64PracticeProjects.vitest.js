@@ -115,10 +115,8 @@ describe("practice project display name", () => {
     expect(isPracticeProjectSlug("training-notes")).toBe(false);
     expect(projectDisplayName({ slug: "my-app" })).toBe("my-app");
     expect(projectDisplayName({ slug: "training-notes" })).toBe("training-notes");
-    expect(projectDisplayName({ slug, practice: { attemptId: "a", lessonCode: "V64-START-02" } })).toBe("Practice: V64-START-02");
-    expect(projectDisplayName({ slug, practice: { lessonCode: "V64-START-02" } }, { lessonTitle: "First change" }))
-      .toBe("Practice: First change");
-    // A local practice project has no listed record: its slug alone still names it as practice.
+    // The slug alone names a practice project as practice (no catalogue marker); the lesson title completes it.
+    expect(projectDisplayName({ slug: "my-app", practice: { lessonCode: "V64-START-02" } })).toBe("my-app");
     expect(projectDisplayName({ slug })).toBe("Practice project");
     expect(projectDisplayName({ slug }, { lessonTitle: "First change" })).toBe("Practice: First change");
   });

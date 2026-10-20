@@ -137,7 +137,7 @@ function useVibe64AppPage() {
     if (!slug) return finalPathSegment(targetRoot.value);
     const mode = learning?.learningMode;
     const lesson = learning?.lesson?.value;
-    return projectDisplayName(projects.value.find(project => project?.slug === slug) || { slug }, {
+    return projectDisplayName({ slug }, {
       lessonTitle: mode?.practiceSlug === slug ? mode.lessonTitle : lesson?.practiceProjectSlug === slug ? lesson.title : ""
     });
   });

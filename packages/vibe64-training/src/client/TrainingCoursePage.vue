@@ -76,7 +76,7 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn v-if="progress.continueFrom" color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('continue')">Continue lesson</v-btn>
+        <v-btn v-if="progress.continueFrom" color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('continue', progress.continueFrom)">Continue lesson</v-btn>
         <v-btn v-else color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
       </template>
       <div v-else-if="complete" class="training-course-page__next-text">
@@ -100,7 +100,7 @@ const path = computed(() => {
         <p v-if="!lessons.length" class="training-course-page__empty">This topic has no displayed lesson choices.</p>
         <ol class="training-course-page__path">
           <li
-            v-for="{ lesson, status, step, next, earlier } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
+            v-for="{ lesson, status, step, next, earlier, continueFrom } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
             class="training-course-page__lesson" :class="[`is-${status}`, { 'is-next': next && !progress.activeHere }]"
           >
             <span class="training-course-page__node" aria-hidden="true">
@@ -121,7 +121,12 @@ const path = computed(() => {
                 <details class="training-course-page__identity"><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
               </div>
               <v-btn
-                v-if="offered(course, lesson, canTryPreviews) && !progress.activeHere"
+                v-if="continueFrom && offered(course, lesson, canTryPreviews) && !progress.activeHere"
+                :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
+                class="training-course-page__start" :disabled="!startAllowed" @click="emit('continue', continueFrom)"
+              >Continue lesson</v-btn>
+              <v-btn
+                v-else-if="offered(course, lesson, canTryPreviews) && !progress.activeHere"
                 :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
                 class="training-course-page__start" :disabled="!startAllowed" @click="emit('start', lesson)"
               >{{ preview ? 'Try preview' : 'Start lesson' }}</v-btn>

@@ -72,8 +72,8 @@ After an update:
 - Older releases of that course are disabled **for new starts only**. They are
   not deleted. Their old card is hidden from the list, except while you still
   have a saved lesson in that release: that card stays, labelled **Disabled for
-  new lessons**, and **Continue lesson** still opens the exact lesson you
-  started. Lesson history is unchanged.
+  new lessons**, and **Continue lesson** still opens the
+  exact lesson you started. Lesson history is unchanged.
 - Progress carries over. A lesson whose content did not change keeps its
   **Completed** status. A lesson whose content changed shows **Not started**
   (or **In progress**) with the note **Completed in <old release> · updated
