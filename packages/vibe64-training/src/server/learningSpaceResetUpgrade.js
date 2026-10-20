@@ -3,14 +3,17 @@ import { createReadStream } from "node:fs";
 import { cp, lstat, mkdir, readdir, readFile, readlink, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { normalizeProjectTraining, practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
 const UPGRADE_ID = "20261022-learning-space-reset";
 const RESET_DIR = ".learning-reset-20261022";
 const SLUG_PATTERN = /^training-([a-f0-9]{32})$/u;
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
-// Attempt data; teacher-notes.json (the learner's own notes) stays.
+// Attempt data and the lock files that guard it; teacher-notes.json and
+// teacher-notes.lock (the learner's own notes) stay.
 const LEARNER_FILES = new Set(["progress.json", "active-lesson.json", "step-progress.json", "reader.json",
-  "code-ledger.json", "learning-mode.json"]);
+  "code-ledger.json", "learning-mode.json", "state.lock", "preparation.lock", "step-progress.lock", "reader.lock",
+  "code-ledger.lock", "learning-mode.lock"]);
 const SOURCELESS_STORES = "learning-sessions";
 
 const object = value => value && typeof value === "object" && !Array.isArray(value);
@@ -31,6 +34,12 @@ function validLearnerKey(key) {
   if (typeof key !== "string" || !key || key.length > 171) return false;
   const id = Buffer.from(key, "base64url").toString("utf8");
   return Buffer.from(key, "base64url").toString("base64url") === key && Buffer.from(id).toString("base64url") === key;
+}
+
+// A schema-2 learning-space practice project, which this reset never touches.
+function learningSpaceMarker(record, slug) {
+  try { return normalizeProjectTraining(record?.training).practiceId === practiceIdFromSlug(slug); }
+  catch { return false; }
 }
 
 // The exact v1 practice marker (schema 1, attempt-keyed) on a managed project.
@@ -64,16 +73,25 @@ async function treeDigest(root) {
   return JSON.stringify(entries);
 }
 
-async function finishCopy(source, destination) {
-  if (await treeDigest(source) !== await treeDigest(destination)) {
-    throw new Error(`Learning reset copy differs from its source: ${source}. Inspect both before retrying.`);
+// The copy is verified once, and the proof is recorded before the source is
+// removed: a retry after an interrupted removal (a partial source) only
+// finishes removing it.
+async function finishCopy({ source, destination }, { verifiedRoot, removeTree }) {
+  const verified = path.join(verifiedRoot, createHash("sha256").update(source).digest("hex"));
+  if (await kind(verified) !== "file") {
+    if (await treeDigest(source) !== await treeDigest(destination)) {
+      throw new Error(`Learning reset copy differs from its source: ${source}. Inspect both before retrying.`);
+    }
+    await mkdir(verifiedRoot, { recursive: true, mode: 0o700 });
+    await writeFile(verified, `${JSON.stringify({ source, destination })}\n`, { mode: 0o600 });
   }
-  await rm(source, { recursive: true });
+  await removeTree(source, { recursive: true, force: true });
 }
 
 // Rename; across filesystems copy, then verify and remove the source. A retry
-// verifies a published copy whose source removal was interrupted.
-async function moveEntry({ source, destination }, renamePath) {
+// verifies a published copy whose source removal never started.
+async function moveEntry(move, { renamePath, ...copy }) {
+  const { source, destination } = move;
   await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
   try { await renamePath(source, destination); return; }
   catch (error) { if (error.code !== "EXDEV") throw error; }
@@ -81,7 +99,7 @@ async function moveEntry({ source, destination }, renamePath) {
   await rm(partial, { recursive: true, force: true });
   await cp(source, partial, { recursive: true, verbatimSymlinks: true, preserveTimestamps: true, errorOnExist: true, force: false });
   await rename(partial, destination);
-  await finishCopy(source, destination);
+  await finishCopy(move, copy);
 }
 
 async function readManifest(manifestPath) {
@@ -124,14 +142,20 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
     }
     const training = v1PracticeMarker(record, hex);
     if (!training) {
-      report("warning", `${slug} looks like a practice project but has no valid v1 practice marker; it is left unchanged.`);
+      if (!learningSpaceMarker(record, slug)) {
+        report("warning", `${slug} looks like a practice project but has no valid v1 practice marker; it is left unchanged.`);
+      }
       continue;
     }
+    // Hosted v1 namespaces are in the catalogue; local ones are under the
+    // installation, with their session sources under the managed source root.
     const namespaces = [];
-    const hosted = projectsRoot && path.join(projectsRoot, slug);
-    if (hosted && await expect(hosted, "directory", "Hosted practice namespace")) {
+    if (projectsRoot) {
+      const hosted = path.join(projectsRoot, slug);
       await verifyUpgradeParents(projectsRoot, hosted);
-      namespaces.push({ source: hosted, destination: path.join(projectsRoot, RESET_DIR, slug) });
+      if (await expect(hosted, "directory", "Hosted practice namespace")) {
+        namespaces.push({ source: hosted, destination: path.join(projectsRoot, RESET_DIR, slug) });
+      }
     } else {
       const local = path.join(systemRoot, "training", "practice", training.learnerKey, training.attemptId, slug);
       await verifyUpgradeParents(systemRoot, local);
@@ -142,10 +166,9 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
         namespaces.push({ source: sessionSource, destination: path.join(managedSourceRoot, RESET_DIR, slug) });
       }
     }
-    if (!namespaces.length) {
-      errors.push(`Practice project ${slug} has no namespace${projectsRoot ? "" : "; a hosted workspace must pass --projects-root"}.`);
-      continue;
-    }
+    // An interrupted deletion or archive removes the namespace before the
+    // runtime root; Learning data is disposable, so the remainder retires.
+    if (!namespaces.length) report("warning", `Practice project ${slug} has no namespace (an interrupted deletion); only its runtime state will be retired.`);
     report("info", `Practice project ${slug} (learner ${training.learnerKey}, lesson ${training.pin.lesson?.code ?? "unknown"}) will be retired.`);
     // Namespaces first: the runtime root holds the marker that identifies them.
     moves.push(...namespaces, retire(runtimeRoot));
@@ -163,15 +186,20 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
       const learnerRoot = path.join(usersRoot, learner);
       if (!await expect(learnerRoot, "directory", "Learner directory")) continue;
       for (const name of await names(learnerRoot)) {
-        const lock = name.endsWith(".lock");
-        if (!LEARNER_FILES.has(name) && !lock && name !== SOURCELESS_STORES) continue;
+        if (!LEARNER_FILES.has(name) && name !== SOURCELESS_STORES) continue;
         const source = path.join(learnerRoot, name);
         if (!await expect(source, name === SOURCELESS_STORES ? "directory" : "file", "Learner state")) continue;
-        if (lock) report("warning", `Stale learner lock ${path.relative(systemRoot, source)} will be retired.`);
         report("info", `Learner state ${path.relative(systemRoot, source)} will be retired.`);
         moves.push(retire(source));
       }
     }
+  }
+  // v1 practice bundles archived as ordinary projects stay where they are:
+  // practice archives are listed only from the learning space's own archive
+  // root by their schema-2 practice.json, so these are never listed or opened.
+  const archives = (await names(path.join(systemRoot, "project-archives"))).filter(name => SLUG_PATTERN.test(name));
+  if (archives.length) {
+    report("info", `${archives.length} archived project bundle(s) named like v1 practice projects stay in project-archives and are not part of Learning: ${archives.join(", ")}.`);
   }
   return { moves, errors };
 }
@@ -188,7 +216,7 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
  * finishes the same plan. Offline, with every writer stopped.
  */
 export async function resetLearningForLearningSpace({ systemRoot, projectsRoot, managedSourceRoot, apply, backupRoot, report,
-  renamePath = rename }) {
+  renamePath = rename, removeTree = rm }) {
   for (const root of [systemRoot, backupRoot, projectsRoot, managedSourceRoot]) {
     if (root !== undefined && (!path.isAbsolute(root || "") || path.resolve(root) !== root || root === path.parse(root).root)) {
       throw new Error("Learning reset requires exact absolute installation, projects, managed source and backup directories.");
@@ -219,9 +247,10 @@ export async function resetLearningForLearningSpace({ systemRoot, projectsRoot, 
     await writeFile(temporary, `${JSON.stringify({ upgrade: UPGRADE_ID, moves }, null, 2)}\n`, { mode: 0o600 });
     await rename(temporary, manifestPath);
   }
-  for (const move of copied) await finishCopy(move.source, move.destination);
+  const copy = { verifiedRoot: path.join(backupRoot, "verified"), removeTree };
+  for (const move of copied) await finishCopy(move, copy);
   for (const move of pending) {
-    await moveEntry(move, renamePath);
+    await moveEntry(move, { renamePath, ...copy });
     report("info", `Retired ${move.source}`);
   }
 }

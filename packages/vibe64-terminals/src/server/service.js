@@ -1286,9 +1286,7 @@ function createService({
       // Delayed publications retain CONTROL identity, never a cached access grant.
       const readGrant = () => actions.execute({
         actionId: "vibe64.sessions.conversation.context.read",
-        input: authority.learningAttemptId
-          ? { learningAttemptId: authority.learningAttemptId, sessionId: conversationId }
-          : { projectSlug: authority.projectSlug, sessionId: conversationId },
+        input: { projectSlug: authority.projectSlug, sessionId: conversationId },
         context: authority.requestContext
       });
       const started = performance.now();
@@ -2124,9 +2122,6 @@ function createService({
     const session = existingSession || await runtime.getSession(sessionId, {
       inspectSource: false
     });
-    if (runtime.learningScope?.noExercise === true) {
-      return { completion: null, state: session.workspaceSetup };
-    }
     const setup = await workspaceSetup.start({
       renewal,
       retry,

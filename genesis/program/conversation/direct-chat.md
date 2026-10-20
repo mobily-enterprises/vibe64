@@ -1245,15 +1245,11 @@ resource edits refreshes facts without restarting the native conversation.
 
 ## Public contract
 
-Learning session notifications reuse this same publisher and channel. Its
-optional `learningAttemptId` comes from the original trusted request context's
-learning scope, or the already validated nested session view when deferred work
-has no request context. Extra payload fields cannot select that identity. Such
-events carry an empty working-project slug; a trusted working-project context
-cannot be reclassified by a conflicting learning view. Ordinary events retain
-their original shape. Client exact-attempt matching and mounted Learning-mode
-acceptance remain separate integration obligations; an event is no authority,
-completion proof or reason to resend work.
+Session notifications carry the trusted request context's project slug, then
+the session view's, then the payload's. Learning v2 retired the source-less
+learning sessions, so the server emits no lesson-scoped (`learningAttemptId`)
+session event; practice projects use ordinary project events. An event is no
+authority, completion proof or reason to resend work.
 
 The session-owned browser facade supplies Main's original native conversation to
 the same JSKIT assistant transport used by optional Colleague. Its transport ID
@@ -3844,8 +3840,7 @@ gates. Unsupported construction scopes fail before registration.
 `useVibe64ConversationRuntime`, the Mounted and AssistantAccess readers and the session request config select only
 project-scoped Working sessions; no client builds a learner/attempt binding,
 draft key or `/api/learning/...` path. Session realtime matchers still refuse
-events that carry a `learningAttemptId`, because the server can still emit
-lesson-scoped session events without a project.
+events that carry a `learningAttemptId`; the server no longer emits them.
 
 Opted source-less learning Codex bindings retain the shared native application
 tool schema hash in their original identity transaction. Early readiness can

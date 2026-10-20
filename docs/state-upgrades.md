@@ -1300,18 +1300,26 @@ without it the local managed source root is resolved as runtime resolves it.
   `^training-[a-f0-9]{32}$`, whose `project.json` parses with a schema 1
   `training` marker (canonical base64url `learnerKey`, UUID `attemptId` whose
   hex is the slug's, a `pin` object, `exercise.kind: "bundled"`) and
-  `repository.mode: "managed_git"`. A look-alike without that marker gets a
-  WARNING and is left unchanged; no other project is read beyond its name, so
-  normal projects, their sessions, chats and code are never touched. Its old
-  namespace is `<projectsRoot>/<slug>` (hosted) or
-  `training/practice/<learnerKey>/<attemptId>/<slug>` plus the session source
-  `<managedSourceRoot>/<slug>` (local). A selected project without a namespace
-  is an ERROR (on hosted, pass `--projects-root`). For every learner in
-  `training/users/` and `author-preview/training/users/` it also selects
-  `progress.json`, `active-lesson.json`, `step-progress.json`, `reader.json`,
-  `code-ledger.json`, `learning-mode.json`, stale `*.lock` files (WARNING) and
-  the source-less `learning-sessions/` stores. `teacher-notes.json` (the
-  learner's own notes) stays.
+  `repository.mode: "managed_git"`. A Learning v2 practice project (a valid
+  schema 2 marker whose `practiceId` is the slug's) is skipped silently. Any
+  other look-alike gets a WARNING and is left unchanged; no other project is
+  read beyond its name, so normal projects, their sessions, chats and code are
+  never touched. Its old namespace is `<projectsRoot>/<slug>` (hosted, with
+  `--projects-root`) or `training/practice/<learnerKey>/<attemptId>/<slug>`
+  plus the session source `<managedSourceRoot>/<slug>` (local). An interrupted
+  deletion or archive removes the namespace before the runtime root, so a
+  selected project without a namespace gets a WARNING and only its runtime root
+  retires. For every learner in `training/users/` and
+  `author-preview/training/users/` it also selects `progress.json`,
+  `active-lesson.json`, `step-progress.json`, `reader.json`, `code-ledger.json`,
+  `learning-mode.json`, the lock files that guard them (`state.lock`,
+  `preparation.lock`, `step-progress.lock`, `reader.lock`, `code-ledger.lock`,
+  `learning-mode.lock`) and the source-less `learning-sessions/` stores.
+  `teacher-notes.json` and `teacher-notes.lock` (the learner's own notes) stay.
+  A v1 practice project archived as an ordinary project stays in
+  `project-archives/<slug>/`; check lists those names. Practice archives are
+  listed only from the learning space's own archive root by their schema 2
+  `practice.json`, so these bundles are never listed or opened as practice.
 - Colleague (`retireColleagueLearningWatches`) removes every `learning-task`
   watch and its queued observations from `colleague/<owner>/conversation.json`
   through the backed-up publisher; history and other watches are kept.
@@ -1326,9 +1334,11 @@ learner files and local namespaces to
 `upgrades/backups/`, so backup retention never removes them. Namespaces move
 before the runtime root that carries their marker. A rename across filesystems
 copies, verifies the file list, types, sizes, SHA-256 and link targets, and only
-then removes the source. Retry finishes the same manifest: a move whose source
-is gone and whose destination exists is complete, and a verified copy whose
-source is still present has its source removed. Check (`--check`) is
+then records the proof under `training/verified/` before it removes the
+source. Retry finishes the same manifest: a move whose source is gone and whose
+destination exists is complete; a copy with its proof has its (possibly
+partial) source removed; a copy without it is verified first, and a copy that
+differs from its source refuses. Check (`--check`) is
 read-only; it lists every selected slug (learner key, lesson code) and every
 learner file, warns that hosted managed databases or resource profiles keyed by
 those slugs are not removed (they become unreachable and never collide with new
@@ -1344,8 +1354,10 @@ until then they count in "Project files". Because this upgrade is pending,
 every writer stopped; never edit the ledger or start an older release against
 partial state; the older registry refuses this newer ledger. Focused evidence:
 `learningSpaceResetUpgrade.unit.test.js` (check-only, apply and interrupted
-retry, the cross-filesystem copy, a tree-hash proof that normal projects stay
-byte-identical, kept teacher notes, refusals and a fresh install),
+retry, the cross-filesystem copy and an interrupted source removal, a
+tree-hash proof that normal projects and archives stay byte-identical, a
+skipped learning-space project, kept teacher notes, a deleted namespace on
+either host, refusals and a fresh install),
 `stateUpgrades.unit.test.js` and `colleagueConversationUpgrade.unit.test.js`.
 
 ## Training learner notes (no upgrade)
