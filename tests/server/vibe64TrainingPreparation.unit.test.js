@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -614,8 +615,40 @@ test("opening a practice project ends another lesson in progress (left) and cont
   await service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 });
   assert.deepEqual({ ...ended, actor: undefined }, { actor: undefined, attemptId: other.attemptId, requestId: `leave-${other.attemptId}`,
     expectedRevision: 5, reason: "left" });
-  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: "open-1", expectedRevision: 6, pin, practiceId: f.practiceId });
+  // Scoped and bounded, so it never collides with a lesson.start id or another open.
+  const scoped = `open_${f.practiceId.replaceAll("-", "")}_${createHash("sha256").update("open-1").digest("hex").slice(0, 26)}`;
+  assert.equal(scoped.length, 64);
+  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: scoped, expectedRevision: 6, pin, practiceId: f.practiceId });
+  await assert.rejects(service.startLesson({ actor, courseId: "intro", release: "0.1.0", lessonCode: "X", requestId: scoped, expectedRevision: 6 }),
+    { code: "VIBE64_TRAINING_REQUEST_INVALID" }, "the open namespace is host-owned");
   f.setPracticeRecord(null);
   await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-2", expectedRevision: 6 }),
     { code: "VIBE64_TRAINING_PRACTICE_MISSING" });
+});
+
+test("opening refuses a practice project being deleted or a lesson that cannot be prepared before ending another lesson", async t => {
+  const f = await continuationFixture(t);
+  const other = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
+  let ended = null;
+  f.owners.learners.readState = async () => ({ revision: 5, active: other, progress: { attempts: [f.previous, other], activeAttemptId: other.attemptId } });
+  f.owners.learners.endAttempt = async input => { ended = input; return { revision: 6, attempt: { ...other, ended: input } }; };
+  const service = createTrainingService(f.owners);
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }),
+    { code: "VIBE64_TRAINING_PRACTICE_MISSING", message: /Nothing was changed/u });
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training });
+  const unreadable = Object.assign(new Error("The installed lesson content is missing."), { code: "VIBE64_TRAINING_CONTENT_MISSING" });
+  f.owners.content.readExercise = async () => { throw unreadable; };
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }), unreadable);
+  assert.equal(ended, null, "the other lesson keeps going");
+  assert.deepEqual(f.calls.filter(([name]) => name === "reserve"), []);
+});
+
+test("Continue lesson whose practice project is being deleted prepares a fresh one", async t => {
+  // Only the learning-space record (with its deletion marker) remains to be seen.
+  const f = await continuationFixture(t, { session: false, project: false });
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
+  await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
+  assert.equal(Object.hasOwn(f.calls[0][1], "practiceId"), false);
+  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId);
 });

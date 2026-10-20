@@ -74,7 +74,8 @@ guide overlay 3000 above L 2400 above Colleague.
   the learning space (the attempt records its `practiceId`), reusing the
   project's session `training-<practiceId>` when it exists and is not archived,
   otherwise creating `training-<attemptId>` at the project's current code
-  without exercise-source verification; a missing project gets a fresh one.
+  without exercise-source verification; a missing project, or one whose
+  deletion stopped part-way, gets a fresh one.
   Passed steps count per lesson content, so L opens at the first one not passed.
   Core `learningMode.js` holds one host-registered reader that
   fails open (a failed read is reported and treated as not in learning mode,
@@ -92,21 +93,30 @@ guide overlay 3000 above L 2400 above Colleague.
   the learner's practice projects live in the learning space, never in the
   project catalogue. `practice.list` returns `projects` (practiceId, slug,
   lesson code and title, status `in-progress`, `finished`, `not-finished` or
-  `deleting` for a delete that stopped part-way, createdAt) and `archived`
-  (practiceId, archiveId, lesson, archivedAt); author-preview practice projects
-  are left out. `practice.open` returns the lesson already in progress there,
-  or ends another lesson in progress (`left`) and continues this project's
-  lesson as above. `practice.archive`, `practice.delete` and
+  `deleting` for a delete that stopped part-way, read from core's
+  `readLearningSpaceProject` without a practice scope) and `archived`
+  (practiceId, archiveId, lesson, archivedAt; an entry whose `practice.json` is
+  missing or damaged is left out); author-preview practice projects are left
+  out. `practice.open` returns the lesson already in progress there; otherwise
+  it refuses a project being deleted with nothing changed, checks that the
+  lesson's installed content (and exercise) can be read, then ends another
+  lesson in progress (`left`) and continues this project's lesson as above,
+  under the scoped request `open_<practiceId hex>_<request hash>`. `practice.archive`, `practice.delete` and
   `practice.archived.delete` are one click for the learner and need the
   person's confirmation (`confirmed: true`) from Colleague. Archive and delete
   run inside the learner's practice scope with the shared project archive
   service (Online's `trainingHost.projectArchive`, a standalone
-  `createProjectArchiveService` locally): a pinned session refuses first with
-  nothing changed, then the in-progress attempt on that project ends (`discard`)
-  and its code ledger is forgotten. Archive bundles go to
-  `<systemRoot>/training/practice-archives/<learnerKey>/<slug>/` with
-  `practice.json` (practiceId, learnerKey, pin, archivedAt) beside them, with
-  the archiver's headroom check and at most 20 archives per learner. Routes:
+  `createProjectArchiveService` locally). The in-progress attempt on that
+  project ends (`discard`) in the archiver's `beforeRemove` step, under its
+  per-slug lock after every refusal (pinned session, storage headroom), so a
+  refusal changes nothing; then the code ledger is forgotten. A failure after
+  the attempt ended still emits the change and reports `ended: true`. Archive
+  bundles go to `<systemRoot>/training/practice-archives/<learnerKey>/<slug>/<UTC>-<slug>/`
+  (the archiver's `<archiveRoot>/<slug>/` layout, so keyed by the practice
+  slug, which names the practiceId) with `practice.json` (practiceId,
+  learnerKey, pin, archivedAt) beside them, written in that same step. Only a
+  folder holding a bundle counts toward the 20 archives per learner; delete
+  also removes a stopped archive's partial bundle. Routes:
   `GET /api/vibe64/training/practice`, `POST …/practice/:practiceId/{open,archive,delete}`
   and `POST …/practice/:practiceId/archives/:archiveId/delete`. Each change
   emits `vibe64.training.learner.changed`.

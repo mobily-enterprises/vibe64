@@ -232,8 +232,9 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
 
   // A learning-space change the learner asked for. Colleague needs the
   // person's confirmation; the learner's own one-click browser action does
-  // not. A refusal (pinned session, archive limit, not this learner's) is
-  // reported with nothing changed.
+  // not. A refusal (pinned session, archive limit, storage, not this
+  // learner's) is reported with nothing changed. A failure after the lesson in
+  // progress ended still publishes the change and reports ended: true.
   const practiceCommand = (name, fields, description, run) => definition(name, { ...fields,
     confirmed: { type: "boolean", required: false } }, { output: practiceOutput, description },
   async (input, actor, context) => {
@@ -245,7 +246,13 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     let result;
     try { result = await run(input, actor); }
     catch (cause) {
-      if (!(cause.statusCode < 500) || !/^(VIBE64_TRAINING_PRACTICE_|vibe64_project_pinned)/u.test(cause.code || "")) throw cause;
+      const refusal = cause.statusCode < 500 && /^(VIBE64_TRAINING_PRACTICE_|vibe64_project_pinned)/u.test(cause.code || "");
+      if (cause.ended === true) {
+        await notify(actor, "", "practice");
+        return { ok: false, available: true, practiceId: input.practiceId, ended: true,
+          error: `${refusal ? `${refusalText(cause.message, "The change stopped.").slice(0, 400)} ` : "The change stopped part-way. "}The lesson in progress has ended (its results are kept); retry to finish.` };
+      }
+      if (!refusal) throw cause;
       return { ok: false, available: true, practiceId: input.practiceId, error: refusalText(cause.message, "Nothing was changed.") };
     }
     await notify(actor, "", "practice");

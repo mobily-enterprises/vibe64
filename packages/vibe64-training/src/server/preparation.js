@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { lstat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -20,8 +21,8 @@ function requireSuccess(result) {
 // initializers, session identities or shell commands here.
 function createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision } = {}) {
-    // This native namespace belongs only to retained-pin continuation.
-    if (typeof requestId === "string" && requestId.startsWith("continue_")) {
+    // These native namespaces belong only to continuation and practice.open.
+    if (typeof requestId === "string" && /^(continue|open)_/u.test(requestId)) {
       throw trainingError("VIBE64_TRAINING_REQUEST_INVALID", "Choose an ordinary start request; continuation request identities are host-owned.");
     }
     const approved = await catalogue.readCatalogue();
@@ -88,18 +89,25 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }
 
+  // This learner's practice project, or null. One being deleted (a removal
+  // that stopped part-way) is gone for Open and Continue lesson; only
+  // practice.delete and practice.archive resume it.
   async function ownPracticeProject(actor, practiceId) {
     const record = await projectContext.readLearningSpaceProject(practiceSlug(practiceId));
-    return record?.learnerKey === practiceLearnerKey(actor) ? record : null;
+    return record?.learnerKey === practiceLearnerKey(actor) && !record.deleting ? record : null;
   }
 
   // practice.open: the learner's practice project with its lesson. Already the
   // lesson in progress, it is returned; another lesson in progress ends first
-  // (reason left); then the lesson continues in this project as a new attempt.
+  // (reason left), only once this lesson's installed content is known to be
+  // preparable; then the lesson continues in this project as a new attempt.
   async function openPractice({ actor, practiceId, requestId, expectedRevision } = {}) {
+    if (typeof requestId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(requestId)) {
+      throw trainingError("VIBE64_TRAINING_REQUEST_INVALID", "Use the same bounded open request when retrying.");
+    }
     const record = await ownPracticeProject(actor, practiceId);
     if (!record) {
-      throw Object.assign(trainingError("VIBE64_TRAINING_PRACTICE_MISSING", "This is not one of your practice projects."), { statusCode: 404 });
+      throw Object.assign(trainingError("VIBE64_TRAINING_PRACTICE_MISSING", "This is not one of your practice projects. Nothing was changed."), { statusCode: 404 });
     }
     let saved = await learners.readState({ actor });
     const active = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
@@ -107,11 +115,17 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     if (expectedRevision !== saved.revision) {
       throw trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read the current revision and open the practice project again.");
     }
+    const { pin } = record.training;
+    const lessonPin = { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash };
+    if ((await content.readLesson(lessonPin)).lesson.exercise) await content.readExercise(lessonPin);
     if (active) {
       await endLesson({ actor, attemptId: active.attemptId, requestId: `leave-${active.attemptId}`, expectedRevision: saved.revision, reason: "left" });
       saved = await learners.readState({ actor });
     }
-    const reserved = await learners.reserveAttempt({ actor, requestId, expectedRevision: saved.revision, pin: record.training.pin, practiceId });
+    // Scoped like continuation, so an id used by lesson.start or by another
+    // open never collides; bounded to the stored request length.
+    const scopedRequestId = `open_${practiceId.replaceAll("-", "")}_${createHash("sha256").update(requestId).digest("hex").slice(0, 26)}`;
+    const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision: saved.revision, pin, practiceId });
     if (reserved.attempt.ended) return { ...reserved, previewReady: false };
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }

@@ -18,8 +18,12 @@ lifecycle; a host adds only the project resources it owns.
 `@local/vibe64-project/server/project-archive` exports
 `createProjectArchiveService({projectContext, closeProjectRuntime, runCommand?,
 clock?, removePath?, hostResources?, assertArchiveHeadroom?})`. It returns
-`archiveProject({slug, archiveRoot?, checkHeadroom?})`, `removeProject({slug})`,
-`canRemoveProject({slug})` and `projectExists({slug})`.
+`archiveProject({slug, archiveRoot?, checkHeadroom?, beforeRemove?})`,
+`removeProject({slug, beforeRemove?})`, `canRemoveProject({slug})` and
+`projectExists({slug})`. `beforeRemove({slug})` is the owner's own step: it
+runs under the per-slug lock after every refusal (pinned session, headroom)
+and before the deletion marker, also on a resumed run, so an owner's side
+effect (Learning ends the lesson attempt) never follows a refusal.
 
 **Archive.** Under a per-slug lock, the project is refused when a session source
 is pinned ("Unpin session … before deleting this project.",
@@ -86,7 +90,7 @@ slug's own `lifecycle.json` under the archive root admits the replay; with
 neither, the slug is refused. Whether the namespace still exists does not
 matter, so an archive interrupted after `source-removed` resumes. Learning
 decides who may archive or remove a practice project and ends its lesson attempt
-first; the archiver only checks the structure.
+in `beforeRemove`; the archiver only checks the structure.
 
 **Light deletion.** `removeProject` is the archive lifecycle without its archive
 steps, for practice projects only: a catalogue project is refused with

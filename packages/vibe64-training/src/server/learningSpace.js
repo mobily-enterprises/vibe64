@@ -14,8 +14,9 @@ const ARCHIVE_ID_PATTERN = /^[0-9A-Za-z][0-9A-Za-z_.-]{0,127}$/u;
 // and the light delete are the shared project archive service, Online's
 // (trainingHost.projectArchive) or a standalone one. This owner adds only what
 // the archiver must not know: that the project is this learner's, that its
-// in-progress attempt ends first (reason `discard`) and its code ledger goes,
-// and the learner's archive root with `practice.json` beside each bundle.
+// in-progress attempt ends (reason `discard`) inside the archiver's lock after
+// every refusal (its `beforeRemove` step) and its code ledger goes, and the
+// learner's archive root with `practice.json` beside each bundle.
 function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext?.systemRoot,
   removePath = rm } = {}) {
   if (typeof learners?.readState !== "function" || typeof learners?.endAttempt !== "function" ||
@@ -44,6 +45,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   }
 
   // A deletion marker stays visible here so a delete can resume it.
+  // (practice.open and Continue lesson treat such a project as gone.)
   const inScope = (actor, record, operation) => projectContext.runWithPracticeProjectScope({
     actor, training: record.training, access: "write", allowDeleting: true }, operation);
 
@@ -57,20 +59,30 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
 
   const lessonView = async pin => ({ code: pin.lesson.code, title: await lessonTitle(pin) });
 
+  // An archived practice project's `practice.json`, or null when it is
+  // missing or damaged (that entry is left out, never the whole list).
+  async function readPractice(directory) {
+    let practice;
+    try { practice = JSON.parse(await readFile(path.join(directory, "practice.json"), "utf8")); }
+    catch (error) { if (error.code === "ENOENT" || error instanceof SyntaxError) return null; throw error; }
+    const { pin } = practice || {};
+    const valid = typeof practice?.practiceId === "string" && typeof practice.archivedAt === "string" &&
+      Number.isFinite(Date.parse(practice.archivedAt)) && typeof pin?.lesson?.code === "string" &&
+      typeof pin.lesson.hash === "string" && pin.topic && typeof pin.topic === "object";
+    return valid ? practice : null;
+  }
+
   async function readArchived(actor, live) {
     const root = learnerArchiveRoot(actor);
     const archived = [];
     for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
       if (!entry.isDirectory()) continue;
       const directory = path.join(root, entry.name);
-      let practice;
-      try { practice = JSON.parse(await readFile(path.join(directory, "practice.json"), "utf8")); }
-      catch (error) { if (error.code === "ENOENT" || error instanceof SyntaxError) continue; throw error; }
+      const practice = await readPractice(directory);
       // Written before archiving: while the project still exists it is not archived.
-      if (live.has(practice.practiceId)) continue;
-      const bundles = (await readdir(directory, { withFileTypes: true })).filter(value => value.isDirectory());
-      for (const bundle of bundles) {
-        archived.push({ practiceId: practice.practiceId, archiveId: bundle.name, lesson: await lessonView(practice.pin),
+      if (!practice || practiceSlug(practice.practiceId) !== entry.name || live.has(practice.practiceId)) continue;
+      for (const bundle of await bundlesIn(directory)) {
+        archived.push({ practiceId: practice.practiceId, archiveId: bundle, lesson: await lessonView(practice.pin),
           archivedAt: practice.archivedAt });
       }
     }
@@ -88,12 +100,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
       live.add(record.practiceId);
       const { pin } = record.training;
       if (pin.course.courseId === AUTHOR_PREVIEW_COURSE) continue;
-      const metadata = await inScope(actor, record, async () => (await projectContext.readWorkspaceProjectState({ slug: record.slug })).metadata);
-      const status = metadata.deletion ? "deleting"
+      const status = record.deleting ? "deleting"
         : active && attemptPracticeId(active) === record.practiceId ? "in-progress"
           : completed.has(`${pin.lesson.code}\0${pin.lesson.hash}`) ? "finished" : "not-finished";
-      projects.push({ practiceId: record.practiceId, slug: record.slug, lesson: await lessonView(pin), status,
-        ...(metadata.createdAt ? { createdAt: metadata.createdAt } : {}) });
+      projects.push({ practiceId: record.practiceId, slug: record.slug, lesson: await lessonView(pin), status });
     }
     return { projects, archived: await readArchived(actor, live) };
   }
@@ -123,21 +133,28 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
   }
 
-  // The archiver's read-only refusals (a pinned session) come before the
-  // attempt ends, so a refused archive or delete changes nothing.
-  async function prepareRemoval(actor, record) {
-    const allowed = await projectArchive.canRemoveProject({ slug: record.slug });
-    if (allowed?.ok === false) {
-      throw Object.assign(new Error(allowed.reason || "This practice project cannot be removed now. Nothing was changed."), {
-        code: "VIBE64_TRAINING_PRACTICE_BUSY", statusCode: 409 });
+  // Runs one archiver removal whose `beforeRemove` step ends the attempt: the
+  // archiver calls it under its per-slug lock after every refusal (pinned
+  // session, storage headroom), so a refused archive or delete changes
+  // nothing. A failure after the attempt ended carries `ended: true`.
+  async function removing(actor, record, run) {
+    let ended = false;
+    const endAttempt = async () => { ended = await endAttemptOn(actor, record.practiceId) || ended; };
+    try {
+      return { ...await run(endAttempt), ended };
+    } catch (error) {
+      if (ended) error.ended = true;
+      throw error;
     }
-    return endAttemptOn(actor, record.practiceId);
   }
 
+  // Only a folder holding a bundle is an archive; a stray `practice.json`
+  // from an archive that stopped before its bundle never uses up a slot.
   async function archiveCount(actor) {
     let count = 0;
-    for (const entry of await readdir(learnerArchiveRoot(actor), { withFileTypes: true }).catch(missingAsEmpty)) {
-      if (entry.isDirectory()) count++;
+    const root = learnerArchiveRoot(actor);
+    for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
+      if (entry.isDirectory() && (await bundlesIn(path.join(root, entry.name))).length) count++;
     }
     return count;
   }
@@ -146,29 +163,38 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     const record = await ownRecord(actor, practiceId);
     const archiveRoot = learnerArchiveRoot(actor);
     const projectArchiveRoot = path.join(archiveRoot, record.slug);
-    if (!await pathExists(projectArchiveRoot) && await archiveCount(actor) >= MAX_ARCHIVES) {
+    // A resumed archive already holds its (partial) bundle and its slot.
+    const resumed = (await bundlesIn(projectArchiveRoot)).length > 0;
+    if (!resumed && await archiveCount(actor) >= MAX_ARCHIVES) {
       throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived practice projects. Delete one in Practice → Archived first. Nothing was archived.`), {
         code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
     }
-    return inScope(actor, record, async () => {
-      const ended = await prepareRemoval(actor, record);
-      await writeJsonFileAtomic(path.join(projectArchiveRoot, "practice.json"), {
-        practiceId, learnerKey: record.learnerKey, pin: record.training.pin, archivedAt: new Date().toISOString()
-      }, { directoryMode: 0o700, fileMode: 0o600 });
-      const archived = await projectArchive.archiveProject({ slug: record.slug, archiveRoot, checkHeadroom: true });
+    return inScope(actor, record, () => removing(actor, record, async endAttempt => {
+      const archived = await projectArchive.archiveProject({ slug: record.slug, archiveRoot, checkHeadroom: true,
+        async beforeRemove() {
+          // Under the lock, after the refusals: a resumed archive keeps its record.
+          if (!(await bundlesIn(projectArchiveRoot)).length || !await readPractice(projectArchiveRoot)) {
+            await writeJsonFileAtomic(path.join(projectArchiveRoot, "practice.json"), {
+              practiceId, learnerKey: record.learnerKey, pin: record.training.pin, archivedAt: new Date().toISOString()
+            }, { directoryMode: 0o700, fileMode: 0o600 });
+          }
+          await endAttempt();
+        } });
       await learners.forgetPracticeLedger({ actor, practiceId });
-      return { ok: true, practiceId, slug: record.slug, archiveId: path.basename(archived.bundlePath), ended };
-    });
+      return { ok: true, practiceId, slug: record.slug, archiveId: path.basename(archived.bundlePath) };
+    }));
   }
 
+  // The light delete also finishes an archive that stopped part-way: its
+  // partial bundle and `practice.json` go with the project.
   async function remove({ actor, practiceId } = {}) {
     const record = await ownRecord(actor, practiceId);
-    return inScope(actor, record, async () => {
-      const ended = await prepareRemoval(actor, record);
-      const removed = await projectArchive.removeProject({ slug: record.slug });
+    return inScope(actor, record, () => removing(actor, record, async endAttempt => {
+      const removed = await projectArchive.removeProject({ slug: record.slug, beforeRemove: endAttempt });
+      await removePath(path.join(learnerArchiveRoot(actor), record.slug), { recursive: true, force: true });
       await learners.forgetPracticeLedger({ actor, practiceId });
-      return { ok: true, practiceId, slug: record.slug, removed: removed?.removed !== false, ended };
-    });
+      return { ok: true, practiceId, slug: record.slug, removed: removed?.removed !== false };
+    }));
   }
 
   // Removes one archived bundle of this learner, and the project's archive
@@ -181,7 +207,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     const info = await lstat(bundle).catch(error => { if (error.code === "ENOENT") return null; throw error; });
     if (!info?.isDirectory()) throw archiveMissing();
     await removePath(bundle, { recursive: true, force: true });
-    if (!(await readdir(directory, { withFileTypes: true })).some(value => value.isDirectory())) {
+    if (!(await bundlesIn(directory)).length) {
       await removePath(directory, { recursive: true, force: true });
     }
     return { ok: true, practiceId, archiveId, removed: true };
@@ -200,9 +226,9 @@ function missingAsEmpty(error) {
   throw error;
 }
 
-async function pathExists(target) {
-  try { await lstat(target); return true; }
-  catch (error) { if (error.code === "ENOENT") return false; throw error; }
+async function bundlesIn(directory) {
+  return (await readdir(directory, { withFileTypes: true }).catch(missingAsEmpty))
+    .filter(value => value.isDirectory()).map(value => value.name);
 }
 
 export { createTrainingLearningSpace, MAX_ARCHIVES };

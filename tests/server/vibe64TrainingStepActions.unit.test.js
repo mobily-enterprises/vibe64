@@ -267,6 +267,19 @@ test("a refused practice change (a pinned session, the archive limit, not this l
   assert.deepEqual(f.published, []);
 });
 
+test("a practice change that fails after the lesson ended still notifies the learner and reports ended", async t => {
+  const f = await fixture(t, { practice: {
+    async archive() { throw Object.assign(new Error("Project runtime could not be closed before archival."), { code: "vibe64_project_runtime_close_failed", ended: true }); },
+    async remove() { throw Object.assign(new Error("Unpin session Practice before deleting this project."), { code: "vibe64_project_pinned", statusCode: 409, ended: true }); }
+  } });
+  const practiceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  assert.deepEqual(await f.execute("practice.archive", { practiceId }), { ok: false, available: true, practiceId, ended: true,
+    error: "The change stopped part-way. The lesson in progress has ended (its results are kept); retry to finish." });
+  assert.deepEqual(await f.execute("practice.delete", { practiceId }), { ok: false, available: true, practiceId, ended: true,
+    error: "Unpin session Practice before deleting this project. The lesson in progress has ended (its results are kept); retry to finish." });
+  assert.deepEqual(changed(f).map(([, , payload]) => payload), [{ learnerId: "42", reason: "practice" }, { learnerId: "42", reason: "practice" }]);
+});
+
 test("practice.open continues the lesson in that practice project and turns learning mode on", async t => {
   const f = await fixture(t);
   const attempt = await f.start();

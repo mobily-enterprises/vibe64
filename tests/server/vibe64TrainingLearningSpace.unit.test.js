@@ -18,7 +18,7 @@ const ALICE = { uid: 42, username: "alice", role: "member" };
 const BOB = { uid: 43, username: "bob", role: "member" };
 const key = actor => Buffer.from(String(actor.uid)).toString("base64url");
 
-async function fixture(t) {
+async function fixture(t, { headroom = async () => {} } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-space-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "topic");
@@ -40,8 +40,13 @@ async function fixture(t) {
   const projectContext = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: systemRoot,
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
   const closed = [];
-  const projectArchive = createProjectArchiveService({ projectContext,
-    async closeProjectRuntime({ slug }) { closed.push(slug); return { ok: true }; } });
+  const failClose = { next: false };
+  const projectArchive = createProjectArchiveService({ projectContext, assertArchiveHeadroom: headroom,
+    async closeProjectRuntime({ slug }) {
+      if (failClose.next) { failClose.next = false; return { ok: false }; }
+      closed.push(slug);
+      return { ok: true };
+    } });
   const space = createTrainingLearningSpace({ learners, content, projectContext, projectArchive });
   const revisions = new Map();
 
@@ -70,7 +75,7 @@ async function fixture(t) {
   }
 
   const active = async actor => (await store.readState({ actor })).progress;
-  return { root, systemRoot, pin, store, space, projectContext, start, createPractice, active, forgotten, closed,
+  return { root, systemRoot, pin, store, space, projectContext, start, createPractice, active, forgotten, closed, failClose,
     title: (await content.readLesson({ ...topic, lessonCode: "CODE-ONE", lessonHash: pin.lesson.hash })).lesson.title };
 }
 
@@ -80,8 +85,8 @@ test("the Practice list shows only the learner's own practice projects with less
   const listed = await f.space.list(ALICE);
   assert.deepEqual(listed.archived, []);
   assert.equal(listed.projects.length, 1);
-  assert.deepEqual({ ...listed.projects[0], createdAt: undefined }, { practiceId: lesson.practiceId, slug: lesson.slug,
-    lesson: { code: "CODE-ONE", title: f.title }, status: "in-progress", createdAt: undefined });
+  assert.deepEqual(listed.projects[0], { practiceId: lesson.practiceId, slug: lesson.slug,
+    lesson: { code: "CODE-ONE", title: f.title }, status: "in-progress" });
   assert.deepEqual(await f.space.list(BOB), { projects: [], archived: [] }, "another learner's practice project is not listed");
   assert.equal(await f.space.exists({ actor: ALICE, practiceId: lesson.practiceId }), true);
   assert.equal(await f.space.exists({ actor: BOB, practiceId: lesson.practiceId }), false);
@@ -143,11 +148,63 @@ test(`a learner keeps at most ${MAX_ARCHIVES} archives; the refusal changes noth
   const f = await fixture(t);
   const lesson = await f.start(ALICE);
   const learnerArchives = path.join(f.systemRoot, "training/practice-archives", key(ALICE));
-  for (let index = 0; index < MAX_ARCHIVES; index++) await mkdir(path.join(learnerArchives, `training-${String(index).padStart(32, "0")}`), { recursive: true });
+  // A folder without a bundle (an archive that stopped first) is not an archive.
+  const stray = path.join(learnerArchives, `training-${"f".repeat(32)}`);
+  await mkdir(stray, { recursive: true });
+  await writeFile(path.join(stray, "practice.json"), "{}");
+  for (let index = 0; index < MAX_ARCHIVES - 1; index++) {
+    await mkdir(path.join(learnerArchives, `training-${String(index).padStart(32, "0")}`, "bundle"), { recursive: true });
+  }
+  const otherId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  await f.createPractice(ALICE, otherId);
+  assert.equal((await f.space.archive({ actor: ALICE, practiceId: otherId })).ok, true, "a folder without a bundle uses up no slot");
   await assert.rejects(f.space.archive({ actor: ALICE, practiceId: lesson.practiceId }), { code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
   assert.equal((await f.active(ALICE)).activeAttemptId, lesson.attemptId);
-  assert.deepEqual(f.forgotten, []);
+  assert.deepEqual(f.forgotten, [otherId]);
   assert.equal((await f.space.list(ALICE)).projects[0].status, "in-progress");
   await rm(path.join(learnerArchives, `training-${"0".repeat(32)}`), { recursive: true });
   assert.equal((await f.space.archive({ actor: ALICE, practiceId: lesson.practiceId })).ok, true);
+});
+
+test("a storage refusal comes before the lesson ends and leaves no archive folder behind", async t => {
+  const refuse = { next: true };
+  const f = await fixture(t, { async headroom() {
+    if (refuse.next) throw Object.assign(new Error("Not enough storage to archive. Nothing was archived."), { code: "VIBE64_TRAINING_PRACTICE_STORAGE", statusCode: 507 });
+  } });
+  const lesson = await f.start(ALICE);
+  await assert.rejects(f.space.archive({ actor: ALICE, practiceId: lesson.practiceId }), error => error.ended === undefined && /storage/u.test(error.message));
+  assert.equal((await f.active(ALICE)).activeAttemptId, lesson.attemptId, "the lesson in progress keeps going");
+  assert.deepEqual(f.forgotten, []);
+  await assert.rejects(readdir(path.join(f.systemRoot, "training/practice-archives", key(ALICE), lesson.slug)), { code: "ENOENT" });
+  assert.equal((await f.space.list(ALICE)).projects[0].status, "in-progress");
+  refuse.next = false;
+  assert.equal((await f.space.archive({ actor: ALICE, practiceId: lesson.practiceId })).ended, true);
+});
+
+test("an archive that stops part-way reports the ended lesson, and delete finishes it with its partial bundle", async t => {
+  const f = await fixture(t);
+  const lesson = await f.start(ALICE);
+  f.failClose.next = true;
+  await assert.rejects(f.space.archive({ actor: ALICE, practiceId: lesson.practiceId }),
+    error => error.code === "vibe64_project_runtime_close_failed" && error.ended === true);
+  assert.equal((await f.active(ALICE)).activeAttemptId, null);
+  const listed = await f.space.list(ALICE);
+  assert.equal(listed.projects[0].status, "deleting");
+  assert.deepEqual(listed.archived, [], "a partial bundle of a live project is not archived");
+  const projectArchiveRoot = path.join(f.systemRoot, "training/practice-archives", key(ALICE), lesson.slug);
+  assert.equal((await readdir(projectArchiveRoot, { withFileTypes: true })).filter(value => value.isDirectory()).length, 1);
+  assert.deepEqual(await f.space.remove({ actor: ALICE, practiceId: lesson.practiceId }),
+    { ok: true, practiceId: lesson.practiceId, slug: lesson.slug, removed: true, ended: false });
+  await assert.rejects(readdir(projectArchiveRoot), { code: "ENOENT" });
+  assert.deepEqual(await f.space.list(ALICE), { projects: [], archived: [] });
+});
+
+test("a damaged practice.json leaves that archive out, never the whole list", async t => {
+  const f = await fixture(t);
+  const lesson = await f.start(ALICE);
+  const archived = await f.space.archive({ actor: ALICE, practiceId: lesson.practiceId });
+  const damaged = path.join(f.systemRoot, "training/practice-archives", key(ALICE), `training-${"e".repeat(32)}`);
+  await mkdir(path.join(damaged, "bundle"), { recursive: true });
+  await writeFile(path.join(damaged, "practice.json"), JSON.stringify({ practiceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" }));
+  assert.deepEqual((await f.space.list(ALICE)).archived.map(value => value.archiveId), [archived.archiveId]);
 });
