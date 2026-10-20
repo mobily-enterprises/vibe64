@@ -37,8 +37,13 @@ first so the ring is visible. Then:
   Dashboard), the ring goes around that pane.
 - In the Dashboard, a Dashboard section that is not open rings the
   **Dashboard section** select at the top; choose the section there.
-- Only when the place is in the other pane, or the chat is showing, does the
-  ring sit on the header's pane switch: the arrow button that shows the project
+- When Files, Database, Architecture or Current changes fills the Dashboard
+  and the place is another Dashboard section, the ring goes around that pane's
+  **Back to dashboard** button (in Files or Database it may read **Back to
+  Architecture**). Tap it, then follow the next ring.
+- Only when the place is in the other pane (Preview instead of Dashboard, or
+  the reverse), or the chat is showing, does the ring sit on the header's pane
+  switch: the arrow button that shows the project
   panes from the chat, or the next-pane button (for example **Dashboard ›**).
   Tap it; when the next step becomes visible, Colleague can ring it directly.
 

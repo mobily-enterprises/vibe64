@@ -194,6 +194,27 @@ describe("teacher guide overlay", () => {
     expect(trainingGuide.value.element).toBe(filesPane);
   });
 
+  it("on a phone with a standalone tool pane open, rings its Dashboard back button for another place", async () => {
+    mountOverlay();
+    document.controls[0].hidden = true; // the phone header hides the Dashboard tab
+    // Files fills the pane: the Dashboard shell and its section select are hidden.
+    const sectionSelect = control({ "data-vibe64-guide-pane": "dashboard" });
+    sectionSelect.hidden = true;
+    const filesPane = control({ "data-vibe64-guide-pane": "files" }, { top: 56, left: 0, width: 390, height: 600 });
+    const backButton = control({ "data-vibe64-guide-pane": "dashboard" }, { top: 60, left: 8, width: 170, height: 40 });
+    const nextPane = control({ "data-vibe64-guide": "pane-switch" }, { top: 8, left: 290, width: 92, height: 40 });
+    document.controls.push(sectionSelect, filesPane, backButton, nextPane);
+    for (const target of ["git-log", "database-erd"]) {
+      const guide = trainingGuideCommand(trainingGuideRequest({ target }), { id: target }).guide;
+      expect(await showTrainingGuide(guide)).toEqual({ shown: true, step: "dashboard" });
+      expect(trainingGuide.value.element).toBe(backButton);
+    }
+    // The open place itself still wins over its back button.
+    const files = trainingGuideCommand(trainingGuideRequest({ target: "files" }), { id: "files" }).guide;
+    expect(await showTrainingGuide(files)).toEqual({ shown: true, step: "files" });
+    expect(trainingGuide.value.element).toBe(filesPane);
+  });
+
   it("clears after its time limit", async () => {
     mountOverlay();
     await showTrainingGuide(erd);

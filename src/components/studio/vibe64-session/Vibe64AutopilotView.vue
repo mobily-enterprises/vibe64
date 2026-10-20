@@ -699,7 +699,7 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <Vibe64DashboardBackButton @click="backToDashboard" />
+          <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
         </header>
         <div class="studio-autopilot__right-pane-page">
           <slot name="dashboard" :dashboard-context="dashboardContext" />
@@ -713,7 +713,7 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <Vibe64DashboardBackButton @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
+          <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
             {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
           </Vibe64DashboardBackButton>
         </header>
@@ -744,7 +744,7 @@
         role="tabpanel"
       >
         <header class="studio-autopilot__session-tool-header">
-          <Vibe64DashboardBackButton @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
+          <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
             {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
           </Vibe64DashboardBackButton>
         </header>
@@ -787,7 +787,7 @@
           @open-source-file="openSourceEditorFile"
         >
           <template #navigation>
-            <Vibe64DashboardBackButton @click="backToDashboard" />
+            <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
           <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
