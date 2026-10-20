@@ -968,7 +968,8 @@ test("resumed lesson brief projects remaining coverage while retaining the passe
   assert.match(api.brief.pacing.join("\n"), /last checkpoint/u);
   assert.match(api.brief.pacing.join("\n"), /control request, not a learner answer/u);
   assert.match(c.definitions.find(value => value.id === "vibe64.training.lesson.resume").extensions.assistant.description,
-    /After success, read teaching-brief.read/u);
+    // Learning v2: Colleague continues from the lesson's steps, not a teaching brief.
+    /After success, read lesson.read for this same attempt/u);
   assert.doesNotMatch(JSON.stringify(api), excluded);
   assert.deepEqual(await inventory(f.systemRoot), before);
 });
@@ -1169,10 +1170,12 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
     sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected }, trainingHost: null });
-  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" });
+  // Learning v2 publishes learner-scoped realtime notices through the optional runtime events.
+  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
-  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners", "learningSessions", "mainTeaching",
+    "publishLearnerChanged", "steps", "teaching"]);
   assert.equal(typeof training.teaching.prepareQuestion, "function");
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
@@ -1269,7 +1272,8 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
   ]);
   const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
-  assert.equal(originalRoutes.length, 14);
+  // Learning v2 adds the lesson reader, step, reader-position and practice routes.
+  assert.equal(originalRoutes.length, 22);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
     route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
@@ -1281,6 +1285,10 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],
+    ["GET", "/api/vibe64/training/lesson"], ["GET", "/api/vibe64/training/attempts/:attemptId/lesson"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/reader"], ["POST", "/api/vibe64/training/attempts/:attemptId/practice/delete"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"],
@@ -1302,12 +1310,20 @@ test("canonical learning read shares bounded owned session summaries and actual 
   const tool = await c.tool("learning.read");
   assert.equal(read.learnerId, String(f.auth.user.uid));
   assert.deepEqual(read.sessions, [session]);
-  const { learnerId: browserIdentity, ...visible } = read;
+  // Learning v2: Colleague teaches from steps, so the earlier Learning mode's
+  // conversations stay a browser-only field (with the learner identity) until
+  // that transport is removed in phase 2.
+  const { learnerId: browserIdentity, sessions: _browserSessions, ...visible } = read;
   assert.equal(browserIdentity, String(f.auth.user.uid));
   assert.deepEqual(tool.result, visible);
   assert.equal(Object.hasOwn(tool.result, "learnerId"), false);
+  assert.equal(Object.hasOwn(tool.result, "sessions"), false);
+  assert.deepEqual(read.attempts.map(value => [value.attemptId, value.preparation.phase, value.practiceSlug]),
+    [[reserved.attempt.attemptId, "reserved", undefined]], "a reserved attempt has no practice project yet");
   assert.doesNotMatch(JSON.stringify(tool.result), excluded);
-  assert.equal(Object.hasOwn(c.definitions.find(value => value.id === "vibe64.training.learning.read").extensions.assistant.output.schema.getFieldDefinitions(), "learnerId"), false);
+  for (const field of ["learnerId", "sessions"]) {
+    assert.equal(Object.hasOwn(c.definitions.find(value => value.id === "vibe64.training.learning.read").extensions.assistant.output.schema.getFieldDefinitions(), field), false);
+  }
   assert.deepEqual(read.history, []);
   assert.equal(read.active.attemptId, reserved.attempt.attemptId);
   assert.equal(calls.length, 2);

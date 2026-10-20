@@ -29,13 +29,16 @@ function createTrainingVisualResourceActions({ learners, content, teaching, acti
         code: "vibe64_auth_required", statusCode: 401
       });
       const state = await learners.readState({ actor, attemptId, includeCompletion: true });
-      const attempt = state.active;
+      const learning = context.vibe64Action?.learning;
+      // Learning v2: the plain route reads any of this learner's retained
+      // attempts (the reader shows ended lessons too). The learning-scoped
+      // route keeps its exact active-attempt rule until phase 2 removes it.
+      const attempt = learning ? state.active : state.progress.attempts.find(value => value.attemptId === attemptId);
       if (!attempt || attempt.attemptId !== attemptId) {
-        throw Object.assign(new Error("Read this learner's exact saved active attempt before requesting its diagram."), {
+        throw Object.assign(new Error("Read one of this learner's exact saved attempts before requesting its diagram."), {
           code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404
         });
       }
-      const learning = context.vibe64Action?.learning;
       if (learning && (!sessionId || learning.learningScope.attemptId !== attemptId ||
           learning.learningScope.learnerId !== state.progress.learnerId ||
           !isDeepStrictEqual(learning.learningScope.pin, attempt.pin))) {

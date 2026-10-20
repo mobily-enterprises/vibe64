@@ -3,6 +3,48 @@
 For authoring and Git publication, read `lesson-authoring`. For pinned content
 and owner recovery, read `teaching-content`.
 
+## Lessons with steps: what Colleague can and cannot do
+
+A lesson written in steps (lesson format 2) is read in **L** and taught by
+Colleague in its ordinary chat. Colleague reads the lesson with `lesson.read`:
+the steps in order with their text, diagram and guide, each step's check kind and
+your saved results. It explains the current step, opens real screens with guides
+and replays the step's diagram. Reading changes nothing. Long lessons arrive in
+pages; Colleague reads every page before claiming a step's text is missing.
+
+Results come only from the checks, never from Colleague:
+
+- **Choice question**: only your own answer in **L** counts. Colleague never sees
+  or reveals the correct option, sees only whether your answer passed (not which
+  options you chose), and cannot answer for you.
+- **Self-check** (**Done**): only your own press in **L** records it.
+- **Automatic check**: Colleague may run the step's check (`step.check.run`) to
+  tell you whether your work is ready, but its run is a diagnostic and is never
+  saved. The step passes only when you press **Check** in **L**. A response
+  check first needs your own press of the App's control in this lesson's Preview.
+- Saving your reading place is automatic from **L**; Colleague has no control for it.
+
+If Colleague says a step passed, ask it to read the lesson again: only a saved
+**passed** result counts. A change to your results, reading place or practice
+projects notifies only your own signed-in pages, so open Learning views can refresh.
+
+**Deleting a practice project.** Ask Colleague to delete the practice project of
+one of your lessons. It names the lesson, says the files, sessions and Preview go
+away for good with no archive, and waits for you to confirm in the chat before
+deleting (`practice.delete` with `confirmed`). A pinned session must be unpinned
+first; that refusal changes nothing. Otherwise an active lesson is ended first
+(reason *discard*); your saved results stay and continuing the lesson later
+prepares a fresh project. If the delete still fails after the lesson was ended,
+Colleague tells you both: the lesson stays ended and the project remains until
+you ask again. Colleague
+cannot delete another learner's practice project. The one-click delete in the
+Practice list needs no confirmation.
+
+`learning.read` lists every saved attempt with its practice project slug, for
+finding or deleting a practice project; it no longer lists Learning-mode
+conversations to Colleague. A lesson in the earlier format (assessments rather
+than steps) can be read in history but not continued.
+
 ## Asking Colleague about lessons
 
 Ask Colleague to list available courses or read your saved lesson; these reads

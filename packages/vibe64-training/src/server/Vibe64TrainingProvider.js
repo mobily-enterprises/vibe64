@@ -12,6 +12,8 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 import { registerLocalPracticeAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { registerRoutes as registerLearningSessionRoutes } from "@local/vibe64-sessions/server/routes";
 import { createTrainingActions } from "./actions.js";
+import { createTrainingStepActions } from "./stepActions.js";
+import { createTrainingLearnerChangedPublisher } from "./learnerEvents.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
 import { createTrainingCourseInstaller } from "./courseInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
@@ -35,10 +37,10 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
   requires: { env: "runtime.env", logger: "runtime.logger", http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
-  optional: { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" },
+  optional: { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" },
   provides: { training: "vibe64.training" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
-  setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor }, { actionCatalogue }) {
+  setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor, events }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingMainPresentationRoutes(http);
     registerTrainingVisualResourceRoutes(http);
@@ -88,13 +90,15 @@ const Vibe64TrainingProvider = defineFeature({
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     if (sourceEditor) registerTrainingCodeEditorRoutes(http);
     return { training: Object.freeze({ catalogue, courseInstaller, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
-      codeAuthorship, steps }) };
+      codeAuthorship, steps, publishLearnerChanged: createTrainingLearnerChangedPublisher(events) }) };
   },
   actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
       teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions,
-      courseInstaller: training.courseInstaller }),
+      courseInstaller: training.courseInstaller, practiceProjects: training.practiceProjects }),
+    ...createTrainingStepActions({ learners: training.learners, content: training.content, steps: training.steps,
+      exercises: training.exercises, practiceProjects: training.practiceProjects, publishLearnerChanged: training.publishLearnerChanged }),
     ...createTrainingTeachingActions(),
     ...createTrainingPresentationActions({ learners: training.learners, content: training.content }),
     ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),
