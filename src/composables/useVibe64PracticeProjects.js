@@ -90,7 +90,7 @@ function useVibe64PracticeProjects({ enabled = true, learningResource = null, co
     }
   }
 
-  return { deleteError, deletePracticeProject, deletingSlug, practiceProjects, reload: resource.reload, resource };
+  return { deleteError, deletePracticeProject, deletingSlug, practiceProjects };
 }
 
 export { practiceProjectsFromLearning, useVibe64PracticeProjects };

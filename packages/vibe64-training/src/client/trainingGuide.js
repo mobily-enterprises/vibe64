@@ -125,5 +125,5 @@ async function runTrainingGuideCommand(command, { navigateBrowser, view } = {}) 
   return { ...(focus ? { focus } : {}), guide: receipt };
 }
 
-export { TRAINING_GUIDE_DURATION_MS, clearTrainingGuide, currentTrainingGuideElement, findTrainingGuideStep, guideElementVisible,
+export { TRAINING_GUIDE_DURATION_MS, clearTrainingGuide, currentTrainingGuideElement, findTrainingGuideStep,
   registerTrainingGuideOverlay, runTrainingGuideCommand, showTrainingGuide, trainingGuide };

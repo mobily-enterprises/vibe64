@@ -122,6 +122,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   let saveTimer = null;
   let lastSaved = "";
 
+  // A retry of the same input reuses its request ID until a confirmed result.
+  function pendingRequestId(key) {
+    const requestId = pending.get(key) || globalThis.crypto.randomUUID();
+    pending.set(key, requestId);
+    return requestId;
+  }
+
   async function request(url, options = {}) {
     if (requestOverride) return requestOverride(url, options);
     return getHttpWebClient().request(resolveStudioRequestUrl(url), options);
@@ -284,14 +291,12 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       .catch(() => { if (lastSaved === key) lastSaved = ""; });
   }
 
-  // One step action. A retry of the same input keeps its request ID until a
-  // confirmed result arrives; the verdict is then reread from lesson.read.
+  // One step action; its confirmed verdict is then reread from lesson.read.
   async function stepAction(kind, route, stepId, extra = {}) {
     if (!state.attemptId || state.busy) return null;
     const attemptId = state.attemptId;
     const key = JSON.stringify([attemptId, kind, stepId, extra]);
-    const requestId = pending.get(key) || globalThis.crypto.randomUUID();
-    pending.set(key, requestId);
+    const requestId = pendingRequestId(key);
     const expected = viewer;
     state.busy = `${kind}:${stepId}`;
     state.error = "";
@@ -309,8 +314,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     }
   }
 
-  // Learner-origin App interaction (restored from the retired Learning gesture
-  // owner, adapted to the reader): the step a press in projectSlug's Preview
+  // Learner-origin App interaction: the step a press in projectSlug's Preview
   // answers. Only L's current step of its open, prepared, not-ended version 2
   // attempt whose practice project is projectSlug, while L does not cover the
   // app, and only when that step declares an automatic response check (code
@@ -380,8 +384,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     minimise();
     const navigator = browserNavigation?.value || null;
     // A Database view belongs to one session: both hosts open it only with that
-    // exact sessionId (the earlier teacher command sent the exercise session).
-    // Use the practice project's selected session, opening the project first.
+    // exact sessionId. Use the practice project's selected session, opening the
+    // project first.
     if (navigator && command.databaseView) {
       if (!selectedSession(command.projectSlug)) {
         await navigator({ projectSlug: command.projectSlug });
@@ -446,8 +450,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!state.attemptId || state.busy) return null;
     const attemptId = state.attemptId;
     const key = JSON.stringify([attemptId, "end"]);
-    const requestId = pending.get(key) || globalThis.crypto.randomUUID();
-    pending.set(key, requestId);
+    const requestId = pendingRequestId(key);
     state.busy = "end";
     state.error = "";
     try {
@@ -466,8 +469,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   }
 
   // Learner notes (C7). Saves replace the whole text against the revision
-  // shown, so a newer change by Colleague is never silently overwritten; a
-  // retry of the same save keeps its request ID.
+  // shown, so a newer change by Colleague is never silently overwritten.
   async function readNotes() {
     if (!state.actorKey) return null;
     const expected = viewer;
@@ -492,8 +494,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const expected = viewer;
     const expectedRevision = notes.value?.revision ?? 0;
     const key = JSON.stringify(["notes", kind, body.text ?? "", expectedRevision]);
-    const requestId = pending.get(key) || globalThis.crypto.randomUUID();
-    pending.set(key, requestId);
+    const requestId = pendingRequestId(key);
     notesState.saving = true;
     notesState.error = "";
     try {
@@ -586,4 +587,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };

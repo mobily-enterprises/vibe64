@@ -23,7 +23,7 @@ export const VIBE64_HOST_CONVERSATION_KEY = Symbol("vibe64.host.conversation");
 // null means signed out; standalone editors use their local identity.
 export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 
-// The shared Learning environment (L) controller (useVibe64Learning), provided
+// The shared Learning environment (L) controller (createVibe64Learning), provided
 // by the assistant shell context of each host as the controller itself or a ref
 // holding it. Colleague reads its open state, lesson, attempt, step and results,
 // and calls show({ attemptId, stepId }), minimise() and close(). Consumers

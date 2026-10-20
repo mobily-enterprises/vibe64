@@ -90,7 +90,7 @@ const {
                   :active="project.slug === projectSlug"
                   :title="projectDisplayName(project)"
                   :subtitle="project.projectRoot"
-                  @click="openProject(project, $event)"
+                  @click="openProject(project)"
                 />
                 <v-list-item
                   v-if="switcherProjects.length === 0"
@@ -138,7 +138,7 @@ const {
             type="button"
             variant="tonal"
             :aria-label="chatToggleTitle"
-            @click="setChatCollapsed(!chatCollapsed, $event)"
+            @click="setChatCollapsed(!chatCollapsed)"
           />
 
           <div
@@ -156,7 +156,7 @@ const {
               type="button"
               :data-vibe64-guide="tab.id"
               :aria-selected="projectPane === tab.id ? 'true' : 'false'"
-              @click="selectProjectPane(tab.id, $event)"
+              @click="selectProjectPane(tab.id)"
             >
               {{ tab.label }}
             </button>
@@ -173,7 +173,7 @@ const {
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
             :title="mobileProjectAction.label"
-            @click="selectProjectPane(mobileProjectAction.pane, $event)"
+            @click="selectProjectPane(mobileProjectAction.pane)"
           >
             <v-icon class="studio-home-shell-project-mobile-action__icon" :icon="mobileProjectAction.icon" size="18" />
             <span class="studio-home-shell-project-mobile-action__label">{{ mobileProjectAction.label }}</span>
