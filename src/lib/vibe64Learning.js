@@ -105,8 +105,10 @@ function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
 
 function createVibe64Learning({ request: requestOverride = null, browserNavigation = null, colleagueView = null,
   runGuide = null, now = () => Date.now() } = {}) {
+  // hiddenBy: "learner" when the learner's own Minimise, Close or Escape hid L
+  // (Colleague then returns a phone learner to its conversation), else "".
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-    loading: false, error: "", actorKey: "", busy: "" });
+    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "" });
   const lesson = shallowRef(null);
   const colleagueRequest = shallowRef(null);
   // The teacher's notes about this learner, read when L shows them.
@@ -153,7 +155,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     notes.value = null;
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-      loading: false, error: "", busy: "", actorKey: next });
+      loading: false, error: "", busy: "", hiddenBy: "", actorKey: next });
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
   }
@@ -208,6 +210,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!state.actorKey) throw new Error("Sign in before opening Learning.");
     state.open = true;
     state.minimised = false;
+    state.hiddenBy = "";
     if (text(attemptId) && attemptId !== state.attemptId) {
       lesson.value = null;
       state.attemptId = attemptId;
@@ -226,14 +229,18 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   }
 
   // Hide L with its state kept; the L button or Colleague brings it back.
-  function minimise() {
+  // by = "learner" only for the learner's own Minimise; Show me, Teach me and
+  // app navigation hide L to show something else.
+  function minimise(by = "") {
     if (!state.open) return;
+    state.hiddenBy = by === "learner" ? "learner" : "";
     state.open = false;
     state.minimised = true;
     flushReader();
   }
 
-  function close() {
+  function close(by = "") {
+    state.hiddenBy = by === "learner" ? "learner" : "";
     state.open = false;
     state.minimised = false;
     flushReader();
@@ -537,6 +544,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state: readonly(state),
     get open() { return state.open; },
     get minimised() { return state.minimised; },
+    get hiddenBy() { return state.hiddenBy; },
     get surface() { return state.surface; },
     get attemptId() { return state.attemptId; },
     get stepId() { return currentStep.value?.id || ""; },

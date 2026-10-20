@@ -181,6 +181,89 @@ test("Teach me from the Learning environment opens Colleague and sends its fixed
   assert.equal(colleagueRequest.value.id, "teach-2");
 });
 
+test("Teach me without a usable AI model opens Colleague, says so and sends nothing", async (t) => {
+  const colleagueRequest = vue.shallowRef(null);
+  const learning = { colleagueRequest, consumeColleagueRequest(id) {
+    if (colleagueRequest.value?.id !== id) return null;
+    const value = colleagueRequest.value;
+    colleagueRequest.value = null;
+    return value;
+  } };
+  let usable = false;
+  const view = mount(t, async (url, options) => {
+    if (url.endsWith("/messages")) return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
+    return { ok: true, messages: [], status: "ready", ...(usable ? {} : { modelSetupRequired: true }) };
+  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, { learning });
+  await flush();
+  colleagueRequest.value = Object.freeze({ id: "teach-1", kind: "teach", message: "Teach me this step.", actorKey: "member",
+    attemptId: "11111111-1111-4111-8111-111111111111", stepId: "connect" });
+  await flush(); await flush();
+  assert.equal(view.state.open.value, true, "Colleague opens to explain");
+  assert.equal(view.state.teachNeedsModel.value, true);
+  assert.equal(colleagueRequest.value, null, "the request is consumed; Teach me can be pressed again");
+  assert.equal(nonFocusPosts(view.requests).length, 0, "no message is sent without a usable model");
+  assert.deepEqual(view.notices, [], "nothing failed: Colleague says what to do instead");
+
+  // After an AI is connected, the next Teach me sends the fixed message.
+  usable = true;
+  colleagueRequest.value = Object.freeze({ id: "teach-2", kind: "teach", message: "Teach me this step.", actorKey: "member",
+    attemptId: "11111111-1111-4111-8111-111111111111", stepId: "connect" });
+  await flush(); await flush();
+  assert.equal(view.state.teachNeedsModel.value, false);
+  const commands = nonFocusPosts(view.requests);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].options.body.text, "Teach me this step.");
+});
+
+test("on a phone, the learner's own Minimise of Learning opened from Colleague returns to Colleague's dialog", async t => {
+  const learning = vue.reactive({ open: false, hiddenBy: "", surface: "courses", attemptId: "", stepId: "", lesson: null, results: [],
+    show() { learning.open = true; learning.hiddenBy = ""; }, minimise(by = "") { learning.hiddenBy = by; learning.open = false; },
+    close(by = "") { learning.hiddenBy = by; learning.open = false; } });
+  const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
+    undefined, null, null, null, { learning });
+  await flush();
+  view.state.props.navigate = async command => { if (command.learning) learning.show(); return { learningOpen: learning.open }; };
+  view.state.xs.value = true;
+  view.state.open.value = true;
+  await flush();
+  await view.state.handleNavigation({ id: "phone-learning", status: "pending", learning: { open: true } });
+  await flush();
+  assert.equal(view.state.shown.value, false, "the phone dialog gives way to Learning");
+  assert.equal(learning.open, true);
+  learning.minimise("learner");
+  await flush();
+  assert.equal(view.state.shown.value, true, "minimising Learning returns to Colleague, not the app");
+
+  // Show me (or any other programmatic hide) shows the app instead.
+  await view.state.handleNavigation({ id: "phone-learning-2", status: "pending", learning: { open: true } });
+  await flush();
+  assert.equal(view.state.shown.value, false);
+  learning.minimise();
+  await flush();
+  assert.equal(view.state.shown.value, false, "Show me keeps the app visible");
+
+  // Learning the learner opened without Colleague never brings the dialog back.
+  learning.show();
+  await flush();
+  learning.close("learner");
+  await flush();
+  assert.equal(view.state.shown.value, false);
+
+  // The pinned step card's Open lesson behaves like Colleague's Learning command.
+  learning.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  learning.stepId = "read";
+  learning.lesson = { title: "Lesson", steps: [{ id: "read", title: "Read" }] };
+  view.state.open.value = true;
+  await flush();
+  view.state.openLearningStep();
+  await flush();
+  assert.equal(view.state.shown.value, false);
+  assert.equal(learning.open, true);
+  learning.close("learner");
+  await flush();
+  assert.equal(view.state.shown.value, true);
+});
+
 test("operation receipts open their exact target and prepare recovery without replaying an effect", async t => {
   const receipt = { id: "operation-one", actionId: "vibe64.sessions.rename", label: "Sessions rename", status: "unknown",
     error: "The outcome could not be verified. Inspect the target before requesting another execution.", canPrepareRetry: false,

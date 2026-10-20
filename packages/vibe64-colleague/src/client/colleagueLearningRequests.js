@@ -15,7 +15,9 @@ function watchColleagueLearningRequests({ learning, actorKey, reveal, send, repo
       // Consumed once: a failure is reported and Teach me can be pressed again.
       const value = learning.consumeColleagueRequest(request.id);
       if (!value) return;
-      await reveal();
+      // reveal() returning false means Colleague cannot answer (no usable AI
+      // model): it has said so in its conversation and nothing is sent.
+      if (await reveal() === false) return;
       if (await send(value.message) === false) {
         throw new Error("Colleague could not receive Teach me. Open Colleague and ask it to teach this step.");
       }

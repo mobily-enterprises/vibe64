@@ -86,12 +86,17 @@ Teaching uses only client state and existing operations. Both hosts report
 and `learningStepId` in focus from the shared L controller, so Colleague knows
 the current step even while L is minimised. **Teach me** records one request on
 that controller; `colleagueLearningRequests.js` consumes it once for the same
-signed-in person, reveals Colleague and sends the fixed text "Teach me this
-step." through the ordinary send. `navigation.open-learning` (no project) opens
+signed-in person, reveals Colleague, rereads its state and sends the fixed text
+"Teach me this step." through the ordinary send. When that read reports
+`modelSetupRequired`, nothing is sent: the setup warning says Colleague cannot
+teach the step yet and offers **Open AI Accounts**. `navigation.open-learning` (no project) opens
 L at an attempt/step, minimises it, or points at a real place or the L button;
 `navigation.open` with `guide.navigate=true` is the project-scoped "show me".
 Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
-On a phone the dialog minimises itself before opening L or ringing a control.
+On a phone the dialog minimises itself before opening L or ringing a control;
+after it gave way to L (a Learning command or **Open lesson**), the learner's
+own Minimise or Close of L (controller `hiddenBy === "learner"`) reopens the
+dialog, while Show me and other app navigation leave the app visible.
 The pinned current-step card (lesson title, Step N of M, step title, Passed,
 **Open lesson**) is rendered from the L controller in the drawer, the phone
 dialog and the voice panel; it has no server coupling. On a phone **Open lesson**
@@ -109,7 +114,9 @@ tools, native history, admission, cancellation and model replacement. Its servic
 owns product instructions, focused targets, watches, assignments and authorization.
 When initial Senior selection has no available route, the service records the
 existing setup failure without admitting a model request and projects a bounded
-`modelSetupRequired` presentation fact. The client keeps the original JSKIT draft
+`modelSetupRequired` presentation fact. Before a selection is committed, a read
+also projects it when ordinary selection finds no usable Senior route (no
+failure is recorded), so the composer and Teach me know before any send. The client keeps the original JSKIT draft
 and offers the existing account owner: Online navigates to Management → AI
 Accounts, while standalone dispatches its existing Account settings request. The
 control sends no message, changes no selection and performs no credential action.

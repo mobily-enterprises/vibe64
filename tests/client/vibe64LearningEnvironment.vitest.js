@@ -88,6 +88,22 @@ describe("useVibe64Learning controller", () => {
     expect(learning.lesson.value.steps.find(step => step.id === "read").bodyText).toBe("# Hello");
   });
 
+  it("records whether the learner's own Minimise or Close hid L, for Colleague's phone return", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    learning.minimise("learner");
+    expect(learning.hiddenBy).toBe("learner");
+    await learning.show();
+    expect(learning.hiddenBy, "showing L again clears it").toBe("");
+    learning.minimise();
+    expect(learning.hiddenBy, "Show me, Teach me and app navigation hide L to show something else").toBe("");
+    await learning.show();
+    learning.close("learner");
+    expect(learning.hiddenBy).toBe("learner");
+    expect(learning.minimised).toBe(false);
+  });
+
   it("minimise keeps the place, close returns to the app and reopening restores the exact step", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();
@@ -612,6 +628,53 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("shows a passed question's saved selection from its recorded evidence, also in a fresh browser", async () => {
+    const { learning } = controller({ reads: () => lessonResult({ results: [
+      { stepId: "quiz", kind: "choice", outcome: "not-yet-passed", evidence: { selected: [1] } },
+      { stepId: "quiz", kind: "choice", outcome: "passed", evidence: { selected: [0, 2] } }] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const view = await mountReader(learning);
+    const checked = () => nodes(view.root).filter(node => node.tag === "div" && node.props?.label).map(node => node.props["model-value"] ?? node.props.modelValue);
+    try {
+      learning.selectStep("quiz");
+      await flush();
+      expect(checked()).toEqual([true, false, true]);
+      expect(byTest(view.root, "learning-answer").props.disabled).toBe(true);
+      // A realtime reread keeps it; another step and back shows it again.
+      await learning.learnerChanged({ attemptId: ATTEMPT });
+      await flush();
+      expect(checked()).toEqual([true, false, true]);
+      learning.selectStep("tick");
+      await flush();
+      learning.selectStep("quiz");
+      await flush();
+      expect(checked()).toEqual([true, false, true]);
+    } finally { view.app.unmount(); }
+  });
+
+  it("leaves a self step's instruction to the lesson and says when an earlier attempt already passed it", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "tick" });
+    const view = await mountReader(learning);
+    const selfText = () => textOf(nodes(view.root).find(node => node.props?.["aria-label"] === "Self check"));
+    try {
+      expect(selfText()).not.toContain("mark it done");
+      expect(byTest(view.root, "learning-done-kept")).toBeUndefined();
+      expect(byTest(view.root, "learning-done").props.disabled).toBe(false);
+    } finally { view.app.unmount(); }
+
+    const retake = controller({ reads: () => lessonResult({ passedStepIds: ["tick"] }) });
+    retake.learning.setViewer("member");
+    await retake.learning.show({ attemptId: ATTEMPT, stepId: "tick" });
+    const again = await mountReader(retake.learning);
+    try {
+      expect(textOf(byTest(again.root, "learning-done-kept"))).toContain("You already passed this step");
+      expect(byTest(again.root, "learning-done").props.disabled).toBe(true);
+    } finally { again.app.unmount(); }
+  });
+
   it("finishes a complete lesson through lesson.end and returns to Courses for the next one", async () => {
     let ended = false;
     const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
@@ -716,6 +779,7 @@ describe("Learning overlay", () => {
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
       await flush();
       expect(learning.open).toBe(false);
+      expect(learning.hiddenBy, "Escape is the learner's own close").toBe("learner");
       // Kept mounted (hidden) so the place stays exactly as it was.
       expect(byTest(root, "reader")).toBeTruthy();
       viewer.value = { actorKey: "someone-else" };
@@ -731,7 +795,8 @@ describe("L's Practice section", () => {
     const { learning } = controller();
     learning.setViewer("member");
     await learning.show();
-    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() } };
+    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() },
+      coursesResource: { data: Vue.ref({ ok: true, courses: [{ lessons: [{ code: "V64-START-02", title: "Your first change" }] }] }) } };
     const practiceOptions = [];
     const practiceProjects = Vue.ref([
       { slug: "training-mine", attemptId: ATTEMPT, lessonCode: "V64-START-02", lessonTitle: "", ended: false, mine: true, deleteAvailable: true },
@@ -760,6 +825,8 @@ describe("L's Practice section", () => {
       expect(nodes(root).filter(node => node.props?.["data-practice-slug"]).map(node => node.props["data-practice-slug"]))
         .toEqual(["training-mine", "training-old"]);
       expect(textOf(root)).toContain("V64-START-02");
+      const names = nodes(root).filter(node => String(node.props?.class || "").includes("vibe64-learning-practice__name")).map(textOf);
+      expect(names, "a row shows its lesson's title from the course catalogue, else its slug").toEqual(["Your first change", "training-old"]);
       const deletes = nodes(root).filter(node => String(node.props?.["aria-label"] || "").startsWith("Delete practice project"));
       expect(deletes.map(node => node.props["aria-label"])).toEqual(["Delete practice project training-mine"]);
       deletes[0].props.onClick();

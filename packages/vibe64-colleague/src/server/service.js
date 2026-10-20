@@ -444,6 +444,17 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
   }
 
+  // Only the definite "no usable model" answer counts; any other failure is
+  // left to the send, which reports it.
+  async function selectionAvailable(context) {
+    try {
+      await chooseSelection(context);
+      return true;
+    } catch (error) {
+      return error?.code !== "vibe64_colleague_model_unavailable";
+    }
+  }
+
   async function openConversation(state, context, settings = {}, transferring = false) {
     if (state.transfer && !transferring) await state.transfer;
     const scopeId = state.record.scopeId, runtimeId = state.record.runtimeId;
@@ -1157,7 +1168,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.requestContext = context;
       scheduleWatches(state);
       wakeForObservations(state);
-      return snapshot(state, input.clientId);
+      const result = await snapshot(state, input.clientId);
+      // Before the first send commits a model, a read already says when none is
+      // usable, so Teach me and the composer can say so without sending.
+      if (!result.modelSetupRequired && !state.record.assistantSelection && !await selectionAvailable(context)) {
+        return { ...result, modelSetupRequired: true };
+      }
+      return result;
     },
     async startFresh(input, context) {
       const state = await stateFor(context);

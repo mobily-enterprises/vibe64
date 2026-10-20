@@ -90,8 +90,7 @@ async function clear() {
 <style scoped>
 .vibe64-teacher-notes {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  margin: var(--v64-space-4, 16px) auto 0;
-  max-width: 48rem;
+  margin-top: var(--v64-space-4, 16px);
   padding: var(--v64-space-4, 16px);
 }
 .vibe64-teacher-notes__title { font: var(--v64-type-title-md, 600 1.125rem/1.5rem system-ui, sans-serif); margin: 0 0 4px; }

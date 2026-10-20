@@ -36,7 +36,8 @@ tab named after your open lesson, **Minimise** and a close button (✕, label
   L where it was; in another browser L opens on **Courses**, and **Resume saved
   lesson** opens the lesson at the step you last read.
 
-On a phone Learning is a full-screen sheet. The lesson's steps become a row of
+On a phone Learning is a full-screen sheet; the **Courses** tab always shows in
+full and a long lesson title is shortened. The lesson's steps become a row of
 numbered circles at the top (a tick for a passed step); the step text scrolls
 below them. When there are more circles than fit, the row scrolls sideways and
 follows the current step as you press **Next step** or **Previous step**, or
@@ -56,6 +57,9 @@ for the workspace owner, **New course** (see
   created.
 - **Continue** and **Resume saved lesson** open your saved lesson.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
+- Below the courses, **Practice** lists your practice projects by lesson title
+  (with the lesson code and project name underneath). Select one to open it
+  (Learning minimises); the bin button deletes it for good.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the same
   reader (see the hosted author-trial guide).
@@ -94,7 +98,9 @@ lesson** button. **Finish lesson** ends the lesson (its results are kept, as
 with any ended lesson) and returns to **Courses**, where the next lesson can be
 started. You don't need Colleague for this, so it also works before an AI is
 connected. If finishing is not confirmed, the error appears at the top of the
-lesson; press **Finish lesson** again.
+lesson; press **Finish lesson** again. On a phone this is one short row under
+the step circles: **✓ Lesson complete**, **Finish lesson** and **Practice**
+(which opens the practice project).
 
 A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
@@ -107,7 +113,8 @@ also has:
   is compared on the server; the result appears as the step's status. You can
   try again until it passes. Once passed, the question says **You already passed
   this question, so answers are not checked again.** and **Check answer** stays
-  disabled; the pass is kept.
+  disabled; the pass is kept. The options you ticked in the passing answer
+  stay ticked, also after a reload or in another browser.
 - **Automatic check**: a step about an App interaction says "This step is
   checked automatically when you do it in your practice project", for example
   by pressing a button in its Preview. For a button step, open the step in
@@ -128,7 +135,10 @@ also has:
   **Check now** (or an answer sent again) is not checked again and shows "You
   already passed this step, so this was not checked again. Your earlier pass
   counts."
-- **Done**: for a step you check yourself; press it when you have done the step.
+- **Done**: for a step you check yourself; the step's text says when to press
+  it. A step already passed (in this attempt or one before, for example when you
+  retake a lesson) says **You already passed this step, so it does not need to
+  be marked done again.** and **Done** stays disabled.
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control
   with a short caption. A step about one file opens that file in the practice
@@ -143,6 +153,10 @@ also has:
 - **Teach me**: minimises Learning, opens Colleague and sends it the message
   "Teach me this step." for you. The step stays pinned above Colleague's chat.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
+  If no AI is connected yet (for example during Lesson 0), nothing is sent:
+  Colleague opens and says **Colleague cannot teach this step yet: it has no
+  usable AI model, so nothing was sent.** with **Open AI Accounts**. Connect an
+  AI there, then press **Teach me** again.
 - **Lesson notes** (when the lesson has them) and **Previous step** /
   **Next step**.
 - Links in a step or its notes that go to another website (for example Z.AI's
@@ -155,7 +169,10 @@ Statuses come only from automatic checks, the answer comparison and your own
 correct answers of a question.
 
 On a phone, **Open lesson** on the step card in Colleague's full-screen chat
-minimises that chat and shows the lesson at that step.
+minimises that chat and shows the lesson at that step. The same happens when
+Colleague opens Learning for you. When you then press **Minimise** or **Close
+Learning** (or Escape), you return to Colleague's chat, not the page behind it.
+**Show me** and **Open practice project** still show the app.
 
 An ended lesson stays readable with the note **This lesson has ended.** A lesson
 started in the earlier teacher format shows **This lesson was started with the

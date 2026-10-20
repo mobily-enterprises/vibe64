@@ -41,8 +41,11 @@ guide overlay 3000 above L 2400 above Colleague.
   focus. `setViewer` binds the signed-in person; a change of person closes L, drops
   the previous person's lesson, notes and pending requests, and restores only
   the new person's own saved place.
-- Place: `show({surface?, attemptId?, stepId?})`, `minimise()` (state kept, app
-  and Colleague visible), `close()`, `toggle()`, `selectStep`, `setScroll`. The
+- Place: `show({surface?, attemptId?, stepId?})`, `minimise(by?)` (state kept,
+  app and Colleague visible), `close(by?)`, `toggle()`; `hiddenBy` is
+  `"learner"` only when L's own Minimise, Close or Escape hid it (Colleague
+  then returns a phone learner to its dialog), and `""` for Show me, Teach me,
+  Open practice project and app navigation, `selectStep`, `setScroll`. The
   place is kept per tab in `sessionStorage` and saved for the account through
   `reader.save` (debounced, flushed on minimise/close), so a reload or another
   browser reopens the same step and scroll.
@@ -83,8 +86,11 @@ restarts the diagram without a snapshot (its declared initial state and the
 controller's own labels) and runs its declared commands in order through
 `TrainingVisualPlayer` (the diagram and the scroll place watch the attempt and
 step IDs as separate sources, so a realtime lesson reread does not remount a
-playing diagram or move the scroll), a choice question (**Check answer**), **Done** for a
-self-check, **Check now** for an automatic check (a code step, one declaring
+playing diagram or move the scroll), a choice question (**Check answer**; a passed question shows the options of its
+latest passing result's `evidence.selected`, so another browser shows them too),
+**Done** for a self-check (no instruction line of its own: the step text says
+when; a step already passed in any attempt of the lesson says so, as a passed
+question does), **Check now** for an automatic check (a code step, one declaring
 `check.files`, says saving does not check it; a not-passed result's reason, or
 the server's `alreadyPassed` answer for a step already passed, is shown under
 **Check now** or **Check answer** until the step changes; it never changes the
@@ -93,7 +99,9 @@ status),
 `sessionId`, which both hosts require for a Database view; from another page it
 opens the practice project first), **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
-full-screen sheet with a row of numbered step circles; when the row overflows,
+full-screen sheet whose **Courses** tab never shrinks, with a row of numbered
+step circles and, for a complete lesson, one short row of **✓ Lesson complete**,
+**Finish lesson** and **Practice**; when the row overflows,
 `revealCurrentStep` scrolls only that row to keep the current step visible on
 step changes and reopening. An earlier-format
 (version 1) attempt is shown as readable history with **End this lesson**; a

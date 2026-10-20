@@ -64,9 +64,29 @@ function openLearningStep() {
   if (!step || typeof controller?.show !== "function") return;
   const reopen = () => controller.show({ attemptId: step.attemptId, stepId: step.stepId });
   // A phone shows one surface: minimise the dialog so Learning is visible.
-  if (xs.value && shown.value) toggleConversation().then(reopen).catch(reportFailure);
+  if (xs.value && shown.value) leaveForLearning().then(reopen).catch(reportFailure);
   else Promise.resolve(reopen()).catch(reportFailure);
 }
+// A phone shows one surface. When Colleague's dialog gave way to Learning and
+// the learner then minimises or closes L themselves, the dialog comes back
+// (not the app behind it). Show me, Teach me and app navigation hide L to show
+// something else, so they never bring the dialog back.
+let returnFromLearning = false;
+function leaveForLearning() {
+  returnFromLearning = true;
+  return toggleConversation();
+}
+function reopenConversation() {
+  if (shown.value) return;
+  if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
+  else open.value = true;
+}
+watch(() => unref(learningController.value?.open) === true, (learningOpen, wasOpen) => {
+  if (learningOpen || !wasOpen) return;
+  const back = returnFromLearning && learningController.value?.hiddenBy === "learner";
+  returnFromLearning = false;
+  if (back && xs.value) reopenConversation();
+});
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
   open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
@@ -217,7 +237,8 @@ const colleagueNavigation = createColleagueNavigation({
   navigate: () => props.navigate ? navigateBrowser : null,
   beforeNavigate(command) {
     // A phone shows one surface: reveal the app, Learning or the guide ring.
-    if (xs.value && shown.value && (command.guide || command.learning)) return toggleConversation();
+    if (xs.value && shown.value && command.learning) return leaveForLearning();
+    if (xs.value && shown.value && command.guide) return toggleConversation();
   },
   acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
   error: productError
@@ -600,15 +621,23 @@ function waitForConversation(timeoutMs = 10000) {
     }, { immediate: true });
   });
 }
+// Without a usable AI model Teach me sends nothing: the conversation opens and
+// says so, offering Open AI Accounts (Lesson 0 connects one).
+const teachNeedsModel = ref(false);
 async function revealForLearning() {
-  if (!shown.value) {
-    if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
-    else open.value = true;
+  teachNeedsModel.value = false;
+  reopenConversation();
+  // A fresh read says whether a model is usable before anything is sent.
+  await refresh();
+  if (product.value.modelSetupRequired) {
+    teachNeedsModel.value = true;
+    return false;
   }
-  if (!conversation.runtime.value) await refresh();
   await waitForConversation();
   if (bodyVisible.value) await focusConversationComposer();
+  return true;
 }
+watch(() => product.value.modelSetupRequired, required => { if (!required) teachNeedsModel.value = false; });
 const stopLearningRequests = watchColleagueLearningRequests({ learning, actorKey: () => actorKey.value,
   reveal: revealForLearning, report: reportFailure,
   send: async message => sendMessage(message, { focus: { ...props.focus } }) });
@@ -789,7 +818,8 @@ onBeforeUnmount(() => {
         </div>
       </section>
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
-        <p>Colleague has no usable AI model. Your draft is kept and no request was sent. Connect an AI and configure an available Senior model, then return and press Send.</p>
+        <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts (Lesson 0 shows how), then press Teach me again.</p>
+        <p v-else>Colleague has no usable AI model, so nothing is sent yet and your draft is kept. Connect an AI and configure an available Senior model, then return and press Send.</p>
         <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>
       </v-alert>
       <div class="vibe64-colleague__conversation">

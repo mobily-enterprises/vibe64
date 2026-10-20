@@ -17,7 +17,18 @@ const props = defineProps({
 const router = useRouter();
 const practice = useVibe64PracticeProjects({ enabled: computed(() => Boolean(props.learning.state.open)),
   learningResource: props.courses.learningResource });
+// learning.read names only the lesson code; the course catalogue L already reads gives its title.
+const lessonTitles = computed(() => {
+  const titles = new Map();
+  for (const course of toValue(props.courses.coursesResource?.data)?.courses || []) {
+    for (const lesson of Array.isArray(course?.lessons) ? course.lessons : []) {
+      if (lesson?.code && lesson.title && !titles.has(lesson.code)) titles.set(lesson.code, String(lesson.title));
+    }
+  }
+  return titles;
+});
 const projects = computed(() => practice.practiceProjects.value);
+const titleOf = project => project.lessonTitle || lessonTitles.value.get(project.lessonCode) || "";
 const deleting = computed(() => toValue(practice.deletingSlug));
 
 function openProject(slug) {
@@ -37,8 +48,8 @@ function openProject(slug) {
       <li v-for="project in projects" :key="project.slug" class="vibe64-learning-practice__row" :data-practice-slug="project.slug">
         <button type="button" class="vibe64-learning-practice__open" :disabled="Boolean(deleting)"
           :aria-label="`Open practice project ${project.slug}`" @click="openProject(project.slug)">
-          <span class="vibe64-learning-practice__name">{{ project.lessonTitle || project.lessonCode || project.slug }}</span>
-          <span class="vibe64-learning-practice__slug">{{ project.slug }}</span>
+          <span class="vibe64-learning-practice__name">{{ titleOf(project) || project.lessonCode || project.slug }}</span>
+          <span class="vibe64-learning-practice__slug">{{ titleOf(project) && project.lessonCode ? `${project.lessonCode} · ${project.slug}` : project.slug }}</span>
         </button>
         <v-btn v-if="project.mine && project.deleteAvailable && project.attemptId" variant="text" :icon="mdiDeleteOutline"
           min-width="48" min-height="48" :aria-label="`Delete practice project ${project.slug}`"
@@ -52,8 +63,7 @@ function openProject(slug) {
 <style scoped>
 .vibe64-learning-practice {
   border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  margin: var(--v64-space-4, 16px) auto 0;
-  max-width: 48rem;
+  margin-top: var(--v64-space-4, 16px);
   padding: var(--v64-space-4, 16px);
 }
 .vibe64-learning-practice__title { font: var(--v64-type-title-md, 600 1.125rem/1.5rem system-ui, sans-serif); margin: 0 0 4px; }
