@@ -138,6 +138,21 @@ it("resumes only the exact requested attempt", async () => {
   expect(harness.command).toHaveBeenCalledTimes(2);
 });
 
+it("continues a left lesson as a new attempt, reusing its continuation request ID on retry", async () => {
+  harness.command.mockRejectedValueOnce(new Error("ack lost"));
+  await expect(courses.continueLesson({ attemptId: A, expectedRevision: 4 })).rejects.toThrow("ack lost");
+  const [path, first] = harness.command.mock.calls[0];
+  expect(path).toBe(`/api/vibe64/training/attempts/${A}/continue`);
+  expect(first).toEqual({ requestId: expect.stringMatching(/^[a-f0-9]{18}$/u), expectedRevision: 4 });
+  expect(courses.starting.value).toBe(false);
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } });
+  const outcome = await courses.continueLesson({ attemptId: A, expectedRevision: 4 });
+  expect(harness.command.mock.calls[1][1], "the retry repeats the same continuation").toEqual(first);
+  expect(outcome).toMatchObject({ attemptId: B, current: true });
+  await courses.continueLesson({ attemptId: A, expectedRevision: 5 });
+  expect(harness.command.mock.calls[2][1].requestId, "a confirmed continuation is not reused").not.toBe(first.requestId);
+});
+
 it("never overlaps another UI operation and retains the exact start retry", async () => {
   const admitted = Promise.withResolvers(); harness.command.mockReturnValueOnce(admitted.promise);
   const pending = courses.startLesson(selection); await flush();

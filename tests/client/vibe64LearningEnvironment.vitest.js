@@ -39,7 +39,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 // Learning-mode requests are answered by `mode` and recorded apart in modeCalls.
-function controller({ reads = () => lessonResult(), posts = () => ({ ok: true }), mode = () => ({ on: false, paused: false }),
+function controller({ reads = () => lessonResult(), posts = () => ({ ok: true }), mode = () => ({ on: false }),
   ...options } = {}) {
   const calls = [];
   const modeCalls = [];
@@ -82,6 +82,13 @@ describe("useVibe64Learning controller", () => {
     expect(learning.stepStatus("tick")).toBe("not-started");
   });
 
+  it("opens a continued lesson at its first required step not yet passed, unless a place is saved", async () => {
+    const { learning } = controller({ reads: () => lessonResult({ results: [], passedStepIds: ["quiz"] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    expect(learning.stepId, "read is optional and quiz passed in an earlier attempt").toBe("preview");
+  });
+
   it("reads every page of a lesson whose step text lesson.read paged", async () => {
     const first = lessonResult({ page: { index: 0, count: 2 } });
     delete first.lesson.steps[3].bodyText;
@@ -114,9 +121,9 @@ describe("useVibe64Learning controller", () => {
   it("is in a lesson while the server's learning mode is on, with L open or hidden, until the lesson ends", async () => {
     let ended = false;
     const { learning, modeCalls } = controller({ reads: () => lessonResult({ attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one" } }),
-      mode: () => ended ? { on: false, paused: false } : { on: true, paused: false, attemptId: ATTEMPT, lessonCode: "V64-START-01",
+      mode: () => ended ? { on: false } : { on: true, attemptId: ATTEMPT, lessonCode: "V64-START-01",
         lessonTitle: "Orientation", practiceSlug: "practice-one", projectSlugs: ["practice-one"] },
-      posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT); return { ok: true, available: true }; } });
+      posts: (url, body) => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT) && body.reason === "finished"; return { ok: true, available: true }; } });
     learning.setViewer("member");
     expect(learning.inLesson, "not before the mode is read").toBe(false);
     await flush();
@@ -127,9 +134,9 @@ describe("useVibe64Learning controller", () => {
     learning.toggle();
     expect(learning.inLesson, "hidden L keeps the lesson going").toBe(true);
     await learning.show();
-    await learning.endLesson({ expectedRevision: 1 });
+    await learning.finishLesson({ expectedRevision: 1 });
     await flush();
-    expect(learning.inLesson, "an ended (or finished) lesson returns the app bar to normal").toBe(false);
+    expect(learning.inLesson, "a finished lesson returns the app bar to normal").toBe(false);
     expect(learning.lessonTitle).toBe("");
     learning.setViewer("someone-else");
     expect(learning.inLesson).toBe(false);
@@ -142,12 +149,12 @@ describe("useVibe64Learning controller", () => {
     expect(failing.inLesson).toBe(false);
   });
 
-  it("leaves and resumes learning mode through its actions and rereads the mode, also on another tab's change", async () => {
+  it("leaves the lesson through its action, ending learning mode, and rereads the mode, also on another tab's change", async () => {
     let on = true;
     const { learning, modeCalls } = controller({ mode: (url, method) => {
-      if (method === "POST") on = url.endsWith("/enter");
-      return on ? { on: true, paused: false, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "practice-one",
-        projectSlugs: ["practice-one"] } : { on: false, paused: true, attemptId: ATTEMPT };
+      if (method === "POST") on = false;
+      return on ? { on: true, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "practice-one",
+        projectSlugs: ["practice-one"] } : { on: false };
     } });
     learning.setViewer("member");
     await flush();
@@ -161,14 +168,18 @@ describe("useVibe64Learning controller", () => {
       { url: VIBE64_LEARNING_ROUTES.learningModeLeave(ATTEMPT), method: "POST", body: {} },
       { url: VIBE64_LEARNING_ROUTES.learningMode, method: "GET", body: undefined }]);
     expect(learning.inLesson).toBe(false);
-    expect(learning.learningMode).toMatchObject({ on: false, paused: true, attemptId: ATTEMPT });
+    expect(learning.learningMode).toMatchObject({ on: false, attemptId: "" });
+    expect(Object.hasOwn(learning.learningMode, "paused"), "a lesson is in progress or not").toBe(false);
     expect(learning.notice, "leaving clears the redirect note").toBe("");
     expect(learning.state.modeBusy).toBe("");
-    await learning.resumeLearningMode(ATTEMPT);
-    expect(modeCalls.at(-2)).toEqual({ url: VIBE64_LEARNING_ROUTES.learningModeEnter(ATTEMPT), method: "POST", body: {} });
-    expect(learning.inLesson).toBe(true);
+    expect(await learning.leaveLesson(), "nothing to leave outside a lesson").toBeNull();
+    expect(learning.resumeLearningMode, "there is no paused lesson to re-enter").toBeUndefined();
 
-    // Another tab or device left the lesson: its learner change rereads the mode here.
+    // Another tab or device started, then left, the lesson: each learner change rereads the mode here.
+    on = true;
+    learning.learnerChanged({ learnerId: "learner", attemptId: ATTEMPT, reason: "learning-mode" });
+    await flush();
+    expect(learning.inLesson).toBe(true);
     on = false;
     const before = modeCalls.length;
     learning.learnerChanged({ learnerId: "learner", attemptId: ATTEMPT, reason: "learning-mode" });
@@ -182,15 +193,15 @@ describe("useVibe64Learning controller", () => {
     expect(learning.notice).toBe("");
   });
 
-  it("redirects other projects in learning mode to the lesson's practice project, or home without one", () => {
+  it("redirects other projects in learning mode to the lesson's practice project, or the Learning page without one", () => {
     const { learningModeRedirect } = LearningLib;
     const mode = { on: true, practiceSlug: "training-abc", projectSlugs: ["training-abc"] };
     expect(learningModeRedirect({ mode, slug: "my-shop" })).toEqual({ slug: "training-abc", path: "/app/project/training-abc" });
     expect(learningModeRedirect({ mode, slug: "training-abc" })).toBeNull();
     expect(learningModeRedirect({ mode, slug: "" }), "pages outside a project stay").toBeNull();
     expect(learningModeRedirect({ mode: { on: true, practiceSlug: "", projectSlugs: [] }, slug: "my-shop" }),
-      "Lesson 0 has no practice project").toEqual({ slug: "", path: "/app" });
-    expect(learningModeRedirect({ mode: { on: false, paused: true }, slug: "my-shop" })).toBeNull();
+      "Lesson 0 has no practice project").toEqual({ slug: "", path: "/app/learning" });
+    expect(learningModeRedirect({ mode: { on: false }, slug: "my-shop" })).toBeNull();
     expect(learningModeRedirect({ mode: null, slug: "my-shop" })).toBeNull();
   });
 
@@ -806,33 +817,15 @@ describe("Learning reader", () => {
     const view = await mountReader(learning);
     try { expect(byTest(view.root, "learning-finish")).toBeUndefined(); } finally { view.app.unmount(); }
   });
-
-  it("keeps an earlier-format attempt readable and only offers to end it", async () => {
-    const { learning, calls } = controller({ reads: () => ({ ok: true, available: true,
-      attempt: { attemptId: ATTEMPT, ended: false }, lesson: { schemaVersion: 1, code: "V64-START-01", title: "Old" } }),
-    posts: () => ({ ok: true, available: true }) });
-    learning.setViewer("member");
-    await learning.show({ attemptId: ATTEMPT });
-    const view = await mountReader(learning);
-    try {
-      expect(textOf(view.root)).toContain("cannot continue here");
-      expect(nodes(view.root).some(node => node.props?.["data-step-id"])).toBe(false);
-      const end = nodes(view.root).find(node => textOf(node) === "End this lesson" && node.props?.onClick);
-      end.props.onClick();
-      await flush();
-      expect(calls.find(call => call.method === "POST")).toMatchObject({ url: VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT),
-        body: { expectedRevision: 3, requestId: expect.any(String), reason: "restart" } });
-    } finally { view.app.unmount(); }
-  });
 });
 
 describe("Learning overlay", () => {
   it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and hides on Escape or its own L", async () => {
     let modeOn = true;
     const { learning, modeCalls } = controller({ mode: (url, method) => {
-      if (method === "POST") modeOn = url.endsWith("/enter");
-      return modeOn ? { on: true, paused: false, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "practice-one",
-        projectSlugs: ["practice-one"] } : { on: false, paused: true, attemptId: ATTEMPT };
+      if (method === "POST") modeOn = false;
+      return modeOn ? { on: true, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "training-1111",
+        projectSlugs: ["training-1111"] } : { on: false };
     } });
     const route = Vue.reactive({ path: "/app/project/my-shop/dashboard", fullPath: "/app/project/my-shop/dashboard", params: { slug: "my-shop" } });
     const replace = vi.fn(async path => { Object.assign(route, { path, fullPath: path, params: { slug: path.split("/")[3] || "" } }); });
@@ -845,6 +838,7 @@ describe("Learning overlay", () => {
       vue: Vue,
       "vue-router": { useRoute: () => route, useRouter: () => ({ replace }) },
       "@/lib/vibe64ProjectScope.js": { projectSlugFromRoute: value => String(value?.params?.slug || "") },
+      "@/lib/vibe64PracticeProjectName.js": { isPracticeProjectSlug: slug => slug.startsWith("training-") },
       "@/lib/vibe64Learning.js": LearningLib,
       "@jskit-ai/realtime/client/composables/useRealtimeEvent": { useRealtimeEvent: options => realtime.push(options) },
       "@local/vibe64-training/client/guide-overlay": { default: { render: () => Vue.h("aside", { "data-guide-overlay": "mounted" }) } },
@@ -857,12 +851,12 @@ describe("Learning overlay", () => {
           onClick: () => emit("opened", { attemptId: ATTEMPT }) }) } },
       "./Vibe64LearningFinished.vue": { default: { props: ["learning", "courses", "learningRevision"],
         setup: props => () => Vue.h("section", { "data-test": "finished", revision: props.learningRevision }) } },
-      "./Vibe64LearningReader.vue": { default: { props: ["learning", "learningRevision"],
-        setup: props => () => Vue.h("article", { "data-test": "reader", revision: props.learningRevision }) } },
+      "./Vibe64LearningReader.vue": { default: { props: ["learning"],
+        setup: props => () => Vue.h("article", { "data-test": "reader", own: props.learning === learning }) } },
       "./Vibe64LearningTeacherNotes.vue": { default: { props: ["learning"],
         setup: props => () => Vue.h("aside", { "data-test": "teacher-notes", own: props.learning === learning }) } },
-      "./Vibe64LearningPractice.vue": { default: { props: ["learning", "courses"],
-        setup: props => () => Vue.h("aside", { "data-test": "practice", own: props.learning === learning && props.courses === courses }) } }
+      "./Vibe64LearningPractice.vue": { default: { props: ["learning", "learningRevision"],
+        setup: props => () => Vue.h("aside", { "data-test": "practice", own: props.learning === learning, revision: props.learningRevision }) } }
     });
     const bodyClasses = new Set();
     vi.stubGlobal("document", { activeElement: null, body: { classList: {
@@ -878,7 +872,7 @@ describe("Learning overlay", () => {
       await flush();
       expect(learning.state.actorKey).toBe("member");
       // Learning mode: another project's URL goes to the lesson's practice project, with the note.
-      expect(replace).toHaveBeenCalledWith("/app/project/practice-one");
+      expect(replace).toHaveBeenCalledWith("/app/project/training-1111");
       expect(replace).toHaveBeenCalledTimes(1);
       expect(learning.notice).toBe(LearningLib.VIBE64_LEARNING_MODE_NOTE);
       expect(byTest(root, "learning-mode-notice").props["model-value"]).toBe(true);
@@ -893,11 +887,18 @@ describe("Learning overlay", () => {
       expect(layer.props["aria-label"]).toBe("Learning");
       expect(byTest(root, "courses").props.own, "the courses surface reads L's own courses adapter").toBe(true);
       expect(byTest(root, "teacher-notes").props.own, "the courses surface shows this learner's teacher notes").toBe(true);
-      expect(byTest(root, "practice").props.own, "the courses surface lists practice projects from L's own learning.read").toBe(true);
+      expect(byTest(root, "practice"), "practice projects have their own tab").toBeUndefined();
+      byTest(root, "learning-practice-tab").props.onClick();
+      await flush();
+      expect(learning.surface).toBe("practice");
+      expect(byTest(root, "practice").props.own).toBe(true);
+      expect(byTest(root, "practice").props.revision, "Open continues against the saved learning revision").toBe(9);
+      byTest(root, "learning-courses-tab").props.onClick();
+      await flush();
       byTest(root, "courses").props.onClick();
       await flush();
       expect(learning.surface).toBe("lesson");
-      expect(byTest(root, "reader").props.revision).toBe(9);
+      expect(byTest(root, "reader").props.own).toBe(true);
       expect(byTest(root, "learning-minimise"), "L itself hides Learning").toBeUndefined();
       expect(byTest(root, "learning-close")).toBeUndefined();
       const hide = byTest(root, "learning-hide");
@@ -912,19 +913,23 @@ describe("Learning overlay", () => {
       await flush();
       expect(learning.surface, "L returns to exactly where the learner was").toBe("lesson");
       expect(bodyClasses.has("vibe64-in-lesson"), "the app bar stays yellow in a lesson").toBe(true);
-      // Leave lesson in L's header pauses the lesson, ends learning mode and hides L.
+      // Leave lesson in L's header ends the lesson and learning mode, hides L and
+      // leaves the practice project for /app.
       await byTest(root, "learning-header-leave").props.onClick();
       await flush();
       expect(modeCalls.some(call => call.url === VIBE64_LEARNING_ROUTES.learningModeLeave(ATTEMPT))).toBe(true);
       expect(bodyClasses.has("vibe64-in-lesson"), "leaving returns the app bar to normal").toBe(false);
       expect(learning.open).toBe(false);
       expect(byTest(root, "learning-header-leave")).toBeUndefined();
+      expect(replace).toHaveBeenLastCalledWith("/app");
       Object.assign(route, { path: "/app/project/my-shop", fullPath: "/app/project/my-shop", params: { slug: "my-shop" } });
       await flush();
-      expect(replace, "out of learning mode every project opens").toHaveBeenCalledTimes(1);
-      await learning.resumeLearningMode(ATTEMPT);
+      expect(replace, "out of learning mode every project opens").toHaveBeenCalledTimes(2);
+      // Continuing the lesson elsewhere (another tab or Colleague) turns learning mode on again here.
+      modeOn = true;
+      learning.learnerChanged({ attemptId: ATTEMPT, reason: "learning-mode" });
       await flush();
-      expect(replace).toHaveBeenLastCalledWith("/app/project/practice-one");
+      expect(replace).toHaveBeenLastCalledWith("/app/project/training-1111");
       await learning.show();
       await flush();
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
@@ -943,55 +948,90 @@ describe("Learning overlay", () => {
   });
 });
 
-describe("L's Practice section", () => {
-  it("lists the learner's practice projects from L's learning.read, opens one over minimised L and deletes with one click", async () => {
-    const { learning } = controller();
+describe("L's Practice tab", () => {
+  it("lists practice projects with lesson and status, opens one into its lesson over minimised L, and archives or deletes with one click", async () => {
+    const opened = { attemptId: OTHER };
+    const { learning, modeCalls } = controller({ mode: () => ({ on: true, attemptId: OTHER, practiceSlug: "training-mine", projectSlugs: ["training-mine"] }) });
     learning.setViewer("member");
-    await learning.show();
-    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() }, coursesResource: { data: Vue.ref(null) } };
+    await learning.show({ surface: "practice" });
     const practiceOptions = [];
-    const practiceProjects = Vue.ref([
-      { slug: "training-mine", attemptId: ATTEMPT, lessonCode: "V64-START-02", lessonTitle: "", name: "Practice: V64-START-02", ended: false, mine: true, deleteAvailable: true },
-      { slug: "training-old", attemptId: OTHER, lessonCode: "", lessonTitle: "", name: "Practice project", ended: true, mine: true, deleteAvailable: false }
+    const projects = Vue.ref([
+      { practiceId: ATTEMPT, slug: "training-mine", name: "Practice: Orientation", status: "not-finished", statusLabel: "Not finished" },
+      { practiceId: OTHER, slug: "training-gone", name: "Practice: Your first change", status: "deleting", statusLabel: "Being deleted" }
     ]);
-    const deletePracticeProject = vi.fn(async () => true);
+    const archived = Vue.ref([{ practiceId: "33333333-3333-4333-8333-333333333333", archiveId: "20261020T101500Z-training-old",
+      name: "Practice: Old lesson", archivedAt: "2026-10-20T10:15:00.000Z" }]);
+    const practice = { projects, archived, loaded: Vue.ref(true), loadError: Vue.ref(""), busy: Vue.ref(""), error: Vue.ref(""),
+      open: vi.fn(async () => ({ ok: true, attempt: opened })), archive: vi.fn(async () => ({ ok: true })),
+      remove: vi.fn(async () => ({ ok: true })), removeArchive: vi.fn(async () => ({ ok: true })) };
     const push = vi.fn();
     const panel = compiledUi(path.resolve("src/components/learning/Vibe64LearningPractice.vue"), {
-      vue: Vue, "vue-router": { useRouter: () => ({ push }) }, "@mdi/js": { mdiDeleteOutline: "trash" },
+      vue: Vue, "vue-router": { useRouter: () => ({ push }) }, "@mdi/js": { mdiDeleteOutline: "trash", mdiArchiveArrowDownOutline: "archive" },
       "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
-      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: options => {
-        practiceOptions.push(options);
-        return { practiceProjects, deletePracticeProject, deletingSlug: Vue.ref(""), deleteError: Vue.ref("") };
-      } }
+      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: options => { practiceOptions.push(options); return practice; } }
     });
     const root = { children: [] };
-    const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, courses }) });
+    const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, learningRevision: 7 }) });
     for (const tag of ["v-btn", "v-alert"]) app.component(tag, widget);
     app.mount(root);
     try {
       await flush();
-      // No project listing: L's own learning.read resource feeds the section.
-      expect(practiceOptions[0].learningResource).toBe(courses.learningResource);
-      expect(practiceOptions[0].coursesResource, "lesson titles come from L's own courses.list").toBe(courses.coursesResource);
-      expect(practiceOptions[0].enabled.value).toBe(true);
-      expect(byTest(root, "learning-practice")).toBeTruthy();
-      expect(nodes(root).filter(node => node.props?.["data-practice-slug"]).map(node => node.props["data-practice-slug"]))
-        .toEqual(["training-mine", "training-old"]);
-      expect(textOf(root)).toContain("Practice: V64-START-02");
-      const names = nodes(root).filter(node => String(node.props?.class || "").includes("vibe64-learning-practice__name")).map(textOf);
-      expect(names, "a row shows its practice name (lesson title from the course catalogue, else its code)").toEqual(["Practice: V64-START-02", "Practice project"]);
-      const deletes = nodes(root).filter(node => String(node.props?.["aria-label"] || "").startsWith("Delete Practice"));
-      expect(deletes.map(node => node.props["aria-label"])).toEqual(["Delete Practice: V64-START-02"]);
-      deletes[0].props.onClick();
+      expect(practiceOptions[0].enabled.value, "practice.list is read only while L is open").toBe(true);
+      expect(nodes(root).filter(node => node.props?.["data-practice-id"]).map(node => node.props["data-practice-id"])).toEqual([ATTEMPT, OTHER]);
+      expect(textOf(root)).toContain("Practice: Orientation");
+      expect(textOf(root)).toContain("Not finished");
+      // A project in deletion offers only Delete.
+      expect(nodes(root).filter(node => node.props?.["data-test"] === "learning-practice-open")).toHaveLength(1);
+      expect(nodes(root).filter(node => node.props?.["data-test"] === "learning-practice-archive")).toHaveLength(1);
+      expect(nodes(root).filter(node => node.props?.["data-test"] === "learning-practice-delete")).toHaveLength(2);
+      const archivedList = byTest(root, "learning-practice-archived");
+      expect(textOf(archivedList)).toContain("Practice: Old lesson");
+      expect(textOf(archivedList)).toContain("Archived");
+      byTest(root, "learning-practice-archive").props.onClick();
+      expect(practice.archive).toHaveBeenCalledWith(projects.value[0]);
+      nodes(root).filter(node => node.props?.["data-test"] === "learning-practice-delete")[1].props.onClick();
+      expect(practice.remove).toHaveBeenCalledWith(projects.value[1]);
+      byTest(root, "learning-practice-archive-delete").props.onClick();
+      expect(practice.removeArchive).toHaveBeenCalledWith(archived.value[0]);
+      await byTest(root, "learning-practice-open").props.onClick();
       await flush();
-      expect(deletePracticeProject).toHaveBeenCalledWith(practiceProjects.value[0]);
-      nodes(root).find(node => node.props?.["aria-label"] === "Open Practice project").props.onClick();
+      expect(practice.open).toHaveBeenCalledWith(projects.value[0], { expectedRevision: 7 });
+      expect(modeCalls.at(-1), "opening turns learning mode on; it is reread").toMatchObject({ method: "GET" });
+      expect(learning.attemptId, "L follows the continued attempt").toBe(OTHER);
+      expect(learning.open, "the project shows with L minimised on the current step").toBe(false);
+      expect(learning.minimised).toBe(true);
+      expect(push).toHaveBeenCalledWith("/app/project/training-mine");
+      projects.value = [];
+      archived.value = [];
       await flush();
-      expect(learning.open, "opening keeps L's place by minimising it").toBe(false);
-      expect(push).toHaveBeenCalledWith("/app/project/training-old");
-      practiceProjects.value = [];
+      expect(byTest(root, "learning-practice-empty")).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
+  it("stays on the Practice tab when opening is refused", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ surface: "practice" });
+    const practice = { projects: Vue.ref([{ practiceId: ATTEMPT, slug: "training-mine", name: "Practice: Orientation", status: "finished", statusLabel: "Finished" }]),
+      archived: Vue.ref([]), loaded: Vue.ref(true), loadError: Vue.ref(""), busy: Vue.ref(""), error: Vue.ref("Refused."),
+      open: vi.fn(async () => null) };
+    const push = vi.fn();
+    const panel = compiledUi(path.resolve("src/components/learning/Vibe64LearningPractice.vue"), {
+      vue: Vue, "vue-router": { useRouter: () => ({ push }) }, "@mdi/js": { mdiDeleteOutline: "trash", mdiArchiveArrowDownOutline: "archive" },
+      "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
+      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => practice }
+    });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, learningRevision: 7 }) });
+    for (const tag of ["v-btn", "v-alert"]) app.component(tag, widget);
+    app.mount(root);
+    try {
       await flush();
-      expect(byTest(root, "learning-practice"), "no practice projects: no section").toBeUndefined();
+      await byTest(root, "learning-practice-open").props.onClick();
+      await flush();
+      expect(push).not.toHaveBeenCalled();
+      expect([learning.open, learning.surface]).toEqual([true, "practice"]);
+      expect(textOf(byTest(root, "learning-practice-error"))).toContain("Refused.");
     } finally { app.unmount(); }
   });
 });
@@ -1204,17 +1244,19 @@ describe("The current lesson's linear flow", () => {
 });
 
 describe("Lesson finished screen", () => {
+  const practiceFake = () => ({ projects: Vue.ref([{ practiceId: ATTEMPT, slug: "training-1111" }]), loaded: Vue.ref(true),
+    busy: Vue.ref(""), error: Vue.ref(""), archive: vi.fn(async () => ({ ok: true })), remove: vi.fn(async () => ({ ok: true })) });
   const COURSE = { courseId: "getting-started", release: "0.2.0", title: "Getting started", enabled: true, status: "released", topics: [],
     lessons: [{ code: "V64-START-01", hash: "h1", title: "Orientation", status: "published", required: true },
       { code: "V64-START-02", hash: "h2", title: "Your first change", status: "published", required: true }] };
   const pin = { course: { courseId: COURSE.courseId, release: COURSE.release }, lesson: { code: "V64-START-01", hash: "h1" } };
 
-  it("ends the lesson once, then deletes or keeps the practice project, starts the next lesson or returns to Courses", async () => {
+  it("finishes the lesson once, then keeps the practice project, starts the next lesson or returns to Courses", async () => {
     let ended = false;
     const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
     const { learning, calls } = controller({
-      reads: () => lessonResult({ results: passed, attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one", pin } }),
-      posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT) ? { reason: "restart" } : ended; return { ok: true, available: true }; } });
+      reads: () => lessonResult({ results: passed, attempt: { attemptId: ATTEMPT, ended, practiceSlug: "training-1111", pin } }),
+      posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT) ? { reason: "finished" } : ended; return { ok: true, available: true }; } });
     learning.setViewer("member");
     await learning.showFinished();
     await learning.show({ attemptId: ATTEMPT });
@@ -1225,12 +1267,11 @@ describe("Lesson finished screen", () => {
     const startLesson = vi.fn(async () => ({ attemptId: OTHER, current: true }));
     const courses = { learningResource: { data: saved, reload: vi.fn(async () => { saved.value = { ...saved.value, revision: 4, active: null }; }) },
       coursesResource: { data: Vue.ref({ ok: true, available: true, courses: [COURSE] }) }, busy: Vue.ref(false), starting: Vue.ref(false), startLesson };
-    const deletePracticeProject = vi.fn(async () => true);
+    const practice = practiceFake();
     const finished = compiledUi(path.resolve("src/components/learning/Vibe64LearningFinished.vue"), {
       vue: Vue, "@mdi/js": { mdiCheckCircle: "check" },
       "@local/vibe64-training/client/course-progress": await import("../../packages/vibe64-training/src/client/courseProgress.js"),
-      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => ({ deletePracticeProject, deletingSlug: Vue.ref(""),
-        deleteError: Vue.ref(""), practiceProjects: Vue.ref([{ slug: "practice-one", attemptId: ATTEMPT }]) }) }
+      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => practice }
     });
     const root = { children: [] };
     const onEnded = vi.fn(() => courses.learningResource.reload());
@@ -1240,7 +1281,7 @@ describe("Lesson finished screen", () => {
     try {
       await flush(); await flush();
       const ends = calls.filter(call => call.method === "POST" && call.url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT));
-      expect(ends).toEqual([expect.objectContaining({ body: { expectedRevision: 3, requestId: expect.any(String), reason: "restart" } })]);
+      expect(ends).toEqual([expect.objectContaining({ body: { expectedRevision: 3, requestId: expect.any(String), reason: "finished" } })]);
       expect(onEnded).toHaveBeenCalledOnce();
       expect(learning.state.attemptId).toBe(ATTEMPT);
       expect(textOf(root)).toContain("Lesson finished");
@@ -1248,7 +1289,8 @@ describe("Lesson finished screen", () => {
       byTest(root, "learning-finished-keep").props.onClick();
       await flush();
       expect(textOf(root)).toContain("The practice project is kept.");
-      expect(deletePracticeProject).not.toHaveBeenCalled();
+      expect(practice.remove).not.toHaveBeenCalled();
+      expect(practice.archive).not.toHaveBeenCalled();
       expect(textOf(byTest(root, "learning-finished-next"))).toContain("Next lesson: Your first change");
       await byTest(root, "learning-finished-next").props.onClick();
       await flush();
@@ -1257,21 +1299,23 @@ describe("Lesson finished screen", () => {
     } finally { app.unmount(); }
   });
 
-  it("deletes the practice project with one click and returns to Courses", async () => {
+  it("continues a next lesson left earlier in its own practice project instead of starting it again", async () => {
     const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
     const { learning } = controller({ reads: () => lessonResult({ results: passed,
-      attempt: { attemptId: ATTEMPT, ended: { reason: "restart" }, practiceSlug: "practice-one", pin } }) });
+      attempt: { attemptId: ATTEMPT, ended: { reason: "finished" }, practiceSlug: "training-1111", pin } }) });
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
     await learning.showFinished();
-    const deletePracticeProject = vi.fn(async () => true);
-    const courses = { learningResource: { data: Vue.ref({ ok: true, available: true, revision: 3, active: null, history: [] }), reload: vi.fn() },
-      coursesResource: { data: Vue.ref({ ok: true, available: true, courses: [] }) }, busy: Vue.ref(false), starting: Vue.ref(false), startLesson: vi.fn() };
+    const left = { attemptId: OTHER, ended: { reason: "left" }, pin: { ...pin, lesson: { code: "V64-START-02", hash: "h2" } } };
+    const continueLesson = vi.fn(async () => ({ attemptId: "44444444-4444-4444-8444-444444444444", current: true }));
+    const courses = { learningResource: { data: Vue.ref({ ok: true, available: true, revision: 5, active: null, history: [left],
+      lessonProgress: [{ lessonCode: "V64-START-01", lessonHash: "h1", required: 3, passed: 3, completed: true, open: false }] }), reload: vi.fn() },
+    coursesResource: { data: Vue.ref({ ok: true, available: true, courses: [COURSE] }) }, busy: Vue.ref(false), starting: Vue.ref(false),
+    startLesson: vi.fn(), continueLesson };
     const finished = compiledUi(path.resolve("src/components/learning/Vibe64LearningFinished.vue"), {
       vue: Vue, "@mdi/js": { mdiCheckCircle: "check" },
       "@local/vibe64-training/client/course-progress": await import("../../packages/vibe64-training/src/client/courseProgress.js"),
-      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => ({ deletePracticeProject, deletingSlug: Vue.ref(""),
-        deleteError: Vue.ref(""), practiceProjects: Vue.ref([{ slug: "practice-one", attemptId: ATTEMPT }]) }) }
+      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => practiceFake() }
     });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(finished, { learning, courses, learningRevision: 3 }) });
@@ -1279,13 +1323,49 @@ describe("Lesson finished screen", () => {
     app.mount(root);
     try {
       await flush();
-      expect(byTest(root, "learning-finished-next"), "no next lesson in an unknown course").toBeUndefined();
-      await byTest(root, "learning-finished-delete").props.onClick();
+      await byTest(root, "learning-finished-next").props.onClick();
       await flush();
-      expect(deletePracticeProject).toHaveBeenCalledWith({ slug: "practice-one", attemptId: ATTEMPT, deleteAvailable: true });
-      expect(textOf(root)).toContain("The practice project is deleted.");
-      await byTest(root, "learning-finished-courses").props.onClick();
-      expect([learning.surface, learning.finished]).toEqual(["courses", false]);
+      expect(continueLesson).toHaveBeenCalledWith({ attemptId: OTHER, expectedRevision: 5 });
+      expect(courses.startLesson).not.toHaveBeenCalled();
     } finally { app.unmount(); }
   });
+
+  for (const [action, test, outcome] of [["archive", "learning-finished-archive", "The practice project is archived."],
+    ["remove", "learning-finished-delete", "The practice project is deleted."]]) {
+    it(`${action === "archive" ? "archives" : "deletes"} the practice project with one click and returns to Courses`, async () => {
+      const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
+      const { learning } = controller({ reads: () => lessonResult({ results: passed,
+        attempt: { attemptId: OTHER, ended: { reason: "finished" }, practiceSlug: "training-1111", pin } }) });
+      learning.setViewer("member");
+      await learning.show({ attemptId: OTHER });
+      await learning.showFinished();
+      const practice = practiceFake();
+      const courses = { learningResource: { data: Vue.ref({ ok: true, available: true, revision: 3, active: null, history: [] }), reload: vi.fn() },
+        coursesResource: { data: Vue.ref({ ok: true, available: true, courses: [] }) }, busy: Vue.ref(false), starting: Vue.ref(false), startLesson: vi.fn() };
+      const finished = compiledUi(path.resolve("src/components/learning/Vibe64LearningFinished.vue"), {
+        vue: Vue, "@mdi/js": { mdiCheckCircle: "check" },
+        "@local/vibe64-training/client/course-progress": await import("../../packages/vibe64-training/src/client/courseProgress.js"),
+        "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: () => practice }
+      });
+      const root = { children: [] };
+      const app = uiRenderer().createApp({ render: () => Vue.h(finished, { learning, courses, learningRevision: 3 }) });
+      for (const tag of WIDGETS) app.component(tag, widget);
+      app.mount(root);
+      try {
+        await flush();
+        expect(byTest(root, "learning-finished-next"), "no next lesson in an unknown course").toBeUndefined();
+        expect(textOf(byTest(root, "learning-finished-keep"))).toBe("Keep");
+        // The continued attempt's project is still listed, so it is offered, not reported deleted.
+        expect(textOf(root)).not.toContain("The practice project is deleted.");
+        await byTest(root, test).props.onClick();
+        await flush();
+        // A continued lesson (attempt OTHER) acts on the practice project its first attempt created,
+        // found in the Practice list by slug.
+        expect(practice[action]).toHaveBeenCalledWith({ practiceId: ATTEMPT });
+        expect(textOf(root)).toContain(outcome);
+        await byTest(root, "learning-finished-courses").props.onClick();
+        expect([learning.surface, learning.finished]).toEqual(["courses", false]);
+      } finally { app.unmount(); }
+    });
+  }
 });

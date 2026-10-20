@@ -29,7 +29,7 @@ const guideRequest = { type: "object", required: false, schema: createSchema({
   filePath: { ...text, noTrim: true, minLength: 1, maxLength: 512 },
   caption: { ...text, minLength: 1, maxLength: TRAINING_GUIDE_CAPTION_LIMIT }
 }) };
-const focusFields = {
+const focusSchema = createSchema({
   ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
   integrationId,
   databaseView,
@@ -41,41 +41,10 @@ const focusFields = {
   previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning"] },
   learningAttemptId,
   learningOpen: { type: "boolean", required: false },
-  learningSurface: { type: "string", required: false, enum: ["courses", "lesson"] },
+  learningSurface: { type: "string", required: false, enum: ["courses", "practice", "lesson"] },
   learningStepId
-};
-const focusSchema = createSchema(focusFields);
+});
 const focusField = { type: "object", schema: focusSchema, required: false };
-// Browser tabs loaded before Learning mode was retired, and their retained
-// uncertain deliveries, still report these focus keys. Incoming focus accepts
-// them for compatibility and the actions drop them before use.
-const retiredFocusFields = {
-  learningMode: { type: "boolean", required: false },
-  learningView: { type: "string", required: false },
-  learningContent: { type: "string", required: false },
-  lessonAttemptId: { ...text, maxLength: 36 }, lessonVisualId: { ...text, maxLength: 64 },
-  lessonPlayerPhase: { ...text, maxLength: 64 }, lessonVisualState: { ...text, maxLength: 64 },
-  lessonCuePhase: { ...text, maxLength: 64 }
-};
-const incomingFocusField = { type: "object", required: false, schema: createSchema({
-  ...focusFields,
-  previewScreen: { ...focusFields.previewScreen, enum: [...focusFields.previewScreen.enum, "lesson-presentation"] },
-  ...retiredFocusFields
-}) };
-function currentFocus(focus) {
-  if (!focus || typeof focus !== "object") return focus;
-  const current = Object.fromEntries(Object.entries(focus).filter(([key]) => !Object.hasOwn(retiredFocusFields, key)));
-  if (current.previewScreen === "lesson-presentation") delete current.previewScreen;
-  return current;
-}
-function withCurrentFocus(input) {
-  if (!input || typeof input !== "object") return input;
-  return { ...input,
-    ...(Object.hasOwn(input, "focus") ? { focus: currentFocus(input.focus) } : {}),
-    ...(Array.isArray(input.unconfirmedMessages) ? { unconfirmedMessages: input.unconfirmedMessages.map(message =>
-      message && Object.hasOwn(message, "focus") ? { ...message, focus: currentFocus(message.focus) } : message) } : {})
-  };
-}
 const navigationOutput = {
   mode: "replace",
   schema: createSchema({
@@ -145,7 +114,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     input: { schema: createSchema(fields), mode: "create" },
     output: null, idempotency: ["message.send", "conversation.start-fresh"].includes(name) ? "domain_native" : "none",
     ...(assistant ? { extensions: { assistant } } : {}),
-    execute: (input, ...rest) => execute(withCurrentFocus(input), ...rest)
+    execute
   }, { projectScoped });
   return [
     definition("usage.topics.read", {
@@ -172,7 +141,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       operationId: clientId, expectedConversationId: clientId,
       unconfirmedMessages: { type: "array", required: false, description: "At most eight exact client-reported unconfirmed submissions; these are retained as annotations, never executed.", items: createSchema({
         messageId: clientId, clientId, text: { type: "string", noTrim: true, minLength: 1, maxLength: 24000, required: true },
-        focus: incomingFocusField
+        focus: focusField
       }) }
     }, (input, context) => colleague.startFresh(input, context)),
     definition("conversation.history.read", {
@@ -182,10 +151,10 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       conversationId: clientId, beforeTurnId: { ...clientId, required: false },
       limit: { type: "integer", min: 1, max: 100, required: false }
     }, (input, context) => colleague.readHistoryPage(input, context)),
-    definition("focus.update", { clientId, focus: { ...incomingFocusField, required: true } },
+    definition("focus.update", { clientId, focus: { ...focusField, required: true } },
       (input, context, deps) => colleague.focus(input, context, deps)),
     definition("message.send", {
-      clientId, focus: incomingFocusField, expectedConversationId: { ...clientId, required: false },
+      clientId, focus: focusField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
@@ -264,7 +233,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
-      error: { ...text, maxLength: 2000 }, focus: incomingFocusField, guide: guideReceipt
+      error: { ...text, maxLength: 2000 }, focus: focusField, guide: guideReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     withLearningModeProjectCheck(definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       guide: guideRequest,
@@ -285,13 +254,13 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
-      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. learningOpen reports whether the Learning environment is open above the app; learningSurface is courses or lesson while it is open; learningAttemptId and learningStepId identify the person's current lesson step even while Learning is minimised. Read that step with lesson.read before teaching it. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request.",
+      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. learningOpen reports whether the Learning environment is open above the app; learningSurface is courses, practice or lesson while it is open; learningAttemptId and learningStepId identify the person's current lesson step even while Learning is minimised. Read that step with lesson.read before teaching it. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request.",
       output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
     })
   ];
 }
 
-const colleagueConversationDataSchema = createSchema({ clientId, focus: incomingFocusField });
+const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });
 const colleagueConversationSelectionSchema = createSchema(modelSelectionFields);
 
 export { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema };

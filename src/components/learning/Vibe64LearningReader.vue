@@ -12,20 +12,13 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // self Done); this view displays the saved results.
 const props = defineProps({
   learning: { type: Object, required: true },
-  // The saved learning revision, required by lesson.end.
-  learningRevision: { type: Number, default: null },
   // Test seam for the step's visual resource read.
   readVisual: { type: Function, default: null }
 });
-// "ended": lesson.end succeeded, so the host rereads the saved lessons it shows.
-const emit = defineEmits(["ended"]);
 const router = useRouter();
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => props.learning.currentStep.value);
-const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
-const legacy = computed(() => Boolean(lesson.value && lesson.value.schemaVersion !== 2));
-const busy = computed(() => props.learning.state.busy);
 const statusOf = stepId => props.learning.stepStatus(stepId);
 const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const requiredDone = computed(() => props.learning.complete);
@@ -68,11 +61,6 @@ function openPractice() {
   props.learning.minimise();
   void router?.push(projectAppPath(practiceSlug.value));
 }
-async function endLesson() {
-  const result = await props.learning.endLesson({ expectedRevision: props.learningRevision });
-  if (result) emit("ended");
-  return result;
-}
 </script>
 
 <template>
@@ -82,14 +70,6 @@ async function endLesson() {
       <template #append><v-btn variant="text" min-height="48" @click="learning.loadLesson()">Retry</v-btn></template>
     </v-alert>
     <v-skeleton-loader v-if="!lesson && learning.state.loading" type="heading, paragraph, paragraph" aria-label="Loading the lesson" />
-
-    <section v-else-if="lesson && legacy" class="vibe64-learning-reader__legacy" aria-label="Earlier lesson">
-      <h2>{{ lesson.title || lesson.code }}</h2>
-      <p>This lesson was started with the earlier teacher format. Its progress is kept, but it cannot continue here.</p>
-      <p v-if="!ended">End it, then start the lesson again from Courses.</p>
-      <v-btn v-if="!ended" variant="tonal" rounded="pill" min-height="48" :disabled="Boolean(busy) || learningRevision === null"
-        :loading="busy === 'end'" @click="endLesson">End this lesson</v-btn>
-    </section>
 
     <template v-else-if="lesson">
       <nav class="vibe64-learning-reader__steps" aria-label="Lesson steps">
@@ -149,8 +129,7 @@ async function endLesson() {
   height: 100%;
   min-height: 0;
 }
-.vibe64-learning-reader__alert, .vibe64-learning-reader__legacy { grid-column: 1 / -1; }
-.vibe64-learning-reader__legacy { max-width: 44rem; margin: 0 auto; padding: var(--v64-space-5, 24px); }
+.vibe64-learning-reader__alert { grid-column: 1 / -1; }
 .vibe64-learning-reader__steps { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); border-inline-end: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12)); }
 .vibe64-learning-reader__steps ol { list-style: none; margin: var(--v64-space-3, 12px) 0; padding: 0; display: grid; gap: 4px; }
 .vibe64-learning-reader__lesson { display: grid; gap: 2px; margin: 0; }

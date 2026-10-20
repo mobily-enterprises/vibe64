@@ -118,7 +118,7 @@ describe("Training course catalogue", () => {
       learningResult: learning({ active }), canStart: true, canResume: true, availableResult: available([course({ installed: "enabled" })]) });
     expect(html).toContain("getting-started · 0.1.0");
     expect(html).toContain("Disabled for new lessons");
-    expect(html).toContain("Resume saved lesson");
+    expect(html).toContain("Continue lesson");
   });
 
   it("keeps unchanged lessons completed and marks changed ones as completed in an earlier release", async () => {
@@ -136,5 +136,20 @@ describe("Training course catalogue", () => {
     const html = await render({ course: updated, progress: summary, startAllowed: true, resumeAllowed: true }, TrainingCoursePage);
     expect(html).toContain("Completed in 0.1.0 · updated since");
     expect(courseProgress(updated, progress).lessons[1].earlier).toEqual({ release: "" });
+  });
+
+  it("offers Continue lesson, not Start lesson, on the row of any lesson the learner left", async () => {
+    const installed = installedCourse("0.2.0", true);
+    const left = { attemptId: "33333333-3333-4333-8333-333333333333", ended: { reason: "left" }, pin: {
+      course: { courseId: "getting-started", release: "0.2.0" }, lesson: { code: "V64-START-01", hash: "d".repeat(64) } } };
+    const progress = [{ lessonCode: "V64-START-01", lessonHash: "d".repeat(64), required: 2, passed: 1, completed: false, open: false }];
+    const summary = courseProgress(installed, progress, null, [left]);
+    expect(summary.next.code).toBe("V64-START-00");
+    expect(summary.continueFrom).toBeNull();
+    expect(summary.lessons.map(value => value.continueFrom?.attemptId || null)).toEqual([null, left.attemptId]);
+    const html = await render({ course: installed, progress: summary, startAllowed: true, resumeAllowed: true }, TrainingCoursePage);
+    expect(html.match(/>Start lesson</g)).toHaveLength(1);
+    expect(html.match(/>Continue lesson</g)).toHaveLength(1);
+    expect(html).toContain("Start next lesson");
   });
 });

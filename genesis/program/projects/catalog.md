@@ -296,9 +296,10 @@ People see a practice project by its lesson, never its `training-<practice ID>`
 slug, which stays the address. The client `vibe64PracticeProjectName.js`
 (`projectDisplayName`, `practiceProjectName`) is the one naming rule for both
 hosts: **Practice:** plus the lesson title where the client knows it (the open
-lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; L's
-courses.list in `useVibe64PracticeProjects`), else the marker's lesson code,
-else "Practice project" for a bare practice slug. Headers, the project
+lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; each
+`practice.list` row's lesson in `useVibe64PracticeProjects`), else that row's
+lesson code, else "Practice project" for a bare practice slug; no catalogue
+marker is read. Headers, the project
 switcher, both Practice lists and Online Management use it; Colleague's
 protocol names practice projects the same way. On phones (≤600px) the project
 page heading takes only the room the header actions leave: the pane controls
@@ -329,7 +330,7 @@ with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
 the routed project page. That page re-reads its selection without a reload on
 the project-changed event (the hosted delete publishes the catalogue change), on
 Learning's own `vibe64.training.learner.changed` notice with reason `practice`
-for this project's attempt (Learning's delete on both hosts), and whenever any
+(Learning's archive or delete on both hosts; other reasons are ignored), and whenever any
 other query of the page fails with the deleted code (a query-cache subscription
 in the gate). `ProjectSelectionGate` then shows **This practice project
 was deleted** with **Open Learning** (L on its course list) instead of the error.

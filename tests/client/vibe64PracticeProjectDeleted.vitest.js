@@ -80,17 +80,19 @@ describe("an open practice project deleted elsewhere", () => {
     scope.stop();
   });
 
-  it("re-reads its selection on Learning's practice notice for this project only", async () => {
+  it("re-reads a practice project page's selection on the learner's Learning changes, ordinary pages never", async () => {
     const { gate, emitted, scope, selection } = openPage({ scopeSelectionToCurrentProject: true });
     selection.data.value = { hasSelection: true, currentProject: { slug: mocks.slug } };
     const { realtime } = selection.options;
     expect(realtime.events).toEqual(["vibe64.project.changed", "vibe64.training.learner.changed"]);
     const attemptId = "12345678-1234-4234-8234-123456789abc";
     const learner = (payload) => realtime.matches({ event: "vibe64.training.learner.changed", payload });
+    // Practice archive or delete, also of a continued lesson whose attempt differs from the project.
     expect(learner({ attemptId, reason: "practice" })).toBe(true);
-    expect(learner({ attemptId, reason: "reader" })).toBe(false);
-    expect(learner({ attemptId: "87654321-1234-4234-8234-123456789abc", reason: "practice" })).toBe(false);
-    expect(learner({ reason: "notes" })).toBe(false);
+    expect(learner({ attemptId: "87654321-1234-4234-8234-123456789abc", reason: "practice" })).toBe(true);
+    for (const reason of ["notes", "reader", "step", "learning-mode", undefined]) {
+      expect(learner({ attemptId, reason }), `${reason} never archives or deletes a practice project`).toBe(false);
+    }
     expect(realtime.matches({ event: "vibe64.project.changed", payload: {} })).toBe(true);
     expect(isPracticeNoticeForProject({ attemptId, reason: "practice" }, "my-app")).toBe(false);
     // The delivered notice invalidates the selection, which now reads deleted.
@@ -141,8 +143,7 @@ describe("project page deleted notice", () => {
     walk(render.call(null, ctx, [], ctx, ctx, ctx, ctx));
     return nodes;
   }
-  const baseContext = (extra) => Vue.reactive({ busy: false, deletingPracticeSlug: "", practiceProjects: [], projects: [],
-    mdiDeleteOutline: "icon", displayError: "Project path is not readable.", selectionInitialLoading: false, runtimeReady: true,
+  const baseContext = (extra) => Vue.reactive({ busy: false, projects: [], displayError: "Project path is not readable.", selectionInitialLoading: false, runtimeReady: true,
     selectedSlotVisible: false, pickerVisible: false, projectsRoot: "~/vibe64", newProjectName: "", creating: false,
     recovering: false, selectingSlug: "", $props: {}, $slots: {}, ...extra });
   const texts = (nodes) => nodes.filter((node) => typeof node.children === "string").map((node) => node.children.trim());
@@ -150,7 +151,7 @@ describe("project page deleted notice", () => {
   it("shows that the practice project was deleted with a button back to Learning, not an error", async () => {
     const openLearning = vi.fn();
     const nodes = nodesOf(baseContext({ practiceDeleted: true, learning: { show: vi.fn() }, openLearning }));
-    expect(texts(nodes)).toContain("This practice project was deleted");
+    expect(texts(nodes)).toContain("This practice project is gone");
     expect(nodes.some((node) => node.props?.title === "Project could not load")).toBe(false);
     const button = nodes.find((node) => String(node.props?.class || "").includes("project-selection-gate__deleted-learning"));
     expect(button).toBeTruthy();
@@ -162,7 +163,7 @@ describe("project page deleted notice", () => {
 
   it("leaves other load errors on the ordinary error notice", () => {
     const nodes = nodesOf(baseContext({ practiceDeleted: false, learning: null, openLearning: vi.fn() }));
-    expect(texts(nodes)).not.toContain("This practice project was deleted");
+    expect(texts(nodes)).not.toContain("This practice project is gone");
     expect(nodes.some((node) => node.props?.title === "Project could not load")).toBe(true);
   });
 });
@@ -181,19 +182,20 @@ describe("the project picker in learning mode", () => {
     return { gate, emitted, scope, selection: mocks.resources[0] };
   }
 
-  it("lists only the lesson's projects, and every project once learning mode ends", async () => {
+  it("shows the server's listing as is, says when a lesson is in progress and leaves it on request", async () => {
     const learning = Vue.reactive({ learningMode: { on: true, practiceSlug: "training-abc", projectSlugs: ["training-abc"] },
       leaveLesson: vi.fn(async () => ({ ok: true })) });
     const { gate, scope, selection } = await openInLearningMode(learning);
-    selection.data.value = { hasSelection: false, projects: [{ slug: "my-shop", path: "/p/my-shop" },
-      { slug: "training-abc", path: "/p/training-abc", practice: { attemptId: "a", lessonCode: "L1", mine: true } }] };
+    // The server lists no project during a lesson; practice projects are never listed.
+    selection.data.value = { hasSelection: false, projects: [] };
     await Vue.nextTick();
     expect(gate.learningModeOn.value).toBe(true);
     expect(gate.projects.value).toEqual([]);
-    expect(gate.practiceProjects.value.map(project => project.slug)).toEqual(["training-abc"]);
+    expect(Object.hasOwn(gate, "practiceProjects")).toBe(false);
     await gate.leaveLesson();
     expect(learning.leaveLesson).toHaveBeenCalledTimes(1);
-    learning.learningMode = { on: false, paused: true, practiceSlug: "", projectSlugs: [] };
+    learning.learningMode = { on: false, practiceSlug: "", projectSlugs: [] };
+    selection.data.value = { hasSelection: false, projects: [{ slug: "my-shop", path: "/p/my-shop" }] };
     await Vue.nextTick();
     expect(gate.learningModeOn.value).toBe(false);
     expect(gate.projects.value.map(project => project.slug)).toEqual(["my-shop"]);

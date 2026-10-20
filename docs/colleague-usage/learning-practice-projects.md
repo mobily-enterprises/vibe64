@@ -1,105 +1,117 @@
-# Practice projects in standalone lessons
+# Practice projects
 
-Some lessons need a practice application. In Learning → **Courses**, use
-**Start**, **Start next lesson** or **Start lesson** for a new lesson, or
-**Continue**/**Resume saved lesson** for your saved one (see
-[Choosing lessons and courses](learning-mode-ui.md)). If the installation reports that exercise preparation is
-unavailable, keep the saved attempt and ask the owner to provide preparation
-support before retrying. That refusal means preparation did not start.
+Some lessons need a practice application. Starting such a lesson in Learning →
+**Courses** (**Start**, **Start next lesson** or **Start lesson**; see
+[Choosing lessons and courses](learning-mode-ui.md)) creates a practice project
+for it. If the installation reports that exercise preparation is unavailable,
+ask the owner to provide preparation support before retrying. That refusal means
+preparation did not start.
 
-Supported preparation uses the exercise bundled with your saved lesson and keeps
-its reserved practice project and session when you resume. Workspace setup may
-continue after the start request finishes. When that setup run succeeds, the
-lesson becomes ready on its own; you do not need to press **Resume saved lesson**
-first. Failed setup needs its existing recovery, then **Resume saved lesson**;
-setup success does not mean Preview is running or a step has passed.
+Preparation uses the exercise bundled with the lesson. Workspace setup may
+continue after the start request finishes; when it succeeds the lesson becomes
+ready on its own. Failed setup needs its existing recovery, then **Continue
+lesson**. Setup success does not mean Preview is running or a step has passed.
 Standalone setup uses the installation's actual resources; it does not create a
 hosted development database by default.
 
-The saved lesson and progress remain intact. Keep mismatched or unsafe practice
-storage intact and ask the owner to inspect the reported error; an unrelated
-project cannot replace this saved attempt's practice project. Colleague can
-explain the error and use supported lesson controls when asked.
+## The learning space
 
-A practice project is an ordinary project of yours, and the session that
-lesson preparation creates in it is an ordinary session of that project. Open
-it with **Open practice project** in the lesson or from **Practice** on
-Learning's **Courses** page. Its chat, **Preview**, **Dashboard** and session list work exactly
-as in any of your projects, with full access, and they stay that way after the
-lesson ends, until you delete the practice project. Ending a lesson does not
-stop or close the project or its session.
+Practice projects live in your own learning space, apart from your projects.
+They never appear in the project lists, the project switcher or Management →
+**Projects**, and your projects never appear among them. The same is true on a
+local Vibe64 and on a hosted workspace. Only you see your practice projects;
+the workspace owner does not.
 
-While the lesson is in progress you are in learning mode (see
-[The Learning environment (L)](learning-environment.md)): this lesson's practice
-project is the only project listed or opened, in the project lists, the project
-switcher and **Practice**, and everything inside it works. Opening another
-project says "You're in a lesson. Leave lesson to get back to your projects."
-Press **Leave lesson** (the yellow bar on a desktop, or Learning's header) to
-pause the lesson and get all your projects back; **L** → **Resume saved
-lesson** returns to it. Lesson 0 and other lessons without a practice project show no projects
-while in progress.
+This separation is part of Vibe64, not of the computer. Vibe64 keeps the two
+apart in where it stores them, what it lists and what it opens. It is not a
+security boundary: agents and the practice application run on the same machine,
+with the same system access, as your other projects. Treat a practice project
+like any of your projects and do not put secrets in it.
 
-A local installation normally serves only the project you selected. It also
-opens your own practice projects by their address (for example when Colleague
-navigates there or you open **Account settings** from it), with the same full
-access as on a hosted workspace, including after the lesson has ended. Another
-person's practice project, or a practice address with no saved lesson behind it,
-still reports "Local editor mode only serves the selected project."
+A practice project is a complete project. Its chat, **Preview**, **Dashboard**
+and sessions work as in any project. The session that lesson preparation
+creates in it is an ordinary session.
 
-## Practice list and deleting a practice project
+## A lesson in progress
 
-Learning lists your practice projects: press **L**, and the **Courses** page shows a **Practice** section below
-the courses (above **What my teacher knows about me**) once you have at least
-one practice project. Each row shows the project's name, **Practice:** followed
-by the lesson title (the lesson code while the title cannot be read), and below
-it the project's address (`training-…`). Select a row to open that project; Learning minimises and keeps your
-place, so **L** returns to it. A local installation normally serves only its
-selected project and has no project list to open, so use this section there.
-On a hosted workspace the same section appears, and Management → **Projects**
-still lists practice projects under **Practice** (see that guide).
+While a lesson is in progress you are in learning mode (see
+[The Learning environment (L)](learning-environment.md)) and in the learning
+space only: the lesson's practice project is the one project you can open.
+Opening another project brings you back to the practice project with the note
+"You're in a lesson. Leave lesson to get back to your projects." Open the
+practice project with **Open practice project** in the lesson.
 
-The trash button beside one of your practice projects (**Delete** followed by
-its name, for example **Delete Practice: First change**) deletes it with one click; there is no
-confirmation dialog. A **Practice project deleted.** message confirms it and the
-row disappears; **Open practice project** in that lesson disappears too. The
-project's source, sessions and runtime state are removed and no archive is
-kept, so it cannot be restored. Your lesson progress and earlier passes stay;
-the lesson attempt that owned the project ends. If a session in that project is
-pinned, deletion refuses with **Unpin session … before deleting this practice
-project.** Open that session, choose **Unpin session**, then delete again.
-When a lesson finishes, its **Lesson finished** screen offers the same one-click
-**Delete practice project**, or **Keep practice project** to keep it here. If
-deletion stops part-way, the row stays: press the trash button again; it
-continues from the step that failed. Until then that project cannot be opened
-again, and **Continue lesson** prepares a fresh practice project instead. A
-refused deletion (for example a pinned session) changes nothing: the lesson in
-progress keeps going. A practice project whose files are damaged
-or whose ownership can no longer be confirmed also stays listed, and the rest
-of the page still loads; deleting it then shows the reason it was refused, so
-ask the person who runs this Vibe64 to inspect it. Ordinary projects never appear under
-**Practice** and are never deleted this way.
+Press **Leave lesson** (the yellow bar on a computer, Learning's header, or
+the Learning page) to end the lesson. Your step results and the practice project
+are kept, your projects come back, and a practice project page returns you to
+`/app`. Later, **Continue lesson** in Learning → **Courses**, or **Open** in
+Learning → **Practice**, starts the lesson again in the same practice project,
+at the first required step you have not passed. If that practice project was
+deleted meanwhile, the lesson gets a new one.
 
-Colleague can explain these steps. It deletes a practice project only when you
-ask it to and then confirm the exact project; an offer is not a request.
+Lesson 0 and other lessons without a practice project open no project. They
+use the Learning page (`/app/learning`); see
+[The Learning environment (L)](learning-environment.md).
 
-If the deleted practice project is still open in another tab or window, that
-page switches by itself (no reload needed) to **This practice project was
-deleted** instead of an error, with **Open Learning**, which opens Learning on its course list (desktop and phone
-alike). The lesson stays there; start it again for a new practice project. The
-page's requests answer not found with the code `vibe64_practice_project_deleted`
-from the moment deletion starts. Colleague can explain this; only you press
-**Open Learning**.
+## The Practice tab
+
+Press **L**, then **Practice** (next to **Courses**). The tab lists your
+practice projects. Each row shows **Practice:** followed by the lesson title (the
+lesson code while the title cannot be read) and the lesson's status: **In
+progress**, **Finished** or **Not finished**. Each row has three buttons:
+
+- **Open** continues the project's lesson (ending another lesson in progress,
+  with its results kept), opens the practice project and minimises Learning on
+  the current step. **L** brings Learning back.
+- **Archive** (the box button, named **Archive** and the project name) archives
+  the project with one click. The archive keeps the project's source,
+  sessions and state, but leaves out dependencies that can be rebuilt, such as
+  `node_modules`. The project then moves to **Archived**.
+- **Delete** (the trash button, named **Delete** and the project name) deletes
+  the project for good with one click, with no archive.
+
+There is no confirmation dialog. Archiving or deleting the project of the lesson
+in progress ends that lesson first; its results are kept.
+
+Below the list, **Archived** lists archived practice projects with the lesson
+title and the date they were archived. The trash button (**Delete archived**
+and the name) deletes one archive for good. You can keep at most 20 archives;
+delete one before archiving another. Archived practice projects cannot
+be reopened from Vibe64. Turning a practice project into one of your own
+projects is not available.
+
+If a session in the project is pinned, archiving or deleting refuses with a
+message that names the session. Open it, choose **Unpin session**, and try
+again. If archiving or deleting stops part-way, the row stays (a stopped
+deletion shows **Being deleted** with only **Delete**). Press the button again;
+it continues from the step that failed. If it keeps failing, the error says
+why; ask the person who runs this Vibe64 to inspect it.
+
+When a lesson finishes, its **Lesson finished** screen offers the same choices
+for its practice project: **Archive practice project**, **Delete practice
+project** or **Keep** (it stays in **Practice**).
+
+Colleague can list your practice projects and open one when you ask. It
+archives or deletes a practice project, or deletes an archive, only when you ask
+and then confirm that exact project; an offer is not a request.
+
+## A practice project open elsewhere
+
+If an archived or deleted practice project is still open in another tab or
+window, that page switches by itself (no reload needed) to **This practice
+project is gone** instead of an error. **Open Learning** there opens Learning on
+its course list (desktop and phone alike), where **Continue lesson** starts the
+lesson again, with a new practice project if the old one was deleted. The page's requests answer not found
+with the code `vibe64_practice_project_deleted`. Colleague can explain this;
+only you press **Open Learning**.
 
 ## How a practice project is named
 
 A practice project keeps its address (`/app/project/training-…`), but Vibe64
-names it after its lesson everywhere a project name is shown: the project
-header, the project picker's list, Learning's **Practice** section and
-Management on a hosted workspace. The name is **Practice:** followed by the
-lesson title when it is known there (the open lesson's own practice project, or
-Learning's course list), otherwise the lesson code, for example **Practice:
-V64-START-02**. Hover the header name on a computer to see the address too.
-Colleague uses the same name.
+names it after its lesson: in the project header, in Learning's **Practice**
+tab and by Colleague. The name is **Practice:** followed by the lesson title,
+otherwise the lesson code, for example **Practice: V64-START-02**. Hover the
+header name on a computer to see the address too.
 
 On a phone the header name shortens with **…** so it never covers the other
 header buttons. While Preview's controls are showing on a very narrow phone, or
@@ -124,7 +136,3 @@ open, make the edits to its files yourself in
 other writer's edit in those files means the step's **Check now** asks for an
 independent attempt (see [Answering a code question in a lesson](learning-code-questions.md)).
 Hosted workspaces record these saves the same way.
-
-For lessons started before Learning v2, the installation's upgrade turned the
-practice conversation into an ordinary session of the practice project, with its
-history.

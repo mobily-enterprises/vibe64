@@ -40,7 +40,8 @@ reaches only the browser, never Colleague's tool result. Readers do not reserve 
 state. An ended start replay returns its original target and actual current
 active attempt without provisioning it.
 
-`lesson.end` accepts exact attempt/request/revision and restart/discard reason,
+`lesson.end` accepts exact attempt/request/revision and a left/finished/discard
+reason (L's Lesson finished screen sends `finished`),
 returns the ended target plus actual active state and native replay flag, and
 retains the exercise and all history. It stops no agent work: the practice
 project and its ordinary sessions stay usable. It does not close, archive or

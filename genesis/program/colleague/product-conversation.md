@@ -80,7 +80,7 @@ predicate governs direct schemas, search, contracts and execution, retaining the
 original assignment-only background mutation rule. No saved history is rewritten.
 
 Teaching uses only client state and existing operations. Both hosts report
-`learningOpen`, `learningSurface` (`courses` or `lesson`), `learningAttemptId`
+`learningOpen`, `learningSurface` (`courses`, `practice` or `lesson`), `learningAttemptId`
 and `learningStepId` in focus from the shared L controller, so Colleague knows
 the current step even while L is minimised. Both derive those fields, apply a
 command's `learning` part and confirm it with the one shared rule in
@@ -116,12 +116,18 @@ private notes (`learner-notes.read`/`learner-notes.update`), report
 choice answer, and tell the person what a guide actually showed (or why not) in
 plain words rather than quoting receipt fields or IDs, say plainly when a step's
 guide could not be opened, and never ask the person to repeat a step that
-`lesson.read` already shows passed; `practice.delete` requires `confirmed` from
-the assistant. In learning mode (a lesson in progress) the protocol has
+`lesson.read` already shows passed. Practice projects are listed and opened with
+`practice.list`/`practice.open`; `practice.archive`, `practice.delete` and
+`practice.archived.delete` run only on the person's request and require
+`confirmed` after Colleague named that exact project and what is kept. Focus
+accepts only the current field names; a retired focus field is refused rather
+than translated. In learning mode (a lesson in progress) the protocol has
 Colleague check `learning-mode.read` before opening projects, never open or work
 on another project, relay "You're in a lesson. Leave lesson to get back to your
-projects." and run `learning-mode.leave` only on the person's direct request
-or accepted offer and `learning-mode.enter` only when they ask to return; `navigation.open` refuses a non-lesson project with that reason before
+projects." and run `learning-mode.leave` (which ends the attempt, keeping its
+results and practice project) only on the person's direct request or accepted
+offer; there is no enter or paused state, and `lesson.continue` starts a left
+lesson again in the same practice project; `navigation.open` refuses a non-lesson project with that reason before
 resolving the project (one mode read per call, so a leave applies at once).
 
 

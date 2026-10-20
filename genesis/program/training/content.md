@@ -596,7 +596,9 @@ lesson's exact code/hash with `learning.read`'s `lessonProgress` (the learner
 store's per-lesson summary of the same verified passes): Completed, In progress
 (open attempt or some passes) or Not started. Course progress counts completed
 required lessons. Card **Start**, **Start next lesson** and per-lesson **Start
-lesson** select one exact displayed lesson and use the same start emit below;
+lesson** select one exact displayed lesson and use the same start emit below
+(a lesson left earlier shows **Continue lesson** instead, emitting `continue`
+with its `continueFrom` attempt);
 on an enabled preview course they read **Try preview** and appear only when
 `courses.list` reports `canTryPreviews` (members see the preview note instead);
 **Continue** is the original saved-attempt resume. `TrainingCourseCreator` lets

@@ -250,7 +250,7 @@ describe("Training lesson picker prerequisite", () => {
     state.requestResume();
     expect(resume).not.toHaveBeenCalled();
     const html = await renderPicker({ catalogueResult: { ...pickerCatalogue(), courses: [] }, learningResult: learning, canResume: false });
-    expect(html).toContain("Your saved attempt remains visible.");
+    expect(html).toContain("Your lesson remains visible.");
     expect(html).toContain("Saved lesson history (1)");
     expect(html).toContain("22222222-2222-4222-8222-222222222222");
     expect(html).toContain("Ended attempt");
@@ -323,7 +323,7 @@ describe("Training lesson picker prerequisite", () => {
     expect(state.selected.lesson.code).toBe("V64-START-00");
     expect(state.startEnabled).toBeFalsy();
     const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(pickerAttempt()), catalogueLoading: true, learningLoading: true });
-    expect(html).toContain("Saved lesson · V64-START-00");
+    expect(html).toContain("Lesson in progress · V64-START-00");
     expect(html).toContain("Getting started");
     expect(html).not.toContain('aria-label="Loading installed courses"');
     expect(html).not.toContain('aria-label="Loading saved lesson"');
@@ -346,7 +346,7 @@ it("missing titles refuse new choice intent while retaining saved attempt and re
   const html = await renderPicker({ catalogueResult: catalogue, learningResult: learning, canStart: true, canResume: true });
   expect(html).toContain("Lesson titles are unavailable. Refresh courses");
   expect(html).toContain("Refresh courses");
-  expect(html).toContain("Saved lesson · V64-START-00");
+  expect(html).toContain("Lesson in progress · V64-START-00");
   expect(html).toContain("Saved lesson history (1)");
   const start = vi.fn();
   const state = mountPicker({ onStart: start });
@@ -409,7 +409,7 @@ describe("Training courses", () => {
     expect(resume).toHaveBeenCalledExactlyOnceWith({ attemptId: savedId });
     state.startLesson(state.summaries[0].course, state.summaries[0].course.lessons[1]);
     expect(start).not.toHaveBeenCalled();
-    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toContain(">Continue<");
+    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toContain(">Continue lesson<");
     const other = mountPicker({ learningResult: pickerLearning(pickerAttempt()) });
     expect(other.summaries[0].progress.activeHere).toBe(false);
     expect(other.startPossible).toBe(false);

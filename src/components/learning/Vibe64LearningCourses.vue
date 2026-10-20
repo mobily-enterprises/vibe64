@@ -3,7 +3,7 @@ import { computed, ref, toValue, watch } from "vue";
 import { useRoute } from "vue-router";
 import TrainingLessonPicker from "@local/vibe64-training/client/lesson-picker";
 
-// L's Courses surface: a confirmed start or resume opens the lesson reader.
+// L's Courses surface: a confirmed start or Continue lesson opens the lesson reader.
 const props = defineProps({
   learning: { type: Object, required: true }
 });
@@ -103,6 +103,7 @@ async function request(operation) {
       @refresh="request(owner => owner.refresh())"
       @start="opened(owner => owner.startLesson($event))"
       @resume="opened(owner => owner.resumeLesson($event.attemptId))"
+      @continue="opened(owner => owner.continueLesson($event))"
       @install="request(owner => owner.installCourse($event))"
     />
   </div>

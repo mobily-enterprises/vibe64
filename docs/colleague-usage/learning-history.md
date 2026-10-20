@@ -1,15 +1,17 @@
 # Lesson history and continuing
 
 A lesson is either in progress or not. To pick up a lesson that is not in
-progress, choose **Continue lesson** for it in Learning, or ask Colleague to
-continue that exact lesson; see [Choosing lessons and courses](learning-mode-ui.md).
+progress, choose **Continue lesson** for it in Learning → **Courses** (on the
+lesson card, the course's **Up next** card or the lesson's own row), or ask
+Colleague to continue that exact lesson; see [Choosing lessons and courses](learning-mode-ui.md).
 These rules apply on desktop and phone.
 
 ## Ending a lesson
 
 A lesson ends in one of three ways:
 
-- **Leave lesson** (the yellow bar, or L) ends it as *left*. Use it to stop for
+- **Leave lesson** (the yellow bar on a computer, Learning's header or the
+  Learning page) ends it as *left*. Use it to stop for
   now and go back to your normal projects.
 - Its **Lesson finished** screen ends it as *finished*. The screen opens when
   your own result completes the last required step, or from **Lesson finished**
@@ -21,8 +23,8 @@ A lesson ends in one of three ways:
 Every ending keeps the lesson's step results and stops no agent work. *Discard*
 records a learning decision, not project disposal. The practice project and its
 sessions stay yours: ending neither stops, archives nor deletes them. Dispose of
-them only on request, through the Practice tab or the existing authorised
-archive and delete operations. An installation without its lesson host cannot
+them from Learning → **Practice** or the **Lesson finished** screen, or ask
+Colleague (it acts only on your request and confirmation). An installation without its lesson host cannot
 end lessons, and that refusal is not a successful end. Leaving or hiding
 Colleague does not end a lesson.
 

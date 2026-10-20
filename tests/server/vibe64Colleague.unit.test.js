@@ -1725,16 +1725,13 @@ test("new steering captures its own focus without navigation silently retargetin
   await assert.rejects(f.send("Bad focus", "invalid", { focus: { previewScreen: "invented-screen" } }), { code: "ACTION_VALIDATION_FAILED" });
 });
 
-test("focus from a tab loaded before Learning mode was retired is accepted without its retired keys", async (t) => {
-  const f = await fixture(t, [reply("Still on alpha.")]);
-  const retired = { projectSlug: "alpha", pane: "preview", previewScreen: "lesson-presentation", learningMode: false,
-    learningView: "workspace", learningContent: "picker", lessonAttemptId: "a", lessonPlayerPhase: "ready" };
+test("focus keys of the retired Learning mode are refused like any unknown focus", async (t) => {
+  const f = await fixture(t, []);
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
+    input: { clientId: "browser-1", focus: { projectSlug: "alpha", learningView: "workspace" } } }), { code: "ACTION_VALIDATION_FAILED" });
   const updated = await f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
-    input: { clientId: "browser-1", focus: retired } });
-  assert.deepEqual(updated.focus, { projectSlug: "alpha", pane: "preview" });
-  await f.send("Where am I?", "retired-focus", { focus: retired });
-  await f.service.wait(f.context);
-  assert.deepEqual(f.observations.starts[0].data.focus, { projectSlug: "alpha", pane: "preview" });
+    input: { clientId: "browser-1", focus: { projectSlug: "alpha", learningOpen: true, learningSurface: "practice" } } });
+  assert.deepEqual(updated.focus, { projectSlug: "alpha", learningOpen: true, learningSurface: "practice" });
 });
 
 test("steering received during a model response takes precedence before any tool dispatch", async (t) => {
@@ -1907,6 +1904,13 @@ test("Colleague's protocol keeps learning mode: no other projects, the exact rea
   assert.match(colleagueInstructions, /learning-mode\.read/u);
   assert.ok(colleagueInstructions.includes(LEARNING_MODE_PROJECT_MESSAGE));
   assert.match(colleagueInstructions, /learning-mode\.leave only after their direct request or accepted offer/u);
+  // A lesson is in progress or not: leaving ends it, and no paused lesson is re-entered.
+  assert.match(colleagueInstructions, /Leaving ends the lesson attempt/u);
+  assert.doesNotMatch(colleagueInstructions, /learning-mode\.enter|paused/u);
+  // Practice projects live in the learning space and change only on the person's confirmation.
+  for (const action of ["practice.list", "practice.open", "practice.archive", "practice.delete", "practice.archived.delete"]) {
+    assert.ok(colleagueInstructions.includes(action), action);
+  }
 });
 
 // Learning v2 (C4): navigation coordination moved from vibe64-training's

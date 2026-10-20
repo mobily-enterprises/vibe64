@@ -42,7 +42,7 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
     <span class="vibe64-learning-button__lesson" :title="lessonTitle" data-test="learning-in-lesson">{{ lessonTitle }}</span>
     <button
       type="button" class="vibe64-learning-button__leave" :disabled="leaving"
-      title="Pause this lesson and get back to your projects" data-test="learning-leave-lesson"
+      title="End this lesson (results and practice project kept) and get back to your projects" data-test="learning-leave-lesson"
       @click="learning.leaveLesson()"
     >
       Leave lesson

@@ -3,7 +3,7 @@
 One client adapter connects the Learning environment (L) to the original
 Training reads and commands without creating a second progress owner.
 
-Lesson start and resume create no conversation: a practice lesson's initial
+Lesson start, resume and continue create no conversation: a practice lesson's initial
 session is an ordinary project session with the ordinary Senior default, and the
 Chat mode menu keeps its usual Senior, Junior and Custom choices. The L
 controller itself is described in [Learning environment (L)](learning-environment.md).
@@ -18,7 +18,8 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `src/lib/vibe64Learning.js`
 - `src/components/learning/Vibe64LearningButton.vue`
 - `src/components/StudioAppShellLayout.vue`
-- `src/components/studio/Vibe64LocalAppIndex.vue`
+- `src/pages/app/index.vue`
+- `src/pages/app/learning.vue`
 - `src/components/studio/ProjectSelectionGate.vue`
 - `src/components/Vibe64AssistantShellContext.vue`
 - `src/components/Vibe64LocalColleagueHost.vue`
@@ -54,8 +55,14 @@ is read only while L is open.
 retains one generated request ID with those exact inputs after uncertainty.
 `starting` marks the in-flight request; `startRetry` offers the exact retry only
 after a start settles unconfirmed. `retryStart` does not rebase the revision or
-admit changed intent. `resumeLesson` targets the requested attempt. Both use the
-original Training HTTP actions; a confirmed result opens the lesson reader in L
+admit changed intent. `resumeLesson` targets the requested attempt.
+`continueLesson({attemptId, expectedRevision})` posts `lesson.continue`
+(`/attempts/:id/continue`) for the picker's **Continue lesson** on a left
+lesson (`courseProgress` gives each lesson not completed a `continueFrom`: its
+latest ended attempt of the same code and hash; the course's main button uses
+the next lesson's, and that lesson's own row shows **Continue lesson** instead
+of **Start lesson**), retaining one request ID per
+attempt until confirmed. All use the original Training HTTP actions; a confirmed result opens the lesson reader in L
 (`Vibe64LearningCourses` emits `opened`). No session or conversation is created
 or selected by the client. `createCourse` posts the owner's custom-course name,
 ordered topics and displayed catalogue revision to `courses.create`, then
@@ -74,11 +81,8 @@ The earlier client Learning mode, its lesson Dashboard and learning-scoped clien
 transport are gone; Training navigation lives in Colleague as
 `createColleagueNavigation`. Remaining compatibility: Colleague's
 `navigation.open` refuses the retired `learningMode`/`learningView` inputs by
-schema; incoming browser focus (focus updates, messages, navigation
-acknowledgements and start-fresh evidence) still accepts the retired focus keys
-from tabs loaded before this release and drops them before use, so an open tab
-keeps working until it reloads; an old `?mode=learning` address renders the
-ordinary project page; and session realtime matchers ignore events that carry a
+schema, and focus with a retired key is refused like any unknown field; an old
+`?mode=learning` address renders the ordinary project page; and session realtime matchers ignore events that carry a
 `learningAttemptId`, because the server can still emit them without a project.
 
 ## Saved hosted author-trial reader
@@ -93,29 +97,39 @@ read nor merges normal progress. Snapshot acquisition and explicit end/new-start
 refresh remain the existing hosted Colleague actions. Published Start
 eligibility and immutable pins are unchanged; no draft course is promoted.
 
-## Practice section in L
+## Learning space client
 
-L's Courses surface shows `Vibe64LearningPractice.vue` between the courses and
-the teacher notes, in both hosts. It feeds `useVibe64PracticeProjects` with L's
-own `learning.read` resource (`learningResource` option, no second read and no
-project listing), so it works in single-project local mode, where
-`GET /api/vibe64/projects` is not registered and the project picker cannot load.
-Rows are attempts carrying `practiceSlug`, named by `practiceProjectName`
-(src/lib/vibe64PracticeProjectName.js) from the lesson title that L's course
-catalogue read (`coursesResource`, passed to useVibe64PracticeProjects) gives
-for the lesson pin; the
-section and the teacher notes use the full content width like the course
-cards. Open minimises L and pushes the
-practice project's address, and the trash button posts `practice.delete` once
-(D-b, snackbar) and rereads. `learning.read` and `lesson.read` include
-`practiceSlug` only while the host facility's read-only `exists({slug, actor})`
-reports the project (standalone: the learner's own practice scope still holds a
-record; Online: the archive service's `practiceProjectExists`). A project whose
-deletion stopped part-way keeps its record and stays listed for the retry.
-Leftover storage whose ownership no longer matches counts as present, and a
-presence check that throws keeps that row listed instead of failing the read,
-so one damaged or uninstalled old attempt never hides progress; delete then
-reports the actual refusal.
+A lesson is in progress or not; `vibe64Learning.js` has no paused mode.
+`leaveLesson()` posts `learning-mode.leave` (which ends the attempt), rereads
+the mode and reloads the lesson; `finishLesson({expectedRevision})` posts
+`lesson.end` with reason `finished`. `lessonPath(mode)` is the lesson's place:
+its practice project address, or `/app/learning` (`VIBE64_LEARNING_PAGE_PATH`)
+for a lesson without one. A loaded lesson opens at the saved reader place,
+else the first required step not passed, else the first step. When the overlay
+sees learning mode turn off while the route is a practice project, it replaces
+the route with `/app`.
+
+L's **Practice** tab (`Vibe64LearningPractice.vue`, surface `practice`) reads
+`practice.list` through `useVibe64PracticeProjects` (its own endpoint resource,
+refreshed on non-notes `learner.changed`), the same on both hosts and
+independent of the project listing. Rows carry `practiceId`, slug, the
+`practiceProjectName` of the lesson and its status; an interrupted deletion
+(`deleting`) offers only Delete. **Open** posts `practice.open` with L's learning
+revision, rereads the mode, shows the returned attempt, minimises L and pushes
+the project address. Archive, Delete and archived Delete post
+`practice.archive`, `practice.delete` and `practice.archived.delete` once and
+reread; one action runs at a time. The Lesson finished screen offers Archive,
+Delete or Keep for its `practiceId`. The project picker
+(`ProjectSelectionGate`) never lists practice projects; the server listing is
+the learning space boundary.
+
+Local `/app` (`src/pages/app/index.vue`) has no Projects page: once the viewer
+is bound it resolves to `lessonPath` during a lesson, else to the started
+project from `PROJECT_SELECTION_ENDPOINT`, with an error notice and **Try
+again**. `/app/learning` is the app shell with L, the lesson bar and Account
+settings; it opens L on the lesson in progress (else Courses) and offers Open
+Learning, Open practice project and Leave lesson. Hosted routing of these
+addresses is Online's.
 
 ## Local practice-project address
 

@@ -2,7 +2,8 @@
 
 The **L** button opens the Learning environment above the current page; see
 [The Learning environment (L)](learning-environment.md). This guide describes
-its **Courses** page.
+its **Courses** page. Its **Practice** tab is described in
+[Practice projects](learning-practice-projects.md).
 
 ## Course cards
 
@@ -10,7 +11,7 @@ its **Courses** page.
 cards. Each card has decorative cover art (the same for a course every time;
 its dots mirror the course's lessons, ticked when complete), a chip saying
 whether it is **Enabled**, a **Preview course** or **Disabled for new lessons**
-(plus **Saved lesson** or **Course complete** when true), the title, its ID and
+(plus **Lesson in progress** or **Course complete** when true), the title, its ID and
 release, topic and lesson counts, "N of M lessons complete" with a progress ring,
 and the next lesson.
 
@@ -20,27 +21,31 @@ lessons are counted, unless a course has none. Progress is read from what is
 already saved; opening a course grades nothing. A lesson passed in one course
 counts in every course that contains the same lesson.
 
-On a card, **Continue** reopens your saved lesson when it belongs to that course
-(the same request as **Resume saved lesson**). Otherwise **Start** starts the
+On a card, **Continue lesson** reopens your lesson in progress when it belongs
+to that course. Otherwise, when the course's next lesson is one you left
+earlier, **Continue lesson** starts it again in the same practice project, at
+the first required step you have not passed. Otherwise **Start** starts the
 course's first published lesson that is not yet complete. **View course** opens
 the course page: a header with the cover and a ring of lessons complete, an
 **Up next** card, then its topics in order, each with its lessons, their title
 and code and a status of **Completed** (green tick), **In progress** (yellow; an
 open attempt or some passes) or **Not started** (numbered). **Up next** has one
-main action, **Continue** or **Start next lesson** (with the next lesson named
-beside it), and each available lesson has a **Start lesson** button. **Back to
+main action, **Continue lesson** or **Start next lesson** (with the next lesson
+named beside it). Each available lesson has a **Start lesson** button, or
+**Continue lesson** when you left that lesson earlier: it starts the lesson
+again in its own practice project rather than making a second one. **Back to
 courses** returns to the list. On a phone the cards stack in one column and the
 course page scrolls in the same pane.
 
-The saved lesson card above the course cards is headed "Saved lesson · code"
+The lesson card above the course cards is headed "Lesson in progress · code"
 with the lesson title and, once reported, a ring of required steps passed with
 "N of M required steps passed. This lesson is complete." or "Continue the
-remaining steps." **Resume saved lesson** opens that exact attempt. Disabled,
+remaining steps." **Continue lesson** opens that exact attempt. Disabled,
 unavailable, loading and error states are shown on the same page. **Refresh
 courses** rereads installed courses, progress and the course catalogue; after a
 step result is saved, Courses refreshes that lesson's progress by itself. If
 updates were disconnected, use **Refresh courses** before choosing Start or
-Resume.
+Continue lesson.
 
 Below the course cards, **Course catalogue → Install a course** lists the
 official catalogue's topics and courses with **Install**; an installed course
@@ -48,18 +53,18 @@ with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
 A lesson without a practice project, such as local Vibe64's Lesson 0 **Set
-yourself up**, opens only the lesson, with no project or conversation; that
-lesson uses [Dashboard → Health](health-checks.md).
+yourself up**, opens only the lesson, on the Learning page (`/app/learning`),
+with no project or conversation; that lesson uses
+[Dashboard → Health](health-checks.md).
 
-## Starting, resuming and ending
+## Starting, continuing, leaving and finishing
 
 While a start is in progress, Courses says **Starting the selected lesson and
 preparing its practice project. The lesson opens when this finishes.** Every
 start button stays disabled until the request settles; the lesson then opens by
 itself. A practice project's Workspace setup can continue afterwards and the
-lesson becomes ready when setup succeeds, so you do not need **Resume saved
-lesson** after a normal start (see
-[Practice projects in standalone lessons](learning-practice-projects.md)).
+lesson becomes ready when setup succeeds, so you do not need **Continue lesson**
+after a normal start (see [Practice projects](learning-practice-projects.md)).
 **Starting lessons is unavailable in this installation** appears only when the
 installation cannot start lessons. This looks the same on desktop and phone.
 
@@ -67,23 +72,22 @@ If a start is unconfirmed, Courses says **The last lesson start was not
 confirmed** and shows **Retry lesson start**, which repeats the same request,
 lesson and revision; do not substitute a different lesson. The retry is lost if
 the page unloads, so read saved progress before making another request. If
-Resume reports that the saved exercise is busy preparing or finishing a command,
-wait for it to settle and retry the same attempt.
+Continue lesson reports that the saved exercise is busy preparing or finishing a
+command, wait for it to settle and retry the same attempt.
 
-While you have a saved active lesson, start buttons stay disabled: continue it,
-or end it first. When every required step has passed, Learning shows the
-**Lesson finished** screen, which ends it (see
-[The Learning environment (L)](learning-environment.md)); otherwise ask Colleague
-to end the lesson (see [Lesson history and resume](learning-history.md)). Ending a lesson
-keeps its history and does not stop, close, archive or delete the practice
-project; an ended lesson cannot be resumed, but Colleague can continue it in a
-fresh exercise.
+A lesson is either in progress or not. While one is in progress, start buttons
+stay disabled: continue it, or press **Leave lesson** first. Leaving ends the
+lesson; its results and practice project are kept, and **Continue lesson**
+starts it again later in the same practice project. When every required step
+has passed, Learning shows the **Lesson finished** screen, which finishes it
+(see [The Learning environment (L)](learning-environment.md)). Leaving or
+finishing never stops, closes, archives or deletes the practice project; do
+that from Learning → **Practice** or the **Lesson finished** screen.
 
-A practice lesson's project is an ordinary project of yours: open it with **Open
-practice project** in the lesson or from **Practice** on Courses, where its trash
-button deletes it with one click. Setup repair there is ordinary project work
-(ask that session's agent or use Workspace setup recovery); it is not a learner
-answer or a passed step.
+A practice lesson's project opens with **Open practice project** in the lesson
+or **Open** in Learning → **Practice**. Setup repair there is ordinary project
+work (ask that session's agent or use Workspace setup recovery); it is not a
+learner answer or a passed step.
 
 Opening L again rereads saved lessons and any admitted author trial, without
 reloading the page. An account change immediately hides the previous person's
