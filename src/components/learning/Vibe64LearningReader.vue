@@ -109,7 +109,9 @@ async function play() {
       await nextTick();
     }
     if (!player.value) throw new Error("The diagram has not mounted.");
-    await player.value.restore({ state: resource.visual.initialState, paused: false, labels: {} });
+    // A fresh instance without a snapshot starts at the declared initial state
+    // with the controller's own labels; only a controller knows its label set.
+    await player.value.restore(undefined);
     for (const entry of entries) {
       usedIds += 1;
       await player.value.command({ commandId: globalThis.crypto.randomUUID(), name: entry.name, parameters: { ...(entry.parameters || {}) } });
@@ -119,6 +121,18 @@ async function play() {
   } finally {
     playing.value = false;
   }
+}
+
+// A check that did not pass says why (for example, no App press captured yet);
+// the reason is shown until the step changes. It never changes the status.
+const checkReason = ref("");
+// Separate sources: a lesson reread after the check keeps the same IDs and must not clear it.
+watch([() => props.learning.state.attemptId, () => step.value?.id], () => { checkReason.value = ""; });
+async function runCheck() {
+  const stepId = step.value.id;
+  checkReason.value = "";
+  const result = await props.learning.runCheck(stepId);
+  if (step.value?.id === stepId && result?.outcome === "not-yet-passed" && result.reason) checkReason.value = String(result.reason);
 }
 
 const actionError = ref("");
@@ -235,7 +249,8 @@ function endLesson() {
         <section v-else-if="!ended && kind === 'auto'" class="vibe64-learning-reader__check" aria-label="Automatic check">
           <p>This step is checked automatically when you do it in your practice project.</p>
           <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
-            :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="learning.runCheck(step.id)">Check now</v-btn>
+            :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck">Check now</v-btn>
+          <p v-if="checkReason" class="vibe64-learning-reader__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
         </section>
         <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-reader__check" aria-label="Self check">
           <p>When you have done this step, mark it done.</p>

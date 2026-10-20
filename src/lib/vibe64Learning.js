@@ -70,14 +70,17 @@ function normalizeLesson(result) {
     attempt,
     practiceProjectSlug: attempt?.practiceSlug || "",
     reader: result.reader && text(result.reader.stepId) ? result.reader : null,
-    results: Array.isArray(result.results) ? result.results : []
+    results: Array.isArray(result.results) ? result.results : [],
+    // Steps passed in any attempt of this same lesson content (they count toward completion).
+    passedStepIds: Array.isArray(result.passedStepIds) ? result.passedStepIds.filter(text) : []
   });
 }
 
-// passed wins over any later not-yet-passed (a pass is final); otherwise the latest outcome.
-function stepStatus(results, stepId) {
+// passed wins over any later not-yet-passed (a pass is final), including a pass
+// kept from an earlier attempt of the same lesson content; otherwise the latest outcome.
+function stepStatus(results, stepId, passedStepIds = []) {
   const own = results.filter(result => result?.stepId === stepId);
-  if (own.some(result => result.outcome === "passed")) return "passed";
+  if (passedStepIds.includes(stepId) || own.some(result => result.outcome === "passed")) return "passed";
   return own.length ? own.at(-1).outcome || "not-yet-passed" : "not-started";
 }
 
@@ -458,7 +461,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get stepId() { return currentStep.value?.id || ""; },
     get scroll() { return state.scroll; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
-    stepStatus: stepId => stepStatus(results.value, stepId),
+    stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, minimise, close, toggle, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
     readNotes, saveNotes, clearNotes

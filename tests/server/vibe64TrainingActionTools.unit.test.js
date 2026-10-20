@@ -117,10 +117,13 @@ test("training queries share API/tool catalogue contracts and fresh member autho
   assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
-    const api = await c.execute(name);
+    const { learnerId, ...api } = await c.execute(name);
     const tool = await c.tool(name);
     assert.equal(tool.ok, true, JSON.stringify(tool));
+    // L binds its lesson requests to the browser reader's own learner identity; the tool result never carries it.
+    assert.equal(learnerId, name === "learning.read" ? "42" : undefined);
     assert.deepEqual(tool.result, api);
+    assert.doesNotMatch(JSON.stringify(tool.result), excluded);
     assert.doesNotMatch(JSON.stringify(api), excluded);
   }
   assert.deepEqual(await inventory(f.systemRoot), before);
@@ -360,8 +363,9 @@ test("history and retained-pass tool projections preserve original provenance wi
   const ended = await c.execute("lesson.end", { attemptId, requestId: "retire-one", expectedRevision: recorded.revision, reason: "discard" });
   const next = await c.execute("lesson.start", { ...f.input, requestId: "start-two", expectedRevision: ended.revision });
   const before = await inventory(f.systemRoot);
-  const read = await c.execute("learning.read");
+  const { learnerId, ...read } = await c.execute("learning.read");
   const toolRead = await c.tool("learning.read");
+  assert.equal(learnerId, "42", "only the browser reader receives its own learner identity");
   assert.deepEqual(toolRead.result, read);
   assert.equal(read.history.length, 1);
   assert.equal(read.history[0].attemptId, attemptId);

@@ -162,6 +162,12 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
     input: { mode: "create", schema: createSchema(fields) }, output: null,
     idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue", "course.install"].includes(name) ? "domain_native" : "none",
     extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput,
+      ...(name === "learning.read" ? { transformResult(result) {
+        // Own identity binds the browser's lesson requests (L), never the model's tool result.
+        const visible = { ...result };
+        delete visible.learnerId;
+        return visible;
+      } } : {})
     } },
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
@@ -235,8 +241,8 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
       for (const attempt of result.progress.attempts) {
         attempts.push(attemptSummary(attempt, await practiceSlug({ attempt, actor, practiceProjects })));
       }
-      return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
-        active: active(result.active), completion: completion(result.completion),
+      return { ok: true, available: true, learnerId: result.progress.learnerId, revision: result.revision,
+        activeSummaryCurrent: result.activeSummaryCurrent, active: active(result.active), completion: completion(result.completion),
         lessonProgress: (result.lessonCompletions || []).map(value => pick(value, ["lessonCode", "lessonHash", "required", "passed", "completed", "open"])),
         history: result.progress.attempts.filter(value => value.ended).map(active), attempts };
     }),

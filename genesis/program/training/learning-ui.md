@@ -43,8 +43,9 @@ the L overlay; `active` is L's open state. `coursesResource` and
 cancellation, scoped by the injected actual viewer actor. A private reader
 envelope masks old data synchronously on actor changes; signed-out and denied
 readers expose no progress. Same-actor transient errors retain loaded state. The
-API-only own `learnerId` remains separate from the shared viewer and Colleague
-identities. `available` (the official catalogue, read by the server from GitHub)
+API-only own `learnerId` (returned by the browser `learning.read`, removed from
+Colleague's tool result) binds lesson requests and remains separate from the
+shared viewer and Colleague identities. `available` (the official catalogue, read by the server from GitHub)
 is read only while L is open.
 
 `startLesson` accepts the picker's course/release/code/revision intent and

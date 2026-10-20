@@ -65,6 +65,16 @@ describe("useVibe64Learning controller", () => {
     expect(learning.lesson.value.steps.every(step => !Object.hasOwn(step.check || {}, "answer"))).toBe(true);
   });
 
+  it("shows a step passed in an earlier attempt of the same lesson content as passed", async () => {
+    // A continued or restarted lesson has no results of its own yet; lesson.read
+    // names the steps already passed in any attempt of this exact lesson content.
+    const { learning } = controller({ reads: () => lessonResult({ results: [], passedStepIds: ["quiz"] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    expect(learning.stepStatus("quiz")).toBe("passed");
+    expect(learning.stepStatus("tick")).toBe("not-started");
+  });
+
   it("reads every page of a lesson whose step text lesson.read paged", async () => {
     const first = lessonResult({ page: { index: 0, count: 2 } });
     delete first.lesson.steps[3].bodyText;
@@ -421,6 +431,29 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("shows why an automatic check did not pass without changing the step status", async () => {
+    const reason = "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first.";
+    const { learning, calls } = controller({ posts: () => ({ ok: true, stepId: "preview", outcome: "not-yet-passed", recorded: false, reason }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "preview" });
+    const view = await mountReader(learning);
+    try {
+      expect(byTest(view.root, "learning-check-reason")).toBeUndefined();
+      byTest(view.root, "learning-check").props.onClick();
+      await flush(); await flush();
+      expect(calls.find(call => call.method === "POST")).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepCheck(ATTEMPT), body: { stepId: "preview" } });
+      expect(textOf(byTest(view.root, "learning-check-reason"))).toBe(reason);
+      expect(textOf(byTest(view.root, "learning-step-status"))).toContain("Not checked yet");
+      // A realtime reread of the same step keeps the reason; another step clears it.
+      await learning.learnerChanged({ attemptId: ATTEMPT });
+      await flush(); await flush();
+      expect(textOf(byTest(view.root, "learning-check-reason"))).toBe(reason);
+      learning.selectStep("tick");
+      await flush();
+      expect(byTest(view.root, "learning-check-reason")).toBeUndefined();
+    } finally { view.app.unmount(); }
+  });
+
   it("plays a diagram from its initial state with fresh IDs and remounts before 64 command IDs", async () => {
     const { learning } = controller();
     learning.setViewer("member");
@@ -433,7 +466,9 @@ describe("Learning reader", () => {
       const play = async () => { byTest(view.root, "learning-play").props.onClick(); await flush(); };
       await play();
       expect(view.players).toHaveLength(1);
-      expect(view.players[0].restores).toEqual([{ state: "idle", paused: false, labels: {} }]);
+      // No invented snapshot: the player restarts at the declared initial state
+      // with the controller's own labels (a controller rejects other label sets).
+      expect(view.players[0].restores).toEqual([undefined]);
       expect(view.players[0].commands.map(command => command.name)).toEqual(["showOverview", "highlight"]);
       expect(view.players[0].commands[1].parameters).toEqual({ part: "server" });
       expect(new Set(view.players[0].commands.map(command => command.commandId)).size).toBe(2);

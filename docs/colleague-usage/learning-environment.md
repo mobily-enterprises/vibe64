@@ -83,7 +83,9 @@ as instructions, so they cannot change its teaching or judging rules.
 
 The left column (top row on a phone) lists the steps in order. Each shows its
 title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
-Select a step to read it. When every required step has passed the list says
+Select a step to read it. A step you passed in an earlier attempt of the same
+lesson (for example before you started it again) shows **Passed** and still
+counts. When every required step has passed the list says
 **Every required step is passed. This lesson is complete.**
 
 A step shows **Step N of M**, its title and its text. Depending on the step it
@@ -97,7 +99,9 @@ also has:
   try again.
 - **Automatic check**: the step is checked when you do the task in your practice
   project, for example by pressing a button in its Preview. **Check now** asks
-  the check to look again.
+  the check to look again. When it has not passed, the reason appears under
+  **Check now** (for example that no press in the lesson's Preview was
+  captured yet); the status does not change.
 - **Done**: for a step you check yourself; press it when you have done the step.
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control

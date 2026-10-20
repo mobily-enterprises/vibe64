@@ -52,7 +52,9 @@ const learningStep = computed(() => {
   const index = steps.findIndex(step => step?.id === stepId);
   if (!attemptId || !stepId || index < 0) return null;
   const results = unref(controller.results);
-  const passed = Array.isArray(results) && results.some(result => result?.stepId === stepId && result.outcome === "passed");
+  // A pass kept from an earlier attempt of the same lesson content counts too.
+  const passed = (Array.isArray(lesson?.passedStepIds) && lesson.passedStepIds.includes(stepId))
+    || (Array.isArray(results) && results.some(result => result?.stepId === stepId && result.outcome === "passed"));
   return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
     position: index + 1, total: steps.length, passed };
 });
