@@ -39,6 +39,10 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/steps/done", "step.done", true);
   actionRoute("POST", "/attempts/:attemptId/reader", "reader.save", true);
   actionRoute("POST", "/attempts/:attemptId/practice/delete", "practice.delete", true);
+  // Learning mode (product decision 8): read, leave (pause) and re-enter.
+  actionRoute("GET", "/learning-mode", "learning-mode.read");
+  actionRoute("POST", "/attempts/:attemptId/learning-mode/leave", "learning-mode.leave", true);
+  actionRoute("POST", "/attempts/:attemptId/learning-mode/enter", "learning-mode.enter", true);
   // Learner notes (contract C7): the signed-in learner's own, never another's.
   // 4000 characters of Markdown may take up to 16 KiB of escaped JSON.
   actionRoute("GET", "/teacher-notes", "learner-notes.read");

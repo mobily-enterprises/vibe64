@@ -9,6 +9,7 @@ import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
 import { practiceProjectsForViewer, projectPracticeForActor } from "@local/vibe64-core/server/practiceProjects";
+import { learningModeAllowsProject, learningModeProjects, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 
 import {
   Vibe64SessionRuntime
@@ -739,7 +740,19 @@ function createService({
     return project && viewer !== undefined ? projectPracticeForActor(project, viewer) : project;
   }
 
+  // A viewer in learning mode sees only that lesson's practice projects.
   async function listProjectsState({ viewer = undefined } = {}) {
+    const listed = await listProjectsForViewer({ viewer });
+    if (viewer === undefined) return listed;
+    const mode = await readLearningModeFor(viewer);
+    if (!mode || !listed || listed.ok === false) return listed;
+    const currentProject = listed.currentProject && learningModeAllowsProject(mode, listed.currentProject.slug)
+      ? listed.currentProject : null;
+    return { ...listed, currentProject, projects: learningModeProjects(listed.projects || [], mode),
+      ...(currentProject ? {} : { hasSelection: false }), learningMode: true };
+  }
+
+  async function listProjectsForViewer({ viewer = undefined } = {}) {
     const requestContext = currentProjectRequestContext();
     if (!requestContext?.targetRoot || studioProjectContext.requestContextMatchesSelectedProject(requestContext)) {
       const listed = await studioProjectContext.listProjects();

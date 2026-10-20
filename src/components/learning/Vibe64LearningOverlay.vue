@@ -1,9 +1,12 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
+import { VIBE64_LEARNING_MODE_NOTE, learningModeRedirect } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
@@ -25,12 +28,35 @@ const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
 watch(actorKey, value => learning?.setViewer(value), { immediate: true });
 onBeforeUnmount(() => learning?.setViewer(""));
 
-// While a lesson is going, every app bar of this host stays Learning yellow,
-// with L open or hidden (vibe64-m3.css styles body.vibe64-in-lesson).
+// While learning mode is on (server-backed: a lesson started or resumed and not
+// left or ended), every app bar of this host stays Learning yellow, with L open
+// or hidden (vibe64-m3.css styles body.vibe64-in-lesson).
 const IN_LESSON_CLASS = "vibe64-in-lesson";
 watch(() => Boolean(learning?.inLesson), value => globalThis.document?.body?.classList.toggle(IN_LESSON_CLASS, value),
   { immediate: true });
 onBeforeUnmount(() => globalThis.document?.body?.classList.remove(IN_LESSON_CLASS));
+
+// Learning mode keeps the learner in the lesson's projects: any other project
+// URL goes to the lesson's practice project (or the app home without one), with
+// a short note. The server refuses those projects' requests anyway.
+const route = useRoute();
+const router = useRouter();
+watch(() => [learning?.learningMode, route?.fullPath], () => {
+  if (!route || !router || !learning) return;
+  const target = learningModeRedirect({ mode: learning.learningMode, slug: projectSlugFromRoute(route) });
+  if (!target || target.path === route.path) return;
+  learning.showNotice(VIBE64_LEARNING_MODE_NOTE);
+  void router.replace(target.path);
+}, { immediate: true });
+
+const leaving = computed(() => learning?.state.modeBusy === "leave");
+// Leave lesson pauses it (progress and place kept) and gives the projects back.
+async function leaveLesson() {
+  if (await learning.leaveLesson()) learning.minimise();
+}
+function noticeShown(value) {
+  if (!value) learning.clearNotice();
+}
 
 const open = computed(() => Boolean(learning?.state.open));
 // Built on first open and kept while minimised, so its place stays as it was.
@@ -66,6 +92,8 @@ useRealtimeEvent({
 
 function lessonOpened(outcome) {
   void learning.show({ surface: "lesson", attemptId: outcome.attemptId });
+  // Starting or resuming re-enters learning mode on the server.
+  void learning.readLearningMode();
 }
 function selectSurface(value) {
   void learning.show({ surface: value });
@@ -94,17 +122,34 @@ function keydown(event) {
   >
     <header class="vibe64-learning__bar">
       <!-- L covers the app bar, so its own L (same plate, same place) hides it. -->
-      <button type="button" class="vibe64-learning__mark" aria-label="Hide Learning" title="Hide Learning (your place is kept)"
-        data-test="learning-hide" @click="learning.toggle()">
+      <button
+        type="button" class="vibe64-learning__mark" aria-label="Hide Learning" title="Hide Learning (your place is kept)"
+        data-test="learning-hide" @click="learning.toggle()"
+      >
         <span class="vibe64-learning__plate" aria-hidden="true">L</span>
       </button>
       <nav class="vibe64-learning__tabs" aria-label="Learning">
-        <button type="button" class="vibe64-learning__tab vibe64-learning__tab--courses" :aria-current="surface === 'courses' ? 'page' : undefined"
-          data-test="learning-courses-tab" @click="selectSurface('courses')">Courses</button>
-        <button v-if="learning.state.attemptId" type="button" class="vibe64-learning__tab"
+        <button
+          type="button" class="vibe64-learning__tab vibe64-learning__tab--courses" :aria-current="surface === 'courses' ? 'page' : undefined"
+          data-test="learning-courses-tab" @click="selectSurface('courses')"
+        >
+          Courses
+        </button>
+        <button
+          v-if="learning.state.attemptId" type="button" class="vibe64-learning__tab"
           :aria-current="surface === 'lesson' ? 'page' : undefined" data-test="learning-lesson-tab"
-          @click="selectSurface('lesson')">{{ lessonTitle }}</button>
+          @click="selectSurface('lesson')"
+        >
+          {{ lessonTitle }}
+        </button>
       </nav>
+      <button
+        v-if="learning.inLesson" type="button" class="vibe64-learning__leave" :disabled="leaving"
+        title="Pause this lesson and get back to your projects" data-test="learning-header-leave"
+        @click="leaveLesson"
+      >
+        Leave lesson
+      </button>
     </header>
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__courses">
@@ -121,6 +166,24 @@ function keydown(event) {
       <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
     </div>
   </div>
+  <v-snackbar
+    v-if="learning && actorKey"
+    :model-value="Boolean(learning.notice)"
+    :timeout="8000"
+    location="bottom"
+    data-test="learning-mode-notice"
+    @update:model-value="noticeShown"
+  >
+    {{ learning.notice }}
+    <template #actions>
+      <v-btn
+        v-if="learning.inLesson" variant="text" :loading="leaving" data-test="learning-notice-leave"
+        @click="leaveLesson"
+      >
+        Leave lesson
+      </v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <style scoped>
@@ -200,6 +263,20 @@ function keydown(event) {
 .vibe64-learning__tab--courses { flex: 0 0 auto; }
 .vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
+.vibe64-learning__leave {
+  background: transparent;
+  border: 1px solid var(--v64-learning-strong, #b88a00);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
+  min-height: 40px;
+  padding: 0 var(--v64-space-4, 16px);
+  white-space: nowrap;
+}
+.vibe64-learning__leave:disabled { cursor: progress; opacity: 0.6; }
+.vibe64-learning__leave:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning:focus { outline: none; }
 .vibe64-learning__content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .vibe64-learning__courses { height: 100%; overflow-y: auto; }
@@ -210,5 +287,6 @@ function keydown(event) {
   .vibe64-learning__bar { gap: 4px; padding-inline: var(--v64-space-2, 8px); }
   .vibe64-learning__mark { --v64-plate-size: 2.5rem; }
   .vibe64-learning__tab { max-width: 9rem; padding: 0 var(--v64-space-3, 12px); }
+  .vibe64-learning__leave { padding: 0 var(--v64-space-3, 12px); }
 }
 </style>

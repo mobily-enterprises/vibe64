@@ -12,6 +12,7 @@ import {
   projectRequestErrorStatusCode
 } from "./projectRequestContext.js";
 import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
+import { LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
 
 function createVibe64FeatureRoutes(
   http,
@@ -112,6 +113,7 @@ function isProjectRequestError(error = {}) {
     "vibe64_project_route_unavailable",
     "vibe64_project_path_not_accessible",
     PRACTICE_PROJECT_DELETED_CODE,
+    LEARNING_MODE_PROJECT_CODE,
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"
   ].includes(error?.code);

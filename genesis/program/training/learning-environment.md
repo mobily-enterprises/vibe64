@@ -22,6 +22,7 @@ Training actions.
 - `packages/vibe64-training/src/client/trainingGuide.js`
 - `packages/vibe64-training/src/shared/learnerEvents.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `packages/vibe64-core/src/server/learningMode.js`
 
 ## Public contract
 
@@ -57,6 +58,26 @@ guide overlay 3000 above L 2400 above Colleague.
   place is kept per tab in `sessionStorage` and saved for the account through
   `reader.save` (debounced, flushed on minimise), so a reload or another
   browser reopens the same step and scroll.
+- Learning mode: a lesson in progress is learning mode for the learner across
+  the environment, server-backed so it holds in every tab and device. Training
+  keeps an optional per-learner `learning-mode.json` whose `pausedAttemptId`
+  records **Leave lesson** (absent = not paused); the mode is on while the
+  learner has an active, not-ended attempt that is not the paused one, and its
+  projects are that attempt's practice projects (none for Lesson 0).
+  `learning-mode.read`, `learning-mode.leave` and `learning-mode.enter`, plus
+  `learningMode` in `learning.read`, expose it; resuming or starting the lesson
+  clears the pause. Core `learningMode.js` holds one host-registered reader that
+  fails open (a failed read is reported and treated as not in learning mode,
+  since the mode focuses a learner and is not an access boundary). Enforcement:
+  HTTP and WebSocket project admission (`resolveProjectRequestContext`), project
+  context for Colleague actions (Colleague `navigation.open` checks first so its
+  refusal carries the exact reason), and project listings, which show only the
+  lesson's practice projects. Refusals are 403 `vibe64_learning_mode_project`,
+  "You're in a lesson. Leave lesson to get back to your projects." The client
+  guards navigation by redirecting away from other projects, the app bar shows
+  the yellow lesson bar with the lesson name and **Leave lesson** (in L's header
+  too), and non-project pages (Learning, Account settings, AI Accounts) are never
+  limited, so leaving is always one click.
 - Lesson: `loadLesson(attemptId)` reads `lesson.read`; every step action is
   followed by a fresh read. `answer(stepId, selected)` (`step.answer`),
   `done(stepId)` (`step.done`) and `runCheck(stepId)` (`step.check.run`) are the

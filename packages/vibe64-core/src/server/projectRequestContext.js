@@ -9,6 +9,7 @@ import {
   resolveProjectContextRoot
 } from "./studioProjectContext.js";
 import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
+import { assertLearningModeAllowsProject, LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
@@ -38,6 +39,10 @@ async function resolveProjectRequestContext({
     (resolvedProjectContext?.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
   const vibe64User = request?.vibe64User || null;
+  // A person's own page or session request (HTTP or WebSocket, which carry
+  // headers) in learning mode opens only that lesson's practice projects.
+  // Internal work resolves without a request and is never limited.
+  if (request?.headers) await assertLearningModeAllowsProject({ actor: vibe64User, slug, request });
   const practice = resolvedProjectContext.currentPracticeProjectScope?.();
   if (practice) {
     if (slug !== practice.slug) {
@@ -294,6 +299,9 @@ function projectRequestErrorStatusCode(error = {}) {
   }
   if (error?.code === "vibe64_project_route_unavailable") {
     return 404;
+  }
+  if (error?.code === LEARNING_MODE_PROJECT_CODE) {
+    return 403;
   }
   if (error?.code === "vibe64_project_path_not_accessible" || error?.code === PRACTICE_PROJECT_DELETED_CODE) {
     return 404;

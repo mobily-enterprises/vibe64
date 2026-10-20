@@ -5,14 +5,16 @@ defineOptions({ inheritAttrs: false });
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // The L plate: opens and hides the Learning environment above the current page. It is
-// shown only where a host has a signed-in Learning overlay bound to it. While
-// a lesson is going, a short "In a lesson" label follows it (not on a phone,
-// where the yellow app bar and the amber dot say it).
+// shown only where a host has a signed-in Learning overlay bound to it. In
+// learning mode the lesson's name and a one-click "Leave lesson" follow it (not
+// on a phone, where the yellow app bar and the amber dot say it).
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const active = computed(() => Boolean(learning?.state.open));
 const minimised = computed(() => Boolean(learning?.state.minimised));
 const inLesson = computed(() => Boolean(learning?.inLesson));
+const lessonTitle = computed(() => String(learning?.lessonTitle || "") || "In a lesson");
+const leaving = computed(() => learning?.state.modeBusy === "leave");
 const title = computed(() => active.value ? "Hide Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
 </script>
 
@@ -36,7 +38,16 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   >
     <span aria-hidden="true">L</span>
   </v-btn>
-  <span v-if="available && inLesson" class="vibe64-learning-button__lesson" data-test="learning-in-lesson">In a lesson</span>
+  <template v-if="available && inLesson">
+    <span class="vibe64-learning-button__lesson" :title="lessonTitle" data-test="learning-in-lesson">{{ lessonTitle }}</span>
+    <button
+      type="button" class="vibe64-learning-button__leave" :disabled="leaving"
+      title="Pause this lesson and get back to your projects" data-test="learning-leave-lesson"
+      @click="learning.leaveLesson()"
+    >
+      Leave lesson
+    </button>
+  </template>
 </template>
 
 <style scoped>
@@ -112,8 +123,36 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
   font-weight: 700;
   margin-left: var(--v64-space-2);
+  max-width: 16rem;
+  overflow: hidden;
   padding: 2px var(--v64-space-2);
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vibe64-learning-button__leave {
+  background: transparent;
+  border: 1px solid var(--v64-learning-strong);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
+  font-weight: 700;
+  margin-left: var(--v64-space-2);
+  min-height: 28px;
+  padding: 2px var(--v64-space-3);
+  white-space: nowrap;
+}
+
+.vibe64-learning-button__leave:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.vibe64-learning-button__leave:focus-visible {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: 2px;
 }
 
 @keyframes vibe64-learning-button-pop {
@@ -138,7 +177,8 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
     width: 2.5rem;
   }
 
-  .vibe64-learning-button__lesson {
+  .vibe64-learning-button__lesson,
+  .vibe64-learning-button__leave {
     display: none;
   }
 }

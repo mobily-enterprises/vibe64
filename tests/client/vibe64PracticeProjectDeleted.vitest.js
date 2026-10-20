@@ -166,3 +166,49 @@ describe("project page deleted notice", () => {
     expect(nodes.some((node) => node.props?.title === "Project could not load")).toBe(true);
   });
 });
+
+describe("the project picker in learning mode", () => {
+  afterEach(() => { mocks.resources.length = 0; });
+
+  async function openInLearningMode(learning, options = {}) {
+    const { VIBE64_LEARNING_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
+    mocks.queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const app = Vue.createApp({});
+    app.provide(VIBE64_LEARNING_KEY, learning);
+    const emitted = [];
+    const scope = Vue.effectScope();
+    const gate = app.runWithContext(() => scope.run(() => useProjectSelectionGate((name, value) => emitted.push([name, value]), options)));
+    return { gate, emitted, scope, selection: mocks.resources[0] };
+  }
+
+  it("lists only the lesson's projects, and every project once learning mode ends", async () => {
+    const learning = Vue.reactive({ learningMode: { on: true, practiceSlug: "training-abc", projectSlugs: ["training-abc"] },
+      leaveLesson: vi.fn(async () => ({ ok: true })) });
+    const { gate, scope, selection } = await openInLearningMode(learning);
+    selection.data.value = { hasSelection: false, projects: [{ slug: "my-shop", path: "/p/my-shop" },
+      { slug: "training-abc", path: "/p/training-abc", practice: { attemptId: "a", lessonCode: "L1", mine: true } }] };
+    await Vue.nextTick();
+    expect(gate.learningModeOn.value).toBe(true);
+    expect(gate.projects.value).toEqual([]);
+    expect(gate.practiceProjects.value.map(project => project.slug)).toEqual(["training-abc"]);
+    await gate.leaveLesson();
+    expect(learning.leaveLesson).toHaveBeenCalledTimes(1);
+    learning.learningMode = { on: false, paused: true, practiceSlug: "", projectSlugs: [] };
+    await Vue.nextTick();
+    expect(gate.learningModeOn.value).toBe(false);
+    expect(gate.projects.value.map(project => project.slug)).toEqual(["my-shop"]);
+    scope.stop();
+  });
+
+  it("shows no load error when the server refuses a project outside the lesson", async () => {
+    const learning = Vue.reactive({ learningMode: { on: true, practiceSlug: "", projectSlugs: [] }, leaveLesson: vi.fn() });
+    const { gate, emitted, scope, selection } = await openInLearningMode(learning, { scopeSelectionToCurrentProject: true });
+    selection.query.error.value = Object.assign(new Error("You're in a lesson. Leave lesson to get back to your projects."),
+      { status: 403, code: "vibe64_learning_mode_project" });
+    await Vue.nextTick();
+    expect(gate.learningModeBlocked.value).toBe(true);
+    expect(gate.errorMessage.value).toBe("");
+    expect(emitted.some(([name]) => name === "error")).toBe(false);
+    scope.stop();
+  });
+});

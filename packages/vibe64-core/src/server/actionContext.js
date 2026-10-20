@@ -7,6 +7,7 @@ import {
 import { getStudioProjectContext, normalizeProjectSlug } from "./studioProjectContext.js";
 import { isLocalStudioRequest } from "./localStudioRequest.js";
 import { logOperationalEvent } from "./logging.js";
+import { assertLearningModeAllowsProject } from "./learningMode.js";
 
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -103,6 +104,10 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       const slug = actionProjectSlug(input, context);
       if (forwardsProjectSlug) trustedInput.projectSlug = slug;
       const resolved = context.vibe64Action?.project;
+      // Colleague acting for a learner in learning mode opens only that
+      // lesson's practice projects. A host contributor that resolved the
+      // project (Online) already applied this through its authorizeProject.
+      if (context.colleague && !resolved) await assertLearningModeAllowsProject({ actor: user, slug });
       if (resolved && resolved.slug !== slug) {
         throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
       }

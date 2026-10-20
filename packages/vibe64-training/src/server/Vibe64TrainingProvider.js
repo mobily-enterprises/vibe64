@@ -8,6 +8,7 @@ import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioReque
 import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { registerLocalPracticeAdmission } from "@local/vibe64-core/server/projectRequestContext";
+import { registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { createTrainingActions } from "./actions.js";
 import { createTrainingStepActions } from "./stepActions.js";
 import { createTrainingLearnerNotesActions } from "./learnerNotesActions.js";
@@ -66,6 +67,10 @@ const Vibe64TrainingProvider = defineFeature({
       }
     });
     registerLocalPracticeAdmission(({ slug }) => admitLocalPracticeProject({ learners, actor: currentOsUser(), slug }));
+    // Learning mode: the local learner is this computer's user, whatever the request says.
+    registerLearningModeReader(() => learners.readLearningMode({ actor: currentOsUser() }), {
+      onReadFailure: error => logger?.warn?.({ error: String(error?.message || error) }, "Learning mode could not be read; projects stay open.")
+    });
     // Host facility practiceProjects.remove; Online supplies its own through trainingHost.
     const practiceProjects = createLocalPracticeProjects({ learners, projectContext, project, terminals });
     // The learner's ordinary Files editor saves in a practice project record
@@ -77,7 +82,8 @@ const Vibe64TrainingProvider = defineFeature({
   actions({ training, trainingHost }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
-      exercises: training.exercises, courseInstaller: training.courseInstaller, practiceProjects: training.practiceProjects }),
+      exercises: training.exercises, courseInstaller: training.courseInstaller, practiceProjects: training.practiceProjects,
+      publishLearnerChanged: training.publishLearnerChanged }),
     ...createTrainingStepActions({ learners: training.learners, content: training.content, steps: training.steps,
       exercises: training.exercises, practiceProjects: training.practiceProjects, publishLearnerChanged: training.publishLearnerChanged }),
     ...createTrainingLearnerNotesActions({ learners: training.learners, publishLearnerChanged: training.publishLearnerChanged }),

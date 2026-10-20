@@ -2,6 +2,7 @@ import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions"
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { assertLearningModeAllowsProject, learningModeProjectError, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
 import { onboardingReadTool, onboardingTemplateTool } from "./onboardingAssistantContracts.js";
 import { settingsTool } from "./settingsAssistantContracts.js";
@@ -259,14 +260,21 @@ function createProjectActions({ project } = {}) {
       ownerRequired: true,
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
-      execute: (input) => project.createProject(input)
+      async execute(input, context) {
+        // In learning mode only the lesson's practice projects exist for the learner.
+        if (await readLearningModeFor(authenticatedVibe64User(context))) throw learningModeProjectError();
+        return project.createProject(input);
+      }
     }),
     action({
       id: ACTION_SELECT_PROJECT,
       kind: "command",
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
-      execute: (input) => project.selectProject(input)
+      async execute(input, context) {
+        await assertLearningModeAllowsProject({ actor: authenticatedVibe64User(context), slug: input.slug });
+        return project.selectProject(input);
+      }
     }),
     action({
       id: ACTION_READ_ENV,

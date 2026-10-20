@@ -21,6 +21,26 @@
       </v-btn>
     </v-sheet>
 
+    <v-sheet
+      v-else-if="learningModeBlocked"
+      class="project-selection-gate__deleted"
+      rounded="lg"
+      border
+      role="status"
+      data-test="learning-mode-project-note"
+    >
+      <p class="project-selection-gate__deleted-text">{{ learningModeNote }}</p>
+      <v-btn
+        color="primary"
+        variant="flat"
+        min-height="48"
+        data-test="learning-mode-project-leave"
+        @click="leaveLesson"
+      >
+        Leave lesson
+      </v-btn>
+    </v-sheet>
+
     <StudioErrorNotice
       v-else-if="displayError"
       title="Project could not load"
@@ -65,6 +85,23 @@
           <h2 class="project-selection-gate__title">Choose a project</h2>
           <p class="project-selection-gate__path">{{ projectsRoot }}</p>
         </div>
+      </div>
+
+      <div
+        v-if="learningModeOn"
+        class="project-selection-gate__learning-note"
+        role="status"
+        data-test="learning-mode-picker-note"
+      >
+        <span>{{ learningModeNote }}</span>
+        <v-btn
+          variant="tonal"
+          min-height="40"
+          data-test="learning-mode-picker-leave"
+          @click="leaveLesson"
+        >
+          Leave lesson
+        </v-btn>
       </div>
 
       <div
@@ -122,6 +159,7 @@
       </section>
 
       <v-form
+        v-if="!learningModeOn"
         class="project-selection-gate__create"
         @submit.prevent="handleCreateProject"
       >
@@ -154,6 +192,7 @@ import { mdiDeleteOutline } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { VIBE64_LEARNING_MODE_NOTE } from "@/lib/vibe64Learning.js";
 import {
   projectAppPath
 } from "@/lib/vibe64ProjectScope.js";
@@ -207,6 +246,9 @@ const {
   creating,
   errorMessage,
   hasSelection,
+  learningModeBlocked,
+  learningModeOn,
+  leaveLesson,
   loadProjectSelection,
   newProjectName,
   deletePracticeProject,
@@ -225,9 +267,10 @@ const {
   showPractice: props.showPractice
 });
 
+const learningModeNote = VIBE64_LEARNING_MODE_NOTE;
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value);
-const pickerVisible = computed(() => !practiceDeleted.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
+const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked?.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
 
 function openLearning() {
   return learning?.show({ surface: "courses" });
@@ -291,6 +334,18 @@ async function handleCreateProject() {
   max-width: min(36rem, 100%);
   padding: 1.25rem;
   width: 100%;
+}
+
+.project-selection-gate__learning-note {
+  align-items: center;
+  background: var(--v64-learning-container, rgba(245, 197, 24, 0.24));
+  border-radius: 0.5rem;
+  color: var(--v64-on-learning-container, inherit);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
 }
 
 .project-selection-gate__deleted-text {

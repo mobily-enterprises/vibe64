@@ -56,6 +56,21 @@ open Learning views refresh.
 Starting, resuming or ending a lesson needs your direct request or an accepted
 offer; a how-to question alone authorizes nothing.
 
+## Learning mode
+
+While you have a lesson in progress you are in learning mode: your projects
+are only that lesson's practice project (none for Lesson 0 or a lesson without
+one), and everything inside it works, Colleague included. Colleague checks this
+(`learning-mode.read`, or `learningMode` in `learning.read`) before opening a
+project for you. It does not open or work on another project while you are in
+learning mode; opening one is refused with "You're in a lesson. Leave lesson to
+get back to your projects." Colleague tells you that and offers to leave the
+lesson. Leaving is your one click on **Leave lesson** (the yellow bar on a
+desktop, or Learning's header); Colleague leaves for you
+(`learning-mode.leave`) only when you ask or accept its offer, and returns to
+the lesson (`learning-mode.enter`) only when you ask. Leaving keeps your
+progress and place; **L** → **Resume** brings you back.
+
 ## Teacher notes
 
 Colleague keeps short private notes about you as a learner

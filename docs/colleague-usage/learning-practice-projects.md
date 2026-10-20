@@ -29,6 +29,16 @@ as in any of your projects, with full access, and they stay that way after the
 lesson ends, until you delete the practice project. Ending a lesson does not
 stop or close the project or its session.
 
+While the lesson is in progress you are in learning mode (see
+[The Learning environment (L)](learning-environment.md)): this lesson's practice
+project is the only project listed or opened, in the project lists, the project
+switcher and **Practice**, and everything inside it works. Opening another
+project says "You're in a lesson. Leave lesson to get back to your projects."
+Press **Leave lesson** (the yellow bar on a desktop, or Learning's header) to
+pause the lesson and get all your projects back; **L** → **Resume** returns to
+it. Lesson 0 and other lessons without a practice project show no projects
+while in progress.
+
 A local installation normally serves only the project you selected. It also
 opens your own practice projects by their address (for example when Colleague
 navigates there or you open **Account settings** from it), with the same full

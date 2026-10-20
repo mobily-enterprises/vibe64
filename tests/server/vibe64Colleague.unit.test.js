@@ -11,6 +11,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
@@ -1860,6 +1861,52 @@ test("project navigation carries bounded panes and exact conversation targets, w
   assert.deepEqual(await pending, { ok: false, error: "The selected conversation changed before it opened." });
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
+});
+
+test("in learning mode Colleague opens only the lesson's practice project and relays the exact reason", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  const reads = [];
+  registerLearningModeReader(async ({ actor }) => {
+    reads.push(actor);
+    return { on: true, attemptId: "a", lessonCode: "L1", practiceSlug: "alpha", projectSlugs: ["alpha"] };
+  });
+  t.after(() => registerLearningModeReader(null));
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  await assert.rejects(execute({ projectSlug: "beta" }),
+    { code: LEARNING_MODE_PROJECT_CODE, statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE });
+  assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null, "nothing is sent to the browser");
+  assert.equal(reads.at(-1)?.uid, f.context.requestMeta.request.vibe64User.uid, "the mode is the acting person's");
+  // The lesson's practice project still opens normally.
+  const pending = execute({ projectSlug: "alpha" });
+  let state;
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation) break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(state.navigation.projectSlug, "alpha");
+  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus: { projectSlug: "alpha" } }, f.context);
+  assert.equal((await pending).ok, true);
+  // Outside learning mode other projects open again.
+  registerLearningModeReader(async () => ({ on: false }));
+  const other = execute({ projectSlug: "beta" });
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation?.projectSlug === "beta") break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(state.navigation.projectSlug, "beta");
+  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus: { projectSlug: "beta" } }, f.context);
+  assert.equal((await other).ok, true);
+});
+
+test("Colleague's protocol keeps learning mode: no other projects, the exact reason, leaving only on request", () => {
+  assert.match(colleagueInstructions, /learning mode/u);
+  assert.match(colleagueInstructions, /learning-mode\.read/u);
+  assert.ok(colleagueInstructions.includes(LEARNING_MODE_PROJECT_MESSAGE));
+  assert.match(colleagueInstructions, /learning-mode\.leave only after their direct request or accepted offer/u);
 });
 
 // Learning v2 (C4): navigation coordination moved from vibe64-training's

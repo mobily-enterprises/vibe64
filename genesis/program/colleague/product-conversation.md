@@ -116,7 +116,12 @@ choice answer, and tell the person what a guide actually showed (or why not) in
 plain words rather than quoting receipt fields or IDs, say plainly when a step's
 guide could not be opened, and never ask the person to repeat a step that
 `lesson.read` already shows passed; `practice.delete` requires `confirmed` from
-the assistant.
+the assistant. In learning mode (a lesson in progress) the protocol has
+Colleague check `learning-mode.read` before opening projects, never open or work
+on another project, relay "You're in a lesson. Leave lesson to get back to your
+projects." and run `learning-mode.leave`/`enter` only on the person's direct
+request; `navigation.open` refuses a non-lesson project with that reason before
+resolving the project (one mode read per call, so a leave applies at once).
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application

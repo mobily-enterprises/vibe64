@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { computed, hasInjectionContext, onScopeDispose, proxyRefs, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -24,6 +24,8 @@ import {
 } from "@/composables/useVibe64PracticeProjects.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
+import { VIBE64_LEARNING_MODE_PROJECT_CODE } from "@/lib/vibe64Learning.js";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 const cachedProjectSelections = new Map();
 // The server's not-found code for a practice project deleted while its page is open.
@@ -119,15 +121,25 @@ function useProjectSelectionGate(emit, {
     writeMethod: "POST"
   });
 
+  // Learning mode (server-backed): only the lesson's projects are listed and
+  // no project is created; the server filters too, this is defense in depth.
+  const learning = hasInjectionContext() ? useVibe64Learning() : null;
+  const learningModeOn = computed(() => learning?.learningMode?.on === true);
+  const inLearningMode = (slug) => !learningModeOn.value ||
+    (learning.learningMode.projectSlugs || []).includes(String(slug || ""));
+  // A project outside the lesson was refused: L's guard redirects; no error.
+  const learningModeBlocked = computed(() =>
+    selectionResource.query?.error?.value?.code === VIBE64_LEARNING_MODE_PROJECT_CODE);
+
   const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
   const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
   const listedProjects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
   // Practice is split at presentation: the listing stays unfiltered.
-  const projects = computed(() => listedProjects.value.filter((project) => !project?.practice));
+  const projects = computed(() => listedProjects.value.filter((project) => !project?.practice && inLearningMode(project?.slug)));
   // Standalone practice projects live outside the projects folder; their
   // source is the learner's own saved lessons (learning.read).
   const practice = useVibe64PracticeProjects({ enabled: showPractice });
-  const practiceProjects = computed(() => showPractice ? practice.practiceProjects.value
+  const practiceProjects = computed(() => (showPractice ? practice.practiceProjects.value
     : listedProjects.value.filter((project) => project?.practice).map((project) => ({
       slug: project.slug,
       attemptId: String(project.practice.attemptId || ""),
@@ -139,7 +151,7 @@ function useProjectSelectionGate(emit, {
       // The hosted host owns its delete (Online management page); the shared
       // picker only lists and opens these.
       deleteAvailable: false
-    })));
+    }))).filter((project) => inLearningMode(project?.slug)));
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);
   const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
@@ -157,14 +169,15 @@ function useProjectSelectionGate(emit, {
     return "";
   });
   const errorMessage = computed(() => String(
-    projectSelectionView.loadError ||
+    (learningModeBlocked.value ? "" : projectSelectionView.loadError) ||
     saveError.value ||
     ""
   ));
   const practiceDeleted = computed(() => scopeSelectionToCurrentProject &&
     selectionResource.query?.error?.value?.code === PRACTICE_PROJECT_DELETED_CODE);
 
-  watch([projectSelection, errorMessage, practiceDeleted], ([selection, error, deleted]) => {
+  watch([projectSelection, errorMessage, practiceDeleted, learningModeBlocked], ([selection, error, deleted, blocked]) => {
+    if (blocked) return;
     if (deleted) {
       // The open practice project was deleted: no cached selection reopens it.
       cachedProjectSelections.delete(projectSlug.value);
@@ -193,6 +206,9 @@ function useProjectSelectionGate(emit, {
     creating,
     errorMessage,
     hasSelection,
+    learningModeBlocked,
+    learningModeOn,
+    leaveLesson: () => learning?.leaveLesson(),
     loadProjectSelection,
     newProjectName,
     deletePracticeProject: practice.deletePracticeProject,

@@ -19,13 +19,35 @@ hides it and returns you to exactly that page. The app underneath keeps working 
 
 **L** is the one control that opens and hides Learning.
 
-While a lesson is going (started and not yet finished or ended), the header
-stays Learning yellow, with a warm yellow wash and an amber line along its
-bottom, even after you hide Learning and work in the normal app. On a desktop
-an **In a lesson** label also follows the L; on a phone the yellow header and
-the amber dot on the L say it. The header returns to normal when you press
-**Finish** or **End this lesson**. In a new browser tab the header turns yellow once you open the lesson
-again (**Resume saved lesson**).
+## Learning mode (a lesson in progress)
+
+While a lesson is going (started and not yet finished or ended), you are in
+learning mode everywhere in Vibe64, for your account: in every tab and on every
+device. The header stays Learning yellow, with a warm yellow wash and an amber
+line along its bottom, even after you hide Learning and work in the normal app.
+On a desktop the bar also shows the lesson's name and a **Leave lesson**
+button; on a phone the yellow header and the amber dot on the L say it, and
+**Leave lesson** is in Learning's own header.
+
+In learning mode your projects are only this lesson's practice project:
+
+- The project lists, the project switcher and **Practice** under Courses show
+  only this lesson's practice project. Lesson 0 and other lessons without a
+  practice project show no projects.
+- Opening any other project (for example from a saved address) is refused with
+  "You're in a lesson. Leave lesson to get back to your projects." and you are
+  taken back.
+- Nothing inside the lesson's practice project is limited: Preview, Files,
+  Database, coding chats and Colleague all work. Account settings and AI
+  Accounts stay available, so you can connect an AI during a lesson.
+
+**Leave lesson** is always one click (the yellow bar on a desktop, or
+Learning's header). It pauses the lesson: your progress and place are kept,
+learning mode ends and all your projects come back. To return, open **L** and
+press **Resume** (or **Resume saved lesson**), or start the lesson again; you
+are back in learning mode. **Finish** or **End this lesson** ends learning mode
+for good and the header returns to normal. The workspace owner works the same
+way.
 
 An old
 `?mode=learning` address from the retired Learning mode opens the ordinary
@@ -237,7 +259,10 @@ from Courses. Its earlier completions still count.
 ## What Colleague can do
 
 Colleague can explain these controls, open Learning on a lesson and step,
-point at the L button, and teach a step when you press **Teach me** or ask. It
+point at the L button, and teach a step when you press **Teach me** or ask. In
+learning mode it opens and works only in the lesson's practice project; when
+you ask for another project it says you're in a lesson and offers to leave it.
+It leaves (or returns to) the lesson only when you ask it to. It
 cannot press **Done**, answer a question or pass a check for you; those are
 your own actions. Colleague can read and rewrite its notes about you when you ask
 (for example "forget that I find Git hard"); only you can **Clear** them.

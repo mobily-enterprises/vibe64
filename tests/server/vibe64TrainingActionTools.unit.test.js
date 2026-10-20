@@ -114,7 +114,8 @@ const excluded = /PRIVATE_SOURCE|PRIVATE_SHELL|SVG_SOURCE_ONLY|CONTROLLER_SOURCE
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue",
+    "learning-mode.read", "learning-mode.leave", "learning-mode.enter"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const { learnerId, ...api } = await c.execute(name);
@@ -638,8 +639,8 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
   // brief, visual checkpoint and lesson-scoped visual routes.
   const originalRoutes = registered;
   // Learning v2 adds the lesson reader, step, reader-position and practice routes,
-  // and the learner's own teacher notes (contract C7).
-  assert.equal(originalRoutes.length, 21);
+  // the learner's own teacher notes (contract C7) and learning mode (decision 8).
+  assert.equal(originalRoutes.length, 24);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -653,6 +654,8 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/reader"], ["POST", "/api/vibe64/training/attempts/:attemptId/practice/delete"],
+    ["GET", "/api/vibe64/training/learning-mode"], ["POST", "/api/vibe64/training/attempts/:attemptId/learning-mode/leave"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/learning-mode/enter"],
     ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],
     ["POST", "/api/vibe64/training/teacher-notes/clear"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"]

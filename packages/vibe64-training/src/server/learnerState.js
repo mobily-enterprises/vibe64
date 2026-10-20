@@ -23,6 +23,8 @@ const MAX_READER_BYTES = 4096;
 const MAX_NOTES_CHARS = 4000;
 const MAX_NOTES_BYTES = 32 * 1024;
 const MAX_NOTES_REQUESTS = 32;
+// Learning mode: one small per-learner record naming the paused lesson.
+const MAX_LEARNING_MODE_BYTES = 1024;
 const STEP_LOCK_WAIT_MS = 2000;
 // Browser receipts and Preview output starts hold the preparation barrier only
 // briefly. Wait this long before reporting a genuinely long operation as busy.
@@ -186,6 +188,12 @@ const notesSchema = createSchema({
   updatedAt: { ...text, maxLength: 24 }, updatedBy: { ...text, enum: ["colleague", "learner"] },
   // Recent writes for request-ID replay; the oldest identity leaves this window.
   requests: list(createSchema({ requestId: { ...text, maxLength: 64 }, textHash: { ...text, maxLength: 64 }, revision }), MAX_NOTES_REQUESTS)
+});
+// Learning mode (product decision 8): a lesson in progress is learning mode
+// unless the learner left (paused) that exact attempt. Absence means not paused.
+const learningModeSchema = createSchema({
+  schemaVersion: version, learnerId: { ...text, maxLength: 128 },
+  pausedAttemptId: { ...text, required: false, maxLength: 36 }, updatedAt: { ...text, maxLength: 24 }
 });
 const isoTime = value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
@@ -539,7 +547,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       reader: path.join(userRoot, "reader.json"),
       readerLock: path.join(userRoot, "reader.lock"),
       notes: path.join(userRoot, "teacher-notes.json"),
-      notesLock: path.join(userRoot, "teacher-notes.lock")
+      notesLock: path.join(userRoot, "teacher-notes.lock"),
+      learningMode: path.join(userRoot, "learning-mode.json"),
+      learningModeLock: path.join(userRoot, "learning-mode.lock")
     };
   }
 
@@ -1519,6 +1529,93 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
+  // Learning mode (product decision 8). A lesson in progress (the active,
+  // not ended attempt) puts its learner in learning mode across every page,
+  // tab and device, unless the learner left that exact attempt. Leaving keeps
+  // the attempt, its progress and place; resuming, or starting another
+  // attempt, re-enters; ending or finishing the attempt ends the mode. The
+  // record holds only the paused attempt ID, in its own file and lock.
+  async function readLearningModeRecord(paths, progress) {
+    const value = await readRecord(paths.learningMode, MAX_LEARNING_MODE_BYTES);
+    if (!value) return null;
+    try {
+      const record = validateContent(learningModeSchema, value, "Learning mode");
+      if (record.learnerId !== paths.learner.id || !isoTime(record.updatedAt) ||
+          (record.pausedAttemptId !== undefined && !progress.attempts.some(attempt => attempt.attemptId === record.pausedAttemptId))) {
+        throw new Error("The learning mode record belongs to another learner or names an unknown attempt.");
+      }
+      return record;
+    } catch (cause) {
+      throw failure("VIBE64_TRAINING_STATE_INVALID",
+        `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
+    }
+  }
+
+  function learningModeProjection(progress, record) {
+    const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId && !value.ended);
+    if (!attempt) return Object.freeze({ on: false, paused: false });
+    const lessonCode = attempt.pin.lesson.code;
+    const paused = record?.pausedAttemptId === attempt.attemptId;
+    // The practice projects of this lesson: the current attempt's (once its
+    // preparation began) and those of earlier attempts of the same lesson. A
+    // lesson without an exercise never gets a project, so its slug opens nothing.
+    const projectSlugs = progress.attempts.filter(value => value.pin.lesson.code === lessonCode && value.projectSlug &&
+      (value.attemptId !== attempt.attemptId || value.preparation?.phase !== "reserved")).map(value => value.projectSlug);
+    const practiceSlug = attempt.preparation?.phase !== "reserved" ? attempt.projectSlug || "" : "";
+    return Object.freeze({ on: !paused, paused, attemptId: attempt.attemptId, lessonCode,
+      practiceSlug, projectSlugs: Object.freeze([...new Set([attempt.projectSlug, ...projectSlugs].filter(Boolean))]) });
+  }
+
+  // includeTitle adds the lesson's title for the shell (the installed lesson is
+  // read only then; project admission needs no content read).
+  async function readLearningMode({ actor, includeTitle = false } = {}) {
+    const paths = userPaths(actor);
+    const state = await loadState(paths);
+    const mode = learningModeProjection(state.progress, await readLearningModeRecord(paths, state.progress));
+    if (!includeTitle || !mode.attemptId) return mode;
+    const attempt = state.progress.attempts.find(value => value.attemptId === mode.attemptId);
+    let lessonTitle = "";
+    try { lessonTitle = String((await verifyInstalled(attempt.pin)).lesson?.title || ""); } catch { /* The code names it. */ }
+    return Object.freeze({ ...mode, lessonTitle: lessonTitle || mode.lessonCode });
+  }
+
+  // paused: true leaves the exact active attempt (an attempt that is no longer
+  // active changes nothing); paused: false resumes it. Both are idempotent.
+  async function setLearningModePaused({ actor, attemptId, paused } = {}) {
+    const paths = userPaths(actor);
+    if (!uuidPattern.test(attemptId || "") || typeof paused !== "boolean") {
+      throw failure("VIBE64_TRAINING_LEARNING_MODE_INVALID", "Leave or resume learning mode for an exact saved attempt.", 400);
+    }
+    let state = await loadState(paths);
+    const before = await readLearningModeRecord(paths, state.progress);
+    const isPaused = before?.pausedAttemptId === attemptId;
+    const isActive = state.progress.activeAttemptId === attemptId &&
+      state.progress.attempts.some(attempt => attempt.attemptId === attemptId && !attempt.ended);
+    if (paused === isPaused || (paused && !isActive)) {
+      return { learningMode: learningModeProjection(state.progress, before), changed: false };
+    }
+    await createNamespace(paths);
+    const release = await acquireRecordLock(paths.learningModeLock, "VIBE64_TRAINING_LEARNING_MODE_BUSY",
+      "Learning mode is being changed. Retry in a moment.");
+    try {
+      state = await loadState(paths);
+      // An invalid record is refused, never overwritten.
+      await readLearningModeRecord(paths, state.progress);
+      const next = { schemaVersion: 1, learnerId: paths.learner.id, updatedAt: new Date().toISOString(),
+        ...(paused ? { pausedAttemptId: attemptId } : {}) };
+      const validated = validateContent(learningModeSchema, next, "Learning mode");
+      try {
+        await writeJsonFileAtomic(paths.learningMode, validated, { directoryMode: 0o700, fileMode: 0o600 });
+      } catch (cause) {
+        throw failure("VIBE64_TRAINING_LEARNING_MODE_SAVE_UNCONFIRMED",
+          "The learning mode change was not confirmed. Read it again or retry.", null, { cause });
+      }
+      return { learningMode: learningModeProjection(state.progress, validated), changed: true };
+    } finally {
+      await release();
+    }
+  }
+
   async function beginPreparation({ actor, attemptId, expectedRevision } = {}) {
     return writePreparation({ actor, attemptId, expectedRevision }, "begin");
   }
@@ -1533,7 +1630,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   return { readState, readLearningSessionScope, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment,
     readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader,
-    readTeacherNotes, saveTeacherNotes };
+    readTeacherNotes, saveTeacherNotes, readLearningMode, setLearningModePaused };
 }
 
 export { assessmentLesson, createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot,

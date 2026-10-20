@@ -38,13 +38,20 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-function controller({ reads = () => lessonResult(), posts = () => ({ ok: true }), ...options } = {}) {
+// Learning-mode requests are answered by `mode` and recorded apart in modeCalls.
+function controller({ reads = () => lessonResult(), posts = () => ({ ok: true }), mode = () => ({ on: false, paused: false }),
+  ...options } = {}) {
   const calls = [];
+  const modeCalls = [];
   const request = vi.fn(async (url, { method, body } = {}) => {
+    if (url.includes("/learning-mode")) {
+      modeCalls.push({ url, method, body });
+      return { ok: true, available: true, learningMode: mode(url, method), ...(method === "POST" ? { changed: true } : {}) };
+    }
     calls.push({ url, method, body });
     return method === "GET" ? reads(url, calls) : posts(url, body, calls);
   });
-  return { learning: createVibe64Learning({ request, ...options }), calls, request };
+  return { learning: createVibe64Learning({ request, ...options }), calls, modeCalls, request };
 }
 const flush = async () => { for (let i = 0; i < 4; i += 1) { await Promise.resolve(); await Vue.nextTick(); } };
 
@@ -104,31 +111,87 @@ describe("useVibe64Learning controller", () => {
     expect(learning.minimised).toBe(true);
   });
 
-  it("is in a lesson while its attempt is read and not ended, with L open or hidden", async () => {
+  it("is in a lesson while the server's learning mode is on, with L open or hidden, until the lesson ends", async () => {
     let ended = false;
-    const { learning } = controller({ reads: () => lessonResult({ attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one" } }),
+    const { learning, modeCalls } = controller({ reads: () => lessonResult({ attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one" } }),
+      mode: () => ended ? { on: false, paused: false } : { on: true, paused: false, attemptId: ATTEMPT, lessonCode: "V64-START-01",
+        lessonTitle: "Orientation", practiceSlug: "practice-one", projectSlugs: ["practice-one"] },
       posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT); return { ok: true, available: true }; } });
     learning.setViewer("member");
-    expect(learning.inLesson).toBe(false);
-    await learning.show();
-    expect(learning.inLesson, "Courses alone is not a lesson").toBe(false);
+    expect(learning.inLesson, "not before the mode is read").toBe(false);
+    await flush();
+    expect(modeCalls[0]).toEqual({ url: VIBE64_LEARNING_ROUTES.learningMode, method: "GET", body: undefined });
+    expect(learning.inLesson, "learning mode comes from the server, also in a fresh tab").toBe(true);
+    expect(learning.lessonTitle).toBe("Orientation");
     await learning.show({ attemptId: ATTEMPT });
-    expect(learning.inLesson).toBe(true);
     learning.toggle();
     expect(learning.inLesson, "hidden L keeps the lesson going").toBe(true);
     await learning.show();
     await learning.endLesson({ expectedRevision: 1 });
+    await flush();
     expect(learning.inLesson, "an ended (or finished) lesson returns the app bar to normal").toBe(false);
+    expect(learning.lessonTitle).toBe("");
     learning.setViewer("someone-else");
     expect(learning.inLesson).toBe(false);
+    expect(learning.learningMode).toBeNull();
 
-    // A reload in the same tab reads its restored attempt at once.
-    ended = false;
-    const again = controller({ reads: () => lessonResult() });
-    again.learning.setViewer("member");
+    // An unreadable mode never locks the learner in.
+    const failing = createVibe64Learning({ request: async () => { throw new Error("offline"); } });
+    failing.setViewer("member");
     await flush();
-    expect(again.calls[0].url).toBe(VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT));
-    expect(again.learning.inLesson).toBe(true);
+    expect(failing.inLesson).toBe(false);
+  });
+
+  it("leaves and resumes learning mode through its actions and rereads the mode, also on another tab's change", async () => {
+    let on = true;
+    const { learning, modeCalls } = controller({ mode: (url, method) => {
+      if (method === "POST") on = url.endsWith("/enter");
+      return on ? { on: true, paused: false, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "practice-one",
+        projectSlugs: ["practice-one"] } : { on: false, paused: true, attemptId: ATTEMPT };
+    } });
+    learning.setViewer("member");
+    await flush();
+    expect(learning.inLesson).toBe(true);
+    learning.showNotice("note");
+    const left = learning.leaveLesson();
+    expect(learning.state.modeBusy).toBe("leave");
+    expect(await learning.leaveLesson(), "one leave at a time").toBeNull();
+    await left;
+    expect(modeCalls.slice(1)).toEqual([
+      { url: VIBE64_LEARNING_ROUTES.learningModeLeave(ATTEMPT), method: "POST", body: {} },
+      { url: VIBE64_LEARNING_ROUTES.learningMode, method: "GET", body: undefined }]);
+    expect(learning.inLesson).toBe(false);
+    expect(learning.learningMode).toMatchObject({ on: false, paused: true, attemptId: ATTEMPT });
+    expect(learning.notice, "leaving clears the redirect note").toBe("");
+    expect(learning.state.modeBusy).toBe("");
+    await learning.resumeLearningMode(ATTEMPT);
+    expect(modeCalls.at(-2)).toEqual({ url: VIBE64_LEARNING_ROUTES.learningModeEnter(ATTEMPT), method: "POST", body: {} });
+    expect(learning.inLesson).toBe(true);
+
+    // Another tab or device left the lesson: its learner change rereads the mode here.
+    on = false;
+    const before = modeCalls.length;
+    learning.learnerChanged({ learnerId: "learner", attemptId: ATTEMPT, reason: "learning-mode" });
+    await flush();
+    expect(modeCalls.length).toBe(before + 1);
+    expect(learning.inLesson).toBe(false);
+    learning.learnerChanged({ reason: "notes" });
+    await flush();
+    expect(modeCalls.length, "a notes change does not reread the mode").toBe(before + 1);
+    learning.clearNotice();
+    expect(learning.notice).toBe("");
+  });
+
+  it("redirects other projects in learning mode to the lesson's practice project, or home without one", () => {
+    const { learningModeRedirect } = LearningLib;
+    const mode = { on: true, practiceSlug: "training-abc", projectSlugs: ["training-abc"] };
+    expect(learningModeRedirect({ mode, slug: "my-shop" })).toEqual({ slug: "training-abc", path: "/app/project/training-abc" });
+    expect(learningModeRedirect({ mode, slug: "training-abc" })).toBeNull();
+    expect(learningModeRedirect({ mode, slug: "" }), "pages outside a project stay").toBeNull();
+    expect(learningModeRedirect({ mode: { on: true, practiceSlug: "", projectSlugs: [] }, slug: "my-shop" }),
+      "Lesson 0 has no practice project").toEqual({ slug: "", path: "/app" });
+    expect(learningModeRedirect({ mode: { on: false, paused: true }, slug: "my-shop" })).toBeNull();
+    expect(learningModeRedirect({ mode: null, slug: "my-shop" })).toBeNull();
   });
 
   it("minimise keeps the place, L hides and reopens L at the exact step", async () => {
@@ -765,7 +828,14 @@ describe("Learning reader", () => {
 
 describe("Learning overlay", () => {
   it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and hides on Escape or its own L", async () => {
-    const { learning } = controller();
+    let modeOn = true;
+    const { learning, modeCalls } = controller({ mode: (url, method) => {
+      if (method === "POST") modeOn = url.endsWith("/enter");
+      return modeOn ? { on: true, paused: false, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "practice-one",
+        projectSlugs: ["practice-one"] } : { on: false, paused: true, attemptId: ATTEMPT };
+    } });
+    const route = Vue.reactive({ path: "/app/project/my-shop/dashboard", fullPath: "/app/project/my-shop/dashboard", params: { slug: "my-shop" } });
+    const replace = vi.fn(async path => { Object.assign(route, { path, fullPath: path, params: { slug: path.split("/")[3] || "" } }); });
     const realtime = [];
     const coursesOptions = [];
     const courses = { learningResource: { data: Vue.ref({ ok: true, revision: 9 }), reload: vi.fn() } };
@@ -773,6 +843,9 @@ describe("Learning overlay", () => {
     const LearnerEvents = await import("../../packages/vibe64-training/src/shared/learnerEvents.js");
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
       vue: Vue,
+      "vue-router": { useRoute: () => route, useRouter: () => ({ replace }) },
+      "@/lib/vibe64ProjectScope.js": { projectSlugFromRoute: value => String(value?.params?.slug || "") },
+      "@/lib/vibe64Learning.js": LearningLib,
       "@jskit-ai/realtime/client/composables/useRealtimeEvent": { useRealtimeEvent: options => realtime.push(options) },
       "@local/vibe64-training/client/guide-overlay": { default: { render: () => Vue.h("aside", { "data-guide-overlay": "mounted" }) } },
       "@local/vibe64-training/shared/learner-events": LearnerEvents,
@@ -799,11 +872,16 @@ describe("Learning overlay", () => {
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(overlay) });
     app.provide(HostKeys.VIBE64_ASSISTANT_VIEWER_KEY, viewer);
-    for (const tag of ["v-btn"]) app.component(tag, widget);
+    for (const tag of ["v-btn", "v-snackbar"]) app.component(tag, widget);
     app.mount(root);
     try {
       await flush();
       expect(learning.state.actorKey).toBe("member");
+      // Learning mode: another project's URL goes to the lesson's practice project, with the note.
+      expect(replace).toHaveBeenCalledWith("/app/project/practice-one");
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(learning.notice).toBe(LearningLib.VIBE64_LEARNING_MODE_NOTE);
+      expect(byTest(root, "learning-mode-notice").props["model-value"]).toBe(true);
       expect(nodes(root).filter(node => node.props?.["data-guide-overlay"])).toHaveLength(1);
       expect(byTest(root, "courses")).toBeUndefined();
       expect(realtime[0].event).toBe("vibe64.training.learner.changed");
@@ -834,6 +912,21 @@ describe("Learning overlay", () => {
       await flush();
       expect(learning.surface, "L returns to exactly where the learner was").toBe("lesson");
       expect(bodyClasses.has("vibe64-in-lesson"), "the app bar stays yellow in a lesson").toBe(true);
+      // Leave lesson in L's header pauses the lesson, ends learning mode and hides L.
+      await byTest(root, "learning-header-leave").props.onClick();
+      await flush();
+      expect(modeCalls.some(call => call.url === VIBE64_LEARNING_ROUTES.learningModeLeave(ATTEMPT))).toBe(true);
+      expect(bodyClasses.has("vibe64-in-lesson"), "leaving returns the app bar to normal").toBe(false);
+      expect(learning.open).toBe(false);
+      expect(byTest(root, "learning-header-leave")).toBeUndefined();
+      Object.assign(route, { path: "/app/project/my-shop", fullPath: "/app/project/my-shop", params: { slug: "my-shop" } });
+      await flush();
+      expect(replace, "out of learning mode every project opens").toHaveBeenCalledTimes(1);
+      await learning.resumeLearningMode(ATTEMPT);
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith("/app/project/practice-one");
+      await learning.show();
+      await flush();
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
       await flush();
       expect(learning.open).toBe(false);

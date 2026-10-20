@@ -1350,6 +1350,24 @@ step results or completion. Readers validate the file and refuse an invalid,
 oversized or another learner's record without repair. Focused evidence:
 `vibe64TrainingLearnerNotes.unit.test.js`.
 
+## Training learning mode (no upgrade)
+
+Learning mode adds, per learner under `training/users/<key>/`, an optional
+`learning-mode.json` (schema version 1: the learner identity, an optional
+`pausedAttemptId` and `updatedAt`; 1 KiB bound) with its own
+`learning-mode.lock`. Only an explicit `learning-mode.leave` or
+`learning-mode.enter` writes it, and `lesson.start`, `lesson.resume` and
+`lesson.continue` clear the pause of the attempt they resume. No existing record
+changes and nothing is backfilled: a missing file means not paused, so an
+existing learner with an active attempt is in learning mode after the upgrade,
+which is the intended product behavior. Older releases never open the file, so
+it needs no compatibility boundary and no numbered upgrade; it cannot change
+attempts, step results or completion. Readers validate the file and refuse an
+invalid, oversized or another learner's record without repair, and project
+admission treats a failed read as not in learning mode (fail open), so a damaged
+record never locks a learner out of their projects. Focused evidence:
+`vibe64TrainingLearningMode.unit.test.js`.
+
 ## Shared database session override
 
 The optional project metadata boolean `allowSharedDatabaseSessions` is written
