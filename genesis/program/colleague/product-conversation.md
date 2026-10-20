@@ -82,7 +82,10 @@ original assignment-only background mutation rule. No saved history is rewritten
 Teaching uses only client state and existing operations. Both hosts report
 `learningOpen`, `learningSurface` (`courses` or `lesson`), `learningAttemptId`
 and `learningStepId` in focus from the shared L controller, so Colleague knows
-the current step even while L is minimised. **Teach me** records one request on
+the current step even while L is minimised. Both derive those fields, apply a
+command's `learning` part and confirm it with the one shared rule in
+`shared/learningFocus.js` (`learningPanelFocus`, `applyLearningNavigation`,
+`learningPanelMatches`). **Teach me** records one request on
 that controller; `colleagueLearningRequests.js` consumes it once for the same
 signed-in person, reveals Colleague, rereads its state and sends the fixed text
 "Teach me this step." through the ordinary send. When that read reports

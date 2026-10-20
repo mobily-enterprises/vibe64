@@ -26,14 +26,8 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
     const attemptId = practiceProjectAttemptId(slug);
     if (!attemptId) throw notPractice();
     if (!actor) throw Object.assign(new Error("Log in to Vibe64 before deleting a practice project."), { code: "vibe64_auth_required", statusCode: 401 });
-    let saved;
-    try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "observe" }); }
-    catch (error) {
-      // Another person's (or no) attempt: the slug names no practice project of this learner.
-      if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code)) throw notPractice();
-      throw error;
-    }
-    if (saved.projectSlug !== slug) throw notPractice();
+    const saved = await readOwnPracticeScope({ learners, actor, slug, access: "observe" });
+    if (!saved) throw notPractice();
     return { attemptId, saved };
   }
 
@@ -208,16 +202,26 @@ async function withRemovalLock(key, operation) {
 // Core grants the admitted scope full write (the learner's own practice
 // project is an ordinary project to them).
 async function admitLocalPracticeProject({ learners, actor, slug }) {
-  const attemptId = practiceProjectAttemptId(slug);
-  if (!attemptId) return null;
-  let saved;
-  try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "control" }); }
-  catch (error) {
-    if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
-        error.message === "Use the exact saved exercise attempt ID.") return null;
-    throw error;
-  }
-  return saved.projectSlug === slug ? { actor, training: saved.training } : null;
+  if (!practiceProjectAttemptId(slug)) return null;
+  const saved = await readOwnPracticeScope({ learners, actor, slug, access: "control", malformedIsForeign: true });
+  return saved ? { actor, training: saved.training } : null;
 }
 
-export { admitLocalPracticeProject, createLocalPracticeProjects, endPracticeAttempt };
+// The saved practice scope of `slug` when it is this learner's own practice
+// project, else null: another person's (or no) attempt, a lesson without an
+// exercise, or a saved scope naming another project. With malformedIsForeign
+// an attempt ID the learner store rejects as malformed is not theirs either.
+// Every other failure is the store's own and is thrown.
+async function readOwnPracticeScope({ learners, actor, slug, access, malformedIsForeign = false }) {
+  const attemptId = practiceProjectAttemptId(slug);
+  let saved;
+  try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access }); }
+  catch (error) {
+    if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
+        (malformedIsForeign && error.message === "Use the exact saved exercise attempt ID.")) return null;
+    throw error;
+  }
+  return saved.projectSlug === slug ? saved : null;
+}
+
+export { admitLocalPracticeProject, createLocalPracticeProjects, endPracticeAttempt, readOwnPracticeScope };

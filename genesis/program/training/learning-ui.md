@@ -124,7 +124,9 @@ the current learner's own practice projects. Training registers
 `registerLocalPracticeAdmission` (`practiceProjects.js`
 `admitLocalPracticeProject`); core `resolveProjectRequestContext` derives the
 attempt from the `training-<attempt>` slug, rechecks the saved attempt through
-`readExerciseProjectScope` (observe, so an ended attempt still qualifies) and
+`readOwnPracticeScope` over `readExerciseProjectScope` (control, so an ended
+attempt still qualifies; local deletion and the Files save owner use the same
+own-project check) and
 admits it with ordinary `write` access marked `ordinary`, which
 `captureProjectRequestContext` retains for helpers and agent turns. Ending a
 lesson leaves the practice project and its sessions the learner's.

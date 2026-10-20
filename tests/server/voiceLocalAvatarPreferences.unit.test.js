@@ -109,7 +109,7 @@ test("the chooser and both standalone consumers use the shared artwork rather th
   assert.match(settings, /<Vibe64AvatarSetting[\s\S]*:model-value="avatars\[binding\.preferenceTarget\]"[\s\S]*setAvatar\(binding\.preferenceTarget, value\)/u);
   assert.match(settings, /<VoiceSpeakingVoiceSelect :voice="voice"/u, "the replaced speech-service voice selector remains available");
   assert.match(settings, /import \{ VoiceSpeakingVoiceSelect \} from "@jskit-ai\/assistant-voice\/client";/u, "reuse JSKIT's selector instead of copying it");
-  assert.match(app, /<Vibe64LocalVoiceHost><RouterView \/><Vibe64LocalColleagueHost \/><\/Vibe64LocalVoiceHost>/u);
+  assert.match(app, /<Vibe64LocalVoiceHost><RouterView \/><Vibe64LocalColleagueHost \/><Vibe64LearningOverlay \/><\/Vibe64LocalVoiceHost>/u);
   assert.match(colleague, /<Vibe64ColleagueAvatar v-bind="voiceVisual \|\| \{ state \}" :avatar="avatars\.colleague" \/>/u);
   assert.match(colleague, /@voice-visual="voiceVisual = \$event"/u);
 });

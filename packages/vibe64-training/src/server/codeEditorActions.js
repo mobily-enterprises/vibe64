@@ -1,5 +1,6 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { practiceProjectAttemptId } from "@local/vibe64-core/server/practiceProjects";
+import { readOwnPracticeScope } from "./practiceProjects.js";
 
 // Practice projects are ordinary projects (Learning v2), so the learner edits
 // their code in the ordinary Files editor through the project-scoped
@@ -33,15 +34,10 @@ function createTrainingCodeSaveOwner({ authorship, learners, selectOwners } = {}
     const selected = await select({ actor, attemptId });
     if (!selected) return save();
     const owners = validOwners(selected);
-    let saved;
-    try { saved = await owners.learners.readExerciseProjectScope({ actor, attemptId, access: "observe" }); }
-    catch (error) {
-      // Another person's (or no) attempt: this is not the learner's lesson code.
-      if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
-          error.message === "Use the exact saved exercise attempt ID.") return save();
-      throw error;
-    }
-    if (saved.projectSlug !== context.slug || !saved.active) return save();
+    // Another person's (or no) attempt: this is not the learner's lesson code.
+    const saved = await readOwnPracticeScope({ learners: owners.learners, actor, slug: context.slug, access: "observe",
+      malformedIsForeign: true });
+    if (!saved?.active) return save();
     return owners.authorship.saveLearnerFile({ actor, attemptId, input, save });
   };
 }

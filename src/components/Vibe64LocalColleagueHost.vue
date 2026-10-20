@@ -2,7 +2,7 @@
 import { useRoute, useRouter } from "vue-router";
 import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watchEffect } from "vue";
 import { Vibe64Colleague } from "@local/vibe64-colleague/client";
-import { learningPanelMatches } from "@local/vibe64-colleague/shared/learning-focus";
+import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "@local/vibe64-colleague/shared/learning-focus";
 import { Vibe64ColleagueAvatar } from "@local/vibe64-voice/client";
 import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAvatarPreferences.js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -39,19 +39,8 @@ const focus = computed(() => {
   const pane = layout.value?.ready && layout.value.projectSlug === projectSlug
     ? layout.value.projectVisible ? route.path.split("/dashboard/")[1]?.split("/")[0] || "preview" : "chat"
     : "";
-  const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "", pane };
-  if (learningController.value) {
-    // L above the app: open state, its surface, and the current lesson step
-    // (kept while L is minimised so Colleague can teach that step).
-    const controller = learningController.value;
-    result.learningOpen = unref(controller.open) === true;
-    const surface = unref(controller.surface);
-    if (result.learningOpen && ["courses", "lesson"].includes(surface)) result.learningSurface = surface;
-    const attemptId = unref(controller.attemptId);
-    const stepId = unref(controller.stepId);
-    if (attemptId) result.learningAttemptId = attemptId;
-    if (attemptId && stepId) result.learningStepId = stepId;
-  }
+  const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "", pane,
+    ...learningPanelFocus(learningController.value) };
   const displayedDatabase = pane === "database" && database.value?.projectSlug === projectSlug &&
     database.value.sessionId === result.sessionId ? database.value : null;
   if (displayedDatabase) {
@@ -135,11 +124,7 @@ async function navigate(command = {}) {
     return { route: route.fullPath };
   }
   if (command.learning) {
-    const controller = learningController.value;
-    if (!controller) throw new Error("Learning is unavailable in this view.");
-    const { open, attemptId, stepId } = command.learning;
-    if (open) await controller.show({ ...(attemptId ? { attemptId } : {}), ...(stepId ? { stepId } : {}) });
-    else await controller.minimise();
+    await applyLearningNavigation(learningController.value, command.learning);
     if (!isCurrent()) throw new Error("The browser navigation target changed before it opened.");
     if (!command.projectSlug) {
       await waitForNavigation(() => learningPanelMatches(command, focus.value), isCurrent,
