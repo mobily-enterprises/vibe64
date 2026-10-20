@@ -303,11 +303,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       if (value.attempt?.ended && learningMode.value?.on && learningMode.value.attemptId === attemptId) void readLearningMode();
       // Restore the exact place: this tab's browser state first, then the
       // learner's saved reader position, then the first required step not yet
-      // passed for this lesson content (a continued lesson resumes there).
+      // passed for this lesson content (a continued lesson resumes there). A
+      // lesson with nothing passed yet starts at its first step.
       const known = id => value.steps.some(step => step.id === id);
       if (!known(state.stepId)) {
         const saved = value.reader?.attemptId === undefined || value.reader?.attemptId === attemptId ? value.reader : null;
-        const unpassed = value.steps.find(step => step.required && stepStatus(value.results, step.id, value.passedStepIds) !== "passed");
+        const passed = step => stepStatus(value.results, step.id, value.passedStepIds) === "passed";
+        const unpassed = value.steps.some(passed) ? value.steps.find(step => step.required && !passed(step)) : null;
         state.stepId = saved && known(saved.stepId) ? saved.stepId : (unpassed || value.steps[0])?.id || "";
         state.scroll = saved && known(saved.stepId) && Number.isSafeInteger(saved.scroll) ? saved.scroll : 0;
       }

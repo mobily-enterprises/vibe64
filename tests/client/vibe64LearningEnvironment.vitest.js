@@ -89,6 +89,13 @@ describe("useVibe64Learning controller", () => {
     expect(learning.stepId, "read is optional and quiz passed in an earlier attempt").toBe("preview");
   });
 
+  it("opens a lesson with nothing passed yet at its first step, even when that step is optional", async () => {
+    const { learning } = controller({ reads: () => lessonResult({ results: [] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    expect(learning.stepId, "a fresh lesson does not skip its optional introduction").toBe("read");
+  });
+
   it("reads every page of a lesson whose step text lesson.read paged", async () => {
     const first = lessonResult({ page: { index: 0, count: 2 } });
     delete first.lesson.steps[3].bodyText;
@@ -822,10 +829,11 @@ describe("Learning reader", () => {
 describe("Learning overlay", () => {
   it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and hides on Escape or its own L", async () => {
     let modeOn = true;
+    let practiceSlug = "training-1111";
     const { learning, modeCalls } = controller({ mode: (url, method) => {
       if (method === "POST") modeOn = false;
-      return modeOn ? { on: true, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug: "training-1111",
-        projectSlugs: ["training-1111"] } : { on: false };
+      return modeOn ? { on: true, attemptId: ATTEMPT, lessonTitle: "Orientation", practiceSlug,
+        projectSlugs: practiceSlug ? [practiceSlug] : [] } : { on: false };
     } });
     const route = Vue.reactive({ path: "/app/project/my-shop/dashboard", fullPath: "/app/project/my-shop/dashboard", params: { slug: "my-shop" } });
     const replace = vi.fn(async path => { Object.assign(route, { path, fullPath: path, params: { slug: path.split("/")[3] || "" } }); });
@@ -939,6 +947,15 @@ describe("Learning overlay", () => {
       expect(learning.minimised, "Escape keeps the place").toBe(true);
       // Kept mounted (hidden) so the place stays exactly as it was.
       expect(byTest(root, "reader")).toBeTruthy();
+      // A lesson without a practice project lives on the Learning page; leaving
+      // it returns to /app, where the projects are.
+      practiceSlug = "";
+      learning.learnerChanged({ attemptId: ATTEMPT, reason: "learning-mode" });
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith(LearningLib.VIBE64_LEARNING_PAGE_PATH);
+      await learning.leaveLesson();
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith("/app");
       viewer.value = { actorKey: "someone-else" };
       await flush();
       expect(learning.attemptId).toBe("");

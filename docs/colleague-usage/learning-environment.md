@@ -48,7 +48,8 @@ In learning mode you are in your learning space only (see
 header, the Learning page, or the note shown when another project was refused).
 It ends the lesson: your step results and the practice project are kept,
 learning mode ends, the header returns to normal and your projects come back.
-A practice project page then goes to `/app`. To return, press **Continue
+A practice project page, or the Learning page of a lesson without a practice
+project, then goes to `/app` (on a local Vibe64, your project). To return, press **Continue
 lesson** in **L** → **Courses**, or **Open** in **L** → **Practice**: a new
 attempt starts in the same practice project (a new one if it was deleted), at
 the first required step you have not passed, and you are back in learning
@@ -66,8 +67,9 @@ opens **L** on **Courses**, with **Back to your projects**.
 
 A local Vibe64 has no Projects page. Its `/app` address opens the lesson's
 practice project during a lesson, the Learning page during a lesson without one,
-and otherwise the project Vibe64 was started in. If no project was started, it
-says so with **Try again**. On hosted Vibe64 `/app` is the Projects page.
+and otherwise the project Vibe64 was started in, without reloading the page
+(**L** stays as it was). If no project was started, it says so with **Try
+again**. On hosted Vibe64 `/app` is the Projects page.
 
 An old `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.

@@ -43,8 +43,8 @@ practice project with **Open practice project** in the lesson.
 
 Press **Leave lesson** (the yellow bar on a computer, Learning's header, or
 the Learning page) to end the lesson. Your step results and the practice project
-are kept, your projects come back, and a practice project page returns you to
-`/app`. Later, **Continue lesson** in Learning → **Courses**, or **Open** in
+are kept, your projects come back, and a practice project page (or the
+Learning page) returns you to `/app`. Later, **Continue lesson** in Learning → **Courses**, or **Open** in
 Learning → **Practice**, starts the lesson again in the same practice project,
 at the first required step you have not passed. If that practice project was
 deleted meanwhile, the lesson gets a new one.

@@ -105,9 +105,10 @@ the mode and reloads the lesson; `finishLesson({expectedRevision})` posts
 `lesson.end` with reason `finished`. `lessonPath(mode)` is the lesson's place:
 its practice project address, or `/app/learning` (`VIBE64_LEARNING_PAGE_PATH`)
 for a lesson without one. A loaded lesson opens at the saved reader place,
-else the first required step not passed, else the first step. When the overlay
-sees learning mode turn off while the route is a practice project, it replaces
-the route with `/app`.
+else, once any step has passed for this lesson content, the first required
+step not passed, else the first step (a fresh lesson starts at its
+introduction). When the overlay sees learning mode turn off while the route is
+a practice project or the Learning page, it replaces the route with `/app`.
 
 L's **Practice** tab (`Vibe64LearningPractice.vue`, surface `practice`) reads
 `practice.list` through `useVibe64PracticeProjects` (its own endpoint resource,
@@ -125,8 +126,10 @@ the learning space boundary.
 
 Local `/app` (`src/pages/app/index.vue`) has no Projects page: once the viewer
 is bound it resolves to `lessonPath` during a lesson, else to the started
-project from `PROJECT_SELECTION_ENDPOINT`, with an error notice and **Try
-again**. `/app/learning` is the app shell with L, the lesson bar and Account
+project, with an error notice and **Try again**. Local project reads are
+project-scoped, so the started project is found by following the server's
+`/app` redirect with a `HEAD` fetch; the page is not reloaded, so L (and a
+Lesson finished screen) keeps its place. `/app/learning` is the app shell with L, the lesson bar and Account
 settings; it opens L on the lesson in progress (else Courses) and offers Open
 Learning, Open practice project and Leave lesson. Hosted routing of these
 addresses is Online's.

@@ -164,22 +164,22 @@ it("shared original shell refs are per mount and only local composition supplies
 
 // Local /app resolves to a place and never shows a Projects page (absent locally).
 describe("local /app resolver", () => {
-  async function resolveApp({ mode = { on: false }, currentProject = { slug: "my-app" }, actorKey = "local" } = {}) {
+  // The server redirects a request for /app to the started project; `startedUrl`
+  // is where that redirect ends (still /app when no project was started).
+  async function resolveApp({ mode = { on: false }, startedUrl = "http://127.0.0.1:4531/app/project/my-app", actorKey = "local" } = {}) {
     const replace = vi.fn(async () => {});
-    const request = vi.fn(async () => ({ ok: true, currentProject }));
+    const fetch = vi.fn(async () => ({ ok: true, url: startedUrl }));
+    vi.stubGlobal("fetch", fetch);
     const learning = Vue.reactive({ state: { actorKey }, readLearningMode: vi.fn(async () => LearningEnvironment.normalizeLearningMode(
       { ok: true, available: true, learningMode: mode })) });
     const stub = name => ({ props: ["title", "error"], setup: (props, { slots }) => () => Vue.h("div", { "data-stub": name, ...props },
       [slots.default?.(), slots["top-right"]?.(), slots.actions?.()]) });
     const page = compiledUi(path.resolve("src/pages/app/index.vue"), {
       vue: Vue, "vue-router": { useRouter: () => ({ replace }) },
-      "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request }) },
       "@/components/StudioAppShellLayout.vue": { default: stub("shell") },
       "@/components/studio/StudioErrorNotice.vue": { default: stub("error") },
       "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") },
-      "@/lib/studioGateApi.js": { PROJECT_SELECTION_ENDPOINT: "/api/vibe64/projects" },
       "@/lib/vibe64Learning.js": LearningEnvironment,
-      "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }
     });
     const root = { children: [] };
@@ -187,41 +187,42 @@ describe("local /app resolver", () => {
     for (const tag of ["v-btn", "v-skeleton-loader"]) app.component(tag, uiWidget);
     app.mount(root);
     for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
-    return { app, root, replace, request, learning };
+    return { app, root, replace, fetch, learning };
   }
 
   it("opens the lesson's practice project during a lesson, without reading the started project", async () => {
     const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "training-abc", projectSlugs: ["training-abc"] } });
     try {
       expect(view.replace).toHaveBeenCalledWith("/app/project/training-abc");
-      expect(view.request).not.toHaveBeenCalled();
-    } finally { view.app.unmount(); }
+      expect(view.fetch).not.toHaveBeenCalled();
+    } finally { view.app.unmount(); vi.unstubAllGlobals(); }
   });
 
   it("opens the Learning page for a lesson without a practice project", async () => {
     const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "", projectSlugs: [] } });
-    try { expect(view.replace).toHaveBeenCalledWith("/app/learning"); } finally { view.app.unmount(); }
+    try { expect(view.replace).toHaveBeenCalledWith("/app/learning"); } finally { view.app.unmount(); vi.unstubAllGlobals(); }
   });
 
-  it("opens the started project outside a lesson, once the overlay binds the viewer", async () => {
+  it("opens the started project outside a lesson by following the server's /app redirect, once the overlay binds the viewer", async () => {
     const view = await resolveApp({ actorKey: "" });
     try {
       expect(view.learning.readLearningMode, "the mode read waits for the signed-in viewer").not.toHaveBeenCalled();
       view.learning.state.actorKey = "local";
       for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
-      expect(view.request).toHaveBeenCalledWith("/api/vibe64/projects", { method: "GET" });
+      expect(view.fetch).toHaveBeenCalledWith("/app", { method: "HEAD", credentials: "same-origin" });
       expect(view.replace).toHaveBeenCalledWith("/app/project/my-app");
-    } finally { view.app.unmount(); }
+    } finally { view.app.unmount(); vi.unstubAllGlobals(); }
   });
 
   it("explains a missing started project with Try again instead of a Projects page", async () => {
-    const view = await resolveApp({ currentProject: null });
+    // The server did not redirect /app: no project was started.
+    const view = await resolveApp({ startedUrl: "http://127.0.0.1:4531/app" });
     try {
       expect(view.replace).not.toHaveBeenCalled();
       const notice = nodes(view.root).find(node => node.props?.["data-stub"] === "error");
       expect(notice.props.error).toContain("no started project");
       expect(nodes(view.root).some(node => node.props?.["data-stub"] === "account-settings")).toBe(true);
-    } finally { view.app.unmount(); }
+    } finally { view.app.unmount(); vi.unstubAllGlobals(); }
   });
 });
 

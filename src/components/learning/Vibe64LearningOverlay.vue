@@ -7,7 +7,7 @@ import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/sh
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { isPracticeProjectSlug } from "@/lib/vibe64PracticeProjectName.js";
-import { VIBE64_LEARNING_MODE_NOTE, learningModeRedirect } from "@/lib/vibe64Learning.js";
+import { VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_PAGE_PATH, learningModeRedirect } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
@@ -52,9 +52,11 @@ watch(() => [learning?.learningMode, route?.fullPath], () => {
 
 const leaving = computed(() => learning?.state.modeBusy === "leave");
 // When the lesson ends (left or finished, here or elsewhere) the projects come
-// back: a practice project page returns to /app.
+// back: a practice project page, or the Learning page that held a lesson
+// without one, returns to /app.
 watch(() => Boolean(learning?.inLesson), (value, previous) => {
-  if (previous && !value && router && isPracticeProjectSlug(projectSlugFromRoute(route))) void router.replace("/app");
+  if (!previous || value || !router) return;
+  if (isPracticeProjectSlug(projectSlugFromRoute(route)) || route?.path === VIBE64_LEARNING_PAGE_PATH) void router.replace("/app");
 });
 async function leaveLesson() {
   if (await learning.leaveLesson()) learning.minimise();

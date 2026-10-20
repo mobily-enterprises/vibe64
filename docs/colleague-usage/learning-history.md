@@ -45,7 +45,7 @@ been disabled; an ordinary new start still needs an enabled release.
 - If the practice project was deleted or archived, the lesson gets a fresh one,
   created as for a first start. A no-exercise lesson has no project.
 - Learning opens at the first required step that has not passed for this lesson
-  content.
+  content. A lesson with no step passed yet opens at its first step.
 
 Only one lesson is in progress at a time; continuing a different lesson needs
 the current one to end first. Colleague explains this and ends it only on your
