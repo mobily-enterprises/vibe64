@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, unref } from "vue";
-import { VIBE64_AGENT_PROVIDERS, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { useVibe64ColleagueModel } from "@local/vibe64-colleague/client";
+import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import { readLocalStorageJson, writeLocalStorageJson } from "/src/lib/browserLocalStorage.js";
+import { useVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
 import { useAiConnections } from "../composables/useAiConnections.js";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import { routingSuggestsChanges, useModelRouting } from "../composables/useModelRouting.js";
@@ -10,6 +10,8 @@ import { AI_ONBOARDING_PROVIDERS } from "./aiOnboardingProviders.js";
 
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
 const engineLabel = (id) => VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === id)?.label || id;
+// Through OpenCode, the regular Z.AI API serves the free GLM-4.7 Flash starter.
+const OPENCODE_STARTERS = ["zai"];
 const snoozeKey = (actorKey) => `vibe64.aiOnboarding.snoozedUntil:${actorKey || "local"}`;
 
 function aiOnboardingSnoozed(actorKey, now = Date.now()) {
@@ -24,12 +26,22 @@ function snoozeAiOnboarding(actorKey, now = Date.now()) {
   }
 }
 
-// "Set up" is any AI beyond the built-in starter, whichever provider it is.
+// "Set up" is any working AI beyond the free starters, whichever provider it is.
 function aiIsSetUp({ accounts, curated, openCode }) {
   return accounts.some(({ id, connected }) => ["claude", "codex"].includes(id) && connected) ||
     curated.some(({ connected, claudeReady }) => connected || claudeReady) ||
-    openCode.some(({ builtIn }) => builtIn !== true);
+    openCode.some(({ builtIn, connected, modelProviderId }) => builtIn !== true && connected &&
+      !OPENCODE_STARTERS.includes(modelProviderId));
 }
+
+// True when a Colleague selection uses this card's orchestrator and provider.
+function usesProvider(selection, { connect }) {
+  return selection?.engineId === connect.engineId && selection?.modelProviderId === connect.modelProviderId;
+}
+
+const colleagueChoice = (result) => result?.selection
+  ? { ...result.selection, label: `${result.engineLabel} (${result.modelLabel})` }
+  : null;
 
 // Orchestrator labels through which a card's provider is connected.
 function aiOnboardingConnections({ matches }, { accounts, curated, openCode }) {
@@ -51,6 +63,7 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   const workflows = useModelRouting({ workflowsOnly: true, enabled: routingEnabled });
   const routing = useModelRouting({ engineId: routingEngineId, enabled: routingEnabled });
   const colleague = useVibe64ColleagueModel();
+  const colleagueCurrent = ref(null);
 
   const lists = computed(() => ({
     accounts: accounts.status.value?.accounts,
@@ -70,15 +83,18 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     return Promise.all([accounts.statusResource.reload(), curated.resource.reload(), openCode.reload()]);
   }
 
-  // Colleague's saved selection with its label, when a Colleague is mounted.
-  function colleagueSelection() {
-    const selection = colleague.available.value ? colleague.current() : null;
-    return selection ? { ...selection, label: vibe64AssistantSelectionLabel(selection, { includeThinking: false }) } : null;
+  // Re-reads Colleague's saved selection, when a Colleague is mounted; a failed read counts as unknown.
+  async function refreshColleague() {
+    colleagueCurrent.value = colleague.available.value ? colleagueChoice(await colleague.current().catch(() => null)) : null;
+    return colleagueCurrent.value;
   }
 
-  async function selectForColleague(engineId) {
-    await colleague.selectForWorkflow(engineId);
-    return colleagueSelection();
+  // Moves Colleague onto the routed Senior of the card's provider.
+  async function selectForColleague({ connect: { engineId, modelProviderId } }) {
+    const result = await colleague.selectForWorkflow({ engineId, modelProviderId });
+    if (!result?.ok) return { error: result?.error || "Colleague couldn't switch models." };
+    colleagueCurrent.value = colleagueChoice(result);
+    return { selection: colleagueCurrent.value };
   }
 
   // Re-reads the chosen provider's connection, then its orchestrator's routing.
@@ -92,16 +108,19 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     await Promise.all([workflows.resource.reload(), routing.resource.reload()]);
     const workflow = workflows.workflows.value.find(({ engineId }) => engineId === connect.engineId);
     const engine = routing.engines.value.find(({ engineId }) => engineId === connect.engineId);
+    const senior = engine?.roles?.senior || {};
+    const routed = senior.assignment?.modelProviderId === connect.modelProviderId;
     return {
       connected: true,
-      available: workflow?.available === true,
-      routed: engine?.roles?.senior?.assignment?.modelProviderId === connect.modelProviderId,
+      // The workflow is usable and its Senior is, or would be, this provider.
+      available: workflow?.available === true && (routed || senior.recommendation?.modelProviderId === connect.modelProviderId),
+      routed,
       routingWouldChange: routingSuggestsChanges(engine, connect.modelProviderId)
     };
   }
 
-  return { cards, colleagueAvailable: colleague.available, colleagueSelection,
+  return { cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, refreshColleague,
     isSetUp, loadError, loaded, reload, selectForColleague, verify };
 }
 
-export { aiIsSetUp, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };
+export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };

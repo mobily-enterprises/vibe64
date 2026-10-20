@@ -12,7 +12,7 @@ const AI_ONBOARDING_PROVIDERS = Object.freeze([
     plan: { name: "Claude Pro", headline: "Recommended: $30/month", detail: "Basic coding",
       more: "Claude Max: $100/month for a lot of good coding" },
     note: "",
-    signUp: { label: "Open claude.com", url: "https://claude.ai/login?plan=pro",
+    signUp: { label: "Open claude.ai", url: "https://claude.ai/login?plan=pro",
       step: "Choose Claude Pro (recommended) or Max. Come back here when you're subscribed." },
     have: "I already have Claude, connect",
     steps: ["Sign in with your Claude account, then paste the code it shows you."],
@@ -61,7 +61,7 @@ const AI_ONBOARDING_PROVIDERS = Object.freeze([
     have: "I already have a Coding Plan key, connect",
     steps: ["Create a Coding Plan API key on Z.AI (Personal Coding Plan > Plan Overview), then paste it here."],
     connect: { engineId: "codex", modelProviderId: "zai-coding-plan", access: "personal" },
-    matches: { native: [], curated: ["zai-coding-plan", "zai"], opencode: ["zai", "zai-coding-plan"] }
+    matches: { native: [], curated: ["zai-coding-plan"], opencode: ["zai-coding-plan"] }
   })
 ]);
 

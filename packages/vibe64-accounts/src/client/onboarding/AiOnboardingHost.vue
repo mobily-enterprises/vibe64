@@ -20,15 +20,17 @@ const route = useRoute();
 const onboarding = useAiOnboarding({ endpoint: props.endpoint, enabled: computed(() => props.canConfigure) });
 const open = ref(false);
 const start = ref("why");
+const redo = ref(false);
 let opener = null;
 
 // Learning owns its own first-run guidance; checked by route, without Learning imports.
 const inLearning = computed(() => String(route?.path || "").startsWith("/app/learning") || route?.query?.mode === "learning");
 const needed = computed(() => props.canConfigure && onboarding.loaded.value && !onboarding.isSetUp.value);
 
-function show(screen) {
+function show(screen, isRedo = false) {
   opener = document.activeElement;
   start.value = screen;
+  redo.value = isRedo;
   open.value = true;
 }
 
@@ -40,7 +42,7 @@ watch([needed, inLearning], () => {
   show("why");
 }, { immediate: true });
 
-const stopListening = onVibe64AiOnboardingRequested((event) => show(event.detail?.start || "choose"));
+const stopListening = onVibe64AiOnboardingRequested((event) => show(event.detail?.start || "choose", event.detail?.redo === true));
 onBeforeUnmount(() => {
   stopListening();
   aiOnboardingNeeded.value = false;
@@ -57,7 +59,7 @@ async function close(reason) {
 
 <template>
   <AiOnboarding
-    :open="open" :start="start" :onboarding="onboarding" :can-configure="canConfigure"
+    :open="open" :start="start" :redo="redo" :onboarding="onboarding" :can-configure="canConfigure"
     :workspace="Boolean(endpoint)" @close="close"
   />
 </template>

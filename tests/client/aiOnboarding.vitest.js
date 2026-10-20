@@ -6,7 +6,6 @@ import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexP
 const mocks = vi.hoisted(() => ({ route: null, accounts: null, curated: null, openCode: null, routing: null, colleague: null }));
 vi.mock("vue-router", () => ({ useRoute: () => mocks.route }));
 vi.mock("vuetify", () => ({ useDisplay: () => ({ xs: ref(false) }) }));
-vi.mock("@local/vibe64-colleague/client", () => ({ useVibe64ColleagueModel: () => mocks.colleague }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js", () => ({ useVibe64Accounts: () => mocks.accounts }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js", () => ({
   useCodexProviderConnections: () => mocks.curated
@@ -20,6 +19,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue", 
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 
+import { registerVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
 import { aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
@@ -32,6 +32,10 @@ const empty = { accounts: [], curated: [], openCode: [] };
 const BIG_PICKLE = { id: "opencode", modelProviderId: "opencode", builtIn: true, connected: true };
 const claude = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "claude");
 const deepseek = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "deepseek");
+const glm = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "glm");
+const ENGINE_LABELS = { claude: "Claude Code", codex: "Codex" };
+const SENIOR_PROVIDERS = { claude: "anthropic", codex: "openai" };
+let unregisterColleague = () => null;
 
 let app;
 let storage;
@@ -61,12 +65,22 @@ beforeEach(() => {
   const engines = ref([]);
   mocks.routing = { workflows: { resource: { reload: vi.fn().mockResolvedValue({}) }, workflows },
     configuration: { resource: { reload: vi.fn().mockResolvedValue({}) }, engines } };
+  // A mounted Colleague as the real bridge sees it: the workflow's routed Senior,
+  // refused when that Senior uses another provider.
   const selection = ref(null);
-  mocks.colleague = { available: computed(() => true), current: () => selection.value,
-    selectForWorkflow: vi.fn(async (engineId) => { selection.value = { engineId, modelId: `${engineId}-model` }; return { ok: true }; }),
-    selection };
+  const labelled = () => ({ selection: selection.value, engineLabel: ENGINE_LABELS[selection.value.engineId],
+    modelLabel: selection.value.modelId });
+  mocks.colleague = { selection, seniorProviders: { ...SENIOR_PROVIDERS },
+    current: vi.fn(async () => selection.value ? labelled() : null),
+    selectForWorkflow: vi.fn(async ({ engineId, modelProviderId }) => {
+      if (mocks.colleague.seniorProviders[engineId] !== modelProviderId) return { ok: false, error: "Its Senior uses another provider." };
+      selection.value = { engineId, modelProviderId, modelId: `${engineId}-model` };
+      return { ok: true, ...labelled() };
+    }) };
+  unregisterColleague = registerVibe64ColleagueModel(mocks.colleague);
 });
 afterEach(() => {
+  unregisterColleague();
   app?.unmount();
   app = null;
   vi.unstubAllGlobals();
@@ -98,8 +112,13 @@ describe("set-up rule", () => {
     expect(aiIsSetUp({ ...empty, accounts: [{ id: "github", connected: true }], openCode: [BIG_PICKLE] })).toBe(false);
   });
 
+  it("does not count the free regular Z.AI starter or a failed connection as set up", () => {
+    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "zai", builtIn: false, connected: true }] })).toBe(false);
+    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", builtIn: false, connected: false }] })).toBe(false);
+  });
+
   it("counts any other AI, including providers onboarding does not list", () => {
-    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", builtIn: false }] })).toBe(true);
+    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", builtIn: false, connected: true }] })).toBe(true);
     expect(aiIsSetUp({ ...empty, curated: [{ id: "zai", connected: false, claudeReady: true }] })).toBe(true);
     expect(aiIsSetUp({ ...empty, accounts: [{ id: "codex", connected: true }] })).toBe(true);
   });
@@ -109,7 +128,9 @@ describe("set-up rule", () => {
       openCode: [BIG_PICKLE, { modelProviderId: "zai", builtIn: false, connected: true }] };
     expect(aiOnboardingConnections(claude, lists)).toEqual(["Claude Code"]);
     expect(aiOnboardingConnections(deepseek, lists)).toEqual(["Codex", "Claude Code"]);
-    expect(aiOnboardingConnections(AI_ONBOARDING_PROVIDERS[3], lists)).toEqual(["OpenCode"]);
+    expect(aiOnboardingConnections(glm, lists)).toEqual([]);
+    expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai", connected: true }] })).toEqual([]);
+    expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai-coding-plan", connected: true }] })).toEqual(["Codex"]);
     expect(aiOnboardingConnections(AI_ONBOARDING_PROVIDERS[1], lists)).toEqual([]);
   });
 });
@@ -133,9 +154,11 @@ describe("snooze and events", () => {
     const stop = onVibe64AiOnboardingRequested(handler);
     expect(requestVibe64AiOnboarding()).toBe(true);
     requestVibe64AiOnboarding({ start: "why" });
+    requestVibe64AiOnboarding({ redo: true });
     stop();
     requestVibe64AiOnboarding();
-    expect(handler.mock.calls.map(([event]) => event.detail)).toEqual([{ start: "choose" }, { start: "why" }]);
+    expect(handler.mock.calls.map(([event]) => event.detail)).toEqual([
+      { start: "choose", redo: false }, { start: "why", redo: false }, { start: "choose", redo: true }]);
   });
 });
 
@@ -148,7 +171,7 @@ describe("host auto-open", () => {
       () => { snoozeAiOnboarding("local"); },
       () => { mocks.route = { path: "/app/learning/lesson-0", query: {} }; },
       () => { mocks.route = { path: "/app/projects", query: { mode: "learning" } }; },
-      () => { mocks.openCode.connections.value = [BIG_PICKLE, { modelProviderId: "openrouter", builtIn: false }]; }
+      () => { mocks.openCode.connections.value = [BIG_PICKLE, { modelProviderId: "openrouter", builtIn: false, connected: true }]; }
     ];
     for (const arrange of cases) {
       storage.clear();
@@ -182,8 +205,8 @@ describe("host auto-open", () => {
     mocks.accounts.status.value.accounts[2].connected = true;
     const state = mount(AiOnboardingHost, { canConfigure: true, actorKey: "owner-1" });
     expect(state.open).toBe(false);
-    requestVibe64AiOnboarding();
-    expect([state.open, state.start]).toEqual([true, "choose"]);
+    requestVibe64AiOnboarding({ redo: true });
+    expect([state.open, state.start, state.redo]).toEqual([true, "choose", true]);
     await state.close("later");
     expect(aiOnboardingSnoozed("owner-1")).toBe(true);
     expect(aiOnboardingSnoozed("local")).toBe(false);
@@ -215,33 +238,61 @@ describe("embedded setup", () => {
 });
 
 describe("flow", () => {
-  function flow({ setUp = false, start = "why" } = {}) {
+  async function flow({ setUp = false, start = "why", redo = setUp } = {}) {
     if (setUp) mocks.accounts.status.value.accounts[2].connected = true;
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
-    const state = mount(AiOnboarding, { open: true, start, onboarding, canConfigure: true });
+    const state = mount(AiOnboarding, { open: true, start, redo, onboarding, canConfigure: true });
+    await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
+    await Promise.resolve();
     return { state, onboarding };
   }
+  const onCodexOpenAi = () => {
+    mocks.colleague.selection.value = { engineId: "codex", modelProviderId: "openai", modelId: "gpt" };
+  };
   const connectClaude = () => {
     mocks.accounts.status.value.accounts[1].connected = true;
     mocks.routing.workflows.workflows.value = [{ engineId: "claude", available: true }];
     mocks.routing.configuration.engines.value = [{ engineId: "claude", roles: {
       senior: { assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" } } } }];
   };
+  const routeDeepSeek = (senior) => {
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
+    mocks.routing.workflows.workflows.value = [{ engineId: "codex", available: true }];
+    mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: { senior } }];
+  };
 
   it("starts first-run at Why and routes a new person straight to success", async () => {
-    const { state } = flow();
+    const { state } = await flow();
     expect(state.screen).toBe("why");
-    state.connect(claude, true);
-    expect([state.screen, state.signUpOpened]).toEqual(["connect", true]);
+    state.connect(claude, "opened");
+    expect([state.screen, state.signUp]).toEqual(["connect", "opened"]);
     connectClaude();
     await state.finish();
     expect(state.screen).toBe("success");
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith("claude");
-    expect(state.outcome).toMatchObject({ routed: true, colleague: { engineId: "claude", label: "Claude Code (claude-model)" } });
+    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "anthropic" });
+    expect(state.outcome).toMatchObject({ routed: true, error: "",
+      colleague: { engineId: "claude", modelProviderId: "anthropic", label: "Claude Code (claude-model)" } });
+    expect(state.colleagueUsesChosen).toBe(true);
+  });
+
+  it("does not mark the sign-up step done for someone who already has a plan", async () => {
+    const { state } = await flow();
+    state.connect(claude, "have");
+    expect([state.screen, state.signUp]).toEqual(["connect", "have"]);
+  });
+
+  it("shows Colleague's refusal instead of claiming the switch", async () => {
+    const { state } = await flow();
+    state.connect(deepseek);
+    routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+    await state.finish();
+    expect(state.screen).toBe("success");
+    expect(state.outcome).toMatchObject({ colleague: null, error: "Its Senior uses another provider." });
+    expect(state.colleagueUsesChosen).toBe(false);
   });
 
   it("stays in Connect until the provider is connected and has a Senior model", async () => {
-    const { state } = flow();
+    const { state } = await flow();
     state.connect(claude);
     await state.finish();
     expect(state.screen).toBe("connect");
@@ -253,28 +304,38 @@ describe("flow", () => {
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
   });
 
+  it("is not ready when the workflow's Senior is another provider", async () => {
+    const { state } = await flow();
+    state.connect(deepseek);
+    routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
+    await state.finish();
+    expect([state.screen, state.notReady]).toEqual(["connect", true]);
+  });
+
   it("redo opens at Choose with live state and keeps the current setup untouched", async () => {
-    mocks.colleague.selection.value = { engineId: "codex", modelId: "gpt" };
-    const { state } = flow({ setUp: true, start: "why" });
+    onCodexOpenAi();
+    const { state, onboarding } = await flow({ setUp: true, start: "why" });
     expect([state.screen, state.wasSetUp]).toEqual(["choose", true]);
     const codex = state.cards.find(({ id }) => id === "codex");
     expect(codex).toMatchObject({ connected: true, through: ["Codex"] });
     expect(state.cardAction(codex)).toBe("keep");
     expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
+    await onboarding.reload();
+    expect(state.cardAction(state.cards.find(({ id }) => id === "deepseek"))).toBe("main");
     mocks.routing.workflows.workflows.value = [{ engineId: "codex", available: true }];
+    mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
+      senior: { assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } } } }];
     await state.keep(codex);
     expect(state.screen).toBe("success");
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
   });
 
   it("redo asks before routing changes and switches Colleague only when asked", async () => {
-    mocks.colleague.selection.value = { engineId: "codex", modelId: "gpt" };
-    const { state } = flow({ setUp: true, start: "choose" });
-    mocks.curated.resource.data.value.providers[0].connected = true;
-    mocks.routing.workflows.workflows.value = [{ engineId: "codex", available: true }];
-    mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
-      senior: { assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
-        recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } } } }];
+    onCodexOpenAi();
+    const { state } = await flow({ setUp: true, start: "choose" });
+    routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
+      recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
     await state.finish();
     expect(state.screen).toBe("routing");
@@ -282,8 +343,34 @@ describe("flow", () => {
     await vi.waitFor(() => expect(state.screen).toBe("success"));
     expect(state.outcome.routed).toBe(false);
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+    expect(state.colleagueUsesChosen).toBe(false);
+    mocks.colleague.seniorProviders.codex = "deepseek";
     await state.switchColleague();
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith("codex");
+    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+    expect(state.colleagueUsesChosen).toBe(true);
+  });
+
+  it("a redo opened before connections load never moves Colleague unasked", async () => {
+    onCodexOpenAi();
+    mocks.openCode.isInitialLoading.value = true;
+    const { state } = await flow({ setUp: true, start: "why", redo: true });
+    expect([state.screen, state.wasSetUp, state.firstRun, state.skippable]).toEqual(["choose", true, false, false]);
+    mocks.openCode.isInitialLoading.value = false;
+    connectClaude();
+    state.connect(claude);
+    await state.finish();
+    expect(state.screen).toBe("success");
+    expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("an automatic open settles first run only once connections are read", async () => {
+    mocks.openCode.isInitialLoading.value = true;
+    const { state } = await flow({ start: "why" });
+    expect([state.screen, state.firstRun]).toEqual(["why", false]);
+    mocks.accounts.status.value.accounts[2].connected = true;
+    mocks.openCode.isInitialLoading.value = false;
+    await vi.waitFor(() => expect(state.screen).toBe("choose"));
+    expect([state.wasSetUp, state.firstRun]).toEqual([true, false]);
   });
 
   it("shows the owner-only notice to members", () => {

@@ -5,10 +5,11 @@ const VIBE64_AI_ONBOARDING_OPEN_EVENT = "vibe64:ai-onboarding:open";
 // Set by the mounted host: true while this viewer can set up AI and has none.
 const aiOnboardingNeeded = ref(false);
 
-function requestVibe64AiOnboarding({ start = "choose" } = {}) {
+// redo: the person asked to review an existing setup (user menu, AI Accounts).
+function requestVibe64AiOnboarding({ start = "choose", redo = false } = {}) {
   if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return false;
   window.dispatchEvent(new CustomEvent(VIBE64_AI_ONBOARDING_OPEN_EVENT, {
-    detail: { start: start === "why" ? "why" : "choose" }
+    detail: { start: start === "why" ? "why" : "choose", redo: redo === true }
   }));
   return true;
 }

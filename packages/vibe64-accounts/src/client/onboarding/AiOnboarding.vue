@@ -8,10 +8,13 @@ import {
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
+import { usesProvider } from "./useAiOnboarding.js";
 
 const props = defineProps({
   open: Boolean,
   start: { type: String, default: "why" },
+  // Opened from the user menu or AI Accounts to review an existing setup.
+  redo: Boolean,
   onboarding: { type: Object, required: true },
   canConfigure: Boolean,
   // Hosted workspace: Personal-use connections serve only the owner.
@@ -32,8 +35,11 @@ const screen = ref("why");
 const direction = ref("forward");
 const stage = ref(null);
 const wasSetUp = ref(false);
+// Setup was read and absent: only then does finishing move Colleague unasked.
+const firstRun = ref(false);
 const chosen = ref(null);
-const signUpOpened = ref(false);
+// How step 1 stands: "" (not yet), "opened" (sign-up page opened) or "have".
+const signUp = ref("");
 const expandedId = ref("");
 const setupBusy = ref(false);
 const routingBusy = ref(false);
@@ -43,7 +49,7 @@ const notReady = ref(false);
 const makeMain = ref(false);
 const routingReviewed = ref(false);
 const fullRouting = ref(false);
-const outcome = ref({ routed: true, colleague: null });
+const outcome = ref({ routed: true, colleague: null, error: "" });
 const announcement = ref("");
 
 const busy = computed(() => setupBusy.value || routingBusy.value || verifying.value);
@@ -58,11 +64,18 @@ const footnote = computed(() => props.workspace
   : "You can change this any time in Account settings > AI Accounts.");
 // Set up later snoozes first-run onboarding; a redo just closes.
 const skippable = computed(() => !wasSetUp.value && !["success", "owner"].includes(screen.value));
-const colleagueUsesChosen = computed(() => outcome.value.colleague?.engineId === chosen.value?.connect.engineId);
+const colleagueUsesChosen = computed(() => usesProvider(outcome.value.colleague, chosen.value));
+
+function readSetup() {
+  const { isSetUp, loaded: known } = props.onboarding;
+  wasSetUp.value = props.redo || isSetUp.value;
+  firstRun.value = !props.redo && known.value && !isSetUp.value;
+}
 
 watch(() => props.open, (open) => {
   if (!open) return;
-  wasSetUp.value = props.onboarding.isSetUp.value;
+  readSetup();
+  props.onboarding.refreshColleague();
   direction.value = "forward";
   screen.value = !props.canConfigure ? "owner" : props.start === "why" && !wasSetUp.value ? "why" : "choose";
   chosen.value = null;
@@ -70,6 +83,13 @@ watch(() => props.open, (open) => {
   announcement.value = "";
   resetAttempt();
 }, { immediate: true });
+
+// Opened before the connections were read: settle once they are, before any choice.
+watch(() => props.onboarding.loaded.value, (known) => {
+  if (!props.open || !known || chosen.value) return;
+  readSetup();
+  if (wasSetUp.value && screen.value === "why") screen.value = "choose";
+});
 
 function resetAttempt() {
   warning.value = "";
@@ -92,9 +112,9 @@ function focusTitle() {
   nextTick(() => stage.value?.querySelector("h1")?.focus({ preventScroll: true }));
 }
 
-function connect(card, opened = false) {
+function connect(card, step = "") {
   chosen.value = card;
-  signUpOpened.value = opened;
+  signUp.value = step;
   resetAttempt();
   go("connect");
 }
@@ -114,11 +134,11 @@ function keep(card) {
 
 function cardAction(card) {
   if (!card.connected || !wasSetUp.value) return "get";
-  return props.onboarding.colleagueSelection()?.engineId === card.connect.engineId ? "keep" : "main";
+  return usesProvider(props.onboarding.colleague.value, card) ? "keep" : "main";
 }
 
-// Success needs the provider connected, a Senior model ready and, on first
-// setup or an explicit switch, Colleague moved onto the chosen orchestrator.
+// Success needs the provider connected, a Senior model of it ready and, on a
+// known first setup or an explicit switch, Colleague moved onto that provider.
 async function finish({ keep: keeping = false } = {}) {
   const card = chosen.value;
   verifying.value = true;
@@ -141,11 +161,12 @@ async function finish({ keep: keeping = false } = {}) {
       announcement.value = `${card.name} is connected, but no model is ready for Colleague yet.`;
       return;
     }
-    let colleague = props.onboarding.colleagueSelection();
-    if ((!wasSetUp.value || makeMain.value) && colleague?.engineId !== card.connect.engineId) {
-      colleague = await props.onboarding.selectForColleague(card.connect.engineId) || colleague;
+    let colleague = await props.onboarding.refreshColleague();
+    let error = "";
+    if ((firstRun.value || makeMain.value) && !usesProvider(colleague, card)) {
+      ({ selection: colleague = colleague, error = "" } = await props.onboarding.selectForColleague(card));
     }
-    outcome.value = { routed: result.routed, colleague };
+    outcome.value = { routed: result.routed, colleague, error };
     announcement.value = `${card.name} is connected.`;
     go("success");
   } catch (error) {
@@ -168,8 +189,8 @@ function routingDone() {
 async function switchColleague() {
   verifying.value = true;
   try {
-    outcome.value = { ...outcome.value,
-      colleague: await props.onboarding.selectForColleague(chosen.value.connect.engineId) || outcome.value.colleague };
+    const { selection = outcome.value.colleague, error = "" } = await props.onboarding.selectForColleague(chosen.value);
+    outcome.value = { ...outcome.value, colleague: selection, error };
   } finally {
     verifying.value = false;
   }
@@ -327,11 +348,11 @@ function expanded(card) {
                         <v-btn
                           color="primary" :variant="card.crown ? 'flat' : 'tonal'" size="large"
                           :href="card.signUp.url" target="_blank" rel="noopener noreferrer" :append-icon="mdiOpenInNew"
-                          @click="connect(card, true)"
+                          @click="connect(card, 'opened')"
                         >
                           Get {{ card.name }}<span class="d-sr-only"> (opens in a new tab)</span>
                         </v-btn>
-                        <v-btn variant="text" class="aio-card__have" @click="connect(card, true)">{{ card.have }}</v-btn>
+                        <v-btn variant="text" class="aio-card__have" @click="connect(card, 'have')">{{ card.have }}</v-btn>
                       </template>
                     </div>
                   </div>
@@ -348,16 +369,20 @@ function expanded(card) {
             </header>
             <div class="ai-onboarding__connect-grid">
               <ol class="aio-checklist">
-                <li :class="{ 'is-done': signUpOpened }">
+                <li :class="{ 'is-done': signUp === 'opened' }">
                   <span class="aio-checklist__marker" aria-hidden="true">
-                    <v-icon v-if="signUpOpened" :icon="mdiCheck" size="18" /><template v-else>1</template>
+                    <v-icon v-if="signUp === 'opened'" :icon="mdiCheck" size="18" /><template v-else>1</template>
                   </span>
                   <div>
-                    <p class="aio-checklist__title">Get a plan<span v-if="signUpOpened" class="d-sr-only"> (done)</span></p>
-                    <p class="aio-checklist__body">{{ chosen.signUp.step }}</p>
+                    <p class="aio-checklist__title">
+                      {{ signUp === "have" ? "Already subscribed" : "Get a plan" }}<span v-if="signUp === 'opened'" class="d-sr-only"> (done)</span>
+                    </p>
+                    <p class="aio-checklist__body">
+                      {{ signUp === "have" ? "Go straight to the next step. Need a plan after all? Open the sign-up page." : chosen.signUp.step }}
+                    </p>
                     <v-btn
                       variant="outlined" :href="chosen.signUp.url" target="_blank" rel="noopener noreferrer"
-                      :append-icon="mdiOpenInNew" @click="signUpOpened = true"
+                      :append-icon="mdiOpenInNew" @click="signUp = 'opened'"
                     >
                       {{ chosen.signUp.label }}<span class="d-sr-only"> (opens in a new tab)</span>
                     </v-btn>
@@ -418,6 +443,9 @@ function expanded(card) {
               <v-chip v-if="outcome.colleague" variant="tonal">Colleague: still using {{ outcome.colleague.label }}</v-chip>
               <v-btn variant="tonal" color="primary" :loading="verifying" @click="switchColleague">Use {{ chosen.name }} for Colleague</v-btn>
             </div>
+            <v-alert v-if="outcome.error" type="warning" variant="tonal" class="ai-onboarding__colleague-error">
+              Colleague couldn't switch to {{ chosen.name }}: {{ outcome.error }}
+            </v-alert>
             <p v-else class="ai-onboarding__lede">Choose {{ chosen.name }} in Colleague's model menu to use it there.</p>
             <p v-if="!outcome.routed" class="ai-onboarding__note">
               {{ chosen.engineLabel }} keeps its current models. {{ chosen.name }} is ready in AI Accounts whenever you want it.
@@ -710,6 +738,7 @@ function expanded(card) {
 .ai-onboarding__success .ai-onboarding__lede { margin-inline: auto; }
 .ai-onboarding__success > .v-btn { margin-top: var(--v64-space-5); }
 .ai-onboarding__colleague { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-3); justify-content: center; margin-bottom: var(--v64-space-3); }
+.ai-onboarding__colleague-error { margin: 0 auto var(--v64-space-3); max-width: 36rem; text-align: left; }
 .ai-onboarding__note { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: 0 0 var(--v64-space-2); }
 .aio-check { animation: aio-pop var(--v64-duration-medium) var(--v64-ease-emphasized-decelerate) calc(var(--v64-duration-medium) + 100ms) both; height: 96px; margin-bottom: var(--v64-space-4); width: 96px; }
 .aio-check circle { fill: var(--v64-success-container); stroke: none; }
@@ -784,6 +813,7 @@ function expanded(card) {
 
 @media (prefers-reduced-motion: reduce) {
   .aio-card, .aio-card__crown, .aio-check, .aio-check path { animation: none; }
+  .aio-card, .aio-card__chevron, .ai-onboarding__dots span { transition: none; }
   .aio-card:hover { transform: none; }
   .aio-forward-enter-from, .aio-forward-leave-to, .aio-back-enter-from, .aio-back-leave-to { transform: none; }
 }
