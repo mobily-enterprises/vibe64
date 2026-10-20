@@ -13,6 +13,8 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `src/composables/useVibe64LearningCourses.js`
 - `src/components/learning/Vibe64LearningCourses.vue`
 - `src/components/learning/Vibe64LearningOverlay.vue`
+- `src/components/learning/Vibe64LearningPractice.vue`
+- `src/composables/useVibe64PracticeProjects.js`
 - `src/lib/vibe64Learning.js`
 - `src/components/learning/Vibe64LearningButton.vue`
 - `src/components/StudioAppShellLayout.vue`
@@ -99,6 +101,25 @@ delegates Resume to the same saved-attempt preparation. It neither reserves on
 read nor merges normal progress. Snapshot acquisition and explicit end/new-start
 refresh remain the existing hosted Colleague actions. Published Start
 eligibility and immutable pins are unchanged; no draft course is promoted.
+
+## Practice section in L
+
+L's Courses surface shows `Vibe64LearningPractice.vue` between the courses and
+the teacher notes, in both hosts. It feeds `useVibe64PracticeProjects` with L's
+own `learning.read` resource (`learningResource` option, no second read and no
+project listing), so it works in single-project local mode, where
+`GET /api/vibe64/projects` is not registered and the project picker cannot load.
+Rows are attempts carrying `practiceSlug`; open minimises L and pushes the
+practice project's address, and the trash button posts `practice.delete` once
+(D-b, snackbar) and rereads. `learning.read` and `lesson.read` include
+`practiceSlug` only while the host facility's read-only `exists({slug, actor})`
+reports the project (standalone: the learner's own practice scope still holds a
+record; Online: the archive service's `practiceProjectExists`). A project whose
+deletion stopped part-way keeps its record and stays listed for the retry.
+Leftover storage whose ownership no longer matches counts as present, and a
+presence check that throws keeps that row listed instead of failing the read,
+so one damaged or uninstalled old attempt never hides progress; delete then
+reports the actual refusal.
 
 ## Local practice-project address
 

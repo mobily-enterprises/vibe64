@@ -287,6 +287,39 @@ test("practice.delete that fails after ending reports ended true and removed fal
   assert.equal(f.ended.length, 1, "the attempt is ended once");
 });
 
+test("a practice presence check that fails keeps that project listed without failing learning.read", async t => {
+  const practiceProjects = { async canRemove() { return { ok: true }; }, async remove() { throw new Error("not removed here"); },
+    async exists() { throw Object.assign(new Error("Practice project has missing or different ownership."), { code: "vibe64_practice_scope_mismatch" }); } };
+  const f = await fixture(t, { practice: practiceProjects });
+  const attempt = await f.start();
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
+    catalogue: { async readCatalogue() { throw new Error("not read by learning.read"); } }, learners: f.learners, practiceProjects
+  }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
+    authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
+  const read = await actions.execute({ actionId: "vibe64.training.learning.read", input: {}, context: { channel: "api", surface: "app" } });
+  assert.equal(read.active.attemptId, attempt.attemptId);
+  assert.equal(read.attempts.find(item => item.attemptId === attempt.attemptId).practiceSlug, attempt.projectSlug,
+    "an unreadable practice project stays listed so delete can retry or report it");
+  assert.ok(Array.isArray(read.lessonProgress), "progress is still returned");
+  assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, attempt.projectSlug);
+});
+
+test("a practice project the host reports deleted is no longer offered for opening or deletion", async t => {
+  const gone = new Set();
+  const f = await fixture(t, { practice: { async canRemove() { return { ok: true }; },
+    async exists({ slug }) { return !gone.has(slug); },
+    async remove(value) { gone.add(value.slug); return { ok: true, slug: value.slug, removed: true }; } } });
+  const attempt = await f.start();
+  assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, attempt.projectSlug);
+  const deleted = await f.execute("practice.delete", { attemptId: attempt.attemptId });
+  assert.deepEqual([deleted.ok, deleted.removed, deleted.ended], [true, true, true]);
+  assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, undefined);
+  await assert.rejects(f.execute("practice.delete", { attemptId: attempt.attemptId }), { code: "VIBE64_TRAINING_PRACTICE_MISSING" });
+  assert.equal(f.ended.length, 1);
+});
+
 test("practice.delete without the host facility reports unavailable and changes nothing", async t => {
   const f = await fixture(t, { practice: false });
   const attempt = await f.start();

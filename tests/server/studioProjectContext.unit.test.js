@@ -2097,6 +2097,11 @@ test("standalone light practice deletion removes the learner's private namespace
     assert.deepEqual(await practiceProjects.canRemove({ slug: "working", actor }), { ok: false, reason: "This is not one of your practice projects." });
     assert.equal((await practiceProjects.canRemove({ slug, actor: { uid: 43, username: "other" } })).ok, false);
     assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true });
+    // The read-only presence check behind learning.read's practice list.
+    assert.equal(await practiceProjects.exists({ slug, actor }), true);
+    assert.equal(await practiceProjects.exists({ slug: "working", actor }), false);
+    assert.equal(await practiceProjects.exists({ slug, actor: { uid: 43, username: "other" } }), false);
+    assert.equal(await practiceProjects.exists({ slug }), false);
     assert.deepEqual(ends, [], "the preflight ends no attempt");
     assert.equal(closed.length, 0, "the preflight closes no runtime");
     assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: true });
@@ -2107,6 +2112,7 @@ test("standalone light practice deletion removes the learner's private namespace
     await assert.rejects(() => access(path.dirname(paths.projectContextRoot)), { code: "ENOENT" }, "the empty attempt namespace goes");
     await access(working);
     await access(path.join(root, "system"));
+    assert.equal(await practiceProjects.exists({ slug, actor }), false, "a deleted practice project is no longer listed");
     assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: false });
     assert.equal(closed.length, 1);
     assert.equal(ends.length, 1, "a repeated delete does not end the attempt twice");
@@ -2140,6 +2146,7 @@ test("standalone light practice deletion resumes its persisted steps and refuses
       async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
     assert.ok(steps["runtime-closed"]);
     assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true }, "an interrupted deletion can be retried");
+    assert.equal(await practiceProjects.exists({ slug, actor }), true, "an interrupted deletion stays listed for the retry");
     assert.equal(steps["source-removed"], undefined);
     await assert.rejects(context.runWithPracticeProjectScope({ actor, training, access: "observe", allowDeleting: true }, () => assert.fail()),
       /explicit write access/u);
@@ -2148,6 +2155,40 @@ test("standalone light practice deletion resumes its persisted steps and refuses
     assert.equal(closed.length, 1, "the completed runtime close is not repeated");
     assert.equal(ends.length, 1, "the resumed deletion does not end the attempt again");
     for (const directory of Object.values(paths)) await assert.rejects(() => access(directory), { code: "ENOENT" });
+    assert.equal(await practiceProjects.exists({ slug, actor }), false);
+  });
+});
+
+test("standalone light practice deletion refuses to record removal its directories survived", async () => {
+  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
+  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals }) => {
+    const kept = new Set([paths.projectContextRoot]);
+    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals,
+      async removePath(target, options) { if (!kept.has(target)) return rm(target, options); } });
+    const readSteps = () => context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
+      async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
+    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_project_namespace_delete_failed" });
+    assert.equal((await readSteps())["source-removed"], undefined, "a surviving namespace is not recorded as removed");
+    assert.equal(await practiceProjects.exists({ slug, actor }), true, "it stays listed for the retry");
+    kept.clear();
+    kept.add(paths.projectRuntimeRoot);
+    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_project_state_delete_failed" });
+    assert.ok((await readSteps())["source-removed"]);
+    assert.equal(await practiceProjects.exists({ slug, actor }), true);
+    kept.clear();
+    assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
+    assert.equal(await practiceProjects.exists({ slug, actor }), false);
+  });
+});
+
+test("standalone practice presence keeps leftover storage with missing ownership listed", async () => {
+  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
+  await withLocalPracticeProject(async ({ context, project, actor, slug, paths, learners, terminals }) => {
+    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
+    // The project record (in the runtime root) is gone but the namespace remains: admission refuses it as foreign.
+    await rm(paths.projectRuntimeRoot, { recursive: true, force: true });
+    assert.equal(await practiceProjects.exists({ slug, actor }), true, "leftover storage is present, so delete can report it");
+    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_practice_scope_mismatch" });
   });
 });
 

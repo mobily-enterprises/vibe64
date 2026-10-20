@@ -24,8 +24,8 @@ Colleague can explain the error and use supported lesson controls when asked.
 
 A practice project is an ordinary project of yours, and the session that
 lesson preparation creates in it is an ordinary session of that project. Open
-it with **Open practice project** in Learning or from **Practice** in the
-project list. Its chat, **Preview**, **Dashboard** and session list work exactly
+it with **Open practice project** in the lesson or from **Practice** on
+Learning's **Courses** page. Its chat, **Preview**, **Dashboard** and session list work exactly
 as in any of your projects, with full access, and they stay that way after the
 lesson ends, until you delete the practice project. Ending a lesson does not
 stop or close the project or its session.
@@ -39,22 +39,31 @@ still reports "Local editor mode only serves the selected project."
 
 ## Practice list and deleting a practice project
 
-Practice projects are ordinary projects marked as practice. The local start
-page (**Projects**, the project picker) lists them separately under
-**Practice**, below your projects: each row names the lesson and the practice
-project's address. Select a row to open that project.
+Practice projects are ordinary projects marked as practice. Learning lists
+yours: press **L**, and the **Courses** page shows a **Practice** section below
+the courses (above **What my teacher knows about me**) once you have at least
+one practice project. Each row names the lesson and the practice project's
+address. Select a row to open that project; Learning minimises and keeps your
+place, so **L** returns to it. A local installation normally serves only its
+selected project and has no project list to open, so use this section there.
+On a hosted workspace the same section appears, and Management → **Projects**
+still lists practice projects under **Practice** (see that guide).
 
-The trash button beside one of your own practice projects (**Delete practice
+The trash button beside one of your practice projects (**Delete practice
 project** followed by its name) deletes it with one click; there is no
-confirmation dialog. A **Practice project deleted.** message confirms it. The
+confirmation dialog. A **Practice project deleted.** message confirms it and the
+row disappears; **Open practice project** in that lesson disappears too. The
 project's source, sessions and runtime state are removed and no archive is
 kept, so it cannot be restored. Your lesson progress and earlier passes stay;
 the lesson attempt that owned the project ends. If a session in that project is
 pinned, deletion refuses with **Unpin session … before deleting this practice
 project.** Open that session, choose **Unpin session**, then delete again. If
-deletion stops part-way, press the trash button again; it continues from the
-step that failed. Ordinary projects never appear under **Practice** and are
-never deleted this way.
+deletion stops part-way, the row stays: press the trash button again; it
+continues from the step that failed. A practice project whose files are damaged
+or whose ownership can no longer be confirmed also stays listed, and the rest
+of the page still loads; deleting it then shows the reason it was refused, so
+ask the person who runs this Vibe64 to inspect it. Ordinary projects never appear under
+**Practice** and are never deleted this way.
 
 Colleague can explain these steps. It deletes a practice project only when you
 ask it to and then confirm the exact project; an offer is not a request.

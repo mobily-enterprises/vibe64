@@ -7,6 +7,7 @@ import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
+import Vibe64LearningPractice from "./Vibe64LearningPractice.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
@@ -102,6 +103,8 @@ function keydown(event) {
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__courses">
         <Vibe64LearningCourses :learning="courses" @opened="lessonOpened" />
+        <!-- The learner's own practice projects (C5), listed, opened and deleted here. -->
+        <Vibe64LearningPractice :learning="learning" :courses="courses" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>

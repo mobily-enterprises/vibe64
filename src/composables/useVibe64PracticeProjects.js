@@ -38,10 +38,12 @@ function practiceProjectsFromLearning(result = null) {
   return projects;
 }
 
-function useVibe64PracticeProjects({ enabled = true } = {}) {
+// `learningResource` lets L's Practice section reuse L's own learning.read
+// resource (already reread on learner changes) instead of a second read.
+function useVibe64PracticeProjects({ enabled = true, learningResource = null } = {}) {
   const deletingSlug = ref("");
   const active = computed(() => toValue(enabled) === true);
-  const resource = useEndpointResource({
+  const resource = learningResource || useEndpointResource({
     enabled: active,
     fallbackLoadError: "Practice projects could not load.",
     path: LEARNING_PATH,

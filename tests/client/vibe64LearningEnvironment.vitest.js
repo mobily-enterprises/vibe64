@@ -525,7 +525,9 @@ describe("Learning overlay", () => {
       "./Vibe64LearningReader.vue": { default: { props: ["learning", "learningRevision"],
         setup: props => () => Vue.h("article", { "data-test": "reader", revision: props.learningRevision }) } },
       "./Vibe64LearningTeacherNotes.vue": { default: { props: ["learning"],
-        setup: props => () => Vue.h("aside", { "data-test": "teacher-notes", own: props.learning === learning }) } }
+        setup: props => () => Vue.h("aside", { "data-test": "teacher-notes", own: props.learning === learning }) } },
+      "./Vibe64LearningPractice.vue": { default: { props: ["learning", "courses"],
+        setup: props => () => Vue.h("aside", { "data-test": "practice", own: props.learning === learning && props.courses === courses }) } }
     });
     const viewer = Vue.ref({ actorKey: "member" });
     const root = { children: [] };
@@ -547,6 +549,7 @@ describe("Learning overlay", () => {
       expect(layer.props["aria-label"]).toBe("Learning");
       expect(byTest(root, "courses").props.own, "the courses surface reads L's own courses adapter").toBe(true);
       expect(byTest(root, "teacher-notes").props.own, "the courses surface shows this learner's teacher notes").toBe(true);
+      expect(byTest(root, "practice").props.own, "the courses surface lists practice projects from L's own learning.read").toBe(true);
       byTest(root, "courses").props.onClick();
       await flush();
       expect(learning.surface).toBe("lesson");
@@ -561,6 +564,56 @@ describe("Learning overlay", () => {
       expect(learning.attemptId).toBe("");
     } finally { app.unmount(); }
     expect(learning.state.actorKey).toBe("");
+  });
+});
+
+describe("L's Practice section", () => {
+  it("lists the learner's practice projects from L's learning.read, opens one over minimised L and deletes with one click", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show();
+    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() } };
+    const practiceOptions = [];
+    const practiceProjects = Vue.ref([
+      { slug: "training-mine", attemptId: ATTEMPT, lessonCode: "V64-START-02", lessonTitle: "", ended: false, mine: true, deleteAvailable: true },
+      { slug: "training-old", attemptId: OTHER, lessonCode: "", lessonTitle: "", ended: true, mine: true, deleteAvailable: false }
+    ]);
+    const deletePracticeProject = vi.fn(async () => true);
+    const push = vi.fn();
+    const panel = compiledUi(path.resolve("src/components/learning/Vibe64LearningPractice.vue"), {
+      vue: Vue, "vue-router": { useRouter: () => ({ push }) }, "@mdi/js": { mdiDeleteOutline: "trash" },
+      "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
+      "@/composables/useVibe64PracticeProjects.js": { useVibe64PracticeProjects: options => {
+        practiceOptions.push(options);
+        return { practiceProjects, deletePracticeProject, deletingSlug: Vue.ref(""), deleteError: Vue.ref("") };
+      } }
+    });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, courses }) });
+    for (const tag of ["v-btn", "v-alert"]) app.component(tag, widget);
+    app.mount(root);
+    try {
+      await flush();
+      // No project listing: L's own learning.read resource feeds the section.
+      expect(practiceOptions[0].learningResource).toBe(courses.learningResource);
+      expect(practiceOptions[0].enabled.value).toBe(true);
+      expect(byTest(root, "learning-practice")).toBeTruthy();
+      expect(nodes(root).filter(node => node.props?.["data-practice-slug"]).map(node => node.props["data-practice-slug"]))
+        .toEqual(["training-mine", "training-old"]);
+      expect(textOf(root)).toContain("V64-START-02");
+      const deletes = nodes(root).filter(node => String(node.props?.["aria-label"] || "").startsWith("Delete practice project"));
+      expect(deletes.map(node => node.props["aria-label"])).toEqual(["Delete practice project training-mine"]);
+      deletes[0].props.onClick();
+      await flush();
+      expect(deletePracticeProject).toHaveBeenCalledWith(practiceProjects.value[0]);
+      nodes(root).find(node => node.props?.["aria-label"] === "Open practice project training-old").props.onClick();
+      await flush();
+      expect(learning.open, "opening keeps L's place by minimising it").toBe(false);
+      expect(push).toHaveBeenCalledWith("/app/project/training-old");
+      practiceProjects.value = [];
+      await flush();
+      expect(byTest(root, "learning-practice"), "no practice projects: no section").toBeUndefined();
+    } finally { app.unmount(); }
   });
 });
 

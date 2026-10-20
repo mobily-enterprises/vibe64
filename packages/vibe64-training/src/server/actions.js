@@ -120,11 +120,19 @@ function installError(cause) {
 // A practice project exists only once preparation began for an exercise lesson.
 // A host that can tell whether it still exists says so; deleted projects are
 // then left out (contract C3/C5: learning.read lists attempts with their slug).
+// A presence check that fails (damaged leftovers, an uninstalled course behind
+// an old attempt) keeps the project listed instead of failing the whole read:
+// one bad attempt must not hide the learner's progress, and practice.delete
+// then retries the removal or reports the actual error.
 async function practiceSlug({ attempt, actor, practiceProjects }) {
   const slug = attempt.projectSlug;
   if (!slug || !attempt.preparation || attempt.preparation.phase === "reserved") return "";
-  if (typeof practiceProjects?.exists === "function" && !await practiceProjects.exists({ slug, actor })) return "";
-  return slug;
+  if (typeof practiceProjects?.exists !== "function") return slug;
+  try {
+    return await practiceProjects.exists({ slug, actor }) ? slug : "";
+  } catch {
+    return slug;
+  }
 }
 
 function attemptSummary(attempt, slug = "") {

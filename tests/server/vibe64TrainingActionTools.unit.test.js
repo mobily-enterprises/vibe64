@@ -558,8 +558,9 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
     "practiceProjects", "publishLearnerChanged", "steps"]);
-  // Learning v2 (C5): the standalone practice facility offers delete and its read-only preflight.
-  assert.deepEqual(Object.keys(training.practiceProjects).sort(), ["canRemove", "remove"]);
+  // Learning v2 (C5): the standalone practice facility offers delete, its read-only preflight and
+  // the presence check that leaves deleted practice projects out of learning.read.
+  assert.deepEqual(Object.keys(training.practiceProjects).sort(), ["canRemove", "exists", "remove"]);
   // Learning v2 phase 2 retired the source-less Main teacher and its lesson-scoped routes.
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);

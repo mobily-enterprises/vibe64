@@ -273,7 +273,9 @@ source and runtime removal, then `forgetProject`; a pinned session refuses with
 an unpin message and changes nothing, and a retry continues from the failed
 step. The attempt that owned the project is ended with reason `discard`;
 progress is kept. Online supplies its own implementation through its archive
-service. The prepared-practice onboarding read under the retired Learning
+service. Both also offer the read-only `canRemove` preflight and
+`exists({slug, actor})`, which leaves a completely removed practice project out
+of Training's `learning.read`/`lesson.read` (L's Practice section). The prepared-practice onboarding read under the retired Learning
 attempt/session URL was removed with the lesson-scoped routes; practice
 onboarding uses the ordinary project read.
 
