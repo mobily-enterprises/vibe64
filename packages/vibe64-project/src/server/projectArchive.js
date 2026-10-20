@@ -20,6 +20,10 @@ import {
   resolveProjectContextRoot
 } from "@local/vibe64-core/server/studioProjectContext";
 import { pathExists } from "@local/vibe64-core/server/core";
+// Practice project slugs (the learning space). Outside its practice scope such
+// a slug resolves to catalogue paths while its record is shared, so the
+// archiver refuses it before writing any deletion marker.
+import { PRACTICE_SLUG_PATTERN } from "@local/vibe64-core/server/learningSpace";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 
 const ARCHIVE_TIMEOUT_MS = 120_000;
@@ -36,10 +40,6 @@ const PROJECT_RESOURCE_EVIDENCE = "resource-evidence.json";
 // is the project namespace, not a project-level application checkout.
 const PROJECT_NAMESPACE_ARCHIVE = "source.tgz";
 const PROJECT_STATE_ARCHIVE = "runtime-state.tgz";
-// Practice project slugs (the learning space, R1). Outside its practice scope
-// such a slug resolves to catalogue paths while its record is shared, so the
-// archiver refuses it before writing any deletion marker.
-const PRACTICE_SLUG_PATTERN = /^training-[a-f0-9]{32}$/u;
 const projectDeletionLocks = new Map();
 const SESSION_SOURCE_DISPOSABLE_PATHS = Object.freeze([
   ".jskit/cache",
@@ -98,7 +98,7 @@ function createProjectArchiveService({
 
   // The namespace of a slug: the catalogue's, or inside the matching practice
   // scope the learning-space one. Everything else is refused before any write.
-  async function projectNamespace(slug) {
+  async function projectNamespace(slug, { archiveRoot = defaultArchiveRoot } = {}) {
     const scope = projectContext.currentPracticeProjectScope?.() || null;
     if (scope?.slug === slug) {
       const learningSpaceRoot = projectContext.learningSpaceRoot ? path.resolve(projectContext.learningSpaceRoot) : "";
@@ -107,14 +107,19 @@ function createProjectArchiveService({
           projectContextRoot === learningSpaceRoot || !pathInsideOrEqual(learningSpaceRoot, projectContextRoot)) {
         throw practiceScopeRequired(slug);
       }
+      // The archive holds and removes only the namespace, so the learner's
+      // session sources must live inside it (one layout on both hosts).
+      if (!pathInsideOrEqual(projectContextRoot, path.resolve(projectContext.projectSessionSourceRootForSlug(slug)))) {
+        throw Object.assign(new Error(`Practice project ${slug} keeps its session sources outside its namespace; inspect it before retrying.`), {
+          code: "vibe64_practice_session_source_outside_namespace"
+        });
+      }
       return { practice: true, projectContextRoot };
     }
     const projectsRoot = path.resolve(String(projectContext.projectsRoot || "/"));
     const projectContextRoot = resolveProjectContextRoot({ projectsRoot, slug });
-    // A catalogue project named like a practice project (created before the
-    // name was reserved) is still archived; a practice record never is.
-    if (PRACTICE_SLUG_PATTERN.test(slug) && (!projectContext.projectsRoot || !await pathExists(projectContextRoot) ||
-        (await projectContext.readWorkspaceProjectState({ slug })).metadata?.training)) {
+    if (PRACTICE_SLUG_PATTERN.test(slug) && (!projectContext.projectsRoot ||
+        !await catalogueProjectNamedLikePractice({ archiveRoot, slug }))) {
       throw practiceScopeRequired(slug);
     }
     if (!projectContext.projectsRoot || !pathInsideOrEqual(projectsRoot, projectContextRoot)) {
@@ -123,6 +128,24 @@ function createProjectArchiveService({
       throw error;
     }
     return { practice: false, projectContextRoot };
+  }
+
+  // A catalogue project named like a practice project (created before the
+  // name was reserved) is still archived, resumed and replayed; a practice
+  // record never is. The record decides; once it is gone (a completed
+  // archive), the catalogue's own lifecycle journal for the slug does.
+  async function catalogueProjectNamedLikePractice({ archiveRoot, slug }) {
+    const { metadata = {} } = await projectContext.readWorkspaceProjectState({ slug });
+    if (Object.keys(metadata).length) return !metadata.training;
+    const entries = await readdir(path.join(archiveRoot, slug), { withFileTypes: true }).catch((error) => {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    });
+    for (const entry of entries.filter((value) => value.isDirectory())) {
+      const lifecycle = await readJsonIfExists(path.join(archiveRoot, slug, entry.name, PROJECT_ARCHIVE_LIFECYCLE));
+      if (lifecycle?.kind === PROJECT_ARCHIVE_LIFECYCLE_KIND && lifecycle.slug === slug) return true;
+    }
+    return false;
   }
 
   async function removeEmptyPracticeParent({ practice, projectContextRoot }) {
@@ -177,7 +200,7 @@ function createProjectArchiveService({
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
     const archiveRoot = input.archiveRoot ? path.resolve(input.archiveRoot) : defaultArchiveRoot;
     return withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
-      const namespace = await projectNamespace(slug);
+      const namespace = await projectNamespace(slug, { archiveRoot });
       const { projectContextRoot } = namespace;
       const existingState = await projectContext.readWorkspaceProjectState({
         slug

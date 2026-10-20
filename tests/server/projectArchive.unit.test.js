@@ -46,9 +46,9 @@ async function withArchiveTest(callback) {
 
 function practiceTraining(learnerUid = 42) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     learnerKey: Buffer.from(String(learnerUid)).toString("base64url"),
-    attemptId: "12345678-1234-4234-8234-123456789abc",
+    practiceId: "12345678-1234-4234-8234-123456789abc",
     pin: {
       course: { courseId: "intro-course", release: "0.1.0" },
       topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
@@ -61,26 +61,36 @@ function practiceTraining(learnerUid = 42) {
 
 const PRACTICE_SLUG = "training-12345678123442348234123456789abc";
 
-// A practice project in the learner's learning space. inScope runs an
-// operation inside its practice scope, as the Learning owner does.
+// A practice project in the learner's learning space, through the real local
+// project context (standalone space under the managed source root). inScope
+// runs an operation inside its practice scope, as the Learning owner does.
 async function withPracticeTest(callback) {
   await withArchiveTest(async ({ tempRoot }) => {
-    const context = createStudioProjectContext({ env: {}, explicitSystemRoot: path.join(tempRoot, "state"),
+    const projectContext = createStudioProjectContext({ env: {}, explicitSystemRoot: path.join(tempRoot, "state"),
       explicitManagedSourceRoot: path.join(tempRoot, "managed-source"), home: tempRoot,
       runtimeProfile: { local: true, mode: "local" } });
-    const learningSpaceRoot = path.join(context.systemRoot, "training", "practice");
-    const projectContext = Object.create(context, { learningSpaceRoot: { value: learningSpaceRoot } });
+    const { learningSpaceRoot } = projectContext;
+    assert.equal(learningSpaceRoot, path.join(tempRoot, "managed-source", ".learning"));
     const actor = { uid: 42, username: "learner" };
     const training = practiceTraining();
     const slug = PRACTICE_SLUG;
-    const inScope = (operation, access = "write") => context.runWithPracticeProjectScope(
+    const inScope = (operation, access = "write") => projectContext.runWithPracticeProjectScope(
       { actor, training, access, ...(access === "write" ? { allowDeleting: true } : {}) }, operation);
-    await inScope(() => context.createWorkspaceProjectRecord({ slug, training }), "create");
-    const { projectContextRoot, projectRuntimeRoot } = await inScope(() => context.readWorkspaceProjectState({ slug }));
-    assert.ok(projectContextRoot.startsWith(`${learningSpaceRoot}${path.sep}`));
+    await inScope(() => projectContext.createWorkspaceProjectRecord({ slug, training }), "create");
+    const { projectContextRoot, projectRuntimeRoot } = await inScope(() => projectContext.readWorkspaceProjectState({ slug }));
+    assert.equal(projectContextRoot, path.join(learningSpaceRoot, training.learnerKey, training.practiceId, slug));
     await callback({ actor, inScope, learningSpaceRoot, projectContext, projectContextRoot, projectRuntimeRoot, slug,
       tempRoot, training });
   });
+}
+
+// An ordinary catalogue project named like a practice project: created before
+// the name was reserved (moved into place, since creation now refuses it).
+async function createLegacyPracticeNamedProject(projectContext) {
+  await projectContext.createWorkspaceProjectRecord({ slug: "legacy" });
+  await rename(path.join(projectContext.projectsRoot, "legacy"), path.join(projectContext.projectsRoot, PRACTICE_SLUG));
+  await rename(projectContext.projectRuntimeRootForSlug("legacy"), projectContext.projectRuntimeRootForSlug(PRACTICE_SLUG));
+  return path.join(projectContext.projectsRoot, PRACTICE_SLUG);
 }
 
 test("project deletion resumes after namespace removal failure without repeating completed steps", async () => {
@@ -459,22 +469,50 @@ test("a practice slug is archived or removed only inside its practice scope, ref
 
 test("a catalogue project named like a practice project, without a practice marker, is still archived", async () => {
   await withArchiveTest(async ({ projectContext }) => {
-    // Created before the name was reserved: move an ordinary project into place.
-    await projectContext.createWorkspaceProjectRecord({ slug: "legacy" });
-    await rename(path.join(projectContext.projectsRoot, "legacy"), path.join(projectContext.projectsRoot, PRACTICE_SLUG));
-    await rename(projectContext.projectRuntimeRootForSlug("legacy"), projectContext.projectRuntimeRootForSlug(PRACTICE_SLUG));
+    const namespace = await createLegacyPracticeNamedProject(projectContext);
     const service = createProjectArchiveService({ projectContext, closeProjectRuntime: async () => ({ ok: true }) });
     const archived = await service.archiveProject({ slug: PRACTICE_SLUG });
     assert.equal(archived.ok, true);
     assert.equal(path.dirname(path.dirname(archived.bundlePath)), path.join(projectContext.systemRoot, "project-archives"));
-    await assert.rejects(() => access(path.join(projectContext.projectsRoot, PRACTICE_SLUG)), { code: "ENOENT" });
+    await assert.rejects(() => access(namespace), { code: "ENOENT" });
+  });
+});
+
+test("a catalogue project named like a practice project resumes after its namespace is gone and replays its archive", async () => {
+  await withArchiveTest(async ({ projectContext }) => {
+    const namespace = await createLegacyPracticeNamedProject(projectContext);
+    const projectRuntimeRoot = projectContext.projectRuntimeRootForSlug(PRACTICE_SLUG);
+    let stateRemovalAttempts = 0;
+    const service = createProjectArchiveService({ projectContext, closeProjectRuntime: async () => ({ ok: true }),
+      removePath: async (targetPath, options) => {
+        if (path.resolve(targetPath) === path.resolve(projectRuntimeRoot) && ++stateRemovalAttempts === 1) {
+          throw Object.assign(new Error("state busy"), { code: "state_busy" });
+        }
+        return rm(targetPath, options);
+      } });
+    await assert.rejects(service.archiveProject({ slug: PRACTICE_SLUG }), { code: "state_busy" });
+    await assert.rejects(() => access(namespace), { code: "ENOENT" }, "the namespace was removed before the interruption");
+    const interrupted = await projectContext.readWorkspaceProjectState({ slug: PRACTICE_SLUG });
+    assert.ok(interrupted.metadata.deletion.steps["source-removed"]);
+    const completed = await service.archiveProject({ slug: PRACTICE_SLUG });
+    assert.equal(completed.ok, true);
+    assert.equal(stateRemovalAttempts, 2);
+    await assert.rejects(() => access(projectRuntimeRoot), { code: "ENOENT" });
+    const replayed = await service.archiveProject({ slug: PRACTICE_SLUG });
+    assert.equal(replayed.bundlePath, completed.bundlePath);
+    assert.deepEqual(replayed.artifacts, completed.artifacts);
   });
 });
 
 test("a practice archive uses the learning-space namespace and replays through the unchanged bundle scan", async () => {
   await withPracticeTest(async ({ inScope, projectContext, projectContextRoot, projectRuntimeRoot, slug, training }) => {
-    await mkdir(path.join(projectContextRoot, "sessions", "active", "s1", "source", "node_modules", "left-pad"), { recursive: true });
-    await writeFile(path.join(projectContextRoot, "sessions", "active", "s1", "source", "app.js"), "practice\n");
+    // The learner's code lives in the practice session source root, which the
+    // learning space keeps inside the namespace on both hosts.
+    const sessionSource = path.join(await inScope(() => projectContext.projectSessionSourceRootForSlug(slug)),
+      "sessions", "active", "s1", "source");
+    assert.ok(sessionSource.startsWith(`${projectContextRoot}${path.sep}`));
+    await mkdir(path.join(sessionSource, "node_modules", "left-pad"), { recursive: true });
+    await writeFile(path.join(sessionSource, "app.js"), "practice\n");
     const archiveRoot = path.join(projectContext.systemRoot, "training", "practice-archives", training.learnerKey);
     const service = createProjectArchiveService({ projectContext, clock: () => new Date("2026-10-20T10:00:00.000Z"),
       closeProjectRuntime: async () => ({ ok: true }) });
