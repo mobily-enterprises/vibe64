@@ -169,7 +169,7 @@ test("fresh-conversation preflight accepts pending earlier conversion and refuse
 
 test("learning-task watch retirement keeps history and other watches with read-only check, backup and retry", async t => {
   const f = await fixture(t);
-  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261021-practice-sessions-ordinary/colleague");
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261022-learning-space-reset/colleague");
   const run = apply => retireColleagueLearningWatches({ systemRoot: f.systemRoot, backupRoot, apply,
     report: (level, message) => f.reports.push({ level, message }) });
   await run(true);

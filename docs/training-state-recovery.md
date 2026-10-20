@@ -187,8 +187,7 @@ content cache before restoring this state. The store refuses growth beyond 32
 retained attempts, 64 KiB of progress, 64 step results per attempt or 1 MiB of
 step results rather than pruning evidence. A candidate supporting
 these explicit writes must complete the `20261007-training-attempt-history` ledger
-boundary before activation; older single-reservation records need no conversion. A candidate writing
-version 2 step results, reader positions, step-keyed code ledgers or more than
-eight attempts must first complete the `20261020-training-step-progress` boundary,
-whose read-only preflight validates every normal and author-preview learner record;
-an older release then refuses the newer ledger instead of misreading those files.
+boundary before activation; older single-reservation records need no conversion.
+Learning v2 discards older learner attempt state instead of converting it: the
+`20261022-learning-space-reset` upgrade retires these files (keeping
+`teacher-notes.json`), and an older release refuses the newer ledger.

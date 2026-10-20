@@ -570,17 +570,18 @@ retrying continuously.
 Learning v2 has no learning-scoped sessions: Colleague teaches every lesson in
 its own conversation, a lesson without an exercise creates no session, and a
 practice lesson's sessions are ordinary sessions of its practice project. The
-numbered `20261021-practice-sessions-ordinary` upgrade unbinds saved practice sessions
-and retires source-less lesson stores.
+numbered `20261022-learning-space-reset` upgrade retires old practice projects
+and source-less lesson stores.
 
-The Runtime and Store still accept a constructor-only `learningScope`
-(`learnerId`, `attemptId`, complete opaque `pin`, `noExercise`) and validate the
+The Runtime and Store still accept a constructor-only practice `learningScope`
+(`learnerId`, `attemptId`, complete opaque `pin`, `noExercise: false`, with its
+actual session source root; the source-less `noExercise: true` scope is
+retired) and validate the
 immutable `learning_session` metadata (`schemaVersion:1`, that scope,
 `conversationId:sessionId`) exactly as before, failing closed on claimed,
 corrupt, foreign or mixed-source bindings. This is kept only so that the
-published offline upgrades (`20261008-learning-practice-sessions`,
-`20261008-learning-practice-history` and `20261021-practice-sessions-ordinary`)
-can read and verify historical bindings; no current route or host constructs
+published offline upgrades (`20261008-learning-practice-sessions` and
+`20261008-learning-practice-history`) can read and verify historical bindings; no current route or host constructs
 such a scope, and Project's `createSessionStore()` keeps its ordinary
 selected-root requirement for every other store. Sessions' create path keeps
 its refusal of source, branch, pull-request and commit options for a

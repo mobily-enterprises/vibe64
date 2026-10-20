@@ -85,25 +85,6 @@ const ACTION_INSPECT_REPOSITORY_HISTORY = "vibe64.repository.history.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILES = "vibe64.repository.history.files.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.diff.inspect";
 
-// Only these declared operations may enter a learning scope. Setup, renewal,
-// saving, Git history and project operations retain project authority.
-const learningAccess = {
-  [ACTION_CREATE_SESSION]: "create",
-  [ACTION_UPDATE_CURRENT_SESSION]: "control",
-  [ACTION_LIST_ASSISTANT_CAPABILITIES]: "observe",
-  [ACTION_READ_CONVERSATION_CONTEXT]: "observe",
-  [ACTION_LIST_SESSIONS]: "observe",
-  [ACTION_LIST_ARCHIVED_SESSIONS]: "observe",
-  [ACTION_INSPECT_SESSION]: "observe",
-  [ACTION_READ_SESSION_CONVERSATION_LOG]: "observe",
-  [ACTION_INSPECT_ASSISTANT_ACCESS]: "observe",
-  [ACTION_SEND_AGENT_MESSAGE]: "write",
-  [ACTION_UPDATE_ASSISTANT_SELECTION]: "write",
-  [ACTION_RENAME_SESSION]: "write",
-  [ACTION_INTERRUPT_AGENT_TURN]: "control",
-  [ACTION_UPDATE_SESSION_PRESENCE]: "control"
-};
-
 function action({
   assistant,
   events = [],
@@ -130,7 +111,7 @@ function action({
     observability: {},
     events,
     execute
-  }, { projectScoped, learningAccess: learningAccess[id] || false });
+  }, { projectScoped });
 }
 
 function withoutSessionId(input = {}) {
@@ -155,7 +136,7 @@ function conversationContextGrant(_input, context) {
   }
   return {
     actor: context.actor,
-    project: context.vibe64Action.learning || context.vibe64Action.project,
+    project: context.vibe64Action.project,
     user: authenticatedVibe64User(context)
   };
 }
@@ -297,9 +278,7 @@ function createSessionActions({ sessions } = {}) {
       kind: "command",
       assistant: sessionTool("Create a coding session in the selected project using its normal workspace and resource admission. workflowEngineId chooses an existing configured workflow (codex, claude or opencode). To open a saved GitHub/Vibe64 Git branch, read repository.branches.read first and supply repositoryBranch with its exact name and expectedCommit. To create a new branch, name is the requested new name, fromBranch is the reviewed existing source name, and expectedCommit is that source's exact commit. This creates a repository branch and session from saved source; it does not copy another session's unsaved work or conversation. Inspect that session's work and explain the source before branching; never silently Save to include unsaved work. The service checks capacity before branch creation, rejects existing target names and stale source commits, and forbids combining a branch with pullRequestNumber. Creation can start preparation; inspect the returned session before sending work. On an uncertain result inspect both sessions and branches before retrying; an admitted branch may exist even if later workspace creation failed."),
       input: sessionCreateInputValidator,
-      execute: (input, context) => context.vibe64Action?.learning
-        ? context.vibe64Action.learning.createLearningSession(input || {})
-        : sessions.createSession(input || {})
+      execute: (input) => sessions.createSession(input || {})
     }),
     action({
       id: ACTION_UPDATE_CURRENT_SESSION,
@@ -512,11 +491,8 @@ function createSessionActions({ sessions } = {}) {
       input: agentMessageActionInputValidator,
       execute(input, context) {
         const grant = conversationContextGrant(input, context);
-        const learning = context.vibe64Action?.learning;
         return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input), {
-          browserAuthority: { sessionId: input.sessionId,
-            ...(learning ? { learningAttemptId: learning.learningScope.attemptId }
-              : { projectSlug: grant.project.slug }),
+          browserAuthority: { sessionId: input.sessionId, projectSlug: grant.project.slug,
             actorId: grant.actor.id, requestContext: mainConversationRequestContext(context) }
         });
       }

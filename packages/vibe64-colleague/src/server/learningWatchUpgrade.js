@@ -12,7 +12,7 @@ function parse(source) {
 }
 
 /**
- * Learning v2 (20261021): Colleague no longer watches learning tasks. Retire
+ * Learning v2 (20261022): Colleague no longer watches learning tasks. Retire
  * every learning-task watch and its queued observations, keeping written
  * conversation history. Offline, with all writers stopped; backed-up publish.
  */

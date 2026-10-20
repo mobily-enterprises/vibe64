@@ -2381,20 +2381,23 @@ test("session creation absence rejects malformed lifecycle containers but ignore
 });
 
 
-const privateLessonScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
+// The saved practice binding the published 20261008 Learning upgrades read.
+const practiceScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: false,
   pin: { course: { courseId: "first-course", release: "0.1.0" },
     topic: { schemaVersion: 1, topicId: "getting-started", release: "0.1.0", repository: "vibe64/learn-getting-started",
       commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "V64-START-00", hash: "c".repeat(64) } } });
 
-function privateLessonStore(root, learningScope = privateLessonScope()) {
-  return createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private-learning"), learningScope });
+async function practiceStore(root, learningScope = practiceScope()) {
+  const { managedSessionSourceRoot } = await import("./vibe64TestHelpers.js");
+  return createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
+    projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope });
 }
 
 test("learning binding is constructor-owned, immutable and captured before caller scope changes", async () => {
   await withTemporaryRoot(async root => {
-    const input = privateLessonScope();
+    const input = practiceScope();
     const original = structuredClone(input);
-    const store = privateLessonStore(root, input);
+    const store = await practiceStore(root, input);
     input.learnerId = "foreign";
     input.pin.lesson.hash = "d".repeat(64);
     const session = await store.createSession({ sessionId: "bound-lesson", runtimeKind: "genesis", metadata: { label: "Lesson0" } });
@@ -2406,28 +2409,28 @@ test("learning binding is constructor-owned, immutable and captured before calle
       () => store.writeMetadataValue(session.sessionId, "learning_session", "{}"),
       () => store.writeMetadataValueForRenewal(session.sessionId, "learning_session", "{}"),
       () => store.deleteMetadataValue(session.sessionId, "learning_session"),
-      () => store.deleteMetadataValues(session.sessionId, ["learning_session"]),
-      () => store.writeMetadataValue(session.sessionId, "source_path", root)
+      () => store.deleteMetadataValues(session.sessionId, ["learning_session"])
     ]) await assert.rejects(operation, { code: "vibe64_learning_session_binding_immutable" });
     assert.deepEqual(await store.readSession(session.sessionId), before);
     await store.writeMetadataValue(session.sessionId, "label", "Renamed lesson");
     assert.equal((await store.readSession(session.sessionId)).sessionName, "Renamed lesson");
     await assert.rejects(() => store.createSession({ sessionId: "caller-bind", runtimeKind: "genesis", metadata: { learning_session: session.metadata.learning_session } }),
       { code: "vibe64_learning_scope_invalid" });
-    await assert.rejects(() => store.createSession({ sessionId: "caller-source", runtimeKind: "genesis", metadata: { source_path: root } }),
-      { code: "vibe64_learning_scope_invalid" });
+    // The source-less lesson scope is retired (20261022).
+    assert.throws(() => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private-learning"),
+      learningScope: { ...practiceScope(), noExercise: true } }), { code: "vibe64_learning_scope_invalid" });
   });
 });
 
-test("ordinary and foreign learning stores refuse exact private session reads and mutations without backfill", async () => {
+test("ordinary and foreign learning stores refuse exact bound session reads and mutations without backfill", async () => {
   await withTemporaryRoot(async root => {
-    const own = privateLessonStore(root);
+    const own = await practiceStore(root);
     const session = await own.createSession({ sessionId: "isolated-lesson", runtimeKind: "genesis" });
     await own.writeConversationUserMessage(session.sessionId, { messageId: "learner-original", text: "Original" });
     const before = await own.readSession(session.sessionId);
-    const stores = [privateLessonStore(root, null), privateLessonStore(root, { ...privateLessonScope(), learnerId: "43" }),
-      privateLessonStore(root, { ...privateLessonScope(), attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
-      privateLessonStore(root, { ...privateLessonScope(), pin: { ...privateLessonScope().pin, lesson: { code: "OTHER", hash: "d".repeat(64) } } })];
+    const stores = await Promise.all([practiceStore(root, null), practiceStore(root, { ...practiceScope(), learnerId: "43" }),
+      practiceStore(root, { ...practiceScope(), attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+      practiceStore(root, { ...practiceScope(), pin: { ...practiceScope().pin, lesson: { code: "OTHER", hash: "d".repeat(64) } } })]);
     for (const foreign of stores) {
       for (const operation of [() => foreign.readSession(session.sessionId), () => foreign.readSessionSummary(session.sessionId),
         () => foreign.readMetadata(session.sessionId), () => foreign.readMetadataValue(session.sessionId, "label"),
@@ -2438,8 +2441,8 @@ test("ordinary and foreign learning stores refuse exact private session reads an
     }
     assert.deepEqual(await own.readSession(session.sessionId), before);
     assert.deepEqual((await own.readConversationLog(session.sessionId)).flatMap(turn => turn.messages).map(message => message.text), ["Original"]);
-    // Learning lists own the lesson session; a Working list omits only that genuine binding.
-    const working = privateLessonStore(root, null);
+    // A Working list omits only a genuine lesson binding.
+    const working = await practiceStore(root, null);
     assert.deepEqual((await working.listSessionSummaries()).map(summary => summary.sessionId), []);
     assert.deepEqual((await working.listSessions()).map(value => value.sessionId), []);
     assert.deepEqual(await working.listSessionsForRenewal(), []);
@@ -2452,7 +2455,7 @@ test("ordinary and foreign learning stores refuse exact private session reads an
 
 test("corrupt learning binding fails read-only and working absence is never converted into learning", async () => {
   await withTemporaryRoot(async root => {
-    const own = privateLessonStore(root);
+    const own = await practiceStore(root);
     const session = await own.createSession({ sessionId: "corrupt-lesson", runtimeKind: "genesis" });
     const file = path.join(own.paths(session.sessionId).metadataRoot, "learning_session");
     const original = await readFile(file);
@@ -2460,88 +2463,15 @@ test("corrupt learning binding fails read-only and working absence is never conv
       await writeFile(file, bytes);
       await assert.rejects(() => own.readSession(session.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
       await assert.rejects(() => own.listSessionSummaries(), { code: "vibe64_learning_session_scope_mismatch" });
-      await assert.rejects(() => privateLessonStore(root, null).listSessionSummaries(), { code: "vibe64_learning_session_scope_mismatch" });
+      await assert.rejects(async () => (await practiceStore(root, null)).listSessionSummaries(), { code: "vibe64_learning_session_scope_mismatch" });
       assert.equal(await readFile(file, "utf8"), bytes);
     }
     await writeFile(file, original);
-    const normal = createStore(root);
+    const normal = await practiceStore(root, null);
     const working = await normal.createSession({ sessionId: "ordinary-existing", runtimeKind: "genesis" });
     assert.equal(working.metadata.learning_session, undefined);
-    const wrongScope = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), learningScope: privateLessonScope() });
-    await assert.rejects(() => wrongScope.readSession(working.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
+    await assert.rejects(() => own.readSession(working.sessionId), { code: "vibe64_learning_session_scope_mismatch" });
     assert.deepEqual(await normal.readSession(working.sessionId), working);
-  });
-});
-
-
-test("native identity descriptor is bounded, scope-checked and distinct from source or execution authorization", async () => {
-  await withTemporaryRoot(async root => {
-    const store = privateLessonStore(root);
-    const session = await store.createSession({ sessionId: "native-identity", runtimeKind: "genesis" });
-    const source = await store.readSessionSourceDescriptor(session.sessionId);
-    const native = await store.readSessionNativeDescriptor(session.sessionId);
-    assert.deepEqual(native.metadata, source.metadata);
-    assert.deepEqual(native.learning, { schemaVersion: 1, ...privateLessonScope(), conversationId: session.sessionId });
-    assert.equal(native.purpose, "learning");
-    assert.equal(native.status, "active");
-    assert.equal(native.archived, false);
-    assert.equal(native.nativeExecutionRoot, path.join(session.sessionRoot, "native"));
-    assert.equal(native.metadata.source_path, "");
-    await store.writeStatus(session.sessionId, "archived");
-    await store.publishSessionArchive(session.sessionId);
-    const archived = await store.readSessionNativeDescriptor(session.sessionId);
-    assert.equal(archived.nativeExecutionRoot, native.nativeExecutionRoot, "Historical native identity never changes to extraction cwd");
-    assert.equal(archived.archived, true);
-    assert.equal(archived.sessionRoot, "");
-    const normal = createStore(root);
-    await normal.createSession({ sessionId: "working-identity", runtimeKind: "genesis" });
-    assert.deepEqual(await normal.readSessionNativeDescriptor("working-identity"), await normal.readSessionSourceDescriptor("working-identity"));
-    await assert.rejects(() => privateLessonStore(root, { ...privateLessonScope(), learnerId: "43" }).readSessionNativeDescriptor(session.sessionId),
-      { code: "vibe64_learning_session_scope_mismatch" });
-  });
-});
-
-test("learning selection reuses the original alias owner inside its private runtime without changing working selection", async () => {
-  await withTemporaryRoot(async root => {
-    const learning = privateLessonStore(root);
-    const sourceRoot = path.join(root, "ordinary-source");
-    const working = createStore(root, { projectSessionSourceRoot: sourceRoot });
-    const ordinary = await working.createSession({ sessionId: "working-selected", runtimeKind: "genesis" });
-    await working.updateCurrentSession(ordinary.sessionId);
-    const lesson = await learning.createSession({ sessionId: "lesson-selected", runtimeKind: "genesis" });
-    assert.equal(await learning.readCurrentSession(), null);
-    assert.equal(learning.paths().currentSessionAliasPath, path.join(root, "private-learning", "sessions", "selected"));
-    assert.equal(await fs.lstat(learning.paths().currentSessionAliasPath).catch(error => error.code), "ENOENT");
-    await learning.updateCurrentSession(lesson.sessionId);
-    assert.equal(await fs.readlink(learning.paths().currentSessionAliasPath), path.join("active", lesson.sessionId));
-    assert.equal((await learning.readCurrentSession()).sessionId, lesson.sessionId);
-    assert.equal((await working.readCurrentSession()).sessionId, ordinary.sessionId);
-    assert.equal((await privateLessonStore(root).readCurrentSession()).sessionId, lesson.sessionId);
-    await assert.rejects(privateLessonStore(root, { ...privateLessonScope(), learnerId: "43" }).readCurrentSession(),
-      { code: "vibe64_learning_session_scope_mismatch" });
-    await assert.rejects(learning.updateCurrentSession("missing-lesson"), { code: "vibe64_session_not_found" });
-    assert.equal((await learning.readCurrentSession()).sessionId, lesson.sessionId);
-    await learning.updateCurrentSession("");
-    assert.equal(await learning.readCurrentSession(), null);
-    assert.equal((await working.readCurrentSession()).sessionId, ordinary.sessionId);
-    assert.equal(await fs.lstat(learning.paths().currentSessionAliasPath).catch(error => error.code), "ENOENT");
-  });
-});
-
-test("learning selected alias retains original conflict and lifecycle clearing safeguards", async () => {
-  await withTemporaryRoot(async root => {
-    const store = privateLessonStore(root);
-    const lesson = await store.createSession({ sessionId: "closing-selected-lesson", runtimeKind: "genesis" });
-    const alias = store.paths().currentSessionAliasPath;
-    await writeFile(alias, "do not overwrite a conflicting file\n");
-    await assert.rejects(store.updateCurrentSession(lesson.sessionId), { code: "vibe64_current_session_alias_conflict" });
-    assert.equal(await readFile(alias, "utf8"), "do not overwrite a conflicting file\n");
-    await fs.rm(alias);
-    await store.updateCurrentSession(lesson.sessionId);
-    await store.writeStatus(lesson.sessionId, "archived");
-    await store.publishSessionArchive(lesson.sessionId);
-    assert.equal(await store.readCurrentSession(), null);
-    assert.equal(await fs.lstat(alias).catch(error => error.code), "ENOENT");
   });
 });
 
@@ -2549,7 +2479,7 @@ test("learning selected alias retains original conflict and lifecycle clearing s
 test("source-bearing Learning keeps original source descriptor and alias owners with an immutable exact binding", async () => {
   await withTemporaryRoot(async root => {
     const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
-    const scope = { ...privateLessonScope(), noExercise: false };
+    const scope = practiceScope();
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
       projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: scope };
     const store = createVibe64SessionStore(options);
@@ -2584,8 +2514,9 @@ test("source-bearing Learning keeps original source descriptor and alias owners 
 test("source-bearing Learning refuses missing source configuration, foreign scopes and raw metadata adoption", async () => {
   await withTemporaryRoot(async root => {
     const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
-    const scope = { ...privateLessonScope(), noExercise: false };
-    assert.throws(() => privateLessonStore(root, scope), { code: "vibe64_learning_scope_invalid" });
+    const scope = practiceScope();
+    assert.throws(() => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private-learning"), learningScope: scope }),
+      { code: "vibe64_learning_scope_invalid" });
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
     const own = createVibe64SessionStore({ ...options, learningScope: scope });
     const session = await own.createSession({ sessionId: "private-practice", runtimeKind: "genesis", metadata: sourceMetadata(root, "private-practice") });
@@ -2610,7 +2541,7 @@ test("offline practice binding stages only the authoritative initial session and
   await withTemporaryRoot(async root => {
     const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
     const { publishStateUpgradeFiles } = await import("@local/vibe64-core/server/stateUpgradeFiles");
-    const scope = { ...privateLessonScope(), noExercise: false };
+    const scope = practiceScope();
     const id = `training-${scope.attemptId}`;
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
     const legacy = createVibe64SessionStore(options);
@@ -2650,7 +2581,7 @@ test("offline practice archive upgrade pairs the original tar and sidecar and va
   await withTemporaryRoot(async root => {
     const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
     const { publishStateUpgradeFiles } = await import("@local/vibe64-core/server/stateUpgradeFiles");
-    const scope = { ...privateLessonScope(), noExercise: false };
+    const scope = practiceScope();
     const id = `training-${scope.attemptId}`;
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
     const legacy = createVibe64SessionStore(options);
@@ -2698,7 +2629,7 @@ test("offline practice archive upgrade pairs the original tar and sidecar and va
 test("offline practice binding refuses unrelated IDs, malformed bindings, unsafe metadata and renewal records before publishing", async () => {
   await withTemporaryRoot(async root => {
     const { sourceMetadata } = await import("./vibe64TestHelpers.js");
-    const scope = { ...privateLessonScope(), noExercise: false };
+    const scope = practiceScope();
     const id = `training-${scope.attemptId}`;
     const legacy = createStore(root);
     await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: sourceMetadata(root, id) });
@@ -2729,7 +2660,7 @@ test("offline practice binding refuses unfinished or malformed published archive
     JSON.stringify({ status: "running", phase: "resources" }), JSON.stringify({ status: "running", phase: "stopping" })]) {
     await withTemporaryRoot(async root => {
       const { sourceMetadata } = await import("./vibe64TestHelpers.js");
-      const scope = { ...privateLessonScope(), noExercise: false };
+      const scope = practiceScope();
       const id = `training-${scope.attemptId}`;
       const legacy = createStore(root);
       await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: sourceMetadata(root, id) });

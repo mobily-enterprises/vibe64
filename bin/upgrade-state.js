@@ -9,8 +9,8 @@ import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPl
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, retireColleagueLearningWatches } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
-import { upgradeLearningPracticeSessionsOrdinary } from "@local/vibe64-training/server/practiceSessionsOrdinaryUpgrade";
-import { inspectTrainingStepProgress } from "@local/vibe64-training/server/step-progress-upgrade";
+import { resetLearningForLearningSpace } from "@local/vibe64-training/server/learningSpaceResetUpgrade";
+import { resolveVibe64ManagedSourceRoot } from "@local/vibe64-core/server/studioRoots";
 import { upgradePlanProgress, upgradeAssistantWorkflow } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
 
 import { upgradeClaudeCommandMessages } from "@local/vibe64-terminals/server/assistantClaudeCommandUpgrade";
@@ -21,16 +21,20 @@ import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/se
 try {
   const { values } = parseArgs({ options: {
     "system-root": { type: "string" },
+    "projects-root": { type: "string" },
     check: { type: "boolean" },
     apply: { type: "boolean" },
     "repair-colleague-retired-operation": { type: "boolean" },
     "repair-colleague-interactive-continuity": { type: "boolean" }
   } });
   if (Boolean(values.check) === Boolean(values.apply)) {
-    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path (--check | --apply) [--repair-colleague-retired-operation | --repair-colleague-interactive-continuity]. Stop all writers before --apply.");
+    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path [--projects-root=/absolute/hosted/projects] (--check | --apply) [--repair-colleague-retired-operation | --repair-colleague-interactive-continuity]. Stop all writers before --apply.");
   }
   await runStateUpgrades({
     systemRoot: values["system-root"],
+    // Hosted sessions live in their catalogue namespace; local ones under the
+    // managed source root, resolved as runtime resolves it.
+    ...(values["projects-root"] ? { projectsRoot: values["projects-root"] } : { managedSourceRoot: resolveVibe64ManagedSourceRoot() }),
     apply: Boolean(values.apply),
     repairRetiredOperation: Boolean(values["repair-colleague-retired-operation"]),
     repairInteractiveContinuity: Boolean(values["repair-colleague-interactive-continuity"]),
@@ -50,8 +54,7 @@ try {
     upgradeColleagueHistoricalInteractiveContinuity,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
-    inspectTrainingStepProgress,
-    upgradeLearningPracticeSessionsOrdinary,
+    resetLearningForLearningSpace,
     retireColleagueLearningWatches,
     upgradePlanProgress,
     upgradeAssistantWorkflow,

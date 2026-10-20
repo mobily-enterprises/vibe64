@@ -65,8 +65,7 @@ function action({ assistant, channels, execute, id, idempotency = "optional", in
     audit: { actionName: id },
     observability: {},
     execute
-  }, { learningAccess: id === ACTION_READ_CANONICAL_AGENT_GOAL ? "observe"
-    : id === ACTION_UPDATE_CANONICAL_AGENT_GOAL || id === "vibe64.terminals.agent-session.prepare" ? "write" : false });
+  });
 }
 
 function createTerminalActions({ terminals } = {}) {
