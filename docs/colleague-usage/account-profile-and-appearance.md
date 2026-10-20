@@ -16,8 +16,8 @@ name** stays disabled.
 ## Appearance
 
 Under **Appearance** (This browser), choose **Light**, **Dark** or **System**.
-The whole app switches immediately, including Learning's warm header and the
-teacher's tutor cards. **System** follows your device's light or dark setting
+The whole app switches immediately, including the Learning environment (**L**),
+its lesson reader and Colleague's pinned step card. **System** follows your device's light or dark setting
 and changes when the device does. Light is the default.
 
 The choice is saved in this browser only. Another browser, another device or a

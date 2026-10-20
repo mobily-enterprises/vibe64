@@ -187,8 +187,8 @@ without it, the existing `contentSystemRoot`/`systemRoot` construction remains.
 The composing server chooses a separate preview state root with the actual
 authenticated actor. The original schema, atomic writer, CAS, locks and immutable
 receipts own that isolated trial state; no new journal or historical rewrite
-exists. These constructor prerequisites do not select a preview snapshot, admit
-an author or route live teaching and presentation operations.
+exists. These constructor prerequisites do not select a preview snapshot or admit
+an author; the owner-only `author-preview.read`/`author-preview.start` actions do.
 
 ## Verified installation
 
@@ -628,8 +628,8 @@ without repair. The original learner/content/permission/progress validators and
 writers remain unchanged. Loading retains already displayed choices and disables
 new intent; initial loads use Material skeletons.
 
-This component does not attach a Learning mode, API route, Main conversation,
-Preview tab or player. The host's original retained Preview/session owners must
+This component does not attach an API route, conversation, Preview tab or
+player; the Learning environment (L) hosts it as its Courses surface. The host's original retained Preview/session owners must
 supply authenticated captured data and effects; native/browser/device acceptance
 remains separate. Existing App/SVG presentation and motion owners are untouched.
 

@@ -470,57 +470,18 @@ Standalone services use their executor-owned process handles. Orderly editor
 shutdown drains owned services. Service SIGTERM handlers own external cleanup;
 commands must not detach untracked workers.
 
-## Prepared Learning App adapter
+## Practice lesson Preview
 
-The original Terminals provider additionally registers only output read,
-declared Run/open, Stop, terminal read/close, immutable download and preview
-identity routes below the saved Learning-attempt namespace. Its allowlist derives
-from explicit existing-action Learning metadata. Original handlers, target
-validation, source/Git/Env/Workspace setup, process sharing and launch proxy remain
-the owners. Each action reenters fresh original false-scope admission; true
-source-less attempts are refused before the service body. The output namespace
-remains the original `learning:[learner,attempt]` scope, never a display slug.
-
-The running app outlives the request that admitted its launch, and a practice
-grant expires with that request. The launch's output, close and stop hooks
-therefore run in the captured control projection taken at admission (the same
-pattern as other accepted work), so readiness metadata, the `output-target-ready`
-event, the preview proxy and Stop cleanup are recorded for practice lessons.
-That projection is control-only; fresh effects still need their own admission.
-
-The same Core WebSocket loop registers only the output stream in that namespace.
-Each attachment and resize obtains the existing internal Session context grant
-and fresh practice operation; raw input is refused. Early close/error registration
-and a closed check around awaited attachment release a late observer exactly
-once without a snapshot or cancelling admitted app work. Original Working raw
-input FIFO and origin/loopback/hosted authentication remain intact.
-
-The same keyed Host exposes separate output availability for the captured false
-scope while source-tool availability remains false. Existing App controls capture
-actual own learner/attempt/initial-session/API identity, use the actual source slug
-only for display, and partition browser caches/preferences by learner/attempt.
-A changed binding or viewer refuses new reads/effects rather than borrowing the
-visible Working project. The original terminal read-only option blocks typing;
-its visible Learning Stop calls the existing Stop HTTP action. Working Ctrl-C
-continues over the original terminal driver. Manual PTY, Env/Save/renewal and
-resource-recovery affordances requiring ordinary project admission remain absent.
-
-The existing onboarding read alone gains a false-scope URL adapter; template,
-Temporary AI and Env mutation controls remain absent. Main diagram registration
-continues alongside App using the same captured Learning binding and player.
-The former Colleague orientation producer is disabled for Learning App: actual
-Main practical gestures/observations still require their coordinated original
-producer integration, not a pass inferred from Run or an iframe. This source
-adapter does not establish installed, real-process or learner acceptance.
-
-Relevant original proofs are `terminalWebSocketRoutes.unit.test.js`,
-`vibe64TerminalControlRoutes.unit.test.js`, `vibe64OutputActionTools.unit.test.js`,
-`vibe64OnboardingActionTools.unit.test.js`, `vibe64OutputControls.vitest.js`,
-`vibe64OutputControlsSurface.vitest.js`, `vibe64ProjectOnboarding.vitest.js` and
-`useVibe64SessionRuntimeHost.vitest.js`; additive cases require root-coordinated
-serial execution. No test result is asserted by this draft explanation.
-
-The existing Onboarding Preview registration carries its captured Learning attempt, learner and no-exercise fields when App is available. Its original screen status and presentation handle stay on that registration; the same captured viewer/session/scope predicate gates registration independently of the App-only setup read. A hidden App does not disable a valid lesson presentation, and a stale identity cannot re-register a Working Preview handle.
+A practice lesson's App runs in its practice project through the ordinary
+project-scoped output, Run, Stop, terminal and preview routes, with ordinary
+project admission; there is no separate Learning App adapter. Learning v2
+retired the lesson-scoped output namespace, the `/api/learning/<attempt>/…`
+terminal routes and output stream, the Learning Stop and onboarding adapters,
+and the lesson presentation registration on the Onboarding Preview. A lesson's
+automatic check needs a receipt of the learner's own App press, recorded through
+Training's browser-only `step.observe`; Run or an iframe load is never a pass.
+Known gap: no current client sends `step.observe` from the Preview bridge, so a
+response check reports that no App interaction has been captured yet.
 
 Opt-in browser Preview diagnostics use the existing terminal action boundary to
 record bounded failure/retry/readiness fields in the private operational logger.
@@ -531,9 +492,9 @@ Preview lifecycle or application-state store.
 
 Separately, the bridge reports a reduced failure of a learner-started in-app
 request (`vibe64:preview-app-request`: method, `:id`-templated path, status,
-failure code) for Learning watches only; it carries no body, header, query or
-diagnostic entry, and the surface ignores it outside a visible bound Learning
-Preview.
+failure code); it carries no body, header, query or diagnostic entry. Its only
+consumer, the Learning watch, was retired with the Main lesson teacher, so no
+surface acts on it any more.
 
 
 Preview suspension belongs to the displayed output surface. It clears its frame

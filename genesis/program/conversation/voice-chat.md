@@ -38,7 +38,7 @@ The voice package owns the assistant avatar artwork: `Vibe64ColleagueAvatar`
 selects Merc (blond illustrated) or Yu (blue-haired manga) and animates blink,
 gestures, expressions and mouth from the host's mouthLevel/mouthPose/state.
 Its catalogue (`shared/avatars`) supplies the saved IDs, chooser labels and the
-per-target defaults: Merc for Colleague, Yu for project agents and Learning.
+per-target defaults: Merc for Colleague, Yu for project agents.
 `Vibe64AvatarSetting` is the single Avatar chooser; a host supplies its value,
 hint and save. The standalone root mounts `Vibe64LocalVoiceHost`, which fills
 the artwork and settings slots, remembers each target's choice in browser local
@@ -91,14 +91,10 @@ startup/current capture through the existing owner, retaining earlier pending
 delivery and the typed draft; visible return alone cannot restart recording.
 Document visibility is separate from avatar collapse and mounted-body eligibility.
 Voice retains no independent chat history and never changes the typed draft.
-Learning Main exposes its bounded delivered-question reference from the same
-conversation snapshot. Typed answers capture the current reference through
-original prepareMessage; a recording captures its reference at start through
-the original project binding. Explicit absence stays local and omits the wire
-field, so earlier speech cannot adopt a later question. Retry uses the original
-saved request. Working requests keep their original data mapping. This carries
-association only: native admission, fresh actor/pin checks and assessment stay
-with the existing Main and Training owners.
+Lessons have no voice binding of their own: the Learning Main binding, its
+delivered-question reference and the voice learning socket were retired in
+Learning v2. Colleague's voice teaches a lesson like its text chat, and the
+Colleague voice panel keeps the pinned current-step card visible.
 
 JSKIT's hands-free Pause stops new microphone input immediately while retaining
 the buffered tail for its original final flush. A matching stale endpoint rejection
@@ -276,28 +272,15 @@ JSKIT preserves the prior pending transcript and newer original recording owner;
 busy Pause or hold release finalizes newer words after the previous admission.
 The idle launcher's microphone icon reflects actual capture, rather than readiness.
 
-### Candidate Learning Main presentation speech preparation
+### Voice preparation hook
 
-Only a Learning Main binding supplies prepareVoice. Before the existing controller
-activates, retains or creates a new voice target, the same Vibe64VoiceHost callback
-awaits that captured binding's authoritative original conversation snapshot. It
-uses the original reader's reload only when no snapshot exists and refuses a
-changed or unavailable target. Default bindings still return their original socket
-URL directly. Availability is not used as a loading flag and the application adds
-no voice queue, history cache, seen ledger or generic controller state.
-
-The original controller already awaits connection preparation before releasing
-its previous target. Actual deferred first-snapshot ordering, old microphone
-ownership and silent initial-history priming must be proved in the original
-mounted Main consumer/controller test. Late older-page history behavior remains
-an open acceptance gate; this candidate does not infer deletion from page absence
-or promise safe tombstone reset on a fresh attachment.
-
-Learning Main cue ownership also projects the original optional-narration
-eligibility flag for its unconfirmed or retired originating request. Raw turns,
-loading and saved thinking/interim preferences remain unchanged; the existing
-voice tracker consumes activity silently without resetting its identities.
-Working and Colleague keep their original narration projection.
+A binding may supply `prepareVoice`; before the existing controller activates,
+retains or creates a voice target, `Vibe64VoiceHost` awaits it (after the host's
+`preparePreferences` when supplied) and refuses a changed or unavailable target.
+Default bindings return their original socket URL directly. The application adds
+no voice queue, history cache, seen ledger or generic controller state. The
+earlier Learning Main presentation speech preparation and cue narration were
+retired with the Main lesson teacher.
 
 
 ### Retained edit-before-send policy

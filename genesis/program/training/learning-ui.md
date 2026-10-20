@@ -3,11 +3,10 @@
 One client adapter connects the Learning environment (L) to the original
 Training reads and commands without creating a second progress owner.
 
-New trusted Learning sessions start in Junior through the original Sessions
-`resolveSessionStart` role/access owner, for both reserved source-less lessons
-and actual practice workspaces. Working and renewal defaults remain Senior.
-Existing saved routing is never rewritten on Open or Resume; the original Chat
-mode menu retains user selection of Senior, Junior and Custom without new controls.
+Lesson start and resume create no conversation: a practice lesson's initial
+session is an ordinary project session with the ordinary Senior default, and the
+Chat mode menu keeps its usual Senior, Junior and Custom choices. The L
+controller itself is described in [Learning environment (L)](learning-environment.md).
 
 ## Sources
 
@@ -100,8 +99,6 @@ read nor merges normal progress. Snapshot acquisition and explicit end/new-start
 refresh remain the existing hosted Colleague actions. Published Start
 eligibility and immutable pins are unchanged; no draft course is promoted.
 
-Exact watch reads use the action host’s attempt-scoped learner reader when supplied, with the existing attempt ID. Ordinary progress keeps its normal reader. Hosted composition supplies the existing normal/author scope selector, including current owner admission for preview attempts. Guidance keeps its original `guideTask` WRITE admission; polling does not acquire a second generic WRITE barrier around that owner.
-
 ## Local practice-project address
 
 Standalone (local) Vibe64 serves only its selected project, plus one exception:
@@ -159,7 +156,8 @@ ordinary `vibe64.source-editor.file.save` then records the save in the learner's
 authorship ledger (`codeAuthorship.js` `saveLearnerFile`) only when the request
 project is the actor's own practice project with an active attempt; every other
 save is the editor's plain save. Agent or other-route writes stay unledgered and
-still void a code attempt. Hosted Online does not install the owner yet.
+still void a code attempt. Hosted Online installs the same owner with its
+normal/author-preview store selector (`selectOwners`).
 
 F2 retired the remaining lesson-scoped server transport: the source-less
 teacher's Session routes, the voice learning socket, the learning-scoped Training

@@ -724,13 +724,13 @@ Sessions exposes the open/archive actions and bounded discovery; Runtime retains
 
 ## `src-lib` Editor support
 
-Provides browser-side support for editor presentation and exact source navigation: reference parsing, display policy, shared constants and focused utilities used by views and composables. These helpers operate within the editor and do not own server storage, provider lifetimes or project authority.
+Provides browser-side support for editor presentation and exact source navigation: reference parsing, display policy, shared constants and focused utilities used by views and composables. It also holds the shared Learning environment (L) controller, which owns only what L displays (open or minimised, surface, selected lesson step and its read results) and calls the Training actions for every change. These helpers operate within the editor and do not own server storage, provider lifetimes or project authority.
 
 ### Source
 - Directory `src/lib`
 
 ### Program
-- Nothing.
+- `genesis/program/training/learning-environment.md`
 
 ### Data owned
 - Nothing.

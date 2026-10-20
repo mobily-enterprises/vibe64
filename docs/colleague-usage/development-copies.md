@@ -12,8 +12,8 @@ still requires the normal sign-in through **AI Accounts**.
 
 Copied workflows remain stopped even if an outstanding delivery receipt is later
 confirmed. Their saved requests and helper history remain available for review.
-Lesson conversations from the retired Learning mode keep their original learner
-and content bindings and stay read-only; they cannot continue.
+Lesson conversations saved before Learning v2 keep their original learner and
+content bindings and stay read-only; they cannot continue.
 
 Colleague can explain these states and offer supported conversation or goal actions.
 History preparation grants no new permissions or shell access. Creating/resetting

@@ -97,7 +97,7 @@ step, or an automatic check result. A lesson is complete when every required ste
 has passed in any attempt of the same lesson content, so passes from an ended
 attempt still count. Only these record a pass: the automatic check run by the
 person's own action (pressing the App's control in the lesson's Preview, or
-**Check** on a code step after editing the files themselves), the server's answer
+**Check now** on a code step after editing the files themselves), the server's answer
 comparison, or **Done** on a self-check step. When Colleague runs a step check,
 it only reports what the check found; nothing is saved, so it can neither record
 a pass nor use up the attempt's results. Colleague never sees or reveals choice

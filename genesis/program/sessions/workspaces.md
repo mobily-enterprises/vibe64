@@ -344,28 +344,13 @@ actor, capacity, source preparation and publication policy. Setup or publication
 failure does not falsify a session already saved. This seam alone adds no learner
 start control or training operation.
 
-The same `createSession` also accepts the existing Project runtime for a trusted
-server learning context. It requires a reserved internal ID. Only `noExercise:true`
-refuses the internal source commit and bypasses source creation/policy/setup;
-explicit false retains the original reserved `expectedCommit`, policy lock, source
-creator, capacity fields and Workspace setup. Both refuse raw source/branch/PR
-choices supplied through input. The original trusted
-actor, workflow initialization, effective Senior/backup and selected connection
-access policy still precede the write. Its one shared metadata body uses the
-original fields; Runtime/Store alone creates the immutable learning binding.
-After the store's real absence preflight, the original locked staged create owns
-atomic publication and duplicate refusal. The source-less branch creates no source,
-workspace setup, development database slot or synthetic capacity policy; its
-result is the actual public session view without `creation`/`limits` fields.
-The false branch retains the ordinary original source policy and actual result
-fields, rather than fabricating setup or capacity success.
-The common inspect and `session-created` publication sequence remains unchanged,
-including truthful retention after inspection/publication failures. Ordinary
-source creation retains PR/routing/runtime/policy/source/setup order and its
-existing result fields. Browser purpose/scope/ID arguments do not enable learning.
-Training must freshly authorize the actor, exact active attempt and installed
-no-exercise pin before supplying the context; this internal creation adaptation
-does not itself expose Main Learning mode or prove a native teaching trial.
+The same `createSession` keeps a branch for a trusted server learning context
+(a reserved internal ID, no raw source/branch/PR choices, Junior start and the
+immutable binding created by Runtime/Store). No current route or Training
+operation supplies that context: lesson preparation creates its practice
+session through the ordinary source path with the ordinary Senior default, and
+a lesson without an exercise creates no session. See
+[Retained learning session binding](#retained-learning-session-binding).
 
 Session text and metadata are replaced atomically, like the store's JSON records.
 Concurrent readers see a complete previous or next value during assistant changes;
@@ -583,117 +568,34 @@ and refreshes immediately when the person returns. Session-renewal recovery
 also slows its checks when maintenance needs operator attention rather than
 retrying continuously.
 
-## Source-less learning session foundation
+## Retained learning session binding
 
-Project's public `createSessionStore()` delegates directly to its existing
-`sessionStore()` owner. That owner retains authenticated learner/attempt/pin and
-source-scope validation and permits the admitted no-exercise runtime namespace;
-ordinary stores still require a selected project root. Codex's existing bounded
-state reader can therefore use `readSessionNativeDescriptor()` for a source-less
-lesson without acquiring project source or creating another runtime. Source
-operations retain their separate required-root guards. The original Project test
-file covers this public factory and Codex reader, ordinary missing-root refusal,
-foreign actors/attempts/pins and inconsistent source-bearing private contexts.
+Learning v2 has no learning-scoped sessions: Colleague teaches every lesson in
+its own conversation, a lesson without an exercise creates no session, and a
+practice lesson's sessions are ordinary sessions of its practice project. The
+source-less teacher sessions, their `/api/learning` Session routes, the Learning
+tabs and purpose filter, and the lesson teaching instructions in the Codex,
+Claude and OpenCode adapters were retired (F1 to F3); the numbered
+`20261021-practice-sessions-ordinary` upgrade unbinds saved practice sessions
+and retires source-less lesson stores.
 
-`@local/vibe64-sessions/server/routes` exposes the original route registrar for
-host composition with the ordinary project registration only. Its learning-scoped
-Session routes under `/api/learning` were retired in Learning v2 (F2) and their
-client callers removed (F3); practice sessions are ordinary project sessions.
-
-The original Store's `paths()` supplies its existing current-session alias owner
-with `<private-learning-runtime>/sessions/selected` only for an admitted immutable
-learning scope. The original atomic relative `active/<sessionId>` symlink, read,
-conflict checks, selection validation and archive/closing clearing run unchanged.
-Ordinary source aliases retain their existing path and source requirement. This
-is new namespace composition, not a historical data repair. The canonical current
-selection action declares control access: selection/clearing retains historical
-identity without admitting work. Clearing needs no selected session ID; Stop and
-presence still require theirs through the original action schemas, while sending
-requires an exact confirmed active lesson/session. Store and canonical action
-tests cover independent working selection, foreign binding refusal, missing
-records, conflicts and lifecycle cleanup.
-
-Sources: `packages/vibe64-sessions/src/server/registerRoutes.js`,
-`packages/vibe64-sessions/src/server/actions.js`,
-`tests/server/vibe64ProjectSessionsFeatures.unit.test.js`.
-
-The existing Runtime and Store also accept a constructor-only `learningScope`
-containing the authenticated `learnerId`, exact `attemptId`, complete opaque
-`pin`, and an explicit `noExercise` boolean. For `noExercise:true`, the composing Training owner must authorize the
-actor, active attempt, installed pin and the lesson's genuinely no-exercise
-descriptor before constructing this scope and its fixed private runtime root.
-Runtime validates bounded identities/JSON shape and exact durable equality; it
-does not reimplement Training validation or acquire content authority. Browser
-arguments, creation metadata and a mode flag cannot enable this purpose.
-
-Original atomic session staging creates one new immutable `learning_session`
-metadata value (`schemaVersion:1`, that scope, `conversationId:sessionId`) and a
-private `native` directory inside the original session tree. The existing
-`genesis` runtimeKind remains a supported format sentinel, not a claim that this
-session has a Genesis project. The new view reports purpose `learning`, companion
-Learning, the exact binding, no source and no workspace setup. Ordinary absent
-purpose remains working unchanged. Claimed, corrupt, wrong-owner/attempt/pin or
-mixed-source bindings fail closed; normal metadata writers cannot alter/remove
-that binding or attach source to it.
-
-`getNativeExecutionRoot(sessionId)` reads that original session and permits only
-a matching active, non-closing learning session with its original regular, non-aliased
-`<runtime>/sessions/active/<sessionId>/native` directory. It never uses an archive
-extraction/closing path as a new native cwd. Historical reads retain exact
-binding without requiring that old directory to exist; archived views expose no
-executable root and execution refuses them. The bounded store
-`readSessionNativeDescriptor` reuses metadata/status readers without hydrating
-history. For learning it reports the derived original active native identity even
-when archived, with its explicit status/archived facts; this is not directory or
-execution proof. Ordinary calls retain the original source descriptor exactly. Missing/aliased active directories
-are unavailable, not recreated by reads. Source getters/inspection remain
-truthful and source operations do not turn this directory into a source checkout.
-
-Learning v2 phase 2 removed the `learningInstructions` reader and lesson teaching
-instructions from the runtime and the Codex, Claude and OpenCode adapters; a
-learning-scoped session receives no teaching instructions.
-
-This is a genuinely new optional explicitly admitted binding, not a changed
-historical format or conversion: no prior working session or Colleague-teacher
-history is inferred, migrated or lazily repaired. Future changes to existing
-bindings require the numbered stopped-writer upgrade procedure. The same
-original store leases, transcript, status and archive owners remain. Browser
-admission, native provider/environment integration, learning renewal/selection,
-teaching evidence and complete learner acceptance are separate unfinished work;
-these constructors do not add a launch control or establish Main teaching.
-
-
-The original session toolbar reads each saved row's purpose. Learning tabs retain
-selection, information and supported scoped naming, but omit the unsupported
-Working Archive action and source branch/repository status claims. Historical rows
-with no purpose and explicit Working rows preserve their existing controls and
-accessible status. This presentation does not introduce a Learning archive owner
-or prove complete lesson controls, teacher admission or installed geometry.
-The original Rename dialog captures the chosen saved row's own Learning attempt
-path; Working rows use the original Working path exposed by the same Data/Host.
-The currently selected attempt cannot retarget the named conversation.
-
-Source-bearing Learning uses an explicitly authorized `noExercise:false` scope
-in the same Runtime/Store, with the same immutable learner/attempt/pin binding.
-It requires the original configured source namespace and invokes the original
-source creator and attachment checks. Its native cwd is the actual session
-source; no private native directory substitutes for it. The original source
-descriptor, selected alias, Genesis prompt/environment, Git inspection, history
-and archive owners remain. Only `noExercise:true` bypasses Genesis and project
-Env. Fresh Training instructions remain a separate native system facility.
-Closing denies fresh execution, instructions and rendering while the existing
-explicit control path retains the admitted source identity. Unavailable original source inspection still
-prevents archiving through its original gate.
-
-The prospective `20261008-learning-practice-sessions` boundary reads or converts
-no application data. It neither adopts old Working sessions nor establishes
-practice provisioning, teacher tools, browser transport or installed acceptance.
+The Runtime and Store still accept a constructor-only `learningScope`
+(`learnerId`, `attemptId`, complete opaque `pin`, `noExercise`) and validate the
+immutable `learning_session` metadata (`schemaVersion:1`, that scope,
+`conversationId:sessionId`) exactly as before, failing closed on claimed,
+corrupt, foreign or mixed-source bindings. This is kept only so that the
+published offline upgrades (`20261008-learning-practice-sessions`,
+`20261008-learning-practice-history` and `20261021-practice-sessions-ordinary`)
+can read and verify historical bindings; no current route or host constructs
+such a scope, and Project's `createSessionStore()` keeps its ordinary
+selected-root requirement for every other store. Sessions' create path keeps
+its refusal of source, branch, pull-request and commit options for a
+learning-scoped context, which no current request produces.
 Sources: `packages/vibe64-runtime/src/server/runtime.js`,
 `packages/vibe64-runtime/src/server/sessionStore.js`,
-`packages/vibe64-core/src/server/stateUpgrades/20261008-learning-practice-sessions.js`,
-`tests/server/vibe64Runtime.unit.test.js`, `tests/server/vibe64SessionStore.unit.test.js`,
+`packages/vibe64-sessions/src/server/service.js`;
+evidence: `tests/server/vibe64SessionStore.unit.test.js`,
 `tests/server/stateUpgrades.unit.test.js`.
-
 
 ### Saved practice Learning admission
 

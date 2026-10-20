@@ -113,9 +113,8 @@ is omitted from JSON and is not a saved permission or credential store.
 
 Focused component evidence covers private canonical creation/source cloning,
 held-barrier preparation, accepted delayed Workspace completion and denied fresh
-user effects. Practice-session Learning purpose/collection, authenticated transport,
-Main teacher/Preview integration and all-provider native lifetime acceptance are
-still required. Source renewal remains unsupported for this practice increment;
+user effects. Practice projects and their sessions are ordinary since Learning
+v2; all-provider native lifetime acceptance is still required. Source renewal remains unsupported for this practice increment;
 its existing ordinary policy is unchanged. This is not installed/browser proof.
 
 Core’s exact project-slug validator and read-only runtime-root inventory live in
@@ -252,16 +251,31 @@ opens still refresh the persisted runtime timestamp for dormancy, but do not
 invalidate every open tab's project resources. The terminal service serializes
 opens per runtime root so simultaneous visits observe one transition.
 
-## Prepared practice onboarding read
+## Practice projects
 
-The existing Project provider registers the original onboarding read under the
-Learning attempt/session URL as a false-scope observation action. The URL supplies
-its exact initial-session identity before original action validation; the original
-Working query adapter stays unchanged. This uses the same Project store, source,
-Genesis inspection and environment-read owner under fresh saved-attempt access.
-No template, Env write, project selection or source operation is registered in
-that route surface. The same onboarding component suppresses those ordinary
-project affordances for Learning and keeps setup-read recovery explicit.
+A practice project is an ordinary project whose immutable record carries the
+saved Learning `training` marker. Core `practiceProjects.js` derives the public
+`practice: {learnerKey, attemptId}` field from it and adds `mine` only for a
+known viewer; it never reads or changes saved progress. The workspace listing
+stays unfiltered for internal callers; a listing for a viewer omits other learners' practice
+projects (`practiceProjectsForViewer`), and the presentation splits Practice from
+ordinary projects. `practiceProjectAccessBlock` refuses a non-owner whose learner
+key differs with `vibe64_practice_project_private` ("This practice project
+belongs to another learner."); the workspace owner keeps access for support.
+`vibe64.project.projects.create` is `ownerRequired`: members get practice
+projects only through lessons.
+
+Deletion is Training's `practice.delete`, through the host facility
+`practiceProjects.remove({slug, actor})`. The standalone implementation
+(`createLocalPracticeProjects`) runs the archive service's lifecycle without the
+archive steps under a per-slug lock: deletion marker, runtime close, resource,
+source and runtime removal, then `forgetProject`; a pinned session refuses with
+an unpin message and changes nothing, and a retry continues from the failed
+step. The attempt that owned the project is ended with reason `discard`;
+progress is kept. Online supplies its own implementation through its archive
+service. The prepared-practice onboarding read under the retired Learning
+attempt/session URL was removed with the lesson-scoped routes; practice
+onboarding uses the ordinary project read.
 
 Project metadata optionally stores `allowSharedDatabaseSessions`, defaulting to
 false without rewriting old records. The existing locked database settings action

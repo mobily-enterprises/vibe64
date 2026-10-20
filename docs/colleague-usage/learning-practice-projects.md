@@ -70,9 +70,9 @@ the change belongs and how you will check it). Then check the result yourself in
 Work an agent does for you never counts as your practical evidence. While a code
 question or code step is open, make the edits to its files yourself in
 **Dashboard → Files**: your saves there are recorded for the lesson, and any
-other writer's edit in those files means the step's **Check** asks for an
+other writer's edit in those files means the step's **Check now** asks for an
 independent attempt (see [Answering a code question in a lesson](learning-code-questions.md)).
-On a hosted workspace, **Files** saves are not yet recorded for lessons.
+Hosted workspaces record these saves the same way.
 
 Lessons started before this change keep their practice conversation: the
 installation's update turns it into an ordinary session of the practice

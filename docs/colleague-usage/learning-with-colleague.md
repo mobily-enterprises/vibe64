@@ -21,7 +21,7 @@ about your lesson, and Colleague teaches the current step:
   the right drawer, the phone's full-screen chat and the voice panel.
 - When you say you have done a task, Colleague can run that step's declared
   automatic check and tells you its actual result; that run is only a
-  diagnostic, and the pass is saved when you press **Check** in Learning.
+  diagnostic, and the pass is saved when you press **Check now** in Learning.
 
 Colleague never judges. A step passes only through its automatic check, your
 answer to a choice question, or your own **Done** for a self-check. Colleague's
@@ -63,7 +63,7 @@ Results come only from the checks, never from Colleague:
 - **Self-check** (**Done**): only your own press in **L** records it.
 - **Automatic check**: Colleague may run the step's check (`step.check.run`) to
   tell you whether your work is ready, but its run is a diagnostic and is never
-  saved. The step passes only when you press **Check** in **L**. A response
+  saved. The step passes only when you press **Check now** in **L**. A response
   check first needs your own press of the App's control in this lesson's Preview.
 - Saving your reading place is automatic from **L**; Colleague has no control for it.
 

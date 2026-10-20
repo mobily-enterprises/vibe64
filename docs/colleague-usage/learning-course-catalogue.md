@@ -6,8 +6,8 @@ courses.
 
 ## Where it is
 
-1. Turn on Learning with the **L** button at the left of the header.
-2. The **Courses** pane shows your installed course cards first. Below them is
+1. Open Learning with the **L** button at the left of the header.
+2. Its **Courses** tab shows your installed course cards first. Below them is
    the **Course catalogue** section, headed **Install a course**.
 3. The catalogue is grouped by **topic** (for example **Vibe64**). Under each
    topic, every course shows its title, release (for example `0.1.10`), a

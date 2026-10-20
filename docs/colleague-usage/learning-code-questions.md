@@ -2,7 +2,7 @@
 
 A lesson can ask you to change code, for example "make `notes.mjs` refuse an
 empty title". Make the change yourself in the practice project's ordinary
-**Dashboard → Files** editor, then press the step's **Check** in the Learning
+**Dashboard → Files** editor, then press the step's **Check now** in the Learning
 environment; see [The Learning environment (L)](learning-environment.md).
 
 Code questions asked by the earlier Main lesson teacher, answered with **Check
@@ -22,6 +22,6 @@ the check reports "needs your own change: edit `<file>` …" without running. An
 other change to a named file after that start makes it report "needs an
 independent attempt: other edits detected in `<file>`" without running. If the
 step has no recorded start, the check says so: open the step again, then make
-your change. The pass is recorded only when you press the step's **Check**
+your change. The pass is recorded only when you press the step's **Check now**
 yourself; a check Colleague runs only reports what it found and saves nothing.
 No explanation or grading is needed.

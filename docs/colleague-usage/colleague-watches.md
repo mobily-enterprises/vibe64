@@ -24,7 +24,7 @@ Colleague to list, cancel or resume watches if you prefer.
 Colleague no longer watches lessons: the Learning watch (“Watch me while I do
 this”) was retired with the Main lesson teacher. In the Learning environment
 your own step actions (an answer, **Done**, or an automatic check from your App
-press or a code step's **Check**) record step results directly; see
+press or a code step's **Check now**) record step results directly; see
 [The Learning environment (L)](learning-environment.md). Earlier Learning
 watches no longer appear here.
 

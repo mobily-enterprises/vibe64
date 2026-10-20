@@ -57,7 +57,7 @@ host/content or capacity refusal retains history.
 `step.check.run`, `step.answer`, `step.done`, `reader.save` and
 `practice.delete`. A step result is recorded only for the learner's own action:
 a choice answer compared by the server, **Done** on a self-check step, or an
-automatic check started by the learner's App press or code **Check**. A check
+automatic check started by the learner's App press or code-step **Check now**. A check
 Colleague runs through `step.check.run` reports its finding and saves nothing.
 
 ### Retired Main teacher

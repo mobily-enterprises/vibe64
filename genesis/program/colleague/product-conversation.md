@@ -54,6 +54,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
+- `packages/vibe64-colleague/src/client/colleagueLearningRequests.js`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/StudioAppShellLayout.vue`
@@ -79,6 +80,25 @@ presentation and cues were retired in Learning v2 phase 2, so no teacher-role
 exclusion remains in the common catalogue policy. The same common catalogue
 predicate governs direct schemas, search, contracts and execution, retaining the
 original assignment-only background mutation rule. No saved history is rewritten.
+
+Teaching uses only client state and existing operations. Both hosts report
+`learningOpen`, `learningSurface` (`courses` or `lesson`), `learningAttemptId`
+and `learningStepId` in focus from the shared L controller, so Colleague knows
+the current step even while L is minimised. **Teach me** records one request on
+that controller; `colleagueLearningRequests.js` consumes it once for the same
+signed-in person, reveals Colleague and sends the fixed text "Teach me this
+step." through the ordinary send. `navigation.open-learning` (no project) opens
+L at an attempt/step, minimises it, or points at a real place or the L button;
+`navigation.open` with `guide.navigate=true` is the project-scoped "show me".
+Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
+On a phone the dialog minimises itself before opening L or ringing a control.
+The pinned current-step card (lesson title, Step N of M, step title, Passed,
+**Open lesson**) is rendered from the L controller in the drawer, the phone
+dialog and the voice panel; it has no server coupling. The protocol text makes
+Colleague read the lesson with `lesson.read`, read and rewrite the learner's
+private notes (`learner-notes.read`/`learner-notes.update`), report
+`step.check.run` results as diagnostics, never claim a pass and never reveal a
+choice answer; `practice.delete` requires `confirmed` from the assistant.
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application

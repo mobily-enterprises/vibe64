@@ -13,8 +13,9 @@ has decorative cover art (the same for a course every time; its dots mirror that
 course's lessons, ticked when complete), a chip saying whether it is **Enabled**,
 a **Preview course** or **Disabled for new lessons** (plus **Saved lesson** or
 **Course complete** when true), the title, its ID and release, topic and lesson
-counts, "N of M lessons complete" with a progress ring, and the next lesson. A lesson counts as complete when all of its required
-assessments are passed in your saved progress; only required lessons are counted,
+counts, "N of M lessons complete" with a progress ring, and the next lesson. A lesson counts as complete when every required step
+has passed in your saved progress (required assessments, for a lesson in the
+earlier format); only required lessons are counted,
 unless a course has none. Progress is read from what is already saved; opening a
 course grades nothing. A lesson passed in one course counts in every course that
 contains the same lesson.
@@ -117,7 +118,7 @@ display and pending reads rather than transferring it to the next person.
 
 In a practice project, setup repair is ordinary project work in its session:
 ask that session's agent, or use the ordinary Workspace setup recovery. A repair
-or successful setup is not a learner answer or passed assessment. Colleague can
+or successful setup is not a learner answer or passed step. Colleague can
 explain and coordinate this recovery but has no source-editing or shell access.
 
 After a step result is saved, **Courses** refreshes the saved progress for that

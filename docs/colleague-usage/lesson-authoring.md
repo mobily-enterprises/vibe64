@@ -4,7 +4,8 @@ Ask Colleague to coordinate a coding agent, review the lesson in the same sessio
 and publish its source through the existing Save or pull-request workflow.
 Colleague can operate those controls when requested; it does not edit files or
 run a shell itself. Git publication, pinned course material and installation are
-separate results. The current learner offering remains one introductory lesson.
+separate results. The current Getting started course has four step-based lessons
+(V64-START-00 to V64-START-03).
 
 ## Choose the authoring target
 
@@ -15,10 +16,10 @@ connection, repository access and Git author identity remain the person's normal
 account steps. Opening, creating or importing a new GitHub project uses the
 existing hosted UI; Colleague must not invent an import or source-access tool.
 
-For the current introduction, revise the existing V64-START-01 topic rather than
-exposing a second lesson. Preserve its permanent IDs, six assessments, actual App
-button/check correlation and declared SVG/controller protocol unless the person's
-request explicitly changes that content. New lesson content may be authored as
+To improve an existing lesson, revise it in its topic rather than exposing a
+duplicate lesson. Preserve its permanent lesson and step IDs, its declared checks
+(including the actual App button/check correlation) and its SVG/controller
+protocol unless the person's request explicitly changes that content. New lesson content may be authored as
 a draft using the existing template below; a draft is not another learner release.
 
 Colleague teaches every lesson from its steps in the Learning environment; the
@@ -30,7 +31,7 @@ text needs a new immutable topic/course pin, keeping earlier learners’ version
 ## Delegate and review
 
 For example: “In this lesson-authoring project and session, improve the introduction's
-wording, keep its six assessments and App/diagram contracts, validate and bundle it,
+wording, keep its step IDs, checks and App/diagram contracts, validate and bundle it,
 arrange a review, then publish the source as a draft PR. Do not install or enable it.”
 This is an example instruction, never authority to execute it without the person's
 actual request. A how-to question makes no edits, assignment or external write.
@@ -175,9 +176,9 @@ operator steps below remain for content outside that catalogue, for an author's
 own snapshots, and for disabling a release.
 
 In supported hosted installations, ask Colleague to admit your exact clean
-committed snapshot from the authorized authoring session. Then turn on Learning
-mode in that project view and use **Resume author trial** under **Courses** to
-reopen it. This saved trial has isolated progress; it is not an
+committed snapshot from the authorized authoring session. Then open Learning with
+**L**; on its **Courses** tab the **Author trial** card shows the snapshot's lesson
+and release, and **Resume author trial** opens it in the ordinary lesson reader. This saved trial has isolated progress; it is not an
 enabled learner course. Ordinary **Start** still requires a published lesson in
 an enabled release. Local validation/bundling alone admits no trial. Do not change
 a draft's status to bypass that guard or report a trial as published progress.
@@ -206,13 +207,11 @@ then reads the fresh installed catalogue before changing enablement. Colleague c
 list the resulting enabled course through its normal learning query after the
 operator completes this step; absence is not permission to fabricate a substitute.
 Existing attempts keep their saved pins. Source publication alone does not prove
-installation, learner delivery, assessment completion or pilot acceptance.
+installation, learner delivery, step completion or pilot acceptance.
 
-Question delivery keeps its exact lesson attempt attached to your answer. An
-unfinished question or one retained from an earlier fresh conversation does not
-become a new assessment. Switching the displayed Preview is not permission to
-move an answer or a diagram checkpoint into another lesson's progress. The
-saved trial control uses the original snapshot admission and explicit refresh
+Each step result stays attached to its exact lesson attempt. Switching the
+displayed Preview or project is not permission to move an answer or a check
+result into another lesson's progress. The saved trial control uses the original snapshot admission and explicit refresh
 operations described above. Edited source requires a deliberately ended old trial
 and a newly admitted committed snapshot; Resume keeps the existing pin.
 

@@ -77,49 +77,56 @@ Operators can investigate slow assistant delivery through content-free timings
 shared across these engines, distinguishing preparation, native acknowledgement,
 receipt storage and the first response.
 
-Colleague teaches every lesson from its steps in the Learning environment. The
-earlier left-hand lesson teacher conversation, its lesson watches, quizzes,
-practical grading and lesson presentations have been retired; lessons started
-that way stay readable in history but cannot continue. Using lesson or exercise
-content still requires full validation of the pinned snapshot.
-A yellow learner plate with a black L opens the Learning environment above the
-current page: Courses (course cards and progress, course pages, the catalogue
-and the owner's custom-course form) and the open lesson, read without AI.
-Learning mode (its tinted header, Learning tab, teacher chat and lesson session
-filter) has been retired. A practice lesson's project is an ordinary project of
-the learner, opened with the ordinary project page, chat, Preview and complete
-Dashboard. Colleague can open Courses, a lesson step or an ordinary project view;
-showing a view is a demonstration, not learner evidence, and closing Learning
-does not end the saved attempt.
+Learning does not belong to a project. A yellow learner plate with a black L,
+present on every signed-in page, opens the Learning environment above the
+current page: Courses (course cards and progress, course pages, the catalogue,
+the owner's custom-course form and author trial) and the open lesson. Closing it
+returns to exactly where the person was; reopening it returns to the same lesson,
+step and scroll position, also from another browser. Minimising it keeps that
+place while the full application and Colleague stay usable. On a phone Learning
+is a full-screen sheet.
+A lesson is a short sequence of steps that a person can read without AI: text,
+diagrams that play their animation on request, and optional lesson notes. A step
+can show the real place in the application it talks about, ringing the control
+with a caption. Each step is checked in one of four ways: an automatic check of
+the learner's own work in their practice project, a multiple-choice question
+compared on the server, the learner's own Done, or no check for reading. A lesson
+is complete when every required step has passed, in any attempt of the same
+lesson content.
+Colleague is the teacher. Teach me minimises Learning, opens Colleague with the
+current step pinned above its chat, and Colleague explains the step in its own
+words, by text or voice, opens and highlights real screens and replays diagrams.
+Colleague never judges: only automatic checks, the answer comparison and the
+learner's own Done change a step's status, and Colleague never reveals the correct
+choice. Colleague keeps short private notes about how each person learns, which
+that person can read, edit and clear in Learning and nobody else can read; notes
+never affect results.
+The earlier left-hand lesson teacher conversation, Learning mode, lesson watches,
+quizzes, practical grading and lesson presentations have been retired; lessons
+started that way stay readable in history and can be ended, but cannot continue,
+and their completions keep counting.
+A lesson that needs an application gives the learner a practice project: an
+ordinary project of theirs, marked practice, with its ordinary chat, Preview and
+Dashboard and full access during and after the lesson. Practice projects are
+listed separately from other projects and are deleted with one click, without an
+archive; deleting one ends its lesson attempt and keeps the learner's progress.
+Another member cannot open someone else's practice project.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 Online or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,
-with an isolated author trial.
+with an isolated owner author trial of a committed draft.
 
-Teaching authors can validate local topic content and produce reproducible lesson
-bundles through the Vibe64 command. Draft lessons stay labelled as drafts. This
-authoring facility does not yet install a course, start an exercise or teach a learner.
-A server-only facility can install exact pinned topic snapshots from an admitted
-owner-selected local source, preserving verified revisions on retry. This does not
-enable a course or expose an installation control to learners or Colleague.
-Private server-only state can reserve and resume one exact lesson identity before
-project preparation. It preserves retry identity and the original pin; it does
-not yet expose exercise start or assessment submission to a learner. Internal
-storage retains bounded assessment evidence and resume state against that pin,
-and derives completion from every required step or assessment rather than a
-teacher claim, without exposing source files or executable visual controllers.
-A learner who explicitly starts another release keeps passes for an unchanged
-lesson, even when other lessons or their order change. Earlier evidence keeps
-its original identity; changed lesson content requires its own assessment.
-With a supported lesson host, a learner can explicitly end a saved attempt and
-ask Colleague to continue its original pin in a fresh exercise, even after release
-disablement. This retains valid passes and the old project without taking over a
-different active lesson. New starts still require an enabled release.
-The server can retain owner-approved course releases and their enablement without
-changing their exact content. Disabling a release blocks future admissions while
-existing pinned attempts continue. This internal facility adds no learner course
-screen or Colleague course tool. Declared visual bytes can be read from a verified
-lesson pin, but this alone does not display or play an animation.
+Teaching authors validate local topic content and produce reproducible lesson
+bundles through the Vibe64 command; draft lessons stay labelled as drafts.
+Official catalogue courses are installed and updated from Courses; other content
+is installed by the operator from an exact pinned local source. A started lesson
+keeps the exact content it was started with. A learner who starts another
+release keeps passes for an unchanged lesson, even when other lessons or their
+order change; changed lesson content must be passed again. A learner can
+explicitly end a saved attempt and ask Colleague to continue its original pin in
+a fresh exercise, even after release disablement, without taking over a
+different active lesson. Disabling a release blocks new starts while existing
+attempts continue.
 
 Colleague is a separate conversation for discussing ideas and operating Vibe64
 across projects. It knows the selected project and session, can open their views
@@ -1688,7 +1695,7 @@ An interrupted attempt shows compact red error text and Retry inside its message
 Retry keeps the original identity: Main resubmits through the existing coordinator
 when no matching route is recorded; an attempted native dispatch checks its receipt
 without sending another copy. Only confirmed failures offer Edit and Cancel.
-Confirmed teaching preparation refusals before
+Confirmed preparation refusals before
 admission keep the original request available for Retry after preparation is ready;
 unknown delivery checks do not authorize another send. A late receipt clears stale delivery warnings.
 
