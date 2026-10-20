@@ -3458,6 +3458,24 @@ test("Colleague requires explicit Stop before model selection after native provi
   }
 });
 
+test("Colleague selects a workflow's routed Senior only when it uses the expected provider", async t => {
+  const f = await fixture(t, []);
+  const select = input => f.actions.execute({ actionId: "vibe64.colleague.model.select", input, context: f.context });
+  await assert.rejects(select({ workflowEngineId: "codex", modelProviderId: "deepseek" }),
+    /This workflow's Senior uses a different AI\. Review its model routing in AI Accounts\./);
+  assert.equal((await f.service.read({}, f.context)).assistantSelection, null);
+  const selected = await select({ workflowEngineId: "codex", modelProviderId: "openai" });
+  assert.deepEqual(selected.assistantSelection, selection);
+  assert.deepEqual(f.observations.routingInitialized, [["codex"], ["codex"]], "routing fills unset roles before resolving Senior");
+  const resolvePurpose = f.terminals.resolveAssistantPurpose;
+  t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
+    return args[0].purpose === "senior" ? { available: false } : resolvePurpose.apply(this, args);
+  });
+  await assert.rejects(select({ workflowEngineId: "claude" }), /This AI has no Senior model ready for Colleague yet\./);
+  await assert.rejects(select({}), /Choose a model for Colleague\./);
+  assert.deepEqual((await f.service.read({}, f.context)).assistantSelection, selection, "a refused change keeps the saved model");
+});
+
 test("an unchanged settled Colleague model retains its exact native thread without another request", async t => {
   const f = await fixture(t, [{ text: reply("The original answer.") }], { native: true });
   await f.send("Keep this conversation.");

@@ -436,20 +436,32 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return (choices.workflows || []).filter(choice => choice.available);
   }
 
-  async function chooseSelection(context, selection) {
+  // Session creation saves a workflow's recommended routing before resolving
+  // it. Colleague does the same, so an AI connected outside the in-app sign-in
+  // (an existing login) is usable without a manual Save. A failed setup leaves
+  // the saved routing to decide.
+  async function routedSenior(user, engineId) {
+    await accounts.initializeModelRouting?.({ engineIds: [engineId], vibe64User: user });
+    return terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: engineId }, { vibe64User: user });
+  }
+
+  async function chooseSelection(context, selection, workflow = null) {
     const user = authenticatedVibe64User(context);
     if (selection) {
       const resolved = await terminals.resolveAssistantSelection(selection, { vibe64User: user });
       await terminals.requireAssistantSelectionAccess(resolved, { vibe64User: user });
       return resolved;
     }
+    if (workflow) {
+      const decision = await routedSenior(user, workflow.engineId);
+      if (!decision.available) throw failure("This AI has no Senior model ready for Colleague yet. Review its model routing in AI Accounts.", "vibe64_colleague_model_unavailable");
+      if (workflow.modelProviderId && decision.effectiveSelection.modelProviderId !== workflow.modelProviderId) {
+        throw failure("This workflow's Senior uses a different AI. Review its model routing in AI Accounts.", "vibe64_colleague_senior_elsewhere");
+      }
+      return decision.effectiveSelection;
+    }
     for (const choice of await availableWorkflows(user)) {
-      // Session creation saves a workflow's recommended routing before
-      // resolving it. Colleague does the same, so an AI connected outside the
-      // in-app sign-in (an existing login) is usable without a manual Save.
-      // A failed setup leaves the saved routing to decide below.
-      await accounts.initializeModelRouting?.({ engineIds: [choice.engineId], vibe64User: user });
-      const decision = await terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: choice.engineId }, { vibe64User: user });
+      const decision = await routedSenior(user, choice.engineId);
       if (decision.available) return decision.effectiveSelection;
     }
     throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
@@ -1389,7 +1401,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const selecting = state.admission.then(async () => {
         assertCurrentConversation(state, expected);
         if (closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
-        const selected = await chooseSelection(context, input.assistantSelection);
+        if (!input.assistantSelection && !input.workflowEngineId) throw failure("Choose a model for Colleague.");
+        const selected = await chooseSelection(context, input.assistantSelection, input.assistantSelection ? null
+          : { engineId: input.workflowEngineId, modelProviderId: input.modelProviderId || "" });
         const settings = await terminals.resolveConversationConfiguration(selected, instructions, { vibe64User: authenticatedVibe64User(context) });
         const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
           .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));

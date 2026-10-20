@@ -6,6 +6,7 @@
   "description": "The user's independent conversation for operating Vibe64.",
   "exports": {
     "./client": "./src/client/index.js",
+    "./client/model-bridge": "./src/client/colleagueModelBridge.js",
     "./server": "./src/server/Vibe64ColleagueProvider.js",
     "./server/service": "./src/server/service.js",
     "./server/conversationUpgrade": "./src/server/conversationUpgrade.js",
