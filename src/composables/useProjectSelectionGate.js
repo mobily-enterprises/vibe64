@@ -1,4 +1,5 @@
-import { computed, proxyRefs, ref, watch } from "vue";
+import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { useQueryClient } from "@tanstack/vue-query";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -21,6 +22,7 @@ import {
 import {
   useVibe64PracticeProjects
 } from "@/composables/useVibe64PracticeProjects.js";
+import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 
 const cachedProjectSelections = new Map();
 // The server's not-found code for a practice project deleted while its page is open.
@@ -50,10 +52,19 @@ function useProjectSelectionGate(emit, {
     })),
     refreshOnPull: true,
     requestRecoveryLabel: "Projects",
-    realtime: {
+    // A routed practice page also re-reads its selection when Learning
+    // deletes that practice project (the learner's own "practice" notice), so
+    // an open page turns into the deleted notice without a reload. Hosted
+    // project-page deletes already publish the project-changed event.
+    realtime: scopeSelectionToCurrentProject ? {
+      events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_TRAINING_LEARNER_CHANGED_EVENT],
+      matches: ({ event, payload } = {}) => event !== VIBE64_TRAINING_LEARNER_CHANGED_EVENT ||
+        isPracticeNoticeForProject(payload, projectSlug.value)
+    } : {
       event: VIBE64_PROJECT_CHANGED_EVENT
     }
   });
+  if (scopeSelectionToCurrentProject) rereadSelectionWhenProjectDeleted();
 
   const projectSelectionView = proxyRefs({
     isInitialLoading: selectionResource.isInitialLoading,
@@ -196,6 +207,29 @@ function useProjectSelectionGate(emit, {
     selectionReady
   };
 
+  // Any other request of the open page (sessions, chat, files) that is refused
+  // with the deleted code makes the gate re-read its own selection, which then
+  // shows the deleted notice when this project is the one that was deleted.
+  function rereadSelectionWhenProjectDeleted() {
+    const queryClient = useQueryClient();
+    const unsubscribe = queryClient?.getQueryCache?.().subscribe?.((cacheEvent) => {
+      if (cacheEvent?.type !== "updated" || cacheEvent.action?.type !== "error" ||
+        cacheEvent.action.error?.code !== PRACTICE_PROJECT_DELETED_CODE || practiceDeleted.value) return;
+      if (cacheEvent.query?.queryHash === selectionQueryHash()) return;
+      void loadProjectSelection().catch(() => {});
+    });
+    if (typeof unsubscribe === "function") onScopeDispose(unsubscribe);
+  }
+
+  function selectionQueryHash() {
+    return JSON.stringify(projectSelectionGateQueryKey({
+      ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+      projectSlug: projectSlug.value,
+      scopeSelectionToCurrentProject,
+      surfaceId: VIBE64_SURFACE_ID
+    }));
+  }
+
   async function loadProjectSelection() {
     await projectSelectionView.refresh();
   }
@@ -230,6 +264,13 @@ function useProjectSelectionGate(emit, {
   }
 }
 
+// Learning's practice notice names the attempt; a practice project's slug is
+// training-<attempt id without dashes>.
+function isPracticeNoticeForProject(payload = {}, slug = "") {
+  const attemptId = String(payload?.attemptId || "").replaceAll("-", "");
+  return payload?.reason === "practice" && Boolean(attemptId) && String(slug || "") === `training-${attemptId}`;
+}
+
 function projectSelectionGateEndpoint({
   projectSlug = "",
   scopeSelectionToCurrentProject = false
@@ -255,6 +296,7 @@ function projectSelectionGateQueryKey({
 
 export {
   PRACTICE_PROJECT_DELETED_CODE,
+  isPracticeNoticeForProject,
   projectSelectionGateEndpoint,
   projectSelectionGateQueryKey,
   useProjectSelectionGate

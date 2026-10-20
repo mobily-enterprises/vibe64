@@ -4,7 +4,11 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resources: [], slug: "training-12345678123442348234123456789abc" }));
+const mocks = vi.hoisted(() => ({ resources: [], slug: "training-12345678123442348234123456789abc", queryClient: null }));
+vi.mock("@tanstack/vue-query", async (importOriginal) => {
+  const original = await importOriginal();
+  return { ...original, useQueryClient: () => mocks.queryClient };
+});
 vi.mock("vue-router", () => ({ useRoute: () => ({ params: { slug: mocks.slug } }), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource(options) {
@@ -20,12 +24,14 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand: (options) => Vue.reactive({ options, messageType: "", message: "", async run() { return { ok: true }; } })
 }));
 
-import { PRACTICE_PROJECT_DELETED_CODE, useProjectSelectionGate } from "../../src/composables/useProjectSelectionGate.js";
+import { QueryClient } from "@tanstack/vue-query";
+import { PRACTICE_PROJECT_DELETED_CODE, isPracticeNoticeForProject, useProjectSelectionGate } from "../../src/composables/useProjectSelectionGate.js";
 
 const deletedError = () => Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
   status: 404, code: "vibe64_practice_project_deleted" });
 
 function openPage(options) {
+  mocks.queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const emitted = [];
   const scope = Vue.effectScope();
   const gate = scope.run(() => useProjectSelectionGate((name, value) => emitted.push([name, value]), options));
@@ -50,6 +56,52 @@ describe("an open practice project deleted elsewhere", () => {
     scope.stop();
   });
 
+  // The page's selection read fails with the deleted code once it is re-read.
+  function selectionReadsDeleted(selection) {
+    selection.reload.mockImplementation(async () => { selection.query.error.value = deletedError(); });
+  }
+
+  it("flips when another request of the open page is refused because the project was deleted", async () => {
+    const { gate, emitted, scope, selection } = openPage({ scopeSelectionToCurrentProject: true });
+    selection.data.value = { hasSelection: true, currentProject: { slug: mocks.slug } };
+    selectionReadsDeleted(selection);
+    await Vue.nextTick();
+    // Another panel's ordinary failure re-reads nothing.
+    await mocks.queryClient.fetchQuery({ queryKey: ["vibe64", "project", mocks.slug, "sessions"],
+      queryFn: async () => { throw Object.assign(new Error("Busy."), { status: 503, code: "vibe64_busy" }); } }).catch(() => {});
+    expect(selection.reload).not.toHaveBeenCalled();
+    // The sessions panel's request is refused with the deleted code.
+    await mocks.queryClient.fetchQuery({ queryKey: ["vibe64", "project", mocks.slug, "sessions"],
+      queryFn: async () => { throw deletedError(); } }).catch(() => {});
+    await Vue.nextTick();
+    expect(selection.reload).toHaveBeenCalledTimes(1);
+    expect(gate.practiceDeleted.value).toBe(true);
+    expect(emitted.at(-1)).toEqual(["deleted", undefined]);
+    scope.stop();
+  });
+
+  it("re-reads its selection on Learning's practice notice for this project only", async () => {
+    const { gate, emitted, scope, selection } = openPage({ scopeSelectionToCurrentProject: true });
+    selection.data.value = { hasSelection: true, currentProject: { slug: mocks.slug } };
+    const { realtime } = selection.options;
+    expect(realtime.events).toEqual(["vibe64.project.changed", "vibe64.training.learner.changed"]);
+    const attemptId = "12345678-1234-4234-8234-123456789abc";
+    const learner = (payload) => realtime.matches({ event: "vibe64.training.learner.changed", payload });
+    expect(learner({ attemptId, reason: "practice" })).toBe(true);
+    expect(learner({ attemptId, reason: "reader" })).toBe(false);
+    expect(learner({ attemptId: "87654321-1234-4234-8234-123456789abc", reason: "practice" })).toBe(false);
+    expect(learner({ reason: "notes" })).toBe(false);
+    expect(realtime.matches({ event: "vibe64.project.changed", payload: {} })).toBe(true);
+    expect(isPracticeNoticeForProject({ attemptId, reason: "practice" }, "my-app")).toBe(false);
+    // The delivered notice invalidates the selection, which now reads deleted.
+    selectionReadsDeleted(selection);
+    await selection.reload();
+    await Vue.nextTick();
+    expect(gate.practiceDeleted.value).toBe(true);
+    expect(emitted.at(-1)).toEqual(["deleted", undefined]);
+    scope.stop();
+  });
+
   it("keeps other load errors, and the picker's own errors, as ordinary errors", async () => {
     const page = openPage({ scopeSelectionToCurrentProject: true });
     page.selection.query.error.value = Object.assign(new Error("Project path is not readable."), { status: 404, code: "vibe64_project_path_not_accessible" });
@@ -63,6 +115,8 @@ describe("an open practice project deleted elsewhere", () => {
     await Vue.nextTick();
     expect(picker.gate.practiceDeleted.value).toBe(false);
     expect(picker.emitted.at(-1)[0]).toBe("error");
+    // The picker keeps its plain project-changed refresh.
+    expect(picker.selection.options.realtime).toEqual({ event: "vibe64.project.changed" });
     picker.scope.stop();
   });
 });

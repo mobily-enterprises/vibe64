@@ -288,7 +288,12 @@ record is missing or carries the deletion marker (an exact delete request with
 recreated by a late request is not a 500. Other practice scopes keep refusing
 unmarked leftover storage. Feature routes and the Online gate map the code to 404
 with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
-the routed project page, and `ProjectSelectionGate` shows **This practice project
+the routed project page. That page re-reads its selection without a reload on
+the project-changed event (the hosted delete publishes the catalogue change), on
+Learning's own `vibe64.training.learner.changed` notice with reason `practice`
+for this project's attempt (Learning's delete on both hosts), and whenever any
+other query of the page fails with the deleted code (a query-cache subscription
+in the gate). `ProjectSelectionGate` then shows **This practice project
 was deleted** with **Open Learning** (L on its course list) instead of the error.
 Evidence: `tests/server/studioProjectContext.unit.test.js`,
 `tests/server/vibe64FeatureRoutes.unit.test.js` and
