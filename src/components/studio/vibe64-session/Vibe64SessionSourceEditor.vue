@@ -1472,8 +1472,12 @@ function createEditor() {
           ".cm-focused": {
             outline: "none"
           },
+          // The gutter stays in place while a long line scrolls sideways (a
+          // phone editing one line), so its tint sits on an opaque surface:
+          // a translucent gutter let the scrolled code show through the numbers.
           ".cm-gutters": {
-            backgroundColor: "rgba(var(--v-theme-surface-variant), 0.38)",
+            backgroundColor: "rgb(var(--v-theme-surface))",
+            backgroundImage: "linear-gradient(rgba(var(--v-theme-surface-variant), 0.38), rgba(var(--v-theme-surface-variant), 0.38))",
             borderRight: "1px solid rgba(var(--v-border-color), 0.28)",
             color: "rgba(var(--v-theme-on-surface), 0.56)"
           },
