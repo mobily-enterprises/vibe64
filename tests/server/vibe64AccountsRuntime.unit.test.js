@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -66,10 +67,16 @@ import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
 } from "../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js";
 import {
-  STUDIO_MANAGED_CLAUDE_COMMAND,
-  STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { configureVibe64Host } from "@local/vibe64-execution/server";
+
+// These tests describe a host with runtime packs.
+const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-test-packs-"));
+process.on("exit", () => rmSync(RUNTIME_PACK_ROOT, { force: true, recursive: true }));
+configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT });
+const MANAGED_CLAUDE_COMMAND = path.join(RUNTIME_PACK_ROOT, "managed-bin", "claude");
+const MANAGED_CODEX_COMMAND = path.join(RUNTIME_PACK_ROOT, "managed-bin", "codex");
 
 async function withTempDir(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-accounts-runtime-"));
@@ -1423,7 +1430,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
         runHostToolCommand: async (args = []) => {
           commands.push(args);
           if (
-            args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+            args[0] === MANAGED_CODEX_COMMAND &&
             args[1] === "-c" &&
             args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
             args.includes("login") &&
@@ -1696,7 +1703,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
       },
       runHostToolCommand: async (args = []) => {
         if (
-          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[0] === MANAGED_CODEX_COMMAND &&
           args[1] === "-c" &&
           args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
           args.includes("status")
@@ -1771,7 +1778,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
       },
       runHostToolCommand: async (args = []) => {
         if (
-          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[0] === MANAGED_CODEX_COMMAND &&
           args[1] === "-c" &&
           args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
           args.includes("logout")
@@ -1783,7 +1790,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
           };
         }
         if (
-          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[0] === MANAGED_CODEX_COMMAND &&
           args[1] === "-c" &&
           args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
           args.includes("status")
@@ -2029,6 +2036,32 @@ test("automatic Codex account recovery preserves an unverified transition and re
 });
 
 
+test("without runtime packs a missing Claude Code is reported with its installer, not as signed out", async () => {
+  configureVibe64Host(null);
+  try {
+    await withTempDir(async (root) => {
+      const requests = [];
+      const service = createService({
+        daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+        env: { ...process.env, HOME: path.join(root, "home"), VIBE64_CLAUDE_COMMAND: path.join(root, "absent", "claude") },
+        runAuthTerminalCommand: async (input) => { requests.push(input); return { ok: true }; }
+      });
+      const status = await service.getStatus({ accountIds: ["claude"] });
+      const [claude] = status.accounts;
+      assert.equal(claude.status, "not_installed");
+      assert.equal(claude.code, "vibe64_cli_not_installed");
+      assert.equal(claude.connected, false);
+      assert.equal(claude.install.command, "curl -fsSL https://claude.ai/install.sh | bash");
+      assert.ok(status.missingTools.some((tool) => tool.id === "claude" && tool.install));
+      const started = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: { role: "owner", username: "owner" } });
+      assert.equal(started.code, "vibe64_cli_not_installed");
+      assert.equal(requests.length, 0);
+    });
+  } finally {
+    configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT });
+  }
+});
+
 test("Claude authentication is owner-only and launches native login after runtime cleanup", async () => {
   await withTempDir(async (root) => {
     const requests = [];
@@ -2054,7 +2087,7 @@ test("Claude authentication is owner-only and launches native login after runtim
     const result = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
     assert.equal(result.code, "fixture_terminal");
     assert.deepEqual(invalidations, [{ provider: "claude", reason: "claude-auth-change" }]);
-    assert.equal(requests[0].command, STUDIO_MANAGED_CLAUDE_COMMAND);
+    assert.equal(requests[0].command, MANAGED_CLAUDE_COMMAND);
     assert.deepEqual(requests[0].args, ["auth", "login", "--claudeai"]);
     assert.equal(requests[0].mode, "pty");
     assert.equal(requests[0].credentialHome.home, path.join(root, "home"));

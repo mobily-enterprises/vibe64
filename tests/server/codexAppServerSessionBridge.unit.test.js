@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -36,9 +37,15 @@ import {
   createVibe64SessionStore
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
-  STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { configureVibe64Host } from "@local/vibe64-execution/server";
+
+// These tests describe a host with runtime packs.
+const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-test-packs-"));
+process.on("exit", () => rmSync(RUNTIME_PACK_ROOT, { force: true, recursive: true }));
+configureVibe64Host({ runtimePackRoot: RUNTIME_PACK_ROOT });
+const MANAGED_CODEX_COMMAND = path.join(RUNTIME_PACK_ROOT, "managed-bin", "codex");
 function fakeRuntime({
   conversationLog = []
 } = {}) {
@@ -1091,7 +1098,7 @@ test("codex app-server bridge records the host CLI resume command for the same t
   assert.equal(Object.hasOwn(metadata, "agent_workflow_result_transport"), false);
   assert.equal(
     metadata.agent_resume_command,
-    `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
+    `${MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
   );
   assert.equal(metadata.agent_transport_kind, "unix");
   assert.equal(metadata.agent_transport_socket_path, "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
