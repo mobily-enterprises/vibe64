@@ -18,11 +18,15 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import {
+  useVibe64PracticeProjects
+} from "@/composables/useVibe64PracticeProjects.js";
 
 const cachedProjectSelections = new Map();
 
 function useProjectSelectionGate(emit, {
-  scopeSelectionToCurrentProject = false
+  scopeSelectionToCurrentProject = false,
+  showPractice = false
 } = {}) {
   const creating = ref(false);
   const selectingSlug = ref("");
@@ -103,7 +107,24 @@ function useProjectSelectionGate(emit, {
 
   const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
   const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
-  const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
+  const listedProjects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
+  // Practice is split at presentation: the listing stays unfiltered.
+  const projects = computed(() => listedProjects.value.filter((project) => !project?.practice));
+  // Standalone practice projects live outside the projects folder; their
+  // source is the learner's own saved lessons (learning.read).
+  const practice = useVibe64PracticeProjects({ enabled: showPractice });
+  const practiceProjects = computed(() => showPractice ? practice.practiceProjects.value
+    : listedProjects.value.filter((project) => project?.practice).map((project) => ({
+      slug: project.slug,
+      attemptId: String(project.practice.attemptId || ""),
+      lessonCode: "",
+      lessonTitle: "",
+      ended: false,
+      mine: project.practice.mine === true,
+      // The hosted host owns its delete (Online management page); the shared
+      // picker only lists and opens these.
+      deleteAvailable: false
+    })));
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);
   const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
@@ -151,6 +172,10 @@ function useProjectSelectionGate(emit, {
     hasSelection,
     loadProjectSelection,
     newProjectName,
+    deletePracticeProject: practice.deletePracticeProject,
+    deletingPracticeSlug: practice.deletingSlug,
+    practiceDeleteError: practice.deleteError,
+    practiceProjects,
     projectSelection,
     projects,
     projectsRoot,

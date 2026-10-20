@@ -74,6 +74,42 @@
         </v-btn>
       </div>
 
+      <section
+        v-if="practiceProjects?.length"
+        class="project-selection-gate__practice"
+        aria-labelledby="project-selection-gate-practice-title"
+      >
+        <h3 id="project-selection-gate-practice-title" class="project-selection-gate__section-title">Practice</h3>
+        <p class="project-selection-gate__section-hint">Projects your lessons created. Deleting one keeps no archive.</p>
+        <div
+          v-for="practice in practiceProjects"
+          :key="practice.slug"
+          class="project-selection-gate__practice-row"
+          :data-practice-slug="practice.slug"
+        >
+          <v-btn
+            class="project-selection-gate__project"
+            :disabled="busy || Boolean(deletingPracticeSlug)"
+            variant="tonal"
+            @click="openPracticeProject(practice.slug)"
+          >
+            <span>{{ practice.lessonTitle || practice.lessonCode || practice.slug }}</span>
+            <span class="project-selection-gate__project-path">{{ practice.slug }}</span>
+          </v-btn>
+          <v-btn
+            v-if="practice.mine && practice.deleteAvailable && practice.attemptId"
+            class="project-selection-gate__practice-delete"
+            :aria-label="`Delete practice project ${practice.slug}`"
+            :title="`Delete practice project ${practice.slug}`"
+            :icon="mdiDeleteOutline"
+            :disabled="busy || Boolean(deletingPracticeSlug)"
+            :loading="deletingPracticeSlug === practice.slug"
+            variant="text"
+            @click="deletePracticeProject(practice)"
+          />
+        </div>
+      </section>
+
       <v-form
         class="project-selection-gate__create"
         @submit.prevent="handleCreateProject"
@@ -103,6 +139,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { mdiDeleteOutline } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
 import {
@@ -137,6 +174,11 @@ const props = defineProps({
   scopeSelectionToCurrentProject: {
     type: Boolean,
     default: false
+  },
+  // Standalone shows the learner's own practice projects from saved lessons.
+  showPractice: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -157,6 +199,9 @@ const {
   hasSelection,
   loadProjectSelection,
   newProjectName,
+  deletePracticeProject,
+  deletingPracticeSlug,
+  practiceProjects,
   projectSelection,
   projects,
   projectsRoot,
@@ -165,7 +210,8 @@ const {
   selectionInitialLoading,
   selectionReady
 } = useProjectSelectionGate(emit, {
-  scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject
+  scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject,
+  showPractice: props.showPractice
 });
 
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
@@ -205,6 +251,10 @@ async function handleSelectProject(slug = "") {
   if (props.navigateOnSelect && selected) {
     void router.push(projectAppPath(selected));
   }
+}
+
+function openPracticeProject(slug = "") {
+  if (slug) void router.push(projectAppPath(slug));
 }
 
 async function handleCreateProject() {
@@ -297,6 +347,30 @@ async function handleCreateProject() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-selection-gate__practice {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.project-selection-gate__section-title {
+  font-size: 0.95rem;
+  font-weight: 720;
+  margin: 0;
+}
+
+.project-selection-gate__section-hint {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.project-selection-gate__practice-row {
+  align-items: center;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .project-selection-gate__create {
