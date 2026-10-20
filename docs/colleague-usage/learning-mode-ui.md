@@ -36,7 +36,8 @@ course page scrolls in the same pane.
 
 Choose **Resume saved lesson** on the saved lesson card (above the course cards,
 headed "Saved lesson · code" with the lesson title and, once reported, a ring of
-required assessments passed) for the exact saved attempt. Disabled,
+required steps passed and "N of M required steps passed. This lesson is
+complete." or "Continue the remaining steps.") for the exact saved attempt. Disabled,
 unavailable, loading and error states are shown on the same page. **Refresh
 courses** rereads installed courses, progress and the course catalogue.
 

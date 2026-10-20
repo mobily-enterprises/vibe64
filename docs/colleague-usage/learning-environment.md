@@ -92,16 +92,24 @@ A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
 
 - **Diagram** with **Play**: Play starts the diagram from its beginning and runs
-  its animation in order. Play again replays it. If a diagram fails, use
+  its animation in order. Play again replays it; saving your place in the
+  lesson while it plays does not interrupt it. If a diagram fails, use
   **Reload diagram** on it.
 - **Question**: tick every correct option, then **Check answer**. The answer
   is compared on the server; the result appears as the step's status. You can
-  try again.
-- **Automatic check**: the step is checked when you do the task in your practice
-  project, for example by pressing a button in its Preview. **Check now** asks
-  the check to look again. When it has not passed, the reason appears under
-  **Check now** (for example that no press in the lesson's Preview was
-  captured yet); the status does not change.
+  try again until it passes.
+- **Automatic check**: a step about an App interaction says "This step is
+  checked automatically when you do it in your practice project", for example
+  by pressing a button in its Preview. A code step names the file to change and
+  says "Make this change yourself in Dashboard → Files. Saving does not check
+  it: press Check now when you are ready." **Check now** asks the check to look
+  again. When it has not passed, the reason appears under **Check now** (for
+  example that no press in the lesson's Preview was captured yet, or "needs your
+  own change: edit `<file>` yourself in Dashboard → Files during this step, then
+  press Check now"); the status does not change.
+- A step you already passed in this attempt keeps its pass: a later
+  **Check answer** or **Check now** is not checked again and shows "You already
+  passed this step, so this was not checked again. Your earlier pass counts."
 - **Done**: for a step you check yourself; press it when you have done the step.
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control

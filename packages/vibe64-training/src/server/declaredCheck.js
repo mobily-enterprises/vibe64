@@ -249,7 +249,9 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
           reason: authorship.missingBaseline
             ? missingBaseline
             : authorship.unchanged
-              ? `needs your own change: edit ${authorship.files.join(", ")} in this lesson's Code editor during this step, then Check again`
+              ? input.stepId
+                ? `needs your own change: edit ${authorship.files.join(", ")} yourself in Dashboard → Files during this step, then press Check now`
+                : `needs your own change: edit ${authorship.files.join(", ")} in this lesson's Code editor during this step, then Check again`
               : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
       }
       const filesHash = sha256(canonicalJson(checked));

@@ -214,7 +214,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
     <article v-if="savedAttempt" class="tlp-saved training-lesson-picker__saved" aria-labelledby="tlp-saved-heading">
       <div class="tlp-saved__glow" aria-hidden="true" />
       <TrainingProgressRing v-if="completion" class="tlp-saved__ring" :value="completion.passed" :max="completion.required" :size="96" :stroke="10"
-        :label="`${completion.passed} of ${completion.required} required assessments passed`">
+        :label="`${completion.passed} of ${completion.required} required steps passed`">
         <span class="tlp-saved__ring-value"><strong>{{ completion.passed }}</strong>/{{ completion.required }}</span>
       </TrainingProgressRing>
       <div v-else class="tlp-saved__badge" aria-hidden="true"><v-icon :icon="icons.bookmark" size="36" /></div>
@@ -226,7 +226,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         </p>
         <p v-if="completion" class="tlp-saved__status">
           <v-icon v-if="completion.completed" :icon="icons.checkCircle" size="18" color="success" />
-          {{ completion.passed }} of {{ completion.required }} required assessments passed. {{ completion.completed ? 'Required assessments complete.' : 'Continue the remaining assessments.' }}
+          {{ completion.passed }} of {{ completion.required }} required steps passed. {{ completion.completed ? 'This lesson is complete.' : 'Continue the remaining steps.' }}
         </p>
         <p v-else class="tlp-saved__status">Saved attempt retained. Completion has not been reported.</p>
         <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Resume rechecks this same attempt; reading it does not repair it.</p>

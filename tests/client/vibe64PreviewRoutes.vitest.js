@@ -254,15 +254,17 @@ describe("Training lesson picker prerequisite", () => {
     expect(html).toContain("Saved lesson history (1)");
     expect(html).toContain("22222222-2222-4222-8222-222222222222");
     expect(html).toContain("Ended attempt");
-    expect(html).not.toContain("Required assessments complete.");
+    expect(html).not.toContain("This lesson is complete.");
   });
 
   it("shows only supplied matching completion counts and refuses a mismatched saved lesson result", async () => {
     const learning = pickerLearning(pickerAttempt());
     learning.completion = { lessonCode: "V64-START-00", lessonHash: pickerHash, required: 3, passed: 2, completed: false };
     const html = await renderPicker({ learningResult: learning });
-    expect(html).toContain("2 of 3 required assessments passed.");
-    expect(html).not.toContain("Required assessments complete.");
+    expect(html).toContain("2 of 3 required steps passed. Continue the remaining steps.");
+    expect(html).not.toContain("This lesson is complete.");
+    const done = await renderPicker({ learningResult: { ...learning, completion: { ...learning.completion, passed: 3, completed: true } } });
+    expect(done).toContain("3 of 3 required steps passed. This lesson is complete.");
     const resume = vi.fn();
     learning.completion = { ...learning.completion, lessonHash: "f".repeat(64) };
     const state = mountPicker({ learningResult: learning, onResume: resume });
