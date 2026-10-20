@@ -2,7 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { lessonSteps } from "./learnerState.js";
-import { attemptId, attemptSummary, id, operationError, pick, practiceSlug, requestId, text } from "./actions.js";
+import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, text } from "./actions.js";
 
 // Learning v2 (contract C3): the lesson reader, step results, reader position
 // and practice deletion. Admission is the existing action context; decisions
@@ -45,6 +45,11 @@ const practiceOutput = {
     error: { ...text, required: false, maxLength: 512 }
   })
 };
+
+// Step records may omit optional parts; a missing part projects as {}.
+function pick(value = {}, fields) {
+  return pickPresent(value, fields);
+}
 
 function refusalText(reason, fallback) {
   return typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 512) : fallback;

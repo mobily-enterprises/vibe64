@@ -44,7 +44,7 @@ const resultOutput = {
   })
 };
 
-function pick(value = {}, fields) {
+function pick(value, fields) {
   return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
 }
 
