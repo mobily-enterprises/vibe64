@@ -68,7 +68,8 @@ async function fixture(t, { contentWrapper = value => value, practice = true } =
     revision = ended_.revision;
     return ended_;
   } };
-  const practiceProjects = practice ? { async remove(value) { removed.push(value); return { ok: true, slug: value.slug, removed: true }; } } : null;
+  const practiceProjects = practice ? { async remove(value) { removed.push(value); return { ok: true, slug: value.slug, removed: true }; },
+    ...(typeof practice === "object" ? practice : {}) } : null;
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const actions = createActionCatalogue();
   const definitions = createTrainingStepActions({ learners, content, steps, exercises, practiceProjects, publishLearnerChanged });
@@ -174,7 +175,13 @@ test("choice, self-check and reader saves record learner results and notify only
   const read = await f.execute("lesson.read", base);
   assert.deepEqual(read.results.map(value => [value.stepId, value.kind, value.outcome, value.origin]), [
     ["which-side", "choice", "not-yet-passed", "learner"], ["which-side", "choice", "passed", "learner"], ["reflect", "self", "passed", "learner"]]);
-  assert.deepEqual(read.results[1].evidence, { selected: [1] });
+  assert.deepEqual(read.results[1].evidence, { selected: [1] }, "the learner's own reader keeps the selection");
+  const told = await f.tool("lesson.read", base);
+  assert.equal(told.ok, true, JSON.stringify(told));
+  assert.deepEqual(told.result.results.map(value => [value.stepId, value.kind, value.outcome]),
+    read.results.map(value => [value.stepId, value.kind, value.outcome]), "Colleague still sees every outcome");
+  assert.ok(told.result.results.filter(value => value.kind === "choice").every(value => !Object.hasOwn(value, "evidence")));
+  assert.doesNotMatch(JSON.stringify(told.result), /"selected"|"answer"/u, "Colleague never sees a chosen, correct or rejected option set");
   assert.deepEqual(read.passedStepIds, ["which-side", "reflect"]);
   assert.deepEqual(read.reader, { attemptId: attempt.attemptId, stepId: "reflect", scroll: 120 });
   const payload = reason => ({ learnerId: "42", attemptId: attempt.attemptId, reason });
@@ -237,6 +244,44 @@ test("practice.delete ends the active attempt then removes its project; Colleagu
   f.auth.user = { uid: 43, username: "bob", role: "member" };
   await assert.rejects(f.execute("practice.delete", { attemptId: attempt.attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   assert.equal(f.removed.length, 2);
+});
+
+test("practice.delete refused by the host's preflight (a pinned session) changes nothing", async t => {
+  const preflight = [];
+  const f = await fixture(t, { practice: { async canRemove(value) {
+    preflight.push(value);
+    return { ok: false, reason: "Unpin the session \"Practice\" before deleting this practice project." };
+  } } });
+  const attempt = await f.start();
+  const refused = await f.tool("practice.delete", { attemptId: attempt.attemptId, confirmed: true });
+  assert.equal(refused.ok, true, JSON.stringify(refused));
+  assert.deepEqual(refused.result, { ok: false, available: true, attemptId: attempt.attemptId, slug: attempt.projectSlug,
+    removed: false, ended: false, error: "Unpin the session \"Practice\" before deleting this practice project." });
+  assert.deepEqual(preflight.map(value => [value.slug, value.actor]), [[attempt.projectSlug, f.auth.user]]);
+  assert.deepEqual([f.ended.length, f.removed.length, f.published.length], [0, 0, 0]);
+  assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, attempt.attemptId, "the attempt stays active");
+});
+
+test("practice.delete that fails after ending reports ended true and removed false, and a retry deletes", async t => {
+  let refuse = "throw";
+  const f = await fixture(t, { practice: { async canRemove() { return { ok: true }; }, async remove(value) {
+    if (refuse === "throw") throw new Error("disk exploded at /internal/path");
+    if (refuse === "refuse") return { ok: false, reason: "The project is busy" };
+    return { ok: true, slug: value.slug, removed: true };
+  } } });
+  const attempt = await f.start();
+  const failed = await f.execute("practice.delete", { attemptId: attempt.attemptId });
+  assert.deepEqual(failed, { ok: false, available: true, attemptId: attempt.attemptId, slug: attempt.projectSlug, removed: false, ended: true,
+    error: "The lesson was ended, but its practice project was not deleted. Retry the delete." }, "an internal error message is not shown");
+  assert.equal((await f.learners.readState({ actor: f.auth.user })).progress.attempts[0].ended.reason, "discard");
+  assert.deepEqual(changed(f).map(value => value[2].reason), ["practice"], "the ended attempt is announced");
+  refuse = "refuse";
+  const busy = await f.execute("practice.delete", { attemptId: attempt.attemptId });
+  assert.deepEqual([busy.ok, busy.ended, busy.removed, busy.error], [false, false, false, "The project is busy"]);
+  refuse = "";
+  const retried = await f.execute("practice.delete", { attemptId: attempt.attemptId });
+  assert.deepEqual([retried.ok, retried.ended, retried.removed], [true, false, true]);
+  assert.equal(f.ended.length, 1, "the attempt is ended once");
 });
 
 test("practice.delete without the host facility reports unavailable and changes nothing", async t => {

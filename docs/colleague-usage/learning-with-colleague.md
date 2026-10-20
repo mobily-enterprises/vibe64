@@ -15,7 +15,8 @@ pages; Colleague reads every page before claiming a step's text is missing.
 Results come only from the checks, never from Colleague:
 
 - **Choice question**: only your own answer in **L** counts. Colleague never sees
-  or reveals the correct option and cannot answer for you.
+  or reveals the correct option, sees only whether your answer passed (not which
+  options you chose), and cannot answer for you.
 - **Self-check** (**Done**): only your own press in **L** records it.
 - **Automatic check**: Colleague may run the step's check (`step.check.run`) to
   tell you whether your work is ready, but its run is a diagnostic and is never
@@ -30,9 +31,12 @@ projects notifies only your own signed-in pages, so open Learning views can refr
 **Deleting a practice project.** Ask Colleague to delete the practice project of
 one of your lessons. It names the lesson, says the files, sessions and Preview go
 away for good with no archive, and waits for you to confirm in the chat before
-deleting (`practice.delete` with `confirmed`). An active lesson is ended first
+deleting (`practice.delete` with `confirmed`). A pinned session must be unpinned
+first; that refusal changes nothing. Otherwise an active lesson is ended first
 (reason *discard*); your saved results stay and continuing the lesson later
-prepares a fresh project. A pinned session must be unpinned first. Colleague
+prepares a fresh project. If the delete still fails after the lesson was ended,
+Colleague tells you both: the lesson stays ended and the project remains until
+you ask again. Colleague
 cannot delete another learner's practice project. The one-click delete in the
 Practice list needs no confirmation.
 

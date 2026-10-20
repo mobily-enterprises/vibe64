@@ -54,6 +54,10 @@ function pick(value = {}, fields) {
   return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
 }
 
+function refusalText(reason, fallback) {
+  return typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 512) : fallback;
+}
+
 function failure(message, code, statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
 }
@@ -87,6 +91,19 @@ function visualProjection(visual) {
       parameters: (command.parameters || []).map(parameter => pick(parameter, ["name", "required", "maxLength"]))
     }))
   };
+}
+
+// A choice result's evidence is the learner's selected option set; with its
+// outcome it would reveal the correct (or a rejected) answer, so Colleague's
+// tool result keeps only the outcome. The learner's own reader keeps it.
+function assistantLessonResult(result) {
+  if (!Array.isArray(result?.results)) return result;
+  return { ...result, results: result.results.map(value => {
+    if (value.kind !== "choice") return value;
+    const { evidence: _evidence, ...visible } = value;
+    void _evidence;
+    return visible;
+  }) };
 }
 
 function resultProjection(result) {
@@ -140,11 +157,12 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   }
 
   const definition = (name, fields, { description = "", browser = false, kind = "command", output = stepResultOutput,
-    idempotency = "domain_native" } = {}, execute) => withVibe64ActionContext({
+    idempotency = "domain_native", transformResult = null } = {}, execute) => withVibe64ActionContext({
     id: `vibe64.training.${name}`, version: 1, kind, idempotency,
     ...(browser ? BROWSER : {}),
     input: { mode: "create", schema: createSchema(fields) }, output: null,
-    extensions: { assistant: browser ? { exclude: true } : { alwaysAvailable: true, description, output } },
+    extensions: { assistant: browser ? { exclude: true } : { alwaysAvailable: true, description, output,
+      ...(transformResult ? { transformResult } : {}) } },
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
@@ -160,6 +178,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
 
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
+    transformResult: assistantLessonResult,
     description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual and guide, each step's check kind (automatic, choice, self-check or none) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer and the learner's own Done; never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text. An earlier-format (version 1) lesson returns its identity only; it can be read in history but not continued." },
   async (input, actor) => {
     let attempt;
@@ -235,7 +254,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
         ...(baseline ? { baseline: pick(baseline, ["recorded", "code", "reason"]) } : {}) };
     }),
     definition("practice.delete", { attemptId, confirmed: { type: "boolean", required: false } }, { output: practiceOutput,
-      description: "Delete the practice project of one of the learner's own lesson attempts, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say the project's files, sessions and Preview go away for good, with no archive. Saved lesson progress and results are kept. An active attempt is ended (reason discard) first; continuing the lesson later prepares a fresh project. A pinned session refuses the delete until it is unpinned. Another learner's practice project is not reachable here." },
+      description: "Delete the practice project of one of the learner's own lesson attempts, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say the project's files, sessions and Preview go away for good, with no archive. Saved lesson progress and results are kept. A pinned session refuses the delete until it is unpinned; that refusal changes nothing. Otherwise an active attempt is ended (reason discard) first, and continuing the lesson later prepares a fresh project. If the host still fails to delete after ending, the result says ended true and removed false: report both, the attempt stays ended and the project remains until a retry. Another learner's practice project is not reachable here." },
     async (input, actor, context) => {
       if (context.channel !== "api" && input.confirmed !== true) {
         throw failure("Ask the person to confirm deleting this practice project, then repeat with confirmed: true.",
@@ -247,6 +266,15 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
       const { state, attempt } = await readAttempt(actor, input.attemptId);
       const slug = await practiceSlug({ attempt, actor, practiceProjects });
       if (!slug) throw failure("This lesson attempt has no practice project.", "VIBE64_TRAINING_PRACTICE_MISSING", 404);
+      // The host's preflight refusal (a pinned session) comes before ending, so a
+      // refused delete has no side effect.
+      if (typeof practiceProjects.canRemove === "function") {
+        const allowed = await practiceProjects.canRemove({ slug, actor });
+        if (allowed?.ok !== true) {
+          return { ok: false, available: true, attemptId: attempt.attemptId, slug, removed: false, ended: false,
+            error: refusalText(allowed?.reason, "The practice project cannot be deleted now. Nothing was changed.") };
+        }
+      }
       let ended = false;
       if (!attempt.ended) {
         // Ending first stops the attempt's agent work before its files go.
@@ -258,7 +286,22 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
         if (!result?.attempt?.ended) throw failure("The lesson attempt was not ended; nothing was deleted.", "VIBE64_TRAINING_ATTEMPT_END_FAILED");
         ended = true;
       }
-      const removed = await practiceProjects.remove({ slug, actor });
+      let removed;
+      try {
+        removed = await practiceProjects.remove({ slug, actor });
+      } catch (cause) {
+        // Ending cannot be undone; report the actual state instead of a bare error.
+        if (!ended) throw cause;
+        removed = { ok: false, removed: false, reason: cause.statusCode && cause.statusCode < 500 ? cause.message : "" };
+      }
+      if (removed?.ok === false) {
+        if (ended) await notify(actor, attempt.attemptId, "practice");
+        const reason = refusalText(removed.reason || removed.error, "");
+        return { ok: false, available: true, attemptId: attempt.attemptId, slug, removed: false, ended,
+          error: ended
+            ? `The lesson was ended, but its practice project was not deleted${reason ? `: ${reason.replace(/[.!]?$/u, ".")}` : "."} Retry the delete.`.slice(0, 512)
+            : reason || "The practice project was not deleted. Nothing was changed." };
+      }
       await notify(actor, attempt.attemptId, "practice");
       return { ok: true, available: true, attemptId: attempt.attemptId, slug, removed: removed?.removed !== false, ended };
     })
