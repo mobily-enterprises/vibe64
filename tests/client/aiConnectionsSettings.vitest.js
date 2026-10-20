@@ -221,7 +221,7 @@ it("keeps offering onboarding while the person's only AI needs reconnecting, lik
   mocks.providers.connections.value[0].claudeReady = true;
   expect(state.hasOwnAi).toBe(true);
   mocks.providers.connections.value = [];
-  mocks.connections.connections.value.push({ id: "openrouter", builtIn: false });
+  mocks.connections.connections.value.push({ id: "openrouter", modelProviderId: "openrouter", builtIn: false, connected: true });
   expect(state.hasOwnAi).toBe(true);
 });
 

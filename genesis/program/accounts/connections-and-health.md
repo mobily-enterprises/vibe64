@@ -382,8 +382,9 @@ active. Set up later is a 24-hour per-browser snooze,
 upgrade. The mounted host sets `aiOnboardingAvailable`; the local account
 menu's **Redo onboarding** and AI Accounts' **Redo onboarding** (owners only,
 disabled while busy) and **Set up your AI** card appear only then. The card
-uses the host's set-up rule: native sign-ins and curated keys count only while
-connected, any added OpenCode connection counts. The local Account settings
+uses the host's set-up rule (`aiIsSetUp`): Claude and Codex sign-ins and curated
+keys count only while connected; an added OpenCode connection counts while
+connected, except the regular Z.AI free starter. The local Account settings
 dialog closes on a request and names its account button as `returnFocus`, where
 the host returns focus when the flow closes; while AI Accounts is busy it sets
 `aiOnboardingBlocked`, and requests are refused rather than stacked over it. The free Big Pickle/GLM-4.7 Flash

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { computed, createRenderer, effectScope, ref, ssrContextKey } from "vue";
+import { createRenderer, effectScope, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 

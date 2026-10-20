@@ -695,7 +695,7 @@ test("Colleague model selection uses its canonical identity and the existing pro
 test("AI onboarding switches Colleague to a workflow's routed Senior without Colleague's own alerts", async t => {
   const senior = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-chat", agentId: "codex", variantId: "" };
   let refuse = false;
-  const view = mount(t, async (url, options) => {
+  const view = mount(t, async url => {
     if (url.startsWith("/api/vibe64/colleague/models?")) return { ok: true, engines: [{ engineId: "codex", label: "Codex",
       modelProviders: [{ id: "deepseek", models: [{ id: "deepseek-chat", label: "DeepSeek V3" }] }] }] };
     if (url.endsWith("/selection") && refuse) return { ok: false, error: "This workflow's Senior uses a different AI. Review its model routing in AI Accounts." };
