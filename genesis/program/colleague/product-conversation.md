@@ -99,7 +99,9 @@ minimises the dialog before showing L, since the dialog would cover it. The prot
 Colleague read the lesson with `lesson.read`, read and rewrite the learner's
 private notes (`learner-notes.read`/`learner-notes.update`), report
 `step.check.run` results as diagnostics, never claim a pass and never reveal a
-choice answer; `practice.delete` requires `confirmed` from the assistant.
+choice answer, and tell the person what a guide actually showed (or why not) in
+plain words rather than quoting receipt fields; `practice.delete` requires
+`confirmed` from the assistant.
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
