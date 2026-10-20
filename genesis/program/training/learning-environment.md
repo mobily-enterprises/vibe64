@@ -72,7 +72,9 @@ controller's own labels) and runs its declared commands in order through
 `TrainingVisualPlayer`, a choice question (**Check answer**), **Done** for a
 self-check, **Check now** for an automatic check (a not-passed result's reason
 is shown under it until the step changes; it never changes the status),
-**Show me**, **Teach me**,
+**Show me** (a Database place carries the practice project's selected
+`sessionId`, which both hosts require for a Database view; from another page it
+opens the practice project first), **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
 full-screen sheet with a row of numbered step circles. An earlier-format
 (version 1) attempt is shown as readable history with **End this lesson**.

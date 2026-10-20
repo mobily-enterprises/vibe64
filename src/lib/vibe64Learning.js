@@ -29,7 +29,7 @@ const VIBE64_LEARNING_NOTES_MAX = 4000;
 const SURFACES = Object.freeze(["courses", "lesson"]);
 const STORAGE_PREFIX = "vibe64:learning-environment:v1:";
 const READER_SAVE_DELAY_MS = 800;
-// How long a file guide waits for the navigated project view to publish itself.
+// How long a file or Database guide waits for the navigated project view to publish itself.
 const PROJECT_VIEW_WAIT_MS = 5000;
 // Teach me sends this exact text; the step itself travels in Colleague's focus.
 const VIBE64_LEARNING_TEACH_MESSAGE = "Teach me this step.";
@@ -86,7 +86,7 @@ function stepStatus(results, stepId, passedStepIds = []) {
 
 // The browser guide command for one step's declared guide. A step without a
 // practice project (or a guide at the L button) only points.
-function showMeCommand(guide, { projectSlug = "" } = {}) {
+function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
   const request = trainingGuideRequest({ target: guide?.target,
     ...(guide?.navigate !== undefined ? { navigate: guide.navigate } : {}),
     ...(guide?.filePath !== undefined ? { filePath: guide.filePath } : {}) });
@@ -96,7 +96,7 @@ function showMeCommand(guide, { projectSlug = "" } = {}) {
   const command = { guide: { ...request, navigate, highlight: true, steps, caption } };
   if (!navigate) return command;
   const place = TRAINING_GUIDE_PLACES[request.target];
-  return { ...command, projectSlug, ...(place.pane ? { pane: place.pane } : {}),
+  return { ...command, projectSlug, ...(text(sessionId) ? { sessionId } : {}), ...(place.pane ? { pane: place.pane } : {}),
     ...(place.databaseView ? { databaseView: place.databaseView } : {}) };
 }
 
@@ -306,9 +306,20 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   async function showMe(stepId = currentStep.value?.id) {
     const step = steps.value.find(value => value.id === stepId);
     if (!step?.guide) throw new Error("This step has nothing to show.");
-    const command = showMeCommand(step.guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
+    let command = showMeCommand(step.guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
     minimise();
     const navigator = browserNavigation?.value || null;
+    // A Database view belongs to one session: both hosts open it only with that
+    // exact sessionId (the earlier teacher command sent the exercise session).
+    // Use the practice project's selected session, opening the project first.
+    if (navigator && command.databaseView) {
+      if (!selectedSession(command.projectSlug)) {
+        await navigator({ projectSlug: command.projectSlug });
+        await waitForProjectView(command.projectSlug, selectedSession);
+      }
+      const sessionId = selectedSession(command.projectSlug);
+      if (sessionId) command = { ...command, sessionId };
+    }
     // A file guide opens its file through the view the navigation selected:
     // the view is read only after navigation and must belong to the target project.
     const navigateBrowser = navigator && command.guide.filePath
@@ -331,9 +342,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       typeof handle.openFile === "function" ? handle : null;
   }
 
-  async function waitForProjectView(projectSlug) {
+  function selectedSession(projectSlug) {
+    const handle = colleagueView?.value;
+    return projectSlug && handle?.projectSlug === projectSlug && text(handle.sessionId) ? handle.sessionId : "";
+  }
+
+  async function waitForProjectView(projectSlug, published = projectView) {
     const deadline = now() + PROJECT_VIEW_WAIT_MS;
-    while (!projectView(projectSlug) && now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+    while (!published(projectSlug) && now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
   }
 
   // Teach me: minimise L and ask this host's Colleague, which opens and sends
