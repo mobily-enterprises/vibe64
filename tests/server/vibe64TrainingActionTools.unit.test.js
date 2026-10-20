@@ -115,7 +115,7 @@ test("training queries share API/tool catalogue contracts and fresh member autho
   const f = await fixture(t);
   const c = f.register();
   assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue",
-    "learning-mode.read", "learning-mode.leave", "learning-mode.enter"].map(value => `vibe64.training.${value}`).sort());
+    "learning-mode.read", "learning-mode.leave"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const { learnerId, ...api } = await c.execute(name);
@@ -266,7 +266,7 @@ test("native lesson end and ended-start replay expose the original target and ac
   const f = await fixture(t);
   const c = f.register(f.exercises);
   const first = await c.execute("lesson.start", f.input);
-  const input = { attemptId: first.active.attemptId, requestId: "end-first", expectedRevision: first.revision, reason: "restart" };
+  const input = { attemptId: first.active.attemptId, requestId: "end-first", expectedRevision: first.revision, reason: "finished" };
   const api = await c.execute("lesson.end", input);
   assert.equal(api.ok, true);
   assert.equal(api.active, null);
@@ -279,7 +279,7 @@ test("native lesson end and ended-start replay expose the original target and ac
   const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.end");
   assert.equal(definition.idempotency, "domain_native");
   assert.match(definition.extensions.assistant.description, /the project's ordinary sessions, step results and history remain readable and usable/u);
-  assert.match(definition.extensions.assistant.description, /does not close, archive or delete anything/u);
+  assert.match(definition.extensions.assistant.description, /nothing is closed, archived or deleted/u);
   const beforeReplay = await inventory(f.systemRoot);
   const replay = await c.tool("lesson.end", input);
   assert.equal(replay.ok, true, JSON.stringify(replay));
@@ -291,7 +291,7 @@ test("native lesson end and ended-start replay expose the original target and ac
   const oldStart = await c.tool("lesson.start", f.input);
   assert.equal(oldStart.ok, true);
   assert.equal(oldStart.result.attempt.attemptId, input.attemptId);
-  assert.equal(oldStart.result.attempt.ended.reason, "restart");
+  assert.equal(oldStart.result.attempt.ended.reason, "finished");
   assert.equal(oldStart.result.active.attemptId, start.active.attemptId);
   assert.equal(oldStart.result.completion, null);
   assert.equal(oldStart.result.previewReady, false);
@@ -351,17 +351,12 @@ test("end tool is unavailable without its host and rejects malformed, unauthoriz
   assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, input.attemptId);
 });
 
-test("history and retained-pass tool projections preserve original provenance without leaking identities or executable sources", async t => {
+test("history tool projections preserve original provenance without leaking identities or executable sources", async t => {
   const f = await fixture(t);
   const c = f.register(f.exercises);
   const reserved = await f.reserve();
   const { attemptId } = reserved.attempt;
-  const checkpoint = await f.learners.saveLessonResume({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision, requestId: "question-one",
-    resume: { stage: "question", pendingQuestion: { id: "question-one", assessmentId: "explain", text: "Where do you try the application?" }, visuals: [], summary: "Waiting for the learner." } });
-  const recorded = await f.learners.recordAssessment({ actor: f.auth.user, attemptId, expectedRevision: checkpoint.revision,
-    submissionId: "answer-one", assessmentId: "explain", outcome: "passed", assistance: "none", explanation: "The learner identifies Preview.",
-    evidence: { kind: "answer", learnerId: "42", attemptId, messageId: "message-one", questionId: "question-one", text: "I try the application in Preview." } });
-  const ended = await c.execute("lesson.end", { attemptId, requestId: "retire-one", expectedRevision: recorded.revision, reason: "discard" });
+  const ended = await c.execute("lesson.end", { attemptId, requestId: "retire-one", expectedRevision: reserved.revision, reason: "discard" });
   const next = await c.execute("lesson.start", { ...f.input, requestId: "start-two", expectedRevision: ended.revision });
   const before = await inventory(f.systemRoot);
   const { learnerId, ...read } = await c.execute("learning.read");
@@ -370,20 +365,15 @@ test("history and retained-pass tool projections preserve original provenance wi
   assert.deepEqual(toolRead.result, read);
   assert.equal(read.history.length, 1);
   assert.equal(read.history[0].attemptId, attemptId);
-  assert.equal(read.history[0].learning.submissions[0].submissionId, "answer-one");
-  assert.equal(read.history[0].learning.submissions[0].evidence.attemptId, attemptId);
-  assert.equal(read.completion.passed, 1);
-  assert.deepEqual(read.lessonProgress, [{ lessonCode: "USE-ONE", lessonHash: f.pin.lesson.hash, required: 1, passed: 1, completed: true, open: true }],
-    "one per-lesson summary joins the ended pass and the open successor");
-  assert.equal(read.active.learning.submissions.length, 0);
+  assert.equal(read.history[0].ended.reason, "discard");
+  assert.deepEqual(read.lessonProgress.map(value => [value.lessonCode, value.open]), [["USE-ONE", true]],
+    "one per-lesson summary joins the ended attempt and the open successor");
   assert.equal(read.active.attemptId, next.active.attemptId);
   assert.doesNotMatch(JSON.stringify(read), excluded);
   assert.deepEqual(await inventory(f.systemRoot), before);
   f.auth.user = { uid: 43, username: "other", role: "member" };
   assert.equal((await c.tool("learning.read")).result.history.length, 0);
 });
-
-
 
 test("retained continuation uses fresh member authority and bounded native input on API and tools", async t => {
   const f = await fixture(t);
@@ -558,10 +548,10 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
-    "practiceProjects", "publishLearnerChanged", "steps"]);
-  // Learning v2 (C5): the standalone practice facility offers delete, its read-only preflight and
-  // the presence check that leaves deleted practice projects out of learning.read.
-  assert.deepEqual(Object.keys(training.practiceProjects).sort(), ["canRemove", "exists", "remove"]);
+    "learningSpace", "publishLearnerChanged", "steps"]);
+  // Rev 3 R6: the standalone learning space lists, archives and removes the
+  // learner's practice projects with the shared project archive service.
+  assert.deepEqual(Object.keys(training.learningSpace).sort(), ["archive", "deleteArchive", "exists", "list", "remove"]);
   // Learning v2 phase 2 retired the source-less Main teacher and its lesson-scoped routes.
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -594,7 +584,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(resumed.statusCode, 200, resumed.body);
   assert.equal(resumed.json().active.attemptId, id, "the saved path attempt wins over a conflicting body");
   const ended = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/end`, payload: {
-    requestId: "local-end", expectedRevision: state.revision, reason: "restart"
+    requestId: "local-end", expectedRevision: state.revision, reason: "finished"
   } });
   assert.equal(ended.statusCode, 200, ended.body);
   assert.ok(ended.json().attempt.ended);
@@ -640,7 +630,7 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
   const originalRoutes = registered;
   // Learning v2 adds the lesson reader, step, reader-position and practice routes,
   // the learner's own teacher notes (contract C7) and learning mode (decision 8).
-  assert.equal(originalRoutes.length, 24);
+  assert.equal(originalRoutes.length, 27);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -653,9 +643,11 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["GET", "/api/vibe64/training/lesson"], ["GET", "/api/vibe64/training/attempts/:attemptId/lesson"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/reader"], ["POST", "/api/vibe64/training/attempts/:attemptId/practice/delete"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/reader"],
+    ["GET", "/api/vibe64/training/practice"], ["POST", "/api/vibe64/training/practice/:practiceId/open"],
+    ["POST", "/api/vibe64/training/practice/:practiceId/archive"], ["POST", "/api/vibe64/training/practice/:practiceId/delete"],
+    ["POST", "/api/vibe64/training/practice/:practiceId/archives/:archiveId/delete"],
     ["GET", "/api/vibe64/training/learning-mode"], ["POST", "/api/vibe64/training/attempts/:attemptId/learning-mode/leave"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/learning-mode/enter"],
     ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],
     ["POST", "/api/vibe64/training/teacher-notes/clear"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"]

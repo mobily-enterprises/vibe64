@@ -16,7 +16,7 @@
     "./server/course-installer": "./src/server/courseInstaller.js",
     "./server/learner-state": "./src/server/learnerState.js",
     "./server/preparation": "./src/server/preparation.js",
-    "./server/practice-projects": "./src/server/practiceProjects.js",
+    "./server/learning-space": "./src/server/learningSpace.js",
     "./server/practiceHistoryUpgrade": "./src/server/practiceHistoryUpgrade.js",
     "./server/learningSpaceResetUpgrade": "./src/server/learningSpaceResetUpgrade.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
