@@ -1856,8 +1856,24 @@ async function listenOnPreviewPort(server, {
   throw new Error(`No launch preview proxy port is available in ${firstPort}-${lastPort}.`);
 }
 
+// The shared temporary directory is writable by every account, so the private
+// parent must already belong to this user before sockets go inside it.
+async function assertPrivateFallbackSocketParent(socketDir = "") {
+  const parent = path.dirname(socketDir);
+  await mkdir(parent, { mode: 0o700, recursive: true });
+  const entry = await lstat(parent);
+  const uid = process.getuid?.();
+  if (!entry.isDirectory() || (uid !== undefined && entry.uid !== uid) || (entry.mode & 0o077) !== 0) {
+    throw new Error(`Preview socket folder ${parent} must be a private folder owned by this user. ` +
+      `Remove it, or set XDG_RUNTIME_DIR or ${PREVIEW_PROXY_SOCKET_DIR_ENV}.`);
+  }
+}
+
 async function preparePreviewSocketDirectory(env = process.env) {
   const socketDir = previewProxySocketDir(env);
+  if (socketDir === fallbackPreviewProxySocketDir()) {
+    await assertPrivateFallbackSocketParent(socketDir);
+  }
   await mkdir(socketDir, {
     mode: 0o700,
     recursive: true
@@ -2050,7 +2066,13 @@ function previewProxySocketDir(env = process.env) {
   if (runtimeDir) {
     return path.join(runtimeDir, "vibe64", "apps");
   }
-  return path.join(os.tmpdir(), `vibe64-${process.getuid?.() ?? "user"}`, "apps");
+  return fallbackPreviewProxySocketDir();
+}
+
+// macOS gives each user a long temporary folder; sockets need a short path.
+function fallbackPreviewProxySocketDir() {
+  const base = process.platform === "darwin" ? "/tmp" : os.tmpdir();
+  return path.join(base, `vibe64-${process.getuid?.() ?? os.userInfo().username}`, "apps");
 }
 
 function tryListen(server, port, host) {

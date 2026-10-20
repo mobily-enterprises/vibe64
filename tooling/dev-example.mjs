@@ -62,16 +62,16 @@ async function main() {
     return;
   }
 
-  // Load the normal env files once, then give this editor its own runtime.
-  // It is a standalone application inside the parent's managed preview process.
+  // Load the app env file once, then give this editor its own runtime. It is a
+  // standalone application inside the parent's managed preview process, so the
+  // public host names below come from the environment that process inherits.
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
   const hostedStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
     ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
   // An optional local speech service is a shared host tool, like the Claude command.
-  const sharedTools = new Set(["VIBE64_SHARED_CACHE_ROOT",
-    "VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
+  const sharedTools = new Set(["VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
     "VIBE64_PUBLIC_USER_DOMAIN", "VIBE64_PUBLIC_PROTOCOL",
     "VIBE64_PREVIEW_PUBLIC_DOMAIN", "VIBE64_PREVIEW_PUBLIC_PROTOCOL",
     "VIBE64_PREVIEW_PUBLIC_NAMESPACE", "VIBE64_PREVIEW_PROXY_SOCKET_DIR",

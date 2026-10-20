@@ -11,6 +11,7 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
 
@@ -53,7 +54,6 @@ test("runtime env files load broadly while runtime config stays explicit", async
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
   const envRoot = await mkdtemp(path.join(tmpdir(), "vibe64-runtime-env-"));
   const appEnvFile = path.join(envRoot, ".env");
-  const hostEnvFile = path.join(envRoot, "vibe64.env");
 
   try {
     for (const key of keys) {
@@ -64,16 +64,13 @@ test("runtime env files load broadly while runtime config stays explicit", async
       "PORT=3939",
       `${VIBE64_RUNTIME_NAMESPACE_ENV}=unit-owner`,
       `${VIBE64_PROJECTS_ROOT_ENV}=/tmp/vibe64-file-projects-root`,
-      "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock"
-    ].join("\n"), "utf8");
-    await writeFile(hostEnvFile, [
+      "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock",
       `${VIBE64_SYSTEM_ROOT_ENV}=/tmp/vibe64-file-system-root`,
       "JSKIT_REALTIME_DEBUG=1"
     ].join("\n"), "utf8");
 
     loadRuntimeEnvFiles({
-      appEnvFile,
-      hostEnvFile
+      appEnvFile
     });
 
     assert.equal(process.env.HOST, "0.0.0.0");
@@ -202,11 +199,23 @@ test("started server publishes the local app entry URL", async () => {
   }
 });
 
-test("started server defaults to Unix socket when PORT is not set", async () => {
+test("started server defaults to Unix socket when PORT is not set", async (t) => {
   const previousPort = process.env.PORT;
   const socketRoot = await mkdtemp(path.join(tmpdir(), "vibe64-listen-socket-"));
   const socketPath = path.join(socketRoot, "server.sock");
   delete process.env.PORT;
+  t.after(async () => {
+    configureVibe64Host(null);
+    await rm(socketRoot, {
+      force: true,
+      recursive: true
+    });
+    if (previousPort == null) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = previousPort;
+    }
+  });
   const app = await startServer({
     listenSocket: socketPath,
     publicOrigin: "https://tonymobily.vibe64.dev",
@@ -219,17 +228,21 @@ test("started server defaults to Unix socket when PORT is not set", async () => 
     assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/project/beepollen");
     await access(socketPath);
     const socketInfo = await lstat(socketPath);
-    assert.equal(socketInfo.mode & 0o777, 0o660);
+    assert.equal(socketInfo.mode & 0o777, 0o600, "only this user reaches a local server socket");
   } finally {
     await app.close();
-    await rm(socketRoot, {
-      force: true,
-      recursive: true
-    });
-    if (previousPort == null) {
-      delete process.env.PORT;
-    } else {
-      process.env.PORT = previousPort;
-    }
+  }
+
+  // A host whose OS users share files through a group keeps its group-readable socket.
+  const sharedApp = await startServer({
+    hostProfile: { sharedGroupAccess: true },
+    listenSocket: socketPath,
+    publicOrigin: "https://tonymobily.vibe64.dev",
+    startupSlug: "beepollen"
+  });
+  try {
+    assert.equal((await lstat(socketPath)).mode & 0o777, 0o660);
+  } finally {
+    await sharedApp.close();
   }
 });

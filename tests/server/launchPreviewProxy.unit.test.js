@@ -1,6 +1,6 @@
 import vm from "node:vm";
 import assert from "node:assert/strict";
-import { lstat, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect } from "node:net";
@@ -540,10 +540,32 @@ test("launch preview public socket path defaults under XDG runtime dir", () => {
 });
 
 test("launch preview public socket path falls back to a per-user temporary dir", () => {
+  const base = process.platform === "darwin" ? "/tmp" : os.tmpdir();
   assert.equal(
     previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {}),
-    path.join(os.tmpdir(), `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234--workspace.sock")
+    path.join(base, `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234--workspace.sock")
   );
+});
+
+test("the temporary preview socket folder must be private to this user", {
+  skip: process.platform === "darwin" ? "the macOS fallback lives under /tmp" : false
+}, async (t) => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-socket-parent-"));
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = tmpRoot;
+  t.after(async () => {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    await rm(tmpRoot, { force: true, recursive: true });
+  });
+  const parent = path.join(tmpRoot, `vibe64-${process.getuid()}`);
+  await mkdir(parent, { mode: 0o755 });
+  await chmod(parent, 0o755);
+  await assert.rejects(pruneStalePreviewSockets({ env: {} }), /must be a private folder owned by this user/u);
+
+  await chmod(parent, 0o700);
+  await pruneStalePreviewSockets({ env: {} });
+  assert.equal((await stat(path.join(parent, "apps"))).mode & 0o777, 0o700);
 });
 
 test("launch preview proxy prunes only stale sockets that match its managed namespace", async () => {

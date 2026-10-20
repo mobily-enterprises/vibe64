@@ -1,10 +1,12 @@
 import path from "node:path";
 import process from "node:process";
+import { isMainThread } from "node:worker_threads";
 
 // What the machine running Vibe64 provides. The defaults describe a person's
 // own computer: their tools on PATH, no shared group, no privileged helper.
 // A host that provisions its own machines passes its values once at startup.
 const HOST_PROFILE_KEY = Symbol.for("vibe64.hostProfile");
+const HOST_UMASK_KEY = Symbol.for("vibe64.hostProfile.previousUmask");
 const PATH_FIELDS = ["runtimePackRoot", "sharedCacheRoot", "execHelperPath"];
 const LOCAL_HOST_PROFILE = Object.freeze({
   // Pinned tool packs; "" means the person's own installed tools.
@@ -17,9 +19,22 @@ const LOCAL_HOST_PROFILE = Object.freeze({
   sharedGroupAccess: false
 });
 
+// Group sharing needs a group-writable umask for every file this process
+// writes; resetting the profile puts the process umask back.
+function setHostUmask(shared) {
+  if (!isMainThread) return;
+  if (shared && !(HOST_UMASK_KEY in globalThis)) {
+    globalThis[HOST_UMASK_KEY] = process.umask(0o007);
+  } else if (!shared && HOST_UMASK_KEY in globalThis) {
+    process.umask(globalThis[HOST_UMASK_KEY]);
+    delete globalThis[HOST_UMASK_KEY];
+  }
+}
+
 function configureVibe64Host(profile = null) {
   if (profile === null) {
     delete globalThis[HOST_PROFILE_KEY];
+    setHostUmask(false);
     return LOCAL_HOST_PROFILE;
   }
   const unknown = Object.keys(profile).filter((key) => !(key in LOCAL_HOST_PROFILE));
@@ -37,9 +52,7 @@ function configureVibe64Host(profile = null) {
   }
   const frozen = Object.freeze(configured);
   globalThis[HOST_PROFILE_KEY] = frozen;
-  if (frozen.sharedGroupAccess) {
-    process.umask(0o007);
-  }
+  setHostUmask(frozen.sharedGroupAccess);
   return frozen;
 }
 

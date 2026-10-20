@@ -63,6 +63,9 @@ test("a host profile is validated, frozen and replaces the local defaults", (t) 
   assert.equal(process.umask(), 0o007);
   assert.deepEqual(vibe64SharedModes(), { inheritingDirectory: 0o2770, directory: 0o770, file: 0o660 });
   assert.equal(vibe64ProcessUmask(), "0007");
+
+  configureVibe64Host(null);
+  assert.equal(process.umask(), previousUmask, "resetting the host restores the process umask");
 });
 
 test("commands use the person's own tools without pinned-pack settings", async () => {
