@@ -6,7 +6,7 @@
 // matches: which existing connections show this card as Connected.
 const AI_ONBOARDING_PROVIDERS = Object.freeze([
   Object.freeze({
-    id: "claude", rank: 1, crown: true, mark: "Cl", tone: "primary", name: "Claude",
+    id: "claude", rank: 1, crown: true, mark: "C", tone: "primary", name: "Claude",
     tagline: "The best experience in Vibe64",
     bullets: [["intelligence", 3, "Very high intelligence"], ["quota", 3, "Very generous quota"], ["speed", 3, "Very high speed"]],
     plan: { name: "Claude Pro", headline: "Recommended: $30/month", detail: "Basic coding",

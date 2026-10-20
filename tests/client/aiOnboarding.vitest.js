@@ -299,7 +299,17 @@ describe("flow", () => {
     expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "anthropic" });
     expect(state.outcome).toMatchObject({ routed: true, error: "",
       colleague: { engineId: "claude", modelProviderId: "anthropic", label: "Claude Code (claude-model)" } });
-    expect(state.colleagueUsesChosen).toBe(true);
+    expect(state.colleagueNote).toBe("uses");
+  });
+
+  it("without a Colleague here, success only points to its model menu", async () => {
+    unregisterColleague();
+    const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+    const state = mount(AiOnboarding, { open: true, start: "choose", onboarding, canConfigure: true });
+    state.connect(claude, "have");
+    connectClaude();
+    await state.finish();
+    expect([state.screen, state.colleagueNote]).toEqual(["success", "menu"]);
   });
 
   it("does not mark the sign-up step done for someone who already has a plan", async () => {
@@ -315,7 +325,7 @@ describe("flow", () => {
     await state.finish();
     expect(state.screen).toBe("success");
     expect(state.outcome).toMatchObject({ colleague: null, error: "Its Senior uses another provider." });
-    expect(state.colleagueUsesChosen).toBe(false);
+    expect(state.colleagueNote).toBe("switch");
   });
 
   it("stays in Connect until the provider is connected and has a Senior model", async () => {
@@ -370,11 +380,11 @@ describe("flow", () => {
     await vi.waitFor(() => expect(state.screen).toBe("success"));
     expect(state.outcome.routed).toBe(false);
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
-    expect(state.colleagueUsesChosen).toBe(false);
+    expect(state.colleagueNote).toBe("switch");
     mocks.colleague.seniorProviders.codex = "deepseek";
     await state.switchColleague();
     expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
-    expect(state.colleagueUsesChosen).toBe(true);
+    expect(state.colleagueNote).toBe("uses");
   });
 
   it("a redo opened before connections load never moves Colleague unasked", async () => {

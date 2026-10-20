@@ -64,7 +64,9 @@ const footnote = computed(() => props.workspace
   : "You can change this any time in Account settings > AI Accounts.");
 // Set up later snoozes first-run onboarding; a redo just closes.
 const skippable = computed(() => !wasSetUp.value && !["success", "owner"].includes(screen.value));
-const colleagueUsesChosen = computed(() => usesProvider(outcome.value.colleague, chosen.value));
+// Success says one thing about Colleague: it uses the choice, can switch to it, or isn't open here.
+const colleagueNote = computed(() => usesProvider(outcome.value.colleague, chosen.value) ? "uses"
+  : props.onboarding.colleagueAvailable.value ? "switch" : "menu");
 
 function readSetup() {
   const { isSetUp, loaded: known } = props.onboarding;
@@ -284,7 +286,7 @@ function expanded(card) {
             <div class="ai-onboarding__cards">
               <article
                 v-for="(card, index) in [featured, ...others]" :key="card.id"
-                class="aio-card" :class="[`aio-card--${card.tone}`, { 'aio-card--featured': card.crown, 'aio-card--collapsed': !expanded(card) }]"
+                class="aio-card" :class="[`aio-card--${card.tone}`, { 'aio-card--featured': card.crown, 'aio-card--connected': card.connected, 'aio-card--collapsed': !expanded(card) }]"
                 :style="{ '--aio-index': index }" :aria-labelledby="`aio-card-${card.id}`"
               >
                 <span v-if="card.crown" class="aio-card__ribbon">Recommended</span>
@@ -310,7 +312,7 @@ function expanded(card) {
                 </div>
                 <div v-else-if="card.connected" class="aio-card__status">
                   <v-chip color="success" variant="tonal" size="small" :prepend-icon="mdiCheckCircle">Connected</v-chip>
-                  <span>Connected through {{ card.through.join(" and ") }}</span>
+                  <span>through {{ card.through.join(" and ") }}</span>
                 </div>
                 <div v-if="expanded(card)" class="aio-card__body">
                   <div class="aio-card__facts">
@@ -393,7 +395,7 @@ function expanded(card) {
                   <p class="aio-checklist__body">{{ step }}</p>
                 </li>
               </ol>
-              <div class="ai-onboarding__setup">
+              <div class="ai-onboarding__setup" :class="{ 'ai-onboarding__setup--plain': nativeLogin }">
                 <AIAccountsSetup
                   v-if="nativeLogin" embedded :provider-id="chosen.connect.engineId"
                   :model-provider-id="chosen.connect.modelProviderId" @connected="finish()"
@@ -407,9 +409,9 @@ function expanded(card) {
                   {{ chosen.name }} is connected, but no model is ready for Colleague yet.
                   <template #append><v-btn variant="text" @click="reviewRouting">Review model routing</v-btn></template>
                 </v-alert>
-                <p class="ai-onboarding__security">
+                <p v-if="nativeLogin" class="ai-onboarding__security">
                   <v-icon :icon="mdiShieldLockOutline" size="18" aria-hidden="true" />
-                  Keys are stored privately outside your projects and never shown again.
+                  Your sign-in is stored privately, outside your projects.
                 </p>
               </div>
             </div>
@@ -438,15 +440,15 @@ function expanded(card) {
               <path d="M30 49 l12 12 l24 -26" />
             </svg>
             <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ chosen.name }} is connected</h1>
-            <p v-if="colleagueUsesChosen" class="ai-onboarding__lede">Colleague now uses {{ outcome.colleague.label }}.</p>
-            <div v-else-if="onboarding.colleagueAvailable.value" class="ai-onboarding__colleague">
+            <p v-if="colleagueNote === 'uses'" class="ai-onboarding__lede">Colleague now uses {{ outcome.colleague.label }}.</p>
+            <div v-else-if="colleagueNote === 'switch'" class="ai-onboarding__colleague">
               <v-chip v-if="outcome.colleague" variant="tonal">Colleague: still using {{ outcome.colleague.label }}</v-chip>
               <v-btn variant="tonal" color="primary" :loading="verifying" @click="switchColleague">Use {{ chosen.name }} for Colleague</v-btn>
             </div>
+            <p v-else class="ai-onboarding__lede">Choose {{ chosen.name }} in Colleague's model menu to use it there.</p>
             <v-alert v-if="outcome.error" type="warning" variant="tonal" class="ai-onboarding__colleague-error">
               Colleague couldn't switch to {{ chosen.name }}: {{ outcome.error }}
             </v-alert>
-            <p v-else class="ai-onboarding__lede">Choose {{ chosen.name }} in Colleague's model menu to use it there.</p>
             <p v-if="!outcome.routed" class="ai-onboarding__note">
               {{ chosen.engineLabel }} keeps its current models. {{ chosen.name }} is ready in AI Accounts whenever you want it.
             </p>
@@ -519,11 +521,13 @@ function expanded(card) {
 
 /* Stage */
 .ai-onboarding__main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   overflow-y: auto;
   padding: var(--v64-space-7) var(--v64-space-5);
 }
-.ai-onboarding__main > section { margin-inline: auto; max-width: 1040px; }
+.ai-onboarding__main > section { margin-inline: auto; max-width: 1040px; width: 100%; }
 .ai-onboarding--phone .ai-onboarding__main { padding: var(--v64-space-4) var(--v64-space-4) var(--v64-space-6); }
 .ai-onboarding__eyebrow {
   color: var(--v64-primary);
@@ -543,7 +547,8 @@ function expanded(card) {
 .ai-onboarding__intro { margin-bottom: var(--v64-space-6); }
 
 /* Why */
-.ai-onboarding__main > .ai-onboarding__why { max-width: 600px; padding-top: var(--v64-space-6); }
+.ai-onboarding__main > .ai-onboarding__why { margin-block: auto; max-width: 680px; padding-bottom: var(--v64-space-7); }
+.ai-onboarding__why .ai-onboarding__headline { font: 600 2.75rem/3.25rem var(--v64-font-family); letter-spacing: -0.02em; }
 .ai-onboarding__differences {
   display: flex;
   flex-wrap: wrap;
@@ -589,21 +594,29 @@ function expanded(card) {
 }
 .aio-card:hover { border-color: var(--v64-outline); box-shadow: var(--v64-elevation-1); transform: translateY(-2px); }
 .aio-card--featured {
-  background: var(--v64-surface);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 10%, var(--v64-surface)), var(--v64-surface) 55%);
   border: 2px solid var(--aio-crown-strong);
   border-radius: var(--v64-shape-xl);
+  box-shadow: 0 18px 40px -24px color-mix(in srgb, var(--aio-crown-strong) 70%, transparent);
   grid-column: 1 / -1;
+  margin-top: var(--v64-space-2);
 }
-.aio-card--featured:hover { border-color: var(--aio-crown-strong); }
+.aio-card--featured:hover {
+  border-color: var(--aio-crown-strong);
+  box-shadow: 0 22px 48px -24px color-mix(in srgb, var(--aio-crown-strong) 80%, transparent);
+}
+/* Straddles the top border, so it never competes with the name for width. */
 .aio-card__ribbon {
   background: var(--aio-crown);
   border-radius: var(--v64-shape-full);
+  box-shadow: 0 0 0 3px var(--v64-surface);
   color: var(--aio-crown-ink);
-  font: var(--v64-type-label-md);
-  padding: 4px 10px;
+  font: var(--v64-type-label-lg);
+  letter-spacing: 0.02em;
+  padding: 3px 12px;
   position: absolute;
   right: var(--v64-space-5);
-  top: var(--v64-space-5);
+  top: -14px;
 }
 .aio-card__head {
   align-items: center;
@@ -617,7 +630,19 @@ function expanded(card) {
   text-align: left;
   width: 100%;
 }
-.aio-card__rank { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md); min-width: 0.75rem; }
+.aio-card__rank {
+  align-items: center;
+  border: 1px solid var(--v64-outline-variant);
+  border-radius: var(--v64-shape-full);
+  color: var(--v64-on-surface-variant);
+  display: inline-flex;
+  flex: none;
+  font: var(--v64-type-label-md);
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+.aio-card--featured .aio-card__rank { border-color: var(--aio-crown-strong); color: var(--aio-crown-strong); }
 .aio-card__mark {
   align-items: center;
   background: var(--aio-tone-bg);
@@ -631,7 +656,8 @@ function expanded(card) {
   position: relative;
   width: 48px;
 }
-.aio-card--primary { --aio-tone-bg: var(--v64-primary-container); --aio-tone-fg: var(--v64-on-primary-container); }
+.aio-card--primary { --aio-tone-bg: color-mix(in srgb, var(--aio-crown) 28%, var(--v64-surface)); --aio-tone-fg: var(--aio-crown-ink); }
+.v-theme--dark .aio-card--primary { --aio-tone-fg: var(--aio-crown); }
 .aio-card--secondary { --aio-tone-bg: var(--v64-secondary-container); --aio-tone-fg: var(--v64-on-secondary-container); }
 .aio-card--tertiary {
   --aio-tone-bg: color-mix(in srgb, var(--aio-tertiary) 16%, rgb(var(--v-theme-surface)));
@@ -640,23 +666,24 @@ function expanded(card) {
 .aio-card--neutral { --aio-tone-bg: var(--v64-surface-container-highest); --aio-tone-fg: var(--v64-on-surface); }
 .aio-card__crown {
   animation: aio-crown-settle calc(var(--v64-duration-medium) * 2) var(--v64-ease-emphasized-decelerate) calc(var(--v64-duration-medium) + 120ms) both;
-  fill: var(--aio-crown-strong);
+  fill: var(--aio-crown);
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--aio-crown-ink) 35%, transparent));
   height: 28px;
-  left: -10px;
-  paint-order: stroke;
+  left: calc(50% - 14px);
   position: absolute;
-  stroke: var(--v64-surface);
-  stroke-width: 1.5px;
-  top: -10px;
-  transform: rotate(-12deg);
+  stroke: var(--aio-crown-strong);
+  stroke-width: 1px;
+  top: -20px;
+  transform: rotate(-8deg);
   width: 28px;
 }
-.aio-card__identity { display: grid; flex: 1; min-width: 0; padding-right: 7rem; }
-.aio-card:not(.aio-card--featured) .aio-card__identity { padding-right: 0; }
+.aio-card__identity { display: grid; flex: 1; min-width: 0; }
 .aio-card__name { font: var(--v64-type-title-lg); }
 .aio-card__tagline { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
 .aio-card__chevron { transition: transform var(--v64-duration-short) var(--v64-ease-standard); }
 .aio-card__head[aria-expanded="true"] .aio-card__chevron { transform: rotate(180deg); }
+.aio-card--connected:not(.aio-card--featured) { border-color: color-mix(in srgb, var(--v64-success) 55%, transparent); }
+.aio-card--collapsed .aio-card__status { margin-top: var(--v64-space-3); }
 .aio-card__status { align-items: center; color: var(--v64-on-surface-variant); display: flex; flex-wrap: wrap; font: var(--v64-type-body-md); gap: var(--v64-space-2); }
 .aio-card__body { display: flex; flex: 1; flex-direction: column; gap: var(--v64-space-4); }
 /* Desktop featured card: identity and facts left, the offer right. */
@@ -668,8 +695,10 @@ function expanded(card) {
 }
 .aio-card--featured > * { grid-column: 1; }
 .aio-card--featured .aio-card__body { display: contents; }
-.aio-card--featured .aio-card__facts { max-width: 26rem; }
-.aio-card--featured .aio-card__offer { grid-column: 2; grid-row: 1 / span 3; padding-top: var(--v64-space-6); }
+.aio-card--featured .aio-card__facts { max-width: 22rem; padding-left: calc(24px + var(--v64-space-3)); }
+.aio-card--featured .aio-card__bullets { gap: var(--v64-space-4); }
+.aio-card--featured .aio-card__bullets li { font: var(--v64-type-body-lg); }
+.aio-card--featured .aio-card__offer { grid-column: 2; grid-row: 1 / span 3; }
 .aio-card__facts { display: grid; align-content: start; gap: var(--v64-space-4); }
 .aio-card__bullets { display: grid; gap: var(--v64-space-3); list-style: none; margin: 0; padding: 0; }
 .aio-card__bullets li { align-items: center; display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-3); justify-content: space-between; }
@@ -695,7 +724,8 @@ function expanded(card) {
 .aio-card__plan-more { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin-top: var(--v64-space-1); }
 .aio-card__ctas { display: grid; gap: var(--v64-space-1); }
 .aio-card__ctas .v-btn { min-height: 48px; }
-.aio-card__have { white-space: normal; }
+.aio-card__have { height: auto !important; padding-block: var(--v64-space-2); }
+.aio-card__have :deep(.v-btn__content) { white-space: normal; }
 
 /* Connect */
 .ai-onboarding__connect-grid { align-items: start; display: grid; gap: var(--v64-space-6); grid-template-columns: 360px minmax(420px, 1fr); }
@@ -722,6 +752,7 @@ function expanded(card) {
   padding: var(--v64-space-5);
 }
 .ai-onboarding__panel { max-width: 720px; }
+.ai-onboarding__setup--plain { background: none; padding: 0; }
 .ai-onboarding__security { align-items: center; color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: var(--v64-space-4) 0 0; }
 .ai-onboarding__footer { border-top: 1px solid var(--v64-outline-variant); flex: none; padding: var(--v64-space-3) var(--v64-space-5); }
 
@@ -773,7 +804,7 @@ function expanded(card) {
 .aio-forward-enter-from, .aio-back-leave-to { opacity: 0; transform: translateX(24px); }
 .aio-forward-leave-to, .aio-back-enter-from { opacity: 0; transform: translateX(-24px); }
 @keyframes aio-rise { from { opacity: 0; transform: translateY(8px); } }
-@keyframes aio-crown-settle { from { transform: rotate(-24deg) scale(0.8); } }
+@keyframes aio-crown-settle { from { opacity: 0; transform: translateY(-6px) rotate(-20deg) scale(0.7); } }
 @keyframes aio-draw { from { stroke-dashoffset: 64; } to { stroke-dashoffset: 0; } }
 @keyframes aio-pop { 50% { transform: scale(1.06); } }
 
@@ -786,7 +817,7 @@ function expanded(card) {
   .ai-onboarding__cards .aio-card:last-child { grid-column: 1 / -1; }
   .aio-card--featured { display: flex; }
   .aio-card--featured .aio-card__body { display: flex; }
-  .aio-card--featured .aio-card__offer { padding-top: 0; }
+  .aio-card--featured .aio-card__facts { max-width: none; padding-left: 0; }
   .ai-onboarding__connect-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -799,14 +830,15 @@ function expanded(card) {
   .aio-card:hover { transform: none; }
   .aio-card--collapsed { gap: 0; min-height: 72px; justify-content: center; }
   .aio-card__head[type="button"] { cursor: pointer; min-height: 48px; }
-  .aio-card__ribbon { right: var(--v64-space-4); top: var(--v64-space-4); }
-  .aio-card__identity { padding-right: 0; }
-  .aio-card--featured .aio-card__identity { padding-right: 6.5rem; }
-  .ai-onboarding__setup, .ai-onboarding__panel { padding: var(--v64-space-4); }
+  .aio-card__ribbon { right: var(--v64-space-4); }
+  .aio-card--featured .aio-card__plan-headline { font: var(--v64-type-title-md); }
+  .ai-onboarding__why .ai-onboarding__headline { font: var(--v64-type-headline-md); }
+  .ai-onboarding__setup:not(.ai-onboarding__setup--plain), .ai-onboarding__panel { padding: var(--v64-space-4); }
 }
 
+.aio-card__head:focus-visible { border-radius: var(--v64-shape-sm); }
+.ai-onboarding :deep(.v-btn:focus-visible),
 .aio-card__head:focus-visible {
-  border-radius: var(--v64-shape-sm);
   outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
   outline-offset: var(--v64-focus-ring-offset);
 }

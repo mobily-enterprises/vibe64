@@ -90,8 +90,9 @@ routing**; choose an available Senior there and save.
 
 ## Redo with an existing setup
 
-**Your AI setup** shows what is connected: such cards carry **Connected** and
-**Connected through [orchestrator]**. Choose **Keep using [provider]** to keep
+**Your AI setup** shows what is connected: such cards have a green outline and
+carry **Connected** with **through [orchestrator]** (shown on a phone even while
+the card is collapsed). Choose **Keep using [provider]** to keep
 your main AI, **Use [provider] as my main AI** to switch (Vibe64 first shows
 the routing changes for review, then moves Colleague), or **Get** another
 provider to add it. Nothing is removed; remove a connection with **Manage** in

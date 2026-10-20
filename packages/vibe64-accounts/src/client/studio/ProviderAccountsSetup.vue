@@ -1,7 +1,11 @@
 <template>
   <v-defaults-provider :defaults="{ VBtn: { minHeight: 48, rounded: 'pill' } }">
     <section class="accounts-setup">
-      <header class="accounts-setup__header">
+      <!-- Embedded, the header only appears while a sign-in offers its own buttons. -->
+      <header
+        v-if="!embedded || lede || $slots.close || setupRows.some(({ session, authorizeStep }) => session || authorizeStep)"
+        class="accounts-setup__header"
+      >
         <div class="accounts-setup__header-actions">
           <h1 v-if="!embedded" class="text-headline-small ma-0">{{ title }}</h1>
           <v-chip
