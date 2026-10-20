@@ -44,7 +44,9 @@ first so the ring is visible. Then:
 - Only when the place is in the other pane (Preview instead of Dashboard, or
   the reverse), or the chat is showing, does the ring sit on the header's pane
   switch: the arrow button that shows the project
-  panes from the chat, or the next-pane button (for example **Dashboard ›**).
+  panes from the chat, or the next-pane button (for example **Dashboard ›**;
+  on phones narrower than about 480px it shows only the Dashboard or Preview
+  icon).
   Tap it; when the next step becomes visible, Colleague can ring it directly.
 
 The caption always shows the whole path. Reopen Colleague with its avatar

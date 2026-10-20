@@ -57,8 +57,9 @@ for the workspace owner, **New course** (see
   created.
 - **Continue** and **Resume saved lesson** open your saved lesson.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
-- Below the courses, **Practice** lists your practice projects by lesson title
-  (with the lesson code and project name underneath). Select one to open it
+- Below the courses, **Practice** lists your practice projects by name,
+  **Practice:** followed by the lesson title (or its lesson code), with the
+  project's address underneath. Select one to open it
   (Learning minimises); the bin button deletes it for good.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the same

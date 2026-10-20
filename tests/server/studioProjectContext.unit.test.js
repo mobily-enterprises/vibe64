@@ -2011,11 +2011,12 @@ test("workspace records derive the practice field from the immutable training ma
     const training = trainingProvenance();
     const slug = `training-${training.attemptId.replaceAll("-", "")}`;
     const created = await context.createWorkspaceProjectRecord({ slug, training });
-    assert.deepEqual(created.project.practice, { learnerKey: training.learnerKey, attemptId: training.attemptId });
+    assert.deepEqual(created.project.practice, { learnerKey: training.learnerKey, attemptId: training.attemptId,
+      lessonCode: training.pin.lesson.code });
     await context.createWorkspaceProjectRecord({ slug: "ordinary" });
     const listed = await context.listWorkspaceProjects();
     assert.deepEqual(listed.projects.map(project => [project.slug, project.practice || null]), [
-      ["ordinary", null], [slug, { learnerKey: training.learnerKey, attemptId: training.attemptId }]
+      ["ordinary", null], [slug, { learnerKey: training.learnerKey, attemptId: training.attemptId, lessonCode: training.pin.lesson.code }]
     ], "the workspace listing stays unfiltered; presentation splits Practice");
     assert.deepEqual((await context.readWorkspaceProject({ slug })).project.practice, created.project.practice);
     const { projectPracticeForActor, practiceProjectAccessBlock } = await import("../../packages/vibe64-core/src/server/practiceProjects.js");
@@ -2202,7 +2203,7 @@ test("public project listing carries practice for its viewer and omits other lea
     await context.createWorkspaceProjectRecord({ slug, training });
     await context.createWorkspaceProjectRecord({ slug: "ordinary" });
     const practiceOf = (listed) => listed.projects.map(project => [project.slug, project.practice || null]);
-    const shared = { learnerKey: training.learnerKey, attemptId: training.attemptId };
+    const shared = { learnerKey: training.learnerKey, attemptId: training.attemptId, lessonCode: training.pin.lesson.code };
     assert.deepEqual(practiceOf(await service.listProjects({ actor: { uid: 42, role: "member" } })),
       [["ordinary", null], [slug, { ...shared, mine: true }]], "the learner sees its own practice project, marked mine");
     assert.deepEqual(practiceOf(await service.listProjects({ actor: { uid: 7, role: "owner" } })),

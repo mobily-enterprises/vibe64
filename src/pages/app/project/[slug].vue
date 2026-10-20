@@ -16,6 +16,7 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
+import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
@@ -52,7 +53,7 @@ const {
   setChatCollapsed,
   showProjectPane,
   switcherProjects,
-  targetFolderName
+  projectTitle
 } = useVibe64AppPage();
 
 </script>
@@ -69,33 +70,36 @@ const {
         :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
       >
         <div class="studio-home-shell-title-area">
-          <v-menu location="bottom start">
-            <template #activator="{ props: menuProps }">
-              <v-btn
-                class="studio-home-shell-project-selector"
-                variant="text"
-                v-bind="menuProps"
-              >
-                <span>{{ targetFolderName || "Project" }}</span>
-                <v-icon :icon="mdiChevronDown" size="18" />
-              </v-btn>
-            </template>
-            <v-list density="compact" min-width="240">
-              <v-list-item
-                v-for="project in switcherProjects"
-                :key="project.slug"
-                :active="project.slug === projectSlug"
-                :title="project.slug"
-                :subtitle="project.projectRoot"
-                @click="openProject(project, $event)"
-              />
-              <v-list-item
-                v-if="switcherProjects.length === 0"
-                :subtitle="projectLoadError || 'No open projects found.'"
-                title="Projects"
-              />
-            </v-list>
-          </v-menu>
+          <div class="studio-home-shell-project-name">
+            <v-menu location="bottom start">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  class="studio-home-shell-project-selector"
+                  variant="text"
+                  v-bind="menuProps"
+                  :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
+                >
+                  <span>{{ projectTitle || "Project" }}</span>
+                  <v-icon :icon="mdiChevronDown" size="18" />
+                </v-btn>
+              </template>
+              <v-list density="compact" min-width="240">
+                <v-list-item
+                  v-for="project in switcherProjects"
+                  :key="project.slug"
+                  :active="project.slug === projectSlug"
+                  :title="projectDisplayName(project)"
+                  :subtitle="project.projectRoot"
+                  @click="openProject(project, $event)"
+                />
+                <v-list-item
+                  v-if="switcherProjects.length === 0"
+                  :subtitle="projectLoadError || 'No open projects found.'"
+                  title="Projects"
+                />
+              </v-list>
+            </v-menu>
+          </div>
           <div
             id="studio-home-shell-create-session"
             class="studio-home-shell-create-session-host"
@@ -168,10 +172,12 @@ const {
             data-vibe64-guide="pane-switch"
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
+            :title="mobileProjectAction.label"
             @click="selectProjectPane(mobileProjectAction.pane, $event)"
           >
-            {{ mobileProjectAction.label }}
-            <v-icon :icon="mdiChevronRight" size="15" />
+            <v-icon class="studio-home-shell-project-mobile-action__icon" :icon="mobileProjectAction.icon" size="18" />
+            <span class="studio-home-shell-project-mobile-action__label">{{ mobileProjectAction.label }}</span>
+            <v-icon class="studio-home-shell-project-mobile-action__chevron" :icon="mdiChevronRight" size="15" />
           </button>
         </div>
       </div>
@@ -310,6 +316,12 @@ const {
   gap: 0.42rem;
   min-width: 0;
   padding-left: 1rem;
+}
+
+.studio-home-shell-project-name {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .studio-home-shell-project-selector {
@@ -567,6 +579,10 @@ const {
   white-space: nowrap;
 }
 
+.studio-home-shell-project-mobile-action__icon {
+  display: none !important;
+}
+
 .studio-home-shell-project-mobile-action:hover {
   background: color-mix(in srgb, var(--v64-on-secondary-container) 8%, var(--v64-secondary-container));
 }
@@ -628,14 +644,21 @@ const {
     max-width: calc(100vw - 16rem);
   }
 
+  /* Phone bar budget: the heading takes only the space the L plate and the
+     account/Colleague buttons leave. The pane switch and session controls
+     keep their size; the project name gives way with an ellipsis, so nothing
+     overlaps and the page never scrolls sideways. */
   .studio-home-shell-heading {
     display: flex;
+    flex: 1 1 auto;
     gap: var(--v64-space-1);
+    min-width: 0;
     padding-left: 0;
     width: 100%;
   }
 
   .studio-home-shell-project-controls {
+    flex: 0 0 auto;
     gap: 0.28rem;
   }
 
@@ -648,17 +671,53 @@ const {
     padding-inline: var(--v64-space-3) var(--v64-space-1);
   }
 
+  /* The session controls teleported beside the name keep their size; only
+     the name's own box is clipped and measured, so it gives way first. */
   .studio-home-shell-title-area {
+    flex: 1 1 auto;
     padding-left: 0;
   }
 
-  /* Keep at least the first ~8 characters of the project name readable;
-     the session and repository controls give way first. */
+  .studio-home-shell-project-name {
+    container-type: inline-size;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  /* The GitHub actor is a status chip: on phones it shows its icon, keeping
+     the account in its tooltip and accessible name, so the project name gets
+     the room. */
+  .studio-home-shell-github-actor-host {
+    flex: 0 0 auto;
+  }
+
+  .studio-home-shell-github-actor-host :deep(.studio-home-shell-session-github-actor) {
+    padding: 0;
+  }
+
+  .studio-home-shell-github-actor-host :deep(.studio-home-shell-session-github-actor span) {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  /* With the project pane shown, the bar belongs to the project's controls
+     (Preview's toolbar, the pane switch): the chat's session controls (new
+     session, Git branch, GitHub actor) come back with the chat pane. */
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-create-session-host,
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-local-remotes-host,
+  .studio-home-shell-heading--chat-collapsed .studio-home-shell-github-actor-host {
+    display: none;
+  }
+
   .studio-home-shell-project-selector {
-    flex: 1 0 auto;
+    flex: 0 1 auto;
     font-size: 0.95rem;
-    max-width: min(11rem, calc(100vw - 15rem));
-    min-width: 5.75rem;
+    max-width: 100%;
+    min-width: 2.25rem;
     padding-inline: 0.375rem 0.125rem;
   }
 
@@ -699,6 +758,36 @@ const {
 
   .studio-screen {
     max-width: 100%;
+  }
+}
+
+/* Too little room for a readable name (a narrow phone showing Preview's
+   controls): hide the selector rather than show a sliver of it. The chat pane
+   shows it again. */
+@container (max-width: 4rem) {
+  .studio-home-shell-project-selector {
+    visibility: hidden;
+  }
+}
+
+/* Narrow phones: the next-pane button is a 40px icon button showing its
+   pane's icon instead of "Dashboard ›"/"Preview ›" (its name stays "Go to
+   dashboard"/"Go to preview"), which leaves the project name readable beside
+   Preview's controls. */
+@media (max-width: 480px) {
+  .studio-home-shell-project-mobile-action {
+    min-width: 2.5rem;
+    padding: 0;
+    width: 2.5rem;
+  }
+
+  .studio-home-shell-project-mobile-action__icon {
+    display: inline-flex !important;
+  }
+
+  .studio-home-shell-project-mobile-action__label,
+  .studio-home-shell-project-mobile-action__chevron {
+    display: none !important;
   }
 }
 </style>

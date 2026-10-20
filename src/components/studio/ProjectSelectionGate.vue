@@ -104,14 +104,14 @@
             variant="tonal"
             @click="openPracticeProject(practice.slug)"
           >
-            <span>{{ practice.lessonTitle || practice.lessonCode || practice.slug }}</span>
+            <span>{{ practice.name }}</span>
             <span class="project-selection-gate__project-path">{{ practice.slug }}</span>
           </v-btn>
           <v-btn
             v-if="practice.mine && practice.deleteAvailable && practice.attemptId"
             class="project-selection-gate__practice-delete"
-            :aria-label="`Delete practice project ${practice.slug}`"
-            :title="`Delete practice project ${practice.slug}`"
+            :aria-label="`Delete ${practice.name}`"
+            :title="`Delete ${practice.name}`"
             :icon="mdiDeleteOutline"
             :disabled="busy || Boolean(deletingPracticeSlug)"
             :loading="deletingPracticeSlug === practice.slug"

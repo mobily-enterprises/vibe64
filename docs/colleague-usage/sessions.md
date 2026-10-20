@@ -9,6 +9,13 @@ pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
 opens the new session. If creation fails, review the error and retry or dismiss
 the dialog. This works the same way on desktop and mobile.
 
+On a phone the session's header controls (**New session** (+), a local
+project's Git branch button and the session's GitHub account) sit beside the
+project name while the chat pane is shown. With Preview or Dashboard shown they
+make room for that pane's controls; choose **Show chat** to reach them again.
+On a phone the GitHub account shows only its GitHub icon; on a computer hover
+it to see which account the session's GitHub commands run as.
+
 For a project with connected projects, the dialog closes once the session's own
 source is ready. The session then shows **Preparing workspace…** while Vibe64
 prepares the connected projects together, naming those still in progress (for

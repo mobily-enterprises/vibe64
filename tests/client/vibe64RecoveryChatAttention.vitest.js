@@ -221,7 +221,7 @@ function projectPage(setChatCollapsed, chatCollapsed) {
         setChatCollapsed,
         showProjectPane: vi.fn(),
         switcherProjects: ref([]),
-        targetFolderName: ref("Project A")
+        projectTitle: ref("Project A")
       };
     }
   });

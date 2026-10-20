@@ -16,19 +16,8 @@ const props = defineProps({
 });
 const router = useRouter();
 const practice = useVibe64PracticeProjects({ enabled: computed(() => Boolean(props.learning.state.open)),
-  learningResource: props.courses.learningResource });
-// learning.read names only the lesson code; the course catalogue L already reads gives its title.
-const lessonTitles = computed(() => {
-  const titles = new Map();
-  for (const course of toValue(props.courses.coursesResource?.data)?.courses || []) {
-    for (const lesson of Array.isArray(course?.lessons) ? course.lessons : []) {
-      if (lesson?.code && lesson.title && !titles.has(lesson.code)) titles.set(lesson.code, String(lesson.title));
-    }
-  }
-  return titles;
-});
+  learningResource: props.courses.learningResource, coursesResource: props.courses.coursesResource });
 const projects = computed(() => practice.practiceProjects.value);
-const titleOf = project => project.lessonTitle || lessonTitles.value.get(project.lessonCode) || "";
 const deleting = computed(() => toValue(practice.deletingSlug));
 
 function openProject(slug) {
@@ -47,13 +36,13 @@ function openProject(slug) {
     <ul class="vibe64-learning-practice__list">
       <li v-for="project in projects" :key="project.slug" class="vibe64-learning-practice__row" :data-practice-slug="project.slug">
         <button type="button" class="vibe64-learning-practice__open" :disabled="Boolean(deleting)"
-          :aria-label="`Open practice project ${project.slug}`" @click="openProject(project.slug)">
-          <span class="vibe64-learning-practice__name">{{ titleOf(project) || project.lessonCode || project.slug }}</span>
-          <span class="vibe64-learning-practice__slug">{{ titleOf(project) && project.lessonCode ? `${project.lessonCode} · ${project.slug}` : project.slug }}</span>
+          :aria-label="`Open ${project.name}`" @click="openProject(project.slug)">
+          <span class="vibe64-learning-practice__name">{{ project.name }}</span>
+          <span class="vibe64-learning-practice__slug">{{ project.slug }}</span>
         </button>
         <v-btn v-if="project.mine && project.deleteAvailable && project.attemptId" variant="text" :icon="mdiDeleteOutline"
-          min-width="48" min-height="48" :aria-label="`Delete practice project ${project.slug}`"
-          :title="`Delete practice project ${project.slug}`" :disabled="Boolean(deleting)" :loading="deleting === project.slug"
+          min-width="48" min-height="48" :aria-label="`Delete ${project.name}`"
+          :title="`Delete ${project.name}`" :disabled="Boolean(deleting)" :loading="deleting === project.slug"
           @click="practice.deletePracticeProject(project)" />
       </li>
     </ul>

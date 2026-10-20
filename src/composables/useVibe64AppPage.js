@@ -1,9 +1,11 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import {
+  mdiApplicationOutline,
   mdiChevronDown,
   mdiChevronLeft,
-  mdiChevronRight
+  mdiChevronRight,
+  mdiViewDashboardOutline
 } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -30,6 +32,8 @@ import {
 import {
   VIBE64_PROJECT_CHANGED_EVENT
 } from "@/lib/studioGateApi.js";
+import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -125,7 +129,16 @@ function useVibe64AppPage() {
   const projects = projectSelection.projects;
   const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
   const targetRoot = computed(() => String(projectSelection.targetRoot.value || "").trim());
-  const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
+  const learning = useVibe64Learning();
+  // A practice project is named by its lesson (the open lesson's title when it
+  // owns this project), never by its training-<attempt> slug.
+  const projectTitle = computed(() => {
+    const slug = projectSlug.value;
+    if (!slug) return finalPathSegment(targetRoot.value);
+    const lesson = learning?.lesson?.value;
+    return projectDisplayName(projects.value.find(project => project?.slug === slug) || { slug },
+      { lessonTitle: lesson?.practiceProjectSlug === slug ? lesson.title : "" });
+  });
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
@@ -148,11 +161,13 @@ function useVibe64AppPage() {
     projectPane.value === "dashboard"
       ? {
           ariaLabel: "Go to preview",
+          icon: mdiApplicationOutline,
           label: "Preview",
           pane: "preview"
         }
       : {
           ariaLabel: "Go to dashboard",
+          icon: mdiViewDashboardOutline,
           label: "Dashboard",
           pane: "dashboard"
         }
@@ -357,7 +372,7 @@ function useVibe64AppPage() {
     setChatCollapsed,
     showProjectPane,
     switcherProjects,
-    targetFolderName
+    projectTitle
   };
 
   function setHomeShellActive(active) {

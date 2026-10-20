@@ -6,16 +6,18 @@ import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { VIBE64_LEARNING_ROUTES } from "@/lib/vibe64Learning.js";
+import { lessonTitleFromCourses, practiceProjectName } from "@/lib/vibe64PracticeProjectName.js";
 
 const LEARNING_PATH = "/api/vibe64/training/learning";
 
 // Local practice projects live in the learner's private namespace, so the
 // standalone source is the learner's own learning.read: its `attempts[]` name
-// each attempt's `practiceSlug`, `pin.lesson.code` and `ended`. The v1
+// each attempt's `practiceSlug`, `pin.lesson` and `ended`; an optional
+// courses.list result supplies the lesson title for the row's name. The v1
 // active/history shape has no practice slug and yields no rows, so no delete is
 // offered against a server without vibe64.training.practice.delete. This
 // adapter owns no admission; the Training actions re-authorize every read and delete.
-function practiceProjectsFromLearning(result = null) {
+function practiceProjectsFromLearning(result = null, coursesResult = null) {
   if (result?.ok !== true || result.available !== true || !Array.isArray(result.attempts)) return [];
   const attempts = result.attempts;
   const seen = new Set();
@@ -25,11 +27,14 @@ function practiceProjectsFromLearning(result = null) {
     const attemptId = String(attempt?.attemptId || "").trim();
     if (!slug || !attemptId || seen.has(slug)) continue;
     seen.add(slug);
+    const lessonCode = String(attempt?.pin?.lesson?.code || "");
+    const lessonTitle = lessonTitleFromCourses(coursesResult?.courses, { code: lessonCode, hash: attempt?.pin?.lesson?.hash });
     projects.push({
       slug,
       attemptId,
-      lessonCode: String(attempt?.pin?.lesson?.code || ""),
-      lessonTitle: String(attempt?.lessonTitle || ""),
+      lessonCode,
+      lessonTitle,
+      name: practiceProjectName({ lessonTitle, lessonCode }),
       ended: Boolean(attempt?.ended),
       mine: true,
       deleteAvailable: true
@@ -39,8 +44,9 @@ function practiceProjectsFromLearning(result = null) {
 }
 
 // `learningResource` lets L's Practice section reuse L's own learning.read
-// resource (already reread on learner changes) instead of a second read.
-function useVibe64PracticeProjects({ enabled = true, learningResource = null } = {}) {
+// resource (already reread on learner changes) instead of a second read, and
+// `coursesResource` its courses.list for lesson titles.
+function useVibe64PracticeProjects({ enabled = true, learningResource = null, coursesResource = null } = {}) {
   const deletingSlug = ref("");
   const active = computed(() => toValue(enabled) === true);
   const resource = learningResource || useEndpointResource({
@@ -55,7 +61,7 @@ function useVibe64PracticeProjects({ enabled = true, learningResource = null } =
     realtime: { events: [VIBE64_TRAINING_LEARNER_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT],
       matches: ({ payload } = {}) => payload?.reason !== "notes" }
   });
-  const practiceProjects = computed(() => active.value ? practiceProjectsFromLearning(resource.data.value) : []);
+  const practiceProjects = computed(() => active.value ? practiceProjectsFromLearning(resource.data.value, coursesResource?.data?.value) : []);
   const deleteCommand = useCommand({
     access: "never",
     apiSuffix: "/vibe64/training",

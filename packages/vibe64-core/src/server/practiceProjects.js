@@ -8,12 +8,15 @@ function practiceLearnerKey(actor = null) {
 }
 
 // The record field is actor-agnostic. `mine` is added only where the current
-// actor is known (a listing or projection), never stored.
+// actor is known (a listing or projection), never stored. `lessonCode` (from the
+// marker's lesson pin) lets every host name the project "Practice: <lesson>"
+// instead of its training-<attempt> slug.
 function projectPracticeFromTraining(training = null) {
   if (!training) return null;
   return Object.freeze({
     learnerKey: String(training.learnerKey || ""),
-    attemptId: String(training.attemptId || "")
+    attemptId: String(training.attemptId || ""),
+    lessonCode: String(training.pin?.lesson?.code || "")
   });
 }
 
@@ -25,6 +28,7 @@ function projectPracticeForActor(project = null, actor = null) {
     practice: {
       learnerKey: project.practice.learnerKey,
       attemptId: project.practice.attemptId,
+      lessonCode: String(project.practice.lessonCode || ""),
       mine: Boolean(key) && key === project.practice.learnerKey
     }
   };

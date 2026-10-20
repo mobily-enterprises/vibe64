@@ -2024,6 +2024,7 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /Report a guide or navigation result truthfully in plain words/u);
   assert.match(colleagueInstructions, /never quote receipt fields/u);
   assert.match(colleagueInstructions, /You never judge/u);
+  assert.match(colleagueInstructions, /Call a practice project what the app shows, Practice: followed by its lesson title/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
   assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);
   // Learner notes (contract C7): read when teaching starts, rewritten as a short private summary, never a result.
