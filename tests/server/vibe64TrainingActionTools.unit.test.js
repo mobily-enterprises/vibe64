@@ -1169,13 +1169,15 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
   const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
-    sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected }, trainingHost: null });
+    sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
   // Learning v2 publishes learner-scoped realtime notices through the optional runtime events.
   assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners", "learningSessions", "mainTeaching",
-    "publishLearnerChanged", "steps", "teaching"]);
+    "practiceProjects", "publishLearnerChanged", "steps", "teaching"]);
+  // Learning v2 (C5): the standalone practice facility offers delete and its read-only preflight.
+  assert.deepEqual(Object.keys(training.practiceProjects).sort(), ["canRemove", "remove"]);
   assert.equal(typeof training.teaching.prepareQuestion, "function");
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",

@@ -2095,6 +2095,12 @@ test("standalone light practice deletion removes the learner's private namespace
     await assert.rejects(practiceProjects.remove({ slug }), { code: "vibe64_auth_required" });
     assert.equal(closed.length, 0);
     assert.deepEqual(ends, [], "refused removals end no attempt");
+    // Learning v2 (C3 practice.delete): the read-only preflight reports the same refusals without throwing.
+    assert.deepEqual(await practiceProjects.canRemove({ slug: "working", actor }), { ok: false, reason: "This is not one of your practice projects." });
+    assert.equal((await practiceProjects.canRemove({ slug, actor: { uid: 43, username: "other" } })).ok, false);
+    assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true });
+    assert.deepEqual(ends, [], "the preflight ends no attempt");
+    assert.equal(closed.length, 0, "the preflight closes no runtime");
     assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: true });
     assert.deepEqual(ends, [{ attemptId: training.attemptId, requestId: `practice-delete-${training.attemptId}`, reason: "discard" }],
       "the owning attempt is ended with reason discard");
@@ -2115,6 +2121,8 @@ test("standalone light practice deletion resumes its persisted steps and refuses
     const pinned = path.join(paths.projectSessionSourceRoot, "sessions", "pinned");
     await fs.promises.symlink("active/main-session", pinned);
     const unpinned = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
+    assert.deepEqual(await unpinned.canRemove({ slug, actor }),
+      { ok: false, reason: "Unpin session main-session before deleting this practice project." });
     await assert.rejects(unpinned.remove({ slug, actor }), { code: "vibe64_project_pinned", statusCode: 409 });
     assert.deepEqual(ends, [], "a pinned refusal keeps the attempt active");
     const readMetadata = () => context.runWithPracticeProjectScope({ actor, training, access: "observe" },
@@ -2133,6 +2141,7 @@ test("standalone light practice deletion resumes its persisted steps and refuses
     const steps = await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
       async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
     assert.ok(steps["runtime-closed"]);
+    assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true }, "an interrupted deletion can be retried");
     assert.equal(steps["source-removed"], undefined);
     await assert.rejects(context.runWithPracticeProjectScope({ actor, training, access: "observe", allowDeleting: true }, () => assert.fail()),
       /explicit write access/u);
