@@ -202,4 +202,12 @@ describe("Vibe64 app page", () => {
       }
     }, "alpha")).toBe(false);
   });
+
+  it("stays on a deleted practice project's page so its gate shows the deleted notice", () => {
+    const deleting = { action: "runtime-closed", projectSlug: "alpha", runtime: { open: false }, runtimeCloseReason: "project-delete" };
+    expect(projectRuntimeClosedPayloadMatches(deleting, "alpha", { practice: true })).toBe(false);
+    // An ordinary project's delete and a practice project's ordinary close still leave the page.
+    expect(projectRuntimeClosedPayloadMatches(deleting, "alpha")).toBe(true);
+    expect(projectRuntimeClosedPayloadMatches({ ...deleting, runtimeCloseReason: "project-close" }, "alpha", { practice: true })).toBe(true);
+  });
 });

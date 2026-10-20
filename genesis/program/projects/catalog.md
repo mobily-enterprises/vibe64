@@ -297,6 +297,9 @@ for this project's attempt (Learning's delete on both hosts), and whenever any
 other query of the page fails with the deleted code (a query-cache subscription
 in the gate). `ProjectSelectionGate` then shows **This practice project
 was deleted** with **Open Learning** (L on its course list) instead of the error.
+The delete's own `runtime-closed` event (reason `project-delete`) does not send
+an open practice page to the hosted Projects page (`useVibe64AppPage`), which a
+local installation does not have; ordinary projects still leave on it.
 Evidence: `tests/server/studioProjectContext.unit.test.js`,
 `tests/server/vibe64FeatureRoutes.unit.test.js` and
 `tests/client/vibe64PracticeProjectDeleted.vitest.js`.
