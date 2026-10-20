@@ -153,8 +153,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // hiddenBy: "learner" when the learner's own L or Escape hid L
   // (Colleague then returns a phone learner to its conversation), else "".
   // finished: the lesson surface shows the "Lesson finished" screen.
+  // modeRead: this viewer's learning mode has been read (or found unreadable).
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "" });
+    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
+    modeRead: false });
   const lesson = shallowRef(null);
   // Learning mode (server-backed, per learner): null until read or when unreadable.
   const learningMode = shallowRef(null);
@@ -219,7 +221,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     notes.value = null;
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-      loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", actorKey: next });
+      loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
+      actorKey: next });
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
     // A restored attempt is read at once, so Colleague's current-step button and
@@ -239,7 +242,31 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     } catch { value = null; }
     if (expected !== modeReads) return learningMode.value;
     learningMode.value = value;
+    state.modeRead = true;
+    // The lesson in progress is the one L and Colleague's step button show,
+    // also in a fresh tab without a saved place. A lesson L is showing stays.
+    if (value?.on && value.attemptId !== state.attemptId && !(state.open && state.surface === "lesson")) {
+      selectAttempt(value.attemptId);
+      remember();
+      void loadLesson();
+    }
     return value;
+  }
+
+  function selectAttempt(attemptId, stepId = "") {
+    lesson.value = null;
+    state.attemptId = attemptId;
+    state.stepId = text(stepId) ? stepId : "";
+    state.scroll = 0;
+    lastSaved = "";
+  }
+
+  // A project page waits until the viewer's learning mode is read, and stays
+  // away while learning mode sends it elsewhere, so it never sends requests
+  // the server would refuse before the redirect.
+  function holdsProject(slug) {
+    if (!state.actorKey || !text(slug)) return false;
+    return !state.modeRead || Boolean(learningModeRedirect({ mode: learningMode.value, slug }));
   }
 
   // Leave lesson ends the attempt (its results and practice project are kept)
@@ -331,11 +358,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state.hiddenBy = "";
     state.finished = false;
     if (text(attemptId) && attemptId !== state.attemptId) {
-      lesson.value = null;
-      state.attemptId = attemptId;
-      state.stepId = text(stepId) ? stepId : "";
-      state.scroll = 0;
-      lastSaved = "";
+      selectAttempt(attemptId, stepId);
     } else if (text(stepId) && stepId !== state.stepId) {
       if (steps.value.length) selectStep(stepId);
       else state.stepId = stepId;
@@ -702,7 +725,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, finishLesson, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
-    readLearningMode, leaveLesson, showNotice, clearNotice
+    readLearningMode, holdsProject, leaveLesson, showNotice, clearNotice
   });
 }
 

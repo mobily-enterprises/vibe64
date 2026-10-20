@@ -1676,6 +1676,11 @@ test("the header's current-step button follows the shared Learning controller an
   await flush();
   assert.equal(view.state.learningStep.value, null, "an ended lesson shows no step button");
   assert.equal(view.state.stepDialog.value, false, "and closes its dialog");
+  // Drawer and eager phone dialog both stay mounted: only the one in use carries the button.
+  const template = descriptor.template.content;
+  assert.match(template, /<v-btn v-if="learningStep && !xs" v-bind="stepButton"/u);
+  assert.match(template, /<template v-if="learningStep && xs" #header-actions>/u);
+  assert.equal(template.match(/v-bind="stepButton"/gu).length, 2);
 });
 
 test("the current-step dialog gives way to Show me, Teach me and L, and comes back when Show me cannot show its place", async t => {

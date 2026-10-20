@@ -3,6 +3,7 @@ import Vibe64AssistantShellContext from "./components/Vibe64AssistantShellContex
 import Vibe64LocalColleagueHost from "./components/Vibe64LocalColleagueHost.vue";
 import Vibe64LocalVoiceHost from "./components/Vibe64LocalVoiceHost.vue";
 import Vibe64LearningOverlay from "./components/learning/Vibe64LearningOverlay.vue";
+import Vibe64LearningRouteHold from "./components/learning/Vibe64LearningRouteHold.vue";
 import { RouterView } from "vue-router";
 import ShellErrorHost from "@jskit-ai/shell-web/client/components/ShellErrorHost";
 import { AiOnboardingHost } from "@local/vibe64-accounts/client";
@@ -14,8 +15,9 @@ useVibe64InAppLinks();
 <template>
   <v-app>
     <Vibe64AssistantShellContext local>
-      <Vibe64LocalVoiceHost><RouterView /><Vibe64LocalColleagueHost /><Vibe64LearningOverlay /></Vibe64LocalVoiceHost>
-      <AiOnboardingHost can-configure actor-key="local" />
+      <Vibe64LocalVoiceHost><Vibe64LearningRouteHold><RouterView /></Vibe64LearningRouteHold><Vibe64LocalColleagueHost /><Vibe64LearningOverlay /></Vibe64LocalVoiceHost>
+      <!-- Its account reads are scoped to the page's project, so it waits with the page. -->
+      <Vibe64LearningRouteHold><AiOnboardingHost can-configure actor-key="local" /></Vibe64LearningRouteHold>
     </Vibe64AssistantShellContext>
     <ShellErrorHost />
   </v-app>

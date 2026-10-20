@@ -113,6 +113,12 @@ while L is open (the Lesson finished screen) it waits until L is hidden. Its
 learning mode redirect (`learningModeRedirect`) shows the "You're in a lesson"
 note only for another project's address, not when it moves a learner whose
 lesson has just started or opened to that lesson's place.
+`Vibe64LearningRouteHold.vue` wraps each host's routed pages (public `App.vue`,
+hosted AuthGate's prepared content; locally also the AI onboarding host, whose
+account reads are scoped to the page's project). A project page renders only
+once the overlay has bound the viewer and read its learning mode
+(`holdsProject(slug)`), and not while that redirect applies, so a redirected
+page never sends requests the server would refuse.
 
 L's **Practice** tab (`Vibe64LearningPractice.vue`, surface `practice`) reads
 `practice.list` through `useVibe64PracticeProjects` (its own endpoint resource,

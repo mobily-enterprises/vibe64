@@ -143,7 +143,9 @@ guide overlay 3000 above L 2400 above Colleague.
 - `teachMe(stepId)` minimises L and records one `colleagueRequest` carrying the
   fixed text "Teach me this step."; Colleague consumes it once
   (`consumeColleagueRequest`). Colleague's **Step N/M** header button and its
-  current-step dialog read and act through this controller only.
+  current-step dialog read and act through this controller only. The button
+  is in the desktop drawer header or, on a phone, the eager phone dialog's
+  header, never both.
 - `complete` is true when every required step of a version 2 lesson passed.
   A learner's own Done, answer, Check now or Preview press result that makes
   the lesson complete (`finishedBy`) calls `showFinished()`, which shows L's

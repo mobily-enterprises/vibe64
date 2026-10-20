@@ -212,6 +212,39 @@ describe("useVibe64Learning controller", () => {
     expect(learningModeRedirect({ mode: null, slug: "my-shop" })).toBeNull();
   });
 
+  it("shows the lesson in progress in a fresh tab without a saved place, for Colleague's step button", async () => {
+    const { learning, calls } = controller({ mode: () => ({ on: true, attemptId: ATTEMPT, lessonCode: "V64-START-01",
+      practiceSlug: "training-abc", projectSlugs: ["training-abc"] }) });
+    learning.setViewer("member");
+    await flush();
+    expect(learning.attemptId).toBe(ATTEMPT);
+    expect(calls.some(call => call.url === VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT))).toBe(true);
+    expect(learning.lesson.value).not.toBeNull();
+    expect(learning.open, "L stays hidden").toBe(false);
+  });
+
+  it("holds a project page until the viewer's learning mode is read, and while learning mode redirects it", async () => {
+    let on = true;
+    const { learning } = controller({ mode: () => on
+      ? { on: true, attemptId: ATTEMPT, lessonCode: "V64-START-01", practiceSlug: "training-abc", projectSlugs: ["training-abc"] }
+      : { on: false } });
+    expect(learning.holdsProject("my-shop"), "no viewer bound: nothing to wait for").toBe(false);
+    learning.setViewer("member");
+    expect(learning.holdsProject("training-abc"), "the mode is not read yet").toBe(true);
+    await flush();
+    expect(learning.holdsProject("my-shop")).toBe(true);
+    expect(learning.holdsProject("training-abc")).toBe(false);
+    expect(learning.holdsProject(""), "pages outside a project never wait").toBe(false);
+    on = false;
+    await learning.readLearningMode();
+    expect(learning.holdsProject("my-shop")).toBe(false);
+
+    const failing = createVibe64Learning({ request: async () => { throw new Error("offline"); } });
+    failing.setViewer("member");
+    await flush();
+    expect(failing.holdsProject("my-shop"), "an unreadable mode never holds a page").toBe(false);
+  });
+
   it("minimise keeps the place, L hides and reopens L at the exact step", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();

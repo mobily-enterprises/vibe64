@@ -64,7 +64,8 @@ const learningStep = computed(() => {
     position: index + 1, total: steps.length, passed };
 });
 const stepDialog = ref(false);
-// The same compact button in the drawer header and the phone dialog header.
+// The same compact button in the drawer header (desktop) or the phone dialog
+// header; both stay mounted (the dialog is eager), so only one carries it.
 const stepButton = computed(() => learningStep.value && {
   class: ["vibe64-colleague__step-button", { "vibe64-colleague__step-button--passed": learningStep.value.passed }],
   variant: "flat", rounded: "pill", height: 32, "data-test": "colleague-current-step", "aria-haspopup": "dialog",
@@ -882,7 +883,7 @@ onBeforeUnmount(() => {
     <div class="vibe64-colleague__drawer">
       <header class="vibe64-colleague__drawer-header">
         <span class="text-title-large">{{ name }}</span>
-        <v-btn v-if="learningStep" v-bind="stepButton" @click="stepDialog = true">
+        <v-btn v-if="learningStep && !xs" v-bind="stepButton" @click="stepDialog = true">
           <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
         </v-btn>
         <v-btn :icon="mdiMinus" variant="text" aria-label="Minimize conversation" title="Minimize conversation" @click="toggleConversation($event).catch(reportFailure)" />
@@ -898,7 +899,7 @@ onBeforeUnmount(() => {
     :activator="launcher?.$el" :open-on-click="false" eager
     @update:model-value="value => !value && closeText()" @minimize="toggleConversation($event).catch(reportFailure)"
   >
-    <template v-if="learningStep" #header-actions>
+    <template v-if="learningStep && xs" #header-actions>
       <v-btn v-bind="stepButton" @click="stepDialog = true">
         <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
       </v-btn>
