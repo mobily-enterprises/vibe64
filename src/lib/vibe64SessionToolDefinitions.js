@@ -100,6 +100,12 @@ function vibe64SessionToolIdFromRouteSegment(routeSegment = "") {
   ))?.id || "";
 }
 
+// The guide id of the place a session tool's pane shows, or undefined so an
+// unguided pane renders no anchor.
+function vibe64SessionToolGuideId(toolId = "") {
+  return vibe64SessionToolDefinition(toolId)?.guideId || undefined;
+}
+
 function vibe64SessionToolDashboardSuffix(toolId = "") {
   const routeSegment = vibe64SessionToolRouteSegment(toolId);
   return routeSegment ? `/dashboard/${routeSegment}` : "";
@@ -111,6 +117,7 @@ export {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix,
   vibe64SessionToolDefinition,
+  vibe64SessionToolGuideId,
   vibe64SessionToolIdFromRouteSegment,
   vibe64SessionToolRouteSegment
 };

@@ -14,6 +14,9 @@ import {
 
 const props = defineProps({
   navigationCollapsed: { type: Boolean, default: false },
+  // The guide place this section navigation opens into: a lesson's "Show me"
+  // rings the menu (or, on a phone, the section select) to pick the next step.
+  navigationGuidePane: { type: String, default: "" },
   title: {
     type: String,
     default: ""
@@ -120,6 +123,7 @@ onBeforeUnmount(() => {
         <v-select
           v-if="mobileSectionsActive && !navigationCollapsed"
           class="section-container-shell__mobile-select"
+          :data-vibe64-guide-pane="navigationGuidePane || undefined"
           :model-value="activeMobileSectionValue"
           :items="mobileSectionLinks"
           item-title="label"
@@ -135,6 +139,7 @@ onBeforeUnmount(() => {
         <nav
           v-if="hasTabs && !mobileSectionsActive && !navigationCollapsed"
           class="section-container-shell__nav"
+          :data-vibe64-guide-pane="navigationGuidePane || undefined"
           aria-label="Dashboard sections"
         >
           <v-list
