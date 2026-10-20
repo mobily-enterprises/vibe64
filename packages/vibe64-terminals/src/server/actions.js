@@ -196,7 +196,7 @@ function createTerminalActions({ terminals } = {}) {
     }),
     action({
       id: ACTION_UPDATE_TEMPORARY_CONVERSATION,
-      assistant: temporaryConversationTool("Update an existing temporary conversation's title/draft presentation or its Senior/Junior assistantRouting. This does not send a message."),
+      assistant: temporaryConversationTool("Update an existing temporary conversation's title/draft presentation (an empty title restores its Temporary N name) or its Senior/Junior assistantRouting. This does not send a message."),
       input: temporaryConversationUpdateInputValidator,
       execute: (input) => terminals.updateTemporaryConversation(input.sessionId, input)
     }),

@@ -570,6 +570,64 @@ test("a temporary draft saves while another assistant operation holds the source
   });
 });
 
+test("temporary chat numbers stay unique after a reload, including chats saved with duplicate names", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, store, restart } = await conversationFixture(root);
+    // Before numbers were stored, each page load restarted the browser's
+    // counter, so a chat created after a reload was saved as Temporary 1 again.
+    for (const [conversationId, title] of [["first", "Temporary 1"], ["second", "Temporary 1"], ["repair", "Fix preview identity"]]) {
+      await service.createTemporaryConversation("one", { conversationId, presentation: { title } });
+      await store.writeSessionConversation("one", conversationId, { number: undefined });
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    const created = await service.createTemporaryConversation("one", { conversationId: "new", presentation: { title: "" } });
+    assert.equal(created.number, 4);
+    const labels = async () => (await restart().listTemporaryConversations("one")).conversations
+      .map(({ conversationId, number, title }) => [conversationId, number, title]);
+    assert.deepEqual(await labels(), [
+      ["first", 1, ""], ["second", 2, ""], ["repair", 3, "Fix preview identity"], ["new", 4, ""]
+    ]);
+    // Stored numbers never move; reading did not backfill the older chats.
+    await store.deleteSessionConversation("one", "first");
+    assert.equal((await service.createTemporaryConversation("one", { conversationId: "later" })).number, 5);
+    assert.deepEqual((await labels()).map(([id, number]) => [id, number]),
+      [["second", 1], ["repair", 2], ["new", 4], ["later", 5]]);
+    assert.equal(Object.hasOwn(await store.readSessionConversation("one", "second"), "number"), false);
+  });
+});
+
+test("renaming a temporary chat saves a plain name without the assistant's lease", { timeout: 5000 }, async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, store, events, restart } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holding = store.runSessionExclusive("one", "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await entered.promise;
+    try {
+      const renamed = await service.updateTemporaryConversation("one", {
+        conversationId: "chat", presentation: { title: "  Login\n  bug  " }
+      });
+      assert.deepEqual(renamed, { ok: true, title: "Login bug" });
+    } finally {
+      release.resolve();
+      await holding;
+    }
+    assert.deepEqual(events.at(-1), ["one", { reason: "temporary-conversation-renamed", payload: { conversationId: "chat" } }]);
+    const [listed] = (await restart().listTemporaryConversations("one")).conversations;
+    assert.equal(listed.title, "Login bug");
+    assert.equal(listed.number, 1);
+    await assert.rejects(service.updateTemporaryConversation("one", {
+      conversationId: "chat", presentation: { title: "x".repeat(81) }
+    }), { statusCode: 400 });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: " " } });
+    assert.equal((await store.readSessionConversation("one", "chat")).title, "");
+  });
+});
+
 test("plain drafts cannot recreate a closed chat or write into one that is closing", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store } = await conversationFixture(root);

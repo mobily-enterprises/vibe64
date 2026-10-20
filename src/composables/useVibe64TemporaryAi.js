@@ -87,7 +87,6 @@ function useVibe64TemporaryAi({
   const closingTaskIds = new Set();
   const stoppingTaskIds = new Set();
   let disposed = false;
-  let nextTaskNumber = 1;
 
   const activeTask = computed(() => (
     tasks.value.find((task) => task.id === activeTaskId.value) || tasks.value[0] || null
@@ -118,6 +117,7 @@ function useVibe64TemporaryAi({
 
   function taskView(value) {
     const task = { ...value };
+    task.label = task.title || `Temporary ${task.number}`;
     const runtime = task.binding.runtime.value;
     // Draft and delivery belong to the supplied retained owner. This flattened
     // read projection serves product feedback only; the element renders its
@@ -243,7 +243,7 @@ function useVibe64TemporaryAi({
         presentation: taskPresentation(current)
       }
     }).then((created) => {
-      if (canApplyTaskResponse(task)) updateTask(task.id, { conversationId: created.conversationId, assistantSelection: created.assistantSelection,
+      if (canApplyTaskResponse(task)) updateTask(task.id, { conversationId: created.conversationId, number: created.number, assistantSelection: created.assistantSelection,
         routingMetadata: created.routingMetadata, recentChatContext: created.recentChatContext, purposes: created.purposes, goal: created.goal || null });
       return created.conversationId;
     });
@@ -368,7 +368,7 @@ function useVibe64TemporaryAi({
         if (closedConversationIds.has(record.conversationId)) continue;
         const existing = tasks.value.find((task) => task.conversationId === record.conversationId || task.id === record.conversationId);
         if (existing) {
-          updateTask(existing.id, { purposes: record.purposes, canSteer: record.canSteer });
+          updateTask(existing.id, { purposes: record.purposes, canSteer: record.canSteer, title: record.title || "", number: record.number });
           continue;
         }
         const task = bindTask({
@@ -427,7 +427,7 @@ function useVibe64TemporaryAi({
         runId: task.runId,
         sessionId: task.sessionId,
         status: temporaryAiText(task.status),
-        title: temporaryAiText(task.title) || "Temporary AI"
+        title: task.label
       }));
     } catch {
       // Feedback must never interfere with the completed task state.
@@ -449,8 +449,6 @@ function useVibe64TemporaryAi({
     includeRecentChatContext = false,
     title = ""
   } = {}) {
-    const number = nextTaskNumber;
-    nextTaskNumber += 1;
     const task = bindTask({
       initialRouting,
       includeRecentChatContext,
@@ -483,7 +481,9 @@ function useVibe64TemporaryAi({
       runConflictId: "",
       sessionId: currentSessionId(),
       status: "ready",
-      title: temporaryAiText(title) || `Temporary ${number}`
+      title: temporaryAiText(title),
+      // Provisional until creation, when the server assigns the saved number.
+      number: Math.max(0, ...tasks.value.map((candidate) => candidate.number || 0)) + 1
     });
     tasks.value = [...tasks.value, task];
     activeTaskId.value = task.id;
@@ -594,6 +594,15 @@ function useVibe64TemporaryAi({
     }
     open.value = true;
     return activeTask.value;
+  }
+
+  async function renameTask(taskId = "", title = "") {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const conversationId = await ensureConversation(task);
+    const result = await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
+      method: "PATCH", body: { presentation: { title } }
+    });
+    if (canApplyTaskResponse(task)) updateTask(taskId, { title: result.title });
   }
 
   function updateDraft(taskId = "", draft = "") {
@@ -710,7 +719,7 @@ function useVibe64TemporaryAi({
       message: !generatedMessage && task.recoveryContext
         ? `${task.recoveryContext}\n\nUser message:\n${draftPayload.message}` : draftPayload.message,
       ...(task.recoveryOperation === "update" ? { outputSchema: VIBE64_AGENT_TASK_RESULT_SCHEMA } : {}),
-      promptLabel: task.title
+      promptLabel: task.label
     });
     if (!payload?.message) return false;
     const authored = payload.request ? payload : { ...payload, data: {
@@ -914,7 +923,7 @@ function useVibe64TemporaryAi({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} }) => (
       !disposed && payload.projectSlug === projectSlug.value &&
-      payload.sessionId === currentSessionId() && ["temporary-conversation-closed", "assistant-routing-changed"].includes(payload.reason) &&
+      payload.sessionId === currentSessionId() && ["temporary-conversation-closed", "temporary-conversation-renamed", "assistant-routing-changed"].includes(payload.reason) &&
       Boolean(payload.conversationId)
     ),
     onEvent: ({ payload }) => {
@@ -922,6 +931,7 @@ function useVibe64TemporaryAi({
         candidate.conversationId === payload.conversationId || candidate.id === payload.conversationId
       ));
       if (payload.reason === "temporary-conversation-closed") removeTask(task?.id || payload.conversationId);
+      else if (payload.reason === "temporary-conversation-renamed") void restoreTasks();
       else if (task && payload.assistantRoutingRequest) {
         updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(payload.assistantRoutingRequest) }, busy: true });
         void task.binding.runtime.value.reload();
@@ -973,6 +983,7 @@ function useVibe64TemporaryAi({
     hasUnreadMessages,
     open,
     openTask,
+    renameTask,
     reportRecoveryOutcome,
     saveTask,
     restoreError,

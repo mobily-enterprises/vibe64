@@ -127,6 +127,24 @@ describe("useVibe64TemporaryAi", () => {
     expect(new Set(sent.map(input => input.messageId)).size).toBe(2);
   });
 
+  it("labels chats by their server number and renames one through its saved title", async () => {
+    const temporary = await mountTemporaryAi();
+    const task = temporary.openTask();
+    expect(temporary.activeTask.value.label).toBe("Temporary 1");
+    mocks.responses.push({ ok: true, conversationId: createdId, number: 3 });
+    await temporary.createTask({ taskId: task.id });
+    expect(temporary.activeTask.value.label).toBe("Temporary 3");
+    mocks.patchResponses.push({ ok: true, title: "Login bug" });
+    await temporary.renameTask(task.id, " Login bug ");
+    const [url, options] = mocks.requests.at(-1);
+    expect(url).toContain(`/temporary-conversations/${createdId}`);
+    expect(options).toMatchObject({ method: "PATCH", body: { presentation: { title: " Login bug " } } });
+    expect(temporary.activeTask.value.label).toBe("Login bug");
+    mocks.patchResponses.push({ ok: true, title: "" });
+    await temporary.renameTask(task.id, "");
+    expect(temporary.activeTask.value.label).toBe("Temporary 3");
+  });
+
   it("captures opted-in context immediately without sending and retains the choice on creation retry", async () => {
     const temporary = await temporaryAi();
     mocks.responses.push({ ok: true, conversationId: createdId, recentChatContext: { messages: [], truncated: false } });

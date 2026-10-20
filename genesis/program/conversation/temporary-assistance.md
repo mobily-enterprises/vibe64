@@ -15,6 +15,16 @@ bounded results report saved chat mode, workflow, review preference and whether
 a model override exists, omitting native bindings. A preference update alone
 does not send a message or change Main's preferences.
 
+Each temporary chat stores its number once, at creation: one more than the
+highest number among the session's open chats. Its saved title is an optional
+plain name (whitespace collapsed, at most 80 characters); the browser shows it,
+or "Temporary N" when it is empty. A title-only update, like a draft-only update,
+saves without the assistant's write lock and publishes a session-change notice
+so other open views reread the list. Chats saved before numbers were stored keep
+the browser's old "Temporary N" title, which restarted at 1 on every page load;
+listing treats that title as unnamed and numbers those chats by creation order
+without rewriting them.
+
 A host-provided conversation appears in the tab strip only while selected.
 Its host owns the entry point; ordinary chat headers and temporary-chat tabs
 do not keep a permanent shortcut, including the header shown while archiving

@@ -14,6 +14,24 @@ Ordinary temporary chats offer **Custom**, **Senior** and **Junior**. Choose
 an available connection and model, then **Apply**. The next message uses that
 choice and the existing conversation history. Main chat's selection is unchanged.
 
+## Rename a temporary chat
+
+New temporary chats are named **Temporary 1**, **Temporary 2** and so on. Each
+number is given once, when the chat is created, and is not reused while the
+session keeps that chat; closing a chat or reloading does not renumber others.
+
+To rename a chat, select its tab, then select the pencil (**Rename …**) beside
+its name. Enter a name of up to 80 characters and select **Rename**, or press
+Enter. Line breaks and extra spaces become single spaces. Leave the name empty
+to return to its numbered name. **Cancel** or Escape keeps the current name.
+The new name is saved immediately, survives reload and appears in the session's
+other open tabs. Renaming works while the assistant is working and does not send
+a message or change the conversation. The pencil appears only on the selected
+tab, on desktop and on a phone.
+
+Colleague can rename a temporary chat through its temporary-conversation update
+action when you ask it to.
+
 ## Send and steer
 
 Temporary chat uses Main's round Send arrow and square Stop control. While a

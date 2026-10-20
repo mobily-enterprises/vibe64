@@ -39,24 +39,39 @@
             :aria-current="!hostConversation?.selected && task.id === temporary.activeTaskId.value ? 'page' : undefined"
             class="vibe64-temporary-ai__tab-select"
             :data-temporary-ai-task-id="task.id"
-            :aria-label="task.unread ? `${task.title}: unread messages` : task.title"
-            :title="task.unread ? `${task.title}: unread messages` : task.title"
+            :aria-label="task.unread ? `${task.label}: unread messages` : task.label"
+            :title="task.unread ? `${task.label}: unread messages` : task.label"
             type="button"
             @click="selectTask(task.id)"
           >
-            <span>{{ task.title }}</span>
+            <span>{{ task.label }}</span>
             <span v-if="task.unread" class="vibe64-temporary-ai__unread" aria-hidden="true" />
             <span v-if="task.nativeWorking" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
           </button>
           <v-btn
-            :aria-label="`Close ${task.title}`"
+            v-if="!hostConversation?.selected && task.id === temporary.activeTaskId.value"
+            :aria-label="`Rename ${task.label}`"
+            class="vibe64-temporary-ai__tab-rename"
+            data-temporary-ai-rename
+            :disabled="task.state === 'closing'"
+            height="32"
+            :icon="mdiPencilOutline"
+            min-width="32"
+            size="x-small"
+            :title="`Rename ${task.label}`"
+            type="button"
+            variant="text"
+            @click="openRename(task)"
+          />
+          <v-btn
+            :aria-label="`Close ${task.label}`"
             class="vibe64-temporary-ai__tab-close"
             :disabled="props.repositoryBusy || task.recoveryOutcome === 'checking' || closingTask || stoppingTaskId === task.id"
             height="32"
             :icon="mdiClose"
             min-width="32"
             size="x-small"
-            :title="`Close ${task.title}`"
+            :title="`Close ${task.label}`"
             type="button"
             variant="text"
             @click="requestCloseTask(task)"
@@ -300,6 +315,41 @@
       :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.status === 'closing'"
       :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })" />
     <v-dialog
+      v-if="renamingTask"
+      aria-label="Rename chat"
+      :model-value="true"
+      max-width="28rem"
+      :persistent="renamePending"
+      @update:model-value="!$event && (renamingTaskId = '')"
+    >
+      <v-card rounded="xl">
+        <form @submit.prevent="submitRename">
+          <v-card-title class="pa-6 pb-2">
+            <h2 class="text-title-large">Rename chat</h2>
+          </v-card-title>
+          <v-card-text class="px-6">
+            <v-text-field
+              v-model="renameValue"
+              label="Chat name"
+              variant="outlined"
+              maxlength="80"
+              autofocus
+              :disabled="renamePending"
+              :placeholder="`Temporary ${renamingTask.number || ''}`.trim()"
+              hint="Leave empty to use the numbered name."
+              persistent-hint
+              :error-messages="renameError"
+            />
+          </v-card-text>
+          <v-card-actions class="pa-6 pt-2">
+            <v-spacer />
+            <v-btn height="48" variant="text" :disabled="renamePending" @click="renamingTaskId = ''">Cancel</v-btn>
+            <v-btn type="submit" height="48" color="primary" variant="flat" rounded="pill" :loading="renamePending">Rename</v-btn>
+          </v-card-actions>
+        </form>
+      </v-card>
+    </v-dialog>
+    <v-dialog
       v-if="taskToClose"
       :model-value="true"
       :aria-labelledby="closeTitleId"
@@ -344,6 +394,7 @@ import {
   mdiClose,
   mdiConsoleNetworkOutline,
   mdiPaperclip,
+  mdiPencilOutline,
   mdiPlus,
 } from "@mdi/js";
 
@@ -466,6 +517,28 @@ function openTask(options) {
   selectionRevision.value += 1;
   hostConversation?.value?.close();
   return temporary.openTask(options);
+}
+const renamingTaskId = ref("");
+const renameValue = ref("");
+const renameError = ref("");
+const renamePending = ref(false);
+const renamingTask = computed(() => temporary.tasks.value.find(task => task.id === renamingTaskId.value) || null);
+function openRename(task) {
+  renameValue.value = task.title;
+  renameError.value = "";
+  renamingTaskId.value = task.id;
+}
+async function submitRename() {
+  renamePending.value = true;
+  renameError.value = "";
+  try {
+    await temporary.renameTask(renamingTaskId.value, renameValue.value);
+    renamingTaskId.value = "";
+  } catch (error) {
+    renameError.value = error.message || "The chat could not be renamed.";
+  } finally {
+    renamePending.value = false;
+  }
 }
 function closeWorkspace() {
   selectionRevision.value += 1;
@@ -1005,6 +1078,7 @@ defineExpose({
   white-space: nowrap;
 }
 
+.vibe64-temporary-ai__tab-rename,
 .vibe64-temporary-ai__tab-close {
   flex: 0 0 auto;
 }
@@ -1126,6 +1200,7 @@ defineExpose({
 @media (pointer: coarse) {
   .vibe64-temporary-ai__tab-select,
   .vibe64-temporary-ai__new-task,
+  .vibe64-temporary-ai__tab-rename,
   .vibe64-temporary-ai__tab-close,
   .vibe64-temporary-ai__check-update,
   .vibe64-temporary-ai__return {

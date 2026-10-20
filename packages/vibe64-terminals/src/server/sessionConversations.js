@@ -31,12 +31,36 @@ export function prepareCopiedSessionConversation(record) {
   return copy;
 }
 
+const TITLE_MAX_LENGTH = 80;
+const LEGACY_DEFAULT_TITLE = /^Temporary \d+$/;
+
+// A chat's number is assigned once, at creation. Chats saved before that kept
+// the browser's "Temporary N" title, which restarted at 1 on every page load;
+// they are numbered by creation order (they always predate numbered chats).
+function numberedConversations(records) {
+  let highest = 0;
+  return records.map((record) => {
+    if (Number.isInteger(record.number)) {
+      highest = Math.max(highest, record.number);
+      return record;
+    }
+    highest += 1;
+    return { ...record, number: highest, title: LEGACY_DEFAULT_TITLE.test(record.title || "") ? "" : record.title };
+  });
+}
+
 function presentation(input = {}) {
   const result = {};
   for (const key of textFields) {
     if (!Object.hasOwn(input, key)) continue;
     if (typeof input[key] !== "string" || input[key].length > 100_000) throw new Error(`Invalid conversation ${key}.`);
     result[key] = input[key];
+  }
+  if (Object.hasOwn(result, "title")) {
+    result.title = result.title.replace(/[\s\p{Cc}]+/gu, " ").trim();
+    if (result.title.length > TITLE_MAX_LENGTH) {
+      throw Object.assign(new Error(`Chat names can be at most ${TITLE_MAX_LENGTH} characters.`), { statusCode: 400 });
+    }
   }
   if (Object.hasOwn(input, "recoveryAutoPaused")) result.recoveryAutoPaused = input.recoveryAutoPaused === true;
   if (Object.hasOwn(input, "recoveryRetryKeys")) {
@@ -655,8 +679,10 @@ function createSessionConversations({
         const initialPresentation = presentation(input.presentation);
         const recentContext = input.includeRecentChatContext === true
           ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;
+        const numbers = numberedConversations(await ctx.runtime.store.listSessionConversations(sessionId)).map(item => item.number);
         const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
           ...initialPresentation,
+          number: Math.max(0, ...numbers) + 1,
           ...(Object.hasOwn(initialPresentation, "draft") ? { draftRevision: randomUUID() } : {}),
           ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences),
             ...(recentContext ? { assistant_changeover: JSON.stringify({ lastEngine: "", engines: {} }) } : {}) } } : {}),
@@ -688,7 +714,7 @@ function createSessionConversations({
         const conversations = [];
         for (const record of records) conversations.push(savedOnly
           ? await savedSnapshot(ctx, record) : await snapshot(ctx, record, true));
-        return { ok: true, conversations };
+        return { ok: true, conversations: numberedConversations(conversations) };
       };
       let result = await write(sessionId, { ...options, lockWaitMs: 0 }, list);
       if (result?.code === "vibe64_agent_write_mode_busy") {
@@ -730,14 +756,23 @@ function createSessionConversations({
     },
 
     async updateTemporaryConversation(sessionId, input = {}, options = {}) {
-      const draftOnly = input.presentation && Object.keys(input.presentation).length === 1 &&
-        Object.hasOwn(input.presentation, "draft") &&
+      // Drafts and names save while the assistant works, without its write lock.
+      const presentationOnly = input.presentation && Object.keys(input.presentation).length === 1 &&
+        ["draft", "title"].includes(Object.keys(input.presentation)[0]) &&
         Object.keys(input).every(key => ["sessionId", "conversationId", "vibe64User", "presentation"].includes(key));
-      if (draftOnly) {
+      if (presentationOnly) {
         const ctx = await readSessionContext(sessionId, options);
-        await save(ctx, { conversationId: input.conversationId },
-          { ...presentation(input.presentation), draftRevision: randomUUID() }, { requireOpen: true });
-        return { ok: true };
+        const fields = presentation(input.presentation);
+        if (!Object.hasOwn(fields, "title")) {
+          await save(ctx, { conversationId: input.conversationId }, { ...fields, draftRevision: randomUUID() }, { requireOpen: true });
+          return { ok: true };
+        }
+        await save(ctx, { conversationId: input.conversationId }, fields, { requireOpen: true });
+        await publishSessionChanged(sessionId, {
+          reason: "temporary-conversation-renamed",
+          payload: { conversationId: input.conversationId }
+        });
+        return { ok: true, title: fields.title };
       }
       const update = async (ctx) => {
         const record = await recordFor(ctx, input.conversationId);
