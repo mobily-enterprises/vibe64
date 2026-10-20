@@ -22,6 +22,7 @@ import {
   readSessionUiSyncStateForSession
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  LOCAL_PLAYWRIGHT_MESSAGE,
   agentPlaywrightCommandSource,
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource,
@@ -1483,6 +1484,9 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     return registered.error;
   }
   const { cwd, descriptor } = registered;
+  if (!descriptor.runtimeRoot) {
+    return responseError(LOCAL_PLAYWRIGHT_MESSAGE, "vibe64_preview_playwright_local");
+  }
   const parentExecutionId = normalizeText(input.parentExecutionId);
   if (!parentExecutionId) {
     return responseError(

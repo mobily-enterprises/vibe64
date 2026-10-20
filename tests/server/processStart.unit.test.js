@@ -34,6 +34,13 @@ test("Linux start identity comes from /proc stat, including command names with p
     platform: "linux",
     readFileFn: async () => "garbage"
   })).status, "ambiguous");
+  // A process in tracing stop reports lower-case "t"; it is still identified.
+  const traced = await readProcessStart(4242, {
+    platform: "linux",
+    readFileFn: async () => LINUX_STAT.replace(") S ", ") t ")
+  });
+  assert.equal(traced.status, "exact");
+  assert.equal(traced.state, "t");
 });
 
 test("macOS start identity comes from ps lstart as epoch seconds", async () => {

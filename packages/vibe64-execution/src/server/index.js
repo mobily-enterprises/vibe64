@@ -211,3 +211,4 @@ export {
   processStartIdentityPlatform,
   readProcessStart
 } from "./runtime/processStart.js";
+export { LOCAL_PLAYWRIGHT_MESSAGE } from "./runtime/agentPlaywrightCommandSource.js";

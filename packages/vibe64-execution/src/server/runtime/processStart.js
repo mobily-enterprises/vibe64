@@ -6,7 +6,8 @@ import { promisify } from "node:util";
 const execFile = promisify(execFileCallback);
 
 // The fields after the command name in /proc/<pid>/stat: state, ppid, pgrp, ...
-// and the start time in clock ticks at index 19.
+// and the start time in clock ticks at index 19. Any state letter is accepted
+// (tracing stop is lower-case "t"); callers decide which states they trust.
 function parseLinuxProcessStat(statText = "") {
   const text = String(statText || "").trim();
   const commandEnd = text.lastIndexOf(")");
@@ -16,7 +17,7 @@ function parseLinuxProcessStat(statText = "") {
   const fields = text.slice(commandEnd + 1).trim().split(/\s+/u);
   const state = String(fields[0] || "");
   const startTimeTicks = String(fields[19] || "");
-  if (!/^[A-Z]$/u.test(state) || !/^\d+$/u.test(startTimeTicks)) {
+  if (!/^[A-Za-z]$/u.test(state) || !/^\d+$/u.test(startTimeTicks)) {
     return null;
   }
   return {

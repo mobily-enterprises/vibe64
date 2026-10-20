@@ -1,3 +1,9 @@
+// Shown where no managed browser runtime exists, so the project's own
+// Playwright is the way to run browser tests.
+const LOCAL_PLAYWRIGHT_MESSAGE =
+  "This computer has no managed browser runtime for vibe64-playwright. Run the project's own Playwright instead: " +
+  "npx playwright test (install a browser once with npx playwright install chromium).";
+
 function agentPlaywrightCommandSource({
   managedNodePath = "",
   managedPreviewPath = "",
@@ -12,6 +18,8 @@ import process from "node:process";
 const managedNodePath = ${JSON.stringify(String(managedNodePath || ""))};
 const managedPreviewPath = ${JSON.stringify(String(managedPreviewPath || ""))};
 const runtimeRoot = ${JSON.stringify(String(runtimeRoot || ""))};
+// Without managed browser runtimes the project runs its own Playwright.
+const LOCAL_PLAYWRIGHT_MESSAGE = ${JSON.stringify(LOCAL_PLAYWRIGHT_MESSAGE)};
 
 function fail(message, code = 1) {
   process.stderr.write(String(message || "Vibe64 managed Playwright test command failed.") + "\\n");
@@ -391,7 +399,7 @@ if (command === "readiness") {
     declaredVersion, installedVersion: project?.version || "",
     runtimeVersion: runtime?.version || "",
     recovery: !declaredVersion ? "Declare portable project browser tests when needed." :
-      !installed ? "Run the project's declared Workspace setup." : !runtime ?
+      !installed ? "Run the project's declared Workspace setup." : !runtime && !runtimeRoot ? LOCAL_PLAYWRIGHT_MESSAGE : !runtime ?
       "Ask the platform operator to reconcile the exact dependency with the supported runtime catalogue. Interactive inspection can use vibe64-helper preview browser eval." : ""
   }) + "\\n");
   process.exit(0);
@@ -416,6 +424,9 @@ if (!project || !existsSync(project.cliPath)) {
   fail("This project does not have a declared and installed @playwright/test dependency.");
 }
 const runtime = managedRuntime(project.version);
+if (!runtime && !runtimeRoot) {
+  fail(LOCAL_PLAYWRIGHT_MESSAGE);
+}
 if (!runtime) {
   fail(
     "The project requires Playwright " + project.version +
@@ -452,5 +463,6 @@ runManaged(runner, runnerArgs, {
 }
 
 export {
+  LOCAL_PLAYWRIGHT_MESSAGE,
   agentPlaywrightCommandSource
 };

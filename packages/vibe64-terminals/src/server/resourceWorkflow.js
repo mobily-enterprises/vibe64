@@ -11,6 +11,7 @@ import {
   vibe64ManagedExecutionRequired
 } from "@local/vibe64-execution/server";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { openedFileWithin } from "./openedFileWithin.js";
 
 const fileDigests = new Map();
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -36,7 +37,7 @@ async function dependencyIdentity(root, file, budget) {
   if (!within(root, actual)) throw new Error("dependency_outside_source");
   const handle = await open(actual, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    if (process.platform === "linux" && !within(root, await realpath(`/proc/self/fd/${handle.fd}`))) {
+    if (!await openedFileWithin(handle, actual, (openedPath) => within(root, openedPath))) {
       throw new Error("dependency_outside_source");
     }
     const before = await handle.stat({ bigint: true });

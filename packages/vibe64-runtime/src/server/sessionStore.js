@@ -589,25 +589,62 @@ function processIsAlive(pid) {
   }
 }
 
-async function currentSessionLockProcessIdentity(processPlatform = process.platform) {
+// Locks record only owners whose state letter is upper case; any other observed
+// state stays ambiguous.
+const LOCK_OWNER_STATE_PATTERN = /^[A-Z]$/u;
+// Where the owner check spawns ps, a contended waiter reuses a live answer
+// briefly instead of probing on every poll.
+const SESSION_LOCK_OWNER_PROBE_REUSE_MS = 250;
+const recentLiveSessionLockOwners = new Map();
+// The server's own start identity never changes, so it is read once per platform.
+const ownSessionLockProcessIdentities = new Map();
+
+function currentSessionLockProcessIdentity(processPlatform = process.platform) {
   const platform = processStartIdentityPlatform(processPlatform);
   if (!platform) {
-    return {
+    return Promise.resolve({
       platform: SESSION_LOCK_PROCESS_IDENTITY_PID_ONLY_PLATFORM,
       startTimeTicks: ""
-    };
+    });
   }
-  const observed = await readProcessStart(process.pid, { platform: processPlatform });
-  if (observed.status !== "exact") {
-    throw vibe64Error(
-      "Vibe64 could not establish the session-lock owner process identity.",
-      "vibe64_session_lock_process_identity_unavailable"
-    );
+  if (!ownSessionLockProcessIdentities.has(platform)) {
+    const pending = readProcessStart(process.pid, { platform: processPlatform }).then((observed) => {
+      if (observed.status !== "exact" || !LOCK_OWNER_STATE_PATTERN.test(observed.state)) {
+        throw vibe64Error(
+          "Vibe64 could not establish the session-lock owner process identity.",
+          "vibe64_session_lock_process_identity_unavailable"
+        );
+      }
+      return {
+        platform,
+        startTimeTicks: observed.startTimeTicks
+      };
+    });
+    pending.catch(() => ownSessionLockProcessIdentities.delete(platform));
+    ownSessionLockProcessIdentities.set(platform, pending);
   }
-  return {
-    platform,
-    startTimeTicks: observed.startTimeTicks
-  };
+  return ownSessionLockProcessIdentities.get(platform);
+}
+
+async function observeSessionLockOwner(pid, identity = {}) {
+  const reusable = processStartIdentityPlatform() === "darwin-ps";
+  const key = `${pid}:${normalizeText(identity.startTimeTicks)}`;
+  const recent = reusable ? recentLiveSessionLockOwners.get(key) : null;
+  if (recent && Date.now() - recent.atMs < SESSION_LOCK_OWNER_PROBE_REUSE_MS) {
+    return recent.observed;
+  }
+  const observed = await readProcessStart(pid);
+  if (reusable) {
+    for (const [entryKey, entry] of recentLiveSessionLockOwners) {
+      if (Date.now() - entry.atMs >= SESSION_LOCK_OWNER_PROBE_REUSE_MS) {
+        recentLiveSessionLockOwners.delete(entryKey);
+      }
+    }
+    if (observed.status === "exact") {
+      recentLiveSessionLockOwners.set(key, { atMs: Date.now(), observed });
+    }
+  }
+  return observed;
 }
 
 async function sessionLockOwnerProcessStatus(owner = {}) {
@@ -615,18 +652,19 @@ async function sessionLockOwnerProcessStatus(owner = {}) {
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     return "ambiguous";
   }
-  const observed = await readProcessStart(pid);
-  if (observed.status === "absent") {
-    return "absent";
-  }
   const identity = isPlainObject(owner?.processIdentity)
     ? owner.processIdentity
     : {};
+  const observed = await observeSessionLockOwner(pid, identity);
+  if (observed.status === "absent") {
+    return "absent";
+  }
   if (
     Number(owner?.schemaVersion) !== SESSION_LOCK_OWNER_SCHEMA_VERSION ||
     normalizeText(identity.platform) !== processStartIdentityPlatform() ||
     !/^\d+$/u.test(normalizeText(identity.startTimeTicks)) ||
-    observed.status !== "exact"
+    observed.status !== "exact" ||
+    !LOCK_OWNER_STATE_PATTERN.test(observed.state)
   ) {
     return processIsAlive(pid) ? "ambiguous" : "absent";
   }

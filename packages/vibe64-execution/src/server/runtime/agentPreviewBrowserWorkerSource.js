@@ -446,18 +446,20 @@ function descendantBrowserProcessGroups() {
       }
     }
   }
-  const groups = [];
+  // Group leaders come from the table already read, once per group.
+  const processesById = new Map(processes.map((entry) => [entry.pid, entry]));
+  const groups = new Map();
   for (const entry of processes) {
-    if (!descendantIds.has(entry.pid) || entry.groupId === process.pid) continue;
-    const leader = processIdentity(entry.groupId);
+    if (!descendantIds.has(entry.pid) || entry.groupId === process.pid || groups.has(entry.groupId)) continue;
+    const leader = processesById.get(entry.groupId);
     if (leader?.groupId === entry.groupId && leader.startTimeTicks) {
-      groups.push({
+      groups.set(entry.groupId, {
         groupId: entry.groupId,
         startTimeTicks: leader.startTimeTicks
       });
     }
   }
-  return normalizedBrowserProcessGroups(groups);
+  return normalizedBrowserProcessGroups([...groups.values()]);
 }
 
 function trackedProcessGroupAlive(entry = {}) {
@@ -471,9 +473,28 @@ function trackedProcessGroupAlive(entry = {}) {
   );
 }
 
+// The tracked groups still alive. Where ps supplies the table, one read
+// answers for every group.
+function liveTrackedProcessGroups(groups = []) {
+  if (process.platform === "linux") {
+    return groups.filter(trackedProcessGroupAlive);
+  }
+  const processes = processTable() || [];
+  const processesById = new Map(processes.map((entry) => [entry.pid, entry]));
+  return groups.filter((entry) => {
+    const groupId = Number(entry?.groupId);
+    const leader = processesById.get(groupId);
+    return Boolean(
+      leader &&
+      leader.groupId === groupId &&
+      leader.startTimeTicks === String(entry?.startTimeTicks || "") &&
+      processes.some((candidate) => candidate.groupId === groupId && candidate.state !== "Z")
+    );
+  });
+}
+
 async function terminateBrowserProcessGroups() {
-  const groups = normalizedBrowserProcessGroups(browserProcessGroups)
-    .filter(trackedProcessGroupAlive);
+  const groups = liveTrackedProcessGroups(normalizedBrowserProcessGroups(browserProcessGroups));
   for (const entry of groups) {
     try {
       process.kill(-entry.groupId, "SIGTERM");
@@ -481,10 +502,10 @@ async function terminateBrowserProcessGroups() {
       // The browser process group already exited.
     }
   }
-  for (let attempt = 0; attempt < 20 && groups.some(trackedProcessGroupAlive); attempt += 1) {
+  for (let attempt = 0; attempt < 20 && liveTrackedProcessGroups(groups).length; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  for (const entry of groups.filter(trackedProcessGroupAlive)) {
+  for (const entry of liveTrackedProcessGroups(groups)) {
     try {
       process.kill(-entry.groupId, "SIGKILL");
     } catch {
