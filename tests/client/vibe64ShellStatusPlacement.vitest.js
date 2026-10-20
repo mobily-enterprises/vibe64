@@ -168,13 +168,14 @@ describe("Vibe64 custom shell status placement", () => {
 import { effectScope, nextTick, reactive, ref } from "vue";
 import { afterEach, beforeEach } from "vitest";
 import { createVuetify } from "vuetify";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { useVibe64SessionSelection } from "../../src/composables/useVibe64SessionSelection.js";
 import { selectedSessionStorageKey } from "../../src/lib/vibe64SessionRequestConfig.js";
 
-async function renderLearningShell(learningMode, showLearningModeControl = true) {
+async function renderLearningShell(learningMode, environment = { actorKey: "local", open: false, minimised: false }) {
   const app = createSSRApp({
     render() {
-      return h(StudioAppShellLayout, { learningMode, showLearningModeControl }, {
+      return h(StudioAppShellLayout, { learningMode, showLearningModeControl: true }, {
         "top-left": () => h("span", { "data-test": "unchanged-project-identity" }),
         "top-right": () => h("button", { "data-test": "unchanged-main-controls" }, "Main"),
         default: () => h("main", { "data-test": "retained-workspace" })
@@ -182,24 +183,29 @@ async function renderLearningShell(learningMode, showLearningModeControl = true)
     }
   });
   app.use(createVuetify());
+  if (environment) app.provide(VIBE64_LEARNING_KEY, { state: reactive(environment), toggle() {} });
   return renderToString(app);
 }
 
+// Learning v2: the L button opens the Learning environment above the page. It
+// keeps the plate's footprint and position; legacy route mode only warms it.
 describe("controlled Learning shell", () => {
   it.each([
-    [false, "false", "Enter Learning mode"],
-    [true, "true", "Leave Learning mode"]
-  ])("renders the actual L button with truthful state %s", async (mode, pressed, title) => {
-    const html = await renderLearningShell(mode);
-    expect(html.match(/aria-label="Learning mode"/gu)).toHaveLength(1);
+    [false, false, "false", "Open Learning"],
+    [false, true, "true", "Close Learning"],
+    [true, false, "true", "Leave Learning mode and open Learning"]
+  ])("renders the actual L button with truthful state (legacy mode %s, open %s)", async (mode, open, pressed, title) => {
+    const html = await renderLearningShell(mode, { actorKey: "local", open, minimised: false });
+    expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
     expect(html).toContain(`aria-pressed="${pressed}"`);
     expect(html).toContain(`title="${title}"`);
+    expect(html).toContain('data-vibe64-guide="learning"');
     expect(html).toMatch(/<span aria-hidden="true"[^>]*>L<\/span>/u);
-    // Neighbouring header icon-button size; full yellow only while Learning is on.
+    // Neighbouring header icon-button size; full yellow only while active.
     const plateClass = html.match(/class="([^"]*studio-app-shell-layout__learning-plate[^"]*)"/u)[1].split(" ");
-    expect(plateClass).toEqual(expect.arrayContaining(["v-btn--icon", "v-btn--size-small", "v-btn--density-comfortable"]));
-    expect(plateClass).toContain(mode ? "v-btn--variant-flat" : "v-btn--variant-outlined");
-    expect(html.includes("studio-app-shell-layout__learning-plate--active")).toBe(mode);
+    expect(plateClass).toEqual(expect.arrayContaining(["vibe64-learning-button", "v-btn--icon", "v-btn--size-small", "v-btn--density-comfortable"]));
+    expect(plateClass).toContain(pressed === "true" ? "v-btn--variant-flat" : "v-btn--variant-outlined");
+    expect(plateClass.includes("vibe64-learning-button--active")).toBe(pressed === "true");
     expect(html).toContain('data-test="retained-workspace"');
     expect(html).toContain('data-test="unchanged-main-controls"');
     expect(html).toContain('data-test="unchanged-project-identity"');
@@ -207,8 +213,25 @@ describe("controlled Learning shell", () => {
     expect(html.includes("studio-app-shell-layout--learning")).toBe(mode);
   });
 
-  it("does not expose an unavailable host mode control", async () => {
-    expect(await renderLearningShell(false, false)).not.toContain('aria-label="Learning mode"');
+  it("marks a minimised lesson on the closed L button", async () => {
+    const html = await renderLearningShell(false, { actorKey: "local", open: false, minimised: true });
+    expect(html).toContain('title="Return to your lesson"');
+    expect(html).toContain("vibe64-learning-button--minimised");
+  });
+
+  it("does not expose L without a signed-in Learning environment", async () => {
+    expect(await renderLearningShell(false, null)).not.toContain('aria-label="Learning"');
+    expect(await renderLearningShell(false, { actorKey: "", open: false, minimised: false })).not.toContain('aria-label="Learning"');
+  });
+
+  it("leads management page headers with the same L button", async () => {
+    const app = createSSRApp({ render: () => h(ShellLayout, null, { "top-left": () => h("span", { "data-test": "page-title" }) }) });
+    app.use(createVuetify());
+    app.provide(VIBE64_LEARNING_KEY, { state: reactive({ actorKey: "member", open: false, minimised: false }), toggle() {} });
+    const html = await renderToString(app);
+    expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
+    expect(html.indexOf('aria-label="Learning"')).toBeLessThan(html.indexOf('data-test="page-title"'));
+    expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
   });
 });
 

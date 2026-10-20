@@ -25,6 +25,7 @@ describe("Vibe64LocalAppIndex", () => {
 import * as Vue from "vue";
 import * as mdi from "@mdi/js";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
+import * as LearningEnvironment from "../../src/lib/vibe64Learning.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { readFileSync } from "node:fs";
@@ -88,9 +89,19 @@ async function mountLearningIndex({ gestures = null, practiceChoices = [], autho
   const launcher = compiledUi(path.resolve("src/components/studio/Vibe64LearningLessonLauncher.vue"), {
     vue: Vue, "vue-router": { useRoute: () => route }, "@local/vibe64-training/client/lesson-picker": { default: picker }
   });
+  // The L button opens the Learning environment through the shell's one
+  // controller; from the legacy route mode it leaves that mode first.
+  calls.environment = [];
+  const environment = { state: Vue.reactive({ actorKey: "local", open: false, minimised: false }),
+    show() { calls.environment.push("show"); environment.state.open = true; },
+    toggle() { calls.environment.push("toggle"); environment.state.open = !environment.state.open; } };
+  const button = compiledUi(path.resolve("src/components/learning/Vibe64LearningButton.vue"), {
+    vue: Vue, "@/composables/useVibe64Learning.js": { useVibe64Learning: () => environment }
+  });
   const shell = compiledUi(path.resolve("src/components/StudioAppShellLayout.vue"), {
     vue: Vue, "@jskit-ai/shell-web/client/components/ShellOutlet": { default: uiWidget },
-    "./Vibe64ColleagueLauncherTarget.vue": { default: uiWidget }
+    "./Vibe64ColleagueLauncherTarget.vue": { default: uiWidget },
+    "./learning/Vibe64LearningButton.vue": { default: button }
   });
   const panel = { props: ["learningResource", "learningView", "purposeFilter", "chatCollapsed", "projectPane", "active"], setup(props, { slots, expose }) {
     calls.panels++; calls.panelProps = props; Vue.onUnmounted(() => { calls.unmounts++; });
@@ -126,13 +137,23 @@ it("mounts actual L/root lesson controls without a project and retains one origi
     expect(view.calls.panelProps.purposeFilter).toBe("learning");
     expect(view.calls.gateProps.forcePicker).toBe(true);
     expect(view.calls.gateProps.navigateOnSelect).toBe(true);
-    const plate = nodes(view.root).find(node => node.props?.["aria-label"] === "Learning mode");
+    // Learning v2: the L plate opens the Learning environment. In a legacy
+    // route mode (URL or Colleague navigation) it warms the plate, and pressing
+    // it leaves that mode through the original owner before opening L.
+    const plate = nodes(view.root).find(node => node.props?.["aria-label"] === "Learning");
     expect(plate.props["aria-pressed"]).toBe(true);
+    expect(plate.props["data-vibe64-guide"]).toBe("learning");
+    expect(plate.props.title).toBe("Leave Learning mode and open Learning");
     plate.props.onClick(); await Vue.nextTick();
+    expect(view.calls.environment).toEqual(["show"]);
     expect(view.calls.panelProps.purposeFilter).toBe("working");
     expect(view.calls.panelProps.active).toBe(false);
-    expect(plate.props["aria-pressed"]).toBe(false);
+    expect(plate.props["aria-pressed"]).toBe(true);
     plate.props.onClick(); await Vue.nextTick();
+    expect(view.calls.environment).toEqual(["show", "toggle"]);
+    expect(plate.props["aria-pressed"]).toBe(false);
+    // The plate never enters the legacy mode; its original owner still can.
+    await view.owner.setLearningMode(true); await Vue.nextTick();
     expect(view.calls.panelProps.purposeFilter).toBe("learning");
     expect(view.calls.panelProps.active).toBe(true);
     expect(view.calls.panels).toBe(1); expect(view.calls.unmounts).toBe(0);
@@ -264,8 +285,10 @@ it("prepared project person choice revalidates the original loaded row before na
   expect(select(choice, event)).toBe(false); expect(calls.at(-1)).toEqual(["discard", ticket]);
 });
 
+const appSource = () => readFileSync(path.resolve("src/App.vue"), "utf8");
 it("shared original shell refs are per mount and only local composition supplies the established local display identity", () => {
-  const context = compiledUi(path.resolve("src/components/Vibe64AssistantShellContext.vue"), { vue: Vue, "@/lib/vibe64AssistantHost.js": HostKeys });
+  const context = compiledUi(path.resolve("src/components/Vibe64AssistantShellContext.vue"), { vue: Vue, "@/lib/vibe64AssistantHost.js": HostKeys,
+    "@/lib/vibe64Learning.js": LearningEnvironment });
   const mount = local => {
     let captured;
     const probe = { setup() { captured = Object.fromEntries(Object.entries(HostKeys).map(([name, key]) => [name, Vue.inject(key, null)])); return () => Vue.h("aside"); } };
@@ -280,9 +303,13 @@ it("shared original shell refs are per mount and only local composition supplies
       expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
       expect(local.captured[key]).not.toBe(hosted.captured[key]);
     }
-    const appSource = readFileSync(path.resolve("src/App.vue"), "utf8");
-    expect(appSource).toContain("<Vibe64AssistantShellContext local>");
-    expect(appSource).toContain("<Vibe64LocalColleagueHost />");
+    // One Learning environment controller per shell, closed until the overlay binds a viewer.
+    expect(local.captured.VIBE64_LEARNING_KEY.state.open).toBe(false);
+    expect(local.captured.VIBE64_LEARNING_KEY.state.actorKey).toBe("");
+    expect(local.captured.VIBE64_LEARNING_KEY).not.toBe(hosted.captured.VIBE64_LEARNING_KEY);
+    expect(appSource()).toContain("<Vibe64LearningOverlay />");
+    expect(appSource()).toContain("<Vibe64AssistantShellContext local>");
+    expect(appSource()).toContain("<Vibe64LocalColleagueHost />");
     const localSource = readFileSync(path.resolve("src/components/Vibe64LocalColleagueHost.vue"), "utf8");
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
     expect(localSource).toContain("if (browserNavigation) browserNavigation.value = navigate;");

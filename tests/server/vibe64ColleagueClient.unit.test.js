@@ -17,6 +17,7 @@ import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useR
 import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
+import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
@@ -145,6 +146,42 @@ test("voice admission sends directly to Colleague and preserves its identity and
   assert.equal(commands[0].options.body.messageId, "voice-question");
   assert.deepEqual(commands[0].options.body.data.focus, focus);
   assert.equal(requests.some(request => request.url.includes("/voice/")), false);
+});
+
+// Learning v2 (C6): Teach me in L asks this host's one Colleague to open and
+// send L's fixed message through the ordinary send with the browser focus.
+test("Teach me from the Learning environment opens Colleague and sends its fixed message once", async (t) => {
+  const requests = [];
+  const colleagueRequest = vue.shallowRef(null);
+  const learning = { colleagueRequest, consumeColleagueRequest(id) {
+    if (colleagueRequest.value?.id !== id) return null;
+    const value = colleagueRequest.value;
+    colleagueRequest.value = null;
+    return value;
+  } };
+  const view = mount(t, async (url, options) => {
+    requests.push({ url, options });
+    if (url.endsWith("/messages")) return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
+    return { ok: true, messages: [], status: "ready" };
+  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, null, null, null, learning);
+  await flush();
+  assert.equal(view.state.open.value, false);
+  colleagueRequest.value = Object.freeze({ id: "teach-1", kind: "teach", message: "Teach me this step.", actorKey: "member",
+    attemptId: "11111111-1111-4111-8111-111111111111", stepId: "quiz" });
+  await flush(); await flush();
+  assert.equal(view.state.open.value, true);
+  assert.equal(colleagueRequest.value, null);
+  const commands = nonFocusPosts(requests);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].url, "/api/assistant/app/conversations/conversation/messages");
+  assert.equal(commands[0].options.body.text, "Teach me this step.");
+  assert.deepEqual(view.notices, []);
+
+  // Another person's request is never sent by this Colleague.
+  colleagueRequest.value = Object.freeze({ id: "teach-2", kind: "teach", message: "Teach me this step.", actorKey: "someone-else" });
+  await flush(); await flush();
+  assert.equal(nonFocusPosts(requests).length, 1);
+  assert.equal(colleagueRequest.value.id, "teach-2");
 });
 
 test("operation receipts open their exact target and prepare recovery without replaying an effect", async t => {
@@ -827,6 +864,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const module = { exports: {} };
   const imports = {
     "./colleagueFocusBinding.js": { createColleagueFocusBinding },
+    "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
     vue,
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },

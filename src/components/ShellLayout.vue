@@ -3,6 +3,7 @@ import { h } from "vue";
 import PackageShellLayout from "@jskit-ai/shell-web/client/components/ShellLayout";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
+import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
 export default {
   name: "ShellLayout",
@@ -10,7 +11,8 @@ export default {
   setup(_, { attrs, slots }) {
     return () => h(PackageShellLayout, attrs, {
       ...slots,
-      "top-left": slots["top-left"] || (() => null),
+      // The L button leads every management page header, as in the Studio shell.
+      "top-left": (slotProps) => [h(Vibe64LearningButton), slots["top-left"]?.(slotProps)],
       "top-right": (slotProps) => [
         h(ShellOutlet, { target: "shell-layout:top-right" }),
         slots["top-right"]?.(slotProps),

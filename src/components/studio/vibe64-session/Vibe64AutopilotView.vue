@@ -649,7 +649,7 @@
         :update-disabled-reason="saveWorkTitle"
         :can-review-update="Boolean(updateConflictRecovery)"
         :workspace-setup-status="workspaceSetupStatus"
-        :open-file="openGuideFile"
+        :open-file="openWorkingFile"
         @check-update="checkTemporaryAiUpdate"
         @review-update="reviewResolvedUpdate"
         @select-main-chat="showMainChat"
@@ -1852,10 +1852,10 @@ function openLearningFile(path) {
   openSourceEditorFile({ path, presentation: "code" });
   return sourceEditorOpenRequest.value?.path === path;
 }
-// A Colleague "show me" guide opens one project file in this session's own
-// Dashboard → Files editor, the same opener the lesson view uses.
-function openGuideFile(path) {
-  if (typeof path !== "string" || !path) return false;
+// A Learning environment "Show me" for one file opens it in this session's
+// ordinary Dashboard -> Files editor, as a source link does.
+function openWorkingFile(path) {
+  if (!props.sourceWorkspaceAvailable || typeof path !== "string" || !path) return false;
   openSourceEditorFile({ path, presentation: "code" });
   return sourceEditorOpenRequest.value?.path === path;
 }

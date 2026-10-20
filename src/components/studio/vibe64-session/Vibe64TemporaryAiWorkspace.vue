@@ -848,6 +848,7 @@ const selectedView = {
   get hostConversationSelected() { return Boolean(hostConversation?.value?.selected); },
   get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
   get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
+  // A Learning "Show me" for a file opens it in the ordinary Working Files view.
   openFile(path) { return typeof props.openFile === "function" && props.openFile(path) === true; },
   async openConversation(conversationId, isCurrent = () => true) {
     if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");

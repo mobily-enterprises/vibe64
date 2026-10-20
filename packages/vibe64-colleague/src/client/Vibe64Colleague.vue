@@ -19,6 +19,7 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
+import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
@@ -620,6 +621,39 @@ async function sendMessage(message, options = {}, target = conversation.runtime.
   return target.send({ message, data: { clientId, focus: options.focus,
     ...(options.trainingQuestion ? { trainingQuestion: options.trainingQuestion } : {}) } }, { messageId: options.messageId });
 }
+// Teach me in L: reveal this conversation (voice stays as it is) and send L's
+// fixed message through the ordinary send with the current browser focus.
+const learning = unref(learningOwner);
+function waitForConversation(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    let stop = null;
+    const timer = setTimeout(() => finish(new Error(connectionError.value || "Colleague is not connected yet. Press Teach me again.")), timeoutMs);
+    function finish(error, target) {
+      clearTimeout(timer);
+      if (stop) stop();
+      else queueMicrotask(() => stop?.());
+      if (error) reject(error);
+      else resolve(target);
+    }
+    stop = watch(() => conversation.runtime.value?.available.value ? conversation.runtime.value : null, target => {
+      if (!mounted) finish(new Error("Colleague left this browser view."));
+      else if (target) finish(null, target);
+    }, { immediate: true });
+  });
+}
+async function revealForLearning() {
+  if (!shown.value) {
+    if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
+    else open.value = true;
+  }
+  if (!conversation.runtime.value) await refresh();
+  await waitForConversation();
+  if (bodyVisible.value) await focusConversationComposer();
+}
+const stopLearningRequests = watchColleagueLearningRequests({ learning, actorKey: () => actorKey.value,
+  reveal: revealForLearning, report: reportFailure,
+  send: async message => sendMessage(message, { focus: { ...props.focus } }) });
+onBeforeUnmount(stopLearningRequests);
 async function submit() {
   if (freshOperation.value || freshBusy.value || voiceSession.value?.composerBlocked.value) return;
   const target = conversation.runtime.value;

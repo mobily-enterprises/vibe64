@@ -11,21 +11,26 @@ const TRAINING_PATH = "/api/vibe64/training";
 
 // This UI adapter owns neither admission nor progress. Original Training and
 // Sessions actions reauthorize every captured attempt before changing anything.
-export function useVibe64LearningMode({ onConversationOpened = null, authorPreview = false } = {}) {
+// `active` (a ref or getter) selects the Learning environment (L) instead of the
+// legacy route mode: the same resources, admission and requests are used while
+// L is open, without the route flag or its mode guard.
+export function useVibe64LearningMode({ onConversationOpened = null, authorPreview = false, active = null } = {}) {
   const route = useRoute();
   const router = useRouter();
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
-  const learningMode = computed(() => route.query.mode === "learning");
+  const environment = active !== null;
+  const learningMode = computed(() => environment ? toValue(active) === true : route.query.mode === "learning");
   const learningView = computed(() => route.query.learningView === "learning" ? "learning" : "workspace");
   const purposeFilter = computed(() => learningMode.value ? "learning" : "working");
   let generation = 0;
   let disposed = false;
-  watch(() => [actorKey.value, route.fullPath, learningMode.value], () => { generation += 1; }, { flush: "sync" });
+  // L stays above the app, so app navigation behind it does not retire its requests.
+  watch(() => [actorKey.value, environment ? "" : route.fullPath, learningMode.value], () => { generation += 1; }, { flush: "sync" });
   // Learning is a page mode: ordinary navigation inside the same project (the
   // Dashboard's section links and back buttons) keeps it. Leaving Learning
   // replaces the same path without the flag, so it is never re-added.
-  const removeModeGuard = typeof router?.beforeEach === "function" ? router.beforeEach((to, from) => {
+  const removeModeGuard = !environment && typeof router?.beforeEach === "function" ? router.beforeEach((to, from) => {
     if (from.query?.mode !== "learning" || Object.hasOwn(to.query || {}, "mode") || to.path === from.path) return true;
     const slug = projectSlugFromPathname(from.path);
     if (!slug || projectSlugFromPathname(to.path) !== slug) return true;
