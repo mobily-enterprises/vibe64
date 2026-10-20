@@ -5,7 +5,12 @@ export { default as NativeProviderConnections } from "./studio/NativeProviderCon
 export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 export { default as AiOnboardingHost } from "./onboarding/AiOnboardingHost.vue";
 export { default as AiOnboardingNudge } from "./onboarding/AiOnboardingNudge.vue";
-export { onVibe64AiOnboardingRequested, requestVibe64AiOnboarding } from "./onboarding/aiOnboardingEvents.js";
+export {
+  aiOnboardingAvailable,
+  aiOnboardingBlocked,
+  onVibe64AiOnboardingRequested,
+  requestVibe64AiOnboarding
+} from "./onboarding/aiOnboardingEvents.js";
 import AccountsSetup from "./studio/AccountsSetup.vue";
 import AIAccountsSetup from "./studio/AIAccountsSetup.vue";
 import ProviderAccountsSetup from "./studio/ProviderAccountsSetup.vue";

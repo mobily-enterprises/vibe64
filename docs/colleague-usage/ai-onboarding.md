@@ -16,11 +16,16 @@ DeepSeek or GLM. It uses the same sign-in, key and Model routing steps as
 - In a hosted workspace only the owner sees it, because only the owner can
   connect AI.
 
-Open it again at any time: **Account settings → AI Accounts → Redo onboarding**
-(the magic-wand button at the top of the tab). While no AI of your own is
-connected, the same tab also shows **Give Vibe64 a brilliant mind** with **Set
-up your AI**, and Colleague shows a small crowned **Set up your AI** note. Each
-of these closes Account settings and opens the flow at the provider choice.
+Open it again at any time from the account menu: select the account button at
+the top right (**Account menu**), then **Redo onboarding**. The same menu holds
+**Account settings**. **Redo onboarding** is also at the top of **Account
+settings → AI Accounts**. While no AI of your own is connected (an expired
+sign-in or key that needs reconnecting does not count), AI Accounts also shows
+**Give Vibe64 a brilliant mind** with **Set up your AI**, and Colleague shows a
+small crowned **Set up your AI** note. Each opens the flow at the provider
+choice, closing Account settings first; closing the flow returns focus to the
+account button. While AI Accounts is saving, signing in or removing something,
+the flow waits: these entries do nothing until it finishes.
 
 ## Screen 1: why it matters
 

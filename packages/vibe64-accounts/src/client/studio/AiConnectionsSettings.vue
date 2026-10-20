@@ -32,7 +32,7 @@ import {
 
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useAiConnections } from "../composables/useAiConnections.js";
-import { requestVibe64AiOnboarding } from "../onboarding/aiOnboardingEvents.js";
+import { aiOnboardingAvailable, requestVibe64AiOnboarding } from "../onboarding/aiOnboardingEvents.js";
 
 const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -247,7 +247,11 @@ const configuredAiGroups = computed(() => [
   { id: "opencode", label: "OpenCode" }
 ].map((engine) => ({ ...engine, accounts: configuredAiRows.value.filter((account) => account.engineId === engine.id) }))
   .filter((engine) => engine.accounts.length));
-const hasOwnAi = computed(() => configuredAiRows.value.some((account) => !account.builtIn));
+// Same rule as the onboarding host (aiIsSetUp): sign-ins and curated keys count
+// only while connected; any added OpenCode connection counts.
+const hasOwnAi = computed(() => configuredAiRows.value.some((account) => (
+  account.kind === "opencode" ? !account.builtIn : account.connected === true
+)));
 const aiStatusLoaded = computed(() => Boolean(
   nativeAccounts.status.value && Array.isArray(nativeAccounts.status.value.accounts)
 ));
@@ -784,6 +788,7 @@ defineExpose({ openProvider });
       aria-label="AI account actions"
     >
       <v-btn
+        v-if="aiOnboardingAvailable"
         class="vibe64-ai-connections__redo"
         :disabled="busy"
         :prepend-icon="mdiAutoFix"
@@ -846,7 +851,7 @@ defineExpose({ openProvider });
         />
 
         <section
-          v-if="!hasOwnAi && !nativeLoadError"
+          v-if="!hasOwnAi && !nativeLoadError && aiOnboardingAvailable"
           aria-labelledby="vibe64-ai-connections-setup-title"
           class="vibe64-ai-connections__setup"
         >

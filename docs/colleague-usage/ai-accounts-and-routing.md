@@ -28,9 +28,10 @@ Open **AI Accounts** in Management, or in the local editor through **Account
 settings → AI Accounts**. No project or coding session is required.
 The local standalone editor does not require a hosted workspace login to open AI
 Accounts. To be guided to a good first AI, use [AI onboarding](ai-onboarding.md):
-**Redo onboarding** at the top of AI Accounts, or **Set up your AI** in the
-**Give Vibe64 a brilliant mind** card shown while no AI of your own is connected
-(the included Big Pickle does not count).
+**Redo onboarding** in the local account menu (next to **Account settings**) or
+at the top of AI Accounts, or **Set up your AI** in the **Give Vibe64 a
+brilliant mind** card shown while no AI of your own is connected (the included
+Big Pickle and accounts marked **Reconnect required** do not count).
 Hosted connection changes require the workspace owner. A member's permitted models
 can differ from the owner's subscription models; account connection alone does not
 grant every collaborator use of it.

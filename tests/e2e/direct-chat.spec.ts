@@ -3023,7 +3023,8 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route,
         routing({ ...assignments, ...route.request().postDataJSON().orchestrators.codex })));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Account settings", exact: true }).click();
+      await page.getByRole("button", { name: "Account menu", exact: true }).click();
+      await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
       await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
       await page.getByRole("button", { name: "Add connection", exact: true }).click();
       await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
@@ -3119,7 +3120,8 @@ for (const width of [390, 820, 1280]) {
         return fulfillJson(route, routing({ ...assignments, ...body.orchestrators.codex }));
       });
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Account settings", exact: true }).click();
+      await page.getByRole("button", { name: "Account menu", exact: true }).click();
+      await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
       await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
       await page.getByRole("button", { name: "Add connection", exact: true }).click();
       await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
@@ -3426,7 +3428,8 @@ test("@accounts-routing opens one named orchestrator from each account heading",
       }] });
     });
     await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
-    await page.getByRole("button", { name: "Account settings", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
     await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
     await expect(page.getByRole("button", { name: "Model routing", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Configure Claude Code routing", exact: true })).toHaveCount(0);

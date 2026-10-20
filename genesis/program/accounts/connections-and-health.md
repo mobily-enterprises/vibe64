@@ -335,7 +335,9 @@ classification. Unknown or removed credentials have no usable identity.
 
 Standalone and hosted editors compose the same AI Accounts screen, catalogue
 validation, provider policy, connection store and runtime wiring. The local
-Account settings dialog has You, AI Accounts and GitHub tabs. AI Accounts offers
+account button opens a menu with Account settings and, while an onboarding host
+can open for this viewer, Redo onboarding. The Account settings dialog has You,
+AI Accounts and GitHub tabs. AI Accounts offers
 Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex,
 and Claude, DeepSeek and GLM through Claude Code,
 and the current OpenCode provider catalogue. An AI connection request opens the
@@ -377,10 +379,14 @@ OpenCode connections loaded without error, no AI beyond included Big Pickle is
 set up, no dialog is open, the route is not Learning, and Set up later is not
 active. Set up later is a 24-hour per-browser snooze,
 `vibe64.aiOnboarding.snoozedUntil:<actorKey>`; there is no server state or state
-upgrade. AI Accounts dispatches the same request from **Redo onboarding**
-(owners only, disabled while a save is busy) and from the **Set up your AI**
-card shown while no non-built-in AI is configured; the local Account settings
-dialog closes on that request unless busy. The free Big Pickle/GLM-4.7 Flash
+upgrade. The mounted host sets `aiOnboardingAvailable`; the local account
+menu's **Redo onboarding** and AI Accounts' **Redo onboarding** (owners only,
+disabled while busy) and **Set up your AI** card appear only then. The card
+uses the host's set-up rule: native sign-ins and curated keys count only while
+connected, any added OpenCode connection counts. The local Account settings
+dialog closes on a request and names its account button as `returnFocus`, where
+the host returns focus when the flow closes; while AI Accounts is busy it sets
+`aiOnboardingBlocked`, and requests are refused rather than stacked over it. The free Big Pickle/GLM-4.7 Flash
 starter and the regular Z.AI shortcut were removed; regular Z.AI stays
 reachable through Add connection → OpenCode. Success requires the chosen
 provider connected and its orchestrator's workflow available. The Colleague

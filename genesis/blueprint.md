@@ -1110,7 +1110,8 @@ so they are easy to correct. The flow opens by itself only for someone who can
 connect AI (the local user, or a hosted workspace owner), only after AI status
 has loaded without error, and only while no AI of their own is connected;
 included Big Pickle does not count. **Set up later** snoozes it for a day in
-that browser, with no server state. **Redo onboarding** in AI Accounts reruns it at any time,
+that browser, with no server state. **Redo onboarding**, in the local account
+menu beside Account settings, in the hosted account menu, and in AI Accounts, reruns it at any time,
 showing what is connected; it can add a provider or change the main AI through
 the normal routing review, and never removes a connection.
 
