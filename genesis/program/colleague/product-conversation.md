@@ -103,8 +103,9 @@ voice inside the same panel; not when minimised) shows a compact **Step N/M**
 button (school icon, check once passed; name "Current lesson step: <title>")
 read from the L controller only. It opens `Vibe64LearningStepDialog`: only the
 current step through the shared `Vibe64LearningStep` (the reader's step body),
-**Previous step**/**Next step** (Next enabled once passed or not required) and
-**Open in Learning**; a full-screen dialog over Colleague's on a phone. Show me
+**Previous step**/**Next step** (Next enabled once passed or not required; on
+the last step of a complete lesson **Finish lesson** opens L's Lesson finished
+screen instead) and **Open in Learning**; a full-screen dialog over Colleague's on a phone. Show me
 and Teach me close it first; a place that cannot be shown reopens it with the
 reason. Every action is an L controller call, so L, focus and tabs stay in step;
 it has no server coupling. On a phone **Open in Learning** minimises Colleague's
@@ -119,8 +120,8 @@ guide could not be opened, and never ask the person to repeat a step that
 the assistant. In learning mode (a lesson in progress) the protocol has
 Colleague check `learning-mode.read` before opening projects, never open or work
 on another project, relay "You're in a lesson. Leave lesson to get back to your
-projects." and run `learning-mode.leave`/`enter` only on the person's direct
-request; `navigation.open` refuses a non-lesson project with that reason before
+projects." and run `learning-mode.leave` only on the person's direct request
+or accepted offer and `learning-mode.enter` only when they ask to return; `navigation.open` refuses a non-lesson project with that reason before
 resolving the project (one mode read per call, so a leave applies at once).
 
 

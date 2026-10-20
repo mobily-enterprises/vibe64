@@ -35,8 +35,8 @@ project is the only project listed or opened, in the project lists, the project
 switcher and **Practice**, and everything inside it works. Opening another
 project says "You're in a lesson. Leave lesson to get back to your projects."
 Press **Leave lesson** (the yellow bar on a desktop, or Learning's header) to
-pause the lesson and get all your projects back; **L** → **Resume** returns to
-it. Lesson 0 and other lessons without a practice project show no projects
+pause the lesson and get all your projects back; **L** → **Resume saved
+lesson** returns to it. Lesson 0 and other lessons without a practice project show no projects
 while in progress.
 
 A local installation normally serves only the project you selected. It also

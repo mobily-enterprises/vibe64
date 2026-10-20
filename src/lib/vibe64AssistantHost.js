@@ -25,7 +25,7 @@ export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 
 // The shared Learning environment (L) controller (createVibe64Learning), provided
 // by the assistant shell context of each host as the controller itself or a ref
-// holding it. Colleague reads its open state, lesson, attempt, step and results,
-// and calls show({ attemptId, stepId }), and minimise(). Consumers
+// holding it. Colleague reads its open and hiddenBy state, lesson, attempt, step
+// and results, and calls show({ attemptId, stepId }) and minimise(). Consumers
 // tolerate its absence.
 export const VIBE64_LEARNING_KEY = Symbol("vibe64.learning");

@@ -7,8 +7,9 @@ apply on desktop and phone.
 
 ## Ending a lesson
 
-A lesson whose required steps have all passed can be ended with **Finish
-lesson** in its reader. Otherwise ending or restarting needs your request to
+A lesson whose required steps have all passed is ended by its **Lesson
+finished** screen, which opens when your own result completes the last required
+step (or from **Lesson finished** in its reader). Otherwise ending or restarting needs your request to
 Colleague, which uses the shared `lesson.end` operation after a direct request
 or accepted offer; there is no separate restart or discard button. An
 installation without its lesson host cannot end lessons, and that refusal is not

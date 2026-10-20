@@ -71,9 +71,10 @@ Resume reports that the saved exercise is busy preparing or finishing a command,
 wait for it to settle and retry the same attempt.
 
 While you have a saved active lesson, start buttons stay disabled: continue it,
-or end it first. When every required step has passed, its reader shows **Finish
-lesson**, which ends it and returns here; otherwise ask Colleague to end the
-lesson (see [Lesson history and resume](learning-history.md)). Ending a lesson
+or end it first. When every required step has passed, Learning shows the
+**Lesson finished** screen, which ends it (see
+[The Learning environment (L)](learning-environment.md)); otherwise ask Colleague
+to end the lesson (see [Lesson history and resume](learning-history.md)). Ending a lesson
 keeps its history and does not stop, close, archive or delete the practice
 project; an ended lesson cannot be resumed, but Colleague can continue it in a
 fresh exercise.

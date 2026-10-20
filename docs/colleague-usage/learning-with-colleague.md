@@ -69,7 +69,7 @@ lesson. Leaving is your one click on **Leave lesson** (the yellow bar on a
 desktop, or Learning's header); Colleague leaves for you
 (`learning-mode.leave`) only when you ask or accept its offer, and returns to
 the lesson (`learning-mode.enter`) only when you ask. Leaving keeps your
-progress and place; **L** → **Resume** brings you back.
+progress and place; **L** → **Resume saved lesson** brings you back.
 
 ## Teacher notes
 

@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from "vue";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 defineOptions({ inheritAttrs: false });
-import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // The L plate: opens and hides the Learning environment above the current page. It is
 // shown only where a host has a signed-in Learning overlay bound to it. In

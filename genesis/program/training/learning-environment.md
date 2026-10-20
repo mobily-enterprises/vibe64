@@ -47,11 +47,12 @@ guide overlay 3000 above L 2400 above Colleague.
   L shows, hiding is `minimise("learner")`; there is no separate close); the
   overlay covers the app bar, so its header L plate is the same toggle button,
   and Escape also calls `minimise("learner")`. `inLesson` is true while the
-  controller's attempt is read and not ended (a restored per-tab attempt is
-  read when the viewer binds); the overlay then sets `body.vibe64-in-lesson`,
-  which `vibe64-m3.css` uses to give every `.shell-layout__app-bar` (Studio and
-  management shells, hosted included) the `--v64-learning-app-bar` wash and an
-  amber edge, and the L button adds an **In a lesson** label above phone width. `hiddenBy` is
+  server-backed learning mode (below) is on; the overlay then sets
+  `body.vibe64-in-lesson`, which `vibe64-m3.css` uses to give every
+  `.shell-layout__app-bar` (Studio and management shells, hosted included) the
+  `--v64-learning-app-bar` wash and an amber edge, and above phone width the L
+  button is followed by the lesson's name (fallback **In a lesson**) and
+  **Leave lesson**. `hiddenBy` is
   `"learner"` only when the learner's own L or Escape hid it (Colleague
   then returns a phone learner to its dialog), and `""` for Show me, Teach me,
   Open practice project and app navigation, `selectStep`, `setScroll`. The
@@ -74,10 +75,10 @@ guide overlay 3000 above L 2400 above Colleague.
   refusal carries the exact reason), and project listings, which show only the
   lesson's practice projects. Refusals are 403 `vibe64_learning_mode_project`,
   "You're in a lesson. Leave lesson to get back to your projects." The client
-  guards navigation by redirecting away from other projects, the app bar shows
-  the yellow lesson bar with the lesson name and **Leave lesson** (in L's header
-  too), and non-project pages (Learning, Account settings, AI Accounts) are never
-  limited, so leaving is always one click.
+  guards navigation by redirecting away from other projects (a note with
+  **Leave lesson**), L's header also offers **Leave lesson**, and non-project
+  pages (Learning, Account settings, AI Accounts) are never limited, so leaving
+  is always one click.
 - Lesson: `loadLesson(attemptId)` reads `lesson.read`; every step action is
   followed by a fresh read. `answer(stepId, selected)` (`step.answer`),
   `done(stepId)` (`step.done`) and `runCheck(stepId)` (`step.check.run`) are the

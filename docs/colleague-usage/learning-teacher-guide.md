@@ -68,6 +68,6 @@ passes a lesson step. When a lesson asks you to find a place, click it yourself.
 ## Opening your lesson
 
 Colleague can open Learning above the app at your current lesson step, or
-minimise it so you can see the app, without ending the lesson. While Learning is
-minimised, the **Step N/M** button in Colleague's header opens the current step
+minimise it so you can see the app, without ending the lesson. While the lesson
+is going, the **Step N/M** button in Colleague's header opens the current step
 in a dialog; its **Open in Learning** returns to that exact step in **L**.

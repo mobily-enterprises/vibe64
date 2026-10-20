@@ -45,6 +45,7 @@ test("all project HTTP operations share canonical actions and current authority 
       ["POST", "/env/reveal", "env.secret.reveal", "revealEnvSecret", { key: "API_KEY", sessionId: "session-1" }],
       ["PUT", "/env/user-values", "env.user-values.save", "saveEnvUserValues", { values: { ACCEPTANCE: { value: "test", secret: false } }, sessionId: "session-1" }],
       ["GET", "/settings", "settings.read", "readSettings", { sessionId: "session-1" }],
+      ["PUT", "/settings/connections", "connections.save", "saveConnectedProjects", { projects: [], revision: "revision-1", sessionId: "session-1" }],
       ["PUT", "/settings/collaboration", "collaboration.save", "saveCollaborationSettings", { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "direct", requirements: "", sessionId: "session-1" }],
       ["PUT", "/settings/prompt-hints", "prompt-hints.save", "savePromptHints", { promptHints: false }],
       ["PUT", "/settings/development-database", "development-database.scope.save", "saveDevelopmentDatabaseScope", { scope: "project" }],
@@ -106,7 +107,7 @@ test("all project HTTP operations share canonical actions and current authority 
       assert.equal(calls.length, count);
       allowed = true;
       await assert.rejects(execute({ ...actionInput, projectSlug: slug, vibe64User: { role: "owner" } }), { code: "ACTION_VALIDATION_FAILED" });
-      if (["repository.workflow.save", "env.secret.reveal", "collaboration.save", "prompt-hints.save"].includes(operation)) {
+      if (["repository.workflow.save", "env.secret.reveal", "connections.save", "collaboration.save", "prompt-hints.save"].includes(operation)) {
         user = { username: "member", role: "member" };
         await assert.rejects(route.handler(request, reply), { code: "vibe64_owner_required", statusCode: 403 });
         await assert.rejects(execute(), { code: "vibe64_owner_required", statusCode: 403 });

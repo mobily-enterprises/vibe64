@@ -101,16 +101,14 @@ function normalizeLearningMode(result) {
     lessonTitle: text(mode.lessonTitle) ? mode.lessonTitle : "", practiceSlug, projectSlugs: Object.freeze(projectSlugs) });
 }
 
-// The redirect a project URL needs in learning mode: null when allowed (or not
-// in learning mode), else the lesson's practice project root, or the app home
-// when the lesson has no practice project (Lesson 0).
+// The redirect a project URL needs in learning mode (as normalizeLearningMode
+// returns it, so projectSlugs already holds practiceSlug): null when allowed (or
+// not in learning mode), else the lesson's practice project root, or the app
+// home when the lesson has no practice project (Lesson 0).
 function learningModeRedirect({ mode = null, slug = "" } = {}) {
   const projectSlug = String(slug || "").trim();
-  if (!mode?.on || !projectSlug) return null;
-  const allowed = [...(mode.projectSlugs || []), ...(mode.practiceSlug ? [mode.practiceSlug] : [])];
-  if (allowed.includes(projectSlug)) return null;
-  const practiceSlug = text(mode.practiceSlug) ? mode.practiceSlug : "";
-  return Object.freeze({ slug: practiceSlug, path: projectAppPath(practiceSlug) });
+  if (!mode?.on || !projectSlug || mode.projectSlugs.includes(projectSlug)) return null;
+  return Object.freeze({ slug: mode.practiceSlug, path: projectAppPath(mode.practiceSlug) });
 }
 
 // passed wins over any later not-yet-passed (a pass is final), including a pass
@@ -211,7 +209,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", actorKey: next });
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
-    // A restored attempt is read at once, so the app bar shows whether it is still going.
+    // A restored attempt is read at once, so Colleague's current-step button and
+    // L's lesson tab are ready while L is hidden (learning mode is read separately).
     if (state.attemptId) void loadLesson();
     if (next) void readLearningMode();
   }

@@ -1556,11 +1556,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     if (!attempt) return Object.freeze({ on: false, paused: false });
     const lessonCode = attempt.pin.lesson.code;
     const paused = record?.pausedAttemptId === attempt.attemptId;
-    // The practice projects of this lesson: the current attempt's (once its
-    // preparation began) and those of earlier attempts of the same lesson. A
-    // lesson without an exercise never gets a project, so its slug opens nothing.
-    const projectSlugs = progress.attempts.filter(value => value.pin.lesson.code === lessonCode && value.projectSlug &&
-      (value.attemptId !== attempt.attemptId || value.preparation?.phase !== "reserved")).map(value => value.projectSlug);
+    // The practice projects of this lesson: the current attempt's (also its
+    // reserved, not yet prepared one) and those of earlier attempts of the same
+    // lesson. A lesson without an exercise never gets a project, so it opens
+    // nothing. practiceSlug names the current one only once preparation began.
+    const projectSlugs = progress.attempts.filter(value => value.pin.lesson.code === lessonCode).map(value => value.projectSlug);
     const practiceSlug = attempt.preparation?.phase !== "reserved" ? attempt.projectSlug || "" : "";
     return Object.freeze({ on: !paused, paused, attemptId: attempt.attemptId, lessonCode,
       practiceSlug, projectSlugs: Object.freeze([...new Set([attempt.projectSlug, ...projectSlugs].filter(Boolean))]) });

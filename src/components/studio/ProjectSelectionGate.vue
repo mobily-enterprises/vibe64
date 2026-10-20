@@ -270,7 +270,7 @@ const {
 const learningModeNote = VIBE64_LEARNING_MODE_NOTE;
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value);
-const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked?.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
+const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
 
 function openLearning() {
   return learning?.show({ surface: "courses" });

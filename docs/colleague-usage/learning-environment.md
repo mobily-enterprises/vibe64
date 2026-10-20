@@ -41,16 +41,16 @@ In learning mode your projects are only this lesson's practice project:
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
 
-**Leave lesson** is always one click (the yellow bar on a desktop, or
-Learning's header). It pauses the lesson: your progress and place are kept,
-learning mode ends and all your projects come back. To return, open **L** and
-press **Resume** (or **Resume saved lesson**), or start the lesson again; you
-are back in learning mode. **Finish** or **End this lesson** ends learning mode
-for good and the header returns to normal. The workspace owner works the same
-way.
+**Leave lesson** is always one click (the yellow bar on a desktop, Learning's
+header, or the note shown when another project was refused). It pauses the
+lesson: your progress and place are kept, learning mode ends and all your
+projects come back. To return, open **L** and press **Resume saved lesson** (or
+**Continue**), or start the lesson again; you are back in learning mode.
+Finishing the lesson (the **Lesson finished** screen) or **End this lesson**
+(for an earlier-format lesson) ends learning mode for good and the header
+returns to normal. The workspace owner works the same way.
 
-An old
-`?mode=learning` address from the retired Learning mode opens the ordinary
+An old `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
 
 ## The Learning screen
@@ -129,26 +129,6 @@ finished** button (on a phone one short row under the step circles: **✓ Lesson
 complete**, **Lesson finished** and **Practice**, which opens the practice
 project). **Lesson finished** opens the lesson finished screen again.
 
-## Lesson finished
-
-When your own step result (in **L**, in Colleague's step dialog, or an automatic
-check from your Preview press) completes the last required step, Learning opens
-on the **Lesson finished** screen in the lesson tab: a check mark, **LESSON
-FINISHED**, the lesson title and "You completed every required step: X of Y
-steps passed. Your results are kept." It ends the lesson for you ("Finishing the
-lesson…"); the yellow in-lesson state and Colleague's step button then
-disappear. If finishing is not confirmed, an error appears with **Finish
-lesson**; press it to try again. You don't need an AI for this. Then choose:
-
-- **Practice project** (when the lesson has one): **Delete practice project**
-  removes it at once, with no archive: its files, sessions and Preview are gone
-  for good. **Keep practice project** keeps it; open or delete it later from
-  **Courses → Practice**.
-- **Next lesson: <title>** starts the next unfinished lesson of the same course
-  (when there is one).
-- **Back to courses**.
-- **Read the lesson again** returns to the ended lesson's steps, read-only.
-
 A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
 
@@ -217,6 +197,26 @@ Statuses come only from automatic checks, the answer comparison and your own
 **Done**. Colleague never decides a step's status and does not know the
 correct answers of a question.
 
+## Lesson finished
+
+When your own step result (in **L**, in Colleague's step dialog, or an automatic
+check from your Preview press) completes the last required step, Learning opens
+on the **Lesson finished** screen in the lesson tab: a check mark, **LESSON
+FINISHED**, the lesson title and "You completed every required step: X of Y
+steps passed. Your results are kept." It ends the lesson for you ("Finishing the
+lesson…"); the yellow in-lesson state and Colleague's step button then
+disappear. If finishing is not confirmed, an error appears with **Finish
+lesson**; press it to try again. You don't need an AI for this. Then choose:
+
+- **Practice project** (when the lesson has one): **Delete practice project**
+  removes it at once, with no archive: its files, sessions and Preview are gone
+  for good. **Keep practice project** keeps it; open or delete it later from
+  **Courses → Practice**.
+- **Next lesson: <title>** starts the next unfinished lesson of the same course
+  (when there is one).
+- **Back to courses**.
+- **Read the lesson again** returns to the ended lesson's steps, read-only.
+
 ## The current step in Colleague
 
 While a lesson is going, Colleague's header (next to **Colleague** and its −
@@ -235,7 +235,9 @@ course browsing: use **L** for that. **Open in Learning** opens **L** at this
 step; on a phone Colleague's dialog gives way to **L** and returns when you hide
 **L**. **Show me** closes the dialog (on a phone also minimising Colleague) and
 shows the place; if it cannot, the dialog comes back with the reason. **Teach
-me** closes the dialog and asks Colleague. The dialog and **L** share one
+me** closes the dialog and asks Colleague. On the last step of a complete
+lesson, **Finish lesson** takes the place of **Next step** and opens the
+**Lesson finished** screen in **L**. The dialog and **L** share one
 lesson state, so **L**, Colleague and other tabs stay in step.
 
 On a phone, when Colleague opens Learning for you its full-screen chat

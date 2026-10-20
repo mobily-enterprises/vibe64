@@ -92,7 +92,7 @@ function openLearningStep() {
   else Promise.resolve(reopen()).catch(reportFailure);
 }
 // A phone shows one surface. When Colleague's dialog gave way to Learning and
-// the learner then minimises or closes L themselves, the dialog comes back
+// the learner then hides L themselves (L or Escape), the dialog comes back
 // (not the app behind it). Show me, Teach me and app navigation hide L to show
 // something else, so they never bring the dialog back.
 let returnFromLearning = false;
