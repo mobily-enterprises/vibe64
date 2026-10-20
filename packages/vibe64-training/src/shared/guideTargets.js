@@ -16,6 +16,7 @@ const TRAINING_GUIDE_PLACES = Object.freeze({
   "git-log": Object.freeze({ pane: "repository", steps: [DASHBOARD, step("git-log", "Git log")] }),
   "session-info": Object.freeze({ pane: "session", steps: [DASHBOARD, step("session-info", "Session info")] }),
   architecture: Object.freeze({ pane: "system", steps: [DASHBOARD, step("architecture", "Architecture")] }),
+  // The L button that opens the Learning environment above the app.
   learning: Object.freeze({ steps: [step("learning", "Learning")] })
 });
 // Earlier teacher targets keep their original "open the view" meaning.
@@ -24,6 +25,8 @@ const TRAINING_GUIDE_TARGETS = Object.freeze([...Object.keys(TRAINING_GUIDE_PLAC
 // Relative, bounded, no "..", backslash or control character.
 // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in a teacher-supplied path.
 const filePathExpression = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\u0000-\u001f\\]{1,512}$/u;
+
+const TRAINING_GUIDE_CAPTION_LIMIT = 256;
 
 function guideFailure(message) {
   return Object.assign(new Error(message), { code: "VIBE64_TRAINING_GUIDE_INVALID", statusCode: 422 });
@@ -50,6 +53,12 @@ function trainingGuideRequest(input = {}) {
     }
     request.filePath = input.filePath;
   }
+  if (input.caption !== undefined) {
+    if (typeof input.caption !== "string" || !input.caption.trim() || input.caption.length > TRAINING_GUIDE_CAPTION_LIMIT) {
+      throw guideFailure(`Use a caption of 1 to ${TRAINING_GUIDE_CAPTION_LIMIT} characters.`);
+    }
+    request.caption = input.caption.trim();
+  }
   return request;
 }
 
@@ -59,12 +68,31 @@ function trainingGuideSteps(request) {
   return steps;
 }
 
-// The browser command for one normalized request. A point-only command
-// changes no view; its receipt carries only what the overlay actually drew.
-function trainingGuideCommand(request, { id, projectSlug, sessionId, attemptId }) {
-  const place = TRAINING_GUIDE_PLACES[request.target];
+function guideWithSteps(request) {
   const steps = trainingGuideSteps(request);
-  const guide = { ...request, steps, caption: steps.map(value => value.label).join(" → ") };
+  return { ...request, steps, caption: request.caption || steps.map(value => value.label).join(" → ") };
+}
+
+// The browser command for one normalized request (Learning v2). A point-only
+// command changes no view; its receipt carries only what the overlay actually
+// drew. "Show me" opens the real place in the exact project/session, or the
+// Learning environment (L) for the learning place.
+function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" }) {
+  const place = TRAINING_GUIDE_PLACES[request.target];
+  const guide = guideWithSteps(request);
+  if (!request.navigate) return { id, guide, status: "pending" };
+  // Opening without a highlight is the ordinary navigation command.
+  const highlighted = request.highlight ? { guide } : {};
+  if (request.target === "learning") return { id, learning: { open: true }, ...highlighted, status: "pending" };
+  return { id, projectSlug, sessionId, conversationId: "", pane: place.pane,
+    ...(place.databaseView ? { databaseView: place.databaseView } : {}), ...highlighted, status: "pending" };
+}
+
+// The retired Main teacher's Learning-mode command, kept unchanged for Main
+// until the teacher model is removed (Learning v2 phase 2).
+function trainingLearningModeGuideCommand(request, { id, projectSlug, sessionId, attemptId }) {
+  const place = TRAINING_GUIDE_PLACES[request.target];
+  const guide = guideWithSteps(request);
   if (!request.navigate) return { id, guide, learningAttemptId: attemptId, status: "pending" };
   const learning = request.target === "learning";
   return { id, projectSlug, sessionId, conversationId: "", pane: learning ? "preview" : place.pane,
@@ -75,5 +103,5 @@ function trainingGuideCommand(request, { id, projectSlug, sessionId, attemptId }
     ...(request.highlight ? { guide } : {}), status: "pending" };
 }
 
-export { TRAINING_GUIDE_ALIASES, TRAINING_GUIDE_PLACES, TRAINING_GUIDE_TARGETS,
-  trainingGuideCommand, trainingGuideRequest, trainingGuideSteps };
+export { TRAINING_GUIDE_ALIASES, TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_PLACES, TRAINING_GUIDE_TARGETS,
+  trainingGuideCommand, trainingGuideRequest, trainingGuideSteps, trainingLearningModeGuideCommand };

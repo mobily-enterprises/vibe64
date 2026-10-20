@@ -6,6 +6,8 @@ import * as vue from "vue";
 import { useTrainingPresentationCue } from "../../packages/vibe64-training/src/client/useTrainingPresentationCue.js";
 import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
 import { createTrainingNavigation } from "../../packages/vibe64-training/src/client/createTrainingNavigation.js";
+import * as trainingGuideModule from "../../packages/vibe64-training/src/client/trainingGuide.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
@@ -730,7 +732,7 @@ function conversationSnapshot(response = {}, streamRevision = response.streamRev
   };
 }
 
-function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null) {
+function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null, { learning = null, companionView = null } = {}) {
   const notices = [];
   const events = [];
   const requests = [];
@@ -832,13 +834,15 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@local/vibe64-training/client/presentation-cue": { useTrainingPresentationCue },
     "@local/vibe64-training/client/navigation": { createTrainingNavigation },
     "@local/vibe64-training/client/learner-gestures": { useTrainingLearnerGestures },
+    "@local/vibe64-training/client/guide": trainingGuideModule,
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
     "@jskit-ai/assistant-runtime/client": { useAssistantConversation },
     "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body") },
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body"),
+      VIBE64_COLLEAGUE_VIEW_KEY: Symbol("view"), VIBE64_LEARNING_KEY: Symbol("learning") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
@@ -888,6 +892,8 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   if (preview) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
   if (gestureChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestureChannel);
   if (bodyChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_BODY_KEY, bodyChannel);
+  if (learning) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_LEARNING_KEY, learning);
+  if (companionView) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_VIEW_KEY, companionView);
   app.provide(routeLocationKey, vue.reactive({ path: "/" }));
   app.provide("jskit.realtime.runtime.client.socket", socket);
   app.mount({});
@@ -1511,6 +1517,96 @@ test("a mobile presentation open minimises the original Colleague frame without 
   assert.equal(calls[0].presentation.phase, "ready");
 });
 
+
+// Learning v2 (C4): the shared navigate wrapper runs guide commands in both hosts.
+test("Colleague guide commands point without navigating and show me through the host navigator, reporting only what was drawn", async t => {
+  const acks = [];
+  const view = mount(t, async (url, options) => {
+    if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
+    return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
+  });
+  await flush();
+  const navigated = [];
+  view.state.props.navigate = async command => { navigated.push(command); return { projectSlug: "alpha", sessionId: "session-1", pane: "database" }; };
+  const pointed = trainingGuideCommand(trainingGuideRequest({ target: "database-erd", caption: "Find the ERD" }), { id: "guide-point" });
+  await view.state.handleNavigation(pointed);
+  assert.deepEqual(navigated, [], "point-only changes no view");
+  assert.deepEqual(acks.at(-1), { commandId: "guide-point", clientId: acks.at(-1).clientId, ok: true,
+    guide: { shown: false, reason: "overlay-unavailable" } }, "no mounted overlay means nothing was drawn");
+  const shown = trainingGuideCommand(trainingGuideRequest({ target: "database-erd", navigate: true }),
+    { id: "guide-show", projectSlug: "alpha", sessionId: "session-1" });
+  await view.state.handleNavigation(shown);
+  const { guide: _guide, ...navigation } = shown;
+  assert.deepEqual(navigated, [navigation], "show me runs the ordinary host navigation without the guide");
+  assert.equal(acks.at(-1).commandId, "guide-show");
+  assert.deepEqual(acks.at(-1).focus, { projectSlug: "alpha", sessionId: "session-1", pane: "database" });
+  assert.deepEqual(acks.at(-1).guide, { shown: false, reason: "overlay-unavailable" });
+});
+
+test("Colleague opening an app place minimises Learning, and a phone minimises its own dialog for guides and Learning", async t => {
+  const acks = [];
+  const calls = [];
+  const learning = vue.shallowRef(vue.reactive({ open: true, surface: "lesson", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    stepId: "open-preview", lesson: null, results: [],
+    show(input) { calls.push(["show", input]); this.open = true; }, minimise() { calls.push(["minimise"]); this.open = false; },
+    close() { calls.push(["close"]); this.open = false; } }));
+  const view = mount(t, async (url, options) => {
+    if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
+    return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
+  }, undefined, null, null, null, null, null, null, { learning });
+  await flush();
+  view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.open });
+  await view.state.handleNavigation({ id: "open-preview", status: "pending", projectSlug: "alpha", sessionId: "", pane: "preview" });
+  assert.deepEqual(calls, [["minimise"]], "the app place becomes visible; Learning keeps its state");
+  assert.equal(acks.at(-1).focus.learningOpen, false);
+  calls.length = 0;
+  learning.value.open = true;
+  await view.state.handleNavigation({ id: "open-learning", status: "pending", learning: { open: true } });
+  assert.deepEqual(calls, [], "a Learning command is the host navigator's own selection");
+
+  view.state.xs.value = true;
+  view.state.open.value = true;
+  await flush();
+  assert.equal(view.state.shown.value, true);
+  await view.state.handleNavigation({ id: "phone-guide", status: "pending",
+    guide: trainingGuideCommand(trainingGuideRequest({ target: "preview" }), { id: "unused" }).guide });
+  assert.equal(view.state.shown.value, false, "the phone dialog minimises so the ring is visible");
+  view.state.open.value = true;
+  await flush();
+  await view.state.handleNavigation({ id: "phone-learning", status: "pending", learning: { open: true } });
+  assert.equal(view.state.shown.value, false, "the phone dialog minimises so Learning is visible");
+  view.state.open.value = true;
+  await flush();
+  await view.state.handleNavigation({ id: "phone-plain", status: "pending", projectSlug: "alpha", pane: "settings", sessionId: "" });
+  assert.equal(view.state.shown.value, true, "ordinary navigation keeps the original phone behaviour");
+});
+
+test("the pinned step card follows the shared Learning controller and reopens its exact step", async t => {
+  const calls = [];
+  const controller = vue.reactive({ open: false, surface: "lesson", attemptId: "", stepId: "",
+    lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
+    results: [], show(input) { calls.push(input); }, minimise() {}, close() {} });
+  const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
+    undefined, null, null, null, null, null, null, { learning: controller });
+  await flush();
+  assert.equal(view.state.learningStep.value, null, "no attempt, no card");
+  controller.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  controller.stepId = "change";
+  await flush();
+  assert.deepEqual(view.state.learningStep.value, { attemptId: controller.attemptId, stepId: "change",
+    lessonTitle: "Your first change", title: "Change the greeting", position: 2, total: 2, passed: false });
+  controller.results = [{ stepId: "change", outcome: "not-yet-passed" }, { stepId: "read", outcome: "passed" }];
+  await flush();
+  assert.equal(view.state.learningStep.value.passed, false, "only this step's own pass counts");
+  controller.results = [...controller.results, { stepId: "change", outcome: "passed" }];
+  await flush();
+  assert.equal(view.state.learningStep.value.passed, true);
+  view.state.openLearningStep();
+  assert.deepEqual(calls, [{ attemptId: controller.attemptId, stepId: "change" }]);
+  controller.stepId = "missing";
+  await flush();
+  assert.equal(view.state.learningStep.value, null, "an unknown step shows no card");
+});
 
 test("deliberate diagram retirement stops only its still-audible output, never drawer minimise or a successor", async t => {
   const cue = vue.ref(null);
@@ -2821,6 +2917,103 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   assert.equal(typeof received?.navigate, "function", "Colleague must receive a callable navigator");
   assert.equal(received.navigate, navigation.value);
   assert.deepEqual(Object.keys(await received.navigate({ managementView: "accounts" })), ["route"]);
+});
+
+test("the local Colleague host reports the shared Learning state and opens its exact lesson step", async t => {
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "colleague-learning-focus", inlineTemplate: true }).content, { format: "cjs" });
+  let received = null;
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+      setup(props) { received = props; return () => null; } } },
+    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const controller = vue.reactive({ open: false, surface: "lesson", attemptId, stepId: "one",
+    async show({ attemptId: shownAttempt, stepId } = {}) {
+      await Promise.resolve();
+      Object.assign(this, { open: true, surface: shownAttempt ? "lesson" : this.surface,
+        ...(shownAttempt ? { attemptId: shownAttempt } : {}), ...(stepId ? { stepId } : {}) });
+    },
+    minimise() { this.open = false; }, close() { this.open = false; } });
+  const navigation = vue.shallowRef(null);
+  const host = renderer.createApp(module.exports.default);
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  host.provide(hostKeys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: "demo", projectVisible: true, showProject() {} }));
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  assert.equal(received.focus.learningOpen, false);
+  assert.equal(received.focus.learningSurface, undefined, "a minimised Learning shows no surface");
+  assert.equal(received.focus.learningAttemptId, attemptId, "the current step stays known while minimised");
+  assert.equal(received.focus.learningStepId, "one");
+  const opened = await navigation.value({ id: "learning", status: "pending", learning: { open: true, attemptId, stepId: "two" } });
+  assert.deepEqual([opened.learningOpen, opened.learningSurface, opened.learningAttemptId, opened.learningStepId],
+    [true, "lesson", attemptId, "two"]);
+  const minimised = await navigation.value({ id: "minimise", status: "pending", learning: { open: false } });
+  assert.equal(minimised.learningOpen, false);
+  // Outside Learning mode the held lesson is the Learning environment's, so a
+  // retired Learning-mode exit still settles while it is reported.
+  const left = await navigation.value({ id: "leave", status: "pending", projectSlug: "demo", learningMode: false });
+  assert.deepEqual([left.learningMode, left.pane, left.learningAttemptId], [false, "preview", attemptId]);
+});
+
+test("the local Colleague host refuses a Learning command when no Learning controller is provided", async t => {
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "colleague-learning-absent", inlineTemplate: true }).content, { format: "cjs" });
+  let received = null;
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request", "settleWorkspace"],
+      setup(props) { received = props; return () => null; } } },
+    "@local/vibe64-training/client/presentation-operation": { executeTrainingPresentationOperation() {}, trainingPresentationReceipt() {} },
+    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const navigation = vue.shallowRef(null);
+  const host = renderer.createApp(module.exports.default);
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  assert.equal(Object.hasOwn(received.focus, "learningOpen"), false, "no controller, no Learning focus");
+  await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Learning is unavailable/u);
 });
 
 test("the local Colleague host reports a project-less lesson's own session instead of the page project", async t => {

@@ -361,6 +361,9 @@ import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/v
 
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update", "review-update"]);
 const props = defineProps({
+  // Opens one project file in this session's Dashboard → Files editor (a
+  // Colleague "show me" guide); returns true only when that file opened.
+  openFile: { type: Function, default: null },
   active: Boolean,
   sessionSelected: Boolean,
   assistantReady: Boolean,
@@ -845,6 +848,7 @@ const selectedView = {
   get hostConversationSelected() { return Boolean(hostConversation?.value?.selected); },
   get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
   get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
+  openFile(path) { return typeof props.openFile === "function" && props.openFile(path) === true; },
   async openConversation(conversationId, isCurrent = () => true) {
     if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
     if (!conversationId) {

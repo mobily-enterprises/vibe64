@@ -11,7 +11,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createTrainingLearningWatchSource } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingPresentationActions } from "../../packages/vibe64-training/src/server/presentationActions.js";
-import { trainingGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { trainingLearningModeGuideCommand as trainingGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
 import { createTrainingAssessmentActions } from "../../packages/vibe64-training/src/server/assessmentActions.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";

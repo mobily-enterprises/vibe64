@@ -1,7 +1,37 @@
-# Lessons: Main teaches, Colleague supervises
+# Lessons: Colleague teaches
 
 For authoring and Git publication, read `lesson-authoring`. For pinned content
-and owner recovery, read `teaching-content`.
+and owner recovery, read `teaching-content`. For pointing and "show me", read
+`learning-teacher-guide`.
+
+## Colleague as your teacher
+
+Learning opens above the app with **L** on every signed-in page. You can read
+lessons yourself without AI. Choose **Teach me** in a lesson, or ask Colleague
+about your lesson, and Colleague teaches the current step:
+
+- It reads your lesson and its saved step results, then explains the step in
+  its own words, by text or voice alike.
+- It points at, or with "show me" opens, the real Vibe64 places the step uses,
+  and can open Learning at your current lesson step or minimise it so you see the
+  app. Learning keeps its place while minimised.
+- While Learning is minimised, a pinned card at the top of Colleague's chat shows
+  the lesson, **Step N of M**, the step title, **Passed** once that step has
+  passed, and **Open lesson** to return to that exact step. It stays visible in
+  the right drawer, the phone's full-screen chat and the voice panel.
+- When you say you have done a task, Colleague can run that step's declared
+  automatic check and tells you its actual result; that run is only a
+  diagnostic, and the pass is saved when you press **Check** in Learning.
+
+Colleague never judges. A step passes only through its automatic check, your
+answer to a choice question, or your own **Done** for a self-check. Colleague's
+feedback never changes a step's status, it never claims a pass the results do not
+show, and it never reveals which choice is correct; it helps you reason instead.
+Starting, resuming or ending a lesson needs your direct request. Colleague deletes
+a practice project only after you explicitly confirm that deletion.
+
+On a phone, Colleague's full-screen chat minimises itself when it opens Learning
+or rings a control, so you can see it; reopen Colleague with its avatar button.
 
 ## Lessons with steps: what Colleague can and cannot do
 
@@ -45,7 +75,13 @@ finding or deleting a practice project; it no longer lists Learning-mode
 conversations to Colleague. A lesson in the earlier format (assessments rather
 than steps) can be read in history but not continued.
 
-## Asking Colleague about lessons
+## Earlier lessons (Main teacher)
+
+The rest of this guide describes lessons started before Learning v2, where the
+saved lesson's Main conversation taught and Colleague supervised. Those attempts
+can be read and ended; they cannot continue.
+
+### Asking Colleague about earlier lessons
 
 Ask Colleague to list available courses or read your saved lesson; these reads
 change no project or progress. A direct start request or accepted offer authorizes

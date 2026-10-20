@@ -461,6 +461,24 @@ describe("Temporary AI recovery workspace accessibility", () => {
     } finally { app.unmount(); }
   });
 
+  it("hands a Colleague show-me guide this session's own file opener and reports only an actual open", async () => {
+    temporaryProvider.value = temporaryAiTestState();
+    const view = VueRuntime.shallowRef(null);
+    const openFile = vi.fn(path => path === "src/app.js");
+    const { app } = mountWorkspace({ children: [] }, {
+      active: true, sessionSelected: true, assistantReady: true, projectSlug: "alpha", sessionId: "one", openFile
+    }, null, view);
+    try {
+      expect(view.value.openFile("src/app.js")).toBe(true);
+      expect(view.value.openFile("missing.js")).toBe(false);
+      expect(openFile).toHaveBeenCalledWith("src/app.js");
+    } finally { app.unmount(); }
+    const { app: without } = mountWorkspace({ children: [] }, {
+      active: true, sessionSelected: true, assistantReady: true, projectSlug: "alpha", sessionId: "one"
+    }, null, view);
+    try { expect(view.value.openFile("src/app.js")).toBe(false); } finally { without.unmount(); }
+  });
+
   it("retains the selected conversation owner while chat is hidden and withdraws it on deselection", async () => {
     temporaryProvider.value = temporaryAiTestState();
     const view = VueRuntime.shallowRef(null);

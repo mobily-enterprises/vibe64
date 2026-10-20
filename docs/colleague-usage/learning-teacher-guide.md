@@ -1,52 +1,62 @@
 # Learning teacher guide
 
-During a practice lesson, the lesson teacher (Main) shows you where things are in
-the real Vibe64 workspace. By default it *points*: it rings the real control you
-should click next, with a short caption such as **Dashboard → Database → ERD**.
-You then click it yourself.
+Colleague teaches your lessons and shows you where things are in the real
+Vibe64 app. By default it *points*: it rings the real control you should click
+next, with a short caption such as **Dashboard → Database → ERD** or the
+lesson's own caption. You then click it yourself.
 
 ## What you see
 
 - The rest of the screen dims slightly, and a ring with a gentle ripple sits on
-  one real tab, Dashboard section or button. A caption with the whole path points
-  at it; a thin bar on the caption shows the time left.
+  one real tab, Dashboard section or button. A caption points at it; a thin bar
+  on the caption shows the time left.
 - The ring is on the next step from where you are. On **Preview**, a path to the
   ERD rings the **Dashboard** tab; once you are in **Dashboard → Database**, it
   rings the **ERD** button.
 - The ring lasts about 8 seconds, or until you click or press a key. It never
   blocks your click, and it holds still when your device asks for reduced motion.
+- If Learning is open above the app when Colleague points at an app place,
+  Learning is minimised first (your lesson and step are kept) so you can see it.
 
-## Places the teacher can point at
+## Places Colleague can point at
 
 **Preview**, **Dashboard**, **Dashboard → Database → ERD** or **Data**,
 **Dashboard → Files** (and one file in it), **Current changes**, **Git log**,
-**Session info**, **Architecture**, and the graduation-cap (Learning) option beside Preview and Dashboard. A Dashboard section
-the lesson does not show cannot be ringed.
+**Session info**, **Architecture**, and the **L** (Learning) button. A Dashboard
+section the project does not show cannot be ringed.
 
 ## On a phone
 
 A phone shows the chat or one pane at a time, so the next tab is often hidden.
-The ring then sits on the header's pane switch: the arrow button that shows the
-project panes from the chat, or the next-pane button (for example **Dashboard ›**)
-that steps **Preview → Dashboard → Learning**. The caption still shows the whole
-path. Tap the switch; when the next step becomes visible, the teacher can ring it
-directly.
+Colleague's full-screen chat minimises itself first so the ring is visible. The
+ring then sits on the header's pane switch when the step itself is hidden: the
+arrow button that shows the project panes from the chat, or the next-pane button
+(for example **Dashboard ›**). The caption still shows the whole path. Tap the
+switch; when the next step becomes visible, Colleague can ring it directly.
+Reopen Colleague with its avatar button.
 
 ## When nothing is ringed
 
 If neither a step on the path nor the pane switch is visible, nothing is drawn.
-The teacher is told so and gives you the path in words instead; follow it with the
-visible controls.
+Colleague is told so, never claims a highlight, and gives you the path in words
+instead; follow it with the visible controls.
 
 ## "Show me"
 
-Ask the teacher to "show me" and it opens the place itself (for a file, in the
-lesson's **Dashboard → Files** editor) and rings it there. A view the teacher opens is
-a demonstration, not your step; when a lesson asks you to find a place, click it
-yourself so **Watch me** observes your own navigation.
+Ask Colleague to "show me" and it opens the place itself in your project (for a
+file, in **Dashboard → Files**) and rings it there. For the Learning place it
+opens Learning. A view Colleague opens is a demonstration, not your step: it never
+passes a lesson step. When a lesson asks you to find a place, click it yourself.
 
-## What Colleague can do
+## Opening your lesson
 
-Colleague can explain these steps. It cannot draw the teacher's ring; it can open
-the lesson project's **Preview** or **Dashboard → Database → ERD** for you when you
-ask, which is also a demonstration.
+Colleague can open Learning above the app at your current lesson step, or
+minimise it so you can see the app, without ending the lesson. While Learning is
+minimised, the current step card stays pinned at the top of Colleague's chat;
+**Open lesson** returns to that exact step.
+
+## Earlier lessons
+
+Lessons started before Learning v2 kept a separate Main teacher in Learning mode.
+Those attempts can be read and ended but not continued; earlier completions keep
+counting.

@@ -6,7 +6,7 @@ import * as Vue from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TrainingGuideOverlay from "../../packages/vibe64-training/src/client/TrainingGuideOverlay.vue";
 import { runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
-import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { trainingGuideCommand, trainingGuideRequest, trainingLearningModeGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 
 const overlayFile = path.resolve("packages/vibe64-training/src/client/TrainingGuideOverlay.vue");
 {
@@ -202,5 +202,36 @@ describe("teacher guide commands in the Main browser", () => {
       .rejects.toThrow(/could not open that practice project file/u);
     await expect(runTrainingGuideCommand(shown, {})).rejects.toThrow(/navigation is unavailable/u);
     expect(guide.caption).toBe("Dashboard → Files → src/app.js");
+  });
+});
+
+describe("Learning v2 guide commands", () => {
+  it("opens real places without a Learning mode, opens Learning for its button, and keeps Main's retired command unchanged", () => {
+    expect(trainingGuideCommand(trainingGuideRequest({ target: "database-data", navigate: true }), { id: "data", projectSlug: "alpha", sessionId: "one" }))
+      .toEqual({ id: "data", projectSlug: "alpha", sessionId: "one", conversationId: "", pane: "database", databaseView: "data", status: "pending",
+        guide: { target: "database-data", navigate: true, highlight: true, caption: "Dashboard → Database → Data",
+          steps: [{ id: "dashboard", label: "Dashboard" }, { id: "database", label: "Database" }, { id: "database-data", label: "Data" }] } });
+    expect(trainingGuideCommand(trainingGuideRequest({ target: "learning", navigate: true, highlight: false }), { id: "open" }))
+      .toEqual({ id: "open", learning: { open: true }, status: "pending" });
+    expect(trainingGuideCommand(trainingGuideRequest({ target: "learning", caption: "Your lessons live here" }), { id: "point" }))
+      .toEqual({ id: "point", status: "pending", guide: { target: "learning", navigate: false, highlight: true,
+        caption: "Your lessons live here", steps: [{ id: "learning", label: "Learning" }] } });
+    const legacy = trainingLearningModeGuideCommand(trainingGuideRequest({ target: "preview", navigate: true }),
+      { id: "main", projectSlug: "practice", sessionId: "session", attemptId: "attempt" });
+    expect(legacy).toMatchObject({ learningMode: true, learningView: "workspace", learningAttemptId: "attempt", pane: "preview" });
+  });
+
+  it("bounds a lesson caption", () => {
+    expect(trainingGuideRequest({ target: "preview", caption: "  Your app runs here " }).caption).toBe("Your app runs here");
+    for (const caption of ["", "   ", "x".repeat(257), 7]) {
+      expect(() => trainingGuideRequest({ target: "preview", caption })).toThrow(/caption of 1 to 256/u);
+    }
+  });
+
+  it("shows the lesson caption on the ring", async () => {
+    mountOverlay();
+    const guide = trainingGuideCommand(trainingGuideRequest({ target: "dashboard", caption: "Start here" }), { id: "caption" }).guide;
+    expect(await showTrainingGuide(guide)).toEqual({ shown: true, step: "dashboard" });
+    expect(trainingGuide.value.caption).toBe("Start here");
   });
 });

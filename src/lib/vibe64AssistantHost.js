@@ -30,3 +30,10 @@ export const VIBE64_TRAINING_LEARNER_GESTURE_KEY = Symbol("vibe64.training.learn
 
 // One actual general Colleague body; not Main's chat or another voice frame.
 export const VIBE64_COLLEAGUE_BODY_KEY = Symbol("vibe64.colleague.body");
+
+// The shared Learning environment (L) controller (useVibe64Learning), provided
+// by the assistant shell context of each host as the controller itself or a ref
+// holding it. Colleague reads its open state, lesson, attempt, step and results,
+// and calls show({ attemptId, stepId }), minimise() and close(). Consumers
+// tolerate its absence.
+export const VIBE64_LEARNING_KEY = Symbol("vibe64.learning");

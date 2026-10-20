@@ -18,7 +18,10 @@ import { createTrainingAnswerAssessment } from "../../packages/vibe64-training/s
 import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
 import { createTrainingAssessmentActions } from "../../packages/vibe64-training/src/server/assessmentActions.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
+import { createTrainingPresentationCoordination } from "../../packages/vibe64-training/src/server/presentationCoordination.js";
+import { learningFocusMatches as learningWatchFocusMatches } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
@@ -2421,9 +2424,204 @@ test("Learning navigation retains exact mode, pane and attempt until its initiat
     pane: "preview", learningMode: false };
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
     ok: true, focus: { ...workingFocus, learningView: "workspace" } }, f.context)).ok, false);
+  // Learning v2: outside Learning mode, the Learning environment (L) still
+  // reports its current lesson; leaving Learning mode must not wait for it.
+  const heldFocus = { ...workingFocus, learningOpen: false,
+    learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", learningStepId: "one" };
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus: workingFocus }, f.context)).ok, true);
-  assert.deepEqual(await leave, { ok: true, focus: workingFocus });
+    ok: true, focus: heldFocus }, f.context)).ok, true);
+  assert.deepEqual(await leave, { ok: true, focus: heldFocus });
+});
+
+test("leaving Learning mode is confirmed while the Learning environment holds a lesson, and its attempt is never a Learning-mode watch", async () => {
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const held = { projectSlug: "alpha", sessionId: "", conversationId: "", pane: "preview", learningMode: false,
+    learningOpen: false, learningAttemptId: attemptId, learningStepId: "one" };
+  for (const create of [createColleagueNavigationCoordination, createTrainingPresentationCoordination]) {
+    const coordination = create({ changed() {} });
+    const connection = {};
+    const leaving = coordination.begin(connection, { id: "leave", status: "pending", projectSlug: "alpha", learningMode: false },
+      { generation: 0 });
+    assert.equal(coordination.acknowledge(connection, { commandId: "leave", ok: true,
+      focus: { ...held, learningView: "workspace" } }, { generation: 0 }).ok, false, create.name);
+    coordination.acknowledge(connection, { commandId: "leave", ok: true, focus: held }, { generation: 0 });
+    assert.deepEqual(await leaving, { ok: true, focus: held }, create.name);
+  }
+  const watch = { projectSlug: "alpha", sessionId: "", learningTask: { attemptId } };
+  assert.equal(learningWatchFocusMatches(watch, held), false, "the Learning environment's lesson is not a Learning-mode task");
+  assert.equal(learningWatchFocusMatches(watch, { ...held, learningMode: true, learningView: "workspace" }), true);
+});
+
+// Learning v2 (C4): navigation coordination moved from vibe64-training's
+// presentationCoordination.js. These port the original Main guide receipt
+// assertions (vibe64TrainingTeaching) onto Colleague's own navigate/ack path.
+async function pendingNavigation(f, clientId, predicate = () => true) {
+  let state;
+  for (let index = 0; index < 50; index += 1) {
+    state = await f.service.read({ clientId }, f.context);
+    if (state.navigation?.status === "pending" && predicate(state.navigation)) return state.navigation;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  return state.navigation;
+}
+
+test("Colleague guide points at a real control without navigating and reports only the highlight actually drawn", async t => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const learningAction = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open-learning", input, context });
+  for (const [input, error] of [
+    [{ guide: { target: "dashboard", navigate: true }, projectSlug: "alpha", sessionId: "session-1" }, /Dashboard has no single view/u],
+    [{ guide: { target: "preview", navigate: false, highlight: false } }, /neither|does neither/u],
+    [{ guide: { target: "preview", filePath: "src/app.js" } }, /filePath is only for the files place/u],
+    [{ guide: { target: "files", filePath: "../outside.js" } }, /without '\.\.'/u],
+    [{ guide: { target: "preview" }, projectSlug: "alpha" }, /point-only guide changes no view/u],
+    [{ guide: { target: "preview", navigate: true } }, /exact project/u],
+    [{ guide: { target: "files", navigate: true }, projectSlug: "alpha" }, /exact session/u],
+    [{ guide: { target: "learning", navigate: true }, projectSlug: "alpha" }, /opens Learning, not a project/u],
+    [{ guide: { target: "preview" }, pane: "settings", projectSlug: "alpha" }, /derives its own view/u],
+    [{ guide: { target: "preview" }, learningMode: true, learningView: "learning", learningContent: "picker", projectSlug: "alpha" }, /retired Learning mode/u]
+  ]) {
+    const result = await (input.projectSlug ? execute : learningAction)(input);
+    assert.equal(result.ok, false, JSON.stringify(input));
+    assert.match(result.error, error);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  await assert.rejects(learningAction({ guide: { target: "elsewhere" } }), { code: "ACTION_VALIDATION_FAILED" });
+  await assert.rejects(learningAction({ guide: { target: "preview", caption: "x".repeat(257) } }), { code: "ACTION_VALIDATION_FAILED" });
+  await assert.rejects(learningAction({ guide: { target: "preview" }, projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
+    "the project-less action accepts no project");
+  await assert.rejects(execute({ learning: { open: true }, projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
+    "Learning is opened through the project-less action");
+
+  const pointed = learningAction({ guide: { target: "learning", caption: "Open Learning here" } });
+  const command = await pendingNavigation(f, "tab-a");
+  assert.equal(command.learningMode, undefined, "point-only changes no view");
+  assert.equal(command.pane, undefined);
+  assert.equal(command.learning, undefined);
+  assert.deepEqual(command.guide, { target: "learning", navigate: false, highlight: true, caption: "Open Learning here",
+    steps: [{ id: "learning", label: "Learning" }] });
+  const ack = (navigation, input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: navigation.id, ok: true, ...input } });
+  assert.equal((await ack(command, {})).ok, false, "a guide receipt is required");
+  assert.equal((await ack(command, { guide: { shown: true } })).ok, false, "a drawn highlight names its real step");
+  assert.equal((await ack(command, { guide: { shown: false } })).ok, false, "an undrawn highlight names why");
+  await assert.rejects(ack(command, { guide: { shown: false, reason: "invented" } }), { code: "ACTION_VALIDATION_FAILED" });
+  assert.equal((await ack(command, { guide: { shown: false, reason: "target-hidden" } })).ok, true);
+  assert.deepEqual(await pointed, { ok: true, guide: { shown: false, reason: "target-hidden" } });
+
+  const shown = execute({ guide: { target: "database-erd", navigate: true }, projectSlug: "alpha", sessionId: "session-1" });
+  const opened = await pendingNavigation(f, "tab-a");
+  assert.deepEqual({ ...opened, id: "" }, { id: "", projectSlug: "alpha", sessionId: "session-1", conversationId: "", pane: "database",
+    databaseView: "erd", status: "pending", guide: { target: "database-erd", navigate: true, highlight: true, caption: "Dashboard → Database → ERD",
+      steps: [{ id: "dashboard", label: "Dashboard" }, { id: "database", label: "Database" }, { id: "database-erd", label: "ERD" }] } });
+  assert.equal(Object.hasOwn(opened, "learningMode"), false, "show me no longer selects a Learning mode");
+  const focus = { projectSlug: "alpha", sessionId: "session-1", conversationId: "", pane: "database", databaseScreen: "workspace", databaseView: "erd" };
+  assert.equal((await ack(opened, { focus: { ...focus, databaseView: "overview" }, guide: { shown: true, step: "database-erd" } })).ok, false,
+    "the guided place must be the one the browser settled on");
+  assert.equal((await ack(opened, { focus: { ...focus, pane: "preview" }, guide: { shown: true, step: "database-erd" } })).ok, false);
+  assert.equal((await ack(opened, { focus, guide: { shown: true, step: "database-erd" } })).ok, true);
+  assert.deepEqual(await shown, { ok: true, focus, guide: { shown: true, step: "database-erd" } });
+
+  const learning = learningAction({ guide: { target: "learning", navigate: true } });
+  const showLearning = await pendingNavigation(f, "tab-a");
+  assert.deepEqual(showLearning.learning, { open: true });
+  assert.equal(showLearning.projectSlug, undefined);
+  assert.equal((await ack(showLearning, { focus: { learningOpen: false }, guide: { shown: true, step: "learning" } })).ok, false);
+  assert.equal((await ack(showLearning, { focus: { learningOpen: true, learningSurface: "courses" },
+    guide: { shown: true, step: "learning" } })).ok, true);
+  assert.deepEqual(await learning, { ok: true, focus: { learningOpen: true, learningSurface: "courses" }, guide: { shown: true, step: "learning" } });
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.mutations, []);
+});
+
+test("Colleague opens or minimises Learning above the app until its initiating browser confirms the exact lesson step", async t => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open-learning", input, context });
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  for (const input of [
+    { learning: { open: false, attemptId } },
+    { learning: { open: true, stepId: "one" } },
+    { learning: { open: true }, guide: { target: "learning" } }
+  ]) {
+    assert.equal((await execute(input)).ok, false, JSON.stringify(input));
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  for (const input of [{ learning: { open: true }, learningMode: true, learningView: "learning", learningContent: "picker" }]) {
+    assert.equal((await f.service.navigate(input, context)).ok, false, "retired Learning mode fields cannot accompany Learning");
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  await assert.rejects(execute({ learning: { attemptId } }), { code: "ACTION_VALIDATION_FAILED" });
+  await assert.rejects(execute({ learning: { open: true, attemptId: "not-an-attempt" } }), { code: "ACTION_VALIDATION_FAILED" });
+  const opening = execute({ learning: { open: true, attemptId, stepId: "open-preview" } });
+  const command = await pendingNavigation(f, "tab-a");
+  assert.deepEqual(command.learning, { open: true, attemptId, stepId: "open-preview" });
+  assert.equal(command.learningMode, undefined);
+  const exact = { projectSlug: "", sessionId: "", conversationId: "", pane: "", learningOpen: true, learningSurface: "lesson",
+    learningAttemptId: attemptId, learningStepId: "open-preview" };
+  const ack = focus => f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: command.id, ok: true, focus } });
+  for (const focus of [{ ...exact, learningOpen: false }, { ...exact, learningSurface: "courses" },
+    { ...exact, learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, { ...exact, learningStepId: "other-step" }]) {
+    assert.equal((await ack(focus)).ok, false, JSON.stringify(focus));
+  }
+  await assert.rejects(ack({ ...exact, learningSurface: "reader" }), { code: "ACTION_VALIDATION_FAILED" });
+  assert.equal((await ack(exact)).ok, true);
+  assert.deepEqual(await opening, { ok: true, focus: exact });
+
+  const minimising = execute({ learning: { open: false } });
+  const minimise = await pendingNavigation(f, "tab-a", navigation => navigation.learning?.open === false);
+  const kept = { learningOpen: false, learningAttemptId: attemptId, learningStepId: "open-preview" };
+  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: minimise.id, ok: true,
+    focus: { ...kept, learningOpen: true, learningSurface: "lesson" } }, f.context)).ok, false);
+  assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: minimise.id, ok: true, focus: kept }, f.context)).ok, true);
+  assert.deepEqual(await minimising, { ok: true, focus: kept }, "minimising keeps the current lesson step");
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.mutations, []);
+});
+
+test("moved navigation coordination fails an unacknowledged command after its original time limits", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let changes = 0;
+  const coordination = createColleagueNavigationCoordination({ changed() { changes += 1; } });
+  const connection = {};
+  const ordinary = { id: "ordinary", status: "pending", guide: { target: "preview", navigate: false, highlight: true, steps: [], caption: "" } };
+  const pending = coordination.begin(connection, ordinary, { generation: 0 });
+  assert.equal(connection.navigation, ordinary);
+  t.mock.timers.tick(14999);
+  assert.equal(ordinary.status, "pending");
+  t.mock.timers.tick(1);
+  assert.deepEqual(await pending, { ok: false, error: "The browser did not acknowledge navigation. Keep the initiating conversation open and check its current status before trying again." });
+  assert.equal(ordinary.status, "failed");
+  assert.equal(connection.acknowledge, null);
+  assert.deepEqual(coordination.acknowledge(connection, { commandId: "ordinary", ok: true, guide: { shown: false, reason: "target-hidden" } }),
+    { ok: false, error: "This navigation command is no longer pending." });
+  const presentation = { id: "presentation", status: "pending", presentation: { operation: "open" } };
+  const presenting = coordination.begin(connection, presentation, { generation: 0 });
+  t.mock.timers.tick(44999);
+  assert.equal(presentation.status, "pending", "a lesson presentation keeps its longer original limit");
+  t.mock.timers.tick(1);
+  assert.equal((await presenting).ok, false);
+  assert.ok(changes >= 4);
+});
+
+test("Colleague teaches through lessons, navigation, guides and checks, and never judges or reveals answers", () => {
+  assert.match(colleagueInstructions, /lesson\.read/u);
+  assert.match(colleagueInstructions, /navigation\.open guide/u);
+  assert.match(colleagueInstructions, /navigation\.open-learning/u);
+  // Every navigation action the teacher text names is a real Colleague action.
+  const actionIds = new Set(createColleagueActions({}).map(action => action.id));
+  for (const [name] of colleagueInstructions.matchAll(/navigation\.[a-z-]+/gu)) {
+    assert.ok(actionIds.has(`vibe64.colleague.${name}`), name);
+  }
+  assert.doesNotMatch(colleagueInstructions, /navigation\.open learning/u, "Learning opens through navigation.open-learning");
+  assert.match(colleagueInstructions, /step\.check\.run/u);
+  assert.match(colleagueInstructions, /You never judge/u);
+  assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
+  assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);
 });
 
 test("lesson presentation navigation waits for the exact player completion in its initiating browser", async t => {

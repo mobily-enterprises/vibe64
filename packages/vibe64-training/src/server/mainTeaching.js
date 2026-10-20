@@ -2,7 +2,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createTrainingPresentationCoordination, publicCue } from "./presentationCoordination.js";
-import { trainingGuideCommand, trainingGuideRequest } from "../shared/guideTargets.js";
+import { trainingLearningModeGuideCommand, trainingGuideRequest } from "../shared/guideTargets.js";
 import { isDeepStrictEqual } from "node:util";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { createRetainedConversationHelper } from "@local/vibe64-terminals/server/retainedConversationHelper";
@@ -467,7 +467,7 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
             return { ok: false, error: "This source-less lesson has no project workspace to display." };
           }
           await requireCurrent(captured, admitted);
-          const command = trainingGuideCommand(request, { id: randomUUID(),
+          const command = trainingLearningModeGuideCommand(request, { id: randomUUID(),
             projectSlug: scope.noExercise ? "" : grant.project.slug, sessionId, attemptId: scope.attemptId });
           return helperState.presentation.begin(connection, command, { get generation() { return helperState.generation; } });
         },

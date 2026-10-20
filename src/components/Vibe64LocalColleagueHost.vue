@@ -1,6 +1,6 @@
 <script setup>
 import { useRoute, useRouter } from "vue-router";
-import { computed, inject, nextTick, onBeforeUnmount, ref, watchEffect } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watchEffect } from "vue";
 import { Vibe64Colleague } from "@local/vibe64-colleague/client";
 import { Vibe64ColleagueAvatar } from "@local/vibe64-voice/client";
 import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAvatarPreferences.js";
@@ -19,6 +19,7 @@ import {
   VIBE64_COLLEAGUE_PLAN_KEY,
   VIBE64_COLLEAGUE_PREVIEW_KEY,
   VIBE64_COLLEAGUE_VIEW_KEY,
+  VIBE64_LEARNING_KEY,
   VIBE64_LEARNING_NAVIGATION_KEY
 } from "@/lib/vibe64AssistantHost.js";
 
@@ -31,6 +32,9 @@ const integrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);
 const plan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
 const browserNavigation = inject(VIBE64_BROWSER_NAVIGATION_KEY, null);
 const learningNavigation = inject(VIBE64_LEARNING_NAVIGATION_KEY, null);
+// The shared Learning environment (L) controller; absent in hosts without it.
+const learningOwner = inject(VIBE64_LEARNING_KEY, null);
+const learningController = computed(() => unref(learningOwner) || null);
 const actor = computed(() => viewer?.actorKey || "");
 const route = useRoute();
 const router = useRouter();
@@ -56,6 +60,17 @@ const focus = computed(() => {
     result.learningView = current?.learningView || (route.query.learningView === "learning" ? "learning" : "workspace");
     result.learningContent = learning ? "active" : "picker";
     if (learning?.learningAttemptId) result.learningAttemptId = learning.learningAttemptId;
+  } else if (learningController.value) {
+    // L above the app: open state, its surface, and the current lesson step
+    // (kept while L is minimised so Colleague can teach that step).
+    const controller = learningController.value;
+    result.learningOpen = unref(controller.open) === true;
+    const surface = unref(controller.surface);
+    if (result.learningOpen && ["courses", "lesson"].includes(surface)) result.learningSurface = surface;
+    const attemptId = unref(controller.attemptId);
+    const stepId = unref(controller.stepId);
+    if (attemptId) result.learningAttemptId = attemptId;
+    if (attemptId && stepId) result.learningStepId = stepId;
   }
   const displayedDatabase = pane === "database" && database.value?.projectSlug === projectSlug &&
     database.value.sessionId === result.sessionId ? database.value : null;
@@ -117,13 +132,23 @@ function waitForNavigation(predicate, isCurrent, failure) {
   });
 }
 
+function learningPanelMatches(command, value) {
+  const learning = command.learning;
+  if (!learning) return true;
+  if ((value.learningOpen === true) !== learning.open) return false;
+  return !learning.open || !learning.attemptId || value.learningSurface === "lesson" &&
+    value.learningAttemptId === learning.attemptId && (!learning.stepId || value.learningStepId === learning.stepId);
+}
+
 function focusMatches(command, value) {
+  if (!learningPanelMatches(command, value)) return false;
   if (command.learningMode !== undefined) {
     if (value.learningMode !== command.learningMode) return false;
     if (command.learningMode && (value.learningView !== command.learningView ||
         command.learningContent && value.learningContent !== command.learningContent ||
         command.learningAttemptId && value.learningAttemptId !== command.learningAttemptId)) return false;
-    if (!command.learningMode && (value.learningView || value.learningContent || value.learningAttemptId)) return false;
+    // Outside Learning mode learningAttemptId is the Learning environment's lesson.
+    if (!command.learningMode && (value.learningView || value.learningContent)) return false;
   }
   if (command.projectSlug && command.learningContent !== "picker" && value.projectSlug !== command.projectSlug) return false;
   if (command.sessionId && value.sessionId !== command.sessionId) return false;
@@ -149,6 +174,19 @@ async function navigate(command = {}) {
       throw new Error("This management view is unavailable in standalone Vibe64.");
     }
     return { route: route.fullPath };
+  }
+  if (command.learning) {
+    const controller = learningController.value;
+    if (!controller) throw new Error("Learning is unavailable in this view.");
+    const { open, attemptId, stepId } = command.learning;
+    if (open) await controller.show({ ...(attemptId ? { attemptId } : {}), ...(stepId ? { stepId } : {}) });
+    else await controller.minimise();
+    if (!isCurrent()) throw new Error("The browser navigation target changed before it opened.");
+    if (!command.projectSlug) {
+      await waitForNavigation(() => learningPanelMatches(command, focus.value), isCurrent,
+        "Learning did not show the requested lesson.");
+      return { ...focus.value };
+    }
   }
   if (!command.projectSlug) throw new Error("Choose a project before opening this view.");
 
