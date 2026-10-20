@@ -81,9 +81,14 @@ guide overlay 3000 above L 2400 above Colleague.
 The reader shows each step's Markdown body, an optional diagram whose **Play**
 restarts the diagram without a snapshot (its declared initial state and the
 controller's own labels) and runs its declared commands in order through
-`TrainingVisualPlayer`, a choice question (**Check answer**), **Done** for a
-self-check, **Check now** for an automatic check (a not-passed result's reason
-is shown under it until the step changes; it never changes the status),
+`TrainingVisualPlayer` (the diagram and the scroll place watch the attempt and
+step IDs as separate sources, so a realtime lesson reread does not remount a
+playing diagram or move the scroll), a choice question (**Check answer**), **Done** for a
+self-check, **Check now** for an automatic check (a code step, one declaring
+`check.files`, says saving does not check it; a not-passed result's reason, or
+the server's `alreadyPassed` answer for a step already passed, is shown under
+**Check now** or **Check answer** until the step changes; it never changes the
+status),
 **Show me**, **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
 full-screen sheet with a row of numbered step circles. An earlier-format

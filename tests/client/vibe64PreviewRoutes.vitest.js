@@ -261,8 +261,10 @@ describe("Training lesson picker prerequisite", () => {
     const learning = pickerLearning(pickerAttempt());
     learning.completion = { lessonCode: "V64-START-00", lessonHash: pickerHash, required: 3, passed: 2, completed: false };
     const html = await renderPicker({ learningResult: learning });
-    expect(html).toContain("2 of 3 required checks passed.");
+    expect(html).toContain("2 of 3 required steps passed. Continue the remaining steps.");
     expect(html).not.toContain("This lesson is complete.");
+    const done = await renderPicker({ learningResult: { ...learning, completion: { ...learning.completion, passed: 3, completed: true } } });
+    expect(done).toContain("3 of 3 required steps passed. This lesson is complete.");
     const resume = vi.fn();
     learning.completion = { ...learning.completion, lessonHash: "f".repeat(64) };
     const state = mountPicker({ learningResult: learning, onResume: resume });

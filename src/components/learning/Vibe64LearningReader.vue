@@ -56,7 +56,8 @@ function requestAnimationFrameSafe(callback) {
   if (globalThis.requestAnimationFrame) globalThis.requestAnimationFrame(callback);
   else setTimeout(callback, 0);
 }
-watch(() => [step.value?.id, props.learning.state.open], ([, open]) => { if (open) void restoreScroll(); }, { immediate: true });
+// Separate sources: a realtime lesson reread keeps the step ID and must not jump the scroll back.
+watch([() => step.value?.id, () => props.learning.state.open], ([, open]) => { if (open) void restoreScroll(); }, { immediate: true });
 let scrollTimer = null;
 function onScroll() {
   if (restoring || !body.value) return;
@@ -77,7 +78,9 @@ const player = ref(null);
 const playing = ref(false);
 let usedIds = 0;
 const visuals = new Map();
-watch(() => [props.learning.state.attemptId, step.value?.visual?.id], async ([attemptId, visualId]) => {
+// Separate sources: a realtime lesson reread (for example after the reader saves
+// its scroll during Play) keeps the IDs and must not remount a playing diagram.
+watch([() => props.learning.state.attemptId, () => step.value?.visual?.id], async ([attemptId, visualId]) => {
   visualResource.value = null;
   visualError.value = "";
   usedIds = 0;
@@ -130,11 +133,24 @@ async function play() {
 const checkReason = ref("");
 // Separate sources: a lesson reread after the check keeps the same IDs and must not clear it.
 watch([() => props.learning.state.attemptId, () => step.value?.id], () => { checkReason.value = ""; });
+// A step passed earlier in this attempt keeps its pass: the server neither
+// checks nor records a later answer or check, so say so instead of a bare "Passed".
+const ALREADY_PASSED = "You already passed this step, so this was not checked again. Your earlier pass counts.";
+function resultNote(result) {
+  if (result?.alreadyPassed) return ALREADY_PASSED;
+  return result?.outcome === "not-yet-passed" && result.reason ? String(result.reason) : "";
+}
 async function runCheck() {
   const stepId = step.value.id;
   checkReason.value = "";
   const result = await props.learning.runCheck(stepId);
-  if (step.value?.id === stepId && result?.outcome === "not-yet-passed" && result.reason) checkReason.value = String(result.reason);
+  if (step.value?.id === stepId) checkReason.value = resultNote(result);
+}
+async function answer() {
+  const stepId = step.value.id;
+  checkReason.value = "";
+  const result = await props.learning.answer(stepId, selected.value);
+  if (step.value?.id === stepId) checkReason.value = resultNote(result);
 }
 
 const actionError = ref("");
@@ -258,10 +274,12 @@ async function finishLesson() {
           />
           <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
             :disabled="!selected.length || Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
-            @click="learning.answer(step.id, selected)">Check answer</v-btn>
+            @click="answer">Check answer</v-btn>
+          <p v-if="checkReason" class="vibe64-learning-reader__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
         </section>
         <section v-else-if="!ended && kind === 'auto'" class="vibe64-learning-reader__check" aria-label="Automatic check">
-          <p>This step is checked automatically when you do it in your practice project.</p>
+          <p v-if="step.check.files?.length">Make this change yourself in Dashboard → Files. Saving does not check it: press Check now when you are ready.</p>
+          <p v-else>This step is checked automatically when you do it in your practice project.</p>
           <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
             :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck">Check now</v-btn>
           <p v-if="checkReason" class="vibe64-learning-reader__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>

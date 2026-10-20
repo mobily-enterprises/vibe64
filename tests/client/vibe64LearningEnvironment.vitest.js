@@ -454,6 +454,48 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("says an answer or check on a step already passed was not checked again, instead of a bare Passed", async () => {
+    const note = "You already passed this step, so this was not checked again. Your earlier pass counts.";
+    const { learning, calls } = controller({ reads: () => lessonResult({ passedStepIds: ["quiz", "preview"] }),
+      posts: (_url, body) => ({ ok: true, stepId: body.stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "quiz" });
+    const view = await mountReader(learning);
+    try {
+      nodes(view.root).filter(node => node.tag === "div" && node.props?.label)[0].props["onUpdate:modelValue"](true);
+      await flush();
+      byTest(view.root, "learning-answer").props.onClick();
+      await flush(); await flush();
+      expect(calls.find(call => call.method === "POST")).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepAnswer(ATTEMPT), body: { stepId: "quiz", selected: [0] } });
+      expect(textOf(byTest(view.root, "learning-check-reason"))).toBe(note);
+      expect(textOf(byTest(view.root, "learning-step-status"))).toContain("Passed");
+      learning.selectStep("preview");
+      await flush();
+      expect(byTest(view.root, "learning-check-reason")).toBeUndefined();
+      byTest(view.root, "learning-check").props.onClick();
+      await flush(); await flush();
+      expect(textOf(byTest(view.root, "learning-check-reason"))).toBe(note);
+    } finally { view.app.unmount(); }
+  });
+
+  it("tells a code step's learner that saving does not check it, unlike an App interaction step", async () => {
+    const codeStep = { id: "code", title: "Code", bodyText: "Change it.", required: true,
+      check: { kind: "auto", check: "greeting-count", files: ["greeting.mjs"] } };
+    const reads = () => { const value = lessonResult(); value.lesson.steps.push(codeStep); return value; };
+    const { learning } = controller({ reads });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "preview" });
+    const view = await mountReader(learning);
+    const checkText = () => textOf(nodes(view.root).find(node => node.props?.["aria-label"] === "Automatic check"));
+    try {
+      expect(checkText()).toContain("checked automatically when you do it in your practice project");
+      learning.selectStep("code");
+      await flush();
+      expect(checkText()).toContain("Make this change yourself in Dashboard → Files. Saving does not check it: press Check now");
+      expect(checkText()).not.toContain("checked automatically");
+    } finally { view.app.unmount(); }
+  });
+
   it("plays a diagram from its initial state with fresh IDs and remounts before 64 command IDs", async () => {
     const { learning } = controller();
     learning.setViewer("member");
@@ -472,6 +514,15 @@ describe("Learning reader", () => {
       expect(view.players[0].commands.map(command => command.name)).toEqual(["showOverview", "highlight"]);
       expect(view.players[0].commands[1].parameters).toEqual({ part: "server" });
       expect(new Set(view.players[0].commands.map(command => command.commandId)).size).toBe(2);
+      // A realtime reread of the same step (the reader's own scroll save emits
+      // one) neither remounts the playing diagram nor jumps the scroll back.
+      const article = nodes(view.root).find(node => node.tag === "article");
+      article.scrollTop = 500;
+      await learning.learnerChanged({ attemptId: ATTEMPT });
+      await flush(); await flush();
+      expect(view.players).toHaveLength(1);
+      expect(view.readVisual).toHaveBeenCalledTimes(1);
+      expect(article.scrollTop).toBe(500);
       // 32 plays use 64 IDs on the first instance; the 33rd remounts first.
       for (let count = 1; count < 32; count += 1) await play();
       expect(view.players).toHaveLength(1);

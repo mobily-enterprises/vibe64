@@ -18,7 +18,9 @@ moving between code steps never changes it. Code already in a file when you
 first opened the step (from the coding agent, Colleague, Git or an earlier step)
 is the start, not your work: you must change every named file yourself, through
 your own saves in **Dashboard → Files**, after opening the step. If you have not,
-the check reports "needs your own change: edit `<file>` …" without running. Any
+the check reports "needs your own change: edit `<file>` yourself in Dashboard →
+Files during this step, then press Check now" without running. Saving a file
+never runs the check by itself. Any
 other change to a named file after that start makes it report "needs an
 independent attempt: other edits detected in `<file>`" without running. If the
 step has no recorded start, the check says so: open the step again, then make

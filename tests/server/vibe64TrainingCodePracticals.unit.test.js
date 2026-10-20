@@ -332,7 +332,7 @@ test("a v2 code step never passes on code written before it was entered; the lea
   const untouched = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check-1",
     context: { channel: "api" } });
   assert.deepEqual({ outcome: untouched.outcome, recorded: untouched.recorded }, { outcome: "not-yet-passed", recorded: true });
-  assert.match(untouched.reason, /needs your own change: edit notes\.mjs/u);
+  assert.equal(untouched.reason, "needs your own change: edit notes.mjs yourself in Dashboard → Files during this step, then press Check now");
   assert.equal(f.calls.length, 0, "an unchanged file never executes code");
   await f.learnerSave(`${solved}// mine\n`);
   const changed = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check-2",
