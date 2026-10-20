@@ -9,6 +9,7 @@ import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPl
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
+import { inspectTrainingStepProgress } from "@local/vibe64-training/server/step-progress-upgrade";
 import { upgradePlanProgress, upgradeAssistantWorkflow } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
 
 import { upgradeClaudeCommandMessages } from "@local/vibe64-terminals/server/assistantClaudeCommandUpgrade";
@@ -48,6 +49,7 @@ try {
     upgradeColleagueHistoricalInteractiveContinuity,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
+    inspectTrainingStepProgress,
     upgradePlanProgress,
     upgradeAssistantWorkflow,
     upgradeClaudeRejectedInput,

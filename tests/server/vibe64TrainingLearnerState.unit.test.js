@@ -2074,19 +2074,21 @@ test("end progress failures before and after atomic rename retry the original re
   }
 });
 
-test("eight retained attempts and the total byte bound refuse growth without evicting history or replay identities", async t => {
+// D-e: v2 step results live outside progress.json, so the retained-attempt cap
+// rose from eight to 32; the progress byte bound is unchanged.
+test("32 retained attempts and the total byte bound refuse growth without evicting history or replay identities", async t => {
   const f = await fixture(t, { learning: true });
   let state = await f.state.readState({ actor: f.actor });
-  for (let index = 0; index < 8; index++) {
+  for (let index = 0; index < 32; index++) {
     const reserved = await f.reserve({ requestId: `start-${index}`, expectedRevision: state.revision });
     state = await f.state.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId,
       requestId: `end-${index}`, expectedRevision: reserved.revision, reason: "restart" });
   }
   const valid = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
-  assert.equal(valid.attempts.length, 8);
+  assert.equal(valid.attempts.length, 32);
   assert.equal(valid.activeAttemptId, null);
   const before = await treeState(f.systemRoot);
-  await assert.rejects(() => f.reserve({ requestId: "start-9", expectedRevision: state.revision }), /eight retained-attempt limit/u);
+  await assert.rejects(() => f.reserve({ requestId: "start-33", expectedRevision: state.revision }), /32 retained-attempt limit/u);
   assert.equal((await f.reserve({ requestId: "start-0", expectedRevision: 0 })).attempt.attemptId, valid.attempts[0].attemptId);
   assert.deepEqual(await treeState(f.systemRoot), before);
   const ninth = randomUUID();
@@ -2097,12 +2099,14 @@ test("eight retained attempts and the total byte bound refuse growth without evi
   await f.write("progress.json", oversized, f.paths.root);
   const invalidBefore = await treeState(f.systemRoot);
   await assert.rejects(() => f.state.readState({ actor: f.actor }), error => error.code === "VIBE64_TRAINING_STATE_INVALID" &&
-    /Expected at most 8 items/u.test(JSON.stringify(error.cause?.fieldErrors)));
+    /Expected at most 32 items/u.test(JSON.stringify(error.cause?.fieldErrors)));
   assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
   await f.write("progress.json", valid, f.paths.root);
   // Fill only valid bounded fields until an end's prospective pretty-printed
   // record would exceed the shared byte budget; no receipt is evicted to fit.
-  const bytesFull = structuredClone(valid);
+  // Eight attempts with maximal learning still fill the byte bound exactly.
+  const bytesFull = structuredClone({ ...valid, attempts: valid.attempts.slice(0, 8) });
+  bytesFull.revision = bytesFull.attempts[7].ended.revision;
   delete bytesFull.attempts[7].ended;
   bytesFull.activeAttemptId = bytesFull.attempts[7].attemptId;
   for (const [index, attempt] of bytesFull.attempts.entries()) {
