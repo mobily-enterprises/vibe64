@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { lessonSchema, topicSchema, visualSchema, validateContent } from "./contentSchemas.js";
+import { topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
+import { trainingGuideRequest } from "../shared/guideTargets.js";
 
 const excludedExerciseEntries = new Set([".git", "node_modules", ".genesis"]);
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
@@ -80,27 +81,11 @@ function checkPrerequisiteCycles(lessons) {
   for (const lesson of lessons) visit(lesson.code);
 }
 
-async function bundleLesson(reader, entry) {
-  const descriptor = await reader.json(entry.descriptor);
-  const lesson = validateContent(lessonSchema, descriptor.value, entry.code);
-  if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
-  const base = path.dirname(descriptor.filename);
-  const files = new Map();
-  function include(file) {
-    recordBundleFile(files, { path: file.relative, sha256: hash(file.bytes), bytes: file.bytes.length });
-    if (files.size > 512 || [...files.values()].reduce((total, item) => total + item.bytes, 0) > 32 * 1024 * 1024) throw new Error(`Lesson ${entry.code} exceeds bundle limits.`);
-  }
-  include(descriptor);
-  const document = await reader.read(lesson.document, base);
+// Lesson format v1: rubric anchors in the teaching document and assessment producers.
+function bundleAssessments(lesson, document, include, checks) {
   include(document);
   const documentText = document.bytes.toString("utf8");
   uniqueIds(lesson.assessments, "id", "Assessments");
-  uniqueIds(lesson.prerequisites, "code", "Lesson prerequisites");
-  const checks = uniqueIds(lesson.checks || [], "id", "Checks");
-  for (const check of lesson.checks || []) {
-    include(await reader.read(check.file, base));
-    for (const asset of check.assets || []) include(await reader.read(asset, base));
-  }
   for (const assessment of lesson.assessments) {
     const [reference, anchor, extra] = assessment.rubric.split("#");
     if (reference !== lesson.document || !anchor || extra || !new RegExp(`^<a id="${assessment.id}"></a>$`, "mu").test(documentText) || anchor !== assessment.id) {
@@ -120,6 +105,97 @@ async function bundleLesson(reader, entry) {
       throw new Error(`Only code evidence names edited files or runs a code check: ${assessment.id}.`);
     }
   }
+}
+
+// Lesson format v2 step rules. Checks decide alone: auto runs a declared check,
+// choice compares with the authored answer, self is the learner's own tick and
+// none records nothing, so it can never be required.
+function validateSteps(lesson, visuals, checks, code) {
+  const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
+  if (!lesson.steps.length) fail("needs at least one step.");
+  uniqueIds(lesson.steps, "id", "Steps");
+  if (!lesson.steps.some(step => step.required)) fail("needs a required step.");
+  for (const step of lesson.steps) {
+    const label = `step ${step.id}`;
+    if (step.visual) {
+      const visual = visuals.get(step.visual.id);
+      if (!visual) fail(`${label} shows undeclared visual ${step.visual.id}.`);
+      for (const entry of step.visual.play || []) {
+        const command = visual.commands.find(item => item.name === entry.name);
+        if (!command) fail(`${label} plays undeclared command ${entry.name}.`);
+        const parameters = entry.parameters;
+        if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) fail(`${label} command ${entry.name} needs a parameters object.`);
+        for (const [name, value] of Object.entries(parameters)) {
+          const declared = command.parameters.find(item => item.name === name);
+          if (!declared) fail(`${label} command ${entry.name} has undeclared parameter ${name}.`);
+          if (typeof value !== "string" || value.length > declared.maxLength) {
+            fail(`${label} command ${entry.name} parameter ${name} must be a string of at most ${declared.maxLength} characters.`);
+          }
+        }
+        for (const declared of command.parameters) {
+          if (declared.required && !Object.hasOwn(parameters, declared.name)) fail(`${label} command ${entry.name} needs parameter ${declared.name}.`);
+        }
+      }
+    }
+    if (step.guide) {
+      const { caption, ...request } = step.guide;
+      try { trainingGuideRequest(request); } catch (error) { fail(`${label} guide: ${error.message}`); }
+    }
+    const check = step.check;
+    const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], self: [], none: [] }[check.kind];
+    const extra = Object.keys(check).filter(key => key !== "kind" && !allowed.includes(key));
+    if (extra.length) fail(`${label} ${check.kind} check cannot declare ${extra.join(", ")}.`);
+    if (check.kind === "none" && step.required) fail(`${label} has no check and cannot be required.`);
+    if (check.kind === "auto") {
+      if (!check.check || !checks.has(check.check)) fail(`${label} names an unknown check.`);
+      if (!lesson.exercise) fail(`${label} runs a declared check and needs the lesson's exercise.`);
+      const declared = lesson.checks.find(item => item.id === check.check);
+      const files = check.files || [];
+      if (declared.kind === "code" ? files.length < 1 || files.length > 8 : files.length) {
+        fail(`${label} ${declared.kind === "code" ? "code check needs 1-8 exercise files" : "names files, but only a code check edits files"}.`);
+      }
+    }
+    if (check.kind === "choice") {
+      const { question, options, answer } = check;
+      if (!question || !options || !answer) fail(`${label} choice needs question, options and answer.`);
+      if (options.length < 2 || options.length > 8) fail(`${label} choice needs 2-8 options.`);
+      if (!answer.length || new Set(answer).size !== answer.length || answer.some(index => index >= options.length)) {
+        fail(`${label} choice answer must list unique option indexes within its options.`);
+      }
+    }
+  }
+}
+
+async function bundleLesson(reader, entry) {
+  const descriptor = await reader.json(entry.descriptor);
+  const lesson = validateLesson(descriptor.value, entry.code);
+  if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
+  const base = path.dirname(descriptor.filename);
+  const files = new Map();
+  function include(file) {
+    recordBundleFile(files, { path: file.relative, sha256: hash(file.bytes), bytes: file.bytes.length });
+    if (files.size > 512 || [...files.values()].reduce((total, item) => total + item.bytes, 0) > 32 * 1024 * 1024) throw new Error(`Lesson ${entry.code} exceeds bundle limits.`);
+  }
+  include(descriptor);
+  // Files a learner can read (step bodies, notes, visual resources, exercise
+  // files). validateTopic refuses any that is a lesson descriptor, so a v2
+  // choice answer never reaches a browser projection.
+  const served = new Set();
+  uniqueIds(lesson.prerequisites, "code", "Lesson prerequisites");
+  const checks = uniqueIds(lesson.checks || [], "id", "Checks");
+  for (const check of lesson.checks || []) {
+    include(await reader.read(check.file, base));
+    for (const asset of check.assets || []) include(await reader.read(asset, base));
+  }
+  if (lesson.schemaVersion === 1) bundleAssessments(lesson, await reader.read(lesson.document, base), include, checks);
+  if (lesson.schemaVersion === 2) {
+    for (const reference of [lesson.notes, ...new Set(lesson.steps.map(step => step.body))]) {
+      if (reference === undefined) continue;
+      const file = await reader.read(reference, base);
+      include(file);
+      served.add(file.relative);
+    }
+  }
   if (lesson.appRoutes && !lesson.exercise) throw new Error(`Lesson ${entry.code} can declare app routes only with its exercise.`);
   const appRoutes = new Set();
   for (const route of lesson.appRoutes || []) {
@@ -134,8 +210,9 @@ async function bundleLesson(reader, entry) {
   for (const check of lesson.checks || []) {
     if (check.timeoutSeconds !== undefined && check.kind !== "code") throw new Error(`Only a code check declares a timeout: ${check.id}.`);
   }
-  if (!lesson.assessments.some(assessment => assessment.required)) throw new Error(`Lesson ${entry.code} needs a required assessment.`);
+  if (lesson.schemaVersion === 1 && !lesson.assessments.some(assessment => assessment.required)) throw new Error(`Lesson ${entry.code} needs a required assessment.`);
   uniqueIds(lesson.visuals, "id", "Visuals");
+  const visuals = new Map();
   for (const resource of lesson.visuals) {
     const visualFile = await reader.json(resource.descriptor, base);
     const visual = validateContent(visualSchema, visualFile.value, resource.id);
@@ -148,10 +225,13 @@ async function bundleLesson(reader, entry) {
       if (command.completionState !== "unchanged" && !states.has(command.completionState)) throw new Error(`Unknown completion state: ${command.name}.`);
     }
     include(visualFile);
+    visuals.set(visual.id, visual);
     const visualBase = path.dirname(visualFile.filename);
-    include(await reader.read(visual.svg, visualBase));
-    include(await reader.read(visual.controller, visualBase));
-    for (const asset of visual.assets || []) include(await reader.read(asset, visualBase));
+    for (const reference of [visual.svg, visual.controller, ...visual.assets || []]) {
+      const file = await reader.read(reference, visualBase);
+      include(file);
+      served.add(file.relative);
+    }
   }
   if (lesson.exercise) {
     const exercise = lesson.exercise;
@@ -168,28 +248,36 @@ async function bundleLesson(reader, entry) {
         const relative = path.relative(reader.root, path.join(directory, item.name));
         const file = await reader.resolve(relative);
         if (item.isDirectory()) await includeDirectory(file.filename);
-        else include(await reader.read(relative));
+        else {
+          const read = await reader.read(relative);
+          include(read);
+          served.add(read.relative);
+        }
       }
     }
     await includeDirectory(source.filename);
     // Declared code files must be ordinary bundled exercise files; their pinned
     // bytes are the check's base and only these paths take the learner's bytes.
-    for (const assessment of lesson.assessments) {
-      for (const file of assessment.evidence?.files || []) {
+    const declaredFiles = lesson.schemaVersion === 1
+      ? lesson.assessments.map(assessment => [`Code assessment ${assessment.id}`, assessment.evidence?.files || []])
+      : lesson.steps.map(step => [`Code step ${step.id}`, step.check.files || []]);
+    for (const [label, declared] of declaredFiles) {
+      for (const file of declared) {
         const parts = file.split("/");
         if (file.includes("\\") || path.posix.isAbsolute(file) ||
             parts.some(part => !part || part === "." || part === ".." || excludedExerciseEntries.has(part)) ||
             !files.has(source.relative ? `${source.relative}/${file}` : file)) {
-          throw new Error(`Code assessment ${assessment.id} names a file outside its bundled exercise: ${file}.`);
+          throw new Error(`${label} names a file outside its bundled exercise: ${file}.`);
         }
       }
-      if (new Set(assessment.evidence?.files || []).size !== (assessment.evidence?.files || []).length) {
-        throw new Error(`Code assessment ${assessment.id} repeats a declared file.`);
+      if (new Set(declared).size !== declared.length) {
+        throw new Error(`${label} repeats a declared file.`);
       }
     }
   }
+  if (lesson.schemaVersion === 2) validateSteps(lesson, visuals, checks, entry.code);
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
-  return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative };
+  return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served };
 }
 
 async function validateTopic(directory) {
@@ -204,9 +292,18 @@ async function validateTopic(directory) {
   if (!topic.lessons.length) throw new Error("A topic needs lessons.");
   if (topic.status === "released" && topic.lessons.some(entry => entry.required && entry.status !== "published")) throw new Error("A released topic contains required draft lessons.");
   const bundles = [];
+  const served = new Set();
   for (const entry of topic.lessons) {
     // Draft descriptors are validated too; draft status never grants permission to teach them.
-    bundles.push({ ...await bundleLesson(reader, entry), status: entry.status, required: entry.required });
+    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry);
+    for (const file of lessonServed) served.add(file);
+    bundles.push({ ...bundle, status: entry.status, required: entry.required });
+  }
+  // A v2 lesson descriptor holds choice answers; no learner-readable file may be one.
+  for (const { descriptorPath, lesson } of bundles) {
+    if (lesson.schemaVersion === 2 && served.has(descriptorPath)) {
+      throw new Error(`Lesson ${lesson.code} descriptor cannot also be a step body, notes, visual or exercise file.`);
+    }
   }
   checkPrerequisiteCycles(bundles.map(bundle => bundle.lesson));
   for (const [index, bundle] of bundles.entries()) {

@@ -94,8 +94,17 @@ Vibe64 command. These authoring commands do not by themselves expose a learner c
 install a topic or start a lesson. Do not offer to start a course merely because
 its files validate.
 
-Use a topic repository whose name begins with `learn-`. Keep the teaching document,
-assessment rubrics, SVG descriptors and runnable exercise in that repository.
+Use a topic repository whose name begins with `learn-`. Keep the lesson
+descriptors, step texts, SVG descriptors, checks and runnable exercise in that
+repository. New lessons use lesson format v2 (`schemaVersion: 2`): optional
+notes and 1–32 ordered steps. Each step has a Markdown body a learner can read
+without AI, an optional diagram to play and an optional guide that points at a
+real Vibe64 place, and one check: `auto` (a declared check against the
+learner's own exercise work), `choice` (multiple choice with an answer kept on
+the server), `self` (the learner presses **Done**) or `none` (reading only, never
+required). Check verdicts are final: there is no rubric or AI grader, and
+Colleague never passes a step. Older v1 lessons (teaching document plus
+assessments) still validate for history but cannot be started.
 The installed `docs/templates/learn-topic/` directory supplies a copyable whole
 topic. The author copies it to a new directory, follows its README to choose
 permanent identifiers and replace placeholder content, then validates it. Its
@@ -113,7 +122,7 @@ These commands use that session's existing filesystem and Git access. Keep the
 inputs and outputs within the authorised authoring assignment. They do not grant
 Colleague source access or permit a coding agent to install or enable courses.
 Success lists ordered lesson hashes and distinguishes published lessons from drafts.
-A failure means the author must correct the reported schema, reference, rubric or
+A failure means the author must correct the reported schema, step, check, reference or
 path problem; it does not change their project or learning history.
 
 To produce local release material, the author runs

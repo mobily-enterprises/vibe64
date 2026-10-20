@@ -100,7 +100,8 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
     }
   }
   write(JSON.stringify({ ok: true, topicId: result.topic.topicId, status: result.topic.status,
-    lessons: result.bundles.map(({ lesson, hash, status }) => ({ code: lesson.code, hash, status })) }, null, 2));
+    lessons: result.bundles.map(({ lesson, hash, status }) => ({ code: lesson.code, hash, status, schemaVersion: lesson.schemaVersion,
+      ...lesson.schemaVersion === 2 ? { steps: lesson.steps.length } : {} })) }, null, 2));
   return 0;
 }
 

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2, "code": "STEPS-ONE", "title": "Steps in a real app", "notes": "notes.md",
+  "prerequisites": [], "estimatedMinutes": 15,
+  "visuals": [{ "id": "flow", "descriptor": "visuals/flow/visual.json" }],
+  "exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },
+  "checks": [
+    { "id": "app-response", "file": "checks/response.mjs" },
+    { "id": "notes-title-required", "file": "checks/notes/title.mjs", "kind": "code", "timeoutSeconds": 15 }
+  ],
+  "steps": [
+    { "id": "open-preview", "title": "Open the Preview", "body": "steps/open-preview.md",
+      "visual": { "id": "flow", "play": [{ "name": "send", "parameters": { "label": "GET /" } }] },
+      "guide": { "target": "preview", "navigate": true, "caption": "Your app runs here" },
+      "check": { "kind": "auto", "check": "app-response", "files": [] }, "required": true },
+    { "id": "which-side", "title": "Which side answered?", "body": "steps/which-side.md",
+      "check": { "kind": "choice", "question": "Which part produced the greeting?",
+        "options": ["The browser", "The server", "The database"], "answer": [1] }, "required": true },
+    { "id": "require-title", "title": "Refuse empty titles", "body": "steps/require-title.md",
+      "guide": { "target": "files", "navigate": true, "filePath": "notes.mjs" },
+      "check": { "kind": "auto", "check": "notes-title-required", "files": ["notes.mjs"] }, "required": true },
+    { "id": "reflect", "title": "Say it in your words", "body": "steps/reflect.md",
+      "check": { "kind": "self" }, "required": false },
+    { "id": "read-more", "title": "Read more", "body": "steps/read-more.md",
+      "check": { "kind": "none" }, "required": false }
+  ]
+}

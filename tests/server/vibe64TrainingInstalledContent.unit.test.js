@@ -9,7 +9,7 @@ import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
-import { createInstalledTrainingContent } from "@local/vibe64-training/server/installed-content";
+import { compareChoiceAnswer, createInstalledTrainingContent } from "@local/vibe64-training/server/installed-content";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-installed-training-"));
@@ -849,4 +849,106 @@ test("an absent exercise retains its message and typed missing-exercise refusal"
     code: "VIBE64_TRAINING_EXERCISE_MISSING", message: "Lesson LESSON-01 has no declared bundled exercise."
   });
   assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+// Lesson format v2: install the shared steps fixture exactly as the CLI does.
+async function stepsFixture(t, { status = "published" } = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-installed-steps-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const source = path.join(root, "source");
+  const systemRoot = path.join(root, "system");
+  await cp(path.resolve(import.meta.dirname, "../fixtures/training/steps-v2"), source, { recursive: true });
+  await mkdir(systemRoot);
+  const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
+  metadata.vibe64Training.lessons[0].status = status;
+  await writeFile(path.join(source, "package.json"), `${JSON.stringify(metadata)}\n`);
+  const lesson = JSON.parse(await readFile(path.join(source, "lesson.json"), "utf8"));
+  const git = (...args) => execFileSync("git", ["-C", source, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+    "-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  git("init", "-b", "main"); git("add", "."); git("commit", "-m", "v2 fixture");
+  const sourcePin = await readPinnedTopic(source);
+  const snapshotRoot = path.join(systemRoot, "training", "content", sourcePin.topicId, sourcePin.commit);
+  await mkdir(path.dirname(snapshotRoot), { recursive: true });
+  await runTrainingCli(["bundle", source, snapshotRoot], { write() {} });
+  const pin = { schemaVersion: 1, topicId: sourcePin.topicId, release: sourcePin.release, repository: sourcePin.repository, commit: sourcePin.commit, topicHash: sourcePin.topicHash };
+  await writeFile(path.join(snapshotRoot, "pin.json"), `${JSON.stringify(pin)}\n`);
+  const bundle = JSON.parse(await readFile(path.join(snapshotRoot, "bundle.json"), "utf8"));
+  const input = { ...pin, lessonCode: "STEPS-ONE", lessonHash: bundle.lessons[0].hash };
+  return { source, systemRoot, snapshotRoot, lesson, pin, input, reader: createInstalledTrainingContent({ systemRoot }) };
+}
+
+const hasAnswer = value => JSON.stringify(value).includes('"answer"');
+
+test("a v2 lesson reads steps with body text and notes, without a document, rubrics or choice answers", async t => {
+  const f = await stepsFixture(t);
+  const before = await treeState(f.systemRoot);
+  const lesson = await f.reader.readLesson(f.input);
+  assert.equal(lesson.document, undefined);
+  assert.equal(lesson.rubrics, undefined);
+  assert.equal(lesson.hash, f.input.lessonHash);
+  assert.equal(lesson.descriptorPath, "lesson.json");
+  assert.deepEqual(lesson.steps.map(step => step.id), f.lesson.steps.map(step => step.id));
+  for (const step of lesson.steps) {
+    assert.equal(step.bodyText, await readFile(path.join(f.source, step.body), "utf8"), step.id);
+  }
+  assert.equal(lesson.notesText, await readFile(path.join(f.source, "notes.md"), "utf8"));
+  assert.deepEqual(lesson.steps[1].check, { kind: "choice", question: f.lesson.steps[1].check.question, options: f.lesson.steps[1].check.options });
+  assert.deepEqual(lesson.steps[0].visual, f.lesson.steps[0].visual);
+  assert.deepEqual(lesson.steps[0].guide, f.lesson.steps[0].guide);
+  assert.equal(lesson.visuals[0].id, "flow");
+  assert.ok(!hasAnswer(lesson), "readLesson never projects a choice answer");
+  assert.ok(!hasAnswer(await f.reader.readTopic(f.pin)), "readTopic never projects a choice answer");
+  assert.ok(!hasAnswer(await f.reader.readAdmissionIdentity(f.input)), "admission never projects a choice answer");
+  assert.ok(!hasAnswer(await f.reader.readExercise({ ...f.input, metadataOnly: true })));
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("only the server comparator accessor reads a v2 choice answer", async t => {
+  const f = await stepsFixture(t);
+  const answer = await f.reader.readChoiceAnswer({ ...f.input, stepId: "which-side" });
+  assert.deepEqual(answer, { pin: f.pin, lessonCode: "STEPS-ONE", lessonHash: f.input.lessonHash, stepId: "which-side", answer: [1] });
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "reflect" }), /not a choice step/u);
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "missing" }), /not declared/u);
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "../x" }), /declared step ID/u);
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "which-side", lessonHash: "f".repeat(64) }), /content hash changed/u);
+  await writeFile(path.join(f.snapshotRoot, "files/lesson.json"), JSON.stringify({ ...f.lesson, title: "Tampered" }));
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "which-side" }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  assert.equal(compareChoiceAnswer([1], [1]), true);
+  assert.equal(compareChoiceAnswer([0, 2], [2, 0]), true);
+  for (const selected of [[], [0], [1, 1], [1, 2], ["1"], [1.5], "1", null]) {
+    assert.equal(compareChoiceAnswer([1], selected), false, JSON.stringify(selected));
+  }
+});
+
+test("v1 lessons have no choice answers and keep their original document projection", async t => {
+  const f = await fixture(t);
+  const input = { ...f.installed.pin, lessonCode: "LESSON-01", lessonHash: f.installed.bundle.lessons[0].hash };
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...input, stepId: "answer" }), /has no steps/u);
+  const lesson = await f.reader.readLesson(input);
+  assert.equal(lesson.steps, undefined);
+  assert.equal(lesson.document.text, f.teachingText);
+});
+
+test("v2 visual, check and exercise reads use the same pinned owners", async t => {
+  const f = await stepsFixture(t);
+  const visual = await f.reader.readVisual({ ...f.input, visualId: "flow" });
+  assert.equal(visual.svg.bytes.toString(), await readFile(path.join(f.source, "visuals/flow/diagram.svg"), "utf8"));
+  assert.match(visual.controller.bytes.toString(), /export function send/u);
+  const check = await f.reader.readCheck({ ...f.input, checkId: "notes-title-required" });
+  assert.equal(check.check.kind, "code");
+  assert.match(check.file.bytes.toString(), /isValidTitle/u);
+  const exercise = await f.reader.readExercise(f.input);
+  assert.equal(exercise.sourcePath, "app");
+  assert.deepEqual(exercise.files.map(file => file.path).sort(), ["notes.mjs", "package.json"]);
+  await writeFile(path.join(f.snapshotRoot, "files/steps/which-side.md"), "Changed body.\n");
+  await assert.rejects(() => f.reader.readLesson(f.input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+});
+
+test("a v2 draft lesson is readable only through the trusted author-preview construction", async t => {
+  const f = await stepsFixture(t, { status: "draft" });
+  await assert.rejects(() => f.reader.readLesson(f.input), /draft and cannot be taught/u);
+  await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "which-side" }), /draft and cannot be taught/u);
+  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  assert.equal((await author.readLesson(f.input)).steps.length, 5);
+  assert.deepEqual((await author.readChoiceAnswer({ ...f.input, stepId: "which-side" })).answer, [1]);
 });

@@ -36,7 +36,12 @@ entry declares `code`, `descriptor`, `status` (`draft` or `published`) and
 `required`. A released topic cannot contain required draft lessons. Draft content
 is validated but remains unavailable for teaching until published and installed.
 
-A lesson descriptor declares schema version 1, `code`, `title`, `document`,
+New lessons use lesson format v2 (see **Lesson format v2: steps** below).
+Schema version 1 remains valid for history: v1 lessons stay readable for
+earlier attempts, but they cannot be started. One topic may mix both versions;
+the topic manifest itself stays schema version 1.
+
+A v1 lesson descriptor declares schema version 1, `code`, `title`, `document`,
 `estimatedMinutes`, `prerequisites` (`{code}` objects), `visuals` (`{id,descriptor}`)
 and `assessments`. Unknown fields and type coercion are rejected. IDs contain
 letters, digits or hyphens, begin with a letter and have at most 64 characters.
@@ -68,7 +73,71 @@ any other path is still reported, as `other`, so route segments that might carry
 typed text never leave the learner's browser. Routes only label watch hints; they
 never grade, and a lesson without an exercise cannot declare them.
 
+### Lesson format v2: steps
+
+A v2 `lesson.json` declares `schemaVersion: 2` and keeps `code`, `title`,
+`prerequisites`, `estimatedMinutes`, `visuals`, `exercise`, `checks` and
+`appRoutes` exactly as above. It has no `document` and no `assessments`:
+an optional `notes` file (background reading) and 1–32 ordered `steps` replace
+them. The fixture `tests/fixtures/training/steps-v2/` is a complete, validating
+topic with every step kind; the copyable template is `docs/templates/learn-topic/`.
+
+```json
+{ "id": "open-preview", "title": "Open the Preview",
+  "body": "steps/open-preview.md",
+  "visual": { "id": "flow",
+              "play": [{ "name": "send", "parameters": { "label": "GET /" } }] },
+  "guide": { "target": "preview", "navigate": true, "caption": "Your app runs here" },
+  "check": { "kind": "auto", "check": "app-response", "files": [] },
+  "required": true }
+```
+
+- `id` is a unique lesson ID; `title` is shown in the step list; `body` is a
+  Markdown file relative to the lesson descriptor. Bodies and `notes` are
+  included in lesson identity; two steps may share one body file.
+- `required` steps decide completion: the lesson is complete when every
+  required step has passed. A lesson needs at least one required step.
+- `visual` (optional) shows one of the lesson's declared `visuals`. `play`
+  lists at most 16 commands to run in order; each `name` is a command the
+  visual declares, and `parameters` is a `{name: string}` map that supplies
+  every required parameter within its `maxLength` and nothing undeclared.
+- `guide` (optional) points at a real Vibe64 place: `target` is one of the
+  declared guide places (`preview`, `dashboard`, `database-erd`,
+  `database-data`, `files`, `changes`, `git-log`, `session-info`,
+  `architecture`, or `learning` for the **L** button). `navigate:true` opens
+  it as well as highlighting it (`dashboard` can only be pointed at).
+  `filePath` is allowed only with `files` and is a relative project path
+  without `..`. `caption` is at most 256 characters.
+- `check.kind` is one of:
+  - `auto` — runs the declared check named by `check` (one of `checks[].id`)
+    and needs the lesson's `exercise`. A response check names no `files`
+    (omit them or use `[]`). A code check (`kind:"code"` in `checks`) names
+    1–8 distinct exercise-relative `files`, the same file rules as a v1 code
+    question above.
+  - `choice` — `question` (at most 2000 characters), 2–8 `options` and
+    `answer`, a non-empty list of unique option indexes (0-based, in range).
+    The learner passes by selecting exactly the answer indexes.
+  - `self` — the learner ticks **Done** after doing the step.
+  - `none` — reading only; records nothing and cannot be `required`.
+  A kind declares only its own fields; anything else is rejected.
+
+**Check verdicts are final.** v2 has no rubric and no AI grader: an automatic
+check or the choice comparator decides, otherwise the learner ticks a `self`
+step. Colleague teaches and explains but never passes a step. Write step bodies
+so a learner can follow them without AI.
+
+Choice answers stay on the server. The lesson descriptor is never served to a
+browser: a step body, `notes`, visual SVG/controller/asset or exercise file
+cannot be any v2 lesson descriptor of the topic (for example, an exercise
+`source` of `.` beside `lesson.json` is refused). The installed reader strips
+`answer` from every projection; only the server comparator reads it.
+
 ### Authoring a code question
+
+In v2, a code question is an `auto` step whose `check` is a code check and whose
+`files` name the edited exercise files; the check program contract below applies
+unchanged, and the check result alone is the verdict (no explanation rubric).
+The rest of this section describes the v1 assessment form kept for history.
 
 A `code` practical asks the learner to change exercise code in the lesson
 Dashboard's **Code** tab and press **Check my code**. Declare it like this
@@ -242,7 +311,21 @@ trusted caller pin, which binds topic metadata, release, repository and lesson o
 The reader freshly validates the declared inputs and complete ordered manifests,
 rejecting aliases, symlinks, missing, changed or unrecorded files.
 `readLesson({topicId,commit,topicHash,lessonCode,lessonHash})` requires the exact published
-lesson and returns its checked teaching text, anchored rubrics and visual metadata.
+lesson. For a v1 lesson it returns its checked teaching text, anchored rubrics
+and visual metadata. For a v2 lesson it returns the verified bundle (`pin`,
+`lesson`, `manifest`, `hash`, `descriptorPath`), `steps` (each declared step plus
+its `bodyText`), `notesText` when the lesson declares notes, and `visuals`; there
+is no `document` or `rubrics`. Every lesson projection — `readTopic`,
+`readLesson`, `readAdmissionIdentity` and exercise metadata — omits each choice
+step's `answer`.
+
+`readChoiceAnswer({topicId,commit,topicHash,lessonCode,lessonHash,stepId})` is the
+server-only comparator accessor. It applies the same verification and draft rules
+and returns `{pin,lessonCode,lessonHash,stepId,answer}` for one v2 choice step; it
+refuses a v1 lesson, an unknown step or a step of another kind. Never return its
+result to a browser or assistant. `compareChoiceAnswer(answer, selected)`, exported
+by the same module, passes only when `selected` lists exactly the answer indexes
+(any order, no duplicates).
 
 `readVisual({topicId,commit,topicHash,lessonCode,lessonHash,visualId})` reuses that
 same lesson verification and selects only its declared visual ID. It returns

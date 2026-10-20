@@ -1,6 +1,6 @@
 # Example topic
 
-**Draft template — incomplete and not ready for teaching.** Replace every planning placeholder before reviewing a lesson for publication. Schema validation does not establish teaching quality or a passing learner rubric.
+**Draft template — incomplete and not ready for teaching.** Replace every planning placeholder before reviewing a lesson for publication. Schema validation does not establish teaching quality or that a step's check proves the outcome.
 
 ## Learner and prerequisites
 

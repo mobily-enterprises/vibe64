@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -482,4 +482,157 @@ test("operator CLI refuses malformed revisions aliases dirty sources and changed
   await writeFile(cataloguePath, "{broken");
   await assert.rejects(f.run("installed-courses", f.systemRoot), { code: "VIBE64_TRAINING_CATALOGUE_INVALID" });
   assert.equal(await readFile(cataloguePath, "utf8"), "{broken", "a read never repairs invalid operator state");
+});
+
+// Lesson format v2 (steps). The fixture is a complete topic with every check kind.
+const stepsFixture = path.resolve(import.meta.dirname, "../fixtures/training/steps-v2");
+
+async function stepsTopic(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-steps-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await cp(stepsFixture, root, { recursive: true });
+  const lesson = JSON.parse(await readFile(path.join(root, "lesson.json"), "utf8"));
+  async function write(filename, value) {
+    await mkdir(path.dirname(path.join(root, filename)), { recursive: true });
+    await writeFile(path.join(root, filename), typeof value === "string" ? value : `${JSON.stringify(value)}\n`);
+  }
+  return { root, lesson, write };
+}
+
+test("a v2 lesson bundles its steps, notes and step bodies into lesson identity", async t => {
+  const f = await stepsTopic(t);
+  const first = (await validateTopic(f.root)).bundles[0];
+  assert.equal(first.lesson.schemaVersion, 2);
+  assert.deepEqual(first.lesson.steps.map(step => [step.id, step.check.kind, step.required]),
+    [["open-preview", "auto", true], ["which-side", "choice", true], ["require-title", "auto", true],
+      ["reflect", "self", false], ["read-more", "none", false]]);
+  assert.deepEqual(first.lesson.steps[1].check.answer, [1], "the authoring bundle keeps the answer for the server");
+  const paths = first.manifest.files.map(file => file.path);
+  for (const expected of ["lesson.json", "notes.md", "steps/open-preview.md", "steps/read-more.md", "app/notes.mjs",
+    "checks/notes/title.mjs", "visuals/flow/diagram.svg"]) assert.ok(paths.includes(expected), expected);
+  assert.ok(!paths.some(file => file.endsWith("lesson.md")), "v2 has no teaching document");
+  await f.write("unrelated.md", "Not declared\n");
+  assert.equal((await validateTopic(f.root)).bundles[0].hash, first.hash);
+  for (const filename of ["steps/which-side.md", "notes.md"]) {
+    const previous = await readFile(path.join(f.root, filename), "utf8");
+    await f.write(filename, `${previous}More.\n`);
+    assert.notEqual((await validateTopic(f.root)).bundles[0].hash, first.hash, filename);
+    await f.write(filename, previous);
+  }
+  // Two steps may share one body file; it is recorded once.
+  const shared = structuredClone(f.lesson);
+  shared.steps[4].body = shared.steps[3].body;
+  await f.write("lesson.json", shared);
+  const sharedBundle = (await validateTopic(f.root)).bundles[0];
+  assert.equal(sharedBundle.manifest.files.filter(file => file.path === "steps/reflect.md").length, 1);
+});
+
+test("v2 step rules reject invalid references, kinds, choices, guides and visual commands", async t => {
+  const f = await stepsTopic(t);
+  const step = index => lesson => lesson.steps[index];
+  const cases = [
+    [lesson => lesson.steps.push(structuredClone(lesson.steps[0])), /duplicate ID/u],
+    [lesson => { lesson.steps[0].id = "1-bad"; }, /invalid or duplicate ID/u],
+    [lesson => { lesson.steps = []; }, /at least one step/u],
+    [lesson => { lesson.steps = Array.from({ length: 33 }, (_, index) => ({ ...lesson.steps[3], id: `s${index}` })); }, /validation/iu],
+    [lesson => lesson.steps.forEach(value => { value.required = false; }), /needs a required step/u],
+    [lesson => { step(4)(lesson).required = true; }, /no check and cannot be required/u],
+    [lesson => { step(0)(lesson).visual.id = "missing"; }, /undeclared visual/u],
+    [lesson => { step(0)(lesson).visual.play[0].name = "jump"; }, /undeclared command/u],
+    [lesson => { step(0)(lesson).visual.play[0].parameters = {}; }, /needs parameter label/u],
+    [lesson => { step(0)(lesson).visual.play[0].parameters.label = "x".repeat(33); }, /at most 32 characters/u],
+    [lesson => { step(0)(lesson).visual.play[0].parameters.colour = "red"; }, /undeclared parameter/u],
+    [lesson => { step(0)(lesson).visual.play[0].parameters.label = 1; }, /noncanonical|validation|string/iu],
+    [lesson => { step(0)(lesson).visual.play = Array.from({ length: 17 }, () => step(0)(lesson).visual.play[0]); }, /validation/iu],
+    [lesson => { step(0)(lesson).guide.target = "nowhere"; }, /guide: Use one of the declared/u],
+    [lesson => { step(0)(lesson).guide.filePath = "notes.mjs"; }, /filePath is only for the files place/u],
+    [lesson => { step(2)(lesson).guide.filePath = "../escape.mjs"; }, /guide: Use a relative/u],
+    [lesson => { step(0)(lesson).guide.caption = "x".repeat(257); }, /validation/iu],
+    [lesson => { step(0)(lesson).guide.highlight = false; }, /validation/iu],
+    [lesson => { step(0)(lesson).check.kind = "rubric"; }, /validation/iu],
+    [lesson => { step(0)(lesson).check.check = "missing"; }, /unknown check/u],
+    [lesson => { delete step(0)(lesson).check.check; }, /unknown check/u],
+    [lesson => { step(0)(lesson).check.files = ["notes.mjs"]; }, /only a code check edits files/u],
+    [lesson => { step(2)(lesson).check.files = []; }, /code check needs 1-8 exercise files/u],
+    [lesson => { step(2)(lesson).check.files = ["missing.mjs"]; }, /outside its bundled exercise/u],
+    [lesson => { step(2)(lesson).check.files = ["../lesson.json"]; }, /outside its bundled exercise/u],
+    [lesson => { step(2)(lesson).check.files = ["notes.mjs", "notes.mjs"]; }, /repeats a declared file/u],
+    [lesson => { delete lesson.exercise; }, /needs the lesson's exercise/u],
+    [lesson => { step(1)(lesson).check.options = ["Only one"]; }, /2-8 options/u],
+    [lesson => { step(1)(lesson).check.answer = [3]; }, /option indexes within its options/u],
+    [lesson => { step(1)(lesson).check.answer = [1, 1]; }, /unique option indexes/u],
+    [lesson => { step(1)(lesson).check.answer = []; }, /option indexes/u],
+    [lesson => { step(1)(lesson).check.answer = [-1]; }, /validation/iu],
+    [lesson => { delete step(1)(lesson).check.question; }, /needs question, options and answer/u],
+    [lesson => { step(3)(lesson).check.question = "Why?"; }, /self check cannot declare question/u],
+    [lesson => { step(4)(lesson).check.check = "app-response"; }, /none check cannot declare check/u],
+    [lesson => { step(1)(lesson).check.check = "app-response"; }, /choice check cannot declare check/u],
+    [lesson => { lesson.document = "notes.md"; }, /validation/iu],
+    [lesson => { lesson.assessments = []; }, /validation/iu],
+    [lesson => { step(0)(lesson).rubric = "steps/open-preview.md"; }, /validation/iu],
+    [lesson => { lesson.schemaVersion = 3; }, /validation/iu],
+    [lesson => { step(0)(lesson).body = "steps/missing.md"; }, /ENOENT/u],
+    [lesson => { lesson.notes = "../../outside.md"; }, /escapes topic/u]
+  ];
+  for (const [change, expected] of cases) {
+    const lesson = structuredClone(f.lesson);
+    change(lesson);
+    await f.write("lesson.json", lesson);
+    await assert.rejects(() => validateTopic(f.root), expected, String(change));
+  }
+});
+
+test("a v2 lesson descriptor holding answers cannot be served as a body, notes, visual or exercise file", async t => {
+  const f = await stepsTopic(t);
+  const cases = [
+    lesson => { lesson.steps[3].body = "lesson.json"; },
+    lesson => { lesson.notes = "lesson.json"; },
+    lesson => { lesson.exercise.source = "."; lesson.steps[2].check.files = ["app/notes.mjs"]; }
+  ];
+  for (const change of cases) {
+    const lesson = structuredClone(f.lesson);
+    change(lesson);
+    await f.write("lesson.json", lesson);
+    await assert.rejects(() => validateTopic(f.root), /descriptor cannot also be/u, String(change));
+  }
+  await f.write("lesson.json", f.lesson);
+  const visual = JSON.parse(await readFile(path.join(f.root, "visuals/flow/visual.json"), "utf8"));
+  await f.write("visuals/flow/visual.json", { ...visual, assets: ["../../lesson.json"] });
+  await assert.rejects(() => validateTopic(f.root), /descriptor cannot also be/u);
+});
+
+test("one topic may mix v1 history lessons with v2 step lessons", async t => {
+  const f = await stepsTopic(t);
+  const metadata = JSON.parse(await readFile(path.join(f.root, "package.json"), "utf8"));
+  await cp(path.resolve(import.meta.dirname, "../fixtures/training/code-practical"), path.join(f.root, "v1"), { recursive: true });
+  metadata.vibe64Training.lessons.unshift({ code: "CODE-ONE", descriptor: "v1/lesson.json", status: "published", required: false });
+  await f.write("package.json", metadata);
+  const result = await validateTopic(f.root);
+  assert.deepEqual(result.bundles.map(bundle => [bundle.lesson.code, bundle.lesson.schemaVersion]), [["CODE-ONE", 1], ["STEPS-ONE", 2]]);
+  assert.ok(result.bundles[0].lesson.assessments);
+  assert.equal(result.bundles[1].lesson.assessments, undefined);
+});
+
+test("authoring CLI validates, bundles and publishes a course lock for a v2 topic", async t => {
+  const f = await stepsTopic(t);
+  const messages = [];
+  await runTrainingCli(["validate", f.root], { write: text => messages.push(JSON.parse(text)) });
+  assert.deepEqual(messages[0].lessons.map(lesson => [lesson.code, lesson.schemaVersion, lesson.steps]), [["STEPS-ONE", 2, 5]]);
+  const output = `${f.root}-bundle`;
+  t.after(() => rm(output, { recursive: true, force: true }));
+  await runTrainingCli(["bundle", f.root, output], { write() {} });
+  const bundled = JSON.parse(await readFile(path.join(output, "bundle.json"), "utf8"));
+  assert.equal(bundled.lessons[0].hash, messages[0].lessons[0].hash);
+  assert.equal(await readFile(path.join(output, "files/steps/which-side.md"), "utf8"),
+    await readFile(path.join(f.root, "steps/which-side.md"), "utf8"));
+  const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main"); git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "v2 topic");
+  const catalogue = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-catalogue-"));
+  t.after(() => rm(catalogue, { recursive: true, force: true }));
+  const course = { schemaVersion: 1, courseId: "steps-course", title: "Steps", release: "0.1.0", status: "preview", topics: [{ topicId: "steps", release: "0.1.0" }] };
+  await writeFile(path.join(catalogue, "course.json"), JSON.stringify(course));
+  await runTrainingCli(["publish-manifest", path.join(catalogue, "course.json"), f.root], { write() {} });
+  const lock = JSON.parse(await readFile(path.join(catalogue, "course.lock.json"), "utf8"));
+  assert.deepEqual(lock.topics[0].lessons.map(lesson => [lesson.code, lesson.hash]), [["STEPS-ONE", messages[0].lessons[0].hash]]);
 });
