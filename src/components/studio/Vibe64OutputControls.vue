@@ -1348,13 +1348,18 @@ onBeforeUnmount(() => {
   border: 1px solid var(--studio-control-border, rgba(var(--v-theme-outline), 0.12));
   border-radius: var(--studio-control-radius, 7px);
   box-shadow: none;
-  flex: 0 0 auto;
+  /* A crowded app bar shortens the address first. */
+  flex: 0 1 auto;
   max-width: 100%;
   opacity: 1;
   padding: 0.1rem;
   position: static;
   transform: none;
   z-index: auto;
+}
+
+.vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__secondary-actions {
+  flex: 0 0 auto;
 }
 
 .vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__position-button {
@@ -1406,7 +1411,8 @@ onBeforeUnmount(() => {
 .vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__preview-nav {
   flex: 1 1 clamp(12rem, 24vw, 20rem);
   max-width: clamp(12rem, 24vw, 20rem);
-  min-width: min(12rem, 24vw);
+  /* Never narrower than its buttons and the shortest address. */
+  min-width: auto;
 }
 
 .vibe64-launch-controls__preview-nav--invalid {

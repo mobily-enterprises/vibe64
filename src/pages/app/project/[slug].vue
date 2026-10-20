@@ -297,25 +297,33 @@ const {
   min-height: 0;
 }
 
+/* The heading takes the bar's room left of the account/Colleague buttons.
+   Its title area lines up with the chat column and gives way first when the
+   bar is short of room (a lesson's L plate, Preview's controls, the Set up AI
+   pill); then Preview's address shortens. On a bar still too narrow the
+   heading is clipped, so nothing overlaps the account/Colleague buttons or
+   runs past the right edge. */
 .studio-home-shell-heading {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex: 1 1 auto;
   gap: var(--studio-home-project-gap);
-  grid-template-columns: var(--studio-home-chat-column-width) auto;
   min-width: 0;
-}
-
-.studio-home-shell-heading--chat-collapsed {
-  grid-template-columns: auto auto;
+  overflow-x: clip;
+  overflow-clip-margin: 4px;
 }
 
 .studio-home-shell-title-area {
   align-items: center;
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1000 var(--studio-home-chat-column-width);
   gap: 0.42rem;
   min-width: 0;
   padding-left: 1rem;
+}
+
+.studio-home-shell-heading--chat-collapsed .studio-home-shell-title-area {
+  flex-basis: auto;
 }
 
 .studio-home-shell-project-name {
@@ -425,7 +433,7 @@ const {
 .studio-home-shell-project-controls {
   align-items: center;
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   gap: 0.45rem;
   min-width: 0;
 }
@@ -606,6 +614,7 @@ const {
 
 @media (max-width: 980px) {
   .studio-home-shell-heading {
+    display: grid;
     gap: 0.5rem;
     grid-template-columns: minmax(0, 1fr) auto;
     width: 100%;

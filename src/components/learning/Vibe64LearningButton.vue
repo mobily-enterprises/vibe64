@@ -119,11 +119,13 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   border: 1px solid var(--v64-learning-strong);
   border-radius: 999px;
   color: var(--v64-on-learning-container);
-  flex: 0 0 auto;
+  /* A crowded bar (a project's Preview controls) shortens the name first. */
+  flex: 0 1 auto;
   font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
   font-weight: 700;
   margin-left: var(--v64-space-2);
   max-width: 16rem;
+  min-width: 4rem;
   overflow: hidden;
   padding: 2px var(--v64-space-2);
   text-overflow: ellipsis;
