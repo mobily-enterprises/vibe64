@@ -22,8 +22,8 @@ duplicate lesson. Preserve its permanent lesson and step IDs, its declared check
 protocol unless the person's request explicitly changes that content. New lesson content may be authored as
 a draft using the existing template below; a draft is not another learner release.
 
-Colleague teaches every lesson from its steps in the Learning environment; the
-separate Main lesson teacher has been retired. Review genuine workspace,
+Colleague teaches every lesson from its steps in the Learning environment.
+Review genuine workspace,
 application and diagram evidence before calling the candidate ready; content
 validation does not supply missing teaching controls. Changed teaching
 text needs a new immutable topic/course pin, keeping earlier learners’ versions.

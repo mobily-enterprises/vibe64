@@ -91,10 +91,9 @@ startup/current capture through the existing owner, retaining earlier pending
 delivery and the typed draft; visible return alone cannot restart recording.
 Document visibility is separate from avatar collapse and mounted-body eligibility.
 Voice retains no independent chat history and never changes the typed draft.
-Lessons have no voice binding of their own: the Learning Main binding, its
-delivered-question reference and the voice learning socket were retired in
-Learning v2. Colleague's voice teaches a lesson like its text chat, and the
-Colleague voice panel keeps the pinned current-step card visible.
+Lessons have no voice binding or socket of their own: Colleague's voice teaches a
+lesson like its text chat, and the Colleague voice panel keeps the pinned
+current-step card visible.
 
 JSKIT's hands-free Pause stops new microphone input immediately while retaining
 the buffered tail for its original final flush. A matching stale endpoint rejection
@@ -278,9 +277,7 @@ A binding may supply `prepareVoice`; before the existing controller activates,
 retains or creates a voice target, `Vibe64VoiceHost` awaits it (after the host's
 `preparePreferences` when supplied) and refuses a changed or unavailable target.
 Default bindings return their original socket URL directly. The application adds
-no voice queue, history cache, seen ledger or generic controller state. The
-earlier Learning Main presentation speech preparation and cue narration were
-retired with the Main lesson teacher.
+no voice queue, history cache, seen ledger or generic controller state.
 
 
 ### Retained edit-before-send policy

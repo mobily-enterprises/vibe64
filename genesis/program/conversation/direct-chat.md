@@ -3821,11 +3821,10 @@ and private namespace; source operations retain their original refusal.
 
 ## Learning shell and separate remembered selection
 
-Retired in Learning v2 phase 2 (F3). The app shell's yellow L plate now only
-opens the Learning environment overlay; it no longer switches a Learning mode or
-tints the header. The stored-selection owner again keeps only the Working
-project key and `session` URL preference; there is no separate Learning learner
-and attempt key or `learningSession` preference.
+The app shell's yellow L plate only opens the Learning environment overlay. The
+stored-selection owner keeps only the Working project key and `session` URL
+preference; there is no Learning learner and attempt key or `learningSession`
+preference.
 
 The existing Core action contributor has a closed server-construction
 `admissionScope`: its default `all` retains the hosted global authority path.
@@ -3842,8 +3841,7 @@ gates. Unsupported construction scopes fail before registration.
 
 ## Learning Main client transport prerequisite
 
-Retired with Learning mode (F3). `useVibe64ConversationRuntime`, the Mounted
-and AssistantAccess readers and the session request config select only
+`useVibe64ConversationRuntime`, the Mounted and AssistantAccess readers and the session request config select only
 project-scoped Working sessions; no client builds a learner/attempt binding,
 draft key or `/api/learning/...` path. Session realtime matchers still refuse
 events that carry a `learningAttemptId`, because the server can still emit
@@ -3868,9 +3866,8 @@ admitted parent receipt and cancellation/close coordination before using it.
 
 ## Keyed Learning chat retention
 
-Retired with Learning mode (F3): the session panel mounts only the project's
-Working hosts, with no purpose filter, keyed Learning records or separate
-Working/Learning load errors.
+The session panel mounts only the project's Working hosts, with no purpose
+filter, keyed Learning records or separate Working/Learning load errors.
 
 The original Codex callback context owner also restores a captured Learning
 scope without a source root. Its existing notification queue can then invoke

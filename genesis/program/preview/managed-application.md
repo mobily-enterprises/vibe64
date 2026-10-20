@@ -474,10 +474,8 @@ commands must not detach untracked workers.
 
 A practice lesson's App runs in its practice project through the ordinary
 project-scoped output, Run, Stop, terminal and preview routes, with ordinary
-project admission; there is no separate Learning App adapter. Learning v2
-retired the lesson-scoped output namespace, the `/api/learning/<attempt>/…`
-terminal routes and output stream, the Learning Stop and onboarding adapters,
-and the lesson presentation registration on the Onboarding Preview. A lesson's
+project admission; there is no separate Learning App adapter, output namespace or
+`/api/learning/<attempt>/…` route. A lesson's
 automatic check needs a receipt of the learner's own App press, recorded through
 Training's browser-only `step.observe`; Run or an iframe load is never a pass.
 The output surface (`useVibe64OutputControlsSurface.js`, both hosts) restores
@@ -503,9 +501,8 @@ Preview lifecycle or application-state store.
 
 Separately, the bridge reports a reduced failure of a learner-started in-app
 request (`vibe64:preview-app-request`: method, `:id`-templated path, status,
-failure code); it carries no body, header, query or diagnostic entry. Its only
-consumer, the Learning watch, was retired with the Main lesson teacher, so no
-surface acts on it any more.
+failure code); it carries no body, header, query or diagnostic entry. No current
+surface consumes it.
 
 
 Preview suspension belongs to the displayed output surface. It clears its frame

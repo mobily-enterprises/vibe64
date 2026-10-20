@@ -159,8 +159,8 @@ Open voice for a different conversation to switch. Unfinished words require
 completion or **Discard and switch**; **Stay here** keeps the original target.
 There is only one voice window and one active capture/playback owner.
 
-Lesson conversations have no voice of their own: the Main lesson teacher was
-retired, so use Colleague's voice to learn with a lesson.
+Lessons have no voice of their own: use Colleague's voice to learn with a
+lesson.
 
 Signing out, losing access to the target, or leaving the page releases its
 resources. A project agent remains the selected voice target even if its text

@@ -63,15 +63,16 @@ The managed application execution owner will run approved pinned checks; teachin
 tools do not gain arbitrary shell access. Demonstrations cannot earn learner passes.
 
 An exercise lesson may optionally declare the practice app's data-changing routes
-so a Learning watch can name a failed request the learner started:
-`appRoutes: [{method, path}]`, at most 16 unique entries. `method` is `POST`,
+as `appRoutes: [{method, path}]`, at most 16 unique entries. `method` is `POST`,
 `PUT`, `PATCH` or `DELETE`; `path` starts with `/`, has no query, fragment or
 trailing slash, and each segment is a literal or `:id` (the Preview replaces
 numeric and UUID segments with `:id`). For the notes exercise:
 `"appRoutes": [{ "method": "POST", "path": "/api/notes" }]`. A failed request on
 any other path is still reported, as `other`, so route segments that might carry
-typed text never leave the learner's browser. Routes only label watch hints; they
-never grade, and a lesson without an exercise cannot declare them.
+typed text never leave the learner's browser. Routes are validated with the
+lesson but no current reader consumes them (they labelled the retired Learning
+watch's hints); they never grade, and a lesson without an exercise cannot
+declare them.
 
 ### Lesson format v2: steps
 
@@ -134,40 +135,34 @@ cannot be any v2 lesson descriptor of the topic (for example, an exercise
 
 ### Authoring a code question
 
-In v2, a code question is an `auto` step whose `check` is a code check and whose
-`files` name the edited exercise files; the check program contract below applies
-unchanged, and the check result alone is the verdict (no explanation rubric).
-The rest of this section describes the v1 assessment form kept for history.
-
-A `code` practical asks the learner to change exercise code in the lesson
-Dashboard's **Code** tab and press **Check my code**. Declare it like this
-(the test fixture `tests/fixtures/training/code-practical/` is a complete,
-validating example):
+A code question is an `auto` step whose `check` names a code check and whose
+`files` name the exercise files the learner edits (the fixture
+`tests/fixtures/training/steps-v2/` contains one):
 
 ```json
 "exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },
 "checks": [{ "id": "notes-title-required", "file": "checks/notes/title.mjs",
              "kind": "code", "timeoutSeconds": 15 }],
-"assessments": [{ "id": "require-note-title", "kind": "practical", "required": true,
-  "rubric": "lesson.md#require-note-title",
-  "evidence": { "producer": "code", "operation": "edit-and-check",
-                "check": "notes-title-required", "files": ["notes.mjs"],
-                "explanationRequired": true } }]
+"steps": [{ "id": "require-title", "title": "Refuse empty titles",
+  "body": "steps/require-title.md",
+  "guide": { "target": "files", "navigate": true, "filePath": "notes.mjs" },
+  "check": { "kind": "auto", "check": "notes-title-required", "files": ["notes.mjs"] },
+  "required": true }]
 ```
 
 - `files` lists 1–8 exercise-relative paths the learner edits. Each must be an
   ordinary bundled exercise file (no `..`, absolute path, `.git`,
-  `node_modules` or `.genesis` segment) and may appear once. Only `code`
-  evidence may name files.
-- The check must declare `kind: "code"`; a code check can only be named by
-  `code` evidence and an `exercise` check must not be a code check. Omitted
-  `kind` means the existing `response` kind. `timeoutSeconds` (1–60, default
-  15) is allowed only on a code check. The operation is any lesson ID.
-- `reuse:"attempt"` is the supported exercise mode; sequence-reused baselines
-  are not part of this first slice.
-- The rubric should ask for the learner's own explanation. The check alone
-  never passes: the existing tool-free grading Helper grades the explanation
-  against the rubric with the check result.
+  `node_modules` or `.genesis` segment) and may appear once.
+- The check must declare `kind: "code"`. Omitted `kind` means the existing
+  `response` kind. `timeoutSeconds` (1–60, default 15) is allowed only on a code
+  check.
+- `reuse:"attempt"` is the supported exercise mode for code checks.
+- The check result alone is the verdict; there is no explanation rubric.
+
+A v1 lesson declares the same check as `code` evidence of a practical assessment
+(`tests/fixtures/training/code-practical/`); only `code` evidence may name files
+or a code check, and an `exercise` check must not be a code check. V1 lessons
+cannot be started.
 
 The check runs with Node in the managed execution owner on a private copy laid
 out like the topic: the pinned exercise at its topic path, with only the
@@ -190,19 +185,15 @@ crashes the check before it prints a result, is "not yet passed" with a fixed
 explanation. stderr is ignored. Use plain `node:assert`-style logic rather than
 `node --test`, whose reporter writes to stdout.
 
-Authorship: when Main prepares a code question, Vibe64 records the SHA-256 of
-each declared file in the live practice project as the question's starting
-point. Each save from the learner's lesson Dashboard Files section is recorded server-side
-with its base hash, intended hash and saved hash. At **Check my code** the chain
-from the starting point through those saves must reach the current bytes
-exactly; otherwise the check is not run and the question is automatically not
-passed with "needs an independent attempt: other edits detected in `<file>`".
-In a practice lesson Main is also the learner's agent, but while a code
-question is open the teaching brief instructs Main not to write that question's
-declared files (even when asked) or send solution code, and to warn the learner
-that an agent edit there voids the attempt. The ledger above enforces this; there
-is no technical write-deny for agents in this slice. Teacher chat
-is not shared with the grader. The check is learner-run code on the learner's
+Authorship: when the learner first opens a code step in an attempt, Vibe64
+records the SHA-256 of each declared file in the live practice project as that
+step's starting point. Each save from the practice project's **Dashboard →
+Files** editor is recorded server-side with its base hash, intended hash and
+saved hash. At **Check now** the chain from the starting point through those
+saves must reach the current bytes exactly; otherwise the check is not run and
+reports "needs an independent attempt: other edits detected in `<file>`". There
+is no technical write-deny for agents: an agent edit in a declared file voids
+the attempt through this ledger. The check is learner-run code on the learner's
 own machine and has no network isolation: for hosted use, sandboxing and network
 denial of the check job are an open gap.
 

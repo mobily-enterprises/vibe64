@@ -54,9 +54,9 @@ Database adds MySQL migrations without login, while Accounts adds authentication
 and account-persistence tests. Import and Workspace setup remain separate.
 The task guide is `docs/colleague-usage/starter-apps.md`.
 
-Learning v2: a practice project is an ordinary project of its learner and its
-sessions are ordinary sessions; the learning-bound practice context described
-below is retired (see the Training Program).
+A practice project is an ordinary project of its learner and its sessions are
+ordinary sessions; the learning-bound practice context described below is
+retired (see the Training Program).
 
 Standalone lesson practice admission uses the same Project context, record
 creation, rollback and request-context storage. Training reads the actual actor's
@@ -275,8 +275,7 @@ step. The attempt that owned the project is ended with reason `discard`;
 progress is kept. Online supplies its own implementation through its archive
 service. Both also offer the read-only `canRemove` preflight and
 `exists({slug, actor})`, which leaves a completely removed practice project out
-of Training's `learning.read`/`lesson.read` (L's Practice section). The prepared-practice onboarding read under the retired Learning
-attempt/session URL was removed with the lesson-scoped routes; practice
+of Training's `learning.read`/`lesson.read` (L's Practice section). Practice
 onboarding uses the ordinary project read.
 
 A page left open on a deleted practice project is a clean not-found on both
