@@ -9,7 +9,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 
-import { assertProjectEffectAdmission, currentPracticeProjectScope, currentProjectRequestContext, runWithPracticeProjectContext } from "./projectRequestContext.js";
+import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./projectRequestContext.js";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
@@ -45,7 +45,15 @@ import {
 import {
   normalizeProjectDeletion
 } from "./projectDeletion.js";
-import { practiceProjectAttemptId, practiceProjectDeletedError, projectPracticeFromTraining } from "./practiceProjects.js";
+import {
+  LEARNING_SPACE_DIR,
+  PRACTICE_SLUG_PATTERN,
+  normalizeProjectTraining,
+  practiceIdFromSlug,
+  practiceNamespace,
+  practiceProjectDeletedError,
+  practiceSlug
+} from "./learningSpace.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -100,6 +108,15 @@ function projectSlugExistsError() {
   error.code = "vibe64_project_slug_exists";
   error.statusCode = 409;
   return error;
+}
+
+// training-<hex> names a learning-space practice project on both hosts.
+function assertCatalogueSlugAllowed(slug = "") {
+  if (PRACTICE_SLUG_PATTERN.test(slug)) {
+    throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."), {
+      code: "vibe64_project_slug_reserved", statusCode: 409
+    });
+  }
 }
 
 function projectDeletingError() {
@@ -270,7 +287,6 @@ async function selectedProjectRecord({
     ...selectionRecord,
     ...repositoryFields,
     ...(githubRepository ? { githubRepository } : {}),
-    ...(metadata?.training ? { practice: projectPracticeFromTraining(metadata.training) } : {}),
     projectRecordPath,
     projectRuntimeRoot,
     projectSessionSourceRoot,
@@ -350,7 +366,6 @@ function workspaceProjectRecord({
       : "",
     runtime: publicProjectRuntimeOpenState(runtime),
     ...(deletion ? { deletion } : {}),
-    ...(metadata.training ? { practice: projectPracticeFromTraining(metadata.training) } : {}),
     sessionsRoot: projectRuntimeRoot
       ? resolveProjectSessionsRoot({
           projectRuntimeRoot
@@ -363,69 +378,6 @@ function workspaceProjectRecord({
 function projectMetadataPath(projectRecordPath = "") {
   const normalizedRecordPath = String(projectRecordPath || "").trim();
   return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
-}
-
-function normalizeProjectTraining(value) {
-  const invalid = () => {
-    const error = new Error("Project training provenance must contain the exact bounded learner, attempt, content pin and bundled exercise identity.");
-    error.code = "vibe64_project_training_invalid";
-    return error;
-  };
-  const shapes = [
-    [value, ["schemaVersion", "learnerKey", "attemptId", "pin", "exercise"]],
-    [value?.pin, ["course", "topic", "lesson"]],
-    [value?.pin?.course, ["courseId", "release"]],
-    [value?.pin?.topic, ["schemaVersion", "topicId", "release", "repository", "commit", "topicHash"]],
-    [value?.pin?.lesson, ["code", "hash"]],
-    [value?.exercise, ["kind", "sourcePath"]]
-  ];
-  for (const [object, fields] of shapes) {
-    if (!isPlainObject(object) || Object.keys(object).length !== fields.length ||
-        fields.some(field => !Object.hasOwn(object, field))) {
-      throw invalid();
-    }
-  }
-  const { learnerKey, attemptId, pin, exercise } = value;
-  if (typeof learnerKey !== "string" || learnerKey.length < 1 || learnerKey.length > 171) {
-    throw invalid();
-  }
-  const learnerBytes = Buffer.from(learnerKey, "base64url");
-  const learnerId = learnerBytes.toString("utf8");
-  const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
-  const releasePattern = /^\d+\.\d+\.\d+$/u;
-  if (learnerBytes.length < 1 || learnerBytes.length > 128 ||
-      learnerBytes.toString("base64url") !== learnerKey || Buffer.from(learnerId).toString("base64url") !== learnerKey ||
-      // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner input.
-      learnerId.trim() !== learnerId || /[\u0000-\u001f\u007f]/u.test(learnerId)) {
-    throw invalid();
-  }
-  if (value.schemaVersion !== 1 || pin.topic.schemaVersion !== 1 ||
-      typeof attemptId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId) ||
-      typeof pin.course.courseId !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(pin.course.courseId) ||
-      typeof pin.course.release !== "string" || pin.course.release.length > 256 || !releasePattern.test(pin.course.release) ||
-      typeof pin.topic.topicId !== "string" || !idPattern.test(pin.topic.topicId) ||
-      typeof pin.topic.release !== "string" || pin.topic.release.length > 256 || !releasePattern.test(pin.topic.release) ||
-      typeof pin.topic.repository !== "string" || pin.topic.repository.length > 256 || !/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(pin.topic.repository) ||
-      typeof pin.topic.commit !== "string" || !/^[a-f0-9]{40}$/u.test(pin.topic.commit) ||
-      typeof pin.topic.topicHash !== "string" || !/^[a-f0-9]{64}$/u.test(pin.topic.topicHash) ||
-      typeof pin.lesson.code !== "string" || !idPattern.test(pin.lesson.code) ||
-      typeof pin.lesson.hash !== "string" || !/^[a-f0-9]{64}$/u.test(pin.lesson.hash) || exercise.kind !== "bundled") {
-    throw invalid();
-  }
-  const sourcePath = exercise.sourcePath;
-  if (typeof sourcePath !== "string" || !sourcePath || sourcePath.length > 512 ||
-      sourcePath.includes("\\") || sourcePath.includes("\0") || path.posix.isAbsolute(sourcePath) ||
-      /^[a-zA-Z][a-zA-Z0-9+.-]*:/u.test(sourcePath) ||
-      (sourcePath !== "." && sourcePath.split("/").some(part => !part || part === "." || part === ".."))) {
-    throw invalid();
-  }
-  return {
-    schemaVersion: 1,
-    learnerKey,
-    attemptId,
-    pin: { course: { ...pin.course }, topic: { ...pin.topic }, lesson: { ...pin.lesson } },
-    exercise: { ...exercise }
-  };
 }
 
 function projectMetadataFromInput(input = {}, {
@@ -709,6 +661,7 @@ function createStudioProjectContext({
   explicitProjectsRoot = "",
   explicitTargetRoot = "",
   home = os.homedir(),
+  learningSpace = null,
   runtimeProfile = null
 } = {}) {
   const practiceOwner = Object.freeze({});
@@ -732,6 +685,9 @@ function createStudioProjectContext({
   });
   const managedSourceRoot = roots.managedSourceRoot;
   const systemRoot = roots.systemRoot;
+  // Inside the managed source root, the space inherits the managed-source
+  // permission contract that agents, Preview and Files need.
+  const learningSpaceRoot = normalizeRoot(learningSpace?.root, path.join(managedSourceRoot, LEARNING_SPACE_DIR));
   let selectedTargetRoot = resolveExplicitStudioTargetRoot({
     cwd,
     env,
@@ -745,12 +701,6 @@ function createStudioProjectContext({
       throw Object.assign(new Error("Practice access cannot select another project."), { code: "vibe64_practice_scope_mismatch" });
     }
     return scope;
-  }
-
-  function practiceProjectNamespace(training) {
-    const slug = normalizeProjectSlug(`training-${training.attemptId.replaceAll("-", "")}`);
-    const projectsRoot = path.join(systemRoot, "training", "practice", training.learnerKey, training.attemptId);
-    return { slug, projectsRoot, projectContextRoot: resolveProjectContextRoot({ projectsRoot, slug }) };
   }
 
   async function practiceDirectoryExists(directory) {
@@ -767,43 +717,111 @@ function createStudioProjectContext({
     return true;
   }
 
-  async function hasPrivatePracticeNamespace(slug, projectRuntimeRoot) {
+  // Each skipped entry warns once per process: listings run on every
+  // Projects page load, and the scrap upgrade, not the listing, clears them.
+  const warnedSkippedEntries = new Set();
+  function skipLearningSpaceEntry(entry, reason) {
+    const key = `${entry}: ${reason}`;
+    if (!warnedSkippedEntries.has(key)) {
+      warnedSkippedEntries.add(key);
+      console.warn(`Vibe64 learning space: skipped ${key}`);
+    }
+    return null;
+  }
+
+  // The learning-space project a practice slug names: its marker is valid,
+  // names that practice, and its namespace is a real directory. Null when the
+  // space has no such project; an unsafe or invalid one is skipped with a warning.
+  async function readLearningSpaceProject(slug) {
+    const practiceId = practiceIdFromSlug(slug);
+    if (!practiceId) return null;
+    const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
+    let metadata;
+    try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
+    catch (error) {
+      if (error instanceof SyntaxError || error.code === "ENOTDIR") return skipLearningSpaceEntry(slug, "unreadable project record");
+      throw error;
+    }
+    if (!isPlainObject(metadata) || !metadata.training) return null;
+    let training;
+    try { training = normalizeProjectTraining(metadata.training); }
+    catch (error) {
+      if (error.code === "vibe64_project_training_invalid") return skipLearningSpaceEntry(slug, "invalid training marker");
+      throw error;
+    }
+    if (training.practiceId !== practiceId || metadata.repository?.mode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
+      return skipLearningSpaceEntry(slug, "training marker names another practice project");
+    }
+    try {
+      if (!await practiceDirectoryExists(practiceNamespace(learningSpaceRoot, training).projectContextRoot)) return null;
+    } catch (error) {
+      if (error.code === "vibe64_practice_path_unsafe") return skipLearningSpaceEntry(slug, error.message);
+      throw error;
+    }
+    return Object.freeze({ slug, learnerKey: training.learnerKey, practiceId, training });
+  }
+
+  async function readDirectoryEntries(directory) {
+    try {
+      return await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
+  // Every practice project in the space (one learner's with learnerKey), as
+  // {slug, learnerKey, practiceId, training}. Unsafe or invalid entries are
+  // skipped with a warning and never change the listing for the others.
+  async function listLearningSpaceProjects({ learnerKey } = {}) {
+    const learners = [];
+    for (const entry of await readDirectoryEntries(learningSpaceRoot)) {
+      if (learnerKey !== undefined && entry.name !== learnerKey) continue;
+      if (entry.isDirectory()) learners.push(entry.name);
+      else skipLearningSpaceEntry(entry.name, "not a real directory");
+    }
+    const projects = [];
+    for (const learner of learners) {
+      for (const practice of await readDirectoryEntries(path.join(learningSpaceRoot, learner))) {
+        const entry = path.join(learner, practice.name);
+        const slug = practiceSlug(practice.name);
+        if (!practice.isDirectory() || practiceIdFromSlug(slug) !== practice.name) {
+          skipLearningSpaceEntry(entry, "not a practice project directory");
+          continue;
+        }
+        const project = await readLearningSpaceProject(slug);
+        if (project?.learnerKey === learner) projects.push(project);
+        else if (project) skipLearningSpaceEntry(entry, "training marker names another learner");
+      }
+    }
+    return projects.sort((left, right) => left.slug.localeCompare(right.slug));
+  }
+
+  // A practice runtime root in the shared inventory is never a catalogue
+  // orphan: the catalogue sweep leaves every training slug with a marker.
+  async function isLearningSpaceRuntime(slug, projectRuntimeRoot) {
+    if (!PRACTICE_SLUG_PATTERN.test(slug)) return false;
     let metadata;
     try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
     catch (error) { if (error instanceof SyntaxError) return false; throw error; }
-    if (metadata?.repository?.mode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT || !metadata.training) return false;
-    let training;
-    try { training = normalizeProjectTraining(metadata.training); }
-    catch (error) { if (error.code === "vibe64_project_training_invalid") return false; throw error; }
-    const namespace = practiceProjectNamespace(training);
-    return namespace.slug === slug && practiceDirectoryExists(namespace.projectContextRoot);
+    if (!metadata?.training) return false;
+    if (!await readLearningSpaceProject(slug)) skipLearningSpaceEntry(slug, "practice runtime without its learning-space project");
+    return true;
   }
 
-  // allowDeleting admits only the learner's own light practice deletion: it
-  // requires write access and lets that owner see and resume its deletion marker.
-  // requireProject is the ordinary page admission: a project without its
-  // record, or one being deleted, is a deleted practice project (not found).
+  // The one practice scope, on both hosts. allowDeleting admits only the
+  // learner's own deletion: it requires write access and lets that owner see
+  // and resume its deletion marker. requireProject is the ordinary page
+  // admission: a project without its record, or one being deleted, is a
+  // deleted practice project (not found).
   async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
     allowDeleting = false, requireProject = false } = {}, operation) {
-    if (projectCatalogEnabled || typeof operation !== "function") {
-      throw new TypeError("Local practice access requires the original local Project context and an owning callback.");
+    if (typeof operation !== "function") {
+      throw new TypeError("Practice access requires an owning callback.");
     }
     if (allowDeleting === true && practiceAccess !== "write") {
       throw new TypeError("Practice deletion requires explicit write access.");
     }
-    return runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess,
-      allowDeleting: allowDeleting === true, requireProject: requireProject === true }, operation, false);
-  }
-
-  async function runWithHostedTrainingProjectScope(input = {}, operation) {
-    if (!projectCatalogEnabled || typeof operation !== "function") {
-      throw new TypeError("Hosted practice access requires the original catalogue Project context and an owning callback.");
-    }
-    return runTrainingProjectScope(input, operation, true);
-  }
-
-  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe", allowDeleting = false,
-    requireProject = false }, operation, hosted) {
     if (!["observe", "control", "write", "create"].includes(practiceAccess)) {
       throw new TypeError("Practice access requires an explicit supported operation scope.");
     }
@@ -815,35 +833,14 @@ function createStudioProjectContext({
     if (!learnerId || Buffer.from(learnerId).toString("base64url") !== training.learnerKey) {
       throw Object.assign(new Error("Practice access belongs to the admitted learner."), { code: "vibe64_practice_scope_mismatch" });
     }
-    const privateNamespace = practiceProjectNamespace(training);
-    const { slug } = privateNamespace;
-    const practiceProjectsRoot = hosted ? projectsRoot : privateNamespace.projectsRoot;
-    const projectContextRoot = hosted
-      ? resolveProjectContextRoot({ projectsRoot, slug }) : privateNamespace.projectContextRoot;
+    const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceNamespace(learningSpaceRoot, training);
     // Preserve original runtime inventory, upgrade and canonical Git ownership.
     const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
-    const projectSessionSourceRoot = hosted ? projectContextRoot : path.join(managedSourceRoot, slug);
-    if (hosted) {
-      const current = currentProjectRequestContext();
-      if (!current || current.slug !== slug || current.targetRoot !== projectContextRoot ||
-          current.projectRuntimeRoot !== projectRuntimeRoot || current.projectSessionSourceRoot !== projectSessionSourceRoot ||
-          current.projectRecordPath !== resolveProjectRecordPath({ projectRuntimeRoot }) ||
-          current.systemRoot !== systemRoot || current.projectsRoot !== projectsRoot || current.sourceRoot || current.sourceConfigRoot) {
-        throw Object.assign(new Error("Hosted practice requires its original exact Project context."), { code: "vibe64_practice_scope_mismatch" });
-      }
-    }
-    for (const directory of [projectContextRoot, projectRuntimeRoot, projectSessionSourceRoot]) {
-      if (!await practiceDirectoryExists(directory) && hosted) {
-        throw Object.assign(new Error("Hosted practice requires its existing prepared Project storage."), { code: "vibe64_practice_scope_mismatch" });
-      }
-    }
+    for (const directory of [projectContextRoot, projectRuntimeRoot]) await practiceDirectoryExists(directory);
     const projectRecordPath = resolveProjectRecordPath({ projectRuntimeRoot });
     const metadata = await readProjectMetadata({ projectRecordPath });
     if (requireProject && practiceAccess !== "create" && (!Object.keys(metadata).length || (metadata.deletion && !allowDeleting))) {
       throw practiceProjectDeletedError();
-    }
-    if (hosted && !Object.keys(metadata).length) {
-      throw Object.assign(new Error("Hosted practice requires its existing owned Project record."), { code: "vibe64_practice_scope_mismatch" });
     }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
       if (!isDeepStrictEqual(metadata.training, training) || (metadata.deletion && !allowDeleting) ||
@@ -852,7 +849,7 @@ function createStudioProjectContext({
       }
     }
     const scope = Object.freeze({ training, access: practiceAccess, slug, projectsRoot: practiceProjectsRoot, systemRoot,
-      targetRoot: projectContextRoot, projectRecordPath, projectRuntimeRoot, projectSessionSourceRoot,
+      targetRoot: projectContextRoot, projectRecordPath, projectRuntimeRoot, projectSessionSourceRoot: projectContextRoot,
       sourceRoot: "", sourceConfigRoot: "", vibe64User: actor, ...(allowDeleting ? { allowDeleting: true } : {}) });
     return runWithPracticeProjectContext(practiceOwner, scope, operation);
   }
@@ -1127,7 +1124,7 @@ function createStudioProjectContext({
       if (await pathExists(resolveProjectRecordPath({
         projectRuntimeRoot: runtimeRoot
       })) && !await pathExists(projectContextRootForSlug(entry.name))) {
-        if (await hasPrivatePracticeNamespace(entry.name, runtimeRoot)) return;
+        if (await isLearningSpaceRuntime(entry.name, runtimeRoot)) return;
         await rm(runtimeRoot, {
           force: true,
           recursive: true
@@ -1140,8 +1137,16 @@ function createStudioProjectContext({
       projectRuntimeRoot: projectRuntimeRootForTarget(projectPath),
       projectSessionSourceRoot: projectSessionSourceRootForTarget(projectPath),
       projectsRoot
+    }).catch((error) => {
+      // A catalogue entry with a retired training marker (an old hosted
+      // practice project awaiting the scrap upgrade) is not a project of the
+      // catalogue; it never takes the other projects' listing down with it.
+      if (error?.code === "vibe64_project_training_invalid") {
+        return skipLearningSpaceEntry(path.basename(projectPath), "catalogue entry with an invalid training marker");
+      }
+      throw error;
     }))))
-      .filter((project) => project.repository)
+      .filter((project) => project?.repository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
@@ -1159,6 +1164,7 @@ function createStudioProjectContext({
     }
 
     const slug = projectSlugFromInput(input);
+    if (!scope) assertCatalogueSlugAllowed(slug);
     const projectContextRoot = projectContextRootForSlug(slug);
     const projectRuntimeRoot = projectRuntimeRootForSlug(slug);
     if (scope && (scope.access !== "create" || !isDeepStrictEqual(normalizeProjectTraining(input.training), scope.training))) {
@@ -1180,8 +1186,7 @@ function createStudioProjectContext({
     try {
       await Promise.all([
         mkdir(path.dirname(projectContextRoot), {
-          recursive: true,
-          ...(scope ? { mode: 0o700 } : {})
+          recursive: true
         }),
         mkdir(path.dirname(projectRuntimeRoot), {
           recursive: true,
@@ -1190,7 +1195,7 @@ function createStudioProjectContext({
       ]);
       await mkdir(projectRuntimeRoot, scope ? { mode: 0o700 } : undefined);
       runtimeCreated = true;
-      await mkdir(projectContextRoot, scope ? { mode: 0o700 } : undefined);
+      await mkdir(projectContextRoot);
       sourceCreated = true;
       if (typeof prepare === "function") {
         // The trusted initializer may adjust repository metadata, but gets its own marker copy.
@@ -1236,6 +1241,7 @@ function createStudioProjectContext({
 
   async function assertWorkspaceProjectAvailable(input = {}) {
     const slug = projectSlugFromInput(input);
+    assertCatalogueSlugAllowed(slug);
     if (
       await pathExists(projectContextRootForSlug(slug)) ||
       await pathExists(projectRuntimeRootForSlug(slug))
@@ -1257,12 +1263,6 @@ function createStudioProjectContext({
     const slug = projectSlugFromInput(input);
     const projectContextRoot = projectContextRootForSlug(slug);
     if (scope) await readWorkspaceProjectState({ slug });
-    else if (practiceProjectAttemptId(slug)) {
-      // Hosted: a catalogue practice project without its record, or being
-      // deleted, is a deleted practice project to its open pages.
-      const metadata = await readProjectMetadata({ projectRecordPath: projectRecordPathForSlug(slug) });
-      if (!Object.keys(metadata).length || (metadata.deletion && input.allowDeleting !== true)) throw practiceProjectDeletedError();
-    }
     await assertDirectoryUsable(projectContextRoot);
     const project = await workspaceProjectRecordForPath({
       projectRecordPath: projectRecordPathForSlug(slug),
@@ -1287,17 +1287,14 @@ function createStudioProjectContext({
   }
 
   async function updateWorkspaceProjectMetadata(input = {}) {
-    if (!projectCatalogEnabled) {
+    const scope = practiceScope();
+    if (!projectCatalogEnabled && !scope) {
       throw projectCatalogUnavailableError();
     }
 
     assertProjectEffectAdmission();
     const slug = projectSlugFromInput(input);
-    practiceScope(slug);
-    const projectContextRoot = resolveProjectContextRoot({
-      projectsRoot,
-      slug
-    });
+    const projectContextRoot = projectContextRootForSlug(slug);
     await assertDirectoryUsable(projectContextRoot);
     await updateWorkspaceProjectState({ slug }, async (currentMetadata) => {
       const metadata = assertHostedRepositoryMetadata({
@@ -1314,12 +1311,12 @@ function createStudioProjectContext({
       path: projectContextRoot,
       projectRuntimeRoot: projectRuntimeRootForSlug(slug),
       projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-      projectsRoot
+      projectsRoot: scope?.projectsRoot || projectsRoot
     });
     return {
       ok: true,
       project,
-      projectsRoot
+      projectsRoot: scope?.projectsRoot || projectsRoot
     };
   }
 
@@ -1354,9 +1351,7 @@ function createStudioProjectContext({
   async function updateWorkspaceProjectState(input = {}, update, {
     allowDeleting = false
   } = {}) {
-    // Local practice records change only inside the learner's own deletion scope.
-    const deletionScope = !projectCatalogEnabled && practiceScope()?.allowDeleting === true;
-    if (!projectCatalogEnabled && !deletionScope) {
+    if (!projectCatalogEnabled && !practiceScope()) {
       throw projectCatalogUnavailableError();
     }
     assertProjectEffectAdmission();
@@ -1364,7 +1359,6 @@ function createStudioProjectContext({
       throw new TypeError("updateWorkspaceProjectState requires an update function.");
     }
     const slug = projectSlugFromInput(input);
-    if (deletionScope) practiceScope(slug);
     const state = {
       projectContextRoot: projectContextRootForSlug(slug),
       projectRecordPath: projectRecordPathForSlug(slug),
@@ -1502,7 +1496,11 @@ function createStudioProjectContext({
   return Object.freeze({
     currentPracticeProjectScope: () => practiceScope(),
     runWithPracticeProjectScope,
-    runWithHostedTrainingProjectScope,
+    listLearningSpaceProjects,
+    readLearningSpaceProject,
+    get learningSpaceRoot() {
+      return learningSpaceRoot;
+    },
     assertWorkspaceProjectAvailable,
     beginWorkspaceProjectDeletion,
     completeWorkspaceProjectDeletionStep,

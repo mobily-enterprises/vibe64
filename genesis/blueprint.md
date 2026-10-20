@@ -95,8 +95,8 @@ compared on the server, the learner's own Done, or no check for reading. A lesso
 is complete when every required step has passed, in any attempt of the same
 lesson content.
 The learner's own result that completes it opens a Lesson finished screen that
-ends the lesson (results kept) and offers deleting or keeping the practice
-project, the next lesson, the courses, or reading the lesson again.
+ends the lesson (results kept) and offers archiving, deleting or keeping the
+practice project, the next lesson, the courses, or reading the lesson again.
 Colleague is the teacher. Teach me minimises Learning and opens Colleague,
 whose header button opens the current step in a dialog, and Colleague explains the step in its own
 words, by text or voice, opens and highlights real screens and replays diagrams.
@@ -107,12 +107,17 @@ that person can read, edit and clear in Learning and nobody else can read; notes
 never affect results.
 Lessons started in the earlier teacher-conversation format stay readable in
 history and can be ended, but cannot continue; their completions keep counting.
-A lesson that needs an application gives the learner a practice project: an
-ordinary project of theirs, marked practice, with its ordinary chat, Preview and
-Dashboard and full access during and after the lesson. Practice projects are
-listed separately from other projects and are deleted with one click, without an
-archive; deleting one ends its lesson attempt and keeps the learner's progress.
-Another member cannot open someone else's practice project.
+A lesson that needs an application gives the learner a practice project: a
+project of theirs with its ordinary chat, Preview and Dashboard and full access
+during and after the lesson. Practice projects live in the learner's own
+learning space, completely apart from normal projects, by the same mechanism on
+both hosts: they never appear among projects, and nobody else can open one, the
+workspace owner included. A lesson is either in progress or not; while it is in
+progress the learner is in the learning space only and opens no normal project.
+Learning lists the learner's practice projects; each can be archived (the same
+archive as normal projects, without rebuildable dependencies) or deleted with
+one click, which ends its lesson attempt and keeps the learner's progress.
+Continuing a lesson reuses its practice project while it exists.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 Online or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,

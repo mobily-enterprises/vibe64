@@ -435,20 +435,20 @@ test("shared managed repository owner provisions and clones a real private pract
     const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project,
       initializeManagedProject: input => initializeManagedProject({ ...input, runCommand: directCommand }) });
     const actor = { uid: 42, username: "learner" };
-    const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
-      attemptId: "12345678-1234-4234-8234-123456789abc",
+    const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),
+      practiceId: "12345678-1234-4234-8234-123456789abc",
       pin: { course: { courseId: "intro-course", release: "0.1.0" },
         topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
           commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
       exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const slug = `training-${training.practiceId.replaceAll("-", "")}`;
     const files = [{ path: "README.md", bytes: Buffer.from("Exact installed exercise bytes.\n") }];
     await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
       const created = await repository.createManagedGitProject({ slug, training }, { initializeProject: ({ projectRoot }) =>
         writeFile(path.join(projectRoot, files[0].path), files[0].bytes) });
       const state = await core.readWorkspaceProjectState({ slug });
       assert.equal(created.project.projectRoot, state.projectContextRoot);
-      assert.equal(state.projectContextRoot, path.join(core.systemRoot, "training", "practice", "NDI", training.attemptId, slug));
+      assert.equal(state.projectContextRoot, path.join(core.managedSourceRoot, ".learning", "NDI", training.practiceId, slug));
       assert.equal(state.projectRuntimeRoot, path.join(core.systemRoot, "projects", slug));
       assert.deepEqual(state.metadata.training, training);
       assert.equal(state.metadata.developmentDatabaseName, undefined, "Standalone composition does not invent Online database defaults.");
@@ -461,11 +461,11 @@ test("shared managed repository owner provisions and clones a real private pract
         const runtime = await project.createRuntime({ inspectSource: false, createSessionSource: context =>
           project.runProjectSourceExclusive(async () => createSessionSource({ ...context, project: await project.readCurrentProject(),
             runCommand: directCommand }), { operation: "session-source-create" }) });
-        const session = await runtime.createSession({ sessionId: `training-${training.attemptId}`,
+        const session = await runtime.createSession({ sessionId: `training-${training.practiceId}`,
           sourceContext: { expectedCommit: proof.commit, vibe64User: actor } });
         const { sessionSourcePath } = await import("@local/vibe64-core/server/sessionSourcePath");
         const source = sessionSourcePath(session);
-        assert.equal(source, path.join(core.managedSourceRoot, slug, "sessions", "active", session.sessionId, "source"));
+        assert.equal(source, path.join(state.projectContextRoot, "sessions", "active", session.sessionId, "source"));
         assert.deepEqual(await readFile(path.join(source, files[0].path)), files[0].bytes);
         assert.equal((await execFileAsync("git", ["-C", source, "rev-parse", "HEAD"])).stdout.trim(), proof.commit);
         assert.equal((await runtime.getSession(session.sessionId, { inspectSource: false })).sessionId, session.sessionId);

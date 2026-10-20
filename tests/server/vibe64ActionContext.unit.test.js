@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
@@ -11,6 +13,7 @@ import {
   captureProjectRequestContext,
   currentProjectActionRequestMeta,
   currentProjectRequestContext,
+  registerPracticeRequestActor,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -142,7 +145,7 @@ test("captured working context retains only the original request for freshly aut
   assert.equal(currentProjectActionRequestMeta(), null);
 });
 
-test("requestless actions and Learning cannot inherit a working action request", async () => {
+test("requestless actions cannot inherit a working action request", async () => {
   const f = fixture();
   const requestMeta = { request: { params: { slug: "alpha" }, headers: { cookie: "working-test-credential" } } };
   await f.execute({ text: "working" }, { requestMeta });
@@ -155,12 +158,6 @@ test("requestless actions and Learning cannot inherit a working action request",
       assert.equal(currentProjectActionRequestMeta(), null);
     });
     assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta);
-    await runWithProjectRequestContext({ ...admitted, learningScope: { learnerId: "42" } }, () => {
-      assert.equal(currentProjectActionRequestMeta(), null);
-      const learning = { ...captureProjectRequestContext() };
-      delete learning.learningScope;
-      return runWithProjectRequestContext(learning, () => assert.equal(currentProjectActionRequestMeta(), null));
-    }, { requestMeta });
   });
   await runWithProjectRequestContext({ slug: "alpha", requestMeta, actionRequestMeta: requestMeta }, () => {
     assert.equal(currentProjectActionRequestMeta(), null, "ordinary fields cannot supply the private request projection");
@@ -225,116 +222,14 @@ test("only an action's declared lifecycle scope can enter a deleting project", a
   assert.equal(archive.calls[0].project.slug, "alpha");
 });
 
-const learningAttempt = "12345678-1234-4234-8234-123456789abc";
-
-function learningActionFixture({ learningAccess = "observe", resolver = true } = {}) {
-  const calls = [];
-  const state = { actor: { uid: 42, username: "learner", role: "member" }, active: true, foreign: false };
-  const actions = createActionCatalogue();
-  const definition = withVibe64ActionContext({
-    id: "vibe64.test.learning", kind: "query", channels: ["api", "internal"], surfaces: ["app"],
-    input: { schema: createSchema({ sessionId: { type: "string", required: true } }), mode: "create" },
-    execute(input) {
-      const current = currentProjectRequestContext();
-      calls.push({ input, current });
-      return { attemptId: current.learningScope.attemptId, learnerId: current.learningScope.learnerId };
-    }
-  }, { learningAccess });
-  actions.register({ contributorId: "learning-test", domain: "test", actions: [definition] });
-  registerVibe64ActionContext(actions, {
-    resolveUser: async () => state.actor,
-    authorizeProject() { throw new Error("A source-less learning operation cannot authorize a substitute project."); },
-    ...(resolver ? { async resolveLearningContext(input) {
-      calls.push({ resolution: input });
-      if (input.access === "write" && !state.active) throw Object.assign(new Error("Ended attempt"), { code: "attempt_inactive" });
-      return { projectRuntimeRoot: "/private/actual-learner/attempt", learningScope: {
-        learnerId: state.foreign ? "other-person" : String(input.actor.uid), attemptId: input.attemptId,
-        pin: { lesson: { code: "REAL-LESSON" } }, noExercise: true
-      } };
-    } } : {})
-  });
-  const execute = (input = {}, context = {}) => actions.execute({ actionId: definition.id,
-    input: { sessionId: "learning-session", ...input }, context: { channel: "internal", surface: "app", ...context } });
-  return { calls, state, execute };
-}
-
-test("learning operations resolve the exact attempt and current actor through the original action contributor", async () => {
-  const f = learningActionFixture();
-  assert.deepEqual(await f.execute({ learningAttemptId: learningAttempt }), { attemptId: learningAttempt, learnerId: "42" });
-  assert.equal(f.calls[0].resolution.actor, f.state.actor);
-  assert.equal(f.calls[0].resolution.sessionId, "learning-session");
-  assert.equal(f.calls[0].resolution.access, "observe");
-  assert.equal(f.calls[1].input.learningAttemptId, undefined);
-  assert.equal(f.calls[1].input.vibe64User, f.state.actor);
-  assert.equal(f.calls[1].current.slug, undefined);
-  assert.equal(currentProjectRequestContext(), null);
-  f.state.actor = null;
-  await assert.rejects(f.execute({ learningAttemptId: learningAttempt }), { statusCode: 401 });
-  assert.equal(f.calls.length, 2);
-});
-
-test("learning route and input cannot mix another attempt, project or reserved authority", async () => {
-  const f = learningActionFixture();
-  const second = "12345678-1234-4234-8234-123456789abd";
-  await assert.rejects(f.execute({ learningAttemptId: second }, {
-    requestMeta: { request: { params: { learningAttemptId: learningAttempt } } }
-  }), { code: "vibe64_learning_attempt_mismatch" });
-  for (const [input, context] of [
-    [{ learningAttemptId: learningAttempt, projectSlug: "working" }, {}],
-    [{ learningAttemptId: learningAttempt }, { projectSlug: "working" }],
-    [{ learningAttemptId: learningAttempt }, { requestMeta: { request: { params: { slug: "working" } } } }],
-    [{ learningAttemptId: learningAttempt, projectSlug: "working" }, { projectSlug: "working", colleague: {} }]
-  ]) await assert.rejects(f.execute(input, context), { code: "vibe64_learning_project_mismatch" });
-  await assert.rejects(f.execute({ learningAttemptId: learningAttempt }, { vibe64Action: {
-    user: f.state.actor, learning: { learningScope: { attemptId: learningAttempt } }
-  } }), { code: "vibe64_action_context_reserved" });
-  await assert.rejects(f.execute({ learningAttemptId: "../private" }), { code: "vibe64_learning_attempt_invalid" });
-  assert.equal(f.calls.length, 0);
-});
-
-test("learning authority fails closed when host support or actor binding is missing", async () => {
-  const unsupported = learningActionFixture({ resolver: false });
-  await assert.rejects(unsupported.execute({ learningAttemptId: learningAttempt }), { code: "vibe64_learning_unavailable" });
-  assert.equal(unsupported.calls.length, 0);
-  const foreign = learningActionFixture();
-  foreign.state.foreign = true;
-  await assert.rejects(foreign.execute({ learningAttemptId: learningAttempt }), { code: "vibe64_learning_scope_mismatch" });
-  assert.equal(foreign.calls.length, 1);
-  const ordinary = fixture();
-  await assert.rejects(ordinary.execute({ text: "do not borrow working authority", learningAttemptId: learningAttempt }), {
-    code: "vibe64_learning_unavailable"
-  });
-  assert.equal(ordinary.calls.length, 0);
-});
-
-test("learning writes recheck active authority; ended observations retain the same original context owner", async () => {
-  const write = learningActionFixture({ learningAccess: "write" });
-  await write.execute({ learningAttemptId: learningAttempt });
-  write.state.active = false;
-  await assert.rejects(write.execute({ learningAttemptId: learningAttempt }), { code: "attempt_inactive" });
-  assert.equal(write.calls.filter(value => value.current).length, 1);
-  const observe = learningActionFixture();
-  observe.state.active = false;
-  await observe.execute({ learningAttemptId: learningAttempt });
-  assert.equal(observe.calls[1].current.learningScope.attemptId, learningAttempt);
-  assert.equal(currentProjectRequestContext(), null);
-});
-
-
 function learningOnlyContributor() {
   const calls = [];
-  const state = { user: { uid: 42, username: "actual-process-owner", role: "owner" }, foreign: false };
+  const state = { user: { uid: 42, username: "actual-process-owner", role: "owner" } };
   let contributor;
   registerVibe64ActionContext({ registerContextContributor(value) { contributor = value; return value; } }, {
     admissionScope: "learning-only",
     async resolveUser(input) { calls.push({ user: input }); return state.user; },
-    authorizeProject() { assert.fail("Learning-only authority cannot admit a working project"); },
-    async resolveLearningContext(input) {
-      calls.push({ learning: input });
-      return { projectRuntimeRoot: "/server-owned/actual-learner/attempt", learningScope: {
-        learnerId: state.foreign ? "another-owner" : String(input.actor.uid), attemptId: input.attemptId, noExercise: true
-      } };
-    }
+    authorizeProject() { assert.fail("Learning-only authority cannot admit a working project"); }
   });
   const contribute = (definition, input = {}, context = {}) => contributor.contribute({ definition, input, context });
   return { calls, state, contribute };
@@ -353,11 +248,10 @@ test("action context rejects unsupported construction admission scopes before re
 test("learning-only authority leaves ordinary Working and Colleague contributions empty before resolving an actor", async () => {
   const f = learningOnlyContributor();
   const cases = [
-    [scopedDefinition("vibe64.sessions.conversation.context.read", { projectScoped: true, learningAccess: "observe" }), { projectSlug: "working", sessionId: "saved" }],
+    [scopedDefinition("vibe64.sessions.conversation.context.read", { projectScoped: true }), { projectSlug: "working", sessionId: "saved" }],
     [scopedDefinition("vibe64.colleague.state.read", { projectScoped: false }), {}],
     [scopedDefinition("vibe64.accounts.state.read", { projectScoped: false }), {}],
     [scopedDefinition("vibe64.training.author-preview.start", { projectScoped: true }), { projectSlug: "author-project" }],
-    [scopedDefinition("vibe64.sessions.source.read", { projectScoped: true }), { learningAttemptId: learningAttempt }],
     [scopedDefinition("vibe64.training-other.read", { projectScoped: false }), {}],
     [{ id: "unscoped.action" }, {}]
   ];
@@ -376,56 +270,19 @@ test("learning-only authority leaves ordinary Working and Colleague contribution
   assert.deepEqual(f.calls, []);
 });
 
-test("learning-only authority uses the original fresh contributor for non-project Training and explicitly selected Main actions", async () => {
+test("learning-only authority uses the original fresh contributor for non-project Training actions", async () => {
   const f = learningOnlyContributor();
   const training = scopedDefinition("vibe64.training.learning.read", { projectScoped: false });
   const first = await f.contribute(training);
   assert.equal(first.actor.id, "42");
   assert.equal(first.vibe64Action.user, f.state.user);
   assert.equal(first.vibe64Action.project, null);
-  assert.equal(Object.hasOwn(first.vibe64Action, "learning"), false);
-  const main = scopedDefinition("vibe64.sessions.agent-message.send", { projectScoped: true, learningAccess: "write" });
-  for (const [input, context] of [
-    [{ learningAttemptId: learningAttempt, sessionId: "saved-learning" }, {}],
-    [{ sessionId: "saved-learning" }, { requestMeta: { request: { params: { learningAttemptId: learningAttempt } } } }]
-  ]) {
-    const grant = await f.contribute(main, input, context);
-    assert.equal(grant.vibe64Action.user, f.state.user);
-    assert.equal(grant.vibe64Action.learning.learningScope.attemptId, learningAttempt);
-    assert.equal(grant.vibe64Action.learning.learningScope.learnerId, "42");
-    assert.equal(grant.vibe64Action.project, null);
-    const resolution = f.calls.at(-1).learning;
-    assert.equal(resolution.actor, f.state.user);
-    assert.equal(resolution.sessionId, "saved-learning");
-    assert.equal(resolution.access, "write");
-  }
-  assert.equal(f.calls.filter(value => value.user).length, 3);
+  await assert.rejects(f.contribute(training, {}, { vibe64Action: { user: f.state.user } }),
+    { code: "vibe64_action_context_reserved" });
+  assert.equal(f.calls.length, 1);
   f.state.user = null;
   await assert.rejects(f.contribute(training), { code: "vibe64_auth_required" });
-  assert.equal(f.calls.filter(value => value.user).length, 4);
-});
-
-test("learning-only matching retains reserved authority, exact selector and foreign learner refusals", async () => {
-  const f = learningOnlyContributor();
-  const main = scopedDefinition("vibe64.sessions.agent-turn.interrupt", { projectScoped: true, learningAccess: "control" });
-  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt }, { vibe64Action: { user: f.state.user } }),
-    { code: "vibe64_action_context_reserved" });
-  assert.deepEqual(f.calls, []);
-  await assert.rejects(f.contribute(main, { learningAttemptId: "../private" }), { code: "vibe64_learning_attempt_invalid" });
-  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt, projectSlug: "working" }),
-    { code: "vibe64_learning_project_mismatch" });
-  await assert.rejects(f.contribute(main, { learningAttemptId: "12345678-1234-4234-8234-123456789abd" }, {
-    requestMeta: { request: { params: { learningAttemptId: learningAttempt } } }
-  }), { code: "vibe64_learning_attempt_mismatch" });
-  assert.equal(f.calls.some(value => value.learning), false);
-  // Colleague's displayed project is ambient focus, not a second selection.
-  const ambient = await f.contribute(main, { learningAttemptId: learningAttempt }, { projectSlug: "working", colleague: {} })
-    .then(() => null, error => error);
-  assert.notEqual(ambient?.code, "vibe64_learning_project_mismatch");
-  f.state.foreign = true;
-  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt, sessionId: "saved-learning" }),
-    { code: "vibe64_learning_scope_mismatch" });
-  assert.equal(f.calls.at(-1).learning.access, "control");
+  assert.equal(f.calls.length, 2);
 });
 
 test("conversation authority diagnostics separate slow phases without retaining request contents or changing admission", async t => {
@@ -442,22 +299,12 @@ test("conversation authority diagnostics separate slow phases without retaining 
     env, logger: { warn(record) { logs.push(record); } },
     resolveUser() { lookups++; clock += slow ? 20 : 0; return user; },
     authorizeProject() { clock += slow ? 30 : 0; if (!allowed) throw new Error("private-project-error"); },
-    resolveLearningContext(input) {
-      if (env.JSKIT_REALTIME_DEBUG === "0") assert.equal(input.onContextTiming, undefined);
-      input.onContextTiming?.("scope-selection", 20);
-      input.onContextTiming?.("exercise-validation", 30);
-      input.onContextTiming?.("practice-capture", 20);
-      input.onContextTiming?.("private-untrusted-phase", 100);
-      input.onContextTiming?.("practice-capture", NaN);
-      clock += 70;
-      throw new Error("private-attempt-error");
-    },
     projectContext: { projectsRoot: "/test/projects", readWorkspaceProject({ slug }) {
       clock += slow ? 60 : 0; return { project: { path: `/test/projects/${slug}` } };
     } }
   });
   const definition = { id: "vibe64.sessions.conversation.context.read",
-    extensions: { vibe64: { projectScoped: true, learningAccess: "observe" } } };
+    extensions: { vibe64: { projectScoped: true } } };
   const input = { projectSlug: "alpha", sessionId: "session-1", text: "private-message" };
   const context = { requestMeta: { request: { headers: { cookie: "private-cookie" } } } };
   const execute = (value = input, selected = definition) => contributor.contribute({ definition: selected, input: value, context });
@@ -473,12 +320,7 @@ test("conversation authority diagnostics separate slow phases without retaining 
   await assert.rejects(execute(), /private-project-error/u);
   assert.deepEqual(logs.at(-1).timings, { user: 20, "project-access": 30 });
   assert.equal(logs.at(-1).completed, false);
-  await assert.rejects(execute({ sessionId: "session-1", learningAttemptId: "00000000-0000-4000-8000-000000000001" }), /private-attempt-error/u);
-  // Learning v2: practice sessions are ordinary, so the former practice
-  // phases (exercise-validation, practice-capture) are untrusted names now.
-  assert.deepEqual(logs.at(-1).timings, { user: 20, "saved-attempt.scope-selection": 20, "saved-attempt": 70 });
-  assert.equal(logs.at(-1).completed, false);
-  assert.doesNotMatch(JSON.stringify(logs), /private-|cookie|username|00000000-0000/u);
+  assert.doesNotMatch(JSON.stringify(logs), /private-|cookie|username/u);
   const count = logs.length;
   allowed = true;
   slow = false;
@@ -491,6 +333,58 @@ test("conversation authority diagnostics separate slow phases without retaining 
   await execute();
   allowed = false;
   await assert.rejects(execute(), /private-project-error/u);
-  await assert.rejects(execute({ sessionId: "session-1", learningAttemptId: "00000000-0000-4000-8000-000000000001" }), /private-attempt-error/u);
   assert.equal(logs.length, count, "Disabled diagnostics remain silent on success and failure");
+});
+
+test("a practice project action admits only its own learner, through the host contributor and the action itself", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-practice-action-"));
+  const projectsRoot = path.join(root, "projects");
+  const projectContext = configureStudioProjectContext({ explicitProjectsRoot: projectsRoot, explicitSystemRoot: path.join(root, "system"),
+    explicitManagedSourceRoot: projectsRoot, env: {}, home: root, learningSpace: { root: path.join(projectsRoot, ".learning") } });
+  const learner = { uid: 42, username: "learner", role: "member" };
+  const other = { uid: 43, username: "other", role: "owner" };
+  const training = { schemaVersion: 2, learnerKey: "NDI", practiceId: "12345678-1234-4234-8234-123456789abc",
+    pin: { course: { courseId: "intro-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0",
+      repository: "example/learn-intro", commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
+  const slug = "training-12345678123442348234123456789abc";
+  const deleted = { code: "vibe64_practice_project_deleted", statusCode: 404 };
+  try {
+    const practice = await projectContext.runWithPracticeProjectScope({ actor: learner, training, access: "create" },
+      async () => (await projectContext.createWorkspaceProjectRecord({ slug, training })).project);
+    const state = { user: learner };
+    const actions = createActionCatalogue();
+    const definition = withVibe64ActionContext({
+      id: "vibe64.test.practice", kind: "query", channels: ["api", "automation"], surfaces: ["app"],
+      input: { schema: createSchema({}), mode: "create" },
+      execute() { return { targetRoot: currentProjectRequestContext().targetRoot }; }
+    });
+    actions.register({ contributorId: "practice-test", domain: "test", actions: [definition] });
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.user, authorizeProject() {} });
+    const execute = () => actions.execute({ actionId: definition.id, input: { projectSlug: slug },
+      context: { channel: "automation", surface: "app" } });
+    assert.deepEqual(await execute(), { targetRoot: practice.projectRoot });
+    state.user = other;
+    await assert.rejects(execute(), deleted, "another learner, even the workspace owner, does not find it");
+    // Without a host contributor the action resolves the same rule with its actor (a request without headers).
+    const direct = (vibe64User) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { vibe64User } } });
+    assert.deepEqual(await direct(learner), { targetRoot: practice.projectRoot });
+    await assert.rejects(direct(other), deleted);
+    // A local person's action carries no vibe64User: it stays that person's
+    // request, so the host-supplied actor is compared with the learner.
+    const local = (headers) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { headers } } });
+    await assert.rejects(local({ host: "localhost" }), deleted, "a person without an actor is not admitted as the marker's learner");
+    registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
+    try {
+      assert.deepEqual(await local({ host: "localhost" }), { targetRoot: practice.projectRoot });
+      await assert.rejects(local({ host: "remote" }), deleted, "another local person is refused");
+    } finally {
+      registerPracticeRequestActor(null);
+    }
+    assert.deepEqual(await definition.execute({ projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
+      "requestless internal work runs as the marker's learner");
+  } finally {
+    configureStudioProjectContext();
+    await rm(root, { force: true, recursive: true });
+  }
 });

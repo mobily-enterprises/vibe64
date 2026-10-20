@@ -13454,7 +13454,7 @@ test("Main browser fresh authorization for a local practice project opened as an
   // retained grant keeps write (it no longer expires to CONTROL); publication
   // must still read fresh authority and revocation must still suppress it.
   const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
-    assertProjectEffectAdmission, registerLocalPracticeAdmission, resolveProjectRequestContext,
+    assertProjectEffectAdmission, registerPracticeRequestActor, resolveProjectRequestContext,
     captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
   const actions = createActionCatalogue();
   const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
@@ -13463,12 +13463,16 @@ test("Main browser fresh authorization for a local practice project opened as an
   const resume = Promise.withResolvers();
   let publishing = false, held = false, browser, unsubscribe, goalOperation;
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    // The learning space holds this learner's practice project (its marker
+    // names learner "42"); the local transport supplies the person.
     const projectContext = { projectCatalogEnabled: false, projectsRoot: path.dirname(runtime.projectContextRoot),
+      readLearningSpaceProject: async requested => requested === slug ? { slug, learnerKey: Buffer.from("42").toString("base64url"),
+        practiceId: "839fb16d-3aed-40c8-8b26-cb4ec8fe1229", training: {} } : null,
       runWithPracticeProjectScope: (input, operation) => runWithPracticeProjectContext(owner, { slug,
         targetRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot,
         projectSessionSourceRoot: runtime.projectContextRoot, access: input.access, vibe64User: input.actor }, operation) };
-    registerLocalPracticeAdmission(async request => request.slug === slug ? { actor } : null);
-    const ordinary = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
+    registerPracticeRequestActor(() => actor);
+    const ordinary = await resolveProjectRequestContext({ projectContext, request: { params: { slug }, headers: {} } });
     assert.equal(ordinary.learningScope, undefined, "the practice project is an ordinary project context");
     const requestContext = { channel: "internal", surface: "app", requestMeta: { request: {
       params: { slug }, vibe64User: actor } } };
@@ -13493,7 +13497,7 @@ test("Main browser fresh authorization for a local practice project opened as an
       assert.equal(practice.access, "write", "the learner's own practice project keeps its ordinary write grant");
       assert.doesNotThrow(assertProjectEffectAdmission);
       reads.push({ actorId: String(actor.uid), access: practice.access, slug: current.slug });
-      return { actor: { id: String(actor.uid) }, vibe64Action: { user: actor, learning: captureProjectRequestContext() } };
+      return { actor: { id: String(actor.uid) }, vibe64Action: { user: actor, project: captureProjectRequestContext() } };
     } });
     captures.onProviderCreated = provider => {
       let goal = null;
@@ -13539,7 +13543,7 @@ test("Main browser fresh authorization for a local practice project opened as an
       resume.resolve();
       await goalOperation?.catch(() => {});
       await unsubscribe?.();
-      registerLocalPracticeAdmission(async () => null);
+      registerPracticeRequestActor(null);
     }
   }, { actions, throughTerminalService: true });
 });

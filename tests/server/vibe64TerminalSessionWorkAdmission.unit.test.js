@@ -2104,13 +2104,13 @@ test("captured practice control cannot admit fresh user work or session and repo
   const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "practice-system"),
     explicitManagedSourceRoot: path.join(f.root, "practice-source"), home: f.root, runtimeProfile: { local: true } });
   const actor = { uid: 42, username: "learner" };
-  const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
-    attemptId: "12345678-1234-4234-8234-123456789abc",
+  const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),
+    practiceId: "12345678-1234-4234-8234-123456789abc",
     pin: { course: { courseId: "intro-course", release: "0.1.0" },
       topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
         commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
     exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
-  const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+  const slug = `training-${training.practiceId.replaceAll("-", "")}`;
   let control;
   await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
     await core.createWorkspaceProjectRecord({ slug, training });
@@ -2138,7 +2138,7 @@ test("captured practice control cannot admit fresh user work or session and repo
     assert.equal(result.code, denied.code);
     assert.equal(lock.held, false);
     assert.equal(lock.attempts.length, 0, "Denial precedes all native/write admission or routing effects.");
-    assert.equal((await core.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
+    assert.equal((await core.readWorkspaceProjectState({ slug })).metadata.training.practiceId, training.practiceId);
     assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
   });
 });

@@ -8,8 +8,6 @@ import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource,
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
-import { practiceProjectsForViewer, projectPracticeForActor } from "@local/vibe64-core/server/practiceProjects";
-import { learningModeAllowsProject, learningModeProjects, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 
 import {
   Vibe64SessionRuntime
@@ -149,7 +147,6 @@ function publicProject(project = {}, {
     ...(project.githubRepository ? { githubRepository: project.githubRepository } : {}),
     name: slug,
     path: projectRoot,
-    ...(project.practice ? { practice: { ...project.practice } } : {}),
     projectRecordPath: context?.projectRecordPath || project.projectRecordPath || "",
     projectRoot,
     projectRuntimeRoot: context?.projectRuntimeRoot || project.projectRuntimeRoot || "",
@@ -320,14 +317,10 @@ function createService({
     : getStudioProjectContext());
 
   function selectedTargetRoot() {
-    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
   }
 
   function requireSelectedTargetRoot() {
-    if (currentProjectRequestContext()?.learningScope?.noExercise) {
-      throw vibe64Error("This learning session has no project source.", "vibe64_session_source_required");
-    }
     const target = selectedTargetRoot();
     if (target) {
       return target;
@@ -336,7 +329,6 @@ function createService({
   }
 
   function selectedSourceRoot() {
-    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     const requestSource = currentProjectSourceRoot();
     if (requestSource) {
       return requestSource;
@@ -380,7 +372,6 @@ function createService({
   }
 
   function selectedSessionSourceRoot() {
-    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     const requestRoot = currentProjectSessionSourceRoot();
     if (requestRoot) {
       return requestRoot;
@@ -392,31 +383,12 @@ function createService({
   }
 
   function sessionStore() {
-    const learningContext = currentProjectRequestContext();
-    if (learningContext?.learningScope) {
-      const actorId = String(learningContext.vibe64User?.uid ?? learningContext.vibe64User?.username ?? "");
-      if (!actorId || actorId !== learningContext.learningScope.learnerId ||
-          (learningContext.learningScope.noExercise
-            ? learningContext.slug || learningContext.targetRoot || learningContext.sourceRoot || learningContext.projectSessionSourceRoot
-            : !learningContext.slug || !learningContext.targetRoot || !learningContext.projectRuntimeRoot || !learningContext.projectSessionSourceRoot)) {
-        throw vibe64Error("Use this authenticated learner's exact private or practice session context.", "vibe64_learning_scope_mismatch");
-      }
-      if (learningContext.learningScope.noExercise) {
-        return createVibe64SessionStore({
-          logger,
-          projectContextRoot: learningContext.projectRuntimeRoot,
-          projectRuntimeRoot: learningContext.projectRuntimeRoot,
-          learningScope: learningContext.learningScope
-        });
-      }
-    }
     const target = requireSelectedTargetRoot();
     return createVibe64SessionStore({
       logger,
       projectContextRoot: target,
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSessionSourceRoot: selectedSessionSourceRoot(),
-      learningScope: learningContext?.learningScope
+      projectSessionSourceRoot: selectedSessionSourceRoot()
     });
   }
 
@@ -726,44 +698,18 @@ function createService({
     return readEnvState(input);
   }
 
-  // Practice is split at presentation and owned by its learner. A listing for
-  // a viewer (the public projects.list action) adds the actor-relative `mine`
-  // and omits practice projects that viewer may not open (another learner's,
-  // unless the viewer is the owner). Internal system callers (runtime cleanup,
-  // goal recovery, health) list without a viewer and see every project. The
-  // current project already passed the request's own access check.
-  function presentedProjects(projects = [], viewer = undefined) {
-    return viewer === undefined ? projects : practiceProjectsForViewer(projects, viewer);
-  }
-
-  function presentedProject(project = null, viewer = undefined) {
-    return project && viewer !== undefined ? projectPracticeForActor(project, viewer) : project;
-  }
-
-  // A viewer in learning mode sees only that lesson's practice projects.
-  async function listProjectsState({ viewer = undefined } = {}) {
-    const listed = await listProjectsForViewer({ viewer });
-    if (viewer === undefined) return listed;
-    const mode = await readLearningModeFor(viewer);
-    if (!mode || !listed || listed.ok === false) return listed;
-    const currentProject = listed.currentProject && learningModeAllowsProject(mode, listed.currentProject.slug)
-      ? listed.currentProject : null;
-    return { ...listed, currentProject, projects: learningModeProjects(listed.projects || [], mode),
-      ...(currentProject ? {} : { hasSelection: false }), learningMode: true };
-  }
-
-  async function listProjectsForViewer({ viewer = undefined } = {}) {
+  async function listProjectsState() {
     const requestContext = currentProjectRequestContext();
     if (!requestContext?.targetRoot || studioProjectContext.requestContextMatchesSelectedProject(requestContext)) {
       const listed = await studioProjectContext.listProjects();
       const currentProject = listed.currentProject
-        ? presentedProject(publicProject(listed.currentProject, {
+        ? publicProject(listed.currentProject, {
             selected: true
-          }), viewer)
+          })
         : null;
-      const projects = presentedProjects(listed.projects.map((project) => publicProject(project, {
+      const projects = listed.projects.map((project) => publicProject(project, {
         selected: project.selected
-      })), viewer);
+      }));
       if (currentProject && !projects.some((project) => project.slug === currentProject.slug)) {
         projects.push(currentProject);
         projects.sort((left, right) => left.slug.localeCompare(right.slug));
@@ -776,15 +722,15 @@ function createService({
     }
     const listed = await studioProjectContext.listWorkspaceProjects();
     const current = listed.projects.find((project) => project.slug === requestContext.slug) || {};
-    const projects = presentedProjects(listed.projects.map((project) => publicProject(project, {
+    const projects = listed.projects.map((project) => publicProject(project, {
       context: project.slug === requestContext.slug ? requestContext : null,
       selected: project.slug === requestContext.slug
-    })), viewer);
+    }));
     return {
-      currentProject: presentedProject(publicProject(current, {
+      currentProject: publicProject(current, {
         context: requestContext,
         selected: true
-      }), viewer),
+      }),
       hasSelection: true,
       ok: true,
       projects,
@@ -1291,15 +1237,6 @@ function createService({
 
   async function createRuntime(options = {}) {
     const requestContext = captureProjectRequestContext() || {};
-    if (requestContext.learningScope?.noExercise) {
-      return new Vibe64SessionRuntime({
-        inspectSourceByDefault: false,
-        projectContextRoot: requestContext.projectRuntimeRoot,
-        projectRuntimeRoot: requestContext.projectRuntimeRoot,
-        learningScope: requestContext.learningScope,
-        store: sessionStore()
-      });
-    }
     const target = requireSelectedTargetRoot();
     return new Vibe64SessionRuntime({
       createSessionSource: options.createSessionSource,
@@ -1307,7 +1244,6 @@ function createService({
       projectContextRoot: target,
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selectedSessionSourceRoot(),
-      learningScope: requestContext.learningScope,
       promptEnvironment: () => runWithProjectRequestContext(requestContext, promptEnvironment),
       store: sessionStore()
     });
@@ -1399,10 +1335,8 @@ function createService({
       return currentDevelopmentDatabasePolicy(input);
     },
 
-    // `actor` (possibly null) asks for the viewer's presentation; internal
-    // callers omit it.
-    async listProjects(input = {}) {
-      return projectResult(() => listProjectsState(Object.hasOwn(input || {}, "actor") ? { viewer: input.actor ?? null } : {}));
+    async listProjects() {
+      return projectResult(() => listProjectsState());
     },
 
     async managedDevelopmentDatabaseDefaults(input = {}) {

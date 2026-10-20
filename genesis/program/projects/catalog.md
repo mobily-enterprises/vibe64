@@ -54,30 +54,21 @@ Database adds MySQL migrations without login, while Accounts adds authentication
 and account-persistence tests. Import and Workspace setup remain separate.
 The task guide is `docs/colleague-usage/starter-apps.md`.
 
-A practice project is an ordinary project of its learner and its sessions are
-ordinary sessions; the learning-bound practice context described below is
-retired (see the Training Program).
+A practice project is an ordinary project of its learner, and its sessions are
+ordinary sessions, but it lives in the learner's learning space rather than the
+catalogue (see **Practice projects** below).
 
-Standalone lesson practice admission uses the same Project context, record
-creation, rollback and request-context storage. Training reads the actual actor's
-saved attempt and verifies its installed pin and bundled exercise before entering
-the bounded `resolvePracticeContext` callback. Fresh creation and writing require
-the exact current active attempt under the original preparation barrier; ended
-history may be observed without admitting new work. A supplied session must be
-the saved initial session and is read through the original Project runtime/store.
-
-Core derives the private namespace from installation roots, learner key and
-attempt, and requires the original immutable project training marker and managed
-Git policy. Runtime roots remain in the original `system/projects/<slug>` tree so
-upgrade inventory, canonical repository and cleanup ownership remain intact.
+Practice admission uses the same Project context, record creation, rollback and
+request-context storage as any project. Core `runWithPracticeProjectScope` is
+the one scope on both hosts: it derives the namespace from the learning space
+root, learner key and practice ID, and requires the immutable training marker
+and managed Git policy. Runtime roots remain in the original
+`system/projects/<slug>` tree so upgrade inventory, canonical repository,
+restart recovery, resource policies and cleanup ownership remain intact.
 Existing unmarked, mismatched or aliased storage is refused without repair.
-Original catalogue orphan cleanup retains a runtime only when its normalized
-managed Git training marker, exact reserved slug and real private namespace match.
-This protects practice history if the same installation is opened with catalogue
-enabled, without listing the practice project or granting catalogue access.
 The private grant survives exact nested Project resolution but expires with its
-owning callback; it cannot come from HTTP fields or inherit source-less Learning
-authority. Ordinary local catalogue and route refusals remain unchanged.
+owning callback; it cannot come from HTTP fields. Ordinary local catalogue and
+route refusals remain unchanged.
 
 The original managed repository creation and exact exercise source verification
 operations now live beside the original Public managed initializer. Online calls
@@ -253,12 +244,55 @@ opens per runtime root so simultaneous visits observe one transition.
 
 ## Practice projects
 
-A practice project is an ordinary project whose immutable record carries the
-saved Learning `training` marker. Core `practiceProjects.js` derives the public
-`practice: {learnerKey, attemptId, lessonCode}` field from it and adds `mine` only for a
-known viewer; it never reads or changes saved progress.
+Practice projects live only in the learning space, apart from normal projects,
+by the same mechanism on both hosts. Core `learningSpace.js` owns the space: the
+`training-<32 hex>` slug and its practice ID (a UUID; the attempt that first
+creates the project supplies it), the immutable marker `training`
+`{schemaVersion: 2, learnerKey, practiceId, pin, exercise}` (only schema 2 is
+accepted), the layout and `PRACTICE_PROJECT_DELETED_CODE`.
 
-People see a practice project by its lesson, never its `training-<attempt>`
+| | Path |
+|---|---|
+| Learning space root | `createStudioProjectContext({learningSpace: {root}})`; standalone default `<managedSourceRoot>/.learning`, Online `<projectsRoot>/.learning` |
+| Project namespace and session source root | `<root>/<learnerKey>/<practiceId>/<slug>` |
+| Runtime root | `<systemRoot>/projects/<slug>` (the shared runtime inventory) |
+
+The space sits inside the managed source tree, so agents, Preview and Files
+reach it through the managed-source permission contract (group, default ACL and
+umask); practice directories get no explicit mode, except the runtime root
+under the daemon-private system root. `.learning` is not a valid slug, so the
+catalogue never lists it. `listWorkspaceProjects` never shows a practice
+project, and its orphan-runtime sweep leaves every `training-<hex>` runtime
+whose record has a training marker (a warning when its learning-space project
+is missing). A catalogue entry whose record carries a retired or invalid
+training marker (an old hosted practice project awaiting the 20261022 scrap
+upgrade) is left out of the listing, never failing it for the other projects,
+and opening its slug is `vibe64_practice_project_deleted` (404). Every such skip
+warns once per process, not on every listing. `createWorkspaceProjectRecord` and `assertWorkspaceProjectAvailable`
+refuse a new catalogue project with a `training-<hex>` name
+(`vibe64_project_slug_reserved`); a pre-existing one still opens.
+`listLearningSpaceProjects({learnerKey?})` returns
+`{slug, learnerKey, practiceId, training}` for each valid project and skips an
+unsafe or invalid entry with a warning; `readLearningSpaceProject(slug)` reads
+one.
+
+`resolveProjectRequestContext` admits every `training-<hex>` slug through core
+`admitPracticeProject` before the explicit, local or catalogue branch. A person
+(an actor, or a request that carries headers) opens only their own practice
+project; anything else, including another learner's and the workspace owner's
+request, is `vibe64_practice_project_deleted` (404). Work without a person
+(agent turns after the browser closes, maintenance, archive) is admitted as the
+marker's learner. Admission reads the marker, not an attempt. A local host
+supplies the person of its local transport through `registerPracticeRequestActor`.
+An action that resolves its own project (`withVibe64ActionContext` without a
+host-resolved project) keeps the person's original request, so a local
+browser action is admitted only for that person's own practice project; only an
+action with no request runs as the marker's learner.
+When the learning space has no such project, only a pre-existing project of that
+name (the explicit local project or `<projectsRoot>/<slug>`) opens. Learning
+mode (`learningMode.js`) allows only the active lesson's `practiceSlug`.
+
+People see a practice project by its lesson, never its `training-<practice ID>`
 slug, which stays the address. The client `vibe64PracticeProjectName.js`
 (`projectDisplayName`, `practiceProjectName`) is the one naming rule for both
 hosts: **Practice:** plus the lesson title where the client knows it (the open
@@ -274,36 +308,21 @@ own `.studio-home-shell-project-name` wrapper is clipped and is the `@container`
 that hides the selector below 4rem rather than show a sliver. The GitHub actor
 shows its icon (account kept in its title and accessible name), the session
 controls leave the bar while the project pane is shown, and at ≤480px the
-next-pane button becomes a pane icon that keeps its "Go to …" name. The workspace listing
-stays unfiltered for internal callers; a listing for a viewer omits other learners' practice
-projects (`practiceProjectsForViewer`), and the presentation splits Practice from
-ordinary projects. `practiceProjectAccessBlock` refuses a non-owner whose learner
-key differs with `vibe64_practice_project_private` ("This practice project
-belongs to another learner."); the workspace owner keeps access for support.
+next-pane button becomes a pane icon that keeps its "Go to …" name.
 `vibe64.project.projects.create` is `ownerRequired`: members get practice
 projects only through lessons.
 
-Deletion is Training's `practice.delete`, through the host facility
-`practiceProjects.remove({slug, actor})`. The standalone implementation
-(`createLocalPracticeProjects`) runs the archive service's lifecycle without the
-archive steps under a per-slug lock: deletion marker, runtime close, resource,
-source and runtime removal, then `forgetProject`; a pinned session refuses with
-an unpin message and changes nothing, and a retry continues from the failed
-step. The attempt that owned the project is ended with reason `discard`;
-progress is kept. Online supplies its own implementation through its archive
-service. Both also offer the read-only `canRemove` preflight and
-`exists({slug, actor})`, which leaves a completely removed practice project out
-of Training's `learning.read`/`lesson.read` (L's Practice section). Practice
-onboarding uses the ordinary project read.
+Archiving and deleting a practice project belong to Training's learning-space
+owner, which uses the shared project archive service inside the learner's
+practice scope.
 
 A page left open on a deleted practice project is a clean not-found on both
 hosts: core `practiceProjectDeletedError` (`vibe64_practice_project_deleted`,
 404, "This practice project was deleted. Its lesson is still in Learning.") is
-thrown by the hosted catalogue `readWorkspaceProject` for a practice slug whose
+thrown by the page admission (`resolveProjectRequestContext` passes
+`requireProject` to `runWithPracticeProjectScope`) for a practice project whose
 record is missing or carries the deletion marker (an exact delete request with
-`allowDeleting` still resumes), and by the standalone page admission
-(`resolveProjectRequestContext` passes `requireProject` to
-`runWithPracticeProjectScope`), checked before the ownership refusal so storage
+`allowDeleting` still resumes), checked before the ownership refusal so storage
 recreated by a late request is not a 500. Other practice scopes keep refusing
 unmarked leftover storage. Feature routes and the Online gate map the code to 404
 with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
