@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
+import { compareChoiceAnswer } from "./installedContent.js";
 import { validateContent } from "./contentSchemas.js";
 import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
@@ -76,9 +77,9 @@ function requireLearnerChannel(context, what) {
 // authored answer indexes. Order is irrelevant. Same rule as contract C1's
 // installed-content comparator; the answer itself comes only from
 // content.readChoiceAnswer, never from a readLesson projection.
+// The content owner's comparator (exact set, any order); an empty answer never passes.
 function choiceMatches(answer, selected) {
-  return Array.isArray(answer) && answer.length > 0 && selected.length === answer.length &&
-    selected.every(index => answer.includes(index));
+  return Array.isArray(answer) && answer.length > 0 && compareChoiceAnswer(answer, selected);
 }
 
 // Version 2 step results. Passes come only from: the automatic check runner
