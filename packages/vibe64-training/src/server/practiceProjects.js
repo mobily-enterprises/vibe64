@@ -70,6 +70,8 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
   // deletion. A project whose deletion stopped part-way keeps its record (the
   // record is removed last), so it stays listed for the retry. Another
   // learner's slug, or one with no saved attempt behind it, does not exist here.
+  // Leftover storage whose ownership no longer matches (scope admission refuses
+  // it) is still present: it stays listed so a delete can retry or report why.
   async function exists({ slug, actor } = {}) {
     let scope;
     try { scope = await ownPracticeScope({ slug, actor }); }
@@ -77,8 +79,13 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
       if (error.statusCode && error.statusCode < 500) return false;
       throw error;
     }
-    return projectContext.runWithPracticeProjectScope({ actor, training: scope.saved.training, access: "write", allowDeleting: true },
-      async () => Object.keys((await projectContext.readWorkspaceProjectState({ slug })).metadata).length > 0);
+    try {
+      return await projectContext.runWithPracticeProjectScope({ actor, training: scope.saved.training, access: "write", allowDeleting: true },
+        async () => Object.keys((await projectContext.readWorkspaceProjectState({ slug })).metadata).length > 0);
+    } catch (error) {
+      if (error.code === "vibe64_practice_scope_mismatch") return true;
+      throw error;
+    }
   }
 
   function readPinnedSessionId(slug, state) {
@@ -123,7 +130,7 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
     if (!steps["source-removed"]) {
       for (const root of [state.projectContextRoot, projectSessionSourceRoot]) {
         await removePath(root, { force: true, recursive: true });
-        if (await exists(root)) {
+        if (await pathExists(root)) {
           throw Object.assign(new Error("Project namespace still exists after deletion."), { code: "vibe64_project_namespace_delete_failed" });
         }
       }
@@ -131,7 +138,7 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
     }
     if (!steps["state-removal-started"]) await markComplete("state-removal-started");
     await removePath(state.projectRuntimeRoot, { force: true, recursive: true });
-    if (await exists(state.projectRuntimeRoot)) {
+    if (await pathExists(state.projectRuntimeRoot)) {
       throw Object.assign(new Error("Project runtime and session state still exists after deletion."), { code: "vibe64_project_state_delete_failed" });
     }
     // The empty per-attempt namespace directory goes too; anything else stays.
@@ -176,7 +183,7 @@ function notPractice() {
   return Object.assign(new Error("This is not one of your practice projects."), { code: "vibe64_project_not_practice", statusCode: 404 });
 }
 
-async function exists(target) {
+async function pathExists(target) {
   try { await lstat(target); return true; }
   catch (error) { if (error.code === "ENOENT") return false; throw error; }
 }

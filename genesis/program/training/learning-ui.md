@@ -116,6 +116,10 @@ practice project's address, and the trash button posts `practice.delete` once
 reports the project (standalone: the learner's own practice scope still holds a
 record; Online: the archive service's `practiceProjectExists`). A project whose
 deletion stopped part-way keeps its record and stays listed for the retry.
+Leftover storage whose ownership no longer matches counts as present, and a
+presence check that throws keeps that row listed instead of failing the read,
+so one damaged or uninstalled old attempt never hides progress; delete then
+reports the actual refusal.
 
 ## Local practice-project address
 

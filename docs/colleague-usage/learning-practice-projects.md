@@ -59,7 +59,10 @@ the lesson attempt that owned the project ends. If a session in that project is
 pinned, deletion refuses with **Unpin session … before deleting this practice
 project.** Open that session, choose **Unpin session**, then delete again. If
 deletion stops part-way, the row stays: press the trash button again; it
-continues from the step that failed. Ordinary projects never appear under
+continues from the step that failed. A practice project whose files are damaged
+or whose ownership can no longer be confirmed also stays listed, and the rest
+of the page still loads; deleting it then shows the reason it was refused, so
+ask the person who runs this Vibe64 to inspect it. Ordinary projects never appear under
 **Practice** and are never deleted this way.
 
 Colleague can explain these steps. It deletes a practice project only when you
