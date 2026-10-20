@@ -12,7 +12,8 @@ import { createInstalledTrainingContent, validateInstalledTopicPin } from "./ins
 
 const MAX_REQUEST_IDS = 64;
 // Step results live outside progress.json (kept per lesson content), so a new
-// attempt past 32 retained attempts prunes the oldest ended one.
+// attempt past 32 retained attempts prunes an ended one no practice project
+// still needs (pruneAttempts).
 const MAX_ATTEMPTS = 32;
 const MAX_RECORD_BYTES = 64 * 1024;
 const MAX_STEP_RESULTS = 64;
@@ -83,7 +84,10 @@ const resumeSchema = createSchema({
 const learningSchema = createSchema({
   submissions: list(resultSchema, 64), resume: { type: "object", required: false, schema: resumeSchema }
 });
-// "restart" is read only: published upgrades still read attempts ended by it.
+// "restart" is read only: the published 20261008-learning-practice-history
+// upgrade runs before the 20261022 reset and reads vibe64 0.1.35 progress,
+// whose attempts ended with it. Drop it only when no published upgrade before
+// the reset reads learner progress.
 const END_REASONS = ["left", "finished", "discard"];
 const endedSchema = createSchema({
   requestId: { ...text, maxLength: 64 }, revision,
@@ -240,6 +244,22 @@ function validateStepProgress(value, learnerId) {
     throw new Error("Step progress exceeds its 1 MiB record limit. No result was removed or written.");
   }
   return record;
+}
+
+// Entries are kept least recently written first. Past the lesson or byte
+// bound, the oldest entries of lesson content that no retained attempt pins
+// go first: those results are disposable once no attempt can read them.
+function retainStepLessons(lessons, progress) {
+  const pinned = new Set(progress.attempts.map(attempt => canonicalJson(attempt.pin.lesson)));
+  const kept = [...lessons];
+  const over = () => kept.length > MAX_STEP_LESSONS ||
+    Buffer.byteLength(`${JSON.stringify({ schemaVersion: 2, learnerId: progress.learnerId, revision: Number.MAX_SAFE_INTEGER, lessons: kept }, null, 2)}\n`) > MAX_STEP_RECORD_BYTES;
+  while (over()) {
+    const index = kept.findIndex(entry => !pinned.has(canonicalJson(entry.lesson)));
+    if (index < 0) break;
+    kept.splice(index, 1);
+  }
+  return kept;
 }
 
 // The saved step results of one lesson content, or an empty entry.
@@ -768,20 +788,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return attempt && attemptPracticeId(attempt) === practiceId ? structuredClone(attempt) : null;
   }
 
-  // Read the original saved exercise identity, never infer it from a project
-  // name or source directory. The caller owns callback-scoped Project admission.
-  async function readExerciseProjectScope({ actor, attemptId, access = "observe" } = {}) {
-    if (!["observe", "control", "write", "create"].includes(access)) {
-      throw new TypeError("Use an explicit practice operation scope.");
-    }
-    const paths = userPaths(actor);
-    if (typeof attemptId !== "string" || !uuidPattern.test(attemptId)) {
-      throw new Error("Use the exact saved exercise attempt ID.");
-    }
-    const state = await loadState(paths);
-    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
-    if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
-    const active = state.progress.activeAttemptId === attemptId && !attempt.ended;
+  // The exact bundled exercise of a saved attempt, with the original refusal
+  // precedence: installed pin, no exercise, inactive work, unavailable reader.
+  async function readAttemptExercise(state, attempt, access) {
+    const active = state.progress.activeAttemptId === attempt.attemptId && !attempt.ended;
     const workInactive = (access === "write" || access === "create") && (!active || !state.activeSummaryCurrent);
     // Refusals retain the original installed-pin/no-exercise precedence. Admitted
     // reads use readExercise's existing lesson validation instead of repeating it.
@@ -811,27 +821,79 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         exercise.lessonCode !== attempt.pin.lesson.code || exercise.lessonHash !== attempt.pin.lesson.hash) {
       throw new Error("The installed topic differs from the admitted reservation pin.");
     }
-    const practiceId = attemptPracticeId(attempt);
+    return { active, sourcePath: exercise.sourcePath };
+  }
+
+  function exerciseScope(paths, state, attempt, { active, training }) {
     return {
-      scope: { learnerId: paths.learner.id, attemptId, pin: structuredClone(attempt.pin), noExercise: false },
+      scope: { learnerId: paths.learner.id, attemptId: attempt.attemptId, pin: structuredClone(attempt.pin), noExercise: false },
       systemRoot,
-      practiceId,
-      training: { schemaVersion: 2, learnerKey: paths.learner.key, practiceId, pin: structuredClone(attempt.pin),
-        exercise: { kind: "bundled", sourcePath: exercise.sourcePath } },
+      training,
       projectSlug: attempt.projectSlug,
       ...(attempt.preparation.initialSessionId ? { initialSessionId: attempt.preparation.initialSessionId } : {}),
       active, activeSummaryCurrent: state.activeSummaryCurrent
     };
   }
 
+  // Frozen for the published 20261008-learning-practice-history upgrade, which
+  // compares the result with a version 1 project marker: one attempt, its own
+  // project and the version 1 marker. Learning-space work reads
+  // readPracticeProjectScope instead.
+  async function readExerciseProjectScope({ actor, attemptId, access = "observe" } = {}) {
+    if (!["observe", "control", "write", "create"].includes(access)) {
+      throw new TypeError("Use an explicit practice operation scope.");
+    }
+    const paths = userPaths(actor);
+    if (typeof attemptId !== "string" || !uuidPattern.test(attemptId)) {
+      throw new Error("Use the exact saved exercise attempt ID.");
+    }
+    const state = await loadState(paths);
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
+    if (attempt.practiceId) {
+      throw failure("VIBE64_TRAINING_ATTEMPT_CONFLICT", "This attempt continues a learning-space practice project; read it by its practice project.", 409);
+    }
+    const { active, sourcePath } = await readAttemptExercise(state, attempt, access);
+    return exerciseScope(paths, state, attempt, { active, training: { schemaVersion: 1, learnerKey: paths.learner.key,
+      attemptId, pin: structuredClone(attempt.pin), exercise: { kind: "bundled", sourcePath } } });
+  }
+
+  // The saved exercise identity of one practice project (the version 2 marker),
+  // keyed on the project, never on an attempt: the active attempt working in
+  // it, otherwise its latest retained attempt. A continued attempt therefore
+  // admits work in the project an earlier attempt created. Pruning keeps the
+  // latest attempt of every practice project still in the learning space.
+  async function readPracticeProjectScope({ actor, practiceId, access = "observe" } = {}) {
+    if (!["observe", "control", "write", "create"].includes(access)) {
+      throw new TypeError("Use an explicit practice operation scope.");
+    }
+    const paths = userPaths(actor);
+    if (typeof practiceId !== "string" || !uuidPattern.test(practiceId)) {
+      throw new Error("Use the exact practice project ID.");
+    }
+    const state = await loadState(paths);
+    const attempts = state.progress.attempts.filter(value => attemptPracticeId(value) === practiceId);
+    const attempt = attempts.find(value => value.attemptId === state.progress.activeAttemptId) || attempts.at(-1);
+    if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no saved attempt in this practice project.", 404);
+    const { active, sourcePath } = await readAttemptExercise(state, attempt, access);
+    return { ...exerciseScope(paths, state, attempt, { active, training: { schemaVersion: 2, learnerKey: paths.learner.key,
+      practiceId, pin: structuredClone(attempt.pin), exercise: { kind: "bundled", sourcePath } } }), practiceId };
+  }
+
   // practiceId continues an existing practice project of this same lesson pin
   // (Continue lesson); the host has verified that the project still exists.
-  async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin, practiceId } = {}) {
+  // livePracticeIds, when the host supplies it, lists every practice project
+  // of this learner still in the learning space; pruning then also drops the
+  // last attempt of a deleted or archived one.
+  async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin, practiceId, livePracticeIds } = {}) {
     const paths = userPaths(actor);
     if (typeof requestId !== "string" || !requestPattern.test(requestId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
       throw new Error("Reserve with a bounded stable request ID and the revision returned by readState.");
     }
     if (practiceId !== undefined && !uuidPattern.test(practiceId || "")) throw new Error("Continue an exact practice project ID.");
+    if (livePracticeIds !== undefined && (!Array.isArray(livePracticeIds) || livePracticeIds.some(id => !uuidPattern.test(id || "")))) {
+      throw new Error("List the learning space's practice projects by their exact IDs.");
+    }
     const pin = validatePin(inputPin);
     const samePractice = attempt => practiceId === undefined ? !attempt.practiceId : attemptPracticeId(attempt) === practiceId;
     await loadState(paths);
@@ -839,7 +901,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const release = await acquire(paths);
     try {
       const state = await loadState(paths);
-      await verifyProgressLessons(state.progress);
+      const lessons = await verifyProgressLessons(state.progress);
       if (state.progress.attempts.some(attempt => attempt.ended?.requestId === requestId)) {
         throw failure("VIBE64_TRAINING_REQUEST_CONFLICT", "This request ID already ended an attempt; use its original end operation.", 409);
       }
@@ -864,6 +926,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       }
       let attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       let attempts = state.progress.attempts;
+      let pruned = [];
       if (attempt) {
         if (canonicalJson(attempt.pin) !== canonicalJson(pin) || practiceId !== undefined && !samePractice(attempt)) {
           throw failure("VIBE64_TRAINING_ATTEMPT_CONFLICT", "Another lesson or practice project is already active. Continue it; this operation does not restart attempts.", 409);
@@ -873,9 +936,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         }
         attempt.requestIds.push(requestId);
       } else {
-        // Every retained attempt is ended here; the oldest makes room. Its
-        // step results stay with the lesson content and ledgers with projects.
-        if (attempts.length >= MAX_ATTEMPTS) attempts = attempts.slice(attempts.length - MAX_ATTEMPTS + 1);
+        ({ attempts, pruned } = pruneAttempts(attempts, lessons, { practiceId, livePracticeIds }));
         const attemptId = randomUUID();
         attempt = {
           attemptId,
@@ -905,9 +966,48 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         throw error;
       }
       const active = await saveActive(paths, progress);
+      await forgetPrunedLedgers(paths, pruned, progress.attempts, livePracticeIds);
       return { revision: progress.revision, attempt, active, replayed: false };
     } finally {
       await release();
+    }
+  }
+
+  // At the cap every retained attempt is ended. The oldest one no practice
+  // project still needs makes room: one that never had a project (a lesson
+  // without an exercise, or an own attempt still only reserved), one a later
+  // attempt in the same practice project supersedes (including the attempt
+  // being continued now), or one whose practice project the host reports gone.
+  // The latest attempt of a practice project still in the learning space is
+  // never pruned, so the project stays readable by its practice ID. Step
+  // results stay with the lesson content and ledgers with practice projects.
+  function pruneAttempts(attempts, lessons, { practiceId, livePracticeIds }) {
+    const kept = [...attempts];
+    const pruned = [];
+    const live = livePracticeIds && new Set(livePracticeIds);
+    while (kept.length >= MAX_ATTEMPTS) {
+      const index = kept.findIndex((attempt, position) => {
+        const id = attemptPracticeId(attempt);
+        return !lessons.get(attempt.attemptId)?.lesson?.exercise || !attempt.practiceId && attempt.preparation.phase === "reserved" ||
+          id === practiceId || kept.slice(position + 1).some(later => attemptPracticeId(later) === id) || live && !live.has(id);
+      });
+      if (index < 0) {
+        throw failure("VIBE64_TRAINING_ATTEMPTS_FULL", `You have ${MAX_ATTEMPTS} practice projects with saved lessons. Archive or delete one in Practice, then start the lesson again.`, 409);
+      }
+      pruned.push(...kept.splice(index, 1));
+    }
+    return { attempts: kept, pruned };
+  }
+
+  // A pruned attempt's code ledger goes with it once no retained attempt and
+  // no live practice project refers to it. The reservation is already saved,
+  // so a failure here only leaves a ledger that deleting the project forgets.
+  async function forgetPrunedLedgers(paths, pruned, retained, livePracticeIds) {
+    if (!livePracticeIds) return;
+    const needed = new Set([...livePracticeIds, ...retained.map(attemptPracticeId)]);
+    for (const practiceId of new Set(pruned.map(attemptPracticeId))) {
+      if (needed.has(practiceId)) continue;
+      try { await forgetLedger(paths, practiceId); } catch { /* Disposable; deleting the project forgets it. */ }
     }
   }
 
@@ -1158,8 +1258,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   // Code ledgers: one private record per practice project, written only while
   // an attempt is active in it, so autosaves never advance the learning
-  // revision. Pruning attempts never touches them; deleting or archiving the
-  // practice project forgets its ledger.
+  // revision. Deleting or archiving the practice project forgets its ledger
+  // (forgetPracticeLedger), as does pruning the last attempt of a practice
+  // project the host reports gone.
   function ledgerPath(paths, practiceId) {
     if (!uuidPattern.test(practiceId || "")) throw new Error("Use an exact practice project ID.");
     return path.join(paths.codeLedgers, `${practiceId}.json`);
@@ -1211,13 +1312,18 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     });
   }
 
-  async function forgetPracticeLedger({ actor, practiceId } = {}) {
-    const paths = userPaths(actor);
+  async function forgetLedger(paths, practiceId) {
     const filename = ledgerPath(paths, practiceId);
     await withLedgerLock(paths, async () => {
       await inspectPath(filename, false);
       await rm(filename, { force: true });
     });
+  }
+
+  // The learning-space owner calls this when it deletes or archives the
+  // practice project (a resumable step: forgetting twice is a no-op).
+  async function forgetPracticeLedger({ actor, practiceId } = {}) {
+    return forgetLedger(userPaths(actor), practiceId);
   }
 
   // Step progress and the reader position use their own short locks so they
@@ -1297,7 +1403,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const updated = { ...result.entry, lesson: entry.lesson };
       const key = canonicalJson(entry.lesson);
       const next = { ...record, revision: record.revision + 1,
-        lessons: [...record.lessons.filter(value => canonicalJson(value.lesson) !== key), updated] };
+        lessons: retainStepLessons([...record.lessons.filter(value => canonicalJson(value.lesson) !== key), updated], state.progress) };
       validateStepProgress(next, paths.learner.id);
       validateLessonStepResults(updated, lesson);
       try {
@@ -1473,7 +1579,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
-  return { readState, activeAttemptForPractice, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
+  return { readState, activeAttemptForPractice, readExerciseProjectScope, readPracticeProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
     beginPreparation, recordPreparationReady, recordPreparationFailure,
     readCodeLedger, updateCodeLedger, forgetPracticeLedger, readStepProgress, updateStepProgress, readReader, saveReader,
     readTeacherNotes, saveTeacherNotes, readLearningMode };

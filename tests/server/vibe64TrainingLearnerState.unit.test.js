@@ -1588,11 +1588,30 @@ test("continuing a practice project reserves a new attempt in the same practice 
   const continued = await f.state.beginPreparation({ actor: f.actor, attemptId: next.attempt.attemptId, expectedRevision: next.revision,
     initialSessionId: prepared.attempt.preparation.initialSessionId });
   assert.equal(continued.attempt.preparation.initialSessionId, `training-${practiceId}`);
-  const scope = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId: next.attempt.attemptId });
+  // The practice project resolves to the continued attempt, which admits work
+  // there; the attempt-keyed published-upgrade reader refuses it.
+  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" });
   assert.equal(scope.practiceId, practiceId);
+  assert.equal(scope.scope.attemptId, next.attempt.attemptId);
+  assert.equal(scope.active, true);
+  assert.equal(scope.projectSlug, first.attempt.projectSlug);
+  assert.equal(scope.initialSessionId, `training-${practiceId}`);
   assert.deepEqual(Object.keys(scope.training).sort(), ["exercise", "learnerKey", "pin", "practiceId", "schemaVersion"]);
   assert.equal(scope.training.schemaVersion, 2);
+  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId: next.attempt.attemptId }),
+    { code: "VIBE64_TRAINING_ATTEMPT_CONFLICT" });
   assert.equal((await f.state.activeAttemptForPractice({ actor: f.actor, practiceId })).attemptId, next.attempt.attemptId);
+  const left = await f.state.endAttempt({ actor: f.actor, attemptId: next.attempt.attemptId, requestId: "leave-2",
+    expectedRevision: continued.revision, reason: "left" });
+  const afterLeave = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "control" });
+  assert.equal(afterLeave.scope.attemptId, next.attempt.attemptId, "the latest retained attempt names the project");
+  assert.equal(afterLeave.active, false);
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" }),
+    { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: randomUUID() }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: "../practice" }));
+  assert.equal(left.active, null);
 });
 
 test("retired format-1 learning records stay readable and count toward completion at their exact pin", async t => {
@@ -1883,7 +1902,14 @@ test("exercise project scope reads the exact saved learner and installed exercis
   const attemptId = reserved.attempt.attemptId;
   const before = await treeState(f.systemRoot);
   const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  // The attempt-keyed reader stays the version 1 marker its published upgrade
+  // compares; the practice-keyed reader gives the learning-space marker.
   assert.deepEqual(saved, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
+    training: { schemaVersion: 1, learnerKey: "NDI", attemptId, pin: f.pin,
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
+    projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
+  assert.deepEqual(await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" }), {
+    scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
     practiceId: attemptId, training: { schemaVersion: 2, learnerKey: "NDI", practiceId: attemptId, pin: f.pin,
     exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
     projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
@@ -1952,13 +1978,13 @@ test("actual saved exercise caller admits only its same original local Project r
   // Practice projects are ordinary projects: the saved exercise scope is read
   // fresh and the original local practice admission owns the callback.
   const practice = async ({ actor, attemptId: id, access = "observe" }, operation) => {
-    const saved = await f.state.readExerciseProjectScope({ actor, attemptId: id, access });
+    const saved = await f.state.readPracticeProjectScope({ actor, practiceId: id, access });
     return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access },
       operation && (() => operation({ projectSlug: saved.projectSlug })));
   };
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  const scope = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
   const progressBefore = await fs.readFile(f.paths.progress);
   const activeBefore = await fs.readFile(f.paths.active);
   let captured;
@@ -2013,7 +2039,7 @@ test("a practice session is an ordinary local project session that stays the lea
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
   await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
-  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  const saved = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
   const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
   const exercise = await installed.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
   const selection = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",

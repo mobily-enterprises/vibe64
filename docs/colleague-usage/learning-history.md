@@ -68,18 +68,27 @@ Colleague runs a step check it only reports what the check found; nothing is
 saved, so it can neither record a pass nor use up the lesson's results.
 Colleague never sees or reveals choice answers. After a step passes, later
 answers or checks for it change nothing. Each lesson keeps at most 64 step
-results and always keeps room for one pass of each step not yet passed: a "not
-yet" result that would use that room is shown but not saved, so retries never
-block a later pass. Code you write in a practice project counts for its code
+results, shared by every attempt of the same lesson content (Leave lesson and
+Continue lesson keep adding to the same 64), and always keeps room for one pass
+of each step not yet passed: a "not yet" result that would use that room is
+shown but not saved, so retries never block a later pass. Code you write in a practice project counts for its code
 steps while a lesson is in progress there, including code written before you
 left and continued. The lesson remembers the last step and scroll position
 across reloads.
 
 ## History limits
 
-Each learner keeps the 32 most recent lesson attempts. Starting another removes
-the oldest ended attempt; its step results stay with its lesson content and its
-practice project is unaffected. Missing or corrupt pinned content needs exact
+Each learner keeps at most 32 lesson attempts. Starting another removes the
+oldest ended attempt that no practice project still needs: one whose lesson has
+no practice project, one that never began preparing, one a later attempt in the
+same practice project replaced, or one whose practice project was deleted or
+archived. The latest attempt of a practice project still in your Practice tab is
+never removed, so every kept practice project can still be opened, archived or
+deleted. When all 32 belong to kept practice projects, starting another lesson
+says so: archive or delete a practice project in **Practice**, then start again.
+Step results stay with their lesson content. Results of up to 128 lesson
+contents are kept; past that, results of lesson content no kept attempt uses
+make room first. Missing or corrupt pinned content needs exact
 owner restoration, even when no lesson is in progress. Reading state never
 repairs a missing record or creates a substitute workspace; ask the installation
 owner to inspect corrupt, foreign or missing content rather than changing the

@@ -558,8 +558,16 @@ assessment outcome or grading evidence is fabricated. New directories use 0700,
 records 0600. Files are bounded to 64 KiB and an attempt retains at most 64
 distinct reservation request IDs; it never silently drops retry history. A
 learner keeps at most 32 attempts: a new reservation at that cap removes the
-oldest ended attempt (with its reader position), never its step results or its
-practice project's ledger.
+oldest ended attempt that no practice project still needs (with its reader
+position): one whose lesson has no exercise, an own attempt still `reserved`,
+one a later attempt in the same practice project supersedes (including the
+attempt being continued), or one whose practice project the host's optional
+`livePracticeIds` leaves out. The latest attempt of every practice project still
+in the learning space is kept; when no attempt qualifies the reservation is
+refused with `VIBE64_TRAINING_ATTEMPTS_FULL` and writes nothing. A pruned
+attempt's code ledger is forgotten only when the host reports its practice
+project gone and no retained attempt names it. Step results are never pruned
+with attempts.
 
 An attempt is in progress exactly while `progress.activeAttemptId` names it.
 `readLearningMode({actor,includeTitle?})` derives `{on:false}` or
@@ -575,9 +583,20 @@ ID), its `projectSlug` is `training-<practiceId hex>`, and
 project belongs to one lesson pin, and another in-progress practice refuses.
 `activeAttemptForPractice({actor,practiceId})` returns the in-progress attempt
 of that practice project, or null.
+`readPracticeProjectScope({actor,practiceId,access})` returns the practice
+project's saved exercise identity (the version 2 `training` marker
+`{schemaVersion:2,learnerKey,practiceId,pin,exercise}`, project slug, initial
+session and `active`) from the in-progress attempt working in it, otherwise its
+latest retained attempt; `write` and `create` require that attempt to be in
+progress. `readExerciseProjectScope({actor,attemptId,access})` is frozen for the
+published `20261008-learning-practice-history` upgrade: one attempt's own
+project with the version 1 marker, refusing a continued attempt.
 
 Step results (`step-progress.json`, schema version 2) are stored per lesson
-content `{code,hash}`, not per attempt, and survive pruning.
+content `{code,hash}`, not per attempt, and survive pruning. Every attempt of
+the same lesson content shares that content's 64 results. The record keeps at
+most 128 lesson contents (and 1 MiB); past either bound a write drops the
+oldest-written results of lesson content no retained attempt pins.
 
 The same internal store adds `beginPreparation({actor,attemptId,expectedRevision})`,
 `recordPreparationReady({actor,attemptId,initialSessionId,expectedRevision})` and

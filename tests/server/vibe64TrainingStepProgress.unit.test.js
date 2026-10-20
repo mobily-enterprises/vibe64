@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -342,6 +342,30 @@ test("results of lesson content no retained attempt names stay readable and unva
   await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: [pruned, ...saved.lessons] })}\n`);
   assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 1);
   assert.equal((await f.owner.read({ actor: f.actor, attemptId: attempt.attemptId })).results.length, 1);
+});
+
+test("at the lesson bound a new lesson's results drop the oldest results no retained attempt pins", async t => {
+  const f = await fixture(t);
+  const attempt = await f.start();
+  await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" });
+  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
+  const current = saved.lessons[0];
+  const unpinned = Array.from({ length: 128 }, (_, index) => ({ ...current,
+    lesson: { code: `OLD-${index}`, hash: createHash("sha256").update(String(index)).digest("hex") } }));
+  // The current lesson's entry is the most recently written; 127 older ones
+  // fill the bound with it, then a full bound of unpinned ones without it.
+  await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: [...unpinned.slice(1), current] })}\n`);
+  await f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [1], requestId: "answer-1" });
+  let kept = JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons;
+  assert.equal(kept.length, 128, "an existing entry is replaced in place of the bound");
+  await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: unpinned })}\n`);
+  await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-2" });
+  kept = JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons;
+  assert.equal(kept.length, 128);
+  assert.deepEqual(kept.slice(0, 127).map(entry => entry.lesson.code), unpinned.slice(1).map(entry => entry.lesson.code),
+    "only the oldest unpinned lesson content made room");
+  assert.deepEqual(kept.at(-1).lesson, current.lesson);
+  assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 1);
 });
 
 test("v1 lessons refuse step writes and keep their assessment completion read", async t => {

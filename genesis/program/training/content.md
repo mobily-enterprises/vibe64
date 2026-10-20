@@ -156,7 +156,11 @@ exercise-relative `path` and verified Buffer `bytes`. It reuses the same file re
 without scanning for new inputs. Manifest records contain no file modes, so this
 read promises no mode preservation. A missing exercise retains its original error
 message with the typed `VIBE64_TRAINING_EXERCISE_MISSING` refusal.
-An admitted `readExerciseProjectScope` uses this existing read once, including
+An admitted `readPracticeProjectScope` (keyed on the practice project; the
+in-progress attempt there, otherwise its latest retained attempt, with the
+version 2 marker) or `readExerciseProjectScope` (frozen for the published
+20261008 practice-history upgrade: one attempt's own project, version 1 marker)
+uses this existing read once, including
 its topic/lesson validation, and checks the returned exact pin/code/hash. Each
 new scope still reads saved learner state and validates installed content; no
 result or authorization is cached. An inactive write/create or unavailable
@@ -425,7 +429,11 @@ practice project: `code-ledgers/<practiceId>.json` under one shared
 `code-ledger.lock`. Saves are ledgered only while that practice project's attempt
 is in progress (`saveLearnerFile({actor,practiceId,input,save})`); otherwise they
 are the editor's plain save. `forgetPracticeLedger` removes a ledger when the
-practice project is deleted or archived; pruning never does.
+learning-space owner deletes or archives the practice project; pruning removes
+one only with the last attempt of a practice project the host reports gone. Every
+attempt of one lesson content shares its 64 step results; the record keeps at
+most 128 lesson contents, and past that bound a write drops the oldest results of
+lesson content no retained attempt pins.
 
 An attempt may record `practiceId` (stored only when it differs from its own ID)
 when Continue reuses an existing practice project. Its project slug is
@@ -480,9 +488,15 @@ Every existing write updates only the matching attempt rather than replacing his
 
 At most 32 attempts are retained, in reservation order. Ended revisions and
 request identities are validated, and only the final unended attempt can be
-active. A new reservation at the cap removes the oldest ended attempt and its
-reader position; step results stay with their lesson content and ledgers with
-their practice project. The serialized progress record stays limited to 64 KiB
+active. A new reservation at the cap removes the oldest ended attempt no
+practice project still needs (no exercise, an own attempt still reserved,
+superseded by a later attempt in the same practice project, or a practice
+project missing from the host's `livePracticeIds`) and its reader position; the
+latest attempt of a live practice project is never pruned, and with none to
+prune the reservation is refused (`VIBE64_TRAINING_ATTEMPTS_FULL`). Step results
+stay with their lesson content and ledgers with their practice project. Saved
+`restart` ends stay readable because the published 20261008 practice-history
+upgrade reads vibe64 0.1.35 progress before the 20261022 reset. The serialized progress record stays limited to 64 KiB
 and an end that would exceed it is refused. For a v1 lesson, completion unions
 passed assessment IDs for the identical lesson code/hash across validated topic
 and course pins for that learner. Topic-only changes do not invalidate an unchanged

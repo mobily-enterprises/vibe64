@@ -260,7 +260,7 @@ test("a host with several learner stores selects the store holding the practice 
   await inPractice(() => save("// no store holds this attempt\n"));
   assert.equal(plainSaves, 2);
   assert.equal(await entries(), 0, "no selected store is a plain save");
-  assert.deepEqual(selections.map(value => value.attemptId), [f.attemptId]);
+  assert.deepEqual(selections.map(value => value.practiceId), [f.attemptId], "the host selects the store by practice project");
   selected = { authorship: f.authorship, learners: f.learners };
   await inPractice(() => save(solved));
   assert.equal(plainSaves, 3);
@@ -405,7 +405,7 @@ test("code the learner wrote before Continue lesson still counts in the continue
   assert.deepEqual({ outcome: result.outcome, recorded: result.recorded }, { outcome: "passed", recorded: true });
 });
 
-test("pruning attempts keeps a live practice project's ledger; forgetting the project removes it", async t => {
+test("pruning keeps a live practice project's attempt and ledger; Continue lesson saves and passes there; forgetting removes it", async t => {
   const f = await fixture(t, entered);
   await f.learnerSave(solved);
   let state = await f.learners.readState({ actor: f.actor });
@@ -419,13 +419,60 @@ test("pruning attempts keeps a live practice project's ledger; forgetting the pr
   }
   state = await f.learners.readState({ actor: f.actor });
   assert.equal(state.progress.attempts.length, 32);
-  assert.equal(state.progress.attempts.some(attempt => attempt.attemptId === f.attemptId), false, "the creating attempt was pruned");
+  assert.equal(state.progress.attempts[0].attemptId, f.attemptId, "the live practice project's only attempt is never pruned");
+  assert.equal((await f.learners.readPracticeProjectScope({ actor: f.actor, practiceId: f.attemptId })).scope.attemptId, f.attemptId);
   assert.equal((await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).entries.length, 1);
+  // Continuing supersedes the creating attempt, which then makes room.
   const attemptId = await continueLesson(f);
+  state = await f.learners.readState({ actor: f.actor });
+  assert.equal(state.progress.attempts.length, 32);
+  assert.equal(state.progress.attempts.some(attempt => attempt.attemptId === f.attemptId), false, "the superseded attempt was pruned");
+  const scope = await f.learners.readPracticeProjectScope({ actor: f.actor, practiceId: f.attemptId, access: "write" });
+  assert.deepEqual({ attemptId: scope.scope.attemptId, active: scope.active, projectSlug: scope.projectSlug },
+    { attemptId, active: true, projectSlug: f.projectSlug }, "the practice project admits work for the continued attempt");
+  // A save in the continued attempt goes through the same practice ledger.
+  await f.learnerSave("export function isValidTitle(title) {\n  return title.trim().length >= 1;\n}\n");
+  const continuedLedger = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
+  assert.equal(continuedLedger.entries.at(-1).savedHash, sha256(await readFile(f.learnerFile)));
+  assert.equal(continuedLedger.entries.reduce((total, entry) => total + entry.saves, 0), 2, "both saves are in the practice ledger");
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
   assert.equal((await steps.runCheck({ actor: f.actor, attemptId, stepId: "refuse-empty", requestId: "after-prune", context: { channel: "api" } })).outcome,
     "passed");
   await f.learners.forgetPracticeLedger({ actor: f.actor, practiceId: f.attemptId });
   assert.equal(await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId }), null);
   await f.learners.forgetPracticeLedger({ actor: f.actor, practiceId: f.attemptId });
+});
+
+test("at the cap only attempts no live practice project needs are pruned, with their ledgers; otherwise the start is refused", async t => {
+  const f = await fixture(t, entered);
+  await f.learnerSave(solved);
+  let state = await f.learners.readState({ actor: f.actor });
+  const pin = state.progress.attempts[0].pin;
+  let revision = (await f.learners.endAttempt({ actor: f.actor, attemptId: f.attemptId, expectedRevision: state.revision,
+    requestId: "end-first", reason: "left" })).revision;
+  // 31 more practice projects, each with a prepared attempt.
+  for (let index = 0; index < 31; index++) {
+    const reserved = await f.learners.reserveAttempt({ actor: f.actor, expectedRevision: revision, requestId: `project-${index}`, pin });
+    const begun = await f.learners.beginPreparation({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision });
+    revision = (await f.learners.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: begun.revision,
+      requestId: `project-end-${index}`, reason: "left" })).revision;
+  }
+  state = await f.learners.readState({ actor: f.actor });
+  const practiceIds = state.progress.attempts.map(attempt => attempt.attemptId);
+  assert.equal(practiceIds.length, 32);
+  const progressFile = path.join(f.systemRoot, "training/users", Buffer.from("42").toString("base64url"), "progress.json");
+  const before = await readFile(progressFile);
+  await assert.rejects(() => f.learners.reserveAttempt({ actor: f.actor, expectedRevision: revision, requestId: "full", pin }),
+    { code: "VIBE64_TRAINING_ATTEMPTS_FULL", statusCode: 409 });
+  await assert.rejects(() => f.learners.reserveAttempt({ actor: f.actor, expectedRevision: revision, requestId: "full-live", pin,
+    livePracticeIds: practiceIds }), { code: "VIBE64_TRAINING_ATTEMPTS_FULL" });
+  assert.deepEqual(await readFile(progressFile), before, "a refused start writes nothing");
+  // The host reports the first practice project deleted: its attempt and ledger go.
+  const reserved = await f.learners.reserveAttempt({ actor: f.actor, expectedRevision: revision, requestId: "after-delete", pin,
+    livePracticeIds: practiceIds.slice(1) });
+  state = await f.learners.readState({ actor: f.actor });
+  assert.deepEqual(state.progress.attempts.map(attempt => attempt.attemptId), [...practiceIds.slice(1), reserved.attempt.attemptId]);
+  assert.equal(await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId }), null, "the deleted project's ledger was forgotten");
+  await assert.rejects(() => f.learners.reserveAttempt({ actor: f.actor, expectedRevision: reserved.revision, requestId: "bad-live", pin,
+    livePracticeIds: ["../practice"] }), /exact IDs/u);
 });
