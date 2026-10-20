@@ -2622,6 +2622,11 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /You never judge/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
   assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);
+  // Learner notes (contract C7): read when teaching starts, rewritten as a short private summary, never a result.
+  assert.match(colleagueInstructions, /learner-notes\.read/u);
+  assert.match(colleagueInstructions, /learner-notes\.update as one short summary of their strengths, difficulties, preferences and where they are/u);
+  assert.match(colleagueInstructions, /private to that person/u);
+  assert.match(colleagueInstructions, /never decide, change or prove a step result/u);
 });
 
 test("lesson presentation navigation waits for the exact player completion in its initiating browser", async t => {

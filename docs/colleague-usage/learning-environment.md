@@ -59,6 +59,27 @@ for the workspace owner, **New course** (see
   **Resume author trial**, which opens the admitted draft snapshot in the same
   reader (see the hosted author-trial guide).
 
+## What my teacher knows about me
+
+Below the courses, **What my teacher knows about me** shows the short private
+notes Colleague keeps about how you learn: strengths, difficulties, preferences
+and where you are. Colleague reads them when it starts teaching you and rewrites
+them as a short summary. Only you can see them, on your own account; the
+workspace owner and other people cannot. They never change a step's status or
+whether a lesson is complete.
+
+- **Nothing yet. Colleague adds notes as it teaches you.** means there are none.
+- **Edit** (or **Write notes**) opens a text box (Markdown, at most 4000
+  characters, with a counter); **Save** keeps your version, **Cancel** discards
+  it. Below the notes, **Updated by Colleague** or **Updated by you** shows who
+  changed them last and when.
+- **Clear**, then **Clear all notes**, deletes them; **Keep them** cancels.
+  Colleague starts again from nothing.
+- If Colleague changed the notes while you were editing, **Save** is refused with
+  "The notes changed since they were read…", the current notes are shown and
+  your edit stays in the box: combine it and press **Save** again.
+- Another failed save shows its message; press **Save** again.
+
 ## Reading a lesson
 
 The left column (top row on a phone) lists the steps in order. Each shows its
@@ -115,4 +136,5 @@ from Courses. Its earlier completions still count.
 Colleague can explain these controls, open Learning on a lesson and step,
 point at the L button, and teach a step when you press **Teach me** or ask. It
 cannot press **Done**, answer a question or pass a check for you; those are
-your own actions.
+your own actions. Colleague can read and rewrite its notes about you when you ask
+(for example "forget that I find Git hard"); only you can **Clear** them.

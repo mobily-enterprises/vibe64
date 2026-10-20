@@ -125,6 +125,29 @@ function pageBodies(steps, notesText) {
   return index + 1;
 }
 
+// One learner-scoped Training action: the learner is always the authenticated
+// actor. "Browser" actions run only on the learner's own api channel and are
+// excluded from Colleague's tools; the others are always available to it.
+const definition = (name, fields, { description = "", browser = false, kind = "command", output = stepResultOutput,
+  idempotency = "domain_native", transformResult = null } = {}, execute) => withVibe64ActionContext({
+  id: `vibe64.training.${name}`, version: 1, kind, idempotency,
+  ...(browser ? BROWSER : {}),
+  input: { mode: "create", schema: createSchema(fields) }, output: null,
+  extensions: { assistant: browser ? { exclude: true } : { alwaysAvailable: true, description, output,
+    ...(transformResult ? { transformResult } : {}) } },
+  async execute(input, context) {
+    const actor = authenticatedVibe64User(context);
+    if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
+    try {
+      return bounded(await execute(input, actor, context));
+    } catch (cause) {
+      if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE" || cause.statusCode && cause.statusCode < 500 &&
+          /^(VIBE64_TRAINING_|ACTION_VALIDATION_FAILED|vibe64_)/u.test(cause.code || "")) throw cause;
+      throw operationError(cause);
+    }
+  }
+}, { projectScoped: false });
+
 function createTrainingStepActions({ learners, attemptLearners = learners, content, steps, exercises = null,
   practiceProjects = null, publishLearnerChanged = null } = {}) {
   if (typeof learners?.readState !== "function" || typeof attemptLearners?.readState !== "function" ||
@@ -153,25 +176,6 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     return { context: inner, ...(sessionId ? { targetInput: { learningAttemptId: attempt.attemptId, sessionId } } : {}) };
   }
 
-  const definition = (name, fields, { description = "", browser = false, kind = "command", output = stepResultOutput,
-    idempotency = "domain_native", transformResult = null } = {}, execute) => withVibe64ActionContext({
-    id: `vibe64.training.${name}`, version: 1, kind, idempotency,
-    ...(browser ? BROWSER : {}),
-    input: { mode: "create", schema: createSchema(fields) }, output: null,
-    extensions: { assistant: browser ? { exclude: true } : { alwaysAvailable: true, description, output,
-      ...(transformResult ? { transformResult } : {}) } },
-    async execute(input, context) {
-      const actor = authenticatedVibe64User(context);
-      if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
-      try {
-        return bounded(await execute(input, actor, context));
-      } catch (cause) {
-        if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE" || cause.statusCode && cause.statusCode < 500 &&
-            /^(VIBE64_TRAINING_|ACTION_VALIDATION_FAILED|vibe64_)/u.test(cause.code || "")) throw cause;
-        throw operationError(cause);
-      }
-    }
-  }, { projectScoped: false });
 
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
@@ -305,4 +309,4 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   ]);
 }
 
-export { createTrainingStepActions };
+export { createTrainingStepActions, definition as defineTrainingLearnerAction };

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
@@ -19,6 +19,10 @@ const MAX_STEP_RESULTS = 64;
 const MAX_STEP_RECEIPTS = 32;
 const MAX_STEP_RECORD_BYTES = 1024 * 1024;
 const MAX_READER_BYTES = 4096;
+// Learner notes (contract C7): one short teacher summary, never a transcript.
+const MAX_NOTES_CHARS = 4000;
+const MAX_NOTES_BYTES = 32 * 1024;
+const MAX_NOTES_REQUESTS = 32;
 const STEP_LOCK_WAIT_MS = 2000;
 // Browser receipts and Preview output starts hold the preparation barrier only
 // briefly. Wait this long before reporting a genuinely long operation as busy.
@@ -175,6 +179,13 @@ const stepProgressSchema = createSchema({
 const readerSchema = createSchema({
   schemaVersion: version, learnerId: { ...text, maxLength: 128 }, attemptId: { ...text, maxLength: 36 },
   stepId: { ...text, maxLength: 64 }, scroll: { type: "number", required: true, min: 0, max: 10_000_000 }
+});
+const notesText = { type: "string", required: true, noTrim: true, minLength: 0, maxLength: MAX_NOTES_CHARS };
+const notesSchema = createSchema({
+  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, revision, text: notesText,
+  updatedAt: { ...text, maxLength: 24 }, updatedBy: { ...text, enum: ["colleague", "learner"] },
+  // Recent writes for request-ID replay; the oldest identity leaves this window.
+  requests: list(createSchema({ requestId: { ...text, maxLength: 64 }, textHash: { ...text, maxLength: 64 }, revision }), MAX_NOTES_REQUESTS)
 });
 const isoTime = value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
@@ -480,6 +491,12 @@ async function readRecord(filename, limit = MAX_RECORD_BYTES) {
 
 // Callers supply content-validated progress and the exact installed lesson.
 // Version 2 lessons have steps, not assessments; their passes are step results.
+// Markdown text: line breaks and tabs, no other control characters.
+function validNotesText(value) {
+  // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner notes.
+  return typeof value === "string" && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
+}
+
 function passedAssessmentIds(attempt, lesson, attempts = [attempt]) {
   if (!assessmentLesson(lesson)) return [];
   const matching = attempts.filter(value => canonicalJson(value.pin.lesson) === canonicalJson(attempt.pin.lesson));
@@ -520,7 +537,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       stepProgress: path.join(userRoot, "step-progress.json"),
       stepProgressLock: path.join(userRoot, "step-progress.lock"),
       reader: path.join(userRoot, "reader.json"),
-      readerLock: path.join(userRoot, "reader.lock")
+      readerLock: path.join(userRoot, "reader.lock"),
+      notes: path.join(userRoot, "teacher-notes.json"),
+      notesLock: path.join(userRoot, "teacher-notes.lock")
     };
   }
 
@@ -626,9 +645,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  async function acquire(paths) {
-    // Preserve existing state/permissions. Create only this explicit operation's
-    // private namespace; the persistent lock serializes cooperating writers.
+  // Preserve existing state/permissions. Create only this explicit operation's
+  // private namespace.
+  async function createNamespace(paths) {
     if (!await inspectDirectoryChain(systemRoot)) {
       throw new Error("Prepare the server-owned system root before reserving a lesson.");
     }
@@ -640,6 +659,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       }
       await inspectPath(directory, true);
     }
+  }
+
+  async function acquire(paths) {
+    // The persistent lock serializes cooperating writers.
+    await createNamespace(paths);
     const release = await tryAcquireExclusiveFileLock(paths.lock);
     if (!release) {
       throw failure("VIBE64_TRAINING_STATE_BUSY", "Learning state is being updated. Retry the same request after that operation finishes.", 409);
@@ -1408,6 +1432,93 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
+  // Learner notes (contract C7): the teacher's private summary of this one
+  // learner, in that learner's own Learning state with its own lock. The
+  // authenticated actor alone selects the file, so no caller can name another
+  // learner. Notes never take part in admission, step results or completion.
+  async function readNotesRecord(paths) {
+    await inspectDirectoryChain(systemRoot);
+    for (const directory of paths.directories) await inspectPath(directory, true);
+    const value = await readRecord(paths.notes, MAX_NOTES_BYTES);
+    if (!value) return null;
+    const record = validateContent(notesSchema, value, "Learner notes");
+    const identities = new Set(record.requests.map(request => request.requestId));
+    if (record.learnerId !== paths.learner.id || !isoTime(record.updatedAt) || !validNotesText(record.text) ||
+        identities.size !== record.requests.length || record.requests.some(request => !requestPattern.test(request.requestId) ||
+          !sha256Pattern.test(request.textHash) || request.revision > record.revision)) {
+      throw new Error("The notes belong to another learner or contain an invalid time, text or request.");
+    }
+    return record;
+  }
+
+  const notesProjection = record => record
+    ? { text: record.text, revision: record.revision, updatedAt: record.updatedAt, updatedBy: record.updatedBy }
+    : { text: "", revision: 0, updatedAt: null, updatedBy: null };
+
+  async function readTeacherNotes({ actor } = {}) {
+    const paths = userPaths(actor);
+    try {
+      return notesProjection(await readNotesRecord(paths));
+    } catch (cause) {
+      throw failure("VIBE64_TRAINING_STATE_INVALID",
+        `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
+    }
+  }
+
+  // Replaces the whole summary (clearing is the empty text). The same request
+  // ID with the same text replays the saved result; expectedRevision, when
+  // given, refuses to overwrite a newer change by the learner or Colleague.
+  async function saveTeacherNotes({ actor, text: value, requestId, updatedBy, expectedRevision } = {}) {
+    const paths = userPaths(actor);
+    if (typeof value !== "string" || value.length > MAX_NOTES_CHARS || !validNotesText(value) ||
+        !requestPattern.test(requestId || "") || !["colleague", "learner"].includes(updatedBy) ||
+        (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0))) {
+      throw failure("VIBE64_TRAINING_NOTES_INVALID",
+        `Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`, 400);
+    }
+    const textHash = createHash("sha256").update(value).digest("hex");
+    await createNamespace(paths);
+    const release = await acquireRecordLock(paths.notesLock, "VIBE64_TRAINING_NOTES_BUSY", "The learner notes are being saved. Retry the same request in a moment.");
+    try {
+      let record;
+      try {
+        record = await readNotesRecord(paths);
+      } catch (cause) {
+        throw failure("VIBE64_TRAINING_STATE_INVALID",
+          `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`, null, { cause });
+      }
+      const replay = record?.requests.find(request => request.requestId === requestId);
+      if (replay) {
+        if (replay.textHash !== textHash) {
+          throw failure("VIBE64_TRAINING_NOTES_REQUEST_REUSED", "This request ID already saved different notes. Use a new request ID.", 409);
+        }
+        return { notes: notesProjection(record), replayed: true, changed: false };
+      }
+      const current = record?.revision || 0;
+      if (expectedRevision !== undefined && expectedRevision !== current) {
+        throw failure("VIBE64_TRAINING_NOTES_CHANGED",
+          "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.", 409);
+      }
+      if (current === Number.MAX_SAFE_INTEGER) throw new Error("Learner notes reached their revision limit. Nothing was saved.");
+      const next = { schemaVersion: 1, learnerId: paths.learner.id, revision: current + 1, text: value,
+        updatedAt: new Date().toISOString(), updatedBy,
+        requests: [...record?.requests || [], { requestId, textHash, revision: current + 1 }].slice(-MAX_NOTES_REQUESTS) };
+      const validated = validateContent(notesSchema, next, "Learner notes");
+      if (Buffer.byteLength(JSON.stringify(validated)) > MAX_NOTES_BYTES) {
+        throw failure("VIBE64_TRAINING_NOTES_INVALID", "The learner notes exceed their storage bound. Shorten them; nothing was saved.", 400);
+      }
+      try {
+        await writeJsonFileAtomic(paths.notes, validated, { directoryMode: 0o700, fileMode: 0o600 });
+      } catch (cause) {
+        throw failure("VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
+          "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.", null, { cause });
+      }
+      return { notes: notesProjection(validated), replayed: false, changed: true };
+    } finally {
+      await release();
+    }
+  }
+
   async function beginPreparation({ actor, attemptId, expectedRevision } = {}) {
     return writePreparation({ actor, attemptId, expectedRevision }, "begin");
   }
@@ -1421,7 +1532,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   }
 
   return { readState, readLearningSessionScope, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment,
-    readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader };
+    readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader,
+    readTeacherNotes, saveTeacherNotes };
 }
 
-export { assessmentLesson, createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot, MAX_STEP_RESULTS };
+export { assessmentLesson, createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot,
+  MAX_NOTES_CHARS, MAX_STEP_RESULTS };

@@ -33,6 +33,8 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
 - `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/learnerNotesActions.js`
+- `src/components/learning/Vibe64LearningTeacherNotes.vue`
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-core/src/server/projectRecordMetadata.js`
 - `packages/vibe64-core/src/server/stateUpgrades.js`
@@ -55,6 +57,7 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `tests/server/vibe64TrainingCourseInstaller.unit.test.js`
 - `tests/client/trainingCourseCatalogue.vitest.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/vibe64TrainingLearnerNotes.unit.test.js`
 - `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/stateUpgrades.unit.test.js`
@@ -443,6 +446,23 @@ saves require read/same-identity retry. Only explicit operations reconcile reach
 stale derived summaries. The appended prospective assessment upgrade changes the
 ordered compatibility ledger, without transforming historical application records.
 
+
+## Learner teacher notes
+
+The learner store also keeps one private `teacher-notes.json` per learner, with
+its own short lock: Colleague's Markdown summary (at most 4000 characters) of that
+person's strengths, difficulties, preferences and place in Learning, with a
+revision, `updatedAt`, `updatedBy` (colleague or learner) and the latest 32
+request IDs for replay. The authenticated actor alone selects the file; no input
+names a learner, so neither another member nor the workspace owner can read it.
+`learner-notes.read` and `learner-notes.update` (replace the whole text, optional
+`expectedRevision`) are available to Colleague and the learner's browser;
+`learner-notes.clear` is the learner's browser action only. Each change publishes
+`vibe64.training.learner.changed` with reason `notes` and no attempt. Notes are
+never read by admission, step results or completion. Online keeps them in the
+normal learner store, also during an owner's author-preview trial. L shows them
+on Courses as "What my teacher knows about me" with Edit and Clear. The file is
+additive and needs no numbered upgrade (`docs/state-upgrades.md`).
 
 ## Explicit attempt retirement and history
 

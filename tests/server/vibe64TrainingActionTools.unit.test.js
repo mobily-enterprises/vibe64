@@ -1274,8 +1274,9 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
   ]);
   const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
-  // Learning v2 adds the lesson reader, step, reader-position and practice routes.
-  assert.equal(originalRoutes.length, 22);
+  // Learning v2 adds the lesson reader, step, reader-position and practice routes,
+  // and the learner's own teacher notes (contract C7).
+  assert.equal(originalRoutes.length, 25);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
     route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
@@ -1291,6 +1292,8 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/reader"], ["POST", "/api/vibe64/training/attempts/:attemptId/practice/delete"],
+    ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],
+    ["POST", "/api/vibe64/training/teacher-notes/clear"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"],

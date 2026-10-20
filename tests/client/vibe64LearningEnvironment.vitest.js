@@ -266,6 +266,52 @@ describe("useVibe64Learning controller", () => {
     expect(() => showMeCommand({ target: "nowhere" })).toThrow("declared Vibe64 guide places");
   });
 
+  it("reads, saves and clears the learner's teacher notes against the shown revision, keeping a retry's request ID", async () => {
+    let saved = { text: "", revision: 0, updatedAt: null, updatedBy: null };
+    let fail = null;
+    const { learning, calls } = controller({
+      reads: url => url === VIBE64_LEARNING_ROUTES.notes ? { ok: true, notes: saved } : lessonResult(),
+      posts: (url, body) => {
+        if (fail) { const error = fail; fail = null; throw error; }
+        saved = { text: url === VIBE64_LEARNING_ROUTES.notesClear ? "" : body.text, revision: saved.revision + 1,
+          updatedAt: "2026-10-20T10:00:00.000Z", updatedBy: "learner" };
+        return { ok: true, notes: saved };
+      }
+    });
+    expect(await learning.readNotes()).toBeNull();
+    learning.setViewer("member");
+    expect(await learning.readNotes()).toEqual(saved);
+    expect(calls[0]).toEqual({ url: VIBE64_LEARNING_ROUTES.notes, method: "GET", body: undefined });
+    fail = Object.assign(new Error("The save was not confirmed."), { status: 500 });
+    expect(await learning.saveNotes("Likes diagrams.")).toBeNull();
+    expect(learning.notesState.error).toBe("The save was not confirmed.");
+    await learning.saveNotes("Likes diagrams.");
+    const posts = calls.filter(call => call.method === "POST");
+    expect(posts[1].body).toEqual({ text: "Likes diagrams.", requestId: posts[0].body.requestId, expectedRevision: 0 });
+    expect(learning.notes.value.text).toBe("Likes diagrams.");
+    expect(learning.notesState.error).toBe("");
+    expect(await learning.saveNotes("")).toBeNull();
+    expect(await learning.saveNotes("x".repeat(4001))).toBeNull();
+    expect(calls.filter(call => call.method === "POST")).toHaveLength(2);
+    // Colleague changed them meanwhile: the refusal shows the current notes and its message.
+    saved = { ...saved, text: "Colleague's newer summary.", revision: 5, updatedBy: "colleague" };
+    fail = Object.assign(new Error("The notes changed since they were read."), { code: "VIBE64_TRAINING_NOTES_CHANGED", status: 409 });
+    expect(await learning.saveNotes("My edit.")).toBeNull();
+    expect(learning.notes.value.text).toBe("Colleague's newer summary.");
+    expect(learning.notesState.error).toMatch(/changed/u);
+    await learning.clearNotes();
+    expect(calls.at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.notesClear, method: "POST", body: { expectedRevision: 5 } });
+    expect(learning.notes.value.text).toBe("");
+    // A notes notice rereads them; a lesson notice does not; another viewer sees none of them.
+    const reads = () => calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.notes && call.method === "GET").length;
+    const before = reads();
+    await learning.learnerChanged({ reason: "notes" });
+    expect(reads()).toBe(before + 1);
+    learning.setViewer("someone-else");
+    expect(learning.notes.value).toBeNull();
+    expect(learning.learnerChanged({ reason: "notes" })).toBeNull();
+  });
+
   it("rereads the displayed attempt only for its own learner change", async () => {
     const { learning, calls } = controller();
     learning.setViewer("member");
@@ -436,7 +482,9 @@ describe("Learning overlay", () => {
         setup: (props, { emit }) => () => Vue.h("section", { "data-test": "courses", environment: props.environment,
           onClick: () => emit("opened", { attemptId: ATTEMPT }) }) } },
       "./Vibe64LearningReader.vue": { default: { props: ["learning", "learningRevision"],
-        setup: props => () => Vue.h("article", { "data-test": "reader", revision: props.learningRevision }) } }
+        setup: props => () => Vue.h("article", { "data-test": "reader", revision: props.learningRevision }) } },
+      "./Vibe64LearningTeacherNotes.vue": { default: { props: ["learning"],
+        setup: props => () => Vue.h("aside", { "data-test": "teacher-notes", own: props.learning === learning }) } }
     });
     const viewer = Vue.ref({ actorKey: "member" });
     const root = { children: [] };
@@ -457,6 +505,7 @@ describe("Learning overlay", () => {
       const layer = nodes(root).find(node => node.props?.role === "dialog");
       expect(layer.props["aria-label"]).toBe("Learning");
       expect(byTest(root, "courses").props.environment).toBe(true);
+      expect(byTest(root, "teacher-notes").props.own, "the courses surface shows this learner's teacher notes").toBe(true);
       byTest(root, "courses").props.onClick();
       await flush();
       expect(learning.surface).toBe("lesson");
@@ -471,5 +520,54 @@ describe("Learning overlay", () => {
       expect(learning.attemptId).toBe("");
     } finally { app.unmount(); }
     expect(learning.state.actorKey).toBe("");
+  });
+});
+
+describe("What my teacher knows about me", () => {
+  it("reads the learner's notes, edits them and clears them only after a second confirmation", async () => {
+    let saved = { text: "Prefers **short** steps.", revision: 2, updatedAt: "2026-10-20T10:00:00.000Z", updatedBy: "colleague" };
+    const { learning, calls } = controller({
+      reads: () => ({ ok: true, notes: saved }),
+      posts: (url, body) => {
+        saved = { text: url === VIBE64_LEARNING_ROUTES.notesClear ? "" : body.text, revision: saved.revision + 1,
+          updatedAt: "2026-10-20T11:00:00.000Z", updatedBy: "learner" };
+        return { ok: true, notes: saved };
+      }
+    });
+    learning.setViewer("member");
+    const panel = compiledUi(path.resolve("src/components/learning/Vibe64LearningTeacherNotes.vue"), {
+      vue: Vue, "@/lib/vibe64Learning.js": LearningLib,
+      "./Vibe64LearningMarkdown.vue": { default: { props: ["text"], setup: props => () => Vue.h("section", { "data-markdown": props.text }) } }
+    });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning }) });
+    for (const tag of ["v-btn", "v-alert", "v-textarea"]) app.component(tag, widget);
+    app.mount(root);
+    try {
+      await flush();
+      expect(textOf(root)).toContain("What my teacher knows about me");
+      expect(textOf(root)).toContain("Only you can see it");
+      expect(nodes(root).find(node => node.props?.["data-markdown"])?.props["data-markdown"]).toBe("Prefers **short** steps.");
+      expect(textOf(root)).toContain("Updated by Colleague");
+      byTest(root, "teacher-notes-edit").props.onClick();
+      await flush();
+      const draft = byTest(root, "teacher-notes-draft");
+      expect(draft.props.modelValue).toBe("Prefers **short** steps.");
+      expect(draft.props.counter).toBe(4000);
+      draft.props["onUpdate:modelValue"]("I like diagrams.");
+      await flush();
+      byTest(root, "teacher-notes-save").props.onClick();
+      await flush();
+      expect(calls.at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.notes, method: "POST", body: { text: "I like diagrams.", expectedRevision: 2 } });
+      expect(byTest(root, "teacher-notes-draft")).toBeUndefined();
+      expect(textOf(root)).toContain("Updated by you");
+      byTest(root, "teacher-notes-clear").props.onClick();
+      await flush();
+      expect(calls.filter(call => call.method === "POST")).toHaveLength(1);
+      byTest(root, "teacher-notes-clear-confirm").props.onClick();
+      await flush();
+      expect(calls.at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.notesClear, method: "POST", body: { expectedRevision: 3 } });
+      expect(byTest(root, "teacher-notes-empty")).toBeTruthy();
+    } finally { app.unmount(); }
   });
 });

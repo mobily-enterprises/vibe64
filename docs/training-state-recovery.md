@@ -2,8 +2,9 @@
 
 This explicit operator procedure covers the current schema-version-1 learner
 store: `progress.json`, its derived `active-lesson.json`, the code-authorship
-ledger, and the version 2 lesson records `step-progress.json` (append-only step
-results) and `reader.json` (last reader position). Project archives and installed-content snapshots do not back up
+ledger, the version 2 lesson records `step-progress.json` (append-only step
+results) and `reader.json` (last reader position), and the learner's private
+teacher notes `teacher-notes.json`. Project archives and installed-content snapshots do not back up
 `training/users`. Use trusted local checkpoint directories owned by the same OS
 user as the state; do not import an archive or another installation's identities.
 There is no automatic backup, retention or rollback service.
@@ -39,7 +40,7 @@ fi
 # Hold existing persistent lock inodes; never create or unlink a state lock.
 shopt -s nullglob dotglob
 held_locks=()
-for lock_file in "$users"/*/state.lock "$users"/*/preparation.lock "$users"/*/step-progress.lock "$users"/*/reader.lock; do
+for lock_file in "$users"/*/state.lock "$users"/*/preparation.lock "$users"/*/step-progress.lock "$users"/*/reader.lock "$users"/*/teacher-notes.lock; do
   test ! -L "$(dirname -- "$lock_file")"
   test -f "$lock_file"
   test ! -L "$lock_file"
@@ -55,8 +56,8 @@ lock means stop and investigate without deleting it. Malformed record bytes can
 still be copied as evidence; copying does not declare them restorable.
 The optional preparation lock spans project/session/setup effects between short
 state writes. Holding only `state.lock` does not exclude that operation. Step
-results and the reader position have their own `step-progress.lock` and
-`reader.lock`. Every existing lock file must be canonical, empty and uncontended;
+results, the reader position and the teacher notes have their own
+`step-progress.lock`, `reader.lock` and `teacher-notes.lock`. Every existing lock file must be canonical, empty and uncontended;
 absent locks are not created by maintenance or validation.
 
 Create a new checkpoint. `cp -a` preserves bytes and modes, including corrupt
@@ -109,6 +110,7 @@ for (const key of await readdir(path.join(copyRoot, "training/users"))) {
   if (Buffer.from(identity).toString("base64url") !== key) throw new Error("Noncanonical learner key; inspect the checkpoint.");
   await state.readState({ actor: { username: identity }, includeCompletion: true });
   await state.readReader({ actor: { username: identity } });
+  await state.readTeacherNotes({ actor: { username: identity } });
 }
 console.log("Reservation records and installed pins validated; no files changed.");
 NODE

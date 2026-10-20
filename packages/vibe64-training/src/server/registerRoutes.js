@@ -7,9 +7,9 @@ function registerTrainingRoutes(http) {
     projectScoped: false, routeRelativePath: "vibe64/training", routeSurface: "app",
     tags: ["studio", "vibe64-training"]
   });
-  const actionRoute = (method, suffix, operation, attempt = false) => routes.actionRoute(method, suffix, {
+  const actionRoute = (method, suffix, operation, attempt = false, bodyLimit = 8 * 1024) => routes.actionRoute(method, suffix, {
     actionId: `vibe64.training.${operation}`,
-    ...(method === "POST" ? { bodyLimit: 8 * 1024 } : {}),
+    ...(method === "POST" ? { bodyLimit } : {}),
     buildInput(request) {
       const { actor: _actor, vibe64User: _user, ...input } = method === "POST" ? routes.requestBody(request) : {};
       void _actor;
@@ -40,6 +40,11 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/steps/done", "step.done", true);
   actionRoute("POST", "/attempts/:attemptId/reader", "reader.save", true);
   actionRoute("POST", "/attempts/:attemptId/practice/delete", "practice.delete", true);
+  // Learner notes (contract C7): the signed-in learner's own, never another's.
+  // 4000 characters of Markdown may take up to 16 KiB of escaped JSON.
+  actionRoute("GET", "/teacher-notes", "learner-notes.read");
+  actionRoute("POST", "/teacher-notes", "learner-notes.update", false, 32 * 1024);
+  actionRoute("POST", "/teacher-notes/clear", "learner-notes.clear");
 }
 
 // Hosted snapshot admission stays with its existing owner. This adapter only

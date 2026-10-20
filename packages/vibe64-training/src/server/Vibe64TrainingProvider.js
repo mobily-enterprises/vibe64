@@ -13,6 +13,7 @@ import { registerLocalPracticeAdmission } from "@local/vibe64-core/server/projec
 import { registerRoutes as registerLearningSessionRoutes } from "@local/vibe64-sessions/server/routes";
 import { createTrainingActions } from "./actions.js";
 import { createTrainingStepActions } from "./stepActions.js";
+import { createTrainingLearnerNotesActions } from "./learnerNotesActions.js";
 import { createTrainingLearnerChangedPublisher } from "./learnerEvents.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
 import { createTrainingCourseInstaller } from "./courseInstaller.js";
@@ -102,6 +103,7 @@ const Vibe64TrainingProvider = defineFeature({
       courseInstaller: training.courseInstaller, practiceProjects: training.practiceProjects }),
     ...createTrainingStepActions({ learners: training.learners, content: training.content, steps: training.steps,
       exercises: training.exercises, practiceProjects: training.practiceProjects, publishLearnerChanged: training.publishLearnerChanged }),
+    ...createTrainingLearnerNotesActions({ learners: training.learners, publishLearnerChanged: training.publishLearnerChanged }),
     ...createTrainingTeachingActions(),
     ...createTrainingPresentationActions({ learners: training.learners, content: training.content }),
     ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),

@@ -36,6 +36,7 @@
     "./server/practical-observations": "./src/server/practicalObservations.js",
     "./server/step-checks": "./src/server/stepChecks.js",
     "./server/step-actions": "./src/server/stepActions.js",
+    "./server/learner-notes-actions": "./src/server/learnerNotesActions.js",
     "./server/learner-events": "./src/server/learnerEvents.js",
     "./shared/learner-events": "./src/shared/learnerEvents.js",
     "./server/step-progress-upgrade": "./src/server/stepProgressUpgrade.js",

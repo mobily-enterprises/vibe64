@@ -1294,6 +1294,21 @@ the newer ledger, which is the downgrade protection: never remove the entry to
 start an older release. Focused evidence: `stateUpgrades.unit.test.js`,
 `vibe64TrainingStepProgress.unit.test.js` and the original learner-state tests.
 
+## Training learner notes (no upgrade)
+
+Learner notes (Learning v2 contract C7) add, per learner under
+`training/users/<key>/`, an optional `teacher-notes.json` (schema version 1: the
+learner identity, a revision, Markdown text of at most 4000 characters,
+`updatedAt`, `updatedBy` colleague or learner, and the latest 32 request IDs with
+their text hashes for replay; 32 KiB bound) with its own `teacher-notes.lock`.
+Only an explicit `learner-notes.update` or `learner-notes.clear` creates it. No
+existing record changes and nothing is backfilled: a missing file means no notes.
+A release without notes never opens the file, so it needs no compatibility
+boundary and no numbered upgrade; its absence or presence cannot change attempts,
+step results or completion. Readers validate the file and refuse an invalid,
+oversized or another learner's record without repair. Focused evidence:
+`vibe64TrainingLearnerNotes.unit.test.js`.
+
 ## Shared database session override
 
 The optional project metadata boolean `allowSharedDatabaseSessions` is written

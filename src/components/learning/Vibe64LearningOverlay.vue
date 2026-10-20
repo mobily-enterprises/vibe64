@@ -8,6 +8,7 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
+import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
 // The Learning environment (L), mounted once per host for the signed-in
 // viewer: public App.vue and hosted AuthGate's authenticated content. It also
@@ -98,8 +99,11 @@ function keydown(event) {
       </v-btn>
     </header>
     <div class="vibe64-learning__content">
-      <Vibe64LearningLessonLauncher v-if="surface === 'courses'" class="vibe64-learning__courses" :learning="mode" environment
-        @opened="lessonOpened" />
+      <div v-if="surface === 'courses'" class="vibe64-learning__courses">
+        <Vibe64LearningLessonLauncher :learning="mode" environment @opened="lessonOpened" />
+        <!-- The learner's own teacher notes (C7), below the courses. -->
+        <Vibe64LearningTeacherNotes :learning="learning" />
+      </div>
       <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" />
     </div>
   </div>

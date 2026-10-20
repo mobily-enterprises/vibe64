@@ -241,7 +241,9 @@ Owns versioned local topic/lesson/visual validation and reproducible authoring
 bundles, verified server-only installation from admitted owner-selected local
 sources, and read-only validation of pinned topic snapshots. Consumes the existing
 CLI entry point without changing editor launch. Owns private server-only pinned
-learner reservations outside projects, reusing Core atomic writes and Kernel locks.
+learner reservations outside projects, reusing Core atomic writes and Kernel locks,
+and each learner's private teacher notes (Colleague's short summary of that person,
+read and rewritten for them only; never step results or completion).
 Owns installed immutable course definitions/locks and revisioned enablement, and
 declared visual asset reads from exact installed lesson pins. These are internal
 server facilities without source access for Colleague. The presentational lesson

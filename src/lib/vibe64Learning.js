@@ -20,8 +20,12 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   readerSave: attemptId => attemptPath(attemptId, "/reader"),
   lessonEnd: attemptId => attemptPath(attemptId, "/end"),
   practiceDelete: attemptId => attemptPath(attemptId, "/practice/delete"),
-  visual: (attemptId, visualId) => attemptPath(attemptId, `/visuals/${encodeURIComponent(visualId)}`)
+  visual: (attemptId, visualId) => attemptPath(attemptId, `/visuals/${encodeURIComponent(visualId)}`),
+  // Learner notes (C7): the signed-in learner's own teacher notes.
+  notes: `${TRAINING_PATH}/teacher-notes`,
+  notesClear: `${TRAINING_PATH}/teacher-notes/clear`
 });
+const VIBE64_LEARNING_NOTES_MAX = 4000;
 const SURFACES = Object.freeze(["courses", "lesson"]);
 const STORAGE_PREFIX = "vibe64:learning-environment:v1:";
 const READER_SAVE_DELAY_MS = 800;
@@ -99,6 +103,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     loading: false, error: "", actorKey: "", busy: "" });
   const lesson = shallowRef(null);
   const colleagueRequest = shallowRef(null);
+  // The teacher's notes about this learner, read when L shows them.
+  const notes = shallowRef(null);
+  const notesState = reactive({ loading: false, saving: false, error: "" });
   const pending = new Map();
   // viewer fences everything of one signed-in person; reads fences lesson reads.
   let viewer = 0;
@@ -135,6 +142,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     pending.clear();
     lesson.value = null;
     colleagueRequest.value = null;
+    notes.value = null;
+    Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
       loading: false, error: "", busy: "", actorKey: next });
     const place = next ? readPlace(next) : null;
@@ -365,8 +374,74 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     }
   }
 
-  // Realtime: a learner change for the displayed attempt rereads it.
+  // Learner notes (C7). Saves replace the whole text against the revision
+  // shown, so a newer change by Colleague is never silently overwritten; a
+  // retry of the same save keeps its request ID.
+  async function readNotes() {
+    if (!state.actorKey) return null;
+    const expected = viewer;
+    notesState.loading = true;
+    notesState.error = "";
+    try {
+      const result = await request(VIBE64_LEARNING_ROUTES.notes, { method: "GET" });
+      if (result?.ok !== true || !result.notes) throw new Error(result?.error || "The notes could not be read.");
+      if (expected === viewer) notes.value = Object.freeze({ ...result.notes });
+      return expected === viewer ? notes.value : null;
+    } catch (cause) {
+      if (expected === viewer) notesState.error = String(cause?.message || "The notes could not be read.");
+      return null;
+    } finally {
+      if (expected === viewer) notesState.loading = false;
+    }
+  }
+
+  async function writeNotes(kind, route, body) {
+    if (!state.actorKey || notesState.saving) return null;
+    const expected = viewer;
+    const expectedRevision = notes.value?.revision ?? 0;
+    const key = JSON.stringify(["notes", kind, body.text ?? "", expectedRevision]);
+    const requestId = pending.get(key) || globalThis.crypto.randomUUID();
+    pending.set(key, requestId);
+    notesState.saving = true;
+    notesState.error = "";
+    try {
+      const result = await request(route, { method: "POST", body: { ...body, requestId, expectedRevision } });
+      if (result?.ok !== true || !result.notes) throw new Error(result?.error || "The notes save was not confirmed. Try again.");
+      pending.delete(key);
+      if (expected === viewer) notes.value = Object.freeze({ ...result.notes });
+      return result;
+    } catch (cause) {
+      if (expected === viewer) {
+        notesState.error = String(cause?.message || "The notes save was not confirmed. Try again.");
+        // Someone else changed them: show the current notes; the edit stays with the caller.
+        if (cause?.code === "VIBE64_TRAINING_NOTES_CHANGED") {
+          pending.delete(key);
+          const message = notesState.error;
+          await readNotes();
+          notesState.error = message;
+        }
+      }
+      return null;
+    } finally {
+      if (expected === viewer) notesState.saving = false;
+    }
+  }
+
+  function saveNotes(text) {
+    const value = String(text ?? "");
+    if (!value || value.length > VIBE64_LEARNING_NOTES_MAX) {
+      notesState.error = `Write between 1 and ${VIBE64_LEARNING_NOTES_MAX} characters, or clear the notes.`;
+      return Promise.resolve(null);
+    }
+    return writeNotes("update", VIBE64_LEARNING_ROUTES.notes, { text: value });
+  }
+
+  const clearNotes = () => writeNotes("clear", VIBE64_LEARNING_ROUTES.notesClear, {});
+
+  // Realtime: a learner change for the displayed attempt rereads it; a notes
+  // change rereads the notes when L has shown them.
   function learnerChanged(payload = {}) {
+    if (payload.reason === "notes") return notes.value ? readNotes() : null;
     if (state.attemptId && (!payload.attemptId || payload.attemptId === state.attemptId) && lesson.value) {
       return loadLesson(state.attemptId);
     }
@@ -381,11 +456,12 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get attemptId() { return state.attemptId; },
     get stepId() { return currentStep.value?.id || ""; },
     get scroll() { return state.scroll; },
-    lesson, results, steps, currentStep, focus, colleagueRequest,
+    lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId),
     setViewer, show, minimise, close, toggle, selectStep, setScroll, flushReader, loadLesson,
-    runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged
+    runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
+    readNotes, saveNotes, clearNotes
   });
 }
 
-export { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, showMeCommand, stepStatus };
+export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, showMeCommand, stepStatus };

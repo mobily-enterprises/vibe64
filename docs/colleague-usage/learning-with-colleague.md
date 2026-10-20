@@ -30,6 +30,17 @@ show, and it never reveals which choice is correct; it helps you reason instead.
 Starting, resuming or ending a lesson needs your direct request. Colleague deletes
 a practice project only after you explicitly confirm that deletion.
 
+**Teacher notes.** Colleague keeps short private notes about you as a learner
+(`learner-notes.read` and `learner-notes.update`): your strengths, difficulties,
+preferences and where you are. It reads them when it starts teaching and rewrites
+them as one short summary (at most 4000 characters), never a transcript, secrets
+or a grade. They live in your own Learning state: no other learner and not the
+workspace owner can read them, and they never change a step's status. You see,
+edit and clear them in **L** under **What my teacher knows about me** on
+**Courses**. Ask Colleague to change or forget something and it rewrites them;
+clearing is your own **Clear** in **L**. If you edited the notes since Colleague
+read them, its save is refused and it reads them again before combining.
+
 On a phone, Colleague's full-screen chat minimises itself when it opens Learning
 or rings a control, so you can see it; reopen Colleague with its avatar button.
 
