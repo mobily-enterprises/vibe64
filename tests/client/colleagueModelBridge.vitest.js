@@ -9,6 +9,7 @@ describe("Colleague model bridge", () => {
     expect(bridge.available.value).toBe(false);
     await expect(bridge.current()).resolves.toBeNull();
     await expect(bridge.selectForWorkflow(target)).resolves.toEqual({ ok: false, error: "Colleague is not open in this browser view." });
+    await expect(bridge.sayHello("Hi")).resolves.toEqual({ ok: false, error: "Colleague is not open in this browser view." });
 
     const first = { current: async () => ({ selection: { engineId: "codex" } }), selectForWorkflow: vi.fn(async () => ({ ok: true, from: "first" })) };
     const second = { current: async () => null, selectForWorkflow: vi.fn(async () => ({ ok: true, from: "second" })) };
@@ -19,6 +20,9 @@ describe("Colleague model bridge", () => {
     await expect(bridge.current()).resolves.toBeNull();
     await expect(bridge.selectForWorkflow(target)).resolves.toEqual({ ok: true, from: "second" });
     expect(second.selectForWorkflow).toHaveBeenCalledWith(target);
+    second.sayHello = vi.fn(async () => ({ ok: true, reply: "Hello!" }));
+    await expect(bridge.sayHello("Hi")).resolves.toEqual({ ok: true, reply: "Hello!" });
+    expect(second.sayHello).toHaveBeenCalledWith("Hi");
 
     unregisterFirst();
     await expect(bridge.selectForWorkflow(target)).resolves.toMatchObject({ from: "second" });

@@ -9,7 +9,7 @@ import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useReal
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
-import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
+import { latestAssistantMessageAwaitingUserReply, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
@@ -736,6 +736,20 @@ const colleagueModel = {
     const selection = result?.ok === false ? null : result?.assistantSelection;
     if (!selection) return { ok: false, error: result?.error || "Colleague could not switch to this AI." };
     return { ok: true, ...await withLabels(selection) };
+  },
+  async sayHello(message) {
+    if (!await conversationReady()) return { ok: false, error: productError.value || "Colleague is not ready yet." };
+    const target = await waitForConversation();
+    const sent = target.turns.value.length;
+    if (!await sendMessage(message, { focus: { ...props.focus } }, target)) return { ok: false, error: target.error.value || "Colleague didn't receive it." };
+    let stop = null;
+    const reply = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(""), 60000);
+      stop = watch(() => target.turns.value.length > sent ? latestAssistantMessageAwaitingUserReply(target.turns.value) : "",
+        text => { if (text) { clearTimeout(timer); resolve(text); } }, { immediate: true });
+    });
+    stop();
+    return reply ? { ok: true, reply } : { ok: false, error: "Colleague took too long to reply." };
   }
 };
 let unregisterModel = null;

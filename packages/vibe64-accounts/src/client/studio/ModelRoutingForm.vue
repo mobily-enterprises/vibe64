@@ -240,6 +240,22 @@ async function save() {
   catch { /* Shared command feedback reports errors; keep this draft and its field errors. */ }
   finally { saving.value = false; }
 }
+function until(ready) {
+  return new Promise((resolve) => {
+    const stop = watch(ready, (value) => { if (value) { queueMicrotask(() => stop()); resolve(); } }, { immediate: true });
+  });
+}
+// Onboarding's plain "Yes": every suggestion for this connection, saved as usual.
+async function applySuggested() {
+  await until(() => loadError.value || baseRevision.value !== null && !refreshingConnection.value);
+  if (loadError.value) return;
+  proposals.value = suggestedChanges.value.map(({ id }) => id);
+  if (!proposals.value.length) return emit("saved");
+  await nextTick();
+  await until(() => !previewPending.value);
+  await save();
+}
+defineExpose({ applySuggested });
 async function reload() {
   refreshError.value = "";
   try { await resource.reload(); if (!resourceError.value) hydrate(resource.data.value); }

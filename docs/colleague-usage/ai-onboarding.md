@@ -21,54 +21,67 @@ the top right (**Account menu**), then **Redo onboarding**. The same menu holds
 **Account settings**. **Redo onboarding** is also at the top of **Account
 settings → AI Accounts**. While no AI of your own is connected (an expired
 sign-in or key that needs reconnecting does not count), AI Accounts also shows
-**Give Vibe64 a brilliant mind** with **Set up your AI**, and Colleague shows a
-small crowned **Set up your AI** note. Each opens the flow at the provider
-choice, closing Account settings first; closing the flow returns focus to the
+**Give Vibe64 a brilliant mind** with **Set up your AI**, Colleague shows a
+small crowned **Set up your AI** note, and the top bar shows a gold crowned
+**Set up AI** button beside the account button (just the crown on a phone).
+Each opens the flow at the provider choice, closing Account settings first; closing the flow returns focus to the
 account button. While AI Accounts is saving, signing in or removing something,
 the flow waits: these entries do nothing until it finishes.
 
 ## Screen 1: why it matters
 
-**First, give Vibe64 a brilliant mind.** explains that the connected AI does
-the thinking and that frontier models make a large difference. Choose **Choose
-my AI** to continue, or **Set up later**.
+**First, give Vibe64 a brilliant mind.** says frontier AI makes Vibe64
+dramatically better, beside a stack of the four providers with Claude crowned
+on top (above the headline on a phone). Choose **Choose my AI** to continue, or
+**Set up later**. Three dots at the top show the step (1 of 3).
 
 ## Screen 2: choose your AI
 
 **Pick the AI behind Vibe64** ranks the providers by how good Vibe64 feels with
-each:
+each. Every card shows three rated facts, a **Suggested budget** and the plan
+with its official price:
 
-1. **Claude** (crown, **Recommended**): very high intelligence, very generous
-   quota, very high speed. Recommended: $30/month for basic coding; Claude Max
-   at $100/month for a lot of good coding.
-2. **Codex**: very good intelligence, with quota and speed issues. Recommended:
-   ChatGPT Pro, $100/month for basic coding, $200/month for a lot of coding.
-3. **DeepSeek**: cheap, pay as you go, weaker on long coding tasks. Recommended:
-   top up $20 of API credit. If you would spend that every month, Claude gives a
-   far better experience for about the same.
-4. **GLM** (Z.AI GLM Coding Plan): a budget subscription. Recommended: the
-   $30/month plan, but there is no point in getting it if you can get Claude for
-   the same price.
+1. **Claude** (crown, gold **Recommended** badge): very high intelligence, very
+   generous quota, very high speed. Suggested budget $30/month (Claude Pro,
+   $20/month, for basic coding); $100/month on Claude Max for a lot of good
+   coding.
+2. **Codex** (OpenAI): very good intelligence, with quota and speed issues; hits
+   limits on long sessions. Suggested budget $100/month (ChatGPT Pro) for basic
+   coding; $200/month for a lot of coding.
+3. **DeepSeek**: cheap, pay as you go (cost grows with work), weaker on long
+   coding tasks. Suggested budget: top up $20 of API credit. If you would spend
+   that every month, Claude gives a far better experience for about the same.
+4. **GLM** (Z.ai GLM Coding Plan, from $18/month): a budget subscription.
+   Suggested budget $30/month, but there is no point in getting it if you can
+   get Claude for the same price.
 
 Prices are set by each provider and can change. You pay the provider directly;
 Vibe64 never resells AI.
 
 Each card offers **Get [provider]**, which opens the provider's site in a new
-tab and moves to Connect, and **I already have [provider], connect**, which goes
-straight to Connect.
+tab and moves to Connect, and **Already subscribed? Connect** (Claude, Codex) or
+**Already have a key? Connect** (DeepSeek, GLM), which goes straight to Connect.
 
 ## Screen 3: connect
 
-**Connect [provider]** shows a checklist (beside the form on a desktop, above it
-on a phone): get a plan with the **Open [site]** button, then the sign-in steps.
-The form is the normal AI Accounts setup:
+**Connect [provider]** keeps the chosen card's mark, plan and suggested budget
+at the top. Below it a checklist (beside the form on a desktop, above it on a
+phone) says how to get a plan with the **Open [site]** button (**Already
+subscribed** or, for DeepSeek, **Already have credit** if you came from the
+Connect link), then the sign-in steps. The form is the normal AI Accounts
+setup:
 
-- **Claude**: sign in with your Claude account, then paste the code it shows.
+- **Claude**: **Sign in to Claude** with **Sign in with Claude**, then paste the
+  code it shows.
 - **Codex**: in ChatGPT's Security settings turn on **Enable device code
   authorization for Codex**, then log in with ChatGPT and enter the short code.
-- **DeepSeek**: create an API key on DeepSeek, paste it and check it.
+- **DeepSeek**: **Paste your DeepSeek API key**, then **Check and connect**.
 - **GLM**: create a Coding Plan API key on Z.AI (Personal Coding Plan → Plan
-  Overview), paste it and check it.
+  Overview), then **Paste your GLM API key** and **Check and connect**.
+
+If the sign-in tool itself cannot run on this machine, the form says **[Claude
+or ChatGPT] sign-in isn't available on this machine yet. Try again or choose
+another provider.**, with the technical output under **Details**.
 
 DeepSeek and GLM connect through Codex. Use **Back** (the arrow at the top left
 on a phone) to return to the provider list. Keys are stored privately outside
@@ -76,11 +89,16 @@ your projects and never shown again.
 
 ## Success
 
-**[Provider] is connected** appears once the connection is saved and a Senior
-model is ready. On first setup Colleague switches to the new AI and the screen
-says which model it now uses; otherwise it shows **Colleague: still using
-[model]** with **Use [provider] for Colleague**. Choose **Start building** to
-close. In a hosted workspace, a personal subscription (Claude, Codex, GLM)
+**[Provider] is ready** appears, with the provider's mark and a check, once the
+connection is saved and a Senior model is ready. On first setup Colleague
+switches to the new AI and says hello: a small Colleague card shows typing dots,
+then its one-line reply (if it doesn't reply in time the card says **Ready when
+you are. Say hi in the Colleague panel.**). The hello is an ordinary Colleague
+message, so it also appears in Colleague's conversation. Below it **Main AI:
+[model] · Change any time in Account settings > AI Accounts** (hosted: **your
+account menu**). Otherwise the screen shows **Colleague: still using [model]**
+with **Use [provider] for Colleague**. Choose **Start building** (the bottom bar
+on a phone) to close. In a hosted workspace, a personal subscription (Claude, Codex, GLM)
 serves only the owner; members need a Workspace-use connection such as
 DeepSeek.
 
@@ -90,18 +108,22 @@ routing**; choose an available Senior there and save.
 
 ## Redo with an existing setup
 
-**Your AI setup** shows what is connected: such cards have a green outline and
-carry **Connected** with **through [orchestrator]** (shown on a phone even while
-the card is collapsed). Choose **Keep using [provider]** to keep
-your main AI, **Use [provider] as my main AI** to switch (Vibe64 first shows
-the routing changes for review, then moves Colleague), or **Get** another
-provider to add it. Nothing is removed; remove a connection with **Manage** in
+**Your AI setup** starts with a **Currently using** strip: the connected
+providers' marks, **Main AI: [provider]** and **Keep using [provider]**.
+Connected cards have a green outline with a **Connected** badge on the top
+border (hosted: **Connected · Workspace use** or **Personal use**); on a phone
+they stay expanded. Choose **Keep using [provider]** to keep your main AI,
+**Use [provider] as my main AI** to switch, or **Get** another provider to add
+it. When switching would change model routing, **Make [provider] your main
+AI?** asks one question: **Yes, use [provider]** applies the suggested routing
+and moves Colleague; **Keep my current setup** leaves routing as it is. **Show
+details** reveals the full routing choices first. Nothing is removed; remove a connection with **Manage** in
 AI Accounts.
 
 ## Closing and recovery
 
-**Set up later** (top right on a desktop, bottom bar on a phone) closes the
-flow and keeps it from opening by itself in this browser for 24 hours. The
+**Set up later** (next to **Choose my AI** on the first screen, then at the top
+right; in the bottom bar on a phone's first screen) closes the flow and keeps it from opening by itself in this browser for 24 hours. The
 close button or Escape just closes it. While a sign-in, key check or routing
 save runs, closing and **Back** wait for it to finish.
 
@@ -117,7 +139,7 @@ save runs, closing and **Back** wait for it to finish.
 On a desktop Claude spans the top of the choice screen with the others in a row
 below. On a phone everything is one column: Claude is expanded, the other cards
 are compact rows you tap to expand, and **Choose my AI** and **Set up later**
-sit in a bar at the bottom. Motion is reduced when your device asks for it.
+sit in a bar at the bottom of the first screen. Motion is reduced when your device asks for it.
 
 ## What Colleague can do
 

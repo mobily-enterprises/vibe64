@@ -118,8 +118,17 @@
               size="30"
             />
             <div>
-              <h2 class="text-title-medium ma-0">{{ account.label }}</h2>
-              <p class="text-body-medium text-medium-emphasis ma-0">
+              <h2 class="text-title-medium ma-0">{{ embedded ? `Sign in to ${signInName(account)}` : account.label }}</h2>
+              <template v-if="embedded && !account.connected">
+                <p class="text-body-medium text-medium-emphasis ma-0">
+                  {{ technicalStatus(account) ? `${signInName(account)} sign-in isn't available on this machine yet. Try again or choose another provider.` : "Not signed in yet." }}
+                </p>
+                <details v-if="technicalStatus(account)" class="accounts-setup__details">
+                  <summary>Details</summary>
+                  <pre>{{ account.message }}</pre>
+                </details>
+              </template>
+              <p v-else class="text-body-medium text-medium-emphasis ma-0">
                 {{ account.message || accountStatusMessage(account) }}
               </p>
               <p
@@ -584,6 +593,9 @@ const {
   updateAuthTerminalExpanded
 } = useProviderAccountsSetup(props, { onConnected: (account) => emit("connected", account) });
 
+// Embedded (onboarding): raw runtime output reads as product copy, details on request.
+const signInName = (account) => ({ claude: "Claude", codex: "ChatGPT" })[account.id] || account.label;
+const technicalStatus = (account) => /command failed|enoent|spawn|error:|\n/iu.test(account.message || "");
 const setupRows = computed(() => accountRows.value.map((account) => {
   const session = accountActiveSession(account);
   return {
@@ -598,6 +610,9 @@ const setupRows = computed(() => accountRows.value.map((account) => {
 </script>
 
 <style scoped>
+.accounts-setup__details { color: rgba(var(--v-theme-on-surface), 0.72); font-size: 0.8125rem; margin-top: 0.5rem; }
+.accounts-setup__details summary { cursor: pointer; }
+.accounts-setup__details pre { font-size: 0.75rem; margin-top: 0.25rem; overflow-wrap: anywhere; white-space: pre-wrap; }
 .accounts-setup {
   display: grid;
   gap: 1.5rem;

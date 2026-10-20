@@ -5,6 +5,7 @@ export { default as NativeProviderConnections } from "./studio/NativeProviderCon
 export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 export { default as AiOnboardingHost } from "./onboarding/AiOnboardingHost.vue";
 export { default as AiOnboardingNudge } from "./onboarding/AiOnboardingNudge.vue";
+export { default as AiOnboardingSetUpPill } from "./onboarding/AiOnboardingSetUpPill.vue";
 export {
   aiOnboardingAvailable,
   aiOnboardingBlocked,
