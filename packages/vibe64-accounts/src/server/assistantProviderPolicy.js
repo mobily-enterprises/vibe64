@@ -14,9 +14,8 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
     ownerOnly: false
   }),
   opencode: Object.freeze({
-    billingLabel: "Big Pickle included; a Zen key unlocks every Zen model",
-    defaultModelId: "big-pickle",
-    includedModelId: "big-pickle",
+    billingLabel: "Usage-based Zen API billing",
+    defaultModelId: "claude-haiku-4-5",
     managementUrl: "https://opencode.ai/zen",
     ownerOnly: false,
     productLabel: "OpenCode Zen"
@@ -87,7 +86,6 @@ function assistantProviderPolicy(provider = {}) {
     canonicalUrl: "",
     defaultModelId,
     endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
-    includedModelId: text(configured.includedModelId),
     managementUrl: text(configured.managementUrl),
     modelAccess: configured.modelAccess
       ? { ...configured.modelAccess }

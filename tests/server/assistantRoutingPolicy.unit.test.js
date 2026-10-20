@@ -314,16 +314,16 @@ test("Accounts exposes safe choices and validates owner-managed assignments", as
 function routingFixture() {
   const codex = catalog();
   const opencode = { ...catalog(["openai"]), engineId: "opencode", label: "OpenCode",
-    defaults: { agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" },
+    defaults: { agentId: "build", modelProviderId: "opencode", modelId: "zen-model", variantId: "" },
     agents: [{ id: "build", mode: "primary" }],
     modelProviders: [{ id: "opencode", label: "Zen", connected: true, models: [
-      { id: "big-pickle", label: "Pickle", status: "available", variants: [], capabilities: { toolcall: true } }
+      { id: "zen-model", label: "Zen model", status: "available", variants: [], capabilities: { toolcall: true } }
     ] }] };
   const connectionAccess = [
     { engineId: "codex", modelProviderId: "openai", ownerOnly: true, available: true, connectionIdentity: "native-login-1" },
     { engineId: "codex", modelProviderId: "deepseek", ownerOnly: false, available: true, connectionIdentity: "deepseek-key-1" },
     { engineId: "codex", modelProviderId: "zai-coding-plan", ownerOnly: true, available: true, connectionIdentity: "glm-plan-1" },
-    { engineId: "opencode", modelProviderId: "opencode", ownerOnly: false, available: true, connectionIdentity: "included-zen" }
+    { engineId: "opencode", modelProviderId: "opencode", ownerOnly: false, available: true, connectionIdentity: "workspace-zen" }
   ];
   const roles = recommendedRoutingAssignments(codex);
   // Resolver/access cases retain their original saved shared DeepSeek routes;
@@ -381,10 +381,10 @@ test("independent recommendations compare engines, retain saved ties and filter 
     const choices = recommendedRoutingAssignments(f.input.catalogs[1], { ...withoutDeepSeek, catalogs });
     assert.equal(choices.helper.modelId, "gpt-6-luna");
     assert.equal(choices.router.modelId, "gpt-6-luna");
-    assert.equal(choices.sharedBackup.modelId, "big-pickle");
+    assert.equal(choices.sharedBackup.modelId, "zen-model");
   }
   f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").ownerOnly = true;
-  assert.equal(recommendedRoutingAssignments(f.input.catalogs[0], options).sharedBackup.modelId, "big-pickle");
+  assert.equal(recommendedRoutingAssignments(f.input.catalogs[0], options).sharedBackup.modelId, "zen-model");
   const engine = f.input.catalogs[1];
   engine.modelProviders[0].models.push(...["model-b", "model-a"].map((id) => ({ id, status: "available", variants: [] })));
   assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "model-a");
@@ -462,8 +462,8 @@ test("foreign Backup moves both effective roles even when Junior is accessible a
       const result = f.resolve(purpose, { reviewEnabled });
       assert.equal(result.available, true, result.message);
       assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "big-pickle");
-      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "big-pickle");
+      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "zen-model");
+      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "zen-model");
       assert.equal(result.seniorJuniorPair.senior.backupReason, "personal_connection");
       assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
     }
@@ -589,7 +589,7 @@ test("capability requirements are checked on effective models without changing d
     "Auto must validate the mandatory reviewer even when optional cleanup is disabled");
   const result = f.resolve("senior", { requirements: { capabilities: ["toolcall"] } });
   assert.equal(result.available, true, result.message);
-  assert.equal(result.effectiveSelection.modelId, "big-pickle");
+  assert.equal(result.effectiveSelection.modelId, "zen-model");
 });
 
 test("overrides cannot split a required Backup pair and direct Senior/Junior cannot cross engines", () => {
@@ -625,15 +625,15 @@ test("the pure resolver requires a trusted actor input; standalone null remains 
 });
 
 
-test("included Pickle is eligible for chat, Backup, Router and bounded Helpers", () => {
+test("a workspace Zen model is eligible for chat, Backup, Router and bounded Helpers", () => {
   const f = routingFixture();
   const engine = f.input.catalogs[1];
   const recommended = recommendedRoutingAssignments(engine, { connectionAccess: f.input.connectionAccess });
-  assert.equal(recommended.senior.modelId, "big-pickle");
-  assert.equal(recommended.junior.modelId, "big-pickle");
-  assert.equal(recommended.sharedBackup.modelId, "big-pickle");
-  assert.equal(recommended.router.modelId, "big-pickle");
-  assert.equal(recommended.helper.modelId, "big-pickle");
+  assert.equal(recommended.senior.modelId, "zen-model");
+  assert.equal(recommended.junior.modelId, "zen-model");
+  assert.equal(recommended.sharedBackup.modelId, "zen-model");
+  assert.equal(recommended.router.modelId, "zen-model");
+  assert.equal(recommended.helper.modelId, "zen-model");
   Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, helper: f.backup });
   assert.equal(f.resolve("helper").available, true);
   for (const purpose of ["request_routing", "prompt_hint", "voice_turn", "auto"]) {
@@ -680,5 +680,5 @@ test("Auto resolves its pair and Router through fallback without depending on He
   assignments.sharedBackup = f.backup;
   const included = f.resolve("auto");
   assert.equal(included.available, true, included.message);
-  assert.equal(included.router.modelId, "big-pickle");
+  assert.equal(included.router.modelId, "zen-model");
 });

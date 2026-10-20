@@ -230,16 +230,12 @@ const configuredAiRows = computed(() => [
     ...connection,
     engineId: "opencode",
     kind: "opencode",
-    modelLabel: connection.builtIn
-      ? "Big Pickle is included and ready"
-      : connection.id === "zai"
+    modelLabel: connection.id === "zai"
         ? "GLM-4.7 Flash is ready for new sessions"
         : connection.id === "opencode"
           ? "Zen key ready; choose model access below"
         : "Choose model roles in Model routing",
-    providerLabel: connection.id === "opencode" && connection.builtIn
-      ? "Big Pickle"
-      : connection.productLabel || connection.label
+    providerLabel: connection.productLabel || connection.label
   }))
 ]);
 const configuredAiGroups = computed(() => [
@@ -297,9 +293,7 @@ const editorRouteExplanation = computed(() => {
   const access = policy.accessLabel === "Workspace use"
     ? "Authorized workspace members may use this connection."
     : "Only the Vibe64 owner may use this connection; members can suggest main-chat messages for approval.";
-  const replacement = existingEditorConnection.value?.builtIn
-    ? " Adding a Zen key keeps Big Pickle available and lets you check or enable Zen's current models. Choose their roles in Model routing."
-    : existingEditorConnection.value
+  const replacement = existingEditorConnection.value
       ? " Saving a replacement restarts active assistant runtimes with the new key."
       : "";
   const routeNote = String(policy.routeNote || "").trim();
@@ -346,7 +340,6 @@ const editorEyebrow = computed(() => {
   return existingEditorConnection.value ? "Manage connection" : "Add connection";
 });
 const editorTitle = computed(() => {
-  if (existingEditorConnection.value?.builtIn) return "Add a Zen API key";
   if (existingEditorConnection.value) {
     if (editorProviderId.value === "zai") return "Update regular Z.AI API key";
     if (editorProviderId.value === "zai-coding-plan") return "Update Z.AI Personal Coding Plan key";
@@ -389,7 +382,7 @@ function zenAccessTitle(account = {}) {
   if (zenCheckIsRunning(account)) return check.status === "cancelling" ? "Stopping model check…" : "Checking Zen models…";
   if (mode === "all") return "All current Zen models enabled";
   if (mode === "verified") return `${Number(check.enabled || 0)} additional Zen models enabled`;
-  return "Big Pickle only";
+  return "Recommended Zen model only";
 }
 
 function zenCheckSummary(account = {}) {
@@ -678,7 +671,6 @@ async function applyZenModelAccess(account = {}, operation = "") {
   const providerId = String(account.id || "");
   if (
     providerId !== "opencode" ||
-    account.builtIn ||
     !operation ||
     updatingModelAccessProviderId.value
   ) {
@@ -904,10 +896,8 @@ defineExpose({ openProvider });
                     {{ account.providerLabel }}
                   </strong>
                   <small v-if="account.id === 'zai'">{{ account.billingLabel }}</small>
-                  <small v-else-if="account.id === 'opencode' && account.builtIn">OpenCode Zen · included with Vibe64</small>
                   <small v-else>{{ account.billingLabel }}</small>
                   <small v-if="account.id === 'zai'">Free model ready for new sessions · {{ account.keyHint }}</small>
-                  <small v-else-if="account.id === 'opencode' && account.builtIn">Ready for the whole workspace · {{ account.keyHint }}</small>
                   <small v-else>{{ account.modelLabel }} · {{ account.keyHint }}</small>
                 </span>
               </div>
@@ -950,12 +940,12 @@ defineExpose({ openProvider });
                   variant="text"
                   @click="requestRemove(account)"
                 >
-                  {{ account.id === 'opencode' ? "Use included Big Pickle" : "Remove" }}
+                  Remove
                 </v-btn>
               </div>
 
               <v-sheet
-                v-if="account.id === 'opencode' && !account.builtIn && account.modelAccess"
+                v-if="account.id === 'opencode' && account.modelAccess"
                 class="vibe64-ai-connections__account-child vibe64-ai-connections__zen-access"
                 rounded="md"
               >
@@ -974,7 +964,7 @@ defineExpose({ openProvider });
                   <span>
                     <strong>{{ zenAccessTitle(account) }}</strong>
                     <small>
-                      Big Pickle always remains available. Checking sends one tiny, potentially billable request to each current Zen model, one at a time.
+                      The recommended Zen model always remains available. Checking sends one tiny, potentially billable request to each current Zen model, one at a time.
                     </small>
                   </span>
                 </div>
@@ -1015,7 +1005,7 @@ defineExpose({ openProvider });
                     variant="text"
                     @click="applyZenModelAccess(account, 'disable-additional')"
                   >
-                    Use Big Pickle only
+                    Use the recommended model only
                   </v-btn>
                   <v-btn
                     v-if="zenCheckIsRunning(account)"
@@ -1509,13 +1499,10 @@ defineExpose({ openProvider });
     <v-dialog v-model="removeOpen" max-width="30rem" persistent>
       <v-card rounded="xl">
         <v-card-title>
-          {{ removeTarget?.id === "opencode" ? "Return to included Big Pickle" : "Remove AI connection" }}?
+          Remove AI connection?
         </v-card-title>
         <v-card-text>
-          <template v-if="removeTarget?.id === 'opencode'">
-            The saved Zen key will be removed and paid or key-only Zen models will stop. Included Big Pickle remains available.
-          </template>
-          <template v-else-if="removeTarget?.kind === 'codex-provider'">
+          <template v-if="removeTarget?.kind === 'codex-provider'">
             Remove the {{ removeTarget.providerLabel }} connection from {{ removeTarget.engineId === "claude" ? "Claude Code" : "Codex" }}?
             Turns using this key will stop. Conversations and files remain.
           </template>
@@ -1535,7 +1522,7 @@ defineExpose({ openProvider });
             variant="flat"
             @click="confirmRemove"
           >
-            {{ removeTarget?.id === "opencode" ? "Use included Big Pickle" : "Remove AI" }}
+            Remove AI
           </v-btn>
         </v-card-actions>
       </v-card>

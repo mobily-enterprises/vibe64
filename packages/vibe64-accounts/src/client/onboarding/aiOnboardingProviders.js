@@ -6,6 +6,8 @@
 // Claude-level, 1-2 read as a warning. mark/shape: the provider's monogram tile.
 // connect: the existing AI Accounts route. access: "personal" serves only the
 // owner in a hosted workspace. matches: which connections show it as Connected.
+// free: the one free option (GLM-4.7 Flash costs nothing on Z.AI's regular API,
+// docs.z.ai/guides/overview/pricing); it connects as its own card.
 const AI_ONBOARDING_PROVIDERS = Object.freeze([
   Object.freeze({
     id: "claude", rank: 1, crown: true, mark: "C", shape: "squircle", tone: "primary", name: "Claude",
@@ -64,7 +66,19 @@ const AI_ONBOARDING_PROVIDERS = Object.freeze([
     connectStep: { title: "Paste your Z.ai Coding Plan key",
       body: "Create a Coding Plan API key on Z.ai (Personal Coding Plan > Plan Overview), then paste it here." },
     connect: { engineId: "codex", modelProviderId: "zai-coding-plan", access: "personal" },
-    matches: { native: [], curated: ["zai-coding-plan"], opencode: ["zai-coding-plan"] }
+    matches: { native: [], curated: ["zai-coding-plan"], opencode: ["zai-coding-plan"] },
+    free: Object.freeze({
+      id: "glm-free", name: "GLM-4.7 Flash", label: "Free option: GLM-4.7 with a free Z.AI account",
+      detail: "GLM-4.7 Flash is free on Z.AI's regular API. Good for trying Vibe64; expect slower, simpler work.",
+      plan: { name: "Free Z.AI account", price: "Free", budget: "No plan or credit needed.", more: "" },
+      signUp: { label: "Open z.ai API keys", url: "https://z.ai/manage-apikey/apikey-list",
+        step: "Create a free Z.AI account, then create an API key." },
+      haveTitle: "Already have a Z.AI account", have: "Already have a key? Connect",
+      connectStep: { title: "Paste your Z.AI API key",
+        body: "Use a key from Z.AI's API Keys page. Vibe64 checks it with one tiny free GLM-4.7 Flash request." },
+      connect: { engineId: "opencode", modelProviderId: "zai", access: "workspace" },
+      matches: { native: [], curated: [], opencode: ["zai"] }
+    })
   })
 ]);
 

@@ -8,6 +8,7 @@ import {
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
+import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import { usesProvider } from "./useAiOnboarding.js";
 
@@ -450,6 +451,27 @@ function expanded(card) {
                         Manage in AI Accounts
                       </v-btn>
                     </div>
+                    <div v-if="card.free" class="aio-card__free">
+                      <p class="aio-card__free-label">
+                        <strong>{{ card.free.label }}</strong>
+                        <span>{{ card.free.connected ? "Connected." : card.free.detail }}</span>
+                      </p>
+                      <v-btn
+                        v-if="!card.free.connected" variant="outlined" color="primary" :href="card.free.signUp.url" target="_blank"
+                        rel="noopener noreferrer" :append-icon="mdiOpenInNew" @click="connect(card.free, 'opened')"
+                      >
+                        Start free<span class="d-sr-only"> (opens Z.AI in a new tab)</span>
+                      </v-btn>
+                      <v-btn v-if="!card.free.connected" variant="text" color="primary" class="aio-card__link" @click="connect(card.free, 'have')">
+                        {{ card.free.have }}
+                      </v-btn>
+                      <v-btn
+                        v-else-if="cardAction(card.free) === 'main'" variant="text" color="primary" :disabled="verifying"
+                        @click="makeMainAi(card.free)"
+                      >
+                        Use the free option as my main AI
+                      </v-btn>
+                    </div>
                   </div>
                 </template>
               </article>
@@ -495,6 +517,10 @@ function expanded(card) {
                   <AIAccountsSetup
                     v-if="nativeLogin" embedded :provider-id="chosen.connect.engineId"
                     :model-provider-id="chosen.connect.modelProviderId" @connected="finish()" @back="go('choose', true)"
+                  />
+                  <AiOnboardingKeyConnect
+                    v-else-if="chosen.connect.engineId === 'opencode'" :model-provider-id="chosen.connect.modelProviderId"
+                    :label="chosen.name" @busy="setupBusy = $event" @connected="finish()"
                   />
                   <NativeProviderConnections
                     v-else embedded adding :select-provider="false" :engine-id="chosen.connect.engineId"
@@ -937,6 +963,10 @@ function expanded(card) {
 .aio-card__bullets li { align-items: center; display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-3); }
 .aio-card--featured .aio-card__bullets li { font: var(--v64-type-body-lg); }
 .aio-card__why { font: var(--v64-type-body-lg); margin: 0; max-width: 28rem; }
+.aio-card__free { align-items: center; border-top: 1px solid var(--v64-outline-variant); display: flex; flex-wrap: wrap;
+  gap: var(--v64-space-2); margin-top: var(--v64-space-3); padding-top: var(--v64-space-3); }
+.aio-card__free-label { display: grid; flex: 1 1 16rem; font: var(--v64-type-body-md); gap: 2px; margin: 0; }
+.aio-card__free-label span { color: var(--v64-on-surface-variant); }
 .aio-card__note { color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .aio-card__note .v-icon { flex: none; margin-top: 1px; }
 .aio-card__offer { display: grid; gap: var(--v64-space-3); grid-template-rows: 1fr auto; }

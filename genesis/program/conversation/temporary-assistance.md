@@ -834,11 +834,14 @@ provider bindings or attachment records. A read failure cannot establish that
 agent work stopped.
 
 Managed OpenCode Helper turns preserve the same native tool definitions as
-ordinary requests, including Big Pickle. The existing execution plugin enforces
+ordinary requests. The existing execution plugin enforces
 the conversation’s actual access when a tool is called; a classification task
 does not gain coding access merely because definitions are present. Without
 the plugin and its trusted session registry, the Helper remains denied. Routing
-therefore admits included Big Pickle for Router and Helper as well as chat.
+therefore admits a connected OpenCode model for Router and Helper as well as
+chat. Vibe64 offers no account-free model: OpenCode Zen's free Big Pickle is
+never offered, so without a connected AI these background workloads are not
+admitted.
 
 Temporary chat uses the same chronological transcript rendering as Main. Saved
 authored rows and native streamed replies interleave by their message times,

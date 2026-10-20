@@ -5,7 +5,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  BUILT_IN_OPENCODE_API_KEY,
   connectionFingerprint,
   createAiConnectionStore
 } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
@@ -47,48 +46,38 @@ async function fixture(t, options = {}) {
   };
 }
 
-test("Big Pickle is always available through the built-in public OpenCode connection", async (t) => {
+test("Vibe64 includes no AI: OpenCode Zen is connected only by a saved key", async (t) => {
   const { store, verificationCalls } = await fixture(t);
-  const [included] = await store.listConnections();
-
-  assert.equal(included.id, "opencode");
-  assert.equal(included.builtIn, true);
-  assert.equal(included.defaultModelId, "big-pickle");
-  assert.equal(included.keyHint, "Included");
-  assert.equal(included.preferred, true);
-  assert.equal(included.removable, false);
-  assert.equal(included.modelAccess.mode, "recommended");
-  assert.equal((await store.resolveConnection("opencode")).apiKey, BUILT_IN_OPENCODE_API_KEY);
-  assert.equal((await store.assistantAccess("opencode", { modelId: "big-pickle" })).available, true);
-  assert.equal((await store.assistantAccess("opencode", { modelId: "other-zen-model" })).available, false);
-  assert.deepEqual(await store.removeConnection("opencode"), {
-    connected: true,
-    id: "opencode",
-    ok: true,
-    removed: false
-  });
+  assert.deepEqual(await store.listConnections(), []);
+  assert.equal(await store.resolveConnection("opencode"), null);
+  assert.equal((await store.assistantAccess("opencode", { modelId: "big-pickle" })).available, false);
+  assert.deepEqual(await store.removeConnection("opencode"), { id: "opencode", ok: true, removed: false });
   assert.deepEqual(verificationCalls, []);
 });
 
 test("OpenCode access retains connection scope for disabled models and identifies credential replacement", async (t) => {
   const { store } = await fixture(t);
-  const before = await store.assistantAccess("opencode", { modelId: "big-pickle" });
+  await store.upsertConnection({ apiKey: "first-secret", modelProviderId: "opencode", providerRevision: revisionA }, {
+    provider: provider("opencode")
+  });
+  const before = await store.assistantAccess("opencode", { modelId: "claude-haiku-4-5" });
   const disabled = await store.assistantAccess("opencode", { modelId: "other-model" });
+  assert.equal(before.available, true);
   assert.equal(before.ownerOnly, false);
   assert.equal(disabled.ownerOnly, false);
   assert.equal(disabled.available, false);
   assert.equal(disabled.connectionIdentity, before.connectionIdentity);
   assert.ok(before.connectionIdentity);
   await store.upsertConnection({ apiKey: "replacement-secret", modelProviderId: "opencode", providerRevision: revisionA }, {
-    provider: provider("opencode", { defaultModelId: "big-pickle" })
+    provider: provider("opencode")
   });
-  const after = await store.assistantAccess("opencode", { modelId: "big-pickle" });
+  const after = await store.assistantAccess("opencode", { modelId: "claude-haiku-4-5" });
   assert.notEqual(after.connectionIdentity, before.connectionIdentity);
   assert.doesNotMatch(JSON.stringify(after), /replacement-secret/);
   assert.equal((await store.assistantAccess("missing")).connectionIdentity, undefined);
 });
 
-test("a real Zen key starts with Big Pickle and supports explicit all-or-Pickle access", async (t) => {
+test("a real Zen key starts with the recommended Zen model, never Big Pickle, and supports all-or-recommended access", async (t) => {
   const changes = [];
   const { store } = await fixture(t, {
     onConnectionChanged(change) {
@@ -105,18 +94,20 @@ test("a real Zen key starts with Big Pickle and supports explicit all-or-Pickle 
     modelProviderId: "opencode",
     providerRevision: revisionA
   }, { provider: opencode });
-  assert.equal(saved.builtIn, false);
+  assert.equal(saved.defaultModelId, "claude-haiku-4-5");
+  assert.equal(saved.removable, true);
   assert.equal(saved.modelAccess.mode, "recommended");
-  assert.deepEqual(saved.modelAccess.enabledModelIds, ["big-pickle"]);
+  assert.deepEqual(saved.modelAccess.enabledModelIds, ["claude-haiku-4-5"]);
   assert.equal(saved.modelAccess.managementOnly, true);
+  assert.equal((await store.assistantAccess("opencode", { modelId: "big-pickle" })).available, false);
   assert.equal((await store.assistantAccess("opencode", { modelId: "another-model" })).available, false);
 
   const all = await store.updateModelAccess("opencode", { operation: "enable-all" });
   assert.equal(all.modelAccess.mode, "all");
   assert.equal((await store.assistantAccess("opencode", { modelId: "another-model" })).available, true);
 
-  const pickleOnly = await store.updateModelAccess("opencode", { operation: "disable-additional" });
-  assert.equal(pickleOnly.modelAccess.mode, "recommended");
+  const recommendedOnly = await store.updateModelAccess("opencode", { operation: "disable-additional" });
+  assert.equal(recommendedOnly.modelAccess.mode, "recommended");
   assert.equal((await store.assistantAccess("opencode", { modelId: "another-model" })).available, false);
 
   await assert.rejects(
@@ -125,18 +116,17 @@ test("a real Zen key starts with Big Pickle and supports explicit all-or-Pickle 
       modelProviderId: "opencode",
       providerRevision: revisionA
     }, { provider: opencode }),
-    (error) => error.code === "vibe64_ai_public_key_already_included"
+    (error) => error.code === "vibe64_ai_public_key_unsupported"
   );
 
-  const removed = await store.removeConnection("opencode");
-  assert.equal(removed.reverted, true);
-  assert.equal((await store.resolveConnection("opencode")).apiKey, "public");
-  assert.equal((await store.listConnections()).find(({ id }) => id === "opencode").builtIn, true);
+  assert.deepEqual(await store.removeConnection("opencode"), { id: "opencode", ok: true, removed: true });
+  assert.equal(await store.resolveConnection("opencode"), null);
+  assert.deepEqual(await store.listConnections(), []);
   assert.deepEqual(changes, [
     { modelProviderId: "opencode", reason: "created" },
     { modelProviderId: "opencode", reason: "model-access-updated" },
     { modelProviderId: "opencode", reason: "model-access-updated" },
-    { modelProviderId: "opencode", reason: "reverted" }
+    { modelProviderId: "opencode", reason: "removed" }
   ]);
 });
 
@@ -144,7 +134,7 @@ test("Zen checks models sequentially in the background and enables only confirme
   const verificationCalls = [];
   const { store } = await fixture(t, {
     async readModelIds() {
-      return ["retry-model", "big-pickle", "working-model", "rejected-model"];
+      return ["retry-model", "big-pickle", "claude-haiku-4-5", "working-model", "rejected-model"];
     },
     async verifyConnection(input) {
       verificationCalls.push(input.modelId);
@@ -180,7 +170,7 @@ test("Zen checks models sequentially in the background and enables only confirme
 
   assert.equal(connection.modelAccess.mode, "verified");
   assert.equal(connection.modelAccess.check.status, "complete");
-  assert.deepEqual(connection.modelAccess.enabledModelIds, ["big-pickle", "working-model"]);
+  assert.deepEqual(connection.modelAccess.enabledModelIds, ["claude-haiku-4-5", "working-model"]);
   assert.deepEqual({
     checked: connection.modelAccess.check.checked,
     enabled: connection.modelAccess.check.enabled,
@@ -189,7 +179,7 @@ test("Zen checks models sequentially in the background and enables only confirme
     total: connection.modelAccess.check.total
   }, { checked: 3, enabled: 1, rejected: 1, retryable: 1, total: 3 });
   assert.deepEqual(verificationCalls, [
-    "big-pickle",
+    "claude-haiku-4-5",
     "rejected-model",
     "retry-model",
     "working-model"
@@ -256,7 +246,7 @@ test("a running Zen model check reports restart interruption and can cancel befo
   }
   assert.equal(connection.modelAccess.check.status, "cancelled");
   assert.equal(connection.modelAccess.check.checked, 0);
-  assert.deepEqual(verificationCalls, ["big-pickle", "first-model"]);
+  assert.deepEqual(verificationCalls, ["claude-haiku-4-5", "first-model"]);
 });
 
 test("AI connection store redacts keys and resolves native OpenCode connections server-side", async (t) => {
@@ -356,7 +346,7 @@ test("GLM API and Coding Plan stay independent even when they use the same key",
   }, { provider: codingPlan });
 
   const rows = await store.listConnections();
-  assert.deepEqual(rows.map(({ id }) => id).sort(), ["opencode", "zai", "zai-coding-plan"]);
+  assert.deepEqual(rows.map(({ id }) => id).sort(), ["zai", "zai-coding-plan"]);
   const regularApi = rows.find(({ id }) => id === "zai");
   const personalPlan = rows.find(({ id }) => id === "zai-coding-plan");
   assert.equal(regularApi.productLabel, "GLM-4.7 Flash · Regular Z.AI API");
@@ -377,7 +367,8 @@ test("GLM API and Coding Plan stay independent even when they use the same key",
   await store.removeConnection("zai");
   assert.equal(await store.resolveConnection("zai"), null);
   assert.equal((await store.resolveConnection("zai-coding-plan")).apiKey, "same-glm-key");
-  assert.equal((await store.listConnections()).find(({ id }) => id === "opencode").preferred, true);
+  assert.equal((await store.listConnections()).some(({ preferred }) => preferred), false,
+    "removing the preferred connection leaves no built-in fallback preferred");
   assert.deepEqual(changes, [
     { modelProviderId: "zai", reason: "created" },
     { modelProviderId: "zai-coding-plan", reason: "created" },
@@ -431,7 +422,7 @@ test("mutations serialize replacements without losing other providers", async (t
     providerRevision: revisionB
   }, { provider: { ...deepseek, definitionRevision: revisionB } });
 
-  assert.deepEqual((await store.listConnections()).map(({ id }) => id), ["anthropic", "deepseek", "opencode"]);
+  assert.deepEqual((await store.listConnections()).map(({ id }) => id), ["anthropic", "deepseek"]);
   assert.equal((await store.resolveConnection("deepseek")).apiKey, "deepseek-replacement");
   assert.equal((await store.resolveConnection("anthropic")).apiKey, "anthropic-first");
 });
@@ -472,7 +463,7 @@ test("store rejects invalid input and stale provider definitions", async (t) => 
     }, { provider: deepseek }),
     (error) => error.code === "vibe64_ai_provider_revision_changed"
   );
-  assert.deepEqual((await store.listConnections()).map(({ id }) => id), ["opencode"]);
+  assert.deepEqual((await store.listConnections()).map(({ id }) => id), []);
 });
 
 test("failed and stale OpenCode verification never replace a working key", async (t) => {
@@ -589,7 +580,7 @@ test("reads ignore temp files and reject malformed durable state", async (t) => 
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(`${filePath}.interrupted.tmp`, "{not-json");
   await writeFile(filePath, JSON.stringify({ connections: {}, version: 3 }));
-  assert.deepEqual((await store.listConnections()).map(({ id }) => id), ["opencode"]);
+  assert.deepEqual((await store.listConnections()).map(({ id }) => id), []);
 
   await writeFile(filePath, "{not-json");
   await assert.rejects(

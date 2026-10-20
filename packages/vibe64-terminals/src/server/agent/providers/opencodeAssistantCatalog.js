@@ -9,6 +9,8 @@ import {
 const OPENCODE_CAPABILITY_PAGE_LIMIT = 25;
 const OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM = 100;
 const OPENCODE_ZEN_PROVIDER_ID = "opencode";
+// Zen's free model is never offered, even to an account with a Zen key.
+const RETIRED_ZEN_MODEL_ID = "big-pickle";
 
 function text(value = "") {
   return String(value ?? "").trim();
@@ -69,7 +71,6 @@ function normalizedConnections(value = null) {
       ? {
           accessLabel: "",
           billingLabel: "",
-          builtIn: false,
           connected: true,
           defaultModelId: "",
           fingerprint: "",
@@ -82,7 +83,6 @@ function normalizedConnections(value = null) {
       : {
           accessLabel: text(connection?.accessLabel),
           billingLabel: text(connection?.billingLabel),
-          builtIn: connection?.builtIn === true,
           connected: connection?.connected !== false,
           defaultModelId: text(connection?.defaultModelId || connection?.defaultModelId),
           fingerprint: text(connection?.fingerprint),
@@ -102,7 +102,6 @@ function openCodeConfiguredAssistantCapabilities({ connections = [] } = {}) {
       left.label.localeCompare(right.label) || left.id.localeCompare(right.id))
     .map((connection) => ({
       apiKeyCompatible: true,
-      builtIn: connection.builtIn,
       connected: true,
       connectionMessage: "",
       connectionStatus: "connected",
@@ -126,7 +125,6 @@ function openCodeConfiguredAssistantCapabilities({ connections = [] } = {}) {
   const revision = `sha256:${createHash("sha256").update(JSON.stringify(
     normalizedConnections(connections).map((connection) => ({
       defaultModelId: connection.defaultModelId,
-      builtIn: connection.builtIn,
       fingerprint: connection.fingerprint,
       id: connection.id,
       modelAccess: connection.modelAccess,
@@ -222,11 +220,11 @@ function normalizedProvider(
   }
   const upstreamModels = Object.values(record(provider.models))
     .map(normalizedModel)
-    .filter((model) => model.id)
+    .filter((model) => model.id && !(id === OPENCODE_ZEN_PROVIDER_ID && model.id === RETIRED_ZEN_MODEL_ID))
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
   const upstreamModelById = new Map(upstreamModels.map((model) => [model.id, model]));
   const currentModels = currentModelIds instanceof Set
-    ? [...currentModelIds]
+    ? [...currentModelIds].filter((modelId) => !(id === OPENCODE_ZEN_PROVIDER_ID && modelId === RETIRED_ZEN_MODEL_ID))
       .map((modelId) => upstreamModelById.get(modelId) || normalizedModel({
         id: modelId,
         name: modelId,
@@ -267,13 +265,11 @@ function normalizedProvider(
   })).digest("hex")}`;
   const stale = Boolean(
     connection &&
-    connection.builtIn !== true &&
     id !== OPENCODE_ZEN_PROVIDER_ID &&
     connection.providerRevision !== definitionRevision
   );
   return {
     apiKeyCompatible: provider.apiKeyCompatible === true,
-    builtIn: connection?.builtIn === true,
     connected: Boolean(connection) && !stale,
     connectionMessage: stale
       ? "This provider changed since its key was confirmed. Reconfirm the connection before use."
@@ -386,7 +382,6 @@ function openCodeAssistantCapabilities({
     agents,
     connections: normalizedConnectionRows
       .map((connection) => JSON.stringify({
-        builtIn: connection.builtIn,
         fingerprint: connection.fingerprint,
         id: connection.id,
         modelAccess: connection.modelAccess,

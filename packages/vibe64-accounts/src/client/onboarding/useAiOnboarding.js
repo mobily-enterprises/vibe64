@@ -10,8 +10,6 @@ import { AI_ONBOARDING_PROVIDERS } from "./aiOnboardingProviders.js";
 
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
 const engineLabel = (id) => VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === id)?.label || id;
-// Through OpenCode, the regular Z.AI API serves the free GLM-4.7 Flash starter.
-const OPENCODE_STARTERS = ["zai"];
 const snoozeKey = (actorKey) => `vibe64.aiOnboarding.snoozedUntil:${actorKey || "local"}`;
 
 function aiOnboardingSnoozed(actorKey, now = Date.now()) {
@@ -26,12 +24,12 @@ function snoozeAiOnboarding(actorKey, now = Date.now()) {
   }
 }
 
-// "Set up" is any working AI beyond the free starters, whichever provider it is.
+// "Set up" is any working AI, whichever provider it is, including the free
+// GLM option. Redo still recommends Claude.
 function aiIsSetUp({ accounts, curated, openCode }) {
   return accounts.some(({ id, connected }) => ["claude", "codex"].includes(id) && connected) ||
     curated.some(({ connected, claudeReady }) => connected || claudeReady) ||
-    openCode.some(({ builtIn, connected, modelProviderId }) => builtIn !== true && connected &&
-      !OPENCODE_STARTERS.includes(modelProviderId));
+    openCode.some(({ connected }) => connected);
 }
 
 // True when a Colleague selection uses this card's orchestrator and provider.
@@ -41,7 +39,8 @@ function usesProvider(selection, { connect }) {
 
 // A routed selection named by its onboarding card, or by its model id.
 const providerName = ({ modelProviderId, modelId }) =>
-  AI_ONBOARDING_PROVIDERS.find(({ connect }) => connect.modelProviderId === modelProviderId)?.name || modelId;
+  AI_ONBOARDING_PROVIDERS.flatMap((provider) => [provider, provider.free].filter(Boolean))
+    .find(({ connect }) => connect.modelProviderId === modelProviderId)?.name || modelId;
 const colleagueChoice = (result) => result?.selection ? { ...result.selection, label: result.modelLabel } : null;
 const HELLO = "Say hello to me in one short, friendly sentence. No questions.";
 
@@ -51,7 +50,7 @@ function aiOnboardingConnections({ matches }, { accounts, curated, openCode }) {
     ...accounts.filter(({ id, connected }) => connected && matches.native.includes(id)).map(({ id }) => engineLabel(id)),
     ...curated.filter(({ id }) => matches.curated.includes(id)).flatMap(({ connected, claudeReady }) =>
       [connected && engineLabel("codex"), claudeReady && engineLabel("claude")].filter(Boolean)),
-    ...openCode.filter(({ builtIn, connected, modelProviderId }) => builtIn !== true && connected &&
+    ...openCode.filter(({ connected, modelProviderId }) => connected &&
       matches.opencode.includes(modelProviderId)).map(() => engineLabel("opencode"))
   ])];
 }
@@ -76,10 +75,13 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   const loaded = computed(() => !loadError.value && unref(enabled) && Array.isArray(lists.value.accounts) &&
     Array.isArray(lists.value.curated) && !openCode.isInitialLoading.value);
   const isSetUp = computed(() => loaded.value && aiIsSetUp(lists.value));
-  const cards = computed(() => AI_ONBOARDING_PROVIDERS.map((provider) => {
+  const card = (provider) => {
     const through = loaded.value ? aiOnboardingConnections(provider, lists.value) : [];
     return { ...provider, engineLabel: engineLabel(provider.connect.engineId), through, connected: through.length > 0 };
-  }));
+  };
+  // A free option is a card of its own for connecting, shown inside its provider's card.
+  const cards = computed(() => AI_ONBOARDING_PROVIDERS.map((provider) => ({ ...card(provider),
+    ...(provider.free ? { free: card({ ...provider, note: "", upgrade: "", crown: false, free: null, ...provider.free }) } : {}) })));
 
   function reload() {
     return Promise.all([accounts.statusResource.reload(), curated.resource.reload(), openCode.reload()]);

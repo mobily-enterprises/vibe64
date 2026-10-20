@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { upgradeColleagueConversations, upgradeColleagueConversationHistory, retireColleagueLearningWatches } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationHistory, retireColleagueLearningWatches, retireColleagueFreeModel } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-upgrade-"));
@@ -201,4 +201,40 @@ test("learning-task watch retirement keeps history and other watches with read-o
   await f.write("44", "{not json");
   await assert.rejects(retireColleagueLearningWatches({ systemRoot: f.systemRoot, apply: false, report() {},
     backupRoot: path.join(f.systemRoot, "upgrades/backups/other") }), /Colleague conversation state is invalid/u);
+});
+
+test("a chat on the retired free model is kept as a previous conversation and the new chat has no model", async t => {
+  const f = await fixture(t);
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261022-free-model-retirement/colleague");
+  const run = apply => retireColleagueFreeModel({ systemRoot: f.systemRoot, backupRoot, apply,
+    report: (level, message) => f.reports.push({ level, message }) });
+  await run(true);
+  await assert.rejects(stat(f.systemRoot), { code: "ENOENT" }, "a new installation has nothing to retire");
+  const pickle = { schema: "vibe64.assistant-selection.v1", engineId: "opencode", agentId: "build", modelProviderId: "opencode",
+    modelId: "big-pickle", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const record = { schemaVersion: 3, scopeId: "colleague_42", runtimeId: "42", previousConversations: [], assistantSelection: pickle,
+    status: "working", error: "", conversationMetadata: { runtime: { engine: "opencode" } },
+    conversationLog: [{ turnId: "turn-1", messages: [{ role: "user", text: "Keep this history." }] }],
+    watches: [{ watchId: "workspace-1", source: "workspace-repair", status: "paused" }] };
+  const file = await f.write("42", record);
+  const codex = await f.write("43", { ...record, scopeId: "colleague_43", runtimeId: "43",
+    assistantSelection: { ...pickle, engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-sol" } });
+  const before = await readFile(file, "utf8");
+  const other = await readFile(codex, "utf8");
+  await run(false);
+  assert.equal(await readFile(file, "utf8"), before, "check writes nothing");
+  await run(true);
+  const upgraded = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(upgraded.assistantSelection, null);
+  assert.deepEqual([upgraded.status, upgraded.conversationLog, upgraded.conversationMetadata], ["ready", [], {}]);
+  assert.equal(upgraded.runtimeId, `42:${upgraded.scopeId}`);
+  assert.deepEqual(upgraded.watches, record.watches);
+  const [old] = upgraded.previousConversations;
+  assert.deepEqual([old.scopeId, old.runtimeId, old.status, old.conversationLog, old.assistantSelection],
+    ["colleague_42", "42", "interrupted", record.conversationLog, pickle]);
+  assert.equal(old.freshOperation.conversationId, upgraded.scopeId);
+  assert.equal(await readFile(codex, "utf8"), other, "another model's chat is unchanged");
+  assert.equal(await readFile(path.join(backupRoot, "before/colleague/42/conversation.json"), "utf8"), before);
+  await run(true);
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), upgraded, "retry changes nothing more");
 });

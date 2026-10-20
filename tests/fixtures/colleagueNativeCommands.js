@@ -303,6 +303,9 @@ export async function createControlledColleagueNativeCommands(root, responses) {
       ws.send(JSON.stringify({ id, error: { code: -32601, message: "Unsupported method: " + method } }));
     }));
     server.listen(socket);
+    // The shared app-server outlives a closed service by design; a removed test
+    // root is the fixture's end, so this fake never survives its test.
+    setInterval(() => { if (!existsSync(${JSON.stringify(directory)})) process.exit(0); }, 500).unref();
   `, { mode: 0o700 });
   await writeFile(claude, `#!${process.execPath}
     import { createInterface } from "node:readline";

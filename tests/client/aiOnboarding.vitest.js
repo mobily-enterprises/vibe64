@@ -29,7 +29,7 @@ import AiOnboarding from "../../packages/vibe64-accounts/src/client/onboarding/A
 import AiOnboardingHost from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue";
 
 const empty = { accounts: [], curated: [], openCode: [] };
-const BIG_PICKLE = { id: "opencode", modelProviderId: "opencode", builtIn: true, connected: true };
+const FREE_GLM = { id: "zai", modelProviderId: "zai", connected: true };
 const claude = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "claude");
 const deepseek = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "deepseek");
 const glm = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "glm");
@@ -60,7 +60,7 @@ beforeEach(() => {
     loadError: ref(""), statusResource: { reload: vi.fn().mockResolvedValue({}) } };
   mocks.curated = { resource: resource({ providers: CURATED_CODEX_PROVIDERS.map(({ id }) => ({ id, connected: false, claudeReady: false })) }),
     loadError: ref("") };
-  mocks.openCode = { connections: ref([BIG_PICKLE]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}) };
+  mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}) };
   const workflows = ref([]);
   const engines = ref([]);
   mocks.routing = { workflows: { resource: { reload: vi.fn().mockResolvedValue({}) }, workflows },
@@ -110,31 +110,34 @@ describe("provider data", () => {
       .map(({ id }) => id)).toEqual(["claude"]);
     expect(new Set(AI_ONBOARDING_PROVIDERS.map(({ shape }) => shape)).size).toBe(AI_ONBOARDING_PROVIDERS.length);
     expect(deepseek.haveTitle).toBe("Already have credit");
+    // The one free option: GLM with a free Z.AI account, connected through OpenCode.
+    expect(AI_ONBOARDING_PROVIDERS.filter(({ free }) => free).map(({ id }) => id)).toEqual(["glm"]);
+    expect(glm.free).toMatchObject({ label: "Free option: GLM-4.7 with a free Z.AI account",
+      connect: { engineId: "opencode", modelProviderId: "zai", access: "workspace" }, matches: { opencode: ["zai"] } });
   });
 });
 
 describe("set-up rule", () => {
-  it("does not count the built-in starter or non-AI accounts as set up", () => {
-    expect(aiIsSetUp({ ...empty, accounts: [{ id: "github", connected: true }], openCode: [BIG_PICKLE] })).toBe(false);
+  it("does not count nothing, non-AI accounts or a failed connection as set up", () => {
+    expect(aiIsSetUp(empty)).toBe(false);
+    expect(aiIsSetUp({ ...empty, accounts: [{ id: "github", connected: true }] })).toBe(false);
+    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", connected: false }] })).toBe(false);
   });
 
-  it("does not count the free regular Z.AI starter or a failed connection as set up", () => {
-    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "zai", builtIn: false, connected: true }] })).toBe(false);
-    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", builtIn: false, connected: false }] })).toBe(false);
-  });
-
-  it("counts any other AI, including providers onboarding does not list", () => {
-    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", builtIn: false, connected: true }] })).toBe(true);
+  it("counts the free GLM option and any other AI, including providers onboarding does not list", () => {
+    expect(aiIsSetUp({ ...empty, openCode: [FREE_GLM] })).toBe(true);
+    expect(aiIsSetUp({ ...empty, openCode: [{ modelProviderId: "openrouter", connected: true }] })).toBe(true);
     expect(aiIsSetUp({ ...empty, curated: [{ id: "zai", connected: false, claudeReady: true }] })).toBe(true);
     expect(aiIsSetUp({ ...empty, accounts: [{ id: "codex", connected: true }] })).toBe(true);
   });
 
   it("marks a card connected through each orchestrator that serves it", () => {
     const lists = { accounts: [{ id: "claude", connected: true }], curated: [{ id: "deepseek", connected: true, claudeReady: true }],
-      openCode: [BIG_PICKLE, { modelProviderId: "zai", builtIn: false, connected: true }] };
+      openCode: [FREE_GLM] };
     expect(aiOnboardingConnections(claude, lists)).toEqual(["Claude Code"]);
     expect(aiOnboardingConnections(deepseek, lists)).toEqual(["Codex", "Claude Code"]);
     expect(aiOnboardingConnections(glm, lists)).toEqual([]);
+    expect(aiOnboardingConnections(glm.free, lists)).toEqual(["OpenCode"]);
     expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai", connected: true }] })).toEqual([]);
     expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai-coding-plan", connected: true }] })).toEqual(["Codex"]);
     expect(aiOnboardingConnections(AI_ONBOARDING_PROVIDERS[1], lists)).toEqual([]);
@@ -177,7 +180,7 @@ describe("host auto-open", () => {
       () => { snoozeAiOnboarding("local"); },
       () => { mocks.route = { path: "/app/learning/lesson-0", query: {} }; },
       () => { mocks.route = { path: "/app/projects", query: { mode: "learning" } }; },
-      () => { mocks.openCode.connections.value = [BIG_PICKLE, { modelProviderId: "openrouter", builtIn: false, connected: true }]; }
+      () => { mocks.openCode.connections.value = [{ modelProviderId: "openrouter", connected: true }]; }
     ];
     for (const arrange of cases) {
       storage.clear();
@@ -188,7 +191,7 @@ describe("host auto-open", () => {
       app.unmount();
       mocks.curated.loadError.value = "";
       mocks.openCode.isInitialLoading.value = false;
-      mocks.openCode.connections.value = [BIG_PICKLE];
+      mocks.openCode.connections.value = [];
     }
     const member = mount(AiOnboardingHost, { canConfigure: false });
     expect(member.open).toBe(false);

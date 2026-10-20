@@ -19,6 +19,7 @@
     "./server/assistantHelperUpgrade": "./src/server/assistantHelperUpgrade.js",
     "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js",
     "./server/providerCredentialsUpgrade": "./src/server/providerCredentialsUpgrade.js",
+    "./server/freeModelRetirementUpgrade": "./src/server/freeModelRetirementUpgrade.js",
     "./server/assistantPlanUpgrade": "./src/server/assistantPlanUpgrade.js"
   },
   "jskit": {

@@ -66,7 +66,6 @@ test("assistant capabilities preserve preferred-provider and locked-model guidan
   const value = capabilities();
   value.modelProviders[0] = {
     ...value.modelProviders[0],
-    builtIn: true,
     modelAccess: {
       configurable: true,
       enabledModelIds: ["deepseek-chat"],
@@ -89,7 +88,7 @@ test("assistant capabilities preserve preferred-provider and locked-model guidan
   };
   const defined = defineVibe64AssistantCapabilities(value);
 
-  assert.equal(defined.modelProviders[0].builtIn, true);
+  assert.equal(Object.hasOwn(defined.modelProviders[0], "builtIn"), false, "Vibe64 has no built-in provider");
   assert.equal(defined.modelProviders[0].preferred, true);
   assert.deepEqual(defined.modelProviders[0].modelAccess.enabledModelIds, ["deepseek-chat"]);
   assert.equal(defined.modelProviders[0].modelAccess.managementOnly, true);

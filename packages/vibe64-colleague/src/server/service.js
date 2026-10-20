@@ -460,7 +460,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       return decision.effectiveSelection;
     }
-    for (const choice of await availableWorkflows(user)) {
+    // A personal Claude or Codex subscription is the real experience; other
+    // connected providers follow in their listed order.
+    const rank = ({ engineId }) => ["claude", "codex"].includes(engineId) ? ["claude", "codex"].indexOf(engineId) : 2;
+    for (const choice of (await availableWorkflows(user)).sort((left, right) => rank(left) - rank(right))) {
       const decision = await routedSenior(user, choice.engineId);
       if (decision.available) return decision.effectiveSelection;
     }

@@ -30,8 +30,13 @@ The local standalone editor does not require a hosted workspace login to open AI
 Accounts. To be guided to a good first AI, use [AI onboarding](ai-onboarding.md):
 **Redo onboarding** in the local account menu (next to **Account settings**) or
 at the top of AI Accounts, or **Set up your AI** in the **Give Vibe64 a
-brilliant mind** card shown while no AI of your own is connected (the included
-Big Pickle and accounts marked **Reconnect required** do not count).
+brilliant mind** card shown while no AI is connected (accounts marked
+**Reconnect required** do not count). Vibe64 includes no AI of its own; the free
+option is GLM-4.7 Flash through a free Z.AI account (see below). OpenCode Zen is
+an ordinary keyed provider: add your own Zen key to use it. Its free Big Pickle
+model is not offered, and model routing or Colleague choices that named it were
+cleared by the release upgrade, so the next use recommends one of your connected
+AIs.
 Hosted connection changes require the workspace owner. A member's permitted models
 can differ from the owner's subscription models; account connection alone does not
 grant every collaborator use of it.
@@ -175,8 +180,9 @@ Send or **Teach me** again. That message clears by itself once an AI is usable.
 
 If the form says routing changed elsewhere, use **Reload current choices** and
 review your retained draft before saving. If no permitted model is usable, finish
-the real account/access setup before promising an AI answer. An included model
-can be available on hosted installations; verify the actual catalogue.
+the real account/access setup before promising an AI answer. Vibe64 includes no
+AI of its own on any installation; **Set up your AI** connects one, including the
+free GLM-4.7 Flash option.
 
 Colleague can explain these steps, inspect account/routing readiness, open AI
 Accounts and save supported routing changes when the owner explicitly asks. It
@@ -215,6 +221,9 @@ search **Z.AI** in **Search OpenCode providers**, and choose **Z.AI** rather tha
 no key-creation link: use [Z.AI's key page](https://z.ai/manage-apikey/apikey-list)
 in another tab, finish its registration/sign-in steps, then return to the masked
 **API key** field and **Verify and connect**. Keep the key out of Colleague chat.
+This is Vibe64's free option: GLM-4.7 Flash is free on Z.AI's regular API, so a
+free Z.AI account is enough. AI onboarding's GLM card offers the same connection
+directly through **Start free**.
 
 For one main conversation, open its chat mode menu and choose **Custom**. Select
 **Orchestrator**, then **Model** and **Thinking**, and press **Apply**. The model

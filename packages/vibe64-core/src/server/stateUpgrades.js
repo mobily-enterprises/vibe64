@@ -54,7 +54,9 @@ import claudeBlockedGoal from "./stateUpgrades/20261017-claude-blocked-goal.js";
 
 import learningSpaceReset from "./stateUpgrades/20261022-learning-space-reset.js";
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset];
+import freeModelRetirement from "./stateUpgrades/20261022-free-model-retirement.js";
+
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -76,7 +78,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, upgradeClaudeRejectedInput, upgradeClaudeCommandMessages, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, resetLearningForLearningSpace, retireColleagueLearningWatches, repairRetiredOperation = false, repairInteractiveContinuity = false,
+async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, upgradeClaudeRejectedInput, upgradeClaudeCommandMessages, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, resetLearningForLearningSpace, retireColleagueLearningWatches, retireFreeModelRouting, retireColleagueFreeModel, repairRetiredOperation = false, repairInteractiveContinuity = false,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -128,6 +130,8 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
       upgradeColleagueHistoricalInteractiveContinuity,
       resetLearningForLearningSpace,
       retireColleagueLearningWatches,
+      retireFreeModelRouting,
+      retireColleagueFreeModel,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {

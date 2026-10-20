@@ -20,7 +20,6 @@
     { "engineId": "claude", "modelProviderId": "deepseek", "modelId": "deepseek-flash", "scores": { "senior": 4, "junior": 4, "helper": 4, "router": 4 } },
     { "engineId": "claude", "modelProviderId": "zai-coding-plan", "modelId": "glm-5.3", "scores": { "senior": 3, "junior": 3, "helper": 3, "router": 3 } },
     { "engineId": "claude", "modelProviderId": "zai", "modelId": "glm-5.3", "scores": { "senior": 3, "junior": 3, "helper": 3, "router": 3 } },
-    { "engineId": "opencode", "modelProviderId": "opencode", "modelId": "big-pickle", "scores": { "senior": 1, "junior": 1, "helper": 1, "router": 1 } },
     { "engineId": "opencode", "modelProviderId": "deepseek", "modelId": "deepseek-flash", "scores": { "senior": 4, "junior": 4, "helper": 4, "router": 4 } },
     { "engineId": "opencode", "modelProviderId": "anthropic", "modelId": "claude-haiku-4-5", "scores": { "senior": 8, "junior": 8, "helper": 10, "router": 10 } },
     { "engineId": "opencode", "modelProviderId": "zai", "modelId": "glm-4.7-flash", "scores": { "senior": 3, "junior": 3, "helper": 3, "router": 3 } },

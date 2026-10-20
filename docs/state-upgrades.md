@@ -1360,6 +1360,34 @@ skipped learning-space project, kept teacher notes, a deleted namespace on
 either host, refusals and a fresh install),
 `stateUpgrades.unit.test.js` and `colleagueConversationUpgrade.unit.test.js`.
 
+## Free model retirement (`20261022-free-model-retirement`)
+
+Vibe64 no longer offers OpenCode Zen's free Big Pickle model, so saved choices
+that name it (`engineId` `opencode`, `modelProviderId` `opencode`, `modelId`
+`big-pickle`) are retired by this numbered upgrade rather than by read-time
+repair. It runs after the learning-space reset and has two owners, each with its
+own backup root under `upgrades/backups/20261022-free-model-retirement/`:
+
+- Accounts (`retireFreeModelRouting`) deletes every Senior, Junior, Helper,
+  Router and Shared backup role in `ai-connections/routing.json` that names the
+  model, sets a Helper routing review's `proposed` to `null` when it names it,
+  drops an orchestrator left with no roles, and increments `revision`. An
+  explicitly disabled role (`null`) stays disabled. Unset roles are recommended
+  again from connected AI on next use, as on first use.
+- Colleague (`retireColleagueFreeModel`) keeps a `colleague/<owner>/conversation.json`
+  chat whose `assistantSelection` names the model as a previous conversation,
+  exactly as Start fresh keeps it (an unfinished turn becomes `interrupted`),
+  and starts a new chat with no model; the next send chooses a connected AI or
+  asks the person to set one up. Watches, assignments and history are kept.
+
+Both use the backed-up publisher; check is read-only and reports, as INFO, state
+that earlier pending upgrades will prepare first. Session-level overrides that
+name the model are not rewritten: such a session reports that its connection is
+no longer recognised until another model is chosen. The historical routing V2
+upgrade still interprets older state with the included row it was written for.
+Focused evidence: `freeModelRetirementUpgrade.unit.test.js`,
+`colleagueConversationUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+
 ## Training learner notes (no upgrade)
 
 Learner notes add, per learner under

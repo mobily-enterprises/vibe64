@@ -191,6 +191,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   if (!existing) return [];
   const connections = await createAiConnectionStore({ filePath: connectionsPath,
     verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); } }).listConnections()
+    .then(historicalOpenCodeConnections)
     .then((rows) => rows.map((connection) => ({ ...connection,
       economyModelId: connectionState?.connections[connection.id]?.economyModelId || connection.defaultModelId,
       helperModelId: connectionState?.connections[connection.id]?.helperModelId || "" })));
@@ -203,6 +204,22 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
     if (JSON.stringify(next) !== JSON.stringify(connectionState)) retired.unshift({ filePath: connectionsPath, original: connectionsSource, contents: json(next) });
   }
   return { updates, retired, configuration };
+}
+
+// At this upgrade's release the store always supplied OpenCode Zen's free Big
+// Pickle: an included row without a key, and the recommended model of a keyed
+// Zen row. The store no longer offers it, so restate that original inventory.
+function historicalOpenCodeConnections(saved) {
+  const rows = saved.map((row) => ({ ...row, builtIn: false }));
+  const included = { configurable: false, enabledModelIds: ["big-pickle"], mode: "recommended", recommendedModelId: "big-pickle" };
+  const keyed = rows.find(({ id }) => id === "opencode");
+  if (!keyed) {
+    return [...rows, { id: "opencode", modelProviderId: "opencode", builtIn: true, connected: true, defaultModelId: "big-pickle",
+      ownerOnly: false, preferred: false, modelAccess: included }];
+  }
+  return rows.map((row) => row !== keyed ? row : { ...row,
+    modelAccess: row.modelAccess && { ...row.modelAccess, recommendedModelId: "big-pickle",
+      enabledModelIds: ["big-pickle", ...(row.modelAccess.mode === "verified" ? row.modelAccess.enabledModelIds.slice(1) : [])] } });
 }
 
 async function upgradeAssistantRouting(context) {

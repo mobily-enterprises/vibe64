@@ -8,9 +8,10 @@ import {
 } from "./assistantProviderPolicy.js";
 
 const AI_CONNECTION_STORE_VERSION = 5;
-const BUILT_IN_OPENCODE_API_KEY = "public";
-const BUILT_IN_OPENCODE_MODEL_ID = "big-pickle";
-const BUILT_IN_OPENCODE_PROVIDER_ID = "opencode";
+// Vibe64 offers no account-free model. Zen is an ordinary keyed provider, and
+// its free Big Pickle model is never offered, recommended or checked.
+const OPENCODE_ZEN_PROVIDER_ID = "opencode";
+const RETIRED_ZEN_MODEL_ID = "big-pickle";
 const ZEN_MODEL_CHECK_DELAY_MS = 2_000;
 const ZEN_MODEL_ACCESS_MODES = new Set(["all", "recommended", "verified"]);
 const ZEN_MODEL_CHECK_STATUSES = new Set([
@@ -193,7 +194,7 @@ function normalizedState(value = null) {
       productLabel: text(candidate.productLabel) || policy?.productLabel || text(candidate.label) || id,
       providerRevision: text(candidate.providerRevision),
       updatedAt: text(candidate.updatedAt),
-      ...(id === BUILT_IN_OPENCODE_PROVIDER_ID
+      ...(id === OPENCODE_ZEN_PROVIDER_ID
         ? {
             zenEnabledModelIds: modelIds(candidate.zenEnabledModelIds),
             zenModelAccessMode: ZEN_MODEL_ACCESS_MODES.has(text(candidate.zenModelAccessMode))
@@ -209,7 +210,7 @@ function normalizedState(value = null) {
     ? requestedPreferredProviderId
     : Object.hasOwn(connections, ZAI_PROVIDER_ID)
       ? ZAI_PROVIDER_ID
-      : BUILT_IN_OPENCODE_PROVIDER_ID;
+      : "";
   return {
     connections,
     preferredProviderId,
@@ -221,17 +222,7 @@ function normalizedState(value = null) {
 function connectionModelAccess(connection = {}, id = "", {
   activeZenCheck = false
 } = {}) {
-  if (connection.builtIn === true) {
-    return {
-      configurable: false,
-      enabledModelIds: [BUILT_IN_OPENCODE_MODEL_ID],
-      label: "Big Pickle included",
-      mode: "recommended",
-      recommendedModelId: BUILT_IN_OPENCODE_MODEL_ID,
-      warning: "Add an OpenCode Zen API key to use additional Zen models."
-    };
-  }
-  if (id === BUILT_IN_OPENCODE_PROVIDER_ID) {
+  if (id === OPENCODE_ZEN_PROVIDER_ID) {
     const mode = ZEN_MODEL_ACCESS_MODES.has(text(connection.zenModelAccessMode))
       ? text(connection.zenModelAccessMode)
       : "recommended";
@@ -250,13 +241,13 @@ function connectionModelAccess(connection = {}, id = "", {
         : modelCheck,
       configurable: true,
       enabledModelIds: modelIds([
-        BUILT_IN_OPENCODE_MODEL_ID,
+        connectionPolicy(connection, id)?.defaultModelId,
         ...(mode === "verified" ? connection.zenEnabledModelIds : [])
       ]),
       label: "Zen model access",
       managementOnly: true,
       mode,
-      recommendedModelId: BUILT_IN_OPENCODE_MODEL_ID,
+      recommendedModelId: connectionPolicy(connection, id)?.defaultModelId || "",
       warning: "Checking models sends one tiny request to each current Zen model and may use API credit."
     };
   }
@@ -266,19 +257,17 @@ function connectionModelAccess(connection = {}, id = "", {
 function publicConnection(connection = {}, id = "", options = {}) {
   const key = String(connection.apiKey || "");
   const route = connectionPolicy(connection, id);
-  const builtIn = connection.builtIn === true;
   const modelAccess = connectionModelAccess(connection, id, options);
   return {
     accessLabel: route?.accessLabel || "Personal use",
     billingLabel: route?.billingLabel || "Billing endpoint not selected",
     canonicalUrl: "",
-    builtIn,
     connected: Boolean(route),
     defaultModelId: route?.defaultModelId || "",
     endpointCode: text(connection.endpointCode),
     fingerprint: text(connection.fingerprint),
     id,
-    keyHint: builtIn ? "Included" : key.length > 4 ? `••••${key.slice(-4)}` : "••••",
+    keyHint: key.length > 4 ? `••••${key.slice(-4)}` : "••••",
     label: text(connection.label) || id,
     managementUrl: route?.managementUrl || "",
     modelProviderId: id,
@@ -287,49 +276,14 @@ function publicConnection(connection = {}, id = "", options = {}) {
     preferred: connection.preferred === true,
     productLabel: route?.productLabel || "Unconfirmed provider route",
     providerRevision: text(connection.providerRevision),
-    removable: !builtIn,
+    removable: true,
     updatedAt: text(connection.updatedAt)
-  };
-}
-
-function builtInOpenCodeConnection({ preferred = false } = {}) {
-  const route = assistantProviderPolicy({
-    defaultModelId: BUILT_IN_OPENCODE_MODEL_ID,
-    id: BUILT_IN_OPENCODE_PROVIDER_ID,
-    label: "OpenCode Zen"
-  });
-  return {
-    apiKey: BUILT_IN_OPENCODE_API_KEY,
-    billingLabel: route.billingLabel,
-    builtIn: true,
-    defaultModelId: BUILT_IN_OPENCODE_MODEL_ID,
-    endpointCode: route.endpointCode,
-    fingerprint: connectionFingerprint(
-      BUILT_IN_OPENCODE_PROVIDER_ID,
-      BUILT_IN_OPENCODE_API_KEY
-    ),
-    label: "OpenCode Zen",
-    managementUrl: route.managementUrl,
-    ownerOnly: route.ownerOnly,
-    preferred,
-    productLabel: route.productLabel,
-    providerRevision: ""
   };
 }
 
 function stateConnection(state = {}, id = "") {
   const stored = state.connections?.[id] || null;
-  if (stored) {
-    return {
-      ...stored,
-      preferred: state.preferredProviderId === id
-    };
-  }
-  return id === BUILT_IN_OPENCODE_PROVIDER_ID
-    ? builtInOpenCodeConnection({
-        preferred: state.preferredProviderId === BUILT_IN_OPENCODE_PROVIDER_ID
-      })
-    : null;
+  return stored ? { ...stored, preferred: state.preferredProviderId === id } : null;
 }
 
 function connectionVerificationError(code, message, statusCode, fieldErrors = null) {
@@ -483,7 +437,7 @@ function createAiConnectionStore({
   async function mutateZenModelCheck(job, operation) {
     return mutate(async () => {
       const state = await readState();
-      const connection = state.connections[BUILT_IN_OPENCODE_PROVIDER_ID];
+      const connection = state.connections[OPENCODE_ZEN_PROVIDER_ID];
       if (
         !connection ||
         connection.fingerprint !== job.fingerprint ||
@@ -510,20 +464,18 @@ function createAiConnectionStore({
       connection.zenModelCheck.message = text(message).slice(0, 320);
       connection.zenModelCheck.status = status;
     });
-    if (zenModelChecks.get(BUILT_IN_OPENCODE_PROVIDER_ID) === job) {
-      zenModelChecks.delete(BUILT_IN_OPENCODE_PROVIDER_ID);
+    if (zenModelChecks.get(OPENCODE_ZEN_PROVIDER_ID) === job) {
+      zenModelChecks.delete(OPENCODE_ZEN_PROVIDER_ID);
     }
   }
 
   async function runZenModelCheck(job) {
     try {
       const currentModelIds = modelIds(await readModelIds());
+      const recommended = connectionPolicy({}, OPENCODE_ZEN_PROVIDER_ID)?.defaultModelId;
       const candidates = currentModelIds
-        .filter((id) => id !== BUILT_IN_OPENCODE_MODEL_ID)
+        .filter((id) => id !== RETIRED_ZEN_MODEL_ID && id !== recommended)
         .sort((left, right) => left.localeCompare(right));
-      if (!currentModelIds.includes(BUILT_IN_OPENCODE_MODEL_ID)) {
-        throw new Error("The current Zen catalogue did not include Big Pickle.");
-      }
       const started = await mutateZenModelCheck(job, (connection) => {
         connection.zenModelCheck.currentModelId = candidates[0] || "";
         connection.zenModelCheck.status = "running";
@@ -543,7 +495,7 @@ function createAiConnectionStore({
             apiKey: job.apiKey,
             engineId: "opencode",
             modelId,
-            modelProviderId: BUILT_IN_OPENCODE_PROVIDER_ID
+            modelProviderId: OPENCODE_ZEN_PROVIDER_ID
           });
           available = result?.ok === true;
           retryable = !available;
@@ -593,11 +545,7 @@ function createAiConnectionStore({
     filePath: targetPath,
     async listConnections() {
       const state = await readState();
-      const ids = new Set([
-        BUILT_IN_OPENCODE_PROVIDER_ID,
-        ...Object.keys(state.connections)
-      ]);
-      return [...ids]
+      return Object.keys(state.connections)
         .map((id) => publicConnection(stateConnection(state, id), id, {
           activeZenCheck: zenModelChecks.has(id)
         }))
@@ -635,12 +583,7 @@ function createAiConnectionStore({
         const state = await readState();
         const previous = state.connections[id] || null;
         if (!previous) {
-          return {
-            connected: id === BUILT_IN_OPENCODE_PROVIDER_ID,
-            id,
-            ok: true,
-            removed: false
-          };
+          return { id, ok: true, removed: false };
         }
         const zenModelCheck = zenModelChecks.get(id);
         if (zenModelCheck) {
@@ -649,16 +592,13 @@ function createAiConnectionStore({
         }
         delete state.connections[id];
         if (state.preferredProviderId === id) {
-          state.preferredProviderId = BUILT_IN_OPENCODE_PROVIDER_ID;
+          state.preferredProviderId = "";
         }
         state.updatedAt = new Date().toISOString();
-        const reverted = id === BUILT_IN_OPENCODE_PROVIDER_ID;
-        const change = { modelProviderId: id, reason: reverted ? "reverted" : "removed" };
+        const change = { modelProviderId: id, reason: "removed" };
         await withConnectionChange(change, () => writeState(state));
         await onConnectionChanged(change);
-        return reverted
-          ? { connected: true, id, ok: true, removed: true, reverted: true }
-          : { id, ok: true, removed: true };
+        return { id, ok: true, removed: true };
       });
     },
     async resolveConnection(value = "") {
@@ -691,14 +631,12 @@ function createAiConnectionStore({
       const id = providerId(input.modelProviderId || input.providerId || input.id);
       const key = apiKey(input.apiKey);
       const revision = providerRevision(input.providerRevision);
-      if (id === BUILT_IN_OPENCODE_PROVIDER_ID && key === BUILT_IN_OPENCODE_API_KEY) {
+      if (id === OPENCODE_ZEN_PROVIDER_ID && key === "public") {
         throw connectionVerificationError(
-          "vibe64_ai_public_key_already_included",
-          "Big Pickle public access is already included. Paste a Zen API key to manage additional Zen models.",
+          "vibe64_ai_public_key_unsupported",
+          "Vibe64 does not use OpenCode Zen's account-free access. Paste your Zen API key.",
           400,
-          {
-            apiKey: "Big Pickle public access is already included. Paste a Zen API key to manage additional Zen models."
-          }
+          { apiKey: "Paste your own OpenCode Zen API key." }
         );
       }
       if (
@@ -741,7 +679,7 @@ function createAiConnectionStore({
           productLabel: route.productLabel,
           providerRevision: revision,
           updatedAt: now,
-          ...(id === BUILT_IN_OPENCODE_PROVIDER_ID
+          ...(id === OPENCODE_ZEN_PROVIDER_ID
             ? {
                 zenEnabledModelIds: sameCredential
                   ? modelIds(previous.zenEnabledModelIds)
@@ -776,7 +714,7 @@ function createAiConnectionStore({
           ? options.unlocked ? "enable-all" : "disable-additional"
           : ""
       );
-      if (![ZAI_PROVIDER_ID, BUILT_IN_OPENCODE_PROVIDER_ID].includes(id)) {
+      if (![ZAI_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID].includes(id)) {
         const error = new Error("This provider does not have configurable model access.");
         error.code = "vibe64_ai_model_access_not_configurable";
         error.statusCode = 400;
@@ -988,9 +926,8 @@ export {
   AI_CONNECTION_PROVIDER_PATTERN,
   AI_CONNECTION_REVISION_PATTERN,
   AI_CONNECTION_STORE_VERSION,
-  BUILT_IN_OPENCODE_API_KEY,
-  BUILT_IN_OPENCODE_MODEL_ID,
-  BUILT_IN_OPENCODE_PROVIDER_ID,
+  OPENCODE_ZEN_PROVIDER_ID,
+  RETIRED_ZEN_MODEL_ID,
   connectionFingerprint,
   createAiConnectionStore
 };

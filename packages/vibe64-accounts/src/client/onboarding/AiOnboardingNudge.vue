@@ -13,7 +13,7 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
 <template>
   <aside v-if="aiOnboardingNeeded && !dismissed" class="aio-nudge" aria-label="Set up your AI">
     <svg class="aio-nudge__crown" viewBox="0 0 24 24" aria-hidden="true"><path :d="mdiCrown" /></svg>
-    <p class="aio-nudge__text">Colleague is on a free starter model. Connect Claude for a much smarter Vibe64.</p>
+    <p class="aio-nudge__text">Vibe64 has no AI yet. Connect Claude for the best experience, or start free with GLM-4.7.</p>
     <div class="aio-nudge__actions">
       <v-btn variant="text" color="primary" @click="requestVibe64AiOnboarding({ start: 'choose' })">Set up your AI</v-btn>
       <v-btn :icon="mdiClose" variant="text" size="48" aria-label="Dismiss" @click="dismissed = true" />

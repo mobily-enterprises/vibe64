@@ -6,7 +6,7 @@ import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
 import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, retireColleagueLearningWatches } from "@local/vibe64-colleague/server/conversationUpgrade";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, retireColleagueLearningWatches, retireColleagueFreeModel } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
 import { resetLearningForLearningSpace } from "@local/vibe64-training/server/learningSpaceResetUpgrade";
@@ -17,6 +17,7 @@ import { upgradeClaudeCommandMessages } from "@local/vibe64-terminals/server/ass
 import { upgradeClaudeRejectedInput } from "@local/vibe64-terminals/server/assistantClaudeDeliveryUpgrade";
 
 import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/server/providerCredentialsUpgrade";
+import { retireFreeModelRouting } from "@local/vibe64-accounts/server/freeModelRetirementUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -56,6 +57,8 @@ try {
     upgradeLearningPracticeHistory,
     resetLearningForLearningSpace,
     retireColleagueLearningWatches,
+    retireFreeModelRouting,
+    retireColleagueFreeModel,
     upgradePlanProgress,
     upgradeAssistantWorkflow,
     upgradeClaudeRejectedInput,

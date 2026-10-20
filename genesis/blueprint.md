@@ -1087,8 +1087,9 @@ message or stopping the main assistant.
 
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
-Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
-sign-in. Connections are grouped by orchestrator, with each independently configured provider
+Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Vibe64
+includes no AI of its own and never falls back to a free model; the free option
+is GLM-4.7 Flash with a free Z.AI account. Connections are grouped by orchestrator, with each independently configured provider
 listed under its owning orchestrator. Manage opens that exact pair with
 no provider selector. After connecting, optional routing suggestions and the
 Configure routing button stay with the orchestrator selected for setup, even
@@ -1108,7 +1109,8 @@ AI onboarding makes connecting a frontier model the first thing a new person
 does. It is one shared full-screen flow, used unchanged by the local and hosted
 editors: a short "why intelligence matters" screen, then Claude (crowned,
 recommended), Codex, DeepSeek and GLM, ranked with honest bullets, each
-plan's official name and price first and the suggested budget beneath, then
+plan's official name and price first and the suggested budget beneath, with
+the GLM card marking the free option (GLM-4.7 Flash with a free Z.AI account), then
 the existing AI Accounts setup for the chosen provider and, when an existing
 main AI would change, one plain "build with it or keep the current one"
 choice, then a success screen once Colleague has a Senior model, where
@@ -1117,8 +1119,8 @@ Start building opens Colleague. Until AI is set up, a
 gold Set up AI button in the top bar reopens it. Prices, plan names and sign-up links live in one small data module
 so they are easy to correct. The flow opens by itself only for someone who can
 connect AI (the local user, or a hosted workspace owner), only after AI status
-has loaded without error, and only while no AI of their own is connected;
-included Big Pickle does not count. **Set up later** snoozes it for a day in
+has loaded without error, and only while no AI is connected; the free GLM
+option counts as set up, while Redo still recommends Claude. **Set up later** snoozes it for a day in
 that browser, with no server state. **Redo onboarding**, in the local account
 menu beside Account settings, in the hosted account menu, and in AI Accounts, reruns it at any time,
 showing what is connected; it can add a provider or change the main AI through
@@ -1750,7 +1752,8 @@ focus or selection.
 People configure Router and Helper independently in Model routing. Hints,
 commit naming and other bounded helpers capture the actor's effective Helper
 choice, which may use another orchestrator, without retargeting the working chat.
-Included Big Pickle is eligible for Helper and Router as well as ordinary chat.
+Any connected model is eligible for Helper and Router as well as ordinary chat;
+with no connected AI, background helpers do not run.
 Helper is available to background tasks, not as a chat mode. Its model and thinking
 are user-configured; task limits and tool restrictions still apply. Router keeps
 its own model and thinking. Existing Helper choices retain their preferences

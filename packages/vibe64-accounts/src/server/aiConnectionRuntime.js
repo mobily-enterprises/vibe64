@@ -18,7 +18,7 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
       const [invalidation] = await Promise.all([
-        ["created", "replaced", "removed", "reverted"].includes(change.reason)
+        ["created", "replaced", "removed"].includes(change.reason)
           ? Promise.resolve(null)
           : terminals.invalidateAgentRuntimes({ ...change, provider: "opencode" }),
         publishConnectionChanged(change.modelProviderId, {

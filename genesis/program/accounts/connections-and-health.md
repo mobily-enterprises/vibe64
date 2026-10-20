@@ -283,7 +283,7 @@ from 1 to 10: Claude occupies 8–10, OpenAI 5–7, DeepSeek 4 and GLM 3. Within
 native providers, Opus/Astra lead Senior, Sonnet/Sol lead Junior and Haiku/Luna
 lead Helper/Router. Unlisted models use their provider's lowest tier, so versioned
 native names retain that priority; unknown providers use the JSON default 2,
-with included Pickle ranked last at 1. Shared Backup uses Helper scores after
+and OpenCode Zen's free Big Pickle has no score because it is never offered. Shared Backup uses Helper scores after
 excluding personal or unavailable connections. Score ties prefer
 the orchestrator being configured, then saved eligible choices; exact route
 ordering makes remaining ties stable. Recommendations never change saved
@@ -354,8 +354,9 @@ orchestrator groups are omitted. A curated key verified for both native
 orchestrators has a separate row in each group. Manage opens that exact
 orchestrator/provider pair. Configured engine membership remains visible during
 a failed credential transition so reconnection opens the correct form. A
-Claude-only key remains absent from Codex's group and usable catalogue. Included
-Big Pickle retains its Default badge under OpenCode. Add connection lists only
+Claude-only key remains absent from Codex's group and usable catalogue. Vibe64
+includes no AI: OpenCode Zen appears only with the person's own Zen key, as an
+ordinary removable connection. Add connection lists only
 orchestrators with missing provider connections, then their unconfigured
 providers. Manage has no provider selector. Native expired/reconnecting
 accounts and configured external pairs remain in Manage. OpenCode availability
@@ -372,27 +373,30 @@ embedded mode; it has no connection implementation of its own.
 plan's official name and price with the product's budget advice beneath it,
 the monogram shape, sign-up URLs, the orchestrator and provider id each card connects
 through, and which saved connections count as that provider. DeepSeek and GLM
-connect as curated Codex providers (`deepseek`, `zai-coding-plan`).
+connect as curated Codex providers (`deepseek`, `zai-coding-plan`). The GLM card
+also carries the one free option (`free`): GLM-4.7 Flash with a free Z.AI
+account, free on Z.AI's regular API. It connects through OpenCode (`zai`) as a
+card of its own, shown inside the GLM card, with `AiOnboardingKeyConnect`: the
+same AI connections save route, using the live catalogue's provider revision
+and server-side key verification.
 `AiOnboardingHost` takes the AI connections endpoint, whether the viewer can
 configure AI and an actor key; the local editor mounts it in `src/App.vue` and
 hosts mount it once with their own endpoint and owner check. It opens on
 `requestVibe64AiOnboarding`, and opens by itself at most once per page load
 only when the viewer can configure AI, account status, curated providers and
-OpenCode connections loaded without error, no AI beyond included Big Pickle is
-set up, no dialog is open, the route is not Learning, and Set up later is not
+OpenCode connections loaded without error, no AI is set up, no dialog is open, the route is not Learning, and Set up later is not
 active. Set up later is a 24-hour per-browser snooze,
 `vibe64.aiOnboarding.snoozedUntil:<actorKey>`; there is no server state or state
 upgrade. The mounted host sets `aiOnboardingAvailable`; the local account
 menu's **Redo onboarding** and AI Accounts' **Redo onboarding** (owners only,
 disabled while busy) and **Set up your AI** card appear only then. The card
 uses the host's set-up rule (`aiIsSetUp`): Claude and Codex sign-ins and curated
-keys count only while connected; an added OpenCode connection counts while
-connected, except the regular Z.AI free starter. The local Account settings
+keys count only while connected; an added OpenCode connection, including the
+free GLM-4.7 Flash option, counts while connected. The local Account settings
 dialog closes on a request and names its account button as `returnFocus`, where
 the host returns focus when the flow closes; while AI Accounts is busy it sets
-`aiOnboardingBlocked`, and requests are refused rather than stacked over it. The free Big Pickle/GLM-4.7 Flash
-starter and the regular Z.AI shortcut were removed; regular Z.AI stays
-reachable through Add connection → OpenCode. Success requires the chosen
+`aiOnboardingBlocked`, and requests are refused rather than stacked over it. Regular Z.AI stays
+reachable through Add connection → OpenCode as well. Success requires the chosen
 provider connected and its orchestrator's workflow available. The Colleague
 model bridge, registered by the mounted Colleague, reads and switches
 Colleague's selection through the existing model selection; the exported
@@ -424,10 +428,19 @@ copy keys, change file formats or merge separate installations' account stores.
 The nested development editor preserves native credential context while keeping
 its own runtime state.
 
-The connection store supplies included OpenCode Big Pickle, with no Codex login
-required. Managed OpenCode Helper turns retain native tool definitions while the
+The connection store supplies no account-free model. OpenCode Zen's free Big
+Pickle is never offered: the catalogue omits it even under a Zen key, a keyed
+Zen connection recommends `claude-haiku-4-5`, and its model check skips it.
+Without a connected AI, Colleague, sessions and background helpers (prompt
+hints, titles, Router) find no available routing and report setup instead of
+falling back. The numbered upgrade `20261022-free-model-retirement` unsets
+routing roles that named Big Pickle (`freeModelRetirementUpgrade.js`) and keeps
+a Colleague chat bound to it as a previous conversation
+(`vibe64-colleague/src/server/freeModelUpgrade.js`); the historical routing V2
+upgrade restates the original included row for its frozen interpretation.
+Managed OpenCode Helper turns retain native tool definitions while the
 trusted session registry and execution plugin deny tool execution in restricted
-non-project workloads. Routing therefore admits available Big Pickle for Router
+non-project workloads. Routing admits any available connected model for Router
 and Helper as well as Senior, Junior and shared Backup. Catalogue availability,
 account access and the actual execution profile remain authoritative; accepting a
 routing assignment does not grant a Helper coding access.
@@ -656,8 +669,8 @@ exposing stale Zen models. This live Zen result shares the existing short-lived
 catalogue cache; it is loaded only by explicit full-catalogue operations, never
 by opening or creating a session or sending its first message.
 
-The host may contribute redacted connection metadata that marks a connection
-as built in, identifies the preferred new-session provider, and restricts it to
+The host may contribute redacted connection metadata that identifies the
+preferred new-session provider, and restricts a connection to
 one recommended model or a finite enabled-model allowlist. The sanitized
 catalogue retains other live model records with a locked status and
 host-supplied explanation, while selection resolution and the session selector
@@ -670,9 +683,9 @@ bypass a later restriction.
 
 Zen's rotating model roster never makes its saved connection stale. Provider
 revision checks still protect connection setup and other provider definitions,
-while current Zen ids independently control which models are presented. The
-host's recommended Big Pickle entry therefore remains connected and available
-when paid models rotate or a prior session selection is no longer enabled.
+while current Zen ids independently control which models are presented. A keyed
+Zen connection's recommended model therefore remains connected and available
+when other models rotate or a prior session selection is no longer enabled.
 
 The short-lived private-credential-free catalogue snapshot is independent of
 credential-bearing assistant runtimes. Replacing or removing a connection

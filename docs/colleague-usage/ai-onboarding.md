@@ -2,14 +2,16 @@
 
 Vibe64 works best with a frontier model. AI onboarding is a short full-screen
 flow that explains why and helps you connect one: Claude (recommended), Codex,
-DeepSeek or GLM. It uses the same sign-in, key and Model routing steps as
-**AI Accounts**; it never disconnects anything.
+DeepSeek or GLM, or the free option, GLM-4.7 Flash with a free Z.AI account.
+It uses the same sign-in, key and Model routing steps as **AI Accounts**; it
+never disconnects anything. Vibe64 includes no AI of its own: without a
+connected AI, Colleague, sessions and background helpers (prompt hints, titles)
+do not run, and Colleague shows **Set up your AI**.
 
 ## When it appears
 
-- When the editor opens and no AI of your own is connected (a Claude or Codex
-  sign-in, a DeepSeek or GLM key, or an OpenCode key). The included Big Pickle
-  does not count.
+- When the editor opens and no AI is connected (a Claude or Codex sign-in, a
+  DeepSeek or GLM key, including the free Z.AI key, or another OpenCode key).
 - It opens by itself at most once per page load, and not when AI status could
   not load, another dialog is open, you are in Learning, or you chose
   **Set up later** in this browser within the last 24 hours.
@@ -19,7 +21,7 @@ DeepSeek or GLM. It uses the same sign-in, key and Model routing steps as
 Open it again at any time from the account menu: select the account button at
 the top right (**Account menu**), then **Redo onboarding**. The same menu holds
 **Account settings**. **Redo onboarding** is also at the top of **Account
-settings → AI Accounts**. While no AI of your own is connected (an expired
+settings → AI Accounts**. While no AI is connected (an expired
 sign-in or key that needs reconnecting does not count), AI Accounts also shows
 **Give Vibe64 a brilliant mind** with **Set up your AI**, Colleague shows a
 small crowned **Set up your AI** note, and the top bar shows a gold crowned
@@ -60,7 +62,10 @@ beneath:
    gives a far better experience for about the same.
 4. **GLM** (Z.ai): a budget subscription. **GLM Coding Plan, from $18/month**;
    budget about $30/month for daily coding. It works, but there is no point in
-   getting it if you can get Claude for the same price.
+   getting it if you can get Claude for the same price. Below the plan the card
+   shows **Free option: GLM-4.7 with a free Z.AI account**: Z.AI's regular API
+   serves GLM-4.7 Flash free of charge (no plan or credit). It is good for
+   trying Vibe64; expect slower, simpler work than the paid plans.
 
 Prices are set by each provider and can change. You pay the provider directly;
 Vibe64 never resells AI.
@@ -69,7 +74,11 @@ Each card offers **Get [provider]**, which opens the provider's site in a new
 tab and moves to Connect, and **Already subscribed? Connect** (Claude, Codex) or
 **Already have a key? Connect** (DeepSeek, GLM), which goes straight to Connect.
 The **Get** button's weight follows the rank: filled for Claude, tonal for
-Codex, outlined for DeepSeek and GLM.
+Codex, outlined for DeepSeek and GLM. The GLM card's free option has its own
+**Start free** (opens Z.AI's API Keys page in a new tab and moves to Connect)
+and **Already have a key? Connect**. Once the free key is connected the line
+reads **Connected.**, and during a redo it offers **Use the free option as my
+main AI**.
 
 ## Screen 3: connect
 
@@ -87,13 +96,17 @@ normal AI Accounts setup directly:
 - **DeepSeek**: **Paste your DeepSeek API key**, then **Check and connect**.
 - **GLM**: **Paste your Z.ai Coding Plan key** (create it on Z.ai under Personal
   Coding Plan → Plan Overview), then **Check and connect**.
+- **GLM-4.7 Flash (free)**: **Paste your Z.AI API key** (Z.AI's API Keys page),
+  then **Connect**. Vibe64 checks it with one tiny free GLM-4.7 Flash request
+  before saving it. This key is a regular Z.AI API key, not a Coding Plan key.
 
 If the sign-in tool itself cannot run on this machine, a warning says **[Claude
 or ChatGPT] sign-in isn't available here yet** with **Try again**, **Choose
 another AI** and the technical output under **Details**; the sign-in button
 stays disabled until it can run.
 
-DeepSeek and GLM connect through Codex. Use **Back** (above the header on a
+DeepSeek and the GLM Coding Plan connect through Codex; the free GLM-4.7 Flash
+option connects through OpenCode and serves the whole workspace. Use **Back** (above the header on a
 desktop, the arrow at the top left on a phone) to return to the provider list.
 Keys are stored privately outside your projects and never shown again.
 

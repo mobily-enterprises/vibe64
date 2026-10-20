@@ -215,7 +215,6 @@ function normalizedModelProvider(value = {}) {
   }
   return Object.freeze({
     apiKeyCompatible: input.apiKeyCompatible === true,
-    builtIn: input.builtIn === true,
     connected: input.connected === true,
     connectionMessage: text(input.connectionMessage),
     connectionStatus: text(input.connectionStatus) || (input.connected === true ? "connected" : "disconnected"),
