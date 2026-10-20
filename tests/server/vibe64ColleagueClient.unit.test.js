@@ -2960,6 +2960,7 @@ test("the local Colleague host reports the shared Learning state and opens its e
   host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
   host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   host.provide(hostKeys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: "demo", projectVisible: true, showProject() {} }));
   host.mount({}); t.after(() => host.unmount());
   await flush();
   assert.equal(received.focus.learningOpen, false);
@@ -2971,6 +2972,10 @@ test("the local Colleague host reports the shared Learning state and opens its e
     [true, "lesson", attemptId, "two"]);
   const minimised = await navigation.value({ id: "minimise", status: "pending", learning: { open: false } });
   assert.equal(minimised.learningOpen, false);
+  // Outside Learning mode the held lesson is the Learning environment's, so a
+  // retired Learning-mode exit still settles while it is reported.
+  const left = await navigation.value({ id: "leave", status: "pending", projectSlug: "demo", learningMode: false });
+  assert.deepEqual([left.learningMode, left.pane, left.learningAttemptId], [false, "preview", attemptId]);
 });
 
 test("the local Colleague host refuses a Learning command when no Learning controller is provided", async t => {

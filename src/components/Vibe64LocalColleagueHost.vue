@@ -147,7 +147,8 @@ function focusMatches(command, value) {
     if (command.learningMode && (value.learningView !== command.learningView ||
         command.learningContent && value.learningContent !== command.learningContent ||
         command.learningAttemptId && value.learningAttemptId !== command.learningAttemptId)) return false;
-    if (!command.learningMode && (value.learningView || value.learningContent || value.learningAttemptId)) return false;
+    // Outside Learning mode learningAttemptId is the Learning environment's lesson.
+    if (!command.learningMode && (value.learningView || value.learningContent)) return false;
   }
   if (command.projectSlug && command.learningContent !== "picker" && value.projectSlug !== command.projectSlug) return false;
   if (command.sessionId && value.sessionId !== command.sessionId) return false;

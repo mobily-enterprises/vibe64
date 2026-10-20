@@ -15,8 +15,10 @@ function requireResult(result) {
   return result;
 }
 
+// Learning-mode watches match only Learning-mode focus (it always reports
+// learningView); the Learning environment's learningAttemptId is not a task.
 function learningFocusMatches(watch, focus) {
-  return focus?.learningAttemptId === watch.learningTask?.attemptId &&
+  return Boolean(focus?.learningView) && focus.learningAttemptId === watch.learningTask?.attemptId &&
     (focus.projectSlug || "") === (watch.projectSlug || "") && focus.sessionId === watch.sessionId;
 }
 

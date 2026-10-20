@@ -20,6 +20,8 @@ import { createTrainingAssessmentActions } from "../../packages/vibe64-training/
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
+import { createTrainingPresentationCoordination } from "../../packages/vibe64-training/src/server/presentationCoordination.js";
+import { learningFocusMatches as learningWatchFocusMatches } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
@@ -2422,9 +2424,32 @@ test("Learning navigation retains exact mode, pane and attempt until its initiat
     pane: "preview", learningMode: false };
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
     ok: true, focus: { ...workingFocus, learningView: "workspace" } }, f.context)).ok, false);
+  // Learning v2: outside Learning mode, the Learning environment (L) still
+  // reports its current lesson; leaving Learning mode must not wait for it.
+  const heldFocus = { ...workingFocus, learningOpen: false,
+    learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", learningStepId: "one" };
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id,
-    ok: true, focus: workingFocus }, f.context)).ok, true);
-  assert.deepEqual(await leave, { ok: true, focus: workingFocus });
+    ok: true, focus: heldFocus }, f.context)).ok, true);
+  assert.deepEqual(await leave, { ok: true, focus: heldFocus });
+});
+
+test("leaving Learning mode is confirmed while the Learning environment holds a lesson, and its attempt is never a Learning-mode watch", async () => {
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const held = { projectSlug: "alpha", sessionId: "", conversationId: "", pane: "preview", learningMode: false,
+    learningOpen: false, learningAttemptId: attemptId, learningStepId: "one" };
+  for (const create of [createColleagueNavigationCoordination, createTrainingPresentationCoordination]) {
+    const coordination = create({ changed() {} });
+    const connection = {};
+    const leaving = coordination.begin(connection, { id: "leave", status: "pending", projectSlug: "alpha", learningMode: false },
+      { generation: 0 });
+    assert.equal(coordination.acknowledge(connection, { commandId: "leave", ok: true,
+      focus: { ...held, learningView: "workspace" } }, { generation: 0 }).ok, false, create.name);
+    coordination.acknowledge(connection, { commandId: "leave", ok: true, focus: held }, { generation: 0 });
+    assert.deepEqual(await leaving, { ok: true, focus: held }, create.name);
+  }
+  const watch = { projectSlug: "alpha", sessionId: "", learningTask: { attemptId } };
+  assert.equal(learningWatchFocusMatches(watch, held), false, "the Learning environment's lesson is not a Learning-mode task");
+  assert.equal(learningWatchFocusMatches(watch, { ...held, learningMode: true, learningView: "workspace" }), true);
 });
 
 // Learning v2 (C4): navigation coordination moved from vibe64-training's
@@ -2586,6 +2611,13 @@ test("moved navigation coordination fails an unacknowledged command after its or
 test("Colleague teaches through lessons, navigation, guides and checks, and never judges or reveals answers", () => {
   assert.match(colleagueInstructions, /lesson\.read/u);
   assert.match(colleagueInstructions, /navigation\.open guide/u);
+  assert.match(colleagueInstructions, /navigation\.open-learning/u);
+  // Every navigation action the teacher text names is a real Colleague action.
+  const actionIds = new Set(createColleagueActions({}).map(action => action.id));
+  for (const [name] of colleagueInstructions.matchAll(/navigation\.[a-z-]+/gu)) {
+    assert.ok(actionIds.has(`vibe64.colleague.${name}`), name);
+  }
+  assert.doesNotMatch(colleagueInstructions, /navigation\.open learning/u, "Learning opens through navigation.open-learning");
   assert.match(colleagueInstructions, /step\.check\.run/u);
   assert.match(colleagueInstructions, /You never judge/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);

@@ -7,7 +7,9 @@ function publicCue(cue) {
 function learningFocusMatches(command, focus) {
   if (command.learningMode === undefined) return true;
   if (focus?.learningMode !== command.learningMode) return false;
-  if (command.learningMode === false) return !focus.learningView && !focus.learningContent && !focus.learningAttemptId;
+  // Learning mode reports learningView/learningContent; outside it, learningAttemptId
+  // names the Learning environment's current lesson (Learning v2), not Learning mode.
+  if (command.learningMode === false) return !focus.learningView && !focus.learningContent;
   if (focus.learningView !== command.learningView ||
       command.learningContent && focus.learningContent !== command.learningContent ||
       command.learningAttemptId && focus.learningAttemptId !== command.learningAttemptId) return false;
