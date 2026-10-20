@@ -63,7 +63,7 @@ function normalizeLesson(result) {
     visuals: Array.isArray(lesson.visuals) ? lesson.visuals : [],
     steps,
     attempt,
-    practiceProjectSlug: attempt?.practice?.projectSlug || attempt?.practice?.slug || attempt?.practiceProjectSlug || "",
+    practiceProjectSlug: attempt?.practiceSlug || attempt?.practice?.projectSlug || attempt?.practice?.slug || attempt?.practiceProjectSlug || "",
     reader: result.reader && text(result.reader.stepId) ? result.reader : null,
     results: Array.isArray(result.results) ? result.results : Array.isArray(lesson.results) ? lesson.results : []
   });
@@ -140,13 +140,29 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (place) Object.assign(state, place);
   }
 
+  // lesson.read pages step text over 64 KiB; the reader shows every step, so
+  // the other pages' bodies are merged into the first page's steps.
+  async function readAllPages(attemptId) {
+    const first = await request(VIBE64_LEARNING_ROUTES.lessonRead(attemptId), { method: "GET" });
+    const count = Number.isSafeInteger(first?.page?.count) ? Math.min(first.page.count, 32) : 1;
+    const steps = Array.isArray(first?.lesson?.steps) ? first.lesson.steps : null;
+    if (count <= 1 || !steps) return first;
+    const bodies = new Map();
+    for (let index = 1; index < count; index++) {
+      const page = await request(`${VIBE64_LEARNING_ROUTES.lessonRead(attemptId)}?page=${index}`, { method: "GET" });
+      for (const step of page?.lesson?.steps || []) if (typeof step?.bodyText === "string") bodies.set(step.id, step.bodyText);
+    }
+    return { ...first, lesson: { ...first.lesson,
+      steps: steps.map(step => typeof step?.bodyText === "string" || !bodies.has(step?.id) ? step : { ...step, bodyText: bodies.get(step.id) }) } };
+  }
+
   async function loadLesson(attemptId = state.attemptId) {
     if (!attemptId || !state.actorKey) return null;
     const expected = ++reads;
     state.loading = true;
     state.error = "";
     try {
-      const result = await request(VIBE64_LEARNING_ROUTES.lessonRead(attemptId), { method: "GET" });
+      const result = await readAllPages(attemptId);
       if (expected !== reads || attemptId !== state.attemptId) return null;
       const value = normalizeLesson(result);
       if (!value) throw new Error(result?.error || "This lesson could not be read. Refresh and try again.");

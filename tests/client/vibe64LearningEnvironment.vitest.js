@@ -15,7 +15,8 @@ const ATTEMPT = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const lessonResult = (overrides = {}) => ({
   ok: true, available: true,
-  attempt: { attemptId: ATTEMPT, ended: false, practice: { projectSlug: "practice-one" } },
+  // C3 lesson.read attempt summary: practiceSlug names the practice project.
+  attempt: { attemptId: ATTEMPT, ended: false, practiceSlug: "practice-one" },
   lesson: { schemaVersion: 2, code: "V64-START-01", title: "Orientation", notesText: "Notes.",
     steps: [
       { id: "read", title: "Read", bodyText: "# Hello", required: false, check: { kind: "none" } },
@@ -62,6 +63,19 @@ describe("useVibe64Learning controller", () => {
     expect(focus).toEqual({ learningOpen: true, learningSurface: "lesson", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
     expect(learning.lesson.value.practiceProjectSlug).toBe("practice-one");
     expect(learning.lesson.value.steps.every(step => !Object.hasOwn(step.check || {}, "answer"))).toBe(true);
+  });
+
+  it("reads every page of a lesson whose step text lesson.read paged", async () => {
+    const first = lessonResult({ page: { index: 0, count: 2 } });
+    delete first.lesson.steps[3].bodyText;
+    const { learning, calls } = controller({ reads: url => url.endsWith("?page=1")
+      ? lessonResult({ page: { index: 1, count: 2 }, lesson: { schemaVersion: 2, code: "V64-START-01", steps: [{ id: "tick", bodyText: "Long text." }] } })
+      : first });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    expect(calls.map(call => call.url)).toEqual([VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT), `${VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT)}?page=1`]);
+    expect(learning.lesson.value.steps.find(step => step.id === "tick").bodyText).toBe("Long text.");
+    expect(learning.lesson.value.steps.find(step => step.id === "read").bodyText).toBe("# Hello");
   });
 
   it("minimise keeps the place, close returns to the app and reopening restores the exact step", async () => {

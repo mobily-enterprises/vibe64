@@ -163,7 +163,7 @@ test("Teach me from the Learning environment opens Colleague and sends its fixed
     requests.push({ url, options });
     if (url.endsWith("/messages")) return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
     return { ok: true, messages: [], status: "ready" };
-  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, null, null, null, learning);
+  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, null, null, null, { learning });
   await flush();
   assert.equal(view.state.open.value, false);
   colleagueRequest.value = Object.freeze({ id: "teach-1", kind: "teach", message: "Teach me this step.", actorKey: "member",
