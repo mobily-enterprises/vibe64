@@ -9,6 +9,7 @@ lifecycle; a host adds only the project resources it owns.
 - Main: `packages/vibe64-project/src/server/projectArchive.js`
 - `packages/vibe64-project/package.json`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
+- `packages/vibe64-core/src/server/learningSpace.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `tests/server/projectArchive.unit.test.js`
 
@@ -66,14 +67,26 @@ unknown kind in a manifest refuses validation.
 
 **Practice projects.** Inside the matching practice scope
 (`projectContext.currentPracticeProjectScope()`), a `training-<hex>` slug resolves
-to its learning-space namespace (`projectContext.learningSpaceRoot`), and the
-archive's source parent is that namespace's parent. After the namespace goes, its
-empty practice directory goes too. Outside its scope a practice slug is refused
-with `vibe64_practice_scope_required` (409) before any marker is written. A
-catalogue project named `training-<hex>` without a practice marker (created
-before the name was reserved) is archived as a normal project. Learning decides
-who may archive or remove a practice project; the archiver only checks the
-structure.
+to its learning-space namespace under `projectContext.learningSpaceRoot`
+(core `learningSpace.js`: `<managedSourceRoot>/.learning` locally,
+`<projectsRoot>/.learning` on Online), and the archive's source parent is that
+namespace's parent. The practice session source root is the namespace itself, so
+the learner's code is in `source.tgz` and goes with the namespace; a scope whose
+session sources lie outside its namespace is refused
+(`vibe64_practice_session_source_outside_namespace`) before any marker. After the
+namespace goes, its empty practice directory goes too. Outside its scope a
+practice slug is refused with `vibe64_practice_scope_required` (409) before any
+marker is written.
+
+A catalogue project named `training-<hex>` without a practice marker (created
+before the name was reserved) is archived, resumed and replayed as a normal
+project. The record decides: a record without `training` is a catalogue project;
+a record with it is refused. Once the record is gone (a completed archive), the
+slug's own `lifecycle.json` under the archive root admits the replay; with
+neither, the slug is refused. Whether the namespace still exists does not
+matter, so an archive interrupted after `source-removed` resumes. Learning
+decides who may archive or remove a practice project and ends its lesson attempt
+first; the archiver only checks the structure.
 
 **Light deletion.** `removeProject` is the archive lifecycle without its archive
 steps, for practice projects only: a catalogue project is refused with
