@@ -90,8 +90,8 @@ why; ask the person who runs this Vibe64 to inspect it.
 When a lesson finishes, its **Lesson finished** screen offers the same choices
 for its practice project: **Archive practice project**, **Delete practice
 project** or **Keep** (it stays in **Practice**). The practice project page
-stays behind Learning while you choose; when you hide Learning it returns to
-your project.
+stays behind Learning while you choose; when you hide Learning it goes to
+`/app` (on a local Vibe64, your project; on hosted Vibe64, Projects).
 
 Colleague can list your practice projects and open one when you ask. It
 archives or deletes a practice project, or deletes an archive, only when you ask
