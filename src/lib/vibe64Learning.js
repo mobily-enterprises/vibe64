@@ -107,8 +107,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   runGuide = null, now = () => Date.now() } = {}) {
   // hiddenBy: "learner" when the learner's own L or Escape hid L
   // (Colleague then returns a phone learner to its conversation), else "".
+  // finished: the lesson surface shows the "Lesson finished" screen.
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "" });
+    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false });
   const lesson = shallowRef(null);
   const colleagueRequest = shallowRef(null);
   // The teacher's notes about this learner, read when L shows them.
@@ -144,6 +145,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // and End this lesson end it), whether L is open or hidden.
   const inLesson = computed(() => Boolean(state.actorKey && state.attemptId && lesson.value?.attempt &&
     !lesson.value.attempt.ended));
+  // Every required step of the read version 2 lesson is passed.
+  const complete = computed(() => Boolean(lesson.value?.schemaVersion === 2 && steps.value.length &&
+    steps.value.filter(step => step.required).every(step => stepStatus(results.value, step.id, lesson.value.passedStepIds) === "passed")));
 
   function remember() {
     if (!state.actorKey) return;
@@ -166,7 +170,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     notes.value = null;
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-      loading: false, error: "", busy: "", hiddenBy: "", actorKey: next });
+      loading: false, error: "", busy: "", hiddenBy: "", finished: false, actorKey: next });
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
     // A restored attempt is read at once, so the app bar shows whether it is still going.
@@ -224,6 +228,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state.open = true;
     state.minimised = false;
     state.hiddenBy = "";
+    state.finished = false;
     if (text(attemptId) && attemptId !== state.attemptId) {
       lesson.value = null;
       state.attemptId = attemptId;
@@ -255,6 +260,27 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // L is the one control that opens and hides Learning; hiding keeps the place.
   function toggle() {
     return state.open ? minimise("learner") : show();
+  }
+
+  // The "Lesson finished" screen of L's attempt, in L's lesson surface: shown
+  // when this learner's own step action completes the lesson, and again from
+  // the reader of a complete lesson. The screen ends the attempt (lesson.end).
+  async function showFinished() {
+    if (!state.attemptId) return null;
+    await show({ surface: "lesson" });
+    state.finished = Boolean(complete.value);
+    return focus.value;
+  }
+
+  // The finished screen's "Read the lesson again" returns to the steps.
+  function closeFinished() {
+    state.finished = false;
+  }
+
+  // A learner's own step result that completes the lesson opens L on its
+  // finished screen (Colleague's step dialog gives way to it).
+  function finishedBy(before, attemptId) {
+    if (!before && complete.value && attemptId === state.attemptId) void showFinished().catch(() => {});
   }
 
   function selectStep(stepId) {
@@ -298,13 +324,17 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const key = JSON.stringify([attemptId, kind, stepId, extra]);
     const requestId = pendingRequestId(key);
     const expected = viewer;
+    const before = complete.value;
     state.busy = `${kind}:${stepId}`;
     state.error = "";
     try {
       const result = await request(route(attemptId), { method: "POST", body: { stepId, ...extra, requestId } });
       if (result?.ok === false) throw new Error(result.error || "The step result was not confirmed. Try again.");
       pending.delete(key);
-      if (expected === viewer && attemptId === state.attemptId) await loadLesson(attemptId);
+      if (expected === viewer && attemptId === state.attemptId) {
+        await loadLesson(attemptId);
+        finishedBy(before, attemptId);
+      }
       return result;
     } catch (cause) {
       if (expected === viewer) state.error = String(cause?.message || "The step result was not confirmed. Try again.");
@@ -348,13 +378,17 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!exerciseCurrent(ticket) || !text(sessionId) || exerciseObservations.has(requestId)) return null;
     exerciseObservations.add(requestId);
     const expected = viewer;
+    const before = complete.value;
     try {
       const result = await request(VIBE64_LEARNING_ROUTES.stepObserve(ticket.attemptId), { method: "POST", body: {
         stepId: ticket.stepId, observation: { control: "exercise-response",
           exercise: { instanceId, interactionId, requestId },
           workspace: { projectSlug: ticket.projectSlug, sessionId, projectVisible: true, pane: "preview", ready: true } } } });
       if (result?.ok === false) throw new Error(result.error || "The App press was not recorded. Press the App's button again.");
-      if (expected === viewer && ticket.attemptId === state.attemptId) await loadLesson(ticket.attemptId);
+      if (expected === viewer && ticket.attemptId === state.attemptId) {
+        await loadLesson(ticket.attemptId);
+        finishedBy(before, ticket.attemptId);
+      }
       return result;
     } catch (cause) {
       if (expected === viewer) state.error = String(cause?.message || "The App press was not recorded. Press the App's button again.");
@@ -551,9 +585,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get stepId() { return currentStep.value?.id || ""; },
     get scroll() { return state.scroll; },
     get inLesson() { return inLesson.value; },
+    get complete() { return complete.value; },
+    get finished() { return state.finished; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
-    setViewer, show, minimise, toggle, selectStep, setScroll, flushReader, loadLesson,
+    setViewer, show, showFinished, closeFinished, minimise, toggle, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes

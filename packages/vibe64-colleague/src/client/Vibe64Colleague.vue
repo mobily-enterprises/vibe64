@@ -6,7 +6,7 @@ import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, unref, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
+import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
@@ -14,6 +14,7 @@ import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
+import Vibe64LearningStepDialog from "/src/components/learning/Vibe64LearningStepDialog.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
@@ -42,7 +43,8 @@ const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 // The shared Learning environment (L) controller, when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
-// The pinned current-step card reads only the L controller's client state.
+// The header's current-step button reads only the L controller's client state;
+// it opens just that step in a dialog above Colleague (Vibe64LearningStepDialog).
 const learningStep = computed(() => {
   const controller = learningController.value;
   const attemptId = unref(controller?.attemptId);
@@ -50,7 +52,7 @@ const learningStep = computed(() => {
   const lesson = unref(controller?.lesson);
   const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
   const index = steps.findIndex(step => step?.id === stepId);
-  if (!attemptId || !stepId || index < 0) return null;
+  if (!attemptId || !stepId || index < 0 || lesson.attempt?.ended) return null;
   const results = unref(controller.results);
   // A pass kept from an earlier attempt of the same lesson content counts too.
   const passed = (Array.isArray(lesson?.passedStepIds) && lesson.passedStepIds.includes(stepId))
@@ -58,9 +60,31 @@ const learningStep = computed(() => {
   return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
     position: index + 1, total: steps.length, passed };
 });
+const stepDialog = ref(false);
+// The same compact button in the drawer header and the phone dialog header.
+const stepButton = computed(() => learningStep.value && {
+  class: ["vibe64-colleague__step-button", { "vibe64-colleague__step-button--passed": learningStep.value.passed }],
+  variant: "flat", rounded: "pill", height: 32, "data-test": "colleague-current-step", "aria-haspopup": "dialog",
+  "aria-expanded": stepDialog.value, "aria-label": `Current lesson step: ${learningStep.value.title}`,
+  title: `Current lesson step: ${learningStep.value.title}`
+});
+watch(learningStep, step => { if (!step) stepDialog.value = false; });
+// Show me hides the step (and, on a phone, Colleague's dialog) so the real
+// place is visible; Teach me only hides the step, Colleague answers below it.
+function leaveStep(kind) {
+  stepDialog.value = false;
+  if (kind === "show-me" && xs.value && shown.value) toggleConversation().catch(reportFailure);
+}
+// Show me could not show its place: the step comes back with the reason.
+function returnToStep() {
+  if (xs.value) reopenConversation();
+  stepDialog.value = true;
+}
+// Open in Learning: L at exactly this step, like Colleague's Learning command.
 function openLearningStep() {
   const step = learningStep.value;
   const controller = learningController.value;
+  stepDialog.value = false;
   if (!step || typeof controller?.show !== "function") return;
   const reopen = () => controller.show({ attemptId: step.attemptId, stepId: step.stepId });
   // A phone shows one surface: minimise the dialog so Learning is visible.
@@ -82,6 +106,13 @@ function reopenConversation() {
   else open.value = true;
 }
 watch(() => unref(learningController.value?.open) === true, (learningOpen, wasOpen) => {
+  // L opening (Open in Learning, a finished lesson's screen) covers the step
+  // dialog; on a phone Colleague's dialog gives way too and comes back when
+  // the learner hides L.
+  if (learningOpen && !wasOpen && stepDialog.value) {
+    stepDialog.value = false;
+    if (xs.value && shown.value) leaveForLearning().catch(reportFailure);
+  }
   if (learningOpen || !wasOpen) return;
   const back = returnFromLearning && learningController.value?.hiddenBy === "learner";
   returnFromLearning = false;
@@ -786,6 +817,9 @@ onBeforeUnmount(() => {
     <div class="vibe64-colleague__drawer">
       <header class="vibe64-colleague__drawer-header">
         <span class="text-title-large">{{ name }}</span>
+        <v-btn v-if="learningStep" v-bind="stepButton" @click="stepDialog = true">
+          <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
+        </v-btn>
         <v-btn :icon="mdiMinus" variant="text" aria-label="Minimize conversation" title="Minimize conversation" @click="toggleConversation($event).catch(reportFailure)" />
         <v-btn :icon="mdiClose" variant="text" :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="closeText" />
       </header>
@@ -799,6 +833,11 @@ onBeforeUnmount(() => {
     :activator="launcher?.$el" :open-on-click="false" eager
     @update:model-value="value => !value && closeText()" @minimize="toggleConversation($event).catch(reportFailure)"
   >
+    <template v-if="learningStep" #header-actions>
+      <v-btn v-bind="stepButton" @click="stepDialog = true">
+        <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
+      </v-btn>
+    </template>
     <div ref="panelTarget" class="vibe64-colleague__panel" />
   </ConversationDialog>
   <Teleport :to="voicePanelTarget || conversationTarget || 'body'" :disabled="!voicePanelTarget && !conversationTarget">
@@ -808,14 +847,6 @@ onBeforeUnmount(() => {
         <p>{{ pointerNotice }}</p>
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
-      <section v-if="learningStep" class="vibe64-colleague__step-card" aria-label="Current lesson step">
-        <p class="vibe64-colleague__step-meta">{{ learningStep.lessonTitle }} · Step {{ learningStep.position }} of {{ learningStep.total }}</p>
-        <p class="text-title-small">{{ learningStep.title }}</p>
-        <div class="vibe64-colleague__step-actions">
-          <span v-if="learningStep.passed" class="vibe64-colleague__watch-chip" data-status="active" role="status">Passed</span>
-          <v-btn variant="text" min-height="48" @click="openLearningStep">Open lesson</v-btn>
-        </div>
-      </section>
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
         <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts (Lesson 0 shows how), then press Teach me again.</p>
         <p v-else>Colleague has no usable AI model, so nothing is sent yet and your draft is kept. Connect an AI and configure an available Senior model, then return and press Send.</p>
@@ -909,6 +940,10 @@ onBeforeUnmount(() => {
       />
     </aside>
   </Teleport>
+  <Vibe64LearningStepDialog
+    v-if="learningStep" v-model="stepDialog" :learning="learningController" :fullscreen="xs"
+    @open-learning="openLearningStep" @leave="leaveStep" @return="returnToStep"
+  />
   <v-dialog v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Watches and assignments">
     <v-card class="vibe64-colleague__watch-dialog">
       <v-card-title class="vibe64-colleague__watch-title d-flex align-center text-title-large">
@@ -1077,8 +1112,6 @@ onBeforeUnmount(() => {
 .vibe64-colleague__history { display: flex; flex-direction: column; gap: 8px; padding: 16px; min-height: 0; overflow: auto; }
 .vibe64-colleague__history-annotation p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vibe64-colleague__voice-feedback { flex: 1 1 100%; min-width: 0; }
-.vibe64-colleague__step-card { flex: 0 0 auto; margin: 12px 12px 0; padding: 12px 16px 4px; border: 1px solid color-mix(in srgb, var(--v64-learning, #f5c518) 45%, rgb(var(--v-theme-surface))); border-radius: var(--v64-shape-lg, 16px); background: var(--v64-learning-tint, rgb(var(--v-theme-surface))); overflow-wrap: anywhere; }
-.vibe64-colleague__step-card p { margin: 0 0 4px; }
-.vibe64-colleague__step-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
-.vibe64-colleague__step-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.vibe64-colleague__step-button { flex: 0 0 auto; min-width: 0; padding: 0 12px; font-size: 0.875rem; line-height: 1.25rem; background: var(--v64-learning, #f5c518) !important; color: var(--v64-on-learning, #2b2100) !important; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.vibe64-colleague__step-button--passed { background: var(--v64-learning-container, #fdf3c4) !important; color: var(--v64-on-learning-container, inherit) !important; }
 </style>

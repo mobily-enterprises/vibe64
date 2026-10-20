@@ -95,13 +95,20 @@ L at an attempt/step, minimises it, or points at a real place or the L button;
 `navigation.open` with `guide.navigate=true` is the project-scoped "show me".
 Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
 On a phone the dialog minimises itself before opening L or ringing a control;
-after it gave way to L (a Learning command or **Open lesson**), the learner's
+after it gave way to L (a Learning command or **Open in Learning**), the learner's
 own L or Escape hiding L (controller `hiddenBy === "learner"`) reopens the
 dialog, while Show me and other app navigation leave the app visible.
-The pinned current-step card (lesson title, Step N of M, step title, Passed,
-**Open lesson**) is rendered from the L controller in the drawer, the phone
-dialog and the voice panel; it has no server coupling. On a phone **Open lesson**
-minimises the dialog before showing L, since the dialog would cover it. The protocol text makes
+While an attempt is not ended, Colleague's header row (drawer, phone dialog,
+voice inside the same panel; not when minimised) shows a compact **Step N/M**
+button (school icon, check once passed; name "Current lesson step: <title>")
+read from the L controller only. It opens `Vibe64LearningStepDialog`: only the
+current step through the shared `Vibe64LearningStep` (the reader's step body),
+**Previous step**/**Next step** (Next enabled once passed or not required) and
+**Open in Learning**; a full-screen dialog over Colleague's on a phone. Show me
+and Teach me close it first; a place that cannot be shown reopens it with the
+reason. Every action is an L controller call, so L, focus and tabs stay in step;
+it has no server coupling. On a phone **Open in Learning** minimises Colleague's
+dialog before showing L, since the dialog would cover it. The protocol text makes
 Colleague read the lesson with `lesson.read`, read and rewrite the learner's
 private notes (`learner-notes.read`/`learner-notes.update`), report
 `step.check.run` results as diagnostics, never claim a pass and never reveal a

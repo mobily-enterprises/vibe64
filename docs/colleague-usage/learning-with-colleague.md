@@ -18,10 +18,11 @@ about your lesson, and Colleague teaches the current step:
 - It points at, or with "show me" opens, the real Vibe64 places the step uses,
   replays the step's diagram, and can open Learning at your current step or
   minimise it so you see the app. Learning keeps its place while minimised.
-- While Learning is minimised, a pinned card at the top of Colleague's chat shows
-  the lesson, **Step N of M**, the step title, **Passed** once that step has
-  passed, and **Open lesson** to return to that exact step. It stays visible in
-  the right drawer, the phone's full-screen chat and the voice panel.
+- While a lesson is going, Colleague's header shows a small yellow **Step N/M**
+  button (a check once the step passed). It opens only the current step in a
+  dialog with its check, **Show me**, **Teach me**, **Previous step**/**Next
+  step** and **Open in Learning** (see `learning-environment`). It appears on
+  the desktop panel, the phone's full-screen chat and during voice chat.
 - Before asking you to press **Done**, answer a question or press **Check now**,
   it looks at that step's saved result. A step that already passed is not asked
   for again: Colleague says it passed and moves on to the next unpassed step.
@@ -34,7 +35,7 @@ or rings a control, so you can see it; reopen Colleague with its avatar button.
 
 ## Colleague never judges
 
-A step passes only through your own action in **L**:
+A step passes only through your own action in **L** or Colleague's step dialog:
 
 - **Choice question**: only your own answer counts. Colleague never sees or
   reveals the correct option, sees only whether your answer passed (not which

@@ -37,6 +37,7 @@
     "./shared/guide-targets": "./src/shared/guideTargets.js",
     "./client/guide-overlay": "./src/client/TrainingGuideOverlay.vue",
     "./client/guide": "./src/client/trainingGuide.js",
+    "./client/course-progress": "./src/client/courseProgress.js",
     "./client/visual-player": "./src/client/TrainingVisualPlayer.vue"
   },
   "jskit": {

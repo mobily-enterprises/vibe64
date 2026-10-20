@@ -94,8 +94,11 @@ the learner's own work in their practice project, a multiple-choice question
 compared on the server, the learner's own Done, or no check for reading. A lesson
 is complete when every required step has passed, in any attempt of the same
 lesson content.
-Colleague is the teacher. Teach me minimises Learning, opens Colleague with the
-current step pinned above its chat, and Colleague explains the step in its own
+The learner's own result that completes it opens a Lesson finished screen that
+ends the lesson (results kept) and offers deleting or keeping the practice
+project, the next lesson, the courses, or reading the lesson again.
+Colleague is the teacher. Teach me minimises Learning and opens Colleague,
+whose header button opens the current step in a dialog, and Colleague explains the step in its own
 words, by text or voice, opens and highlights real screens and replays diagrams.
 Colleague never judges: only automatic checks, the answer comparison and the
 learner's own Done change a step's status, and Colleague never reveals the correct

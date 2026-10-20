@@ -248,7 +248,7 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await flush();
   assert.equal(view.state.shown.value, false);
 
-  // The pinned step card's Open lesson behaves like Colleague's Learning command.
+  // The step dialog's Open in Learning behaves like Colleague's Learning command.
   learning.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   learning.stepId = "read";
   learning.lesson = { title: "Lesson", steps: [{ id: "read", title: "Read" }] };
@@ -962,6 +962,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
     "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} },
+    "/src/components/learning/Vibe64LearningStepDialog.vue": { default: {} },
     "/src/lib/vibe64AccountConnectionsDialog.js": {
       requestVibe64AccountConnectionsDialog: options => { events.push(["account-setup", options]); return true; }
     }
@@ -1602,7 +1603,7 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   assert.equal(view.state.shown.value, true, "ordinary navigation keeps the original phone behaviour");
 });
 
-test("the pinned step card follows the shared Learning controller and reopens its exact step", async t => {
+test("the header's current-step button follows the shared Learning controller and its dialog reopens the exact step in L", async t => {
   const calls = [];
   const controller = vue.reactive({ open: false, surface: "lesson", attemptId: "", stepId: "",
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
@@ -1610,7 +1611,7 @@ test("the pinned step card follows the shared Learning controller and reopens it
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
-  assert.equal(view.state.learningStep.value, null, "no attempt, no card");
+  assert.equal(view.state.learningStep.value, null, "no attempt, no step button");
   controller.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   controller.stepId = "change";
   await flush();
@@ -1622,7 +1623,9 @@ test("the pinned step card follows the shared Learning controller and reopens it
   controller.results = [...controller.results, { stepId: "change", outcome: "passed" }];
   await flush();
   assert.equal(view.state.learningStep.value.passed, true);
+  view.state.stepDialog.value = true;
   view.state.openLearningStep();
+  assert.equal(view.state.stepDialog.value, false, "Open in Learning closes the step dialog");
   assert.deepEqual(calls, [{ attemptId: controller.attemptId, stepId: "change" }]);
   // On a phone the full-screen dialog would cover Learning: it minimises first.
   view.state.xs.value = true;
@@ -1637,7 +1640,59 @@ test("the pinned step card follows the shared Learning controller and reopens it
   view.state.xs.value = false;
   controller.stepId = "missing";
   await flush();
-  assert.equal(view.state.learningStep.value, null, "an unknown step shows no card");
+  assert.equal(view.state.learningStep.value, null, "an unknown step shows no step button");
+  controller.stepId = "change";
+  await flush();
+  view.state.stepDialog.value = true;
+  controller.lesson = { ...controller.lesson, attempt: { ended: { reason: "restart" } } };
+  await flush();
+  assert.equal(view.state.learningStep.value, null, "an ended lesson shows no step button");
+  assert.equal(view.state.stepDialog.value, false, "and closes its dialog");
+});
+
+test("the current-step dialog gives way to Show me, Teach me and L, and comes back when Show me cannot show its place", async t => {
+  const controller = vue.reactive({ open: false, surface: "lesson", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", stepId: "read",
+    lesson: { title: "Lesson", steps: [{ id: "read", title: "Read" }] }, results: [], show() { controller.open = true; },
+    minimise(by = "") { controller.open = false; controller.hiddenBy = by; }, hiddenBy: "" });
+  const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
+    undefined, null, null, null, { learning: controller });
+  await flush();
+  // Desktop: Show me and Teach me only close the dialog; Colleague stays.
+  view.state.open.value = true;
+  view.state.stepDialog.value = true;
+  view.state.leaveStep("show-me");
+  await flush();
+  assert.equal(view.state.stepDialog.value, false);
+  assert.equal(view.state.shown.value, true);
+  view.state.returnToStep();
+  assert.equal(view.state.stepDialog.value, true, "an unshown place brings the step back");
+  view.state.leaveStep("teach-me");
+  assert.equal(view.state.stepDialog.value, false);
+  // Phone: Show me minimises Colleague's dialog so the place is visible; the
+  // reason brings both back, the step dialog above Colleague's.
+  view.state.xs.value = true;
+  view.state.stepDialog.value = true;
+  view.state.leaveStep("show-me");
+  await flush();
+  assert.equal(view.state.shown.value, false);
+  view.state.returnToStep();
+  await flush();
+  assert.equal(view.state.shown.value, true);
+  assert.equal(view.state.stepDialog.value, true);
+  // Teach me keeps Colleague's phone dialog: Colleague answers there.
+  view.state.leaveStep("teach-me");
+  await flush();
+  assert.equal(view.state.shown.value, true);
+  // L opening (a finished lesson's screen) closes the dialog; on a phone
+  // Colleague gives way and returns when the learner hides L.
+  view.state.stepDialog.value = true;
+  controller.show();
+  await flush();
+  assert.equal(view.state.stepDialog.value, false);
+  assert.equal(view.state.shown.value, false);
+  controller.minimise("learner");
+  await flush();
+  assert.equal(view.state.shown.value, true);
 });
 
 test("previous-conversation list offers explicit fresh recovery after a terminal provider failure without uncertain delivery", async t => {

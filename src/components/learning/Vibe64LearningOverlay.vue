@@ -7,6 +7,7 @@ import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
+import Vibe64LearningFinished from "./Vibe64LearningFinished.vue";
 import Vibe64LearningPractice from "./Vibe64LearningPractice.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
@@ -112,6 +113,10 @@ function keydown(event) {
         <Vibe64LearningPractice :learning="learning" :courses="courses" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
+      </div>
+      <!-- A completed lesson's "Lesson finished" screen (it ends the attempt). -->
+      <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__courses">
+        <Vibe64LearningFinished :learning="learning" :courses="courses" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
       </div>
       <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
     </div>

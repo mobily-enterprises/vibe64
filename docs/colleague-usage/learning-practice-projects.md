@@ -56,7 +56,9 @@ project's source, sessions and runtime state are removed and no archive is
 kept, so it cannot be restored. Your lesson progress and earlier passes stay;
 the lesson attempt that owned the project ends. If a session in that project is
 pinned, deletion refuses with **Unpin session … before deleting this practice
-project.** Open that session, choose **Unpin session**, then delete again. If
+project.** Open that session, choose **Unpin session**, then delete again.
+When a lesson finishes, its **Lesson finished** screen offers the same one-click
+**Delete practice project**, or **Keep practice project** to keep it here. If
 deletion stops part-way, the row stays: press the trash button again; it
 continues from the step that failed. A practice project whose files are damaged
 or whose ownership can no longer be confirmed also stays listed, and the rest

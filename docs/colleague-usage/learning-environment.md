@@ -102,14 +102,30 @@ title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
 Select a step to read it. A step you passed in an earlier attempt of the same
 lesson (for example before you started it again) shows **Passed** and still
 counts. When every required step has passed the list says
-**Every required step is passed. This lesson is complete.** with a **Finish
-lesson** button. **Finish lesson** ends the lesson (its results are kept, as
-with any ended lesson) and returns to **Courses**, where the next lesson can be
-started. You don't need Colleague for this, so it also works before an AI is
-connected. If finishing is not confirmed, the error appears at the top of the
-lesson; press **Finish lesson** again. On a phone this is one short row under
-the step circles: **✓ Lesson complete**, **Finish lesson** and **Practice**
-(which opens the practice project).
+**Every required step is passed. This lesson is complete.** with a **Lesson
+finished** button (on a phone one short row under the step circles: **✓ Lesson
+complete**, **Lesson finished** and **Practice**, which opens the practice
+project). **Lesson finished** opens the lesson finished screen again.
+
+## Lesson finished
+
+When your own step result (in **L**, in Colleague's step dialog, or an automatic
+check from your Preview press) completes the last required step, Learning opens
+on the **Lesson finished** screen in the lesson tab: a check mark, **LESSON
+FINISHED**, the lesson title and "You completed every required step: X of Y
+steps passed. Your results are kept." It ends the lesson for you ("Finishing the
+lesson…"); the yellow in-lesson state and Colleague's step button then
+disappear. If finishing is not confirmed, an error appears with **Finish
+lesson**; press it to try again. You don't need an AI for this. Then choose:
+
+- **Practice project** (when the lesson has one): **Delete practice project**
+  removes it at once, with no archive: its files, sessions and Preview are gone
+  for good. **Keep practice project** keeps it; open or delete it later from
+  **Courses → Practice**.
+- **Next lesson: <title>** starts the next unfinished lesson of the same course
+  (when there is one).
+- **Back to courses**.
+- **Read the lesson again** returns to the ended lesson's steps, read-only.
 
 A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
@@ -160,7 +176,7 @@ also has:
   available on the current page, Learning comes back with the reason; open
   your practice project and try again.
 - **Teach me**: minimises Learning, opens Colleague and sends it the message
-  "Teach me this step." for you. The step stays pinned above Colleague's chat.
+  "Teach me this step." for you. Colleague answers in its conversation.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
   If no AI is connected yet (for example during Lesson 0), nothing is sent:
   Colleague opens and says **Colleague cannot teach this step yet: it has no
@@ -179,11 +195,31 @@ Statuses come only from automatic checks, the answer comparison and your own
 **Done**. Colleague never decides a step's status and does not know the
 correct answers of a question.
 
-On a phone, **Open lesson** on the step card in Colleague's full-screen chat
-minimises that chat and shows the lesson at that step. The same happens when
-Colleague opens Learning for you. When you then hide Learning with **L** (or
-Escape), you return to Colleague's chat, not the page behind it.
-**Show me** and **Open practice project** still show the app.
+## The current step in Colleague
+
+While a lesson is going, Colleague's header (next to **Colleague** and its −
+and × buttons, on a desktop and in the phone's full-screen Colleague, also
+during voice chat) shows a small yellow **Step N/M** button with a school icon,
+or a check once that step has passed. Its tooltip is **Current lesson step:
+<step title>**. It is hidden while Colleague is minimised.
+
+Press it to see only the current step: a scrollable dialog above Colleague on a
+desktop, a full-screen dialog over Colleague's on a phone (× **Close current
+step**, Escape or back returns to Colleague). It shows the lesson code and title
+and the step exactly as here (**STEP 3 OF 9 · OPTIONAL**, text, diagram, check,
+status, **Show me**, **Teach me**). **Next step** is enabled once the step has
+passed or is not required; **Previous step** goes back. There is no step list or
+course browsing: use **L** for that. **Open in Learning** opens **L** at this
+step; on a phone Colleague's dialog gives way to **L** and returns when you hide
+**L**. **Show me** closes the dialog (on a phone also minimising Colleague) and
+shows the place; if it cannot, the dialog comes back with the reason. **Teach
+me** closes the dialog and asks Colleague. The dialog and **L** share one
+lesson state, so **L**, Colleague and other tabs stay in step.
+
+On a phone, when Colleague opens Learning for you its full-screen chat
+minimises and shows the lesson at that step; hiding Learning with **L** (or
+Escape) returns you to Colleague's chat, not the page behind it. **Show me** and
+**Open practice project** still show the app.
 
 An ended lesson stays readable with the note **This lesson has ended.** A lesson
 started in the earlier teacher format shows **This lesson was started with the

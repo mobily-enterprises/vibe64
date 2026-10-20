@@ -69,5 +69,5 @@ passes a lesson step. When a lesson asks you to find a place, click it yourself.
 
 Colleague can open Learning above the app at your current lesson step, or
 minimise it so you can see the app, without ending the lesson. While Learning is
-minimised, the current step card stays pinned at the top of Colleague's chat;
-**Open lesson** returns to that exact step.
+minimised, the **Step N/M** button in Colleague's header opens the current step
+in a dialog; its **Open in Learning** returns to that exact step in **L**.

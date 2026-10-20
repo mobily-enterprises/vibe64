@@ -79,8 +79,12 @@ guide overlay 3000 above L 2400 above Colleague.
   cannot be shown reopens L with the reason.
 - `teachMe(stepId)` minimises L and records one `colleagueRequest` carrying the
   fixed text "Teach me this step."; Colleague consumes it once
-  (`consumeColleagueRequest`). The pinned step card in Colleague reads this
-  controller only.
+  (`consumeColleagueRequest`). Colleague's **Step N/M** header button and its
+  current-step dialog read and act through this controller only.
+- `complete` is true when every required step of a version 2 lesson passed.
+  A learner's own Done, answer, Check now or Preview press result that makes
+  the lesson complete (`finishedBy`) calls `showFinished()`, which shows L's
+  lesson surface with `finished` set; `closeFinished()` returns to the steps.
 - Notes: `readNotes`, `saveNotes(text)` (1 to 4000 characters, refused when the
   notes changed since they were read) and `clearNotes` call the learner-notes
   routes for the signed-in person only.
@@ -109,13 +113,19 @@ opens the practice project first), **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
 full-screen sheet whose **Courses** tab never shrinks, with a row of numbered
 step circles and, for a complete lesson, one short row of **✓ Lesson complete**,
-**Finish lesson** and **Practice**; when the row overflows,
+**Lesson finished** and **Practice**; when the row overflows,
 `revealCurrentStep` scrolls only that row to keep the current step visible on
 step changes and reopening. An earlier-format
 (version 1) attempt is shown as readable history with **End this lesson**; a
-version 2 lesson whose required steps all passed offers **Finish lesson**. Both
-call `lesson.end` with reason `restart` (results kept), emit `ended` so the
-overlay rereads saved learning, and Finish returns to Courses. A passed choice
+version 2 lesson whose required steps all passed offers **Lesson finished**,
+which reopens `Vibe64LearningFinished`. That screen ends the attempt itself
+(**Finish lesson** retries an unconfirmed end); **End this lesson** and it call
+`lesson.end` with reason `restart` (results kept) and emit `ended` so the
+overlay rereads saved learning. It then offers the practice project's one-click
+**Delete practice project** (no archive) or **Keep practice project**, **Next
+lesson: <title>** (next unfinished lesson of the course), **Back to courses**
+and **Read the lesson again**. The step body is `Vibe64LearningStep`, shared
+with Colleague's current-step dialog. A passed choice
 question is not compared again (the server keeps the pass), so the reader says
 so and disables **Check answer**. Links in lesson Markdown to another origin open
 in a new tab (`openLessonLink`), keeping the app and L open.

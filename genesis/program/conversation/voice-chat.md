@@ -92,8 +92,8 @@ delivery and the typed draft; visible return alone cannot restart recording.
 Document visibility is separate from avatar collapse and mounted-body eligibility.
 Voice retains no independent chat history and never changes the typed draft.
 Lessons have no voice binding or socket of their own: Colleague's voice teaches a
-lesson like its text chat, and the Colleague voice panel keeps the pinned
-current-step card visible.
+lesson like its text chat, and the Colleague panel header keeps its **Step N/M**
+current-step button during voice.
 
 JSKIT's hands-free Pause stops new microphone input immediately while retaining
 the buffered tail for its original final flush. A matching stale endpoint rejection
