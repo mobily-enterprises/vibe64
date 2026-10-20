@@ -79,8 +79,10 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     }
     // Continue lesson reuses the previous attempt's practice project while it
     // is still in the learning space; otherwise preparation makes a fresh one.
+    // A retry repeats the original reservation exactly, including whether it
+    // reused the project, even after that project has gone.
     const practiceId = attemptPracticeId(previous);
-    const reuse = !replay && Boolean(await ownPracticeProject(actor, practiceId));
+    const reuse = replay ? Boolean(replay.practiceId) : Boolean(await ownPracticeProject(actor, practiceId));
     // Pass the admitted revision unchanged. A racing start must fail the
     // original CAS, rather than silently join its same-pin active successor.
     const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision, pin: previous.pin,
