@@ -11,7 +11,7 @@ const ARCHIVE_ID_PATTERN = /^[0-9A-Za-z][0-9A-Za-z_.-]{0,127}$/u;
 // The learner's practice projects in the learning space (Learning v2 Rev 3
 // R1, R6): listing, archive, removal and archived-bundle deletion. Admission
 // and paths are core's (runWithPracticeProjectScope); the archive lifecycle
-// and the light delete are the shared project archive service, Online's
+// and the light delete are the shared project archive service, the host's
 // (trainingHost.projectArchive) or a standalone one. This owner adds only what
 // the archiver must not know: that the project is this learner's, that its
 // in-progress attempt ends (reason `discard`) inside the archiver's lock after

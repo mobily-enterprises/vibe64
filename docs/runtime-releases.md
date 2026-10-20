@@ -34,9 +34,8 @@ version. When they match, nothing is published and the version stays. When
 they differ, it bumps the patch version, commits `Release vibe64@<version>`,
 pushes to `main`, rebuilds and retests the artifact, and publishes that exact
 tarball. `npm run npm-publish -- --dry-run` builds and compares without
-writing, pushing or publishing. Production releases normally happen through
-the Vibe64 Online deploy, which runs this command after pinning released JSKIT
-and Genesis versions. Direct `npm publish` and `npm pack` from the source
+writing, pushing or publishing. A release workflow that consumes this package
+runs this command after pinning released JSKIT and Genesis versions. Direct `npm publish` and `npm pack` from the source
 checkout are guarded because the source manifest includes development-only
 dependencies. Release preparation never prunes the source checkout's installed
 dependencies.

@@ -72,8 +72,8 @@ unknown kind in a manifest refuses validation.
 **Practice projects.** Inside the matching practice scope
 (`projectContext.currentPracticeProjectScope()`), a `training-<hex>` slug resolves
 to its learning-space namespace under `projectContext.learningSpaceRoot`
-(core `learningSpace.js`: `<managedSourceRoot>/.learning` locally,
-`<projectsRoot>/.learning` on Online), and the archive's source parent is that
+(core `learningSpace.js`: `<managedSourceRoot>/.learning` locally, or the root
+a host passes), and the archive's source parent is that
 namespace's parent. The practice session source root is the namespace itself, so
 the learner's code is in `source.tgz` and goes with the namespace; a scope whose
 session sources lie outside its namespace is refused
@@ -105,12 +105,10 @@ retry; a completed removal replays as `{ok: true, removed: false}`.
 There is no restore operation. The bundle is private recovery evidence, not a
 portable export.
 
-## Moved from Vibe64 Online
+## Host resources
 
-The lifecycle, its light deletion and these tests moved here from Online's
-`projectArchiveService.js` and its unit tests. Online keeps its managed
-databases, resource profiles and resource policy as `hostResources`, with their
-tests. The test that counted namespace inspections through a test-only
+A host keeps its own managed databases, resource profiles and resource policy
+as `hostResources`, with their tests. The test that counted namespace inspections through a test-only
 `readNamespaceDisposablePaths` hook now counts the namespace tar runs. The
 practice tests run inside the practice scope and pass no actor: ownership and
 the end of the lesson attempt belong to Learning.

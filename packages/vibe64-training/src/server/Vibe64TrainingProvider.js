@@ -51,7 +51,7 @@ const Vibe64TrainingProvider = defineFeature({
     const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals });
     // A browser-supplied actor is never local authority. Retain the original
-    // transport check without its hosted signed-in-user alternative.
+    // transport check without a host's signed-in-user alternative.
     const localActor = request => {
       if (!request || !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }))) return null;
       const actor = currentOsUser();
@@ -73,7 +73,7 @@ const Vibe64TrainingProvider = defineFeature({
     registerLearningModeReader(() => learners.readLearningMode({ actor: currentOsUser() }), {
       onReadFailure: error => logger?.warn?.({ error: String(error?.message || error) }, "Learning mode could not be read; projects stay open.")
     });
-    // The standalone project archive service; Online supplies its own through trainingHost.
+    // The standalone project archive service; a host supplies its own through trainingHost.
     const projectArchive = createProjectArchiveService({ projectContext,
       closeProjectRuntime: ({ slug, reason }) => project.runInProjectContext(slug, () => terminals.closeProjectRuntime({ reason }),
         { allowDeleting: true }) });

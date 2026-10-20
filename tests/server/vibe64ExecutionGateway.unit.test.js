@@ -197,7 +197,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
       "console.log(JSON.stringify({ shared: process.env.VIBE64_SHARED_CACHE_ROOT, browsers: process.env.PLAYWRIGHT_BROWSERS_PATH, npmPrefix: process.env.NPM_CONFIG_PREFIX, path: process.env.PATH, author: process.env.GIT_AUTHOR_NAME, email: process.env.GIT_AUTHOR_EMAIL, committer: process.env.GIT_COMMITTER_NAME, committerEmail: process.env.GIT_COMMITTER_EMAIL }))"
     ],
     project: {
-      tenant: "sas"
+      workspace: "sas"
     },
     userKey: "merc"
   });
@@ -250,7 +250,7 @@ test("execution gateway gives Codex commands only their declared database env, f
         DB_PORT: "24712",
         DB_USER: "vibe64_dev_app"
       },
-      tenant: "sas"
+      workspace: "sas"
     },
     purpose: "codex",
     userKey: "merc"
@@ -297,7 +297,7 @@ test("execution gateway gives Codex PTY terminals the same declared DB, Git iden
         DB_HOST: "127.0.0.1",
         DB_NAME: "sas_compas_next"
       },
-      tenant: "sas"
+      workspace: "sas"
     },
     purpose: "codex",
     terminal: {
@@ -353,7 +353,7 @@ test("execution gateway gives detached Codex app-server commands the shared brow
       envPolicy: "auth",
       mode: "detached",
       project: {
-        tenant: "sas"
+        workspace: "sas"
       },
       purpose: "codex",
       runtimes: ["node26", "git", "playwright"],
@@ -840,7 +840,7 @@ test("execution gateway gives deployment commands production DB env, Git identit
         DB_PORT: "3306",
         DB_USER: "vibe64_prod_app"
       },
-      tenant: "sas"
+      workspace: "sas"
     },
     purpose: "deployment",
     runtimes: ["git", "gh", "playwright"],
@@ -1032,7 +1032,7 @@ test("execution gateway ignores caller-provided Git identity policy env", async 
       GIT_AUTHOR_NAME: "Wrong User"
     },
     project: {
-      tenant: "sas"
+      workspace: "sas"
     },
     userKey: "merc"
   });
@@ -1054,7 +1054,7 @@ test("execution gateway fallback git identity allows local commits without git c
     args: ["add", "README.md"],
     cwd: root,
     project: {
-      tenant: "localtenant"
+      workspace: "localworkspace"
     },
     runtimes: ["git"],
     userKey: "localuser"
@@ -1066,7 +1066,7 @@ test("execution gateway fallback git identity allows local commits without git c
     args: ["commit", "-m", "Initial local commit"],
     cwd: root,
     project: {
-      tenant: "localtenant"
+      workspace: "localworkspace"
     },
     runtimes: ["git"],
     userKey: "localuser"
@@ -1076,7 +1076,7 @@ test("execution gateway fallback git identity allows local commits without git c
   const log = await git(root, ["log", "-1", "--format=%an <%ae>|%cn <%ce>"]);
   assert.equal(
     log.stdout.trim(),
-    "localuser via Vibe64 <localuser@localtenant.users.vibe64.invalid>|Vibe64 <vibe64@localtenant.users.vibe64.invalid>"
+    "localuser via Vibe64 <localuser@localworkspace.users.vibe64.invalid>|Vibe64 <vibe64@localworkspace.users.vibe64.invalid>"
   );
 });
 
@@ -1138,7 +1138,7 @@ test("execution gateway prefers explicitly configured nested Git identity", asyn
           }
         }
       },
-      tenant: "sas"
+      workspace: "sas"
     },
     userKey: "merc"
   });
@@ -1163,7 +1163,7 @@ test("execution gateway prefers GitHub identity before fallback identity", async
         email: "octo@example.invalid",
         login: "octocat"
       },
-      tenant: "sas"
+      workspace: "sas"
     },
     userKey: "merc"
   });
@@ -1187,7 +1187,7 @@ test("execution gateway lets GitHub projects make local commits with fallback id
     cwd: root,
     gitTransport: "github-https",
     project: {
-      tenant: "sas"
+      workspace: "sas"
     },
     purpose: "github",
     runtimes: ["git"],
@@ -1201,7 +1201,7 @@ test("execution gateway lets GitHub projects make local commits with fallback id
     cwd: root,
     gitTransport: "github-https",
     project: {
-      tenant: "sas"
+      workspace: "sas"
     },
     purpose: "github",
     runtimes: ["git"],

@@ -27,10 +27,9 @@ The public Vibe64 repo owns the execution gateway:
 - `packages/vibe64-execution/src/server/index.js`
   - Public server API exports.
 
-Vibe64 Online consumes the same public execution package through the composed
-application. Hosted callers remain responsible for describing their actor and
-command intent; they do not replace the gateway's environment or credential
-policy.
+A host that composes this application uses the same execution package. Its
+callers remain responsible for describing their actor and command intent; they
+do not replace the gateway's environment or credential policy.
 
 ## Core Flow
 
@@ -63,7 +62,8 @@ Then it chooses:
 - `mode: "capture"`: run and collect output.
 - `mode: "pty"`: start a tracked terminal session.
 - `mode: "detached"`: spawn a background process.
-- real-user mismatch: run through `/usr/lib/vibe64/vibe64-exec-helper` via sudo.
+- real-user mismatch: run through the host's privileged helper via sudo. A
+  person's own computer has no helper and never builds such an actor.
 
 ## Main Request Shape
 
@@ -77,9 +77,9 @@ await runVibe64Command({
   mode: "capture",
   command: "git",
   args: ["ls-remote", "origin", "refs/heads/main"],
-  cwd: "/var/lib/vibe64/sas/projects/compas-next",
-  allowedRoots: ["/var/lib/vibe64/sas/projects/compas-next"],
-  gitSafeDirectories: ["/var/lib/vibe64/sas/projects/compas-next"],
+  cwd: "/home/merc/projects/compas-next",
+  allowedRoots: ["/home/merc/projects/compas-next"],
+  gitSafeDirectories: ["/home/merc/projects/compas-next"],
   gitTransport: "github-https",
   runtimes: ["git", "gh"],
   envPolicy: "auth",
@@ -99,7 +99,7 @@ That means:
 - Run it for the real OS user `merc`.
 - Use GitHub HTTPS credential behavior.
 - Refuse interactive Git prompts.
-- Put `git` and `gh` runtime packs on `PATH`.
+- Put the `git` and `gh` runtimes on `PATH`.
 - Allow the command only inside the project root.
 - Use `/home/merc` as the credential home.
 
@@ -110,7 +110,7 @@ That means:
 `actor` decides whose identity the command should use.
 
 ```js
-"daemon"     // current Vibe64 daemon process, such as v64d_sas
+"daemon"     // current Vibe64 daemon process
 "app"        // app process actor; no real-user switch
 "owner-user" // project/session owner user
 "named-user" // explicit user from userKey
@@ -185,7 +185,7 @@ await runVibe64Command({
   actor: "daemon",
   command: "git",
   args: ["status", "--short"],
-  cwd: "/var/lib/vibe64/sas/projects/app",
+  cwd: "/home/merc/projects/app",
   mode: "capture",
   purpose: "setup",
   runtimes: ["git"]
@@ -199,7 +199,7 @@ await runVibe64Command({
   actor: "app",
   command: "bash",
   args: () => ["-lc", "npm install"],
-  cwd: "/var/lib/vibe64/sas/projects/app/sessions/active/session/source",
+  cwd: "/home/merc/projects/app/sessions/active/session/source",
   mode: "pty",
   purpose: "terminal",
   envPolicy: "project",
@@ -260,7 +260,7 @@ Deployment commands use deployment-specific env:
 
 ### `runtimes`
 
-`runtimes` controls shared runtime-pack PATH entries.
+`runtimes` names the tools a command needs on `PATH`.
 
 ```js
 {
@@ -268,13 +268,15 @@ Deployment commands use deployment-specific env:
 }
 ```
 
-Those resolve under:
+On a person's own computer these are the tools already on their `PATH`. A host
+that provides pinned runtime packs passes their root at startup, and each id
+then resolves under it:
 
 ```txt
-/opt/vibe64/runtime-packs/node26/bin
-/opt/vibe64/runtime-packs/git/bin
-/opt/vibe64/runtime-packs/mariadb/bin
-/opt/vibe64/runtime-packs/playwright/bin
+<runtime pack root>/node26/bin
+<runtime pack root>/git/bin
+<runtime pack root>/mariadb/bin
+<runtime pack root>/playwright/bin
 ```
 
 The gateway appends system PATH fallback entries too:
@@ -338,21 +340,22 @@ Gateway-owned process identity env looks like:
 
 ```js
 {
-  HOME: "/home/v64d_sas",
-  USER: "v64d_sas",
-  LOGNAME: "v64d_sas",
-  XDG_CACHE_HOME: "/home/v64d_sas/.cache",
-  XDG_CONFIG_HOME: "/home/v64d_sas/.config",
-  XDG_DATA_HOME: "/home/v64d_sas/.local/share"
+  HOME: "/home/merc",
+  USER: "merc",
+  LOGNAME: "merc",
+  XDG_CACHE_HOME: "/home/merc/.cache",
+  XDG_CONFIG_HOME: "/home/merc/.config",
+  XDG_DATA_HOME: "/home/merc/.local/share"
 }
 ```
 
-Shared tool env is always present:
+Shared tool env is present only when the host provides a shared cache and
+runtime packs; on a person's own computer the tools use their own defaults:
 
 ```js
 {
-  VIBE64_SHARED_CACHE_ROOT: "/var/cache/vibe64",
-  PLAYWRIGHT_BROWSERS_PATH: "/opt/vibe64/runtime-packs/playwright/browsers"
+  VIBE64_SHARED_CACHE_ROOT: "<shared cache root>",
+  PLAYWRIGHT_BROWSERS_PATH: "<runtime pack root>/playwright/browsers"
 }
 ```
 
@@ -360,7 +363,7 @@ NPM prefix is derived from HOME:
 
 ```js
 {
-  NPM_CONFIG_PREFIX: "/home/v64d_sas/.local"
+  NPM_CONFIG_PREFIX: "/home/merc/.local"
 }
 ```
 
@@ -413,8 +416,8 @@ Git safe directories are passed explicitly:
 ```js
 {
   gitSafeDirectories: [
-    "/var/lib/vibe64/sas/projects/compas-next",
-    "/var/lib/vibe64/sas/projects/compas-next/sessions/active/..."
+    "/home/merc/projects/compas-next",
+    "/home/merc/projects/compas-next/sessions/active/..."
   ]
 }
 ```
@@ -454,9 +457,9 @@ Fallback identity:
 ```js
 {
   GIT_AUTHOR_NAME: "merc via Vibe64",
-  GIT_AUTHOR_EMAIL: "merc@sas.users.vibe64.invalid",
+  GIT_AUTHOR_EMAIL: "merc@local.users.vibe64.invalid",
   GIT_COMMITTER_NAME: "Vibe64",
-  GIT_COMMITTER_EMAIL: "vibe64@sas.users.vibe64.invalid"
+  GIT_COMMITTER_EMAIL: "vibe64@local.users.vibe64.invalid"
 }
 ```
 

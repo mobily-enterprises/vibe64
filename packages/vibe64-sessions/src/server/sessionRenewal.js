@@ -2191,8 +2191,8 @@ function createSessionRenewalController({
         error?.code === "vibe64_session_renewal_actor_resolver_unavailable" &&
         !requestActor
       ) {
-        // Standalone Vibe64 runs as the local user and does not need a hosted
-        // user-store resolver. Hosted Online always installs one before boot.
+        // Standalone Vibe64 runs as the local user and needs no user-store
+        // resolver. A multi-user host installs one before boot.
         return input;
       }
       throw error;

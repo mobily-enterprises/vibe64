@@ -21,8 +21,8 @@ describe("Vibe64 session info", () => {
         source_remote_url: "https://secret@example.test/company/dogandgroom.git?token=hidden"
       },
       sessionId: "2026-08-17_01-02-03",
-      sessionRoot: "/home/v64d_sas/.local/state/vibe64/projects/dogandgroom/sessions/active/2026-08-17_01-02-03",
-      sourcePath: "/var/lib/vibe64/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source",
+      sessionRoot: "/home/sas/.local/state/vibe64/projects/dogandgroom/sessions/active/2026-08-17_01-02-03",
+      sourcePath: "/home/merc/.local/state/vibe64/managed-sources/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source",
       sourceReady: true,
       status: "active"
     }, {
@@ -37,11 +37,11 @@ describe("Vibe64 session info", () => {
       Branch: "vibe64/2026-08-17_01-02-03",
       Repository: "https://example.test/company/dogandgroom.git",
       Session: "2026-08-17_01-02-03",
-      Source: "/var/lib/vibe64/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source"
+      Source: "/home/merc/.local/state/vibe64/managed-sources/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source"
     });
     const context = vibe64SessionInfoText(facts, { status: "active" });
     expect(context).toContain("Status: active");
-    expect(context).toContain("Source: /var/lib/vibe64/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source");
+    expect(context).toContain("Source: /home/merc/.local/state/vibe64/managed-sources/sas/projects/dogandgroom/sessions/active/2026-08-17_01-02-03/source");
     expect(context).not.toContain("secret");
     expect(context).not.toContain("token=hidden");
   });

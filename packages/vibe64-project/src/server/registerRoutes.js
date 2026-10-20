@@ -188,7 +188,7 @@ function registerRoutes(http, {
     actionId: ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE,
     body: projectDevelopmentDatabaseScopeInputValidator,
     buildInput: routes.requestBody,
-    summary: "Choose whether Online manages one development database per session or per project."
+    summary: "Choose whether the host manages one development database per session or per project."
   });
   routes.actionRoute("GET", "/settings/engineering", {
     actionId: ACTION_READ_ENGINEERING_SETTINGS,

@@ -10,8 +10,8 @@ user as the state; do not import an archive or another installation's identities
 There is no automatic backup, retention or rollback service.
 
 Stop the application and every independent reserve/resume, assessment, lesson checkpoint, preparation or maintenance writer.
-Keep them stopped and exclude activation until verification finishes. Online's
-host-specific steps are in its deployment state-upgrade guide. User locks alone
+Keep them stopped and exclude activation until verification finishes. A host
+documents its own stopping and activation steps. User locks alone
 cannot exclude a new learner directory or a noncooperating writer.
 
 Run these Bash blocks in one shell as the state-owning OS user, with compatible

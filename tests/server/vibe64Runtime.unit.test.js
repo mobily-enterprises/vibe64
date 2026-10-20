@@ -23,7 +23,7 @@ import {
 test("session runtime never derives private state from a project context path", () => {
   assert.throws(
     () => new Vibe64SessionRuntime({
-      projectContextRoot: "/var/lib/vibe64/merc/projects/example"
+      projectContextRoot: "/home/merc/.local/state/vibe64/managed-sources/merc/projects/example"
     }),
     (error) => error?.code === "vibe64_project_runtime_root_required"
   );

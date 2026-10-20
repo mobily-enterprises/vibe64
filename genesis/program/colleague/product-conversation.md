@@ -139,8 +139,8 @@ existing setup failure without admitting a model request and projects a bounded
 `modelSetupRequired` presentation fact. Before a selection is committed, a read
 also projects it when ordinary selection finds no usable Senior route (no
 failure is recorded), so the composer and Teach me know before any send. The client keeps the original JSKIT draft
-and offers the existing account owner: Online navigates to Management → AI
-Accounts, while standalone dispatches its existing Account settings request. The
+and offers the existing account owner: a host may navigate to its own AI
+accounts page, while standalone dispatches its existing Account settings request. The
 control sends no message, changes no selection and performs no credential action.
 After setup, the person's next explicit Send retries through ordinary selection
 and admission; the UI does not promise an unavailable response.

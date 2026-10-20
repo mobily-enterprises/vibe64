@@ -1,7 +1,8 @@
 # Managed session filesystem contract
 
-This is a release-blocking host contract for every managed Vibe64 project and
-session source. It records the 2026-08-15 permission failure that cost live
+This is a release-blocking contract for every host that shares managed Vibe64
+project and session sources between several Unix identities through one group.
+A person's own computer runs everything as that person and needs none of it. It records the 2026-08-15 permission failure that cost live
 work and the architecture required to prevent it from recurring.
 
 ## Incident
@@ -18,7 +19,7 @@ The human/agent command and the workspace daemon were writing the same session
 source under different Unix identities:
 
 - human or agent commands could run as `merc`;
-- preview and Vite ran as `v64d_<workspace>`;
+- preview and Vite ran as the workspace daemon account;
 - both identities belonged to the shared `vibe64` group;
 - directories were setgid, but did not have an inherited default ACL;
 - an atomically replaced file could consequently be created without shared
@@ -39,9 +40,8 @@ were repaired by:
 5. verifying that no existing file lacked shared-group write access.
 
 A file created as `merc` with umask `0022` then inherited owner `merc`, group
-`vibe64`, and mode `0660`; the corresponding `v64d_<workspace>` daemon could
-append immediately. The affected `typed-router.d.ts` became writable by
-`v64d_sas`.
+`vibe64`, and mode `0660`; the corresponding workspace daemon could append
+immediately. The affected `typed-router.d.ts` became writable by that daemon.
 
 This emergency repair is evidence, not the product design. Vibe64 must not
 depend on repeating a recursive repair.
@@ -53,7 +53,7 @@ preview-identity, and application credentials must not determine source
 ownership or write access.
 
 Every routine operation inside a managed project/session source runs as the
-workspace daemon (`v64d_<workspace>`). This includes agent commands, Git index
+workspace daemon account. This includes agent commands, Git index
 and worktree operations, package managers, generators, workspace setup, and
 preview processes. A selected human account supplies Git authorship and remote
 authorization; it does not change the Unix identity of the Git process. This
@@ -71,8 +71,8 @@ watcher starts, every managed project/session source namespace must have:
 - inherited default group ACL: `vibe64:rwx`;
 - no access for other users.
 
-The human users allowed to administer a workspace and its
-`v64d_<workspace>` daemon must be members of `vibe64`. Shared group access
+The human users allowed to administer a workspace and its daemon account must
+be members of `vibe64`. Shared group access
 remains mandatory for maintenance, recovery, and explicit host inspection; it
 is not the routine mutation path and product correctness must not depend on a
 second Unix identity being able to race a live writer. A missing group, missing

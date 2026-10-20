@@ -623,8 +623,8 @@ frozen after references; the original Core publisher verifies backups/hashes
 and atomically publishes the prepared set. No ordinary source, native, history
 or progress owner is replaced. Original Store and Learner companions preserve
 ordinary writer refusal, source/native IDs, archived sidecar/history and actual
-Preparation same-session resume; these are source-component proofs, not fleet
-activation or all-provider acceptance.
+Preparation same-session resume; these are source-component proofs, not
+multi-machine activation or all-provider acceptance.
 
 The read-only runtime-root inventory and original project-slug validator are
 owned by Core `projectState.js`;
@@ -659,7 +659,7 @@ the server-selected session, which is the pinned source while pinned.
 The Sessions action and route own authorized pin changes; the pin button beside
 Save uses the existing endpoint resource and error feedback, and refreshes the
 session after acknowledgement. Another session cannot replace the pin until the
-current one is unpinned. VPS update cleanliness/origin checks remain independent.
+current one is unpinned. Host update cleanliness/origin checks remain independent.
 Pin changes take the existing renewal-state and session-mutation boundaries, not
 the assistant write lock. Assistant preparation therefore cannot block a pin;
 closing rechecks the pin under the same session-mutation boundary before teardown.

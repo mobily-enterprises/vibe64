@@ -6650,7 +6650,7 @@ function sessionPayload({
   sessionId?: string;
   sessionName?: string;
 } = {}) {
-  const sourcePath = `/var/lib/vibe64/test/projects/example/sessions/active/${sessionId}/source`;
+  const sourcePath = `/home/merc/.local/state/vibe64/managed-sources/test/projects/example/sessions/active/${sessionId}/source`;
   const createdAt = "2026-05-24T00:00:00.000Z";
   const sessionRoot = sessionRuntimeRoot(sessionId);
   const session = {

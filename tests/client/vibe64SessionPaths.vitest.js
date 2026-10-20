@@ -6,7 +6,7 @@ import {
 
 describe("Vibe64 session source paths", () => {
   it("accepts a managed session checkout from its explicit source descriptor", () => {
-    const sourcePath = "/var/lib/vibe64/merc/projects/demo/sessions/active/session-1/source";
+    const sourcePath = "/home/merc/.local/state/vibe64/managed-sources/merc/projects/demo/sessions/active/session-1/source";
     const session = {
       metadata: {
         repository_mode: "github",
@@ -15,7 +15,7 @@ describe("Vibe64 session source paths", () => {
         source_path_authority: "managed_session_source"
       },
       sessionId: "session-1",
-      sessionRoot: "/var/lib/vibe64/state/demo/session-1"
+      sessionRoot: "/home/merc/.local/state/vibe64/demo/session-1"
     };
 
     expect(vibe64SessionSourcePath(session)).toBe(sourcePath);
@@ -36,17 +36,17 @@ describe("Vibe64 session source paths", () => {
     expect(vibe64SessionSourcePath(session)).toBe("");
   });
 
-  it("never treats a hosted namespace or retired targetRoot field as source", () => {
-    const hostedNamespace = "/var/lib/vibe64/merc/projects/demo";
+  it("never treats a project namespace or retired targetRoot field as source", () => {
+    const projectNamespace = "/home/merc/.local/state/vibe64/managed-sources/merc/projects/demo";
     const session = {
       metadata: {
         repository_mode: "github",
-        source_path: hostedNamespace
+        source_path: projectNamespace
       },
       sessionId: "session-1",
-      sessionRoot: "/var/lib/vibe64/state/demo/session-1",
-      standaloneSourceRoot: hostedNamespace,
-      targetRoot: hostedNamespace
+      sessionRoot: "/home/merc/.local/state/vibe64/demo/session-1",
+      standaloneSourceRoot: projectNamespace,
+      targetRoot: projectNamespace
     };
 
     expect(vibe64SessionSourcePath(session)).toBe("");

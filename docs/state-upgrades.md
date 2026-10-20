@@ -228,7 +228,7 @@ project archives do not cover this state. The explicit stopped-writer
 [learning-state recovery procedure](training-state-recovery.md) preserves private
 checkpoint bytes and validates a staged restore through these same readers.
 Its focused proof covers filesystem interruption and persistent lock contention,
-not actual fleet stopping, off-host retention or future coordinated project restores.
+not actual multi-machine stopping, off-host retention or future coordinated project restores.
 
 ## Training provenance and preparation compatibility
 
@@ -1275,7 +1275,7 @@ boundary through the ordinary stopped-service upgrade before activating writes.
 `20261020-training-step-progress` (a read-only learner-record preflight) and
 `20261021-practice-sessions-ordinary` (practice-session unbinding) were
 registered on main after the vibe64 0.1.35 release commit `a5266dcd` and are in
-no npm release. No ledger holds them: `vibe64-local update` refuses any
+no npm release. No ledger holds them: a host's in-place update refuses any
 candidate with a pending upgrade, so it never applies one; development parent
 copies applied the 20261021 owners directly, without the ledger; and no normal
 deployment ran after 0.1.35. A read-only check of the operator's local
@@ -1291,8 +1291,7 @@ projects now live in their learner's learning space, and old Learning data is
 disposable: there is no conversion. The candidate CLI supplies two owners, each
 with its own backup root under this upgrade's (`training/` and `colleague/`);
 Core keeps the registry, lock and ledger. `bin/upgrade-state.js` takes
-`--projects-root=<absolute>` on hosted installations (Online's
-`upgrade-vibe64-state.sh` passes `/var/lib/vibe64/<workspace>/projects`);
+`--projects-root=<absolute>` when a host keeps managed sources elsewhere;
 without it the local managed source root is resolved as runtime resolves it.
 
 - Training (`resetLearningForLearningSpace`) selects a practice project only
@@ -1350,7 +1349,7 @@ installation has been verified: remove `<projectsRoot>/.learning-reset-20261022`
 (hosted) or `<managedSourceRoot>/.learning-reset-20261022` (local) and
 `training/retired/20261022-learning-space-reset`. Vibe64 never removes them;
 until then they count in "Project files". Because this upgrade is pending,
-`vibe64-local update` refuses until a normal deployment has applied it. Keep
+a host's in-place update refuses until its normal upgrade path has applied it. Keep
 every writer stopped; never edit the ledger or start an older release against
 partial state; the older registry refuses this newer ledger. Focused evidence:
 `learningSpaceResetUpgrade.unit.test.js` (check-only, apply and interrupted

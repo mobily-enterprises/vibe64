@@ -15,7 +15,7 @@ import {
 } from "./support/base-shell/http";
 
 const sessionApi = `/vibe64/system-graph/sessions/${directChatSessionId}`;
-const systemWorldSourcePath = `/var/lib/vibe64/test/projects/example/sessions/active/${directChatSessionId}/source`;
+const systemWorldSourcePath = `/home/merc/.local/state/vibe64/managed-sources/test/projects/example/sessions/active/${directChatSessionId}/source`;
 const systemWorldSessionPayload = {
   ...directChatSessionPayload,
   agentSession: {

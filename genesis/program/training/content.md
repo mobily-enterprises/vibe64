@@ -463,8 +463,9 @@ a retry older than the replay window is refused as changed, never restoring olde
 text. Colleague treats the notes as data about the person, never as instructions;
 `learner-notes.clear` is the learner's browser action only. Each change publishes
 `vibe64.training.learner.changed` with reason `notes` and no attempt. Notes are
-never read by admission, step results or completion. Online keeps them in the
-normal learner store, also during an owner's author-preview trial. L shows them
+never read by admission, step results or completion. A host with an
+author-preview store keeps them in the normal learner store during an owner's
+trial. L shows them
 on Courses as "What my teacher knows about me" with Edit and Clear. The file is
 additive and needs no numbered upgrade (`docs/state-upgrades.md`).
 

@@ -71,8 +71,8 @@ owning callback; it cannot come from HTTP fields. Ordinary local catalogue and
 route refusals remain unchanged.
 
 The original managed repository creation and exact exercise source verification
-operations now live beside the original Public managed initializer. Online calls
-that same owner, retaining its hosted slug prevalidation and one configuration
+operations now live beside the original Public managed initializer. A host calls
+that same owner, retaining its own slug prevalidation and one configuration
 facility for its existing development database defaults. Standalone composition
 supplies no hosted database policy. The original initial commit, source exclusion,
 identity checks and atomic rollback remain with their original owners. Private
@@ -253,7 +253,7 @@ accepted), the layout and `PRACTICE_PROJECT_DELETED_CODE`.
 
 | | Path |
 |---|---|
-| Learning space root | `createStudioProjectContext({learningSpace: {root}})`; standalone default `<managedSourceRoot>/.learning`, Online `<projectsRoot>/.learning` |
+| Learning space root | `createStudioProjectContext({learningSpace: {root}})`; standalone default `<managedSourceRoot>/.learning`, or the root a host passes |
 | Project namespace and session source root | `<root>/<learnerKey>/<practiceId>/<slug>` |
 | Runtime root | `<systemRoot>/projects/<slug>` (the shared runtime inventory) |
 
@@ -261,7 +261,7 @@ The space sits inside the managed source tree, so agents, Preview and Files
 reach it through the managed-source permission contract (group, default ACL and
 umask); practice directories get no explicit mode, except the runtime root
 under the daemon-private system root. The default managed source root is the
-real workspace under `/var/lib/vibe64` whatever `home` says, so in a Node test
+real `~/Vibe64` folder in the person's home, so in a Node test
 process (`NODE_TEST_CONTEXT`) a context with neither `explicitManagedSourceRoot`
 nor `learningSpace.root` refuses to read or create practice storage instead of
 reaching the real space. `.learning` is not a valid slug, so the
@@ -304,7 +304,7 @@ lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; each
 `practice.list` row's lesson in `useVibe64PracticeProjects`), else that row's
 lesson code, else "Practice project" for a bare practice slug; no catalogue
 marker is read. Headers, the project
-switcher, both Practice lists and Online Management use it; Colleague's
+switcher, both Practice lists and a host's management pages use it; Colleague's
 protocol names practice projects the same way. On phones (≤600px) the project
 page heading takes only the room the header actions leave: the pane controls
 and the session controls teleported into the title area (new session, local Git
@@ -329,7 +329,7 @@ thrown by the page admission (`resolveProjectRequestContext` passes
 record is missing or carries the deletion marker (an exact delete request with
 `allowDeleting` still resumes), checked before the ownership refusal so storage
 recreated by a late request is not a 500. Other practice scopes keep refusing
-unmarked leftover storage. Feature routes and the Online gate map the code to 404
+unmarked leftover storage. Feature routes and a host's gate map the code to 404
 with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
 the routed project page. That page re-reads its selection without a reload on
 the project-changed event (the hosted delete publishes the catalogue change), on

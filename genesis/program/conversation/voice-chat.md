@@ -135,7 +135,7 @@ below the app bar without a scrim. On phones the existing fullscreen
 ConversationDialog is the frame. The original single aside Teleport selects the
 desktop or phone panel, while a root target-switch panel retains priority.
 Minimize, reopen and responsive changes keep that body and its runtime mounted;
-Close keeps the original explicit voice-end/discard operation. No Online layout
+Close keeps the original explicit voice-end/discard operation. No host layout
 state or second voice controller is added: both frames share the host's v-app.
 Its core transcript, custom composer, model picker, watches and assignments keep their original owners;
 the extracted JSKIT VoiceConversationControls mounts once beside that composer

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runSourceDevelopment, sourceDevelopmentSelected } from "./development/run.mjs";
+import { withHostPathGuard } from "./run-targeted-tests.mjs";
 
 const [target, ...extra] = process.argv.slice(2);
 if (extra.length || !/^tests\/client\/[a-zA-Z0-9_-]+\.vitest\.js$/u.test(target || "") || !statSync(target).isFile()) {
@@ -11,13 +12,14 @@ if (extra.length || !/^tests\/client\/[a-zA-Z0-9_-]+\.vitest\.js$/u.test(target 
   process.exitCode = 1;
 } else {
   const require = createRequire(import.meta.url);
+  const env = withHostPathGuard();
   if (sourceDevelopmentSelected()) {
     process.exitCode = await runSourceDevelopment({
       publicRoot: dirname(dirname(fileURLToPath(import.meta.url))),
-      command: process.execPath, args: ["tooling/run-targeted-client-tests.mjs", target]
+      command: process.execPath, args: ["tooling/run-targeted-client-tests.mjs", target], env
     });
   } else {
-    const result = spawnSync(process.execPath, [join(dirname(require.resolve("vitest/package.json")), "vitest.mjs"), "run", target, "--maxWorkers=1", "--no-file-parallelism"], { stdio: "inherit" });
+    const result = spawnSync(process.execPath, [join(dirname(require.resolve("vitest/package.json")), "vitest.mjs"), "run", target, "--maxWorkers=1", "--no-file-parallelism"], { env, stdio: "inherit" });
     if (result.error) throw result.error;
     process.exitCode = result.status ?? 1;
   }

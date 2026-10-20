@@ -40,11 +40,12 @@ started speaking, including after navigation or a failed-send retry. The normal
 default still sends completed speech automatically, and input and playback stay
 independent. There is no new settings control for this retained choice.
 
-Online waits for your saved settings before opening a new voice target. An existing
+A host with saved speech preferences waits for your saved settings before
+opening a new voice target. An existing
 voice target stays owned while those settings load. If loading fails, retry opening
 voice or use typed chat; your words are not automatically submitted. Reopening an
 already active target does not add a new microphone readiness gate.
 
-A temporary Online settings refresh error keeps an already loaded saved review
+A temporary settings refresh error keeps an already loaded saved review
 choice for the same account. It does not silently switch that active microphone
 to automatic sending. A new voice target still waits for its settings to load.

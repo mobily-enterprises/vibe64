@@ -10,7 +10,7 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 // (another project, another person, no attempt in progress there) is the
 // editor's plain save.
 //
-// A host with several learner stores (Online: normal and author-preview)
+// A host with several learner stores (for example normal and author-preview)
 // passes `selectOwners({ actor, practiceId })`, which returns the store's
 // { authorship } holding that practice project's attempt, or null.
 function validOwners(owners) {

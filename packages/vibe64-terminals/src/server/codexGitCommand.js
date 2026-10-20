@@ -959,7 +959,7 @@ function createCodexGitCommandService({
         ownerUserKey: actor.githubRequired === false
           ? ""
           : toolHome.ownerUserKey || actor.actorUserKey,
-        tenant: env.VIBE64_WORKSPACE || env.VIBE64_RUNTIME_NAMESPACE || ""
+        workspace: env.VIBE64_WORKSPACE || env.VIBE64_RUNTIME_NAMESPACE || ""
       },
       purpose: githubToken.token ? "github" : "codex",
       runtimes: ["git", "gh"],

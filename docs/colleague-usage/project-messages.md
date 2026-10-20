@@ -9,7 +9,7 @@ review the changes, publish if already authorized, and ping this project with
 the package versions.” The coding assistant uses:
 
 ```sh
-vibe64-helper session message-project jskit-ai "Review the changes, then ping vibe64-online with the result and published versions."
+vibe64-helper session message-project jskit-ai "Review the changes, then ping my-app with the result and published versions."
 ```
 
 Without `--session`, the destination's **currently selected session** receives the
@@ -98,7 +98,7 @@ Host-specific guidance shares the same bounded instruction budget; adding it mus
 not prevent either conversation from starting.
 
 Installed host instructions reach coding assistants through the host environment
-filter. On a configured VPS they include the local update and SSH restore commands;
+filter. A host that offers its own update or restore commands includes them there;
 hosts without that facility do not advertise it.
 
 If the destination has a pinned source session, that is its server-selected

@@ -141,8 +141,8 @@ project-scoped, so the started project is found by following the server's
 `/app` redirect with a `HEAD` fetch; the page is not reloaded, so L (and a
 Lesson finished screen) keeps its place. `/app/learning` is the app shell with L, the lesson bar and Account
 settings; it opens L on the lesson in progress (else Courses) and offers Open
-Learning, Open practice project and Leave lesson. Hosted routing of these
-addresses is Online's.
+Learning, Open practice project and Leave lesson. A host routes these
+addresses itself.
 
 ## Local practice-project address
 
@@ -214,8 +214,8 @@ ordinary `vibe64.source-editor.file.save` then records the save in the learner's
 authorship ledger (`codeAuthorship.js` `saveLearnerFile`) only when the request
 project is the actor's own practice project with an active attempt; every other
 save is the editor's plain save. Agent or other-route writes stay unledgered and
-still void a code attempt. Hosted Online installs the same owner with its
-normal/author-preview store selector (`selectOwners`).
+still void a code attempt. A host with several learner stores installs the same
+owner with its normal/author-preview store selector (`selectOwners`).
 
 Evidence: `tests/server/vibe64LearningDashboardRoutes.unit.test.js` (no Dashboard
 action declares lesson access; no lesson URLs), `vibe64TrainingCodePracticals`

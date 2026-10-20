@@ -29,14 +29,14 @@ describe("source editor chat links", () => {
 
   it("parses source links whose visible route path contains brackets", () => {
     expect(parseLongTextInlineParts(
-      "See [src/pages/home/receivals/[recordId]/edit.vue](</var/lib/vibe64/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1>)."
+      "See [src/pages/home/receivals/[recordId]/edit.vue](</home/merc/.local/state/vibe64/managed-sources/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1>)."
     )).toEqual([
       {
         text: "See ",
         type: "text"
       },
       {
-        href: "/var/lib/vibe64/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1",
+        href: "/home/merc/.local/state/vibe64/managed-sources/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1",
         text: "src/pages/home/receivals/[recordId]/edit.vue",
         type: "link"
       },
@@ -91,7 +91,7 @@ describe("source editor chat links", () => {
 
   it("maps absolute session source links even when the source root is not known", () => {
     expect(sourceEditorLinkTarget({
-      href: "/var/lib/vibe64/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/.github/workflows/verify.yml",
+      href: "/home/merc/.local/state/vibe64/managed-sources/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/.github/workflows/verify.yml",
       text: ".github/workflows/verify.yml"
     })).toEqual({
       column: 0,

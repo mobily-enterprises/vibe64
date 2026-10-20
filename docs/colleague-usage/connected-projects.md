@@ -145,8 +145,8 @@ that selection requires preparation again. Access is rechecked before each
 command and when checking whether preparation remains current.
 
 If a command reports that it requires an undeclared runtime, add that runtime
-to the affected command in Stack and prepare again. Vibe64 and Online's own
-Node composition checks declare both `nodejs` and `git`: Genesis inspects the
+to the affected command in Stack and prepare again. Vibe64's own Node
+composition checks declare both `nodejs` and `git`: Genesis inspects the
 Git worktree while verifying the composed application. Do not bypass the managed
 runtime restriction by adding host executables to PATH.
 

@@ -71,7 +71,7 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       const resolved = context.vibe64Action?.project;
       // Colleague acting for a learner in learning mode opens only that
       // lesson's practice projects. A host contributor that resolved the
-      // project (Online) already applied this through its authorizeProject.
+      // project already applied this through its authorizeProject.
       if (context.colleague && !resolved) await assertLearningModeAllowsProject({ actor: user, slug });
       if (resolved && resolved.slug !== slug) {
         throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");

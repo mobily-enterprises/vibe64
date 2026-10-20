@@ -97,25 +97,8 @@ stored outside that source under the real OS user's state directory:
   setup.json
 ```
 
-Online supplies explicit roots from its launcher. A typical single-owner layout
-is:
-
-```text
-/var/lib/vibe64/<owner>/
-  projects/
-    <project>/
-      .git/
-      application source...
-  services/
-    _daemon/
-      <service-owner>/
-        <service>/
-          data/
-    <project>/
-      <service-owner>/
-        <service>/
-          data/
-```
+A host that serves several owners passes explicit roots (`systemRoot`,
+`projectsRoot`, `managedSourceRoot`) to `startServer` and owns their layout.
 
 Sessions, runtime files, resolved Env values, secrets, domains, publish state,
 billing state, auth markers, terminal state, and UI preferences are Vibe64-owned
@@ -167,11 +150,12 @@ Directory policy is centralized in the Vibe64 root resolver. Feature packages
 must not invent state paths.
 
 ```text
-local editor systemRoot   = ~/.local/state/vibe64
+local editor systemRoot   = ~/.local/state/vibe64 (Linux, or $XDG_STATE_HOME/vibe64)
+                            ~/Library/Application Support/Vibe64 (macOS)
 serviceDataRoot           = <systemRoot>/services unless explicitly configured
 sourceRoot                = active source checkout
 projectRuntimeRoot        = Vibe64-owned runtime root
-managedSourceRoot         = /var/lib/vibe64/<owner>/projects by default
+managedSourceRoot         = ~/Vibe64 unless the host passes one
 projectSessionSourceRoot  = source bucket for Vibe64-created session copies
 ```
 
@@ -317,7 +301,7 @@ in managed environment values.
 
 Genesis Stack components declare resource kinds, environment variable names,
 and optional generated environment-file paths. They never supply or inspect
-secret values. Local Vibe64 uses the user's project Env; Vibe64 Online may
+secret values. Local Vibe64 uses the user's project Env; a host may
 provision declared MySQL or PostgreSQL resources and supply their values. Other
 Genesis hosts can satisfy the same declarations using their own environment
 mechanism.

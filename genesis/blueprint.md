@@ -119,7 +119,7 @@ archive as normal projects, without rebuildable dependencies) or deleted with
 one click, which ends its lesson attempt and keeps the learner's progress.
 Continuing a lesson reuses its practice project while it exists.
 Public Vibe64 owns this shared learning experience. Text lessons work without
-Online or a speech service; optional speech uses the existing voice integration.
+a host or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,
 with an isolated owner author trial of a committed draft.
 
@@ -146,7 +146,7 @@ shared-runtime move, an operator correction preserves its original thread and
 written discussion. Uncertain history or account ownership requires inspection;
 the correction never resends an old request or grants a different account access.
 The current text
-conversation supports an Online host's global voice controls and configured display name.
+conversation supports a host's global voice controls and configured display name.
 Chat message timestamps include the calendar date and local time, so people can
 distinguish messages from different days in Main and Colleague.
 Colleague displays reply text incrementally and a voice host can speak readable

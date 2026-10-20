@@ -97,7 +97,7 @@ or restarted server interaction is incomplete, not a learner pass; `stepChecks.j
 records a step result only for the learner's own App press. This internal owner has no API/tool registration or persisted state
 upgrade. Its focused fixture preserves the original topic
 check and uses real standalone finite execution against a loopback HTTP transport
-fixture; it does not claim hosted fleet or learner gesture acceptance.
+fixture; it does not claim hosted or learner gesture acceptance.
 
 ### Code checks
 
@@ -108,7 +108,7 @@ in the actor's own practice project with an active attempt to the generic
 source-editor save under the ledger lock and records it in that practice
 project's private `code-ledgers/<practiceId>.json`, shared by every attempt that
 continues the project. A save whose read-back bytes differ from the learner's
-text is recorded as foreign. A host with several stores (Online: normal and
+text is recorded as foreign. A host with several stores (for example normal and
 author-preview) passes `selectOwners({actor, practiceId})`, which returns the
 store whose in-progress attempt works in that practice project, or null for a
 plain save.
@@ -145,8 +145,8 @@ It authenticates the actor, finds any of that learner's retained attempts
 (the reader shows ended lessons too), and returns the verified SVG, controller
 and asset bytes of the pinned lesson revision as a bounded base64 envelope with
 `Cache-Control: private, no-store`, plus the diagram state a version 1 lesson
-saved, if any. Online reuses these owners with its paired normal/author-preview
-learner scope.
+saved, if any. A host with paired normal/author-preview learner scopes reuses
+these owners.
 
 ### Question-admission release boundary
 
@@ -177,7 +177,7 @@ and are not adopted by this bounded cut. There is no request backfill, new
 journal, runtime, native retirement or historical teaching-proof inference.
 
 Source and draft-original-file tests do not establish installed activation,
-actual fleet history counts, all-provider continuity or learner acceptance.
+actual installed history counts, all-provider continuity or learner acceptance.
 Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
 `bin/upgrade-state.js`, existing Core `stateUpgrades.js`/`stateUpgradeFiles.js`,
 original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.

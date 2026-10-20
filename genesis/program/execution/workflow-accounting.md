@@ -228,7 +228,7 @@ any user-facing explanation; a task denial is not memory-exhaustion evidence.
 Finish refuses a populated or unknown group. It atomically retains final
 counters before stopping the exact accounting unit and verifies inactivity.
 The root-owned `0600` receipt at
-`/run/vibe64-workflows/<workspace>/<uuid>.json`, beneath `0700` directories,
+`<helper run directory>/<workspace>/<uuid>.json`, beneath `0700` directories,
 survives a lost helper response or controller restart in the same boot.
 Only after recording durable history does the provider acknowledge that receipt;
 acknowledgement requires the unit to be empty and inactive. Repeated finish and

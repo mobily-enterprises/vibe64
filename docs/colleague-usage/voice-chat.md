@@ -50,8 +50,9 @@ Main's microphone and speaker controls sit with the expanded face, outside the
 original message buttons. Before speech is connected, the speaker button opens
 Main's speech connection and changes spoken replies without recording.
 Main defaults to spoken replies on when no choice is saved; Colleague defaults
-off. An explicit saved choice takes precedence. In Vibe64 Online, the speaker
-choice is personal and separate for Colleague and coding assistants. Both idle controls stay available while
+off. An explicit saved choice takes precedence. A host with saved speech
+preferences keeps the speaker choice personal and separate for Colleague and
+coding assistants. Both idle controls stay available while
 Talk is connecting. The fourth small round button, the minus after microphone,
 speaker and settings, tucks away the face; speech continues. The collapsed anonymous icon in the
 top-right corner is **Show avatar** and restores it. While hidden, a passive

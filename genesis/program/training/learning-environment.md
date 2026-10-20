@@ -30,8 +30,8 @@ Training actions.
 
 `createVibe64Learning({ request?, browserNavigation?, colleagueView?, runGuide? })`
 returns one frozen controller. `Vibe64AssistantShellContext` provides it under
-`VIBE64_LEARNING_KEY` in both hosts; public `App.vue` and Online's authenticated
-`Vibe64AuthGate` mount `Vibe64LearningOverlay` once, and the **L** button
+`VIBE64_LEARNING_KEY`; public `App.vue` (and a host's own authenticated shell)
+mount `Vibe64LearningOverlay` once, and the **L** button
 (`Vibe64LearningButton`, anchor `data-vibe64-guide="learning"`) sits first in
 `StudioAppShellLayout` and the management `ShellLayout` headers. Stacking is
 guide overlay 3000 above L 2400 above Colleague.
@@ -105,7 +105,7 @@ guide overlay 3000 above L 2400 above Colleague.
   `practice.archived.delete` are one click for the learner and need the
   person's confirmation (`confirmed: true`) from Colleague. Archive and delete
   run inside the learner's practice scope with the shared project archive
-  service (Online's `trainingHost.projectArchive`, a standalone
+  service (a host's `trainingHost.projectArchive`, a standalone
   `createProjectArchiveService` locally). The in-progress attempt on that
   project ends (`discard`) in the archiver's `beforeRemove` step, under its
   per-slug lock after every refusal (pinned session, storage headroom), so a

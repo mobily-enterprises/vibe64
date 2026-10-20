@@ -727,7 +727,7 @@ Project archives exclude `training/users`. Operators use the explicit
 [stopped-writer checkpoint and restore procedure](training-state-recovery.md),
 which preserves private bytes and validates candidates through the existing
 reservation and installed-content readers. Its fixture proof does not establish
-live fleet stopping, off-host retention or power-loss durability.
+live multi-machine stopping, off-host retention or power-loss durability.
 
 ## Official catalogue installation
 

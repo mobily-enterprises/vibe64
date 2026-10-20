@@ -5,6 +5,14 @@ import path from "node:path";
 import { runSourceDevelopment, sourceDevelopmentSelected } from "./development/run.mjs";
 
 const TEST_FILE_PATTERN = /\.test\.(?:c|m)?js$/u;
+const HOST_PATH_GUARD = new URL("./test-host-path-guard.mjs", import.meta.url).href;
+
+// Every test process, and each Node child it starts, loads the host path guard.
+export function withHostPathGuard(env = process.env) {
+  const option = `--import=${HOST_PATH_GUARD}`;
+  const current = String(env.NODE_OPTIONS || "");
+  return { ...env, NODE_OPTIONS: current.includes(option) ? current : `${current} ${option}`.trim() };
+}
 
 export function targetedTestArguments(cliArguments) {
   const positionalArguments = cliArguments.filter((argument) => !argument.startsWith("-"));
@@ -45,15 +53,17 @@ async function run() {
     throw new Error(`Targeted test path is not a file: ${target}`);
   }
 
+  const env = withHostPathGuard();
   if (sourceDevelopmentSelected()) {
     process.exitCode = await runSourceDevelopment({
       publicRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
-      command: process.execPath, args: ["--test", ...testArguments]
+      command: process.execPath, args: ["--test", ...testArguments], env
     });
     return;
   }
 
   const result = spawnSync(process.execPath, ["--test", ...testArguments], {
+    env,
     stdio: "inherit"
   });
 

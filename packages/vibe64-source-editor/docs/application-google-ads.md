@@ -5,7 +5,7 @@
 The public Vibe64 editor owns the Material 3 preparation/review screens and its
 existing Integration setup command transport. The generated application owns
 Google credentials, OAuth, refresh, account authorization and every Google API
-request. Vibe64 Online supplies no Ads registration, credential, gateway or
+request. No Vibe64 host supplies an Ads registration, credential, gateway or
 billing service. The Ads account owner pays Google.
 
 JSKIT provides reusable plan validation and Search operations in

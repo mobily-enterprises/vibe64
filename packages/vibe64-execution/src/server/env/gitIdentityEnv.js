@@ -71,15 +71,15 @@ function githubGitIdentity(github = {}) {
 }
 
 function fallbackGitIdentity({
-  tenant = "",
+  workspace = "",
   userKey = ""
 } = {}) {
   const safeUser = sanitizeEmailLabel(userKey, "user");
-  const safeTenant = sanitizeEmailLabel(tenant, "local");
+  const safeWorkspace = sanitizeEmailLabel(workspace, "local");
   return {
-    authorEmail: `${safeUser}@${safeTenant}.users.vibe64.invalid`,
+    authorEmail: `${safeUser}@${safeWorkspace}.users.vibe64.invalid`,
     authorName: `${safeUser} via Vibe64`,
-    committerEmail: `vibe64@${safeTenant}.users.vibe64.invalid`,
+    committerEmail: `vibe64@${safeWorkspace}.users.vibe64.invalid`,
     committerName: "Vibe64",
     source: "fallback"
   };
@@ -105,7 +105,7 @@ function resolveGitIdentity({
   ) ||
     githubGitIdentity(project.githubUser || session.githubUser || metadata.github_user) ||
     fallbackGitIdentity({
-      tenant: firstText(project.tenant, project.workspace, env.VIBE64_WORKSPACE, env.VIBE64_RUNTIME_NAMESPACE),
+      workspace: firstText(project.workspace, env.VIBE64_WORKSPACE, env.VIBE64_RUNTIME_NAMESPACE),
       userKey: firstText(
         userKey,
         actor.user?.username,

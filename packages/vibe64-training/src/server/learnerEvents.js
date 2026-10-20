@@ -6,8 +6,8 @@ import { learnerIdentity } from "./learnerState.js";
 // the learner's practice projects (reason "practice") or teacher notes
 // (reason "notes"). The event goes to every connected
 // client like the session notices; each host's realtime authorization admits
-// it only for the learner it names (Online: realtimeAuthorization.js). A
-// notification failure never changes or repeats the saved operation.
+// it only for the learner it names. A notification failure never changes or
+// repeats the saved operation.
 function createTrainingLearnerChangedPublisher(events) {
   if (typeof events?.publish !== "function") return null;
   return async function publishLearnerChanged({ actor, attemptId, reason = "" } = {}) {

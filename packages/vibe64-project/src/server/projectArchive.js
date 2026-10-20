@@ -62,9 +62,9 @@ const NO_HOST_RESOURCES = Object.freeze({
   artifactKinds: Object.freeze({})
 });
 
-// The project archive lifecycle shared by both hosts. A host with project
-// resources of its own (Online's managed databases and resource profiles)
-// supplies them as hostResources:
+// The project archive lifecycle shared by every host. A host with project
+// resources of its own (managed databases, resource profiles) supplies them
+// as hostResources:
 //   archive(ctx) -> artifacts written inside ctx.bundlePath,
 //   remove(ctx) after the bundle is validated (ctx.manifest is null for removeProject),
 //   forget(ctx) after the project's runtime state is gone,

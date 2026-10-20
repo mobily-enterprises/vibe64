@@ -633,7 +633,7 @@ function createAgentEnvCommandService({
     }
   });
   // The session binding is the authority for which project an agent may
-  // manage. Carry only that validated identity across the Online persistence
+  // manage. Carry only that validated identity across the host's persistence
   // boundary instead of relying on ambient request context surviving it.
   const productionEnvironment = Object.freeze({
     isUserValueRecord(record = null) {

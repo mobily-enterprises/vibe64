@@ -859,7 +859,7 @@ Conversion tag snippets display as text and are installed by the app's own conse
 and tracking implementation. Billing, website and advertiser readiness remain
 manual confirmations. Current editor management uses development Env, which may
 connect to a real Ads account. No account provisioning, PMax/Demand Gen, automatic
-coding-assistant tools, Online registration or advertising gateway is added.
+coding-assistant tools, host registration or advertising gateway is added.
 
 LinkedIn saves its confidential Web OAuth references and the four captured
 permission choices. OpenID and profile are required by shared configuration
@@ -1282,7 +1282,7 @@ transitions, including a missing origin; it does not claim host URL selection
 or provider callback reachability.
 
 Production integration credential and callback links carry the same draft-prefill
-parameters as development links to the Online production Env page. Credentials
+parameters as development links to the host's production Env page. Credentials
 carry only the key and secret flag; callback suggestions can include the public
 URL. Each Env page owns the explicit save operation.
 
@@ -1481,7 +1481,7 @@ import deduplication. Public Vibe64 continues to store only text/Env setup.
 Telegram provides app-owned plain text sending, chat actions and explicit update
 polling in addition to bot verification. Verification does not consume updates.
 The app owns its bot, chat authorization, single polling worker, durable offset
-and deduplication/recovery; neither public Vibe64 nor Online runs that worker.
+and deduplication/recovery; no Vibe64 host runs that worker.
 
 Confidence Flags and Confidence Exp reuse the project OAuth registration action.
 The owner registers against the fixed Confidence MCP authority; the client ID

@@ -60,6 +60,7 @@ export default defineConfig({
   ],
   test: {
     include: ["tests/client/**/*.vitest.js"],
+    setupFiles: ["./tooling/test-host-path-guard.mjs"],
     server: {
       // The published assistant ships Vue source that needs the Vue transform.
       deps: { inline: ["@jskit-ai/assistant-core", "@jskit-ai/assistant-runtime", "@jskit-ai/assistant-voice", "vuetify"] }

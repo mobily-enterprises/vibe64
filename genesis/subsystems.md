@@ -269,7 +269,7 @@ explicit numbered practice-history operation separately adopts only an exact
 preparation-owned initial session under its saved learner/pin and immutable
 project marker. Training owns authority/retry validation, Runtime owns offline
 metadata/archive staging, Core owns verified file publication and the ledger;
-Online retains stopped-service activation. Progress/source/native histories and
+A host retains stopped-service activation. Progress/source/native histories and
 unreferenced Working sessions remain unchanged. The read-only lesson visual
 resource serves the pinned diagram bytes of any of the learner's retained attempts.
 The Training Feature supplies
@@ -458,8 +458,8 @@ through bounded settings results.
 Owns the shared project archive lifecycle (`@local/vibe64-project/server/project-archive`):
 archiving a project into a bundle without rebuildable dependencies, and the
 light delete, for normal projects and, inside a practice scope, for practice
-projects in the learning space. Hosts add their own managed resources (Online:
-databases, resource profiles); Learning and ownership checks stay with Training.
+projects in the learning space. Hosts add their own managed resources (for
+example databases, resource profiles); Learning and ownership checks stay with Training.
 
 Owns project values supplied to managed application work.
 Colleague uses the canonical Project Env read/save actions through a bounded

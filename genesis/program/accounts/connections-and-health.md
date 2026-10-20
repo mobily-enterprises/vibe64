@@ -528,7 +528,7 @@ The unmodified CLI runs `claude auth login --claudeai`. Its browser-opener
 invocation writes an atomic private JSON handoff, giving the UI a Continue to
 Claude button without parsing terminal prose. The handoff uses the pinned CLI's
 hosted manual-code callback, so a browser on another machine never needs to
-reach the VPS through localhost. The user pastes the browser's
+reach the server through localhost. The user pastes the browser's
 authorization code into the guided form, which forwards it to the owned login
 terminal. Claude performs the exchange and stores its own credentials. Realtime
 completion rereads `claude auth status --json`; a failed login offers Try again,

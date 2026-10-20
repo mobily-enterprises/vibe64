@@ -56,7 +56,7 @@ describe("Vibe64 launch controls", () => {
   });
   const managedSourceMetadata = {
     source_kind: "session_clone",
-    source_path: "/var/lib/vibe64/user/projects/project-test/sessions/active/session-1/source",
+    source_path: "/home/merc/.local/state/vibe64/managed-sources/user/projects/project-test/sessions/active/session-1/source",
     source_path_authority: "managed_session_source"
   };
 

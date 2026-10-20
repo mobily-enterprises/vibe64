@@ -123,9 +123,9 @@ test("a project without a baseline source is unconfigured until a session exists
   assert.match(response.message, /Choose a project/u);
 });
 
-test("current app never inspects a hosted namespace as source", async () => {
+test("current app never inspects a project namespace as source", async () => {
   let inspected = false;
-  const hostedNamespace = "/var/lib/vibe64/merc/projects/demo";
+  const projectNamespace = "/home/merc/.local/state/vibe64/managed-sources/merc/projects/demo";
   const service = createService({
     inspectOutputs() {
       inspected = true;
@@ -134,7 +134,7 @@ test("current app never inspects a hosted namespace as source", async () => {
     projectService: {
       ...projectService(""),
       currentTargetRoot() {
-        return hostedNamespace;
+        return projectNamespace;
       }
     }
   });

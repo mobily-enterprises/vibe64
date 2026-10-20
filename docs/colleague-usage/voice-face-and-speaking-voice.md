@@ -25,13 +25,11 @@ Open the same **Voice settings** cog and choose **Speaking voice**.
 Opening settings loads the installed choices without recording. The
 change applies to the next spoken reply. In standalone Vibe64 it lasts for the
 current voice session; a host with saved speech preferences can replace this
-selector and retain the choice across sessions. Vibe64 Online saves your avatar
-and voice personally, separately for Colleague and coding assistants across
-projects. Its Management → **Speech and Colleague** page changes only the shared
-Colleague name; use each assistant's cog for your own avatar and voice.
-The personal cog's **Speak replies** choice controls output for that target.
-In Vibe64 Online, older browser-only speaker choices are not copied into personal
-settings; check **Speak replies** when first using your personal controls.
+selector and retain the choice across sessions, saving your avatar and voice
+personally, separately for Colleague and coding assistants. On such a host the
+personal cog's **Speak replies** choice controls output for that target; check
+it when first using your personal controls, because older browser-only speaker
+choices are not copied into personal settings.
 While that choice saves, the speaker control briefly waits; microphone capture
 and typed chat remain available.
 For coding assistants, **Read thinking**, **Read progress** and **Thinking sounds**
