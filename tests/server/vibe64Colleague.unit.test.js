@@ -2442,6 +2442,24 @@ test("first Colleague setup rejects without admission and retries the same autho
   }
 });
 
+test("a Colleague read reports no usable model before anything is sent, and stops once one is usable", async t => {
+  const f = await fixture(t, []);
+  let configured = false;
+  const resolvePurpose = f.terminals.resolveAssistantPurpose;
+  t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
+    return configured ? resolvePurpose.apply(this, args) : { available: false };
+  });
+  const before = await f.service.read({}, f.context);
+  assert.equal(before.modelSetupRequired, true);
+  assert.equal(before.status, "ready", "a read records no failure");
+  assert.deepEqual(before.messages, []);
+  assert.equal(f.observations.creates, 0);
+  configured = true;
+  const after = await f.service.read({}, f.context);
+  assert.notEqual(after.modelSetupRequired, true);
+  await f.service.close();
+});
+
 test("Colleague preparation with an existing runtime preserves rejected delivery uncertainty", async t => {
   const f = await fixture(t, [reply("Saved before the setup failure.")]);
   await f.send("An earlier accepted message.", "accepted-before-setup-failure");

@@ -35,8 +35,17 @@ const kind = computed(() => step.value?.check?.kind || "none");
 const requiredDone = computed(() => steps.value.filter(value => value.required).every(value => statusOf(value.id) === "passed"));
 
 // Choice: the selection is local until Check answer; the answer key never reaches the browser.
+// A passed question shows the selection its saved result recorded (also in a fresh browser).
 const selected = ref([]);
-watch(() => step.value?.id, () => { selected.value = []; });
+const savedSelection = computed(() => {
+  const passed = (lesson.value?.results || []).filter(result => result?.stepId === step.value?.id &&
+    result.kind === "choice" && result.outcome === "passed" && Array.isArray(result.evidence?.selected));
+  return passed.length ? passed.at(-1).evidence.selected.filter(Number.isSafeInteger) : null;
+});
+watch([() => step.value?.id, () => JSON.stringify(savedSelection.value)], ([stepId], [previousStepId] = []) => {
+  if (savedSelection.value) selected.value = [...savedSelection.value];
+  else if (stepId !== previousStepId) selected.value = [];
+}, { immediate: true });
 function toggleOption(optionIndex) {
   selected.value = selected.value.includes(optionIndex)
     ? selected.value.filter(value => value !== optionIndex) : [...selected.value, optionIndex];
@@ -240,10 +249,18 @@ async function finishLesson() {
             </button>
           </li>
         </ol>
-        <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">Every required step is passed. This lesson is complete.</p>
-        <v-btn v-if="requiredDone && !ended" color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
-          :disabled="Boolean(busy) || learningRevision === null" :loading="busy === 'end'" @click="finishLesson">Finish lesson</v-btn>
-        <v-btn v-if="practiceSlug" variant="text" rounded="pill" min-height="48" @click="openPractice">Open practice project</v-btn>
+        <div v-if="requiredDone || practiceSlug" class="vibe64-learning-reader__summary">
+          <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">
+            <span class="vibe64-learning-reader__complete-long">Every required step is passed. This lesson is complete.</span>
+            <span class="vibe64-learning-reader__complete-short">✓ Lesson complete</span>
+          </p>
+          <v-btn v-if="requiredDone && !ended" color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
+            :disabled="Boolean(busy) || learningRevision === null" :loading="busy === 'end'" @click="finishLesson">Finish lesson</v-btn>
+          <v-btn v-if="practiceSlug" variant="text" rounded="pill" min-height="48" aria-label="Open practice project" data-test="learning-open-practice" @click="openPractice">
+            <span class="vibe64-learning-reader__practice-long">Open practice project</span>
+            <span class="vibe64-learning-reader__practice-short">Practice</span>
+          </v-btn>
+        </div>
       </nav>
 
       <article v-if="step" ref="body" class="vibe64-learning-reader__body" :aria-labelledby="`vibe64-learning-step-${step.id}`" @scroll.passive="onScroll">
@@ -293,7 +310,8 @@ async function finishLesson() {
           <p v-if="checkReason" class="vibe64-learning-reader__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
         </section>
         <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-reader__check" aria-label="Self check">
-          <p>When you have done this step, mark it done.</p>
+          <!-- The step text says when to press Done; a pass kept from an earlier attempt is said here, as for questions. -->
+          <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-reader__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
           <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
             :disabled="Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `done:${step.id}`"
             @click="learning.done(step.id)">Done</v-btn>
@@ -359,7 +377,9 @@ async function finishLesson() {
 .vibe64-learning-reader__step.is-passed .vibe64-learning-reader__step-mark { background: rgb(var(--v-theme-success)); border-color: rgb(var(--v-theme-success)); color: rgb(var(--v-theme-on-success)); }
 .vibe64-learning-reader__step-title { overflow-wrap: anywhere; font-weight: 600; }
 .vibe64-learning-reader__step-status { font-size: 0.75rem; color: var(--v64-on-surface-variant, inherit); }
-.vibe64-learning-reader__complete { color: rgb(var(--v-theme-success)); font-weight: 600; }
+.vibe64-learning-reader__summary { display: grid; gap: var(--v64-space-2, 8px); justify-items: start; }
+.vibe64-learning-reader__complete { color: rgb(var(--v-theme-success)); font-weight: 600; margin: 0; }
+.vibe64-learning-reader__complete-short, .vibe64-learning-reader__practice-short { display: none; }
 .vibe64-learning-reader__body { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px) var(--v64-space-6, 32px); max-width: 52rem; width: 100%; }
 .vibe64-learning-reader__body h2 { font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif); margin: 0 0 var(--v64-space-3, 12px); }
 .vibe64-learning-reader__eyebrow { margin: 0 0 4px; font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.06em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
@@ -383,6 +403,11 @@ async function finishLesson() {
   .vibe64-learning-reader__steps ol { display: flex; overflow-x: auto; margin: var(--v64-space-2, 8px) 0 0; }
   .vibe64-learning-reader__step { grid-template-columns: 28px; min-width: 48px; justify-items: center; }
   .vibe64-learning-reader__step-title, .vibe64-learning-reader__step-status { display: none; }
+  /* Phone: completion and its buttons share one short row. */
+  .vibe64-learning-reader__summary { align-items: center; display: flex; flex-wrap: wrap; gap: 4px var(--v64-space-2, 8px); margin-top: var(--v64-space-2, 8px); }
+  .vibe64-learning-reader__complete { font-size: 0.875rem; }
+  .vibe64-learning-reader__complete-long, .vibe64-learning-reader__practice-long { display: none; }
+  .vibe64-learning-reader__complete-short, .vibe64-learning-reader__practice-short { display: inline; }
   .vibe64-learning-reader__body { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px) var(--v64-space-6, 32px); }
 }
 </style>

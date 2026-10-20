@@ -66,8 +66,9 @@ Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.
 A completed reply returns the chat to ready and restores the model controls
 through its live connection, without reloading the page.
-If the first request finds no usable model, Colleague shows a warning that your
-draft is kept and no request was sent. Choose **Open AI Accounts**. Hosted Vibe64
+If no usable model is connected yet, Colleague shows a warning as soon as you
+open it (or after your first request) that nothing is sent and your draft is
+kept. Choose **Open AI Accounts**. Hosted Vibe64
 opens Management → AI Accounts; standalone Vibe64 opens its existing Account
 settings on **AI Accounts**. Connect an AI and configure an available Senior
 model, then return and press **Send**. Opening setup does not send the draft or

@@ -109,7 +109,10 @@ the teacher notes, in both hosts. It feeds `useVibe64PracticeProjects` with L's
 own `learning.read` resource (`learningResource` option, no second read and no
 project listing), so it works in single-project local mode, where
 `GET /api/vibe64/projects` is not registered and the project picker cannot load.
-Rows are attempts carrying `practiceSlug`; open minimises L and pushes the
+Rows are attempts carrying `practiceSlug`, titled with the lesson title that
+L's course catalogue read (`coursesResource`) gives for the lesson code; the
+section and the teacher notes use the full content width like the course
+cards. Open minimises L and pushes the
 practice project's address, and the trash button posts `practice.delete` once
 (D-b, snackbar) and rereads. `learning.read` and `lesson.read` include
 `practiceSlug` only while the host facility's read-only `exists({slug, actor})`

@@ -65,7 +65,7 @@ function selectSurface(value) {
 function keydown(event) {
   if (event.key === "Escape" && !event.defaultPrevented) {
     event.stopPropagation();
-    learning.close();
+    learning.close("learner");
   }
 }
 </script>
@@ -87,16 +87,16 @@ function keydown(event) {
     <header class="vibe64-learning__bar">
       <span class="vibe64-learning__mark" aria-hidden="true">L</span>
       <nav class="vibe64-learning__tabs" aria-label="Learning">
-        <button type="button" class="vibe64-learning__tab" :aria-current="surface === 'courses' ? 'page' : undefined"
+        <button type="button" class="vibe64-learning__tab vibe64-learning__tab--courses" :aria-current="surface === 'courses' ? 'page' : undefined"
           data-test="learning-courses-tab" @click="selectSurface('courses')">Courses</button>
         <button v-if="learning.state.attemptId" type="button" class="vibe64-learning__tab"
           :aria-current="surface === 'lesson' ? 'page' : undefined" data-test="learning-lesson-tab"
           @click="selectSurface('lesson')">{{ lessonTitle }}</button>
       </nav>
       <v-btn variant="text" min-height="48" class="vibe64-learning__action" title="Minimise Learning; your place is kept"
-        aria-label="Minimise Learning" data-test="learning-minimise" @click="learning.minimise()">Minimise</v-btn>
+        aria-label="Minimise Learning" data-test="learning-minimise" @click="learning.minimise('learner')">Minimise</v-btn>
       <v-btn variant="text" min-height="48" min-width="48" icon class="vibe64-learning__action" title="Close Learning"
-        aria-label="Close Learning" data-test="learning-close" @click="learning.close()">
+        aria-label="Close Learning" data-test="learning-close" @click="learning.close('learner')">
         <span aria-hidden="true">✕</span>
       </v-btn>
     </header>
@@ -162,6 +162,8 @@ function keydown(event) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* "Courses" never shrinks; a long lesson title takes the remaining width. */
+.vibe64-learning__tab--courses { flex: 0 0 auto; }
 .vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning__action { flex: 0 0 auto; letter-spacing: 0; text-transform: none; }
