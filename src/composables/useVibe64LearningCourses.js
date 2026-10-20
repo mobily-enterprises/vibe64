@@ -159,6 +159,25 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     } finally { busy.value = false; }
   }
 
+  // Continue lesson: a new attempt of a left lesson (lesson.continue), in the
+  // same practice project when it still exists. A retry of the same ended
+  // attempt reuses its continuation request ID (at most 18 characters).
+  const continueIds = new Map();
+  async function continueLesson({ attemptId, expectedRevision } = {}) {
+    if (busy.value) return null;
+    const scope = capture();
+    const requestId = continueIds.get(attemptId) || globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 18);
+    continueIds.set(attemptId, requestId);
+    busy.value = true;
+    starting.value = true;
+    try {
+      const outcome = await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/continue`,
+        { requestId, expectedRevision }, scope);
+      continueIds.delete(attemptId);
+      return outcome;
+    } finally { busy.value = false; starting.value = false; }
+  }
+
   // Owner-only custom course through the original catalogue action; it admits
   // no lesson and changes no saved progress.
   async function createCourse({ title, topics, expectedRevision } = {}) {
@@ -219,5 +238,5 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
 
   return Object.freeze({ active: open,
     coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
-    refresh, startLesson, retryStart, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
+    refresh, startLesson, retryStart, resumeLesson, continueLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

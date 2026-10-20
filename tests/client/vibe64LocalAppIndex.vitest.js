@@ -1,24 +1,5 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-
-describe("Vibe64LocalAppIndex", () => {
-  it("uses the shared project selection gate instead of auto-selecting a project", async () => {
-    const source = await readFile(
-      path.resolve(process.cwd(), "src/components/studio/Vibe64LocalAppIndex.vue"),
-      "utf8"
-    );
-
-    expect(source).toContain("ProjectSelectionGate");
-    expect(source).toContain("force-picker");
-    expect(source).toContain("navigate-on-select");
-    expect(source).not.toContain("useVibe64ProjectsResource");
-    expect(source).not.toContain("router.replace");
-    expect(source).not.toContain("targetProjectSlug");
-    expect(source).not.toContain("watch(");
-    expect(source).not.toContain("v-for=\"project");
-  });
-});
+import { describe, expect, it, vi } from "vitest";
 
 // Actual Learning Courses and shell-context setup/templates; only the courses
 // adapter and presentation widgets are bounded fixtures.
@@ -179,4 +160,112 @@ it("shared original shell refs are per mount and only local composition supplies
     expect(localSource).toContain(':navigate="navigate"');
     expect(localSource).not.toContain("createConversationRuntime");
   } finally { local.app.unmount(); hosted.app.unmount(); }
+});
+
+// Local /app resolves to a place and never shows a Projects page (absent locally).
+describe("local /app resolver", () => {
+  async function resolveApp({ mode = { on: false }, currentProject = { slug: "my-app" }, actorKey = "local" } = {}) {
+    const replace = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ ok: true, currentProject }));
+    const learning = Vue.reactive({ state: { actorKey }, readLearningMode: vi.fn(async () => LearningEnvironment.normalizeLearningMode(
+      { ok: true, available: true, learningMode: mode })) });
+    const stub = name => ({ props: ["title", "error"], setup: (props, { slots }) => () => Vue.h("div", { "data-stub": name, ...props },
+      [slots.default?.(), slots["top-right"]?.(), slots.actions?.()]) });
+    const page = compiledUi(path.resolve("src/pages/app/index.vue"), {
+      vue: Vue, "vue-router": { useRouter: () => ({ replace }) },
+      "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request }) },
+      "@/components/StudioAppShellLayout.vue": { default: stub("shell") },
+      "@/components/studio/StudioErrorNotice.vue": { default: stub("error") },
+      "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") },
+      "@/lib/studioGateApi.js": { PROJECT_SELECTION_ENDPOINT: "/api/vibe64/projects" },
+      "@/lib/vibe64Learning.js": LearningEnvironment,
+      "@/lib/vibe64ProjectScope.js": { projectAppPath: slug => `/app/project/${slug}` },
+      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }
+    });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(page) });
+    for (const tag of ["v-btn", "v-skeleton-loader"]) app.component(tag, uiWidget);
+    app.mount(root);
+    for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
+    return { app, root, replace, request, learning };
+  }
+
+  it("opens the lesson's practice project during a lesson, without reading the started project", async () => {
+    const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "training-abc", projectSlugs: ["training-abc"] } });
+    try {
+      expect(view.replace).toHaveBeenCalledWith("/app/project/training-abc");
+      expect(view.request).not.toHaveBeenCalled();
+    } finally { view.app.unmount(); }
+  });
+
+  it("opens the Learning page for a lesson without a practice project", async () => {
+    const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "", projectSlugs: [] } });
+    try { expect(view.replace).toHaveBeenCalledWith("/app/learning"); } finally { view.app.unmount(); }
+  });
+
+  it("opens the started project outside a lesson, once the overlay binds the viewer", async () => {
+    const view = await resolveApp({ actorKey: "" });
+    try {
+      expect(view.learning.readLearningMode, "the mode read waits for the signed-in viewer").not.toHaveBeenCalled();
+      view.learning.state.actorKey = "local";
+      for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
+      expect(view.request).toHaveBeenCalledWith("/api/vibe64/projects", { method: "GET" });
+      expect(view.replace).toHaveBeenCalledWith("/app/project/my-app");
+    } finally { view.app.unmount(); }
+  });
+
+  it("explains a missing started project with Try again instead of a Projects page", async () => {
+    const view = await resolveApp({ currentProject: null });
+    try {
+      expect(view.replace).not.toHaveBeenCalled();
+      const notice = nodes(view.root).find(node => node.props?.["data-stub"] === "error");
+      expect(notice.props.error).toContain("no started project");
+      expect(nodes(view.root).some(node => node.props?.["data-stub"] === "account-settings")).toBe(true);
+    } finally { view.app.unmount(); }
+  });
+});
+
+// /app/learning: the shell for a lesson without a practice project, and L outside a project.
+describe("Learning page", () => {
+  async function openPage(mode) {
+    const learning = Vue.reactive({ state: { actorKey: "local", modeBusy: "" }, inLesson: mode.on === true, lessonTitle: mode.lessonTitle || "",
+      learningMode: LearningEnvironment.normalizeLearningMode({ ok: true, available: true, learningMode: mode }),
+      readLearningMode: vi.fn(async () => learning.learningMode), show: vi.fn(async () => null), leaveLesson: vi.fn(async () => ({ ok: true })) });
+    const stub = name => ({ setup: (_props, { slots }) => () => Vue.h("div", { "data-stub": name },
+      [slots["top-left"]?.(), slots["top-right"]?.(), slots.default?.()]) });
+    const page = compiledUi(path.resolve("src/pages/app/learning.vue"), {
+      vue: Vue,
+      "@/components/StudioAppShellLayout.vue": { default: stub("shell") },
+      "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") },
+      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
+      "@/lib/vibe64Learning.js": LearningEnvironment
+    });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(page) });
+    app.component("v-btn", uiWidget);
+    app.mount(root);
+    for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
+    return { app, root, learning };
+  }
+  const byTest = (root, id) => nodes(root).find(node => node.props?.["data-test"] === id);
+
+  it("opens L on the lesson in progress, with Leave lesson and Account settings", async () => {
+    const view = await openPage({ on: true, attemptId: "a", lessonTitle: "Set yourself up", practiceSlug: "", projectSlugs: [] });
+    try {
+      expect(view.learning.show).toHaveBeenCalledWith({ surface: "lesson", attemptId: "a" });
+      expect(nodes(view.root).some(node => node.props?.["data-stub"] === "account-settings")).toBe(true);
+      byTest(view.root, "learning-page-leave").props.onClick();
+      expect(view.learning.leaveLesson).toHaveBeenCalledOnce();
+      expect(byTest(view.root, "learning-page-projects")).toBeUndefined();
+    } finally { view.app.unmount(); }
+  });
+
+  it("opens L on the courses outside a lesson, with a way back to the projects", async () => {
+    const view = await openPage({ on: false });
+    try {
+      expect(view.learning.show).toHaveBeenCalledWith({ surface: "courses" });
+      expect(byTest(view.root, "learning-page-projects").props.to).toBe("/app");
+      expect(byTest(view.root, "learning-page-leave")).toBeUndefined();
+    } finally { view.app.unmount(); }
+  });
 });

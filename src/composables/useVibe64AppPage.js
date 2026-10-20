@@ -32,7 +32,7 @@ import {
 import {
   VIBE64_PROJECT_CHANGED_EVENT
 } from "@/lib/studioGateApi.js";
-import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
+import { isPracticeProjectSlug, projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
   vibe64SessionDebugDurationMs,
@@ -130,14 +130,16 @@ function useVibe64AppPage() {
   const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
   const targetRoot = computed(() => String(projectSelection.targetRoot.value || "").trim());
   const learning = useVibe64Learning();
-  // A practice project is named by its lesson (the open lesson's title when it
-  // owns this project), never by its training-<attempt> slug.
+  // A practice project is named by its lesson (the lesson in progress or the
+  // open lesson when it owns this project), never by its training-<id> slug.
   const projectTitle = computed(() => {
     const slug = projectSlug.value;
     if (!slug) return finalPathSegment(targetRoot.value);
+    const mode = learning?.learningMode;
     const lesson = learning?.lesson?.value;
-    return projectDisplayName(projects.value.find(project => project?.slug === slug) || { slug },
-      { lessonTitle: lesson?.practiceProjectSlug === slug ? lesson.title : "" });
+    return projectDisplayName(projects.value.find(project => project?.slug === slug) || { slug }, {
+      lessonTitle: mode?.practiceSlug === slug ? mode.lessonTitle : lesson?.practiceProjectSlug === slug ? lesson.title : ""
+    });
   });
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
@@ -208,7 +210,7 @@ function useVibe64AppPage() {
     enabled: computed(() => Boolean(projectSlug.value)),
     event: VIBE64_PROJECT_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => projectRuntimeClosedPayloadMatches(payload, projectSlug.value, {
-      practice: Boolean(projects.value.find(project => project?.slug === projectSlug.value)?.practice)
+      practice: isPracticeProjectSlug(projectSlug.value)
     }),
     onEvent: ({ payload = {} } = {}) => {
       handleProjectRuntimeClosed(payload);

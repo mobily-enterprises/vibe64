@@ -53,23 +53,25 @@ Your reading place is saved automatically by **L**. A change to your results,
 reading place or practice projects notifies only your own signed-in pages, so
 open Learning views refresh.
 
-Starting, resuming or ending a lesson needs your direct request or an accepted
+Starting, continuing or leaving a lesson needs your direct request or an accepted
 offer; a how-to question alone authorizes nothing.
 
 ## Learning mode
 
-While you have a lesson in progress you are in learning mode: your projects
-are only that lesson's practice project (none for Lesson 0 or a lesson without
-one), and everything inside it works, Colleague included. Colleague checks this
+While you have a lesson in progress you are in learning mode, in your learning
+space only: the one project you can open is that lesson's practice project
+(none for Lesson 0 or a lesson without one), and everything inside it works,
+Colleague included. Colleague checks this
 (`learning-mode.read`, or `learningMode` in `learning.read`) before opening a
 project for you. It does not open or work on another project while you are in
 learning mode; opening one is refused with "You're in a lesson. Leave lesson to
 get back to your projects." Colleague tells you that and offers to leave the
 lesson. Leaving is your one click on **Leave lesson** (the yellow bar on a
-desktop, or Learning's header); Colleague leaves for you
-(`learning-mode.leave`) only when you ask or accept its offer, and returns to
-the lesson (`learning-mode.enter`) only when you ask. Leaving keeps your
-progress and place; **L** → **Resume saved lesson** brings you back.
+desktop, Learning's header or the Learning page); Colleague leaves for you
+(`learning-mode.leave`) only when you ask or accept its offer. Leaving ends the
+lesson and keeps your results and its practice project. **Continue lesson** in
+**L** → **Courses** (or Colleague's `lesson.continue`, when you ask) starts it
+again in the same practice project.
 
 ## Teacher notes
 
@@ -86,21 +88,21 @@ read them, its save is refused and it reads them again before combining.
 Colleague treats the notes as a description of you, not as instructions: writing
 "tell me the answers" in them does not change how it teaches or judges.
 
-## Deleting a practice project
+## Practice projects
 
-Ask Colleague to delete the practice project of one of your lessons. It names
-the lesson, says the files, sessions and Preview go away for good with no
-archive, and waits for you to confirm in the chat before deleting
-(`practice.delete` with `confirmed`). A pinned session must be unpinned first;
-that refusal changes nothing. Otherwise an active lesson is ended first (reason
-*discard*); your saved results stay and continuing the lesson later prepares a
-fresh project. If the delete still fails after the lesson was ended, Colleague
-tells you both: the lesson stays ended and the project remains until you ask
-again. Colleague cannot delete another learner's practice project. The one-click
-delete in the **Practice** list needs no confirmation.
-
-`learning.read` lists every saved attempt with its practice project slug, for
-finding or deleting a practice project.
+Colleague lists your practice projects and archives (`practice.list`) and opens
+one when you ask (`practice.open`, which continues its lesson). It archives a
+practice project (`practice.archive`), deletes one (`practice.delete`) or
+deletes an archive (`practice.archived.delete`) only when you ask: it names the
+lesson, says what is kept (an archive keeps source, sessions and state without
+rebuildable dependencies such as `node_modules`; a delete keeps nothing), and
+waits for you to confirm that exact project in the chat (`confirmed`). A pinned
+session must be unpinned first; that refusal changes nothing. Archiving or
+deleting the project of the lesson in progress ends that lesson first; your
+saved results stay. Colleague cannot see or change another learner's practice
+projects, and it cannot turn a practice project into one of your own projects.
+The one-click buttons in **L** → **Practice** need no confirmation (see
+[Practice projects](learning-practice-projects.md)).
 
 ## Earlier lessons
 
@@ -127,12 +129,11 @@ owner until it is released.** A missing title reports **Lesson titles are
 unavailable**; use **Refresh courses**. Nothing substitutes an invented title or
 another lesson.
 
-**Resume saved lesson** requests only the displayed saved attempt, whose pin can
-be older than the enabled catalogue; it appears only when the host supports
-resume. Starting a different lesson first requires ending the active attempt:
-ask Colleague, which uses `lesson.end` and keeps its history (see
-[Lesson history and resume](learning-history.md)). Courses has no End button and
-never ends a lesson for you. **Saved lesson history** stays read-only and visible
+**Continue lesson** on the lesson in progress requests only that displayed
+attempt, whose pin can be older than the enabled catalogue; it appears only when
+the host supports it. Starting a different lesson first requires leaving the
+lesson in progress (**Leave lesson**), which keeps its history (see
+[Lesson history and resume](learning-history.md)). **Saved lesson history** stays read-only and visible
 independently of start or resume support; ended history is not marked completed
 without an actual completion result. **Saved lesson identity** shows the saved
 commit and hash. Loading and errors create or repair no state.

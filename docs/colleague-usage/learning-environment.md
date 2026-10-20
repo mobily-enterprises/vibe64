@@ -21,34 +21,53 @@ hides it and returns you to exactly that page. The app underneath keeps working 
 
 ## Learning mode (a lesson in progress)
 
-While a lesson is going (started and not yet finished or ended), you are in
-learning mode everywhere in Vibe64, for your account: in every tab and on every
-device. The header stays Learning yellow, with a warm yellow wash and an amber
+A lesson is either in progress or not. While one is in progress (started and
+not yet left or finished), you are in learning mode everywhere in Vibe64, for
+your account: in every tab and on every device. The header stays Learning yellow, with a warm yellow wash and an amber
 line along its bottom, even after you hide Learning and work in the normal app.
 On a desktop the bar also shows the lesson's name and a **Leave lesson**
 button; on a phone the yellow header and the amber dot on the L say it, and
 **Leave lesson** is in Learning's own header.
 
-In learning mode your projects are only this lesson's practice project:
+In learning mode you are in your learning space only (see
+[Practice projects](learning-practice-projects.md)):
 
-- The project lists, the project switcher and **Practice** under Courses show
-  only this lesson's practice project. Lesson 0 and other lessons without a
-  practice project show no projects.
+- The lesson's practice project is the one project you can open. Hosted
+  project lists are empty, with the note "You're in a lesson. Leave lesson to
+  get back to your projects." A local Vibe64 shows the practice project instead
+  of the project it was started in.
 - Opening any other project (for example from a saved address) is refused with
-  "You're in a lesson. Leave lesson to get back to your projects." and you are
-  taken back.
+  that note and you are taken to the practice project.
+- Lesson 0 and other lessons without a practice project open no project; they
+  use the Learning page (below).
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
 
 **Leave lesson** is always one click (the yellow bar on a desktop, Learning's
-header, or the note shown when another project was refused). It pauses the
-lesson: your progress and place are kept, learning mode ends and all your
-projects come back. To return, open **L** and press **Resume saved lesson** (or
-**Continue**), or start the lesson again; you are back in learning mode.
-Finishing the lesson (the **Lesson finished** screen) or **End this lesson**
-(for an earlier-format lesson) ends learning mode for good and the header
-returns to normal. The workspace owner works the same way.
+header, the Learning page, or the note shown when another project was refused).
+It ends the lesson: your step results and the practice project are kept,
+learning mode ends, the header returns to normal and your projects come back.
+A practice project page then goes to `/app`. To return, press **Continue
+lesson** in **L** → **Courses**, or **Open** in **L** → **Practice**: a new
+attempt starts in the same practice project (a new one if it was deleted), at
+the first required step you have not passed, and you are back in learning
+mode. Finishing the lesson (the **Lesson finished** screen) also ends learning
+mode. There is no paused lesson. The workspace owner works the same way.
+
+## The Learning page and `/app`
+
+The Learning page (`/app/learning`) is the place for a lesson without a
+practice project, such as Lesson 0. It has the normal header with **L**, the
+yellow bar and **Leave lesson** during a lesson, and **Account settings** at the
+right, and it opens **L** on the lesson. Hide **L** and the page shows the
+lesson's name with **Open Learning** and **Leave lesson**. Outside a lesson it
+opens **L** on **Courses**, with **Back to your projects**.
+
+A local Vibe64 has no Projects page. Its `/app` address opens the lesson's
+practice project during a lesson, the Learning page during a lesson without one,
+and otherwise the project Vibe64 was started in. If no project was started, it
+says so with **Try again**. On hosted Vibe64 `/app` is the Projects page.
 
 An old `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
@@ -56,8 +75,8 @@ project page.
 ## The Learning screen
 
 Learning fills the screen, covering the header, so its own top bar starts with
-the same yellow **L** in the same place, followed by a **Courses** tab and a
-tab named after your open lesson. There is no separate minimise or close
+the same yellow **L** in the same place, followed by a **Courses** tab, a
+**Practice** tab and a tab named after your open lesson. There is no separate minimise or close
 button.
 
 - Press that **L** (label **Hide Learning**, tooltip **Hide Learning (your
@@ -67,11 +86,12 @@ button.
 - Press **L** again to come back to exactly where you were: the same tab,
   lesson, step and scroll position.
 - Your place is also saved for your account. A reload in the same tab reopens
-  L where it was; in another browser L opens on **Courses**, and **Resume saved
+  L where it was; in another browser L opens on **Courses**, and **Continue
   lesson** opens the lesson at the step you last read.
 
-On a phone Learning is a full-screen sheet; the **Courses** tab always shows in
-full and a long lesson title is shortened. The lesson's steps become a row of
+On a phone Learning is a full-screen sheet; the **Courses** and **Practice**
+tabs always show in full, a long lesson title is shortened, and the tab row
+scrolls sideways when it does not fit. The lesson's steps become a row of
 numbered circles at the top (a tick for a passed step); the step text scrolls
 below them. When there are more circles than fit, the row scrolls sideways and
 follows the current step as you press **Next step** or **Previous step**, or
@@ -85,15 +105,18 @@ catalogue** and, for the workspace owner, **New course**; see
 
 - **Start**, **Start next lesson**, **Start lesson** or **Try preview** start
   the lesson and open it in the lesson tab. No chat is created.
-- **Continue** and **Resume saved lesson** open your saved lesson.
+- **Continue lesson** opens your lesson in progress, or starts a lesson you
+  left again in its practice project.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
-- Below the courses, **Practice** lists your practice projects by name,
-  **Practice:** followed by the lesson title (or its lesson code), with the
-  project's address underneath. Select one to open it (Learning
-  minimises); the bin button deletes it for good.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the same
   reader (see the hosted author-trial guide).
+
+## Practice
+
+The **Practice** tab lists your practice projects with their lesson and status,
+and your archived ones. **Open**, **Archive** and **Delete** are one click each;
+see [Practice projects](learning-practice-projects.md).
 
 ## What my teacher knows about me
 
@@ -208,10 +231,12 @@ lesson…"); the yellow in-lesson state and Colleague's step button then
 disappear. If finishing is not confirmed, an error appears with **Finish
 lesson**; press it to try again. You don't need an AI for this. Then choose:
 
-- **Practice project** (when the lesson has one): **Delete practice project**
-  removes it at once, with no archive: its files, sessions and Preview are gone
-  for good. **Keep practice project** keeps it; open or delete it later from
-  **Courses → Practice**.
+- **Practice project** (when the lesson has one): **Archive practice project**
+  archives it (without rebuildable dependencies such as `node_modules`) and
+  lists it under **Practice → Archived**. **Delete practice project** removes it
+  at once, with no archive: its files, sessions and Preview are gone for good.
+  **Keep** keeps it; open, archive or delete it later from **L** →
+  **Practice**.
 - **Next lesson: <title>** starts the next unfinished lesson of the same course
   (when there is one).
 - **Back to courses**.
@@ -245,10 +270,7 @@ minimises and shows the lesson at that step; hiding Learning with **L** (or
 Escape) returns you to Colleague's chat, not the page behind it. **Show me** and
 **Open practice project** still show the app.
 
-An ended lesson stays readable with the note **This lesson has ended.** A lesson
-started in the earlier teacher format shows **This lesson was started with the
-earlier teacher format** and **End this lesson**; end it, then start it again
-from Courses. Its earlier completions still count.
+An ended lesson stays readable with the note **This lesson has ended.**
 
 ## Problems
 
@@ -264,7 +286,8 @@ Colleague can explain these controls, open Learning on a lesson and step,
 point at the L button, and teach a step when you press **Teach me** or ask. In
 learning mode it opens and works only in the lesson's practice project; when
 you ask for another project it says you're in a lesson and offers to leave it.
-It leaves (or returns to) the lesson only when you ask it to. It
+It leaves or continues a lesson only when you ask it to, and archives or
+deletes a practice project only after you confirm that exact project. It
 cannot press **Done**, answer a question or pass a check for you; those are
 your own actions. Colleague can read and rewrite its notes about you when you ask
 (for example "forget that I find Git hard"); only you can **Clear** them.

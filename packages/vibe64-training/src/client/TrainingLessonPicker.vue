@@ -28,7 +28,7 @@ const props = defineProps({
   availableError: { type: String, default: "" },
   installState: { type: Object, default: null }
 });
-const emit = defineEmits(["refresh", "start", "resume", "install"]);
+const emit = defineEmits(["refresh", "start", "resume", "continue", "install"]);
 const selectionId = ref("");
 const text = value => typeof value === "string" && value.length > 0;
 const revision = value => Number.isSafeInteger(value) && value >= 0;
@@ -108,6 +108,10 @@ function requestStart() {
 }
 function requestResume() {
   if (resumeEnabled.value) emit("resume", { attemptId: savedAttempt.value.attemptId });
+}
+// Continue lesson for a left lesson: a new attempt of its latest ended attempt.
+function requestContinue(attempt) {
+  if (startPossible.value && attempt?.attemptId) emit("continue", { attemptId: attempt.attemptId, expectedRevision: props.learningResult.revision });
 }
 // Course Start selects one exact displayed lesson for the same original start.
 function startLesson(course, lesson) {
@@ -190,7 +194,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       <div class="tlp-hero__text">
         <p class="tlp-eyebrow"><v-icon :icon="icons.school" size="18" /> Learning</p>
         <h2>Courses</h2>
-        <p>Choose a course to see its lessons and your progress, or resume your saved lesson.</p>
+        <p>Choose a course to see its lessons and your progress, or continue your lesson.</p>
         <p v-if="courses.length" class="tlp-hero__meta">
           {{ plural(courses.length, 'course') }} · {{ plural(uniqueLessonCount, 'lesson') }} installed
         </p>
@@ -219,7 +223,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       </TrainingProgressRing>
       <div v-else class="tlp-saved__badge" aria-hidden="true"><v-icon :icon="icons.bookmark" size="36" /></div>
       <div class="tlp-saved__body">
-        <p id="tlp-saved-heading" class="tlp-eyebrow tlp-eyebrow--learning">Saved lesson · {{ savedAttempt.pin.lesson.code }}</p>
+        <p id="tlp-saved-heading" class="tlp-eyebrow tlp-eyebrow--learning">Lesson in progress · {{ savedAttempt.pin.lesson.code }}</p>
         <h3 class="tlp-saved__title">{{ savedPlace.lessonTitle || 'Continue where you left off' }}</h3>
         <p class="tlp-saved__meta">
           <template v-if="savedPlace.courseTitle">{{ savedPlace.courseTitle }} · </template>{{ savedAttempt.pin.course.courseId }} · {{ savedAttempt.pin.course.release }}
@@ -229,11 +233,11 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
           {{ completion.passed }} of {{ completion.required }} required steps passed. {{ completion.completed ? 'This lesson is complete.' : 'Continue the remaining steps.' }}
         </p>
         <p v-else class="tlp-saved__status">Saved attempt retained. Completion has not been reported.</p>
-        <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Resume rechecks this same attempt; reading it does not repair it.</p>
-        <p v-if="!canResume" class="tlp-note">Lesson resume is unavailable in this installation. Your saved attempt remains visible.</p>
+        <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Continue lesson rechecks this same attempt; reading it does not repair it.</p>
+        <p v-if="!canResume" class="tlp-note">Continuing a lesson is unavailable in this installation. Your lesson remains visible.</p>
         <div class="tlp-saved__actions">
           <v-btn color="primary" variant="flat" rounded="pill" size="large" min-height="48" :prepend-icon="icons.play"
-            :disabled="!resumeEnabled" @click="requestResume">Resume saved lesson</v-btn>
+            :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
         </div>
         <details class="tlp-identity">
           <summary><v-icon :icon="icons.info" size="18" /><span>Saved lesson identity</span><v-icon class="tlp-chevron" :icon="icons.chevronDown" size="18" /></summary>
@@ -281,6 +285,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       @back="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
       @resume="requestResume"
+      @continue="requestContinue(openCourse.progress.continueFrom)"
     />
     <template v-else>
       <div v-if="courses.length" class="tlp-grid training-lesson-picker__courses">
@@ -290,7 +295,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
           <div class="tlp-card__cover">
             <TrainingCourseArt :course-id="course.courseId" :title="course.title" :statuses="progress.lessons.map(value => value.status)" />
             <div class="tlp-card__chips">
-              <span v-if="progress.activeHere" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.bookmark" size="14" />Saved lesson</span>
+              <span v-if="progress.activeHere" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.bookmark" size="14" />Lesson in progress</span>
               <span v-else-if="progress.total && progress.completed === progress.total" class="tlp-chip tlp-chip--success"><v-icon :icon="icons.trophy" size="14" />Course complete</span>
               <span class="tlp-chip" :class="`tlp-chip--${statusTone(course)}`"><v-icon :icon="statusIcon[statusTone(course)]" size="14" />{{ courseStatusLabel(course) }}</span>
               <span v-if="updateFor(course)" class="tlp-chip tlp-chip--learning"><v-icon :icon="icons.update" size="14" />Update available: {{ updateFor(course).release }}</span>
@@ -315,7 +320,9 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
           </div>
           <div class="tlp-card__actions">
             <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
-              :disabled="!resumeEnabled" @click="requestResume">Continue</v-btn>
+              :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
+            <v-btn v-else-if="progress.continueFrom" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
+              :disabled="!startPossible" @click="requestContinue(progress.continueFrom)">Continue lesson</v-btn>
             <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!startPossible" @click="startLesson(course, progress.next)">{{ previewCourse(course) ? 'Try preview' : 'Start' }}</v-btn>
             <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
@@ -337,7 +344,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')" />
     </template>
     <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
-      <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Resume your saved lesson. Starting a different lesson requires explicitly ending that attempt first; its history remains retained.</span></p>
+      <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>A lesson is in progress. Continue it, or use Leave lesson before starting a different one; its results are kept.</span></p>
       <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. The lesson opens when this finishes.</span></p>
       <p v-else-if="startUnconfirmed" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
       <p v-else-if="!canStart" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Starting lessons is unavailable in this installation.</span></p>

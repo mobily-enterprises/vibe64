@@ -6,6 +6,7 @@ import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
+import { isPracticeProjectSlug } from "@/lib/vibe64PracticeProjectName.js";
 import { VIBE64_LEARNING_MODE_NOTE, learningModeRedirect } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
@@ -28,17 +29,17 @@ const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
 watch(actorKey, value => learning?.setViewer(value), { immediate: true });
 onBeforeUnmount(() => learning?.setViewer(""));
 
-// While learning mode is on (server-backed: a lesson started or resumed and not
-// left or ended), every app bar of this host stays Learning yellow, with L open
+// While learning mode is on (server-backed: a lesson in progress, not left or
+// finished), every app bar of this host stays Learning yellow, with L open
 // or hidden (vibe64-m3.css styles body.vibe64-in-lesson).
 const IN_LESSON_CLASS = "vibe64-in-lesson";
 watch(() => Boolean(learning?.inLesson), value => globalThis.document?.body?.classList.toggle(IN_LESSON_CLASS, value),
   { immediate: true });
 onBeforeUnmount(() => globalThis.document?.body?.classList.remove(IN_LESSON_CLASS));
 
-// Learning mode keeps the learner in the lesson's projects: any other project
-// URL goes to the lesson's practice project (or the app home without one), with
-// a short note. The server refuses those projects' requests anyway.
+// Learning mode keeps the learner in the learning space: any other project URL
+// goes to the lesson's practice project (or the Learning page without one),
+// with a short note. The server refuses those projects' requests anyway.
 const route = useRoute();
 const router = useRouter();
 watch(() => [learning?.learningMode, route?.fullPath], () => {
@@ -50,7 +51,11 @@ watch(() => [learning?.learningMode, route?.fullPath], () => {
 }, { immediate: true });
 
 const leaving = computed(() => learning?.state.modeBusy === "leave");
-// Leave lesson pauses it (progress and place kept) and gives the projects back.
+// When the lesson ends (left or finished, here or elsewhere) the projects come
+// back: a practice project page returns to /app.
+watch(() => Boolean(learning?.inLesson), (value, previous) => {
+  if (previous && !value && router && isPracticeProjectSlug(projectSlugFromRoute(route))) void router.replace("/app");
+});
 async function leaveLesson() {
   if (await learning.leaveLesson()) learning.minimise();
 }
@@ -92,7 +97,7 @@ useRealtimeEvent({
 
 function lessonOpened(outcome) {
   void learning.show({ surface: "lesson", attemptId: outcome.attemptId });
-  // Starting or resuming re-enters learning mode on the server.
+  // Starting or continuing a lesson turns learning mode on.
   void learning.readLearningMode();
 }
 function selectSurface(value) {
@@ -136,6 +141,12 @@ function keydown(event) {
           Courses
         </button>
         <button
+          type="button" class="vibe64-learning__tab vibe64-learning__tab--practice" :aria-current="surface === 'practice' ? 'page' : undefined"
+          data-test="learning-practice-tab" @click="selectSurface('practice')"
+        >
+          Practice
+        </button>
+        <button
           v-if="learning.state.attemptId" type="button" class="vibe64-learning__tab"
           :aria-current="surface === 'lesson' ? 'page' : undefined" data-test="learning-lesson-tab"
           @click="selectSurface('lesson')"
@@ -145,7 +156,7 @@ function keydown(event) {
       </nav>
       <button
         v-if="learning.inLesson" type="button" class="vibe64-learning__leave" :disabled="leaving"
-        title="Pause this lesson and get back to your projects" data-test="learning-header-leave"
+        title="End this lesson (results and practice project kept) and get back to your projects" data-test="learning-header-leave"
         @click="leaveLesson"
       >
         Leave lesson
@@ -154,16 +165,18 @@ function keydown(event) {
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__courses">
         <Vibe64LearningCourses :learning="courses" @opened="lessonOpened" />
-        <!-- The learner's own practice projects (C5), listed, opened and deleted here. -->
-        <Vibe64LearningPractice :learning="learning" :courses="courses" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
+      </div>
+      <!-- The learner's practice projects in the learning space. -->
+      <div v-else-if="surface === 'practice'" class="vibe64-learning__courses">
+        <Vibe64LearningPractice :learning="learning" :learning-revision="learningRevision" />
       </div>
       <!-- A completed lesson's "Lesson finished" screen (it ends the attempt). -->
       <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__courses">
         <Vibe64LearningFinished :learning="learning" :courses="courses" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
       </div>
-      <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
+      <Vibe64LearningReader v-else :learning="learning" />
     </div>
   </div>
   <v-snackbar
@@ -259,8 +272,8 @@ function keydown(event) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* "Courses" never shrinks; a long lesson title takes the remaining width. */
-.vibe64-learning__tab--courses { flex: 0 0 auto; }
+/* "Courses" and "Practice" never shrink; a long lesson title takes the remaining width. */
+.vibe64-learning__tab--courses, .vibe64-learning__tab--practice { flex: 0 0 auto; }
 .vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning__leave {

@@ -1,105 +1,108 @@
 import fs from "node:fs";
-import { compile } from "@vue/compiler-dom";
-import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
-import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ commands: [], resources: [] }));
+const mocks = vi.hoisted(() => ({ resources: [] }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource(options) {
-    const resource = { options, data: Vue.ref(null), reload: vi.fn(async () => null) };
+    const resource = { options, data: Vue.ref(null), loadError: Vue.ref(""), reload: vi.fn(async () => null) };
     mocks.resources.push(resource);
     return resource;
   }
 }));
-vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand(options) {
-    const command = Vue.reactive({ options, messageType: "", message: "", calls: [],
-      async run(context) {
-        this.calls.push({ context, request: options.buildCommandOptions(null, { context }), body: options.buildRawPayload(null, { context }) });
-        return { ok: true };
-      } });
-    mocks.commands.push(command);
-    return command;
-  }
-}));
 
-import { practiceProjectsFromLearning, useVibe64PracticeProjects } from "../../src/composables/useVibe64PracticeProjects.js";
+import { practiceListFromResult, useVibe64PracticeProjects } from "../../src/composables/useVibe64PracticeProjects.js";
 import { isPracticeProjectSlug, projectDisplayName } from "../../src/lib/vibe64PracticeProjectName.js";
 
-const attempt = (attemptId, practiceSlug, extra = {}) => ({ attemptId, practiceSlug, pin: { lesson: { code: "V64-START-02" } }, ...extra });
+const PRACTICE = "12345678-1234-4234-8234-123456789abc";
+const listed = { ok: true,
+  projects: [
+    { practiceId: PRACTICE, slug: "training-x", lesson: { code: "V64-START-02", title: "First change" }, status: "in-progress", createdAt: "2026-10-20T09:00:00.000Z" },
+    { practiceId: "p2", slug: "training-y", lesson: { code: "V64-START-03" }, status: "finished", deleting: true },
+    { practiceId: "", slug: "training-z", lesson: {}, status: "finished" }
+  ],
+  archived: [{ practiceId: "p3", archiveId: "20261020T101500Z-training-w", lesson: { code: "V64-START-01", title: "Orientation" }, archivedAt: "2026-10-20T10:15:00.000Z" },
+    { practiceId: "p4", lesson: {} }] };
 
-describe("practice projects from the learner's saved lessons", () => {
-  afterEach(() => { mocks.commands.length = 0; mocks.resources.length = 0; });
+describe("practice projects in the learning space", () => {
+  afterEach(() => { mocks.resources.length = 0; });
 
-  it("lists only attempts that still have a practice project, once each", () => {
-    expect(practiceProjectsFromLearning({ ok: true, available: true, attempts: [
-      attempt("a1", "training-a1"), attempt("a2", ""), attempt("a3", "training-a1"), attempt("a4", "training-a4", { ended: { reason: "restart" } })
-    ] })).toEqual([
-      { slug: "training-a1", attemptId: "a1", lessonCode: "V64-START-02", lessonTitle: "", name: "Practice: V64-START-02", ended: false, mine: true, deleteAvailable: true },
-      { slug: "training-a4", attemptId: "a4", lessonCode: "V64-START-02", lessonTitle: "", name: "Practice: V64-START-02", ended: true, mine: true, deleteAvailable: true }
-    ]);
-    // A server without the v2 attempts list (and so without practice.delete) offers no rows or deletes.
-    expect(practiceProjectsFromLearning({ ok: true, available: true, active: attempt("b1", "training-b1"),
-      history: [attempt("b2", "training-b2")] })).toEqual([]);
-    expect(practiceProjectsFromLearning({ ok: false })).toEqual([]);
-    expect(practiceProjectsFromLearning({ ok: true, available: false, attempts: [attempt("c", "training-c")] })).toEqual([]);
+  it("lists practice.list projects by lesson and status, and archived ones by lesson and date", () => {
+    expect(practiceListFromResult(listed)).toEqual({
+      projects: [
+        { practiceId: PRACTICE, slug: "training-x", name: "Practice: First change", status: "in-progress", statusLabel: "In progress" },
+        // An interrupted deletion offers only Delete.
+        { practiceId: "p2", slug: "training-y", name: "Practice: V64-START-03", status: "deleting", statusLabel: "Being deleted" }
+      ],
+      archived: [{ practiceId: "p3", archiveId: "20261020T101500Z-training-w", name: "Practice: Orientation", archivedAt: "2026-10-20T10:15:00.000Z" }]
+    });
+    expect(practiceListFromResult({ ok: false })).toEqual({ projects: [], archived: [] });
   });
 
-  it("names each practice project by its lesson title from courses.list, else its lesson code", () => {
-    const courses = { ok: true, courses: [{ lessons: [{ code: "V64-START-02", hash: "h2", title: "First change" },
-      { code: "V64-START-03", hash: "h3", title: "Second change" }] }] };
-    const rows = practiceProjectsFromLearning({ ok: true, available: true, attempts: [
-      attempt("a1", "training-a1", { pin: { lesson: { code: "V64-START-02", hash: "h2" } } }),
-      attempt("a2", "training-a2", { pin: { lesson: { code: "V64-START-03", hash: "other-release" } } }),
-      attempt("a3", "training-a3", { pin: { lesson: {} } })
-    ] }, courses);
-    expect(rows.map(row => [row.slug, row.lessonTitle, row.name])).toEqual([
-      ["training-a1", "First change", "Practice: First change"],
-      ["training-a2", "", "Practice: V64-START-03"],
-      ["training-a3", "", "Practice project"]
-    ]);
-  });
-
-  it("deletes the learner's own practice project with one request and rereads the list", async () => {
+  it("retries an unconfirmed open with the same request ID and uses a new one after a confirmed open", async () => {
     const scope = Vue.effectScope();
-    const practice = scope.run(() => useVibe64PracticeProjects({ enabled: true }));
-    const [resource] = mocks.resources;
-    expect(resource.options.path).toBe("/api/vibe64/training/learning");
-    expect(resource.options.realtime.events).toEqual(["vibe64.training.learner.changed", "vibe64.project.changed"]);
-    resource.data.value = { ok: true, available: true, attempts: [attempt("12345678-1234-4234-8234-123456789abc", "training-x")] };
-    expect(practice.practiceProjects.value).toHaveLength(1);
-    expect(await practice.deletePracticeProject(practice.practiceProjects.value[0])).toBe(true);
-    const [command] = mocks.commands;
-    expect(command.calls).toEqual([{ context: { attemptId: "12345678-1234-4234-8234-123456789abc" },
-      request: { method: "POST", path: "/api/vibe64/training/attempts/12345678-1234-4234-8234-123456789abc/practice/delete" }, body: {} }]);
-    expect(command.options.messages.success).toBe("Practice project deleted.");
-    expect(resource.reload).toHaveBeenCalledTimes(1);
-    expect(practice.deletingSlug.value).toBe("");
-    expect(await practice.deletePracticeProject({ ...practice.practiceProjects.value[0], deleteAvailable: false })).toBe(false);
-    expect(command.calls).toHaveLength(1);
+    const request = vi.fn().mockRejectedValueOnce(new Error("ack lost")).mockResolvedValue({ ok: true, attempt: { attemptId: "a2" } });
+    const practice = scope.run(() => useVibe64PracticeProjects({ enabled: true, request }));
+    mocks.resources[0].data.value = listed;
+    const [project] = practice.projects.value;
+    expect(await practice.open(project, { expectedRevision: 4 })).toBeNull();
+    expect(practice.error.value).toBe("ack lost");
+    await practice.open(project, { expectedRevision: 4 });
+    await practice.open(project, { expectedRevision: 5 });
+    const ids = request.mock.calls.map(([, options]) => options.body.requestId);
+    expect(ids[1]).toBe(ids[0]);
+    expect(ids[2]).not.toBe(ids[0]);
     scope.stop();
   });
 
-  it("reuses L's own learning.read resource instead of reading again", async () => {
+  it("opens, archives and deletes through the practice actions, one at a time, and rereads the list", async () => {
     const scope = Vue.effectScope();
-    const learningResource = { data: Vue.ref({ ok: true, available: true, attempts: [attempt("12345678-1234-4234-8234-123456789abc", "training-l")] }),
-      reload: vi.fn(async () => null) };
-    const practice = scope.run(() => useVibe64PracticeProjects({ enabled: true, learningResource }));
-    expect(mocks.resources).toHaveLength(0);
-    expect(practice.practiceProjects.value.map(value => value.slug)).toEqual(["training-l"]);
-    expect(await practice.deletePracticeProject(practice.practiceProjects.value[0])).toBe(true);
-    expect(learningResource.reload).toHaveBeenCalledTimes(1);
+    const calls = [];
+    let release;
+    const request = vi.fn((url, options) => { calls.push({ url, ...options }); return new Promise(resolve => { release = resolve; }); });
+    const practice = scope.run(() => useVibe64PracticeProjects({ enabled: true, request }));
+    const [resource] = mocks.resources;
+    expect(resource.options.path).toBe("/api/vibe64/training/practice");
+    expect(resource.options.realtime.event).toBe("vibe64.training.learner.changed");
+    expect(resource.options.realtime.matches({ payload: { reason: "notes" } }), "notes never touch a practice project").toBe(false);
+    resource.data.value = listed;
+    const [project] = practice.projects.value;
+    const archived = practice.archived.value[0];
+
+    const opening = practice.open(project, { expectedRevision: 4 });
+    expect(practice.busy.value).toBe(`open:${PRACTICE}`);
+    expect(await practice.archive(project), "one action at a time").toBeNull();
+    release({ ok: true, attempt: { attemptId: "a2" } });
+    expect(await opening).toEqual({ ok: true, attempt: { attemptId: "a2" } });
+    for (const [run, result] of [[() => practice.archive(project), { ok: true }], [() => practice.remove(project), { ok: true }],
+      [() => practice.removeArchive(archived), { ok: true }]]) {
+      const pending = run();
+      release(result);
+      await pending;
+    }
+    expect(calls).toEqual([
+      { url: `/api/vibe64/training/practice/${PRACTICE}/open`, method: "POST", body: { requestId: expect.any(String), expectedRevision: 4 } },
+      { url: `/api/vibe64/training/practice/${PRACTICE}/archive`, method: "POST", body: {} },
+      { url: `/api/vibe64/training/practice/${PRACTICE}/delete`, method: "POST", body: {} },
+      { url: "/api/vibe64/training/practice/p3/archives/20261020T101500Z-training-w/delete", method: "POST", body: {} }
+    ]);
+    expect(resource.reload).toHaveBeenCalledTimes(4);
+    expect(practice.busy.value).toBe("");
+
+    const refused = practice.remove(project);
+    release({ ok: false, error: "This practice project is in use." });
+    expect(await refused).toBeNull();
+    expect(practice.error.value).toBe("This practice project is in use.");
     scope.stop();
   });
 
   it("stays empty and reads nothing when disabled", () => {
     const scope = Vue.effectScope();
     const practice = scope.run(() => useVibe64PracticeProjects({ enabled: false }));
-    mocks.resources[0].data.value = { ok: true, available: true, attempts: [attempt("a", "training-a")] };
+    mocks.resources[0].data.value = listed;
     expect(mocks.resources[0].options.enabled.value).toBe(false);
-    expect(practice.practiceProjects.value).toEqual([]);
+    expect(practice.projects.value).toEqual([]);
+    expect(practice.archived.value).toEqual([]);
     scope.stop();
   });
 });
@@ -121,41 +124,9 @@ describe("practice project display name", () => {
   });
 });
 
-describe("project picker Practice section", () => {
-  it("lists practice projects separately, opens them and deletes only the learner's own, where its host offers delete, with one click", async () => {
-    const deletePracticeProject = vi.fn(async () => true);
-    const filename = new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url).pathname;
-    const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
-    const script = compileScript(descriptor, { id: "practice-gate" });
-    const { code } = compile(descriptor.template.content, { mode: "function", prefixIdentifiers: true, bindingMetadata: script.bindings });
-    const render = new Function("Vue", code)(Vue);
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { render: () => null } }] });
-    await router.push("/app");
-    const practiceProjects = Vue.ref([
-      { slug: "training-mine", attemptId: "a", lessonCode: "V64-START-02", lessonTitle: "First change", name: "Practice: First change", ended: false, mine: true, deleteAvailable: true },
-      { slug: "training-other", attemptId: "b", lessonCode: "", lessonTitle: "", name: "Practice project", ended: false, mine: false, deleteAvailable: true },
-      { slug: "training-hosted", attemptId: "c", lessonCode: "", lessonTitle: "", name: "Practice project", ended: false, mine: true, deleteAvailable: false }
-    ]);
-    const ctx = Vue.reactive({ busy: false, deletingPracticeSlug: "", practiceProjects, projects: [], deletePracticeProject,
-      mdiDeleteOutline: "icon", openPracticeProject: (slug) => router.push(`/app/project/${slug}`),
-      displayError: "", selectionInitialLoading: false, runtimeReady: true, selectedSlotVisible: false, pickerVisible: true,
-      projectsRoot: "~/vibe64", newProjectName: "", creating: false,
-      selectingSlug: "", $props: {}, $slots: {} });
-    const tree = render.call(null, ctx, [], ctx, ctx, ctx, ctx);
-    const nodes = [];
-    const walk = (node) => {
-      if (!node || typeof node !== "object") return;
-      if (Array.isArray(node)) return node.forEach(walk);
-      nodes.push(node);
-      walk(node.children);
-      if (node.children && typeof node.children === "object" && typeof node.children.default === "function") walk(node.children.default());
-    };
-    walk(tree);
-    const rows = nodes.filter((node) => node.props?.["data-practice-slug"]);
-    expect(rows.map((node) => node.props["data-practice-slug"])).toEqual(["training-mine", "training-other", "training-hosted"]);
-    const deletes = nodes.filter((node) => String(node.props?.["aria-label"] || "").startsWith("Delete Practice"));
-    expect(deletes.map((node) => node.props["aria-label"])).toEqual(["Delete Practice: First change"]);
-    await deletes[0].props.onClick();
-    expect(deletePracticeProject).toHaveBeenCalledWith(practiceProjects.value[0]);
+describe("project picker", () => {
+  it("has no Practice section: practice projects live only in L's Practice tab", () => {
+    const source = fs.readFileSync(new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url), "utf8");
+    expect(source).not.toMatch(/practiceProjects|showPractice|data-practice-slug|deletePracticeProject/u);
   });
 });

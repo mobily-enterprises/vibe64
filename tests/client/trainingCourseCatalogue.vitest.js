@@ -118,7 +118,7 @@ describe("Training course catalogue", () => {
       learningResult: learning({ active }), canStart: true, canResume: true, availableResult: available([course({ installed: "enabled" })]) });
     expect(html).toContain("getting-started · 0.1.0");
     expect(html).toContain("Disabled for new lessons");
-    expect(html).toContain("Resume saved lesson");
+    expect(html).toContain("Continue lesson");
   });
 
   it("keeps unchanged lessons completed and marks changed ones as completed in an earlier release", async () => {

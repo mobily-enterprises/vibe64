@@ -19,11 +19,8 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import {
-  useVibe64PracticeProjects
-} from "@/composables/useVibe64PracticeProjects.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
-import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
+import { isPracticeProjectSlug } from "@/lib/vibe64PracticeProjectName.js";
 import { VIBE64_LEARNING_MODE_PROJECT_CODE } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
@@ -32,8 +29,7 @@ const cachedProjectSelections = new Map();
 const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
 
 function useProjectSelectionGate(emit, {
-  scopeSelectionToCurrentProject = false,
-  showPractice = false
+  scopeSelectionToCurrentProject = false
 } = {}) {
   const creating = ref(false);
   const selectingSlug = ref("");
@@ -55,10 +51,9 @@ function useProjectSelectionGate(emit, {
     })),
     refreshOnPull: true,
     requestRecoveryLabel: "Projects",
-    // A routed practice page also re-reads its selection when Learning
-    // deletes that practice project (the learner's own "practice" notice), so
-    // an open page turns into the deleted notice without a reload. Hosted
-    // project-page deletes already publish the project-changed event.
+    // A routed practice page also re-reads its selection on the learner's
+    // Learning changes (Practice archive or delete), so an open page turns into
+    // the deleted notice without a reload.
     realtime: scopeSelectionToCurrentProject ? {
       events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_TRAINING_LEARNER_CHANGED_EVENT],
       matches: ({ event, payload } = {}) => event !== VIBE64_TRAINING_LEARNER_CHANGED_EVENT ||
@@ -121,37 +116,17 @@ function useProjectSelectionGate(emit, {
     writeMethod: "POST"
   });
 
-  // Learning mode (server-backed): only the lesson's projects are listed and
-  // no project is created; the server filters too, this is defense in depth.
+  // Learning mode (server-backed): the server lists no project during a
+  // lesson; the picker says why and offers no project creation.
   const learning = hasInjectionContext() ? useVibe64Learning() : null;
   const learningModeOn = computed(() => learning?.learningMode?.on === true);
-  const inLearningMode = (slug) => !learningModeOn.value ||
-    (learning.learningMode.projectSlugs || []).includes(String(slug || ""));
   // A project outside the lesson was refused: L's guard redirects; no error.
   const learningModeBlocked = computed(() =>
     selectionResource.query?.error?.value?.code === VIBE64_LEARNING_MODE_PROJECT_CODE);
 
   const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
   const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
-  const listedProjects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
-  // Practice is split at presentation: the listing stays unfiltered.
-  const projects = computed(() => listedProjects.value.filter((project) => !project?.practice && inLearningMode(project?.slug)));
-  // Standalone practice projects live outside the projects folder; their
-  // source is the learner's own saved lessons (learning.read).
-  const practice = useVibe64PracticeProjects({ enabled: showPractice });
-  const practiceProjects = computed(() => (showPractice ? practice.practiceProjects.value
-    : listedProjects.value.filter((project) => project?.practice).map((project) => ({
-      slug: project.slug,
-      attemptId: String(project.practice.attemptId || ""),
-      lessonCode: String(project.practice.lessonCode || ""),
-      lessonTitle: "",
-      name: projectDisplayName(project),
-      ended: false,
-      mine: project.practice.mine === true,
-      // The hosted host owns its delete (Online management page); the shared
-      // picker only lists and opens these.
-      deleteAvailable: false
-    }))).filter((project) => inLearningMode(project?.slug)));
+  const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);
   const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
@@ -211,10 +186,7 @@ function useProjectSelectionGate(emit, {
     leaveLesson: () => learning?.leaveLesson(),
     loadProjectSelection,
     newProjectName,
-    deletePracticeProject: practice.deletePracticeProject,
-    deletingPracticeSlug: practice.deletingSlug,
     practiceDeleted,
-    practiceProjects,
     projectSelection,
     projects,
     projectsRoot,
@@ -280,11 +252,10 @@ function useProjectSelectionGate(emit, {
   }
 }
 
-// Learning's practice notice names the attempt; a practice project's slug is
-// training-<attempt id without dashes>.
+// Any Learning change of the learner except their notes may have archived or
+// deleted the practice project a page shows; ordinary project pages ignore it.
 function isPracticeNoticeForProject(payload = {}, slug = "") {
-  const attemptId = String(payload?.attemptId || "").replaceAll("-", "");
-  return payload?.reason === "practice" && Boolean(attemptId) && String(slug || "") === `training-${attemptId}`;
+  return payload?.reason !== "notes" && isPracticeProjectSlug(slug);
 }
 
 function projectSelectionGateEndpoint({

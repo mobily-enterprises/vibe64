@@ -37,6 +37,7 @@ function courseProgress(course, lessonProgress = [], active = null, history = []
     const earlier = status === "completed" ? null : earlierCompletion(lesson, lessonProgress, attempts);
     return { lesson, status, ...(earlier ? { earlier } : {}) };
   });
+  const next = lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews))?.lesson || null;
   const counted = lessons.some(value => value.lesson.required) ? lessons.filter(value => value.lesson.required) : lessons;
   const topics = course.topics.map(topic => ({ ...topic,
     lessons: lessons.filter(value => value.lesson.topicId === topic.topicId && value.lesson.topicRelease === topic.release) }));
@@ -45,7 +46,11 @@ function courseProgress(course, lessonProgress = [], active = null, history = []
     completed: counted.filter(value => value.status === "completed").length,
     total: counted.length,
     activeHere: Boolean(active && active.pin.course.courseId === course.courseId && active.pin.course.release === course.release),
-    next: lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews))?.lesson || null
+    next,
+    // The next lesson was left before: Continue lesson starts a new attempt of
+    // its latest ended attempt (in the same practice project) instead of Start.
+    continueFrom: next ? history.findLast(attempt => attempt?.ended && attempt.pin?.lesson?.code === next.code &&
+      attempt.pin.lesson.hash === next.hash) || null : null
   };
 }
 

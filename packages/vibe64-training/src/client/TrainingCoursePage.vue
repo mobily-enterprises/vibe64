@@ -4,8 +4,8 @@ import { courseStatusLabel, earlierCompletionLabel, offered, previewCourse, prev
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 
-// Presentational course page. The parent picker owns every start/resume gate
-// and emits only the original start and resume intents. Every mastery state,
+// Presentational course page. The parent picker owns every start/continue gate
+// and emits only the original start, resume and continue intents. Every mastery state,
 // count and ring below is drawn from the supplied saved progress only.
 const props = defineProps({
   course: { type: Object, required: true },
@@ -15,7 +15,7 @@ const props = defineProps({
   canTryPreviews: Boolean,
   resumeAllowed: Boolean
 });
-const emit = defineEmits(["back", "start", "resume"]);
+const emit = defineEmits(["back", "start", "resume", "continue"]);
 
 const complete = computed(() => Boolean(props.progress.total && props.progress.completed === props.progress.total));
 const availability = computed(() => courseStatusLabel(props.course));
@@ -69,14 +69,15 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Lesson in progress</p>
           <p class="training-course-page__next-title">Pick up where you left off.</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!resumeAllowed" @click="emit('resume')">Continue</v-btn>
+        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!resumeAllowed" @click="emit('resume')">Continue lesson</v-btn>
       </template>
       <template v-else-if="progress.next">
         <div class="training-course-page__next-text">
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
+        <v-btn v-if="progress.continueFrom" color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('continue')">Continue lesson</v-btn>
+        <v-btn v-else color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
       </template>
       <div v-else-if="complete" class="training-course-page__next-text">
         <p class="training-course-page__next-label">All lessons done</p>

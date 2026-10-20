@@ -12,6 +12,8 @@ import { trainingGuideRequest, trainingGuideSteps, TRAINING_GUIDE_PLACES } from 
 // change below is one of those actions, followed by a fresh lesson.read.
 const TRAINING_PATH = "/api/vibe64/training";
 const attemptPath = (attemptId, suffix = "") => `${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}${suffix}`;
+const practicePath = (practiceId = "", suffix = "") =>
+  `${TRAINING_PATH}/practice${practiceId ? `/${encodeURIComponent(practiceId)}${suffix}` : ""}`;
 // HTTP routes for the C3 actions (registerRoutes.js assembles their input).
 const VIBE64_LEARNING_ROUTES = Object.freeze({
   lessonRead: attemptId => attemptPath(attemptId, "/lesson"),
@@ -21,22 +23,28 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   stepDone: attemptId => attemptPath(attemptId, "/steps/done"),
   readerSave: attemptId => attemptPath(attemptId, "/reader"),
   lessonEnd: attemptId => attemptPath(attemptId, "/end"),
-  practiceDelete: attemptId => attemptPath(attemptId, "/practice/delete"),
   visual: (attemptId, visualId) => attemptPath(attemptId, `/visuals/${encodeURIComponent(visualId)}`),
   // Learner notes (C7): the signed-in learner's own teacher notes.
   notes: `${TRAINING_PATH}/teacher-notes`,
   notesClear: `${TRAINING_PATH}/teacher-notes/clear`,
-  // Learning mode: the learner's server-backed lesson-in-progress state.
+  // Learning mode: the learner's lesson in progress, derived from the active attempt.
   learningMode: `${TRAINING_PATH}/learning-mode`,
   learningModeLeave: attemptId => attemptPath(attemptId, "/learning-mode/leave"),
-  learningModeEnter: attemptId => attemptPath(attemptId, "/learning-mode/enter")
+  // The learner's practice projects in the learning space (L's Practice tab).
+  practice: practicePath(),
+  practiceOpen: practiceId => practicePath(practiceId, "/open"),
+  practiceArchive: practiceId => practicePath(practiceId, "/archive"),
+  practiceDelete: practiceId => practicePath(practiceId, "/delete"),
+  practiceArchiveDelete: (practiceId, archiveId) => practicePath(practiceId, `/archives/${encodeURIComponent(archiveId)}/delete`)
 });
+// The page for a lesson without a practice project (Lesson 0), and L outside a project.
+const VIBE64_LEARNING_PAGE_PATH = "/app/learning";
 // Shown after an other project's URL was redirected to the lesson's place.
 const VIBE64_LEARNING_MODE_NOTE = "You're in a lesson. Leave lesson to get back to your projects.";
 // The server's refusal of a project-scoped request outside the lesson.
 const VIBE64_LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
 const VIBE64_LEARNING_NOTES_MAX = 4000;
-const SURFACES = Object.freeze(["courses", "lesson"]);
+const SURFACES = Object.freeze(["courses", "practice", "lesson"]);
 const STORAGE_PREFIX = "vibe64:learning-environment:v1:";
 const READER_SAVE_DELAY_MS = 800;
 // How long a file or Database guide waits for the navigated project view to publish itself.
@@ -81,6 +89,8 @@ function normalizeLesson(result) {
     steps,
     attempt,
     practiceProjectSlug: attempt?.practiceSlug || "",
+    // The practice project's identity in the learning space (the attempt that created it).
+    practiceId: attempt?.practiceSlug ? attempt.practiceId || attempt.attemptId || "" : "",
     reader: result.reader && text(result.reader.stepId) ? result.reader : null,
     results: Array.isArray(result.results) ? result.results : [],
     // Steps passed in any attempt of this same lesson content (they count toward completion).
@@ -96,19 +106,24 @@ function normalizeLearningMode(result) {
   const practiceSlug = text(mode.practiceSlug) ? mode.practiceSlug : "";
   const projectSlugs = [...new Set([...(Array.isArray(mode.projectSlugs) ? mode.projectSlugs.filter(text) : []),
     ...(practiceSlug ? [practiceSlug] : [])])];
-  return Object.freeze({ on: mode.on === true, paused: mode.paused === true,
+  return Object.freeze({ on: mode.on === true,
     attemptId: text(mode.attemptId) ? mode.attemptId : "", lessonCode: text(mode.lessonCode) ? mode.lessonCode : "",
     lessonTitle: text(mode.lessonTitle) ? mode.lessonTitle : "", practiceSlug, projectSlugs: Object.freeze(projectSlugs) });
 }
 
 // The redirect a project URL needs in learning mode (as normalizeLearningMode
 // returns it, so projectSlugs already holds practiceSlug): null when allowed (or
-// not in learning mode), else the lesson's practice project root, or the app
-// home when the lesson has no practice project (Lesson 0).
+// not in learning mode), else the lesson's practice project root, or the
+// Learning page when the lesson has no practice project (Lesson 0).
 function learningModeRedirect({ mode = null, slug = "" } = {}) {
   const projectSlug = String(slug || "").trim();
   if (!mode?.on || !projectSlug || mode.projectSlugs.includes(projectSlug)) return null;
-  return Object.freeze({ slug: mode.practiceSlug, path: projectAppPath(mode.practiceSlug) });
+  return Object.freeze({ slug: mode.practiceSlug, path: lessonPath(mode) });
+}
+
+// Where a lesson in progress lives: its practice project, else the Learning page.
+function lessonPath(mode) {
+  return mode?.practiceSlug ? projectAppPath(mode.practiceSlug) : VIBE64_LEARNING_PAGE_PATH;
 }
 
 // passed wins over any later not-yet-passed (a pass is final), including a pass
@@ -176,8 +191,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const focus = computed(() => ({ learningOpen: state.open, learningSurface: state.surface,
     ...(state.attemptId ? { learningAttemptId: state.attemptId } : {}),
     ...(state.attemptId && currentStep.value ? { learningStepId: currentStep.value.id } : {}) }));
-  // The learner is in a lesson while the server says learning mode is on
-  // (started or resumed, not left, finished or ended), in every tab and device.
+  // The learner is in a lesson while the server says learning mode is on (an
+  // attempt is in progress: not left, finished or ended), in every tab and device.
   const inLesson = computed(() => Boolean(state.actorKey && learningMode.value?.on));
   // Every required step of the read version 2 lesson is passed.
   const complete = computed(() => Boolean(lesson.value?.schemaVersion === 2 && steps.value.length &&
@@ -229,35 +244,32 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     return value;
   }
 
-  // Leave lesson pauses it (progress and place kept) and ends learning mode;
-  // resume re-enters it. Both reread the mode afterwards.
-  async function changeLearningMode(kind, route, attemptId) {
+  // Leave lesson ends the attempt (its results and practice project are kept)
+  // and with it learning mode; the mode is reread afterwards.
+  async function leaveLesson() {
+    const attemptId = learningMode.value?.attemptId || "";
     // Its own busy flag: a step check or answer in flight never delays leaving.
     if (!state.actorKey || !text(attemptId) || state.modeBusy) return null;
     const expected = viewer;
-    state.modeBusy = kind;
+    state.modeBusy = "leave";
     state.error = "";
     try {
-      const result = await request(route(attemptId), { method: "POST", body: {} });
-      if (result?.ok !== true) throw new Error(result?.error || "The lesson change was not confirmed. Try again.");
+      const result = await request(VIBE64_LEARNING_ROUTES.learningModeLeave(attemptId), { method: "POST", body: {} });
+      if (result?.ok !== true) throw new Error(result?.error || "Leaving the lesson was not confirmed. Try again.");
       if (expected !== viewer) return null;
       const value = normalizeLearningMode(result);
       if (value) { modeReads += 1; learningMode.value = value; }
       await readLearningMode();
-      if (kind === "leave") state.notice = "";
+      state.notice = "";
+      if (state.attemptId === attemptId && lesson.value) void loadLesson(attemptId);
       return result;
     } catch (cause) {
-      if (expected === viewer) state.error = String(cause?.message || "The lesson change was not confirmed. Try again.");
+      if (expected === viewer) state.error = String(cause?.message || "Leaving the lesson was not confirmed. Try again.");
       return null;
     } finally {
-      if (state.modeBusy === kind) state.modeBusy = "";
+      if (state.modeBusy === "leave") state.modeBusy = "";
     }
   }
-
-  const leaveLesson = () => changeLearningMode("leave", VIBE64_LEARNING_ROUTES.learningModeLeave,
-    learningMode.value?.attemptId || "");
-  const resumeLearningMode = (attemptId = learningMode.value?.attemptId || state.attemptId) =>
-    changeLearningMode("enter", VIBE64_LEARNING_ROUTES.learningModeEnter, attemptId);
 
   function showNotice(value) { state.notice = String(value || ""); }
   function clearNotice() { state.notice = ""; }
@@ -292,11 +304,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       // The lesson ended elsewhere (another tab or device): learning mode ends with it.
       if (value.attempt?.ended && learningMode.value?.on && learningMode.value.attemptId === attemptId) void readLearningMode();
       // Restore the exact place: this tab's browser state first, then the
-      // learner's saved reader position, then the first step.
+      // learner's saved reader position, then the first required step not yet
+      // passed for this lesson content (a continued lesson resumes there).
       const known = id => value.steps.some(step => step.id === id);
       if (!known(state.stepId)) {
         const saved = value.reader?.attemptId === undefined || value.reader?.attemptId === attemptId ? value.reader : null;
-        state.stepId = saved && known(saved.stepId) ? saved.stepId : value.steps[0]?.id || "";
+        const unpassed = value.steps.find(step => step.required && stepStatus(value.results, step.id, value.passedStepIds) !== "passed");
+        state.stepId = saved && known(saved.stepId) ? saved.stepId : (unpassed || value.steps[0])?.id || "";
         state.scroll = saved && known(saved.stepId) && Number.isSafeInteger(saved.scroll) ? saved.scroll : 0;
       }
       remember();
@@ -351,7 +365,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
 
   // The "Lesson finished" screen of L's attempt, in L's lesson surface: shown
   // when this learner's own step action completes the lesson, and again from
-  // the reader of a complete lesson. The screen ends the attempt (lesson.end).
+  // the reader of a complete lesson. The screen ends the attempt (lesson.end,
+  // reason finished).
   async function showFinished() {
     if (!state.attemptId) return null;
     await show({ surface: "lesson" });
@@ -565,9 +580,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     return value;
   }
 
-  // lesson.end requires a reason: "restart" retires the attempt keeping every
-  // result, so the lesson or the next one can be started from Courses.
-  async function endLesson({ expectedRevision, reason = "restart" } = {}) {
+  // Finishing a complete lesson ends its attempt (lesson.end, reason finished);
+  // every result and the practice project are kept.
+  async function finishLesson({ expectedRevision } = {}) {
     if (!state.attemptId || state.busy) return null;
     const attemptId = state.attemptId;
     const key = JSON.stringify([attemptId, "end"]);
@@ -576,14 +591,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state.error = "";
     try {
       const result = await request(VIBE64_LEARNING_ROUTES.lessonEnd(attemptId), { method: "POST",
-        body: { requestId, expectedRevision, reason } });
-      if (result?.ok !== true) throw new Error(result?.error || "Ending the lesson was not confirmed. Retry the same request.");
+        body: { requestId, expectedRevision, reason: "finished" } });
+      if (result?.ok !== true) throw new Error(result?.error || "Finishing the lesson was not confirmed. Retry the same request.");
       pending.delete(key);
-      // Ending (or finishing) the lesson ends learning mode.
+      // Finishing the lesson ends learning mode.
       await Promise.all([loadLesson(attemptId), readLearningMode()]);
       return result;
     } catch (cause) {
-      state.error = String(cause?.message || "Ending the lesson was not confirmed.");
+      state.error = String(cause?.message || "Finishing the lesson was not confirmed.");
       return null;
     } finally {
       if (state.busy === "end") state.busy = "";
@@ -655,7 +670,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
 
   // Realtime: a learner change for the displayed attempt rereads it; a notes
   // change rereads the notes when L has shown them.
-  // Every other learner change (start, resume, continue, end, leave, enter)
+  // Every other learner change (start, continue, finish, leave, practice)
   // also rereads learning mode, which is cheap.
   function learnerChanged(payload = {}) {
     if (payload.reason === "notes") return notes.value ? readNotes() : null;
@@ -684,10 +699,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, showFinished, closeFinished, minimise, toggle, selectStep, setScroll, flushReader, loadLesson,
-    runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
+    runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, finishLesson, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
-    readLearningMode, leaveLesson, resumeLearningMode, showNotice, clearNotice
+    readLearningMode, leaveLesson, showNotice, clearNotice
   });
 }
 
@@ -719,4 +734,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, learningModeRedirect, normalizeLearningMode, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, learningModeRedirect, lessonPath, normalizeLearningMode, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };
