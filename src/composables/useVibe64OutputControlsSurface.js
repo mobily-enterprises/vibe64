@@ -1167,8 +1167,7 @@ function useVibe64OutputControlsSurface(props) {
     });
   }
 
-  // Restored learner-origin App interaction capture (removed with Learning
-  // mode in F3), adapted to Learning v2: the practice App's orientation
+  // Learner-origin App interaction capture: the practice App's orientation
   // protocol runs over one MessageChannel bound to this exact Preview frame,
   // instance and player. A trusted press, its request and the displayed
   // response are correlated here; the Learning controller sends step.observe

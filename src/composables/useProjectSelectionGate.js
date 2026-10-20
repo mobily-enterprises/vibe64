@@ -195,7 +195,6 @@ function useProjectSelectionGate(emit, {
     newProjectName,
     deletePracticeProject: practice.deletePracticeProject,
     deletingPracticeSlug: practice.deletingSlug,
-    practiceDeleteError: practice.deleteError,
     practiceDeleted,
     practiceProjects,
     projectSelection,
@@ -211,14 +210,13 @@ function useProjectSelectionGate(emit, {
   // with the deleted code makes the gate re-read its own selection, which then
   // shows the deleted notice when this project is the one that was deleted.
   function rereadSelectionWhenProjectDeleted() {
-    const queryClient = useQueryClient();
-    const unsubscribe = queryClient?.getQueryCache?.().subscribe?.((cacheEvent) => {
-      if (cacheEvent?.type !== "updated" || cacheEvent.action?.type !== "error" ||
+    const unsubscribe = useQueryClient().getQueryCache().subscribe((cacheEvent) => {
+      if (cacheEvent.type !== "updated" || cacheEvent.action?.type !== "error" ||
         cacheEvent.action.error?.code !== PRACTICE_PROJECT_DELETED_CODE || practiceDeleted.value) return;
       if (cacheEvent.query?.queryHash === selectionQueryHash()) return;
       void loadProjectSelection().catch(() => {});
     });
-    if (typeof unsubscribe === "function") onScopeDispose(unsubscribe);
+    onScopeDispose(unsubscribe);
   }
 
   function selectionQueryHash() {

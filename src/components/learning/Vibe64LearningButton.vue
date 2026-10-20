@@ -8,10 +8,7 @@ const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const active = computed(() => Boolean(learning?.state.open));
 const minimised = computed(() => Boolean(learning?.state.minimised));
-const title = computed(() => learning?.state.open ? "Close Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
-function press() {
-  return learning.toggle();
-}
+const title = computed(() => active.value ? "Close Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
 </script>
 
 <template>
@@ -21,7 +18,7 @@ function press() {
     :class="{ 'vibe64-learning-button--active': active, 'vibe64-learning-button--minimised': minimised && !active }"
     aria-label="Learning"
     :aria-pressed="active"
-    :aria-expanded="learning.state.open"
+    :aria-expanded="active"
     aria-haspopup="dialog"
     :title="title"
     data-vibe64-guide="learning"
@@ -29,7 +26,7 @@ function press() {
     icon
     size="small"
     :variant="active ? 'flat' : 'outlined'"
-    @click="press"
+    @click="learning.toggle()"
   >
     <span aria-hidden="true">L</span>
   </v-btn>
