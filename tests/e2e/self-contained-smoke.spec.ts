@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX
 } from "./support/base-shell-data";
+import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 const targetRoot = "/workspace/example-target-app";
 
@@ -83,6 +84,7 @@ type MockReadyStudioShellOptions = {
 };
 
 async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOptions = {}) {
+  await suppressAiOnboarding(page);
   const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   const apiPayloads = new Map<string, unknown>([
     ["/api/vibe64/accounts/codex-providers", { ok: true, providers: [] }],

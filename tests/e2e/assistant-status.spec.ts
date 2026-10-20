@@ -1,11 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { DASHBOARD_PATH, viewports } from "./support/base-shell-data";
 import { assistantStatusServer, json } from "./support/assistant-status-server";
+import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 let server: Awaited<ReturnType<typeof assistantStatusServer>>;
 let pageErrors: string[];
 test.beforeEach(async ({ page }) => {
   server = await assistantStatusServer();
+  await suppressAiOnboarding(page);
   pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 });
@@ -534,6 +536,7 @@ test("navigation and browser history preserve recovery and the draft", async ({ 
 
 test("two browsers recover independently without sending either draft", async ({ page, browser }) => {
   const otherContext = await browser.newContext();
+  await suppressAiOnboarding(otherContext);
   const releaseChecks = Promise.withResolvers<void>();
   try {
     const otherPage = await otherContext.newPage();

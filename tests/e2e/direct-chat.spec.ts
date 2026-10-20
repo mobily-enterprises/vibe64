@@ -16,6 +16,9 @@ import {
 import {
   routeApiEndpoint
 } from "./support/base-shell/http";
+import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
+
+test.beforeEach(({ page }) => suppressAiOnboarding(page));
 
 const ASSISTANT_CATALOG = {
   ok: true,

@@ -1,7 +1,7 @@
 import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null }));
+const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null, requestOnboarding: null }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({
   useModelRouting: () => ({ connectedWorkflows: ref([{ engineId: "codex", connected: true }, { engineId: "opencode", connected: true }]) })
 }));
@@ -19,7 +19,9 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useAiConnections.
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue", () => ({ default: {} }));
-vi.mock("../../packages/vibe64-accounts/src/client/studio/FreeAiSelector.vue", () => ({ default: {} }));
+vi.mock("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js", () => ({
+  requestVibe64AiOnboarding: (...args) => mocks.requestOnboarding(...args)
+}));
 import AiConnectionsSettings from "../../packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue";
 
 let app;
@@ -32,6 +34,7 @@ function mount() {
 }
 beforeEach(() => {
   vi.stubGlobal("document", { activeElement: {} });
+  mocks.requestOnboarding = vi.fn();
   mocks.accounts = {
     status: ref({ accounts: [{ id: "codex", connected: true, ownerOnly: true }, { id: "claude", connected: true }] }),
     isLoading: ref(false), loadError: ref("")
@@ -189,4 +192,24 @@ it("removes only the selected orchestrator key through its existing owner", asyn
   await state.confirmRemove();
   expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "deepseek", remove: true });
   expect(state.removeOpen).toBe(false);
+});
+
+it("offers onboarding instead of a free starter until an AI of the person's own is connected", () => {
+  mocks.accounts.status.value.accounts = [];
+  mocks.providers.connections.value = [];
+  const state = mount();
+  expect(state.configuredAiGroups.map(group => group.id)).toEqual(["opencode"]);
+  expect(state.hasOwnAi).toBe(false);
+  state.openOnboarding();
+  expect(mocks.requestOnboarding).toHaveBeenCalledExactlyOnceWith({ start: "choose" });
+  mocks.providers.connections.value = [{ id: "deepseek", connected: true, configuredEngines: ["codex"] }];
+  expect(state.hasOwnAi).toBe(true);
+  expect(mocks.providers.change).not.toHaveBeenCalled();
+});
+
+it("reports busy while a removal runs so Redo onboarding cannot interrupt it", () => {
+  const state = mount();
+  expect(state.busy).toBe(false);
+  mocks.providers.busy.value = true;
+  expect(state.busy).toBe(true);
 });

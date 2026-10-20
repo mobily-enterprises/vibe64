@@ -61,8 +61,6 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue`
-- `packages/vibe64-accounts/src/client/studio/FreeAiSelector.vue`
-- `packages/vibe64-accounts/src/client/studio/freeAiStarters.js`
 - `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
 
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
@@ -70,6 +68,14 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue`
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
+
+- `packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js`
+- `packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js`
+- `packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js`
+- `packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue`
+- `packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue`
+- `src/App.vue`
 
 - `packages/vibe64-accounts/bin/claude-auth-browser`
 - `packages/studio-terminal-core/src/server/claudeRuntime.js`
@@ -353,9 +359,36 @@ comes from its refreshed catalogue; loading or failure is not treated as
 exhaustion. When no supported connections remain, Add connection is disabled.
 Adding an orchestrator requires its own independent key entry and verification.
 The same key may be entered deliberately for several pairs; no key is copied.
-Removal confirms the exact owning orchestrator/provider. The regular Z.AI
-recommendation is hidden for a connected regular API or Coding Plan key in
-OpenCode, or a Coding Plan key verified for Codex or Claude Code.
+Removal confirms the exact owning orchestrator/provider.
+
+AI onboarding is owned by the client `onboarding/` module of
+`packages/vibe64-accounts` and composes these same setup components in their
+embedded mode; it has no connection implementation of its own.
+`aiOnboardingProviders.js` is the only place for provider ranks, copy, prices,
+plan names, sign-up URLs, the orchestrator and provider id each card connects
+through, and which saved connections count as that provider. DeepSeek and GLM
+connect as curated Codex providers (`deepseek`, `zai-coding-plan`).
+`AiOnboardingHost` takes the AI connections endpoint, whether the viewer can
+configure AI and an actor key; the local editor mounts it in `src/App.vue` and
+hosts mount it once with their own endpoint and owner check. It opens on
+`requestVibe64AiOnboarding`, and opens by itself at most once per page load
+only when the viewer can configure AI, account status, curated providers and
+OpenCode connections loaded without error, no AI beyond included Big Pickle is
+set up, no dialog is open, the route is not Learning, and Set up later is not
+active. Set up later is a 24-hour per-browser snooze,
+`vibe64.aiOnboarding.snoozedUntil:<actorKey>`; there is no server state or state
+upgrade. AI Accounts dispatches the same request from **Redo onboarding**
+(owners only, disabled while a save is busy) and from the **Set up your AI**
+card shown while no non-built-in AI is configured; the local Account settings
+dialog closes on that request unless busy. The free Big Pickle/GLM-4.7 Flash
+starter and the regular Z.AI shortcut were removed; regular Z.AI stays
+reachable through Add connection → OpenCode. Success requires the chosen
+provider connected and its orchestrator's workflow available. The Colleague
+model bridge, registered by the mounted Colleague, reads and switches
+Colleague's selection through the existing model selection; the exported
+`AiOnboardingNudge` in the Colleague panel and Colleague's no-usable-model
+warning dispatch the same request while setup is needed. Redo never removes a
+connection and changes routing only through `ModelRoutingForm`.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

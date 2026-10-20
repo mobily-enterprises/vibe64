@@ -169,6 +169,7 @@ import {
   accountRowsForStatus,
   ProviderAccountsSetup,
   AiConnectionsSettings,
+  onVibe64AiOnboardingRequested,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
@@ -318,14 +319,21 @@ function handleAccountConnectionsDialogRequest(event) {
   void openDialog(event?.detail || {});
 }
 
+function handleAiOnboardingRequest() {
+  if (!aiConnectionsBusy.value) dialogOpen.value = false;
+}
+
 let disposeAccountConnectionsDialogRequest = () => null;
+let disposeAiOnboardingRequest = () => null;
 
 onMounted(() => {
   disposeAccountConnectionsDialogRequest = onVibe64AccountConnectionsDialogRequested(handleAccountConnectionsDialogRequest);
+  disposeAiOnboardingRequest = onVibe64AiOnboardingRequested(handleAiOnboardingRequest);
 });
 
 onBeforeUnmount(() => {
   disposeAccountConnectionsDialogRequest();
+  disposeAiOnboardingRequest();
 });
 
 watch(

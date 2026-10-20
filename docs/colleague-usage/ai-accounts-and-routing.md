@@ -24,9 +24,14 @@ runs. Waiting retains the stage: use its stage-specific **Continue** action when
 resolved, or **Retry** for an uncertain message. Stop remains respected.
 See [plans and workflow recovery](plans.md) for the full steps.
 
-Open **AI Accounts** in Management. No project or coding session is required.
+Open **AI Accounts** in Management, or in the local editor through **Account
+settings → AI Accounts**. No project or coding session is required.
 The local standalone editor does not require a hosted workspace login to open AI
-Accounts. Hosted connection changes require the workspace owner. A member's permitted models
+Accounts. To be guided to a good first AI, use [AI onboarding](ai-onboarding.md):
+**Redo onboarding** at the top of AI Accounts, or **Set up your AI** in the
+**Give Vibe64 a brilliant mind** card shown while no AI of your own is connected
+(the included Big Pickle does not count).
+Hosted connection changes require the workspace owner. A member's permitted models
 can differ from the owner's subscription models; account connection alone does not
 grant every collaborator use of it.
 
@@ -202,8 +207,8 @@ or change Colleague's model. Ask for the actual routing before changing only the
 requested future workflow role. A correct lesson answer establishes understanding,
 not successful account setup or model execution.
 
-If an existing GLM Coding Plan hides **Connect regular Z.AI API**, use
-**Add connection** → OpenCode's **Choose provider**. Wait for the catalogue,
+To connect the regular Z.AI API, use **Add connection** → OpenCode's
+**Choose provider**. Wait for the catalogue,
 search **Z.AI** in **Search OpenCode providers**, and choose **Z.AI** rather than
 **Z.AI Coding Plan**. This opens the same regular API key editor. That route has
 no key-creation link: use [Z.AI's key page](https://z.ai/manage-apikey/apikey-list)

@@ -1092,13 +1092,27 @@ connection options, then only their unconfigured providers. Expired or failed
 configured connections remain under Manage for reconnection. When every
 available connection is configured, Add connection is disabled. Each saved DeepSeek or GLM connection belongs to one orchestrator/provider.
 Different keys or deliberately equal keys can be saved independently. Setup,
-checks, replacement and removal affect only that pair. The Add GLM shortcut
-is hidden when GLM is already connected through Codex, Claude Code or OpenCode.
+checks, replacement and removal affect only that pair.
 Provider credentials and shared model-routing assignments belong to the
 editor's account storage, outside the project. Native Codex and Claude credentials keep
 using the host's existing account context, including in a nested development
 preview. Hosts supply account storage and management permissions; they do not
 maintain a separate provider setup implementation.
+
+AI onboarding makes connecting a frontier model the first thing a new person
+does. It is one shared full-screen flow, used unchanged by the local and hosted
+editors: a short "why intelligence matters" screen, then Claude (crowned,
+recommended), Codex, DeepSeek and GLM, ranked with honest bullets and a
+recommended monthly spend, then the existing AI Accounts setup for the chosen
+provider and its routing review, then a success screen once Colleague has a
+Senior model. Prices, plan names and sign-up links live in one small data module
+so they are easy to correct. The flow opens by itself only for someone who can
+connect AI (the local user, or a hosted workspace owner), only after AI status
+has loaded without error, and only while no AI of their own is connected;
+included Big Pickle does not count. **Set up later** snoozes it for a day in
+that browser, with no server state. **Redo onboarding** in AI Accounts reruns it at any time,
+showing what is connected; it can add a provider or change the main AI through
+the normal routing review, and never removes a connection.
 
 The chat selector stays focused on choosing among AIs that are already
 configured and connected. With no connected AI, the session picker directs

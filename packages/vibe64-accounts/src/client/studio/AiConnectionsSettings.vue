@@ -14,6 +14,7 @@ import {
 import {
   mdiAccountCircleOutline,
   mdiArrowLeft,
+  mdiAutoFix,
   mdiCheck,
   mdiClose,
   mdiCreditCardOutline,
@@ -31,8 +32,7 @@ import {
 
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useAiConnections } from "../composables/useAiConnections.js";
-import FreeAiSelector from "./FreeAiSelector.vue";
-import { REGULAR_ZAI_STARTER } from "./freeAiStarters.js";
+import { requestVibe64AiOnboarding } from "../onboarding/aiOnboardingEvents.js";
 
 const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -40,10 +40,6 @@ const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const props = defineProps({
   endpoint: { type: String, default: AI_CONNECTIONS_ENDPOINT },
   isOwner: {
-    default: false,
-    type: Boolean
-  },
-  onboarding: {
     default: false,
     type: Boolean
   }
@@ -61,8 +57,6 @@ const nativeSetupProviderId = ref("codex");
 const nativeSetupActivator = ref(null);
 const editorActivator = ref(null);
 const nativeRemoving = ref(false);
-const onboardingSelector = ref(null);
-const zeroStateSelector = ref(null);
 const providerPickerOpen = ref(false);
 const providerPickerPending = ref(false);
 const providerSearch = ref("");
@@ -73,15 +67,13 @@ const catalogPreparationError = ref("");
 const editorOpen = ref(false);
 const routingOpen = ref(false);
 const routingEngineId = ref("");
-const { connectedWorkflows } = useModelRouting({ workflowsOnly: true, enabled: computed(() => props.isOwner && !props.onboarding) });
+const { connectedWorkflows } = useModelRouting({ workflowsOnly: true, enabled: computed(() => props.isOwner) });
 const routingSaving = ref(false);
 const editorRoutingPending = ref(false);
 const editorRoutingSetupError = ref("");
 const nativeRoutingReady = ref(false);
 const nativeRoutingSetupError = ref("");
 const editorOrigin = ref("direct");
-const editorStarter = ref(null);
-const editorStarterSurface = ref("");
 const editorProviderId = ref("");
 const editorProviderRevision = ref("");
 const editorLabel = ref("");
@@ -255,13 +247,7 @@ const configuredAiGroups = computed(() => [
   { id: "opencode", label: "OpenCode" }
 ].map((engine) => ({ ...engine, accounts: configuredAiRows.value.filter((account) => account.engineId === engine.id) }))
   .filter((engine) => engine.accounts.length));
-const glmConnected = computed(() => (
-  connections.value.some((connection) => (
-    (connection.id === "zai" || connection.id === "zai-coding-plan") && connection.connected === true
-  )) || codexProviders.connections.value.some((connection) => (
-    ["zai", "zai-coding-plan"].includes(connection.id) && (connection.connected || connection.claudeReady)
-  ))
-));
+const hasOwnAi = computed(() => configuredAiRows.value.some((account) => !account.builtIn));
 const aiStatusLoaded = computed(() => Boolean(
   nativeAccounts.status.value && Array.isArray(nativeAccounts.status.value.accounts)
 ));
@@ -320,7 +306,7 @@ const editorCatalogModelCount = computed(() => (
     : 0
 ));
 const editorPreparing = computed(() => preparingProviderId.value === editorProviderId.value);
-const editorSaving = computed(() => savingProviderId.value === editorProviderId.value);
+const editorSaving = computed(() => Boolean(editorProviderId.value) && savingProviderId.value === editorProviderId.value);
 const editorVerificationCopy = computed(() => {
   if (editorPreparing.value) {
     return "Loading the current OpenCode provider details. You can paste the key now; verification becomes available when they are ready.";
@@ -349,13 +335,10 @@ const editorCanSave = computed(() => Boolean(
   !editorSaving.value
 ));
 const editorBackLabel = computed(() => (
-  ["add", "provider-picker", "starter"].includes(editorOrigin.value) ? "Back" : "Cancel"
+  ["add", "provider-picker"].includes(editorOrigin.value) ? "Back" : "Cancel"
 ));
 const editorEyebrow = computed(() => {
-  if (existingEditorConnection.value) return "Manage connection";
-  if (editorProviderId.value === "zai" && editorStarter.value) return "Regular Z.AI API";
-  if (editorStarter.value) return "Free AI setup";
-  return "Add connection";
+  return existingEditorConnection.value ? "Manage connection" : "Add connection";
 });
 const editorTitle = computed(() => {
   if (existingEditorConnection.value?.builtIn) return "Add a Zen API key";
@@ -366,15 +349,15 @@ const editorTitle = computed(() => {
   }
   if (editorProviderId.value === "zai") return "Connect regular Z.AI API";
   if (editorProviderId.value === "zai-coding-plan") return "Connect Z.AI Personal Coding Plan";
-  if (editorStarter.value) return `Connect ${editorStarter.value.label}`;
   return `Connect ${editorLabel.value || "provider"}`;
 });
 const removeRunning = computed(() => codexProviders.busy.value || (
   ["codex", "claude"].includes(removeTarget.value?.kind)
     ? nativeRemoving.value
-    : removingProviderId.value === String(removeTarget.value?.id || "")
+    : Boolean(removingProviderId.value) && removingProviderId.value === String(removeTarget.value?.id || "")
 ));
 const modelAccessRunning = computed(() => (
+  Boolean(updatingModelAccessProviderId.value) &&
   updatingModelAccessProviderId.value === String(modelAccessTarget.value?.id || "")
 ));
 const zenCheckRunning = computed(() => connections.value.some((connection) => (
@@ -504,18 +487,9 @@ async function refreshAllAccounts() {
   }
 }
 
-function connectStarterProvider(starter = {}, surface = "inline") {
-  editorStarterSurface.value = surface;
-  void chooseProvider(starter, {
-    origin: surface === "recommendation" ? "direct" : "starter",
-    starter
-  });
-}
-
 async function chooseProvider(choice = {}, {
   origin = "direct",
-  preserveInput = false,
-  starter = null
+  preserveInput = false
 } = {}) {
   const id = String(choice.id || "");
   if (!id || preparingProviderId.value) return;
@@ -527,10 +501,9 @@ async function chooseProvider(choice = {}, {
   catalogPreparationError.value = "";
   catalogProviderId.value = id;
   editorOrigin.value = origin;
-  editorStarter.value = starter;
   editorProviderId.value = id;
   editorProviderRevision.value = "";
-  editorLabel.value = String(starter?.label || choice.connection?.label || choice.label || id);
+  editorLabel.value = String(choice.connection?.label || choice.label || id);
   if (!preserveInput) {
     editorApiKey.value = "";
     editorApiKeyVisible.value = false;
@@ -567,7 +540,7 @@ async function chooseProvider(choice = {}, {
     return;
   }
   editorProviderRevision.value = provider.definitionRevision;
-  if (!starter) editorLabel.value = String(provider.label || choice.label || id);
+  editorLabel.value = String(provider.label || choice.label || id);
   preparingProviderId.value = "";
 }
 
@@ -575,8 +548,7 @@ function retryPreparedProvider() {
   if (preparedChoice.value) {
     void chooseProvider(preparedChoice.value, {
       origin: editorOrigin.value,
-      preserveInput: true,
-      starter: editorStarter.value
+      preserveInput: true
     });
   }
 }
@@ -589,8 +561,6 @@ function resetEditor() {
   preparingProviderId.value = "";
   catalogPreparationError.value = "";
   editorOrigin.value = "direct";
-  editorStarter.value = null;
-  editorStarterSurface.value = "";
   editorProviderId.value = "";
   editorProviderRevision.value = "";
   editorLabel.value = "";
@@ -599,19 +569,11 @@ function resetEditor() {
   editorError.value = "";
 }
 
-async function closeEditor() {
+function closeEditor() {
   if (editorSaving.value) return;
   const origin = editorOrigin.value;
-  const providerId = editorProviderId.value;
-  const starterSurface = editorStarterSurface.value;
   resetEditor();
-  if (origin === "starter") {
-    await nextTick();
-    const selector = starterSurface === "onboarding"
-      ? onboardingSelector.value
-      : zeroStateSelector.value;
-    selector?.focusOption(providerId);
-  } else if (origin === "provider-picker") {
+  if (origin === "provider-picker") {
     providerPickerOpen.value = true;
   } else if (origin === "add") {
     addAiOpen.value = true;
@@ -801,353 +763,328 @@ function openProvider(providerId, { providerLabel = "", providerRevision = "" } 
   else if (providerId === "opencode") void openProviderPicker();
   else addAiOpen.value = true;
 }
-watch(() => Boolean(routingSaving.value || editorSaving.value || removeRunning.value || modelAccessRunning.value || codexProviderSaving.value),
-  (busy) => emit("busy", busy));
+const busy = computed(() => Boolean(routingSaving.value || editorSaving.value || removeRunning.value || modelAccessRunning.value || codexProviderSaving.value));
+watch(busy, (value) => emit("busy", value));
+
+function openOnboarding() {
+  requestVibe64AiOnboarding({ start: "choose" });
+}
 defineExpose({ openProvider });
 </script>
 
 <template>
   <v-sheet
-    :border="!onboarding"
-    :class="[
-      'vibe64-ai-connections',
-      {
-        'vibe64-ai-connections--compact': smAndDown,
-        'vibe64-ai-connections--onboarding': onboarding
-      }
-    ]"
+    border
+    :class="['vibe64-ai-connections', { 'vibe64-ai-connections--compact': smAndDown }]"
     rounded="xl"
   >
-    <FreeAiSelector
-      v-if="onboarding"
-      ref="onboardingSelector"
-      :connections="connections"
-      :error="loadError"
-      :loading="isInitialLoading"
-      @retry="reload"
-      @select="(choice) => connectStarterProvider(choice, 'onboarding')"
+    <div
+      v-if="isOwner"
+      class="vibe64-ai-connections__page-actions"
+      aria-label="AI account actions"
+    >
+      <v-btn
+        class="vibe64-ai-connections__redo"
+        :disabled="busy"
+        :prepend-icon="mdiAutoFix"
+        type="button"
+        variant="text"
+        @click="openOnboarding"
+      >
+        Redo onboarding
+      </v-btn>
+      <v-btn
+        :icon="mdiRefresh"
+        aria-label="Refresh AI accounts"
+        :disabled="accountsInitialLoading || refreshingAll"
+        type="button"
+        variant="text"
+        @click="refreshAllAccounts"
+      />
+      <v-btn
+        color="primary"
+        :disabled="accountsInitialLoading || Boolean(loadError) || Boolean(nativeLoadError) || !canAddConnection"
+        :prepend-icon="mdiPlus"
+        type="button"
+        variant="flat"
+        @click="addAiOpen = true"
+      >
+        Add connection
+      </v-btn>
+    </div>
+
+    <v-alert
+      v-if="!isOwner"
+      text="Only the Vibe64 owner can add, change, or remove AI accounts. Workspace members can use connections marked Workspace use."
+      title="Owner required"
+      type="info"
+      variant="tonal"
     />
 
     <template v-else>
       <div
-        v-if="isOwner"
-        class="vibe64-ai-connections__page-actions"
-        aria-label="AI account actions"
+        v-if="accountsInitialLoading"
+        aria-busy="true"
+        aria-label="Loading AI accounts"
+        class="vibe64-ai-connections__list"
       >
-        <v-btn
-          :icon="mdiRefresh"
-          aria-label="Refresh AI accounts"
-          :disabled="accountsInitialLoading || refreshingAll"
-          type="button"
-          variant="text"
-          @click="refreshAllAccounts"
-        />
-        <v-btn
-          color="primary"
-          :disabled="accountsInitialLoading || Boolean(loadError) || Boolean(nativeLoadError) || !canAddConnection"
-          :prepend-icon="mdiPlus"
-          type="button"
-          variant="flat"
-          @click="addAiOpen = true"
-        >
-          Add connection
-        </v-btn>
+        <v-skeleton-loader v-for="index in 3" :key="index" type="list-item-avatar-three-line, actions" />
       </div>
 
-      <v-alert
-        v-if="!isOwner"
-        text="Only the Vibe64 owner can add, change, or remove AI accounts. Workspace members can use connections marked Workspace use."
-        title="Owner required"
-        type="info"
-        variant="tonal"
-      />
+      <div v-else-if="loadError" class="vibe64-ai-connections__load-error">
+        <v-alert :text="loadError" title="AI accounts could not load" type="error" variant="tonal" />
+        <v-btn type="button" variant="tonal" @click="refreshAllAccounts">Try again</v-btn>
+      </div>
 
       <template v-else>
-        <div
-          v-if="accountsInitialLoading"
-          aria-busy="true"
-          aria-label="Loading AI accounts"
-          class="vibe64-ai-connections__list"
+        <v-alert
+          v-if="nativeLoadError"
+          :text="nativeLoadError"
+          title="AI account status could not load"
+          type="warning"
+          variant="tonal"
+        />
+
+        <section
+          v-if="!hasOwnAi && !nativeLoadError"
+          aria-labelledby="vibe64-ai-connections-setup-title"
+          class="vibe64-ai-connections__setup"
         >
-          <v-skeleton-loader v-for="index in 3" :key="index" type="list-item-avatar-three-line, actions" />
-        </div>
-
-        <div v-else-if="loadError" class="vibe64-ai-connections__load-error">
-          <v-alert :text="loadError" title="AI accounts could not load" type="error" variant="tonal" />
-          <v-btn type="button" variant="tonal" @click="refreshAllAccounts">Try again</v-btn>
-        </div>
-
-        <template v-else>
-          <v-alert
-            v-if="nativeLoadError"
-            :text="nativeLoadError"
-            title="AI account status could not load"
-            type="warning"
-            variant="tonal"
-          />
-
-          <v-sheet
-            v-if="!glmConnected"
-            border
-            class="vibe64-ai-connections__recommendation"
-            rounded="lg"
+          <span class="vibe64-ai-connections__setup-mark" aria-hidden="true">
+            <v-icon :icon="mdiAutoFix" size="28" />
+          </span>
+          <div class="vibe64-ai-connections__setup-copy">
+            <h2 id="vibe64-ai-connections-setup-title">Give Vibe64 a brilliant mind</h2>
+            <p>Vibe64 is at its best with a frontier model such as Claude. Choosing one takes about two minutes.</p>
+          </div>
+          <v-btn
+            class="vibe64-ai-connections__setup-action"
+            color="primary"
+            :disabled="busy"
+            size="large"
+            type="button"
+            variant="flat"
+            @click="openOnboarding"
           >
-            <div class="vibe64-ai-connections__recommendation-body">
-              <h2 class="text-title-medium">Add GLM-4.7 Flash</h2>
-              <p class="text-body-medium text-medium-emphasis">
-                Connect a regular Z.AI API key to use GLM-4.7 Flash through OpenCode. Review its suggested roles in Model routing; your existing choices stay in place unless you change them. This connection uses Z.AI's regular API.
-              </p>
-              <div class="vibe64-ai-connections__recommendation-actions">
-                <v-btn
-                  class="vibe64-ai-connections__recommendation-primary"
-                  color="primary"
-                  type="button"
-                  variant="flat"
-                  @click="connectStarterProvider(REGULAR_ZAI_STARTER, 'recommendation')"
-                >
-                  Connect regular Z.AI API
-                </v-btn>
-                <span class="text-body-small text-medium-emphasis">
-                  Have a Z.AI Personal Coding Plan?
-                  <v-btn
-                    class="vibe64-ai-connections__recommendation-plan-action"
-                    type="button"
-                    variant="text"
-                    @click="chooseAiType('codex'); chooseNativeProvider('zai-coding-plan')"
-                  >
-                    Connect Coding Plan with Codex
-                  </v-btn>
+            Set up your AI
+          </v-btn>
+        </section>
+
+        <section v-if="configuredAiRows.length" aria-label="Configured AI accounts" class="vibe64-ai-connections__accounts">
+          <v-sheet
+            v-for="group in configuredAiGroups" :key="group.id" tag="section" :aria-label="group.label"
+            border class="vibe64-ai-connections__account-list" rounded="xl"
+          >
+            <div class="d-flex align-center justify-space-between flex-wrap ga-2 vibe64-ai-connections__group-title">
+              <h2 class="text-title-large">{{ group.label }}</h2>
+              <v-btn
+                v-if="connectedWorkflows.some(choice => choice.engineId === group.id)" variant="tonal"
+                :aria-label="`Configure ${group.label} routing`" @click="routingEngineId = group.id; routingOpen = true"
+              >
+                Configure routing
+              </v-btn>
+            </div>
+            <article
+              v-for="account in group.accounts"
+              :key="`${account.kind}:${account.id}`"
+              class="vibe64-ai-connections__row"
+            >
+              <div class="vibe64-ai-connections__identity">
+                <v-avatar :color="account.kind === 'codex-provider' && !account.connected ? 'warning' : 'success'" size="44" variant="tonal">
+                  <v-icon :icon="account.kind === 'codex-provider' && !account.connected ? mdiRefresh : mdiCheck" size="22" />
+                </v-avatar>
+                <span>
+                  <strong>
+                    {{ account.providerLabel }}
+                  </strong>
+                  <small v-if="account.id === 'zai'">{{ account.billingLabel }}</small>
+                  <small v-else-if="account.id === 'opencode' && account.builtIn">OpenCode Zen · included with Vibe64</small>
+                  <small v-else>{{ account.billingLabel }}</small>
+                  <small v-if="account.id === 'zai'">Free model ready for new sessions · {{ account.keyHint }}</small>
+                  <small v-else-if="account.id === 'opencode' && account.builtIn">Ready for the whole workspace · {{ account.keyHint }}</small>
+                  <small v-else>{{ account.modelLabel }} · {{ account.keyHint }}</small>
                 </span>
               </div>
-            </div>
-          </v-sheet>
 
-          <div v-if="!configuredAiRows.length" class="vibe64-ai-connections__zero-state">
-            <FreeAiSelector
-              ref="zeroStateSelector"
-              :connections="connections"
-              :error="loadError"
-              @retry="reload"
-              @select="(choice) => connectStarterProvider(choice, 'inline')"
-            />
-          </div>
-
-          <section v-else aria-label="Configured AI accounts" class="vibe64-ai-connections__accounts">
-            <v-sheet
-              v-for="group in configuredAiGroups" :key="group.id" tag="section" :aria-label="group.label"
-              border class="vibe64-ai-connections__account-list" rounded="xl"
-            >
-              <div class="d-flex align-center justify-space-between flex-wrap ga-2 vibe64-ai-connections__group-title">
-                <h2 class="text-title-large">{{ group.label }}</h2>
-                <v-btn
-                  v-if="connectedWorkflows.some(choice => choice.engineId === group.id)" variant="tonal"
-                  :aria-label="`Configure ${group.label} routing`" @click="routingEngineId = group.id; routingOpen = true"
+              <div class="vibe64-ai-connections__status" aria-label="Connection status">
+                <v-chip
+                  v-if="account.accessLabel"
+                  :color="account.accessLabel === 'Workspace use' ? 'primary' : undefined"
+                  size="small"
+                  variant="tonal"
                 >
-                  Configure routing
+                  {{ account.accessLabel }}
+                </v-chip>
+                <v-chip
+                  v-if="account.preferred"
+                  color="success"
+                  size="small"
+                  variant="tonal"
+                >
+                  Default
+                </v-chip>
+              </div>
+
+              <div class="vibe64-ai-connections__row-actions">
+                <v-btn
+                  v-if="account.managementUrl"
+                  :append-icon="mdiOpenInNew"
+                  :href="account.managementUrl"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  variant="text"
+                >
+                  Billing &amp; usage
+                </v-btn>
+                <v-btn type="button" variant="text" @click="manageConfiguredAi(account)">Manage</v-btn>
+                <v-btn
+                  v-if="account.removable !== false"
+                  color="error"
+                  type="button"
+                  variant="text"
+                  @click="requestRemove(account)"
+                >
+                  {{ account.id === 'opencode' ? "Use included Big Pickle" : "Remove" }}
                 </v-btn>
               </div>
-              <article
-                v-for="account in group.accounts"
-                :key="`${account.kind}:${account.id}`"
-                class="vibe64-ai-connections__row"
+
+              <v-sheet
+                v-if="account.id === 'opencode' && !account.builtIn && account.modelAccess"
+                class="vibe64-ai-connections__account-child vibe64-ai-connections__zen-access"
+                rounded="md"
               >
-                <div class="vibe64-ai-connections__identity">
-                  <v-avatar :color="account.kind === 'codex-provider' && !account.connected ? 'warning' : 'success'" size="44" variant="tonal">
-                    <v-icon :icon="account.kind === 'codex-provider' && !account.connected ? mdiRefresh : mdiCheck" size="22" />
+                <small class="vibe64-ai-connections__account-child-label">For this connection</small>
+                <div class="vibe64-ai-connections__model-access-copy">
+                  <v-avatar
+                    :color="account.modelAccess.mode === 'all' ? 'warning' : 'primary'"
+                    size="40"
+                    variant="tonal"
+                  >
+                    <v-icon
+                      :icon="zenCheckIsRunning(account) ? mdiRefresh : mdiShieldCheckOutline"
+                      size="21"
+                    />
                   </v-avatar>
                   <span>
-                    <strong>
-                      {{ account.providerLabel }}
-                    </strong>
-                    <small v-if="account.id === 'zai'">{{ account.billingLabel }}</small>
-                    <small v-else-if="account.id === 'opencode' && account.builtIn">OpenCode Zen · included with Vibe64</small>
-                    <small v-else>{{ account.billingLabel }}</small>
-                    <small v-if="account.id === 'zai'">Free model ready for new sessions · {{ account.keyHint }}</small>
-                    <small v-else-if="account.id === 'opencode' && account.builtIn">Ready for the whole workspace · {{ account.keyHint }}</small>
-                    <small v-else>{{ account.modelLabel }} · {{ account.keyHint }}</small>
+                    <strong>{{ zenAccessTitle(account) }}</strong>
+                    <small>
+                      Big Pickle always remains available. Checking sends one tiny, potentially billable request to each current Zen model, one at a time.
+                    </small>
                   </span>
                 </div>
 
-                <div class="vibe64-ai-connections__status" aria-label="Connection status">
-                  <v-chip
-                    v-if="account.accessLabel"
-                    :color="account.accessLabel === 'Workspace use' ? 'primary' : undefined"
-                    size="small"
-                    variant="tonal"
-                  >
-                    {{ account.accessLabel }}
-                  </v-chip>
-                  <v-chip
-                    v-if="account.preferred"
-                    color="success"
-                    size="small"
-                    variant="tonal"
-                  >
-                    Default
-                  </v-chip>
+                <div v-if="zenCheck(account).status" class="vibe64-ai-connections__zen-progress" aria-live="polite">
+                  <v-progress-linear
+                    v-if="zenCheckIsRunning(account)"
+                    color="primary"
+                    :indeterminate="!zenCheck(account).total"
+                    :model-value="zenCheckProgress(account)"
+                    rounded
+                  />
+                  <small>{{ zenCheckSummary(account) }}</small>
                 </div>
 
-                <div class="vibe64-ai-connections__row-actions">
+                <div class="vibe64-ai-connections__zen-actions">
                   <v-btn
-                    v-if="account.managementUrl"
-                    :append-icon="mdiOpenInNew"
-                    :href="account.managementUrl"
-                    rel="noopener noreferrer"
-                    target="_blank"
-                    variant="text"
+                    color="primary"
+                    :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
+                    type="button"
+                    variant="flat"
+                    @click="applyZenModelAccess(account, 'check-available')"
                   >
-                    Billing &amp; usage
+                    <span v-if="smAndDown">Check &amp; enable models</span>
+                    <span v-else>Check &amp; enable working models</span>
                   </v-btn>
-                  <v-btn type="button" variant="text" @click="manageConfiguredAi(account)">Manage</v-btn>
                   <v-btn
-                    v-if="account.removable !== false"
-                    color="error"
+                    :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
+                    type="button"
+                    variant="tonal"
+                    @click="applyZenModelAccess(account, 'enable-all')"
+                  >
+                    Enable all current models
+                  </v-btn>
+                  <v-btn
+                    :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
                     type="button"
                     variant="text"
-                    @click="requestRemove(account)"
+                    @click="applyZenModelAccess(account, 'disable-additional')"
                   >
-                    {{ account.id === 'opencode' ? "Use included Big Pickle" : "Remove" }}
+                    Use Big Pickle only
+                  </v-btn>
+                  <v-btn
+                    v-if="zenCheckIsRunning(account)"
+                    color="error"
+                    :disabled="updatingModelAccessProviderId === account.id || zenCheck(account).status === 'cancelling'"
+                    :prepend-icon="mdiStopCircleOutline"
+                    type="button"
+                    variant="text"
+                    @click="applyZenModelAccess(account, 'cancel-check')"
+                  >
+                    {{ zenCheck(account).status === 'cancelling' ? "Stopping…" : "Cancel check" }}
                   </v-btn>
                 </div>
+              </v-sheet>
 
-                <v-sheet
-                  v-if="account.id === 'opencode' && !account.builtIn && account.modelAccess"
-                  class="vibe64-ai-connections__account-child vibe64-ai-connections__zen-access"
-                  rounded="md"
-                >
-                  <small class="vibe64-ai-connections__account-child-label">For this connection</small>
-                  <div class="vibe64-ai-connections__model-access-copy">
-                    <v-avatar
-                      :color="account.modelAccess.mode === 'all' ? 'warning' : 'primary'"
-                      size="40"
-                      variant="tonal"
-                    >
-                      <v-icon
-                        :icon="zenCheckIsRunning(account) ? mdiRefresh : mdiShieldCheckOutline"
-                        size="21"
-                      />
-                    </v-avatar>
-                    <span>
-                      <strong>{{ zenAccessTitle(account) }}</strong>
-                      <small>
-                        Big Pickle always remains available. Checking sends one tiny, potentially billable request to each current Zen model, one at a time.
-                      </small>
-                    </span>
-                  </div>
-
-                  <div v-if="zenCheck(account).status" class="vibe64-ai-connections__zen-progress" aria-live="polite">
-                    <v-progress-linear
-                      v-if="zenCheckIsRunning(account)"
-                      color="primary"
-                      :indeterminate="!zenCheck(account).total"
-                      :model-value="zenCheckProgress(account)"
-                      rounded
+              <v-sheet
+                v-if="account.id !== 'opencode' && account.modelAccess?.configurable"
+                class="vibe64-ai-connections__account-child vibe64-ai-connections__model-access"
+                :class="{ 'vibe64-ai-connections__model-access--paid': account.modelAccess.mode === 'all' }"
+                rounded="md"
+              >
+                <small class="vibe64-ai-connections__account-child-label">For this connection</small>
+                <div class="vibe64-ai-connections__model-access-copy">
+                  <v-avatar
+                    :color="account.modelAccess.mode === 'all' ? 'warning' : 'success'"
+                    size="40"
+                    variant="tonal"
+                  >
+                    <v-icon
+                      :icon="account.modelAccess.mode === 'all' ? mdiCreditCardOutline : mdiShieldCheckOutline"
+                      size="21"
                     />
-                    <small>{{ zenCheckSummary(account) }}</small>
-                  </div>
+                  </v-avatar>
+                  <span>
+                    <strong>{{ account.modelAccess.mode === 'all' ? "All Z.AI models unlocked" : "Free-only model access" }}</strong>
+                    <small>
+                      {{ account.modelAccess.mode === 'all'
+                        ? "GLM-4.7 Flash remains free; other model choices can consume Z.AI API credit."
+                        : "GLM-4.7 Flash stays available. Paid Z.AI models remain visible but locked." }}
+                    </small>
+                  </span>
+                </div>
+                <v-switch
+                  color="primary"
+                  :disabled="Boolean(updatingModelAccessProviderId)"
+                  hide-details
+                  inset
+                  :label="updatingModelAccessProviderId === account.id
+                    ? (account.modelAccess.mode === 'all' ? 'Returning to free only…' : 'Unlocking paid models…')
+                    : account.modelAccess.label"
+                  :model-value="account.modelAccess.mode === 'all'"
+                  @click.prevent="requestModelAccess(account, account.modelAccess.mode !== 'all')"
+                />
+              </v-sheet>
+            </article>
+          </v-sheet>
+        </section>
 
-                  <div class="vibe64-ai-connections__zen-actions">
-                    <v-btn
-                      color="primary"
-                      :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
-                      type="button"
-                      variant="flat"
-                      @click="applyZenModelAccess(account, 'check-available')"
-                    >
-                      <span v-if="smAndDown">Check &amp; enable models</span>
-                      <span v-else>Check &amp; enable working models</span>
-                    </v-btn>
-                    <v-btn
-                      :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
-                      type="button"
-                      variant="tonal"
-                      @click="applyZenModelAccess(account, 'enable-all')"
-                    >
-                      Enable all current models
-                    </v-btn>
-                    <v-btn
-                      :disabled="Boolean(updatingModelAccessProviderId) || zenCheckIsRunning(account)"
-                      type="button"
-                      variant="text"
-                      @click="applyZenModelAccess(account, 'disable-additional')"
-                    >
-                      Use Big Pickle only
-                    </v-btn>
-                    <v-btn
-                      v-if="zenCheckIsRunning(account)"
-                      color="error"
-                      :disabled="updatingModelAccessProviderId === account.id || zenCheck(account).status === 'cancelling'"
-                      :prepend-icon="mdiStopCircleOutline"
-                      type="button"
-                      variant="text"
-                      @click="applyZenModelAccess(account, 'cancel-check')"
-                    >
-                      {{ zenCheck(account).status === 'cancelling' ? "Stopping…" : "Cancel check" }}
-                    </v-btn>
-                  </div>
-                </v-sheet>
+        <v-alert
+          v-if="pendingProvider && !editorOpen"
+          class="vibe64-ai-connections__requested"
+          :text="`${pendingProvider.label} needs an API key before the requested OpenCode session can start.`"
+          title="Provider setup requested"
+          type="info"
+          variant="tonal"
+        >
+          <template #append>
+            <v-btn color="primary" type="button" variant="flat" @click="chooseProvider(pendingProvider)">Connect</v-btn>
+          </template>
+        </v-alert>
 
-                <v-sheet
-                  v-if="account.id !== 'opencode' && account.modelAccess?.configurable"
-                  class="vibe64-ai-connections__account-child vibe64-ai-connections__model-access"
-                  :class="{ 'vibe64-ai-connections__model-access--paid': account.modelAccess.mode === 'all' }"
-                  rounded="md"
-                >
-                  <small class="vibe64-ai-connections__account-child-label">For this connection</small>
-                  <div class="vibe64-ai-connections__model-access-copy">
-                    <v-avatar
-                      :color="account.modelAccess.mode === 'all' ? 'warning' : 'success'"
-                      size="40"
-                      variant="tonal"
-                    >
-                      <v-icon
-                        :icon="account.modelAccess.mode === 'all' ? mdiCreditCardOutline : mdiShieldCheckOutline"
-                        size="21"
-                      />
-                    </v-avatar>
-                    <span>
-                      <strong>{{ account.modelAccess.mode === 'all' ? "All Z.AI models unlocked" : "Free-only model access" }}</strong>
-                      <small>
-                        {{ account.modelAccess.mode === 'all'
-                          ? "GLM-4.7 Flash remains free; other model choices can consume Z.AI API credit."
-                          : "GLM-4.7 Flash stays available. Paid Z.AI models remain visible but locked." }}
-                      </small>
-                    </span>
-                  </div>
-                  <v-switch
-                    color="primary"
-                    :disabled="Boolean(updatingModelAccessProviderId)"
-                    hide-details
-                    inset
-                    :label="updatingModelAccessProviderId === account.id
-                      ? (account.modelAccess.mode === 'all' ? 'Returning to free only…' : 'Unlocking paid models…')
-                      : account.modelAccess.label"
-                    :model-value="account.modelAccess.mode === 'all'"
-                    @click.prevent="requestModelAccess(account, account.modelAccess.mode !== 'all')"
-                  />
-                </v-sheet>
-              </article>
-            </v-sheet>
-          </section>
-
-          <v-alert
-            v-if="pendingProvider && !editorOpen"
-            class="vibe64-ai-connections__requested"
-            :text="`${pendingProvider.label} needs an API key before the requested OpenCode session can start.`"
-            title="Provider setup requested"
-            type="info"
-            variant="tonal"
-          >
-            <template #append>
-              <v-btn color="primary" type="button" variant="flat" @click="chooseProvider(pendingProvider)">Connect</v-btn>
-            </template>
-          </v-alert>
-
-          <div class="vibe64-ai-connections__security-note">
-            <v-icon :icon="mdiLockOutline" size="18" />
-            <span>Provider keys are redacted after saving. Sign-ins and keys can be managed only by the Vibe64 owner.</span>
-          </div>
-        </template>
+        <div class="vibe64-ai-connections__security-note">
+          <v-icon :icon="mdiLockOutline" size="18" />
+          <span>Provider keys are redacted after saving. Sign-ins and keys can be managed only by the Vibe64 owner.</span>
+        </div>
       </template>
     </template>
 
@@ -1445,20 +1382,6 @@ defineExpose({ openProvider });
               </span>
             </v-sheet>
 
-            <v-btn
-              v-if="editorStarter"
-              :append-icon="mdiOpenInNew"
-              block
-              color="primary"
-              :href="editorStarter.accountUrl"
-              rel="noopener noreferrer"
-              size="large"
-              target="_blank"
-              variant="tonal"
-            >
-              {{ editorStarter.accountAction }}
-            </v-btn>
-
             <v-sheet
               v-if="editorPreparing"
               aria-label="Loading current provider details"
@@ -1529,7 +1452,7 @@ defineExpose({ openProvider });
               variant="flat"
               @click="saveEditor"
             >
-              {{ editorPreparing ? "Loading provider details…" : onboarding ? "Verify key and start Vibe64" : "Verify and connect" }}
+              {{ editorPreparing ? "Loading provider details…" : "Verify and connect" }}
             </v-btn>
           </v-card-actions>
         </template>
@@ -1621,10 +1544,6 @@ defineExpose({ openProvider });
   padding: clamp(1rem, 3vw, 1.5rem);
 }
 
-.vibe64-ai-connections--onboarding {
-  background: transparent;
-}
-
 .vibe64-ai-connections__page-actions,
 .vibe64-ai-connections__identity,
 .vibe64-ai-connections__status,
@@ -1632,8 +1551,6 @@ defineExpose({ openProvider });
 .vibe64-ai-connections__model-access,
 .vibe64-ai-connections__model-access-copy,
 .vibe64-ai-connections__zen-actions,
-.vibe64-ai-connections__recommendation-actions,
-.vibe64-ai-connections__recommendation-actions > span,
 .vibe64-ai-connections__security-note,
 .vibe64-dialog-title,
 .vibe64-provider-editor__provider,
@@ -1644,7 +1561,6 @@ defineExpose({ openProvider });
 }
 
 .vibe64-add-ai__body > p,
-.vibe64-ai-connections__recommendation-body > p,
 .vibe64-provider-editor__route p {
   margin: 0;
 }
@@ -1669,32 +1585,53 @@ defineExpose({ openProvider });
   justify-content: flex-end;
 }
 
-.vibe64-ai-connections__recommendation-body {
+.vibe64-ai-connections__redo {
+  margin-inline-end: auto;
+}
+
+.vibe64-ai-connections__setup {
+  align-items: center;
+  background:
+    radial-gradient(28rem 12rem at 100% 0%, var(--v64-primary-container), transparent 70%),
+    var(--v64-surface-container-low);
+  border: 1px solid var(--v64-outline-variant);
+  border-radius: var(--v64-shape-xl);
   display: grid;
-  gap: 0.75rem;
+  gap: var(--v64-space-4) var(--v64-space-5);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: var(--v64-space-5);
+}
+
+.vibe64-ai-connections__setup-mark {
+  align-items: center;
+  background: var(--v64-primary-container);
+  border-radius: var(--v64-shape-lg);
+  color: var(--v64-on-primary-container);
+  display: inline-flex;
+  height: 3.5rem;
+  justify-content: center;
+  width: 3.5rem;
+}
+
+.vibe64-ai-connections__setup-copy {
+  display: grid;
+  gap: var(--v64-space-1);
   min-width: 0;
 }
 
-.vibe64-ai-connections__recommendation {
-  background: rgb(var(--v-theme-surface-container-low));
-  padding: 1.25rem;
+.vibe64-ai-connections__setup-copy h2 {
+  font: var(--v64-type-title-lg);
+  margin: 0;
 }
 
-.vibe64-ai-connections__recommendation-body > p {
-  overflow-wrap: anywhere;
+.vibe64-ai-connections__setup-copy p {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-body-md);
+  margin: 0;
 }
 
-.vibe64-ai-connections__recommendation-actions,
-.vibe64-ai-connections__recommendation-actions > span {
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-}
-
-.vibe64-ai-connections__recommendation-plan-action {
-  max-width: 100%;
-  padding-inline: 0;
-  white-space: normal;
+.vibe64-ai-connections__setup-action {
+  min-height: 3rem;
 }
 
 .vibe64-ai-connections__list,
@@ -1877,10 +1814,6 @@ defineExpose({ openProvider });
   gap: 0.5rem;
 }
 
-.vibe64-ai-connections__zero-state {
-  padding-block: 0.25rem;
-}
-
 .vibe64-dialog-title {
   align-items: center;
   gap: 1rem;
@@ -2018,18 +1951,20 @@ defineExpose({ openProvider });
   width: 100%;
 }
 
-.vibe64-ai-connections--compact .vibe64-ai-connections__recommendation-actions {
-  align-items: stretch;
-  flex-direction: column;
+.vibe64-ai-connections--compact .vibe64-ai-connections__setup {
+  gap: var(--v64-space-3);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  padding: var(--v64-space-5) var(--v64-space-4) var(--v64-space-4);
 }
 
-.vibe64-ai-connections--compact .vibe64-ai-connections__recommendation-primary {
+.vibe64-ai-connections--compact .vibe64-ai-connections__setup-mark {
+  height: 2.75rem;
+  width: 2.75rem;
+}
+
+.vibe64-ai-connections--compact .vibe64-ai-connections__setup-action {
   width: 100%;
-}
-
-.vibe64-ai-connections--compact .vibe64-ai-connections__recommendation-actions > span {
-  align-items: flex-start;
-  display: grid;
 }
 
 .vibe64-ai-connections--compact .vibe64-ai-connections__row {
