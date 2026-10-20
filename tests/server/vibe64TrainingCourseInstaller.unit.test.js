@@ -323,3 +323,33 @@ test("an install or update that would exceed the installed release limit fails c
   assert.deepEqual((await f.catalogue.readCatalogue()).courses, []);
   assert.deepEqual(await f.scratch(), []);
 });
+
+test("a course release whose topic carries v2 step lessons installs and projects titles without answers", async (t) => {
+  const f = await fixture(t);
+  const metadata = JSON.parse(git(f.topicRoot, "show", "HEAD:package.json"));
+  await write(f.topicRoot, "package.json", { ...metadata, version: "0.2.0" });
+  await write(f.topicRoot, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 2, code: "USE-ONE", title: "Try the application",
+    prerequisites: [], estimatedMinutes: 5, visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }],
+    steps: [{ id: "look", title: "Look", body: "steps/look.md", visual: { id: "request" }, check: { kind: "self" }, required: true },
+      { id: "which", title: "Which?", body: "steps/which.md", check: { kind: "choice", question: "Which one?", options: ["A", "B"], answer: [0] }, required: true }] });
+  await write(f.topicRoot, "training/lessons/USE-ONE/steps/look.md", "Look at the request.\n");
+  await write(f.topicRoot, "training/lessons/USE-ONE/steps/which.md", "Pick one.\n");
+  git(f.topicRoot, "add", "-A");
+  git(f.topicRoot, "commit", "-q", "-m", "Topic 0.2.0 in lesson format v2");
+  const next = await readPinnedTopic(f.topicRoot);
+  const course = { ...f.course, release: "0.2.0", topics: [{ topicId: next.topicId, release: "0.2.0" }] };
+  const lock = createCourseLock(course, [next]);
+  const topics = { ...f.topics, topics: [{ ...f.topics.topics[0], releases: [...f.topics.topics[0].releases,
+    { release: "0.2.0", status: "released", commit: next.commit, manifestHash: next.topicHash }] }] };
+  await f.publishCatalogue({ courseValue: course, lockValue: lock, topicsValue: topics });
+  const installed = await f.make().installCourse({ courseId: "first-course", release: "0.2.0" });
+  assert.equal(installed.changed, true);
+  await assert.rejects(readdir(f.executed), { code: "ENOENT" }, "installation runs no authored code");
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const pin = { schemaVersion: 1, topicId: next.topicId, release: "0.2.0", repository: next.repository, commit: next.commit, topicHash: next.topicHash };
+  const lesson = await content.readLesson({ ...pin, lessonCode: "USE-ONE", lessonHash: lock.topics[0].lessons[0].hash });
+  assert.deepEqual(lesson.steps.map(step => step.id), ["look", "which"]);
+  assert.equal(JSON.stringify(lesson).includes('"answer"'), false);
+  const listed = (await f.catalogue.readCatalogue()).courses.find(entry => entry.course.release === "0.2.0");
+  assert.equal(listed.enabled, true);
+});

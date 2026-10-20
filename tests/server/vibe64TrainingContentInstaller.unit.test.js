@@ -240,3 +240,26 @@ test("a commit changed after bundling cannot publish, owned staging is cleaned a
   await release();
   await assert.rejects(() => lstat(f.executed), { code: "ENOENT" });
 });
+
+test("a v2 step lesson installs from its exact commit and reads without choice answers", async t => {
+  const f = await fixture(t);
+  await f.write("training/lessons/INTRO-01/lesson.json", { schemaVersion: 2, code: "INTRO-01", title: "Try an application", prerequisites: [], estimatedMinutes: 10,
+    visuals: [{ id: "flow", descriptor: "../../visuals/flow/visual.json" }], exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" },
+    checks: [{ id: "response", file: "../../checks/response.mjs" }], steps: [
+      { id: "try-app", title: "Press the button", body: "steps/try-app.md", visual: { id: "flow", play: [{ name: "send", parameters: {} }] },
+        guide: { target: "preview", navigate: true }, check: { kind: "auto", check: "response" }, required: true },
+      { id: "which", title: "Which side?", body: "steps/which.md",
+        check: { kind: "choice", question: "Who answered?", options: ["Browser", "Server"], answer: [1] }, required: true }] });
+  await f.write("training/lessons/INTRO-01/steps/try-app.md", "Press the real button.\n");
+  await f.write("training/lessons/INTRO-01/steps/which.md", "Choose who answered.\n");
+  await rm(path.join(f.sourceRoot, "training/lessons/INTRO-01/lesson.md"));
+  const pin = await f.commit();
+  const result = await f.installer.installTopic({ sourceRoot: f.sourceRoot, pin });
+  assert.equal(result.installed, true);
+  const topic = await f.reader.readTopic(pin);
+  const lesson = await f.reader.readLesson({ ...pin, lessonCode: "INTRO-01", lessonHash: topic.bundles[0].hash });
+  assert.deepEqual(lesson.steps.map(step => [step.id, step.bodyText]), [["try-app", "Press the real button.\n"], ["which", "Choose who answered.\n"]]);
+  assert.equal(JSON.stringify(topic).includes('"answer"') || JSON.stringify(lesson).includes('"answer"'), false);
+  assert.deepEqual((await f.reader.readChoiceAnswer({ ...pin, lessonCode: "INTRO-01", lessonHash: topic.bundles[0].hash, stepId: "which" })).answer, [1]);
+  await assert.rejects(() => lstat(f.executed), { code: "ENOENT" });
+});

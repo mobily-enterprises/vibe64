@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "flow", "title": "Request flow", "svg": "diagram.svg", "controller": "controller.js",
+  "initialState": "overview", "states": ["overview", "arrived"], "description": "A browser sends one request to the server.",
+  "commands": [{ "name": "send", "parameters": [{ "name": "label", "required": true, "maxLength": 32 }],
+    "completionState": "arrived", "description": "Move a labelled request from the browser to the server." }]
+}

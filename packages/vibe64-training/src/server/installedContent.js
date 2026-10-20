@@ -3,7 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
-import { lessonSchema, validateContent } from "./contentSchemas.js";
+import { validateContent, validateLesson } from "./contentSchemas.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -19,6 +19,25 @@ const pinSchema = createSchema({
   topicHash: { ...text, maxLength: 64 }
 });
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+
+// A v2 choice answer is read only by the server comparator. Every other
+// projection of a lesson descriptor goes through this.
+function withoutAnswers(lesson) {
+  if (lesson?.schemaVersion !== 2) return lesson;
+  return { ...lesson, steps: lesson.steps.map(step => {
+    if (step.check.kind !== "choice") return step;
+    const { answer, ...check } = step.check;
+    return { ...step, check };
+  }) };
+}
+
+// The choice comparator: the selection passes only when it names exactly the
+// authored answer indexes. Order is irrelevant; duplicates or non-integers fail.
+function compareChoiceAnswer(answer, selected) {
+  if (!Array.isArray(answer) || !Array.isArray(selected) || !selected.every(Number.isSafeInteger) ||
+      new Set(selected).size !== selected.length) return false;
+  return selected.length === answer.length && selected.every(index => answer.includes(index));
+}
 
 function validateInstalledTopicPin(value, expected = {}) {
   const pin = validateContent(pinSchema, value, "Installed topic pin");
@@ -83,7 +102,12 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   }
   const pendingTopics = new Map();
 
-  async function readTopic({ topicId, commit, topicHash } = {}) {
+  async function readTopic(input = {}) {
+    const topic = await readVerifiedTopic(input);
+    return { ...topic, bundles: topic.bundles.map(bundle => ({ ...bundle, lesson: withoutAnswers(bundle.lesson) })) };
+  }
+
+  async function readVerifiedTopic({ topicId, commit, topicHash } = {}) {
     if (typeof topicId !== "string" || typeof commit !== "string" || !idPattern.test(topicId) || !commitPattern.test(commit)) {
       throw new Error("Choose a valid topic ID and its exact 40-character lowercase Git commit.");
     }
@@ -198,9 +222,9 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       if (entry.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
       const identity = { pin, manifest: selected.manifest, hash: lessonHash, descriptorPath: descriptor.descriptor };
       const file = await lessonFile(identity, ".", descriptor.descriptor);
-      const lesson = validateContent(lessonSchema, JSON.parse(file.bytes.toString("utf8")), lessonCode);
+      const lesson = validateLesson(JSON.parse(file.bytes.toString("utf8")), lessonCode);
       if (lesson.code !== lessonCode) throw new Error("Installed lesson descriptor identity changed.");
-      return { ...identity, lesson };
+      return { ...identity, lesson: withoutAnswers(lesson) };
     } catch (cause) {
       const error = new Error(`Pinned teaching identity ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to restore the exact snapshot.`, { cause });
       error.code = ["ENOENT", "ENOTDIR"].includes(cause.code)
@@ -209,11 +233,16 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     }
   }
 
-  async function readLessonIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
+  async function readLessonIdentity(input = {}) {
+    const identity = await readVerifiedLessonIdentity(input);
+    return { ...identity, lesson: withoutAnswers(identity.lesson) };
+  }
+
+  async function readVerifiedLessonIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     if (typeof lessonCode !== "string" || typeof lessonHash !== "string" || !idPattern.test(lessonCode) || !hashPattern.test(lessonHash)) {
       throw new Error("Choose a declared lesson code and its exact 64-character lowercase content hash.");
     }
-    const topic = await readTopic({ topicId, commit, topicHash });
+    const topic = await readVerifiedTopic({ topicId, commit, topicHash });
     const bundle = topic.bundles.find(item => item.lesson.code === lessonCode);
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
     if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
@@ -229,6 +258,18 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const file = await lessonFile(bundle, base, reference);
       return { path: file.path, text: file.bytes.toString("utf8") };
     }
+    const visuals = [];
+    for (const resource of bundle.lesson.visuals) {
+      const descriptor = await lessonText(resource.descriptor);
+      visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
+    }
+    if (bundle.lesson.schemaVersion === 2) {
+      // v2 has no teaching document or rubrics: each step carries its body text.
+      const steps = [];
+      for (const step of bundle.lesson.steps) steps.push({ ...step, bodyText: (await lessonText(step.body)).text });
+      return { ...bundle, steps, ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text }, visuals };
+    }
+    if (bundle.lesson.schemaVersion !== 1) throw new Error(`Lesson ${bundle.lesson.code} uses an unsupported format.`);
     const document = await lessonText(bundle.lesson.document);
     const anchors = bundle.lesson.assessments.map(assessment => ({
       id: assessment.id,
@@ -240,17 +281,24 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       reference: anchor.reference,
       text: document.text.slice(anchor.position, anchors[index + 1]?.position ?? document.text.length)
     }));
-    const visuals = [];
-    for (const resource of bundle.lesson.visuals) {
-      const descriptor = await lessonText(resource.descriptor);
-      visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
-    }
     return {
       ...bundle,
       document,
       rubrics,
       visuals
     };
+  }
+
+  // Server-only comparator input: the authored answer of one v2 choice step.
+  // Never return this to a browser or assistant projection.
+  async function readChoiceAnswer({ stepId, ...input } = {}) {
+    if (typeof stepId !== "string" || !idPattern.test(stepId)) throw new Error("Choose a declared step ID.");
+    const { pin, lesson, hash } = await readVerifiedLessonIdentity(input);
+    if (lesson.schemaVersion !== 2) throw new Error(`Lesson ${lesson.code} has no steps.`);
+    const step = lesson.steps.find(item => item.id === stepId);
+    if (!step) throw new Error(`Step ${stepId} is not declared in this pinned lesson.`);
+    if (step.check.kind !== "choice") throw new Error(`Step ${stepId} is not a choice step.`);
+    return { pin, lessonCode: lesson.code, lessonHash: hash, stepId, answer: [...step.check.answer] };
   }
 
   async function readVisual({ topicId, commit, topicHash, lessonCode, lessonHash, visualId } = {}) {
@@ -326,7 +374,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { ...identity, files };
   }
 
-  return { readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise };
+  return { readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer };
 }
 
-export { createInstalledTrainingContent, validateInstalledTopicPin };
+export { compareChoiceAnswer, createInstalledTrainingContent, validateInstalledTopicPin };

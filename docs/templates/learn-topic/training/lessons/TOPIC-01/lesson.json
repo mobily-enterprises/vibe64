@@ -1,17 +1,38 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "code": "TOPIC-01",
   "title": "Replace with the learner task",
-  "document": "lesson.md",
+  "notes": "notes.md",
   "prerequisites": [],
   "estimatedMinutes": 15,
   "visuals": [],
-  "assessments": [
+  "steps": [
     {
-      "id": "explain-outcome",
-      "kind": "answer",
-      "required": true,
-      "rubric": "lesson.md#explain-outcome"
+      "id": "explain-idea",
+      "title": "Replace with the first idea",
+      "body": "steps/explain-idea.md",
+      "check": { "kind": "none" },
+      "required": false
+    },
+    {
+      "id": "check-understanding",
+      "title": "Replace with a check of that idea",
+      "body": "steps/check-understanding.md",
+      "check": {
+        "kind": "choice",
+        "question": "Replace with a question that has one clearly correct option.",
+        "options": ["Replace with the correct option", "Replace with a common misconception"],
+        "answer": [0]
+      },
+      "required": true
+    },
+    {
+      "id": "try-it",
+      "title": "Replace with what the learner does",
+      "body": "steps/try-it.md",
+      "guide": { "target": "preview", "navigate": true, "caption": "Replace with where to look" },
+      "check": { "kind": "self" },
+      "required": true
     }
   ]
 }

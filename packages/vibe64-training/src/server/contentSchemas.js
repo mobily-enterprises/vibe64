@@ -19,8 +19,9 @@ const assessment = createSchema({
     files: { ...list(text, 8), required: false, minLength: 1 }
   }) }
 });
-const lessonSchema = createSchema({
-  schemaVersion: version, code: id, title: text, document: text, prerequisites,
+// Fields shared by every lesson format version.
+const lessonFields = {
+  code: id, title: text, prerequisites,
   estimatedMinutes: { type: "integer", required: true, min: 1, max: 180 },
   visuals: list(createSchema({ id, descriptor: text }), 12),
   exercise: { type: "object", required: false, schema: createSchema({
@@ -33,9 +34,48 @@ const lessonSchema = createSchema({
     timeoutSeconds: { type: "integer", required: false, min: 1, max: 60 } }), 12), required: false },
   // Learning watches keep a failed in-app request's path only when it matches one of these.
   appRoutes: { ...list(createSchema({ method: { ...text, enum: ["POST", "PUT", "PATCH", "DELETE"] },
-    path: { ...text, maxLength: 128, pattern: "^/[A-Za-z0-9._~:/-]*$" } }), 16), required: false },
+    path: { ...text, maxLength: 128, pattern: "^/[A-Za-z0-9._~:/-]*$" } }), 16), required: false }
+};
+const lessonSchema = createSchema({
+  schemaVersion: version, ...lessonFields, document: text,
   assessments: list(assessment, 32)
 });
+// Lesson format v2: ordered steps replace the teaching document and its
+// assessments. Check verdicts are final; v2 has no rubric and no AI grader.
+// Cross-field rules (per-kind fields, references, counts) live in the bundler.
+const stepSchema = createSchema({
+  id, title: text, body: text, required: { type: "boolean", required: true },
+  visual: { type: "object", required: false, schema: createSchema({
+    id,
+    // Each entry's parameters are a flat name -> string map, checked against
+    // the visual's declared command by the bundler.
+    play: { ...list(createSchema({ name: id, parameters: { type: "object", required: true } }), 16), required: false }
+  }) },
+  guide: { type: "object", required: false, schema: createSchema({
+    target: id, navigate: { type: "boolean", required: false },
+    filePath: { ...text, required: false, maxLength: 512 }, caption: { ...text, required: false }
+  }) },
+  check: { type: "object", required: true, schema: createSchema({
+    kind: { ...text, enum: ["auto", "choice", "self", "none"] },
+    check: { ...id, required: false },
+    files: { ...list(text, 8), required: false },
+    question: { ...text, required: false, maxLength: 2000 },
+    options: { ...list(text, 8), required: false },
+    answer: { ...list({ type: "integer", required: true, min: 0, max: 7 }, 8), required: false }
+  }) }
+});
+const lessonSchemaV2 = createSchema({
+  schemaVersion: { type: "integer", required: true, enum: [2] }, ...lessonFields,
+  notes: { ...text, required: false },
+  steps: list(stepSchema, 32)
+});
+const lessonSchemas = new Map([[1, lessonSchema], [2, lessonSchemaV2]]);
+
+// Select the authored lesson format by its declared version before validating.
+function validateLesson(value, label) {
+  const schema = lessonSchemas.get(value?.schemaVersion) || lessonSchema;
+  return validateContent(schema, value, label);
+}
 const topicSchema = createSchema({
   schemaVersion: version, topicId: id, domainId: id, title: text,
   status: { ...text, enum: ["preview", "released"] }, outline: text, prerequisites: list(createSchema({ topicId: id }), 24),
@@ -63,4 +103,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, id, lessonSchema, list, text, topicSchema, visualSchema, validateContent };
+export { courseSchema, id, lessonSchema, lessonSchemaV2, list, text, topicSchema, visualSchema, validateContent, validateLesson };
