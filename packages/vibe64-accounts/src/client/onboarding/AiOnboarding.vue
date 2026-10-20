@@ -12,7 +12,6 @@ import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import { usesProvider } from "./useAiOnboarding.js";
-import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 
 const props = defineProps({
   open: Boolean,
@@ -79,10 +78,9 @@ const connectedCards = computed(() => cards.value.filter((card) => card.connecte
 const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(props.onboarding.colleague.value, card)) || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
 // The chosen engine's CLI, when this computer lacks it or it did not start.
-const accounts = useVibe64Accounts();
 const missingTool = computed(() => {
   const id = chosen.value?.connect.engineId;
-  const status = accounts.status.value || {};
+  const status = props.onboarding.accounts?.status.value || {};
   return status.accounts?.find((account) => account.id === id && cliProblem(account)) ||
     status.missingTools?.find((tool) => tool.id === id) || null;
 });
@@ -90,7 +88,7 @@ const checkingTools = ref(false);
 async function checkTools() {
   checkingTools.value = true;
   try {
-    await accounts.refresh();
+    await props.onboarding.accounts?.refresh();
   } finally {
     checkingTools.value = false;
   }

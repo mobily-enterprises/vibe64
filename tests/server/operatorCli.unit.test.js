@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   configureVibe64Host,
   operatorCliProblem,
+  operatorCliStartFailed,
   resolveOperatorCli
 } from "@local/vibe64-execution/server";
 
@@ -36,36 +37,30 @@ test("a host with runtime packs runs its pinned CLI launchers", async () => {
     assert.equal(resolveOperatorCli("claude", { env: { VIBE64_CLAUDE_COMMAND: "/fixture/claude" } }).command, "/fixture/claude");
     assert.equal(resolveOperatorCli("codex", { env: {} }).command, path.join(packRoot, "managed-bin", "codex"));
     assert.equal(resolveOperatorCli("opencode", { env: {} }).command, "opencode");
-    assert.equal(operatorCliProblem("codex").install, undefined, "a host with packs never shows an install command");
   });
 });
 
 test("without packs each CLI is the person's own, found again on every call", async () => {
   await withHome(async (home) => {
     const env = { HOME: home, PATH: path.join(home, "on-path") };
-    await mkdir(path.join(home, ".nvm", "versions", "node", "v26.1.0", "bin"), { recursive: true });
     const before = resolveOperatorCli("claude", { env });
-    assert.deepEqual(before.searched, [...new Set([
+    assert.deepEqual(before.searched, [
       path.join(home, "on-path"),
-      ...[".local/bin", ".claude/local", ".opencode/bin", ".npm-global/bin", ".bun/bin", ".volta/bin"]
-        .map((dir) => path.join(home, dir)),
-      path.join(home, ".nvm", "versions", "node", "v26.1.0", "bin"),
-      path.dirname(process.execPath),
+      ...[".local/bin", ".claude/local", ".opencode/bin"].map((dir) => path.join(home, dir)),
       "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "/usr/bin"
-    ])]);
+      "/usr/local/bin"
+    ]);
 
     const installed = await installFake(path.join(home, ".local", "bin"), "claude");
     assert.notEqual(before.command, installed);
     assert.deepEqual(resolveOperatorCli("claude", { env }), { command: installed, installed: true, searched: before.searched });
 
     const first = await installFake(path.join(home, "on-path"), "codex");
-    await installFake(path.join(home, ".npm-global", "bin"), "codex");
-    assert.equal(resolveOperatorCli("codex", { env }).command, first, "PATH comes before the usual install folders");
+    await installFake(path.join(home, ".local", "bin"), "codex");
+    assert.equal(resolveOperatorCli("codex", { env }).command, first, "PATH comes before the installers' folders");
 
-    const nvm = await installFake(path.join(home, ".nvm", "versions", "node", "v26.1.0", "bin"), "opencode");
-    assert.equal(resolveOperatorCli("opencode", { env }).command, nvm);
+    const opencode = await installFake(path.join(home, ".opencode", "bin"), "opencode");
+    assert.equal(resolveOperatorCli("opencode", { env }).command, opencode);
   });
 });
 
@@ -81,6 +76,30 @@ test("an explicit Claude command is used as given", async () => {
     const command = await installFake(home, "fixture-claude");
     assert.deepEqual(resolveOperatorCli("claude", { env: { HOME: home, VIBE64_CLAUDE_COMMAND: command } }),
       { command, installed: true, searched: [command] });
+  });
+});
+
+test("a bare Claude command name is looked up like the tool itself", async () => {
+  await withHome(async (home) => {
+    const env = { HOME: home, PATH: path.join(home, "on-path"), VIBE64_CLAUDE_COMMAND: "my-claude" };
+    assert.equal(resolveOperatorCli("claude", { env }).installed, false);
+    const command = await installFake(path.join(home, "on-path"), "my-claude");
+    assert.equal(resolveOperatorCli("claude", { env }).command, command);
+    assert.equal(resolveOperatorCli("claude", { env }).installed, true);
+  });
+});
+
+test("only a CLI that could not be executed counts as not starting", async () => {
+  assert.equal(operatorCliStartFailed({ ok: false, exitCode: 127 }), true);
+  assert.equal(operatorCliStartFailed({ ok: false, exitCode: 126 }), true);
+  assert.equal(operatorCliStartFailed({ ok: false, exitCode: 1, error: "Command failed with ENOENT: codex\nspawn /x/codex ENOENT" }), true);
+  assert.equal(operatorCliStartFailed({ ok: false, exitCode: 1, output: "Permission denied: ~/.codex/auth.json" }), false,
+    "a CLI that ran and reported a file problem is still a sign-in problem");
+  assert.equal(operatorCliStartFailed({ ok: false, exitCode: 1, timedOut: true }), false);
+  assert.equal(operatorCliStartFailed({ ok: true, exitCode: 0 }), false);
+  await withHome(async (packRoot) => {
+    configureVibe64Host({ runtimePackRoot: packRoot });
+    assert.equal(operatorCliStartFailed({ ok: false, exitCode: 127 }), false, "a host with packs keeps its own results");
   });
 });
 

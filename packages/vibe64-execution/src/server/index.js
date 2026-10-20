@@ -203,5 +203,6 @@ export {
   OPERATOR_CLIS,
   operatorCliCommand,
   operatorCliProblem,
+  operatorCliStartFailed,
   resolveOperatorCli
 } from "./runtime/operatorCli.js";

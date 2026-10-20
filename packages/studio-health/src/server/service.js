@@ -92,16 +92,15 @@ async function commandCheck({
     : failedCheck(check);
 }
 
-function toolchainCheck(packs) {
+// Without runtime packs, the person keeps their own tools up to date.
+function ownToolsCheck() {
   return passedCheck({
     id: "toolchain",
     label: "Tools",
     group: "Runtime",
-    expected: packs ? "Vibe64 runs its pinned runtime packs." : "Vibe64 runs the tools installed on this computer.",
-    observed: packs ? "Pinned runtime packs." : "Using your installed tools.",
-    explanation: packs
-      ? "Node.js, Git and the AI tools come from versions this Vibe64 pins."
-      : "Node.js, Git and the AI tools are the ones on this computer; install or update them yourself."
+    expected: "Vibe64 runs the tools installed on this computer.",
+    observed: "Using your installed tools.",
+    explanation: "Node.js, Git and the AI tools are the ones on this computer; install or update them yourself."
   });
 }
 
@@ -262,7 +261,20 @@ function createService({
           isValid: (output) => /^ripgrep\s+/u.test(compactOutput(output)),
           explanation: "Codex uses ripgrep for fast local source discovery."
         }),
-        ...Object.keys(OPERATOR_CLIS).map((tool) => operatorCliCheck(tool, { env, runCommand, studioRoot })),
+        ...(packs
+          ? [commandCheck({
+              id: "codex",
+              label: "Codex CLI",
+              command: "codex",
+              args: ["--version"],
+              runtimes: ["operator-clis", "node26"],
+              runCommand,
+              studioRoot,
+              expected: "The managed operator CLI pack exposes Codex.",
+              isValid: (output) => /codex/iu.test(compactOutput(output)),
+              explanation: "Direct chat delegates project work to the pinned Codex command."
+            })]
+          : Object.keys(OPERATOR_CLIS).map((tool) => operatorCliCheck(tool, { env, runCommand, studioRoot }))),
         commandCheck({
           id: "genesis",
           label: "Genesis",
@@ -311,7 +323,7 @@ function createService({
         inspectAccounts({ connectionsService, input }),
         Promise.all(commandChecks)
       ]);
-      const checks = [workspace, toolchainCheck(packs), ...accounts, ...commands];
+      const checks = [workspace, ...(packs ? [] : [ownToolsCheck()]), ...accounts, ...commands];
       const failed = checks.filter((check) => check.status !== "pass").length;
       return {
         ok: true,

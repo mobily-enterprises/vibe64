@@ -57,7 +57,7 @@ function withRuntimePacks(t, root) {
 test("Studio Health reports explicit platform checks without repairs", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-"));
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
-  const packRoot = withRuntimePacks(t, studioRoot);
+  withRuntimePacks(t, studioRoot);
   const commandCalls = [];
   const service = createService({
     connectionsService: {
@@ -96,27 +96,23 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   assert.equal(result.summary.failed, 0);
   assert.deepEqual(result.checks.map((check) => check.id), [
     "workspace",
-    "toolchain",
     "ai-auth",
     "github-auth",
     "node",
     "git",
     "github-cli",
     "ripgrep",
-    "claude",
     "codex",
-    "opencode",
     "genesis",
     "playwright",
     "playwright-browser"
   ]);
-  assert.equal(result.checks.find((check) => check.id === "toolchain").observed, "Pinned runtime packs.");
-  assert.equal(commandCalls.length, 10);
-  assert.deepEqual(commandCalls.filter((call) => call.args[0] === "--version").map((call) => call.command).slice(4), [
-    path.join(packRoot, "managed-bin", "claude"),
-    path.join(packRoot, "managed-bin", "codex"),
-    "opencode"
-  ]);
+  assert.equal(commandCalls.length, 8);
+  // The host's Codex check is the original one: same command, label and wording.
+  const codex = result.checks.find((check) => check.id === "codex");
+  assert.equal(codex.label, "Codex CLI");
+  assert.equal(codex.expected, "The managed operator CLI pack exposes Codex.");
+  assert.ok(commandCalls.some((call) => call.command === "codex" && call.args[0] === "--version"));
   assert.equal(commandCalls.every((call) => call.mode === "capture"), true);
   assert.equal(commandCalls.every((call) => call.purpose === "health"), true);
 });
@@ -146,7 +142,7 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
 
   assert.equal(result.ok, true);
   assert.equal(result.healthy, false);
-  assert.equal(result.summary.failed, result.summary.total - 1, "only the toolchain description passes");
+  assert.equal(result.summary.failed, result.summary.total);
   assert.match(result.checks.find((check) => check.id === "workspace").observed, /Catalog unavailable/u);
   assert.match(result.checks.find((check) => check.id === "accounts-auth").observed, /Account service unavailable/u);
   assert.match(result.checks.find((check) => check.id === "genesis").observed, /Runtime pack unavailable/u);

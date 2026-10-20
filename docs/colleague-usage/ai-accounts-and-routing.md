@@ -62,18 +62,20 @@ a warning instead of the sign-in button:
   - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
   - Codex: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - opencode: `curl -fsSL https://opencode.ai/install | bash`
-- **Codex didn't start** means the program is installed but failed to run. Choose
-  **Check again**; if it keeps failing, reinstall it with the same command. The
+- **Codex didn't start** means the program is installed but could not be run at all.
+  Choose **Check again**; if it keeps failing, reinstall it with the same command. The
   program's own error output is under **Details**, collapsed.
-- A program that runs but isn't signed in shows the usual sign-in button.
+- A program that runs but isn't signed in, answers too slowly or reports a problem
+  with its login files shows the usual sign-in button and its message, so you can
+  sign in again.
 
-Vibe64 looks for these programs on your `PATH` and in the usual install folders
-(such as `~/.local/bin`, `~/.claude/local`, `~/.opencode/bin`, npm, Bun, Volta and nvm
-folders, `/opt/homebrew/bin` and `/usr/local/bin`), so it finds them even when it was
-started outside a terminal. When Vibe64 starts, it prints one line for each program it
-can't find, and **Dashboard → Health** shows a check for each. Where the host provides
-pinned versions of these programs, you never see an install command; a program that
-doesn't start there tells you to contact whoever runs that Vibe64.
+Vibe64 looks for these programs on your `PATH` and in the official installers' folders
+(`~/.local/bin`, `~/.claude/local`, `~/.opencode/bin`, `/opt/homebrew/bin` and
+`/usr/local/bin`), so it finds them even when it was started outside a terminal. A
+program installed somewhere else must be on the `PATH` of the terminal that starts
+Vibe64. When Vibe64 starts, it prints one line for each program it can't find, and
+**Dashboard → Health** shows a check for each. Where the host provides pinned versions
+of these programs, none of these warnings or install commands appear.
 
 ## Connect and check accounts
 

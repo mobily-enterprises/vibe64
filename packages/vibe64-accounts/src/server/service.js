@@ -67,6 +67,7 @@ import {
   githubCredentialContext,
   operatorCliCommand,
   operatorCliProblem,
+  operatorCliStartFailed,
   resolveOperatorCli,
   runVibe64Command,
   shellQuote
@@ -78,7 +79,7 @@ import {
   codexRuntimeContext
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
 
-import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
+import { claudeStatusStartFailed, readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -124,7 +125,6 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   })
 });
 const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "claude", "github"]);
-const OPERATOR_CLI_START_FAILURE_PATTERN = /\b(?:ENOENT|EACCES|spawn)\b|No such file|Permission denied|command not found/iu;
 
 function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -1101,11 +1101,7 @@ function rememberedGithubIdentity(value = {}) {
 function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
   const { install, ...problem } = operatorCliProblem(id, { installed });
   return { ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
-    required: ACCOUNT_DEFINITIONS[id].required, ...(install ? { install } : {}) };
-}
-
-function operatorCliStartFailed(result = {}) {
-  return [126, 127].includes(result.exitCode) || OPERATOR_CLI_START_FAILURE_PATTERN.test(hostCommandResultOutput(result));
+    required: ACCOUNT_DEFINITIONS[id].required, install };
 }
 
 async function readCodexStatus({
@@ -1121,7 +1117,7 @@ async function readCodexStatus({
     hostCommandOptionsForCredentialContext(codexContext)
   );
 
-  if (!result.ok && operatorCliStartFailed(result)) {
+  if (operatorCliStartFailed(result)) {
     return operatorCliAccount("codex", { installed: true, observed: hostCommandResultOutput(result) });
   }
   if (!result.ok) {
@@ -1457,8 +1453,7 @@ function createService({
   async function readClaudeStatus() {
     if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
     const status = await readClaudeCodeAuthStatus({ env, credentialHome: resolvedAccountRuntime.claudeContext() });
-    // Native status reports an error only when Claude itself could not answer.
-    if (status.error && resolvedAccountRuntime.claudeContext().ok !== false) {
+    if (claudeStatusStartFailed(status)) {
       return operatorCliAccount("claude", { installed: true, observed: status.error });
     }
     return { ...ACCOUNT_DEFINITIONS.claude, connected: status.loggedIn,

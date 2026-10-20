@@ -130,7 +130,7 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     };
   }
 
-  return { cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, refreshColleague,
+  return { accounts, cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, refreshColleague,
     isSetUp, loadError, loaded, reload, revealColleague: colleague.reveal, sayHello, selectForColleague, verify };
 }
 

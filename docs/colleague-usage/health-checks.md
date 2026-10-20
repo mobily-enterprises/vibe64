@@ -8,10 +8,10 @@ to run them again after fixing something. On a phone, open Dashboard, then choos
 | Check | Group | What a failure means |
 | --- | --- | --- |
 | Workspace services | Studio | The Vibe64 installation or its project list cannot be read. |
-| Tools | Runtime | Always passes. It says where Vibe64's tools come from: **Using your installed tools** (the programs installed on this computer) or **Pinned runtime packs** (versions the host provides). |
+| Tools | Runtime | Shown only when Vibe64 uses the programs installed on this computer (**Using your installed tools**). Always passes; it reminds you to install and update them yourself. |
 | AI connection | Credentials | No AI provider is connected; open **Account settings → AI Accounts**. |
 | Node.js, Git, GitHub CLI, ripgrep, Genesis | Runtime | That program is missing or the wrong version on this machine; install it with the system's normal installer. With your installed tools, Node.js must match the major version Vibe64 declares (shown in the check). |
-| Claude Code, Codex, opencode | AI tools | That AI tool isn't installed on this computer, or it didn't start. A missing tool shows its official install command; each is needed only for the AI that uses it. |
+| Claude Code, Codex, opencode | AI tools | With your installed tools: that AI tool isn't installed on this computer, or it didn't start. A missing tool shows its official install command; each is needed only for the AI that uses it. Where the host provides pinned versions, a single **Codex CLI** check (Runtime) replaces these. |
 | Playwright runtime, Pinned browser | Browser | Only automated browser tests need these; other work is unaffected. |
 
 GitHub sign-in is not a Health check. **Account settings → GitHub** shows the

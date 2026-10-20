@@ -1,4 +1,4 @@
-import { accessSync, constants, readdirSync } from "node:fs";
+import { accessSync, constants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -25,33 +25,13 @@ function executable(file = "") {
   }
 }
 
-function nvmBinDirs(home = "") {
-  const root = path.join(home, ".nvm", "versions", "node");
-  try {
-    return readdirSync(root)
-      .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))
-      .map((version) => path.join(root, version, "bin"));
-  } catch {
-    return [];
-  }
-}
-
-// Where the official installers and npm put a person's own CLI. A server
-// started outside a login shell may lack these on PATH.
+// PATH plus the official installers' own locations: a server started outside
+// a login shell may lack these on PATH.
 function operatorCliSearchDirs(env = process.env) {
   const home = String(env.HOME || os.homedir() || "");
-  const homeDirs = home
-    ? [".local/bin", ".claude/local", ".opencode/bin", ".npm-global/bin", ".bun/bin", ".volta/bin"]
-      .map((dir) => path.join(home, dir)).concat(nvmBinDirs(home))
-    : [];
-  const dirs = [
-    ...String(env.PATH || "").split(path.delimiter),
-    ...homeDirs,
-    path.dirname(process.execPath),
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "/usr/bin"
-  ].filter((dir) => path.isAbsolute(dir));
+  const homeDirs = home ? [".local/bin", ".claude/local", ".opencode/bin"].map((dir) => path.join(home, dir)) : [];
+  const dirs = [...String(env.PATH || "").split(path.delimiter), ...homeDirs, "/opt/homebrew/bin", "/usr/local/bin"]
+    .filter((dir) => path.isAbsolute(dir));
   return [...new Set(dirs)];
 }
 
@@ -69,10 +49,22 @@ function resolveOperatorCli(tool = "", { env = process.env } = {}) {
     const command = override || (tool === "opencode" ? "opencode" : path.join(root, "managed-bin", tool));
     return { command, installed: true, searched: [] };
   }
-  if (override) return { command: override, installed: executable(override), searched: [override] };
+  // An override with a path is used as given; a bare name is looked up like the tool itself.
+  if (override.includes(path.sep)) return { command: override, installed: executable(override), searched: [override] };
   const searched = operatorCliSearchDirs(env);
-  const found = searched.map((dir) => path.join(dir, tool)).find(executable);
-  return { command: found || tool, installed: Boolean(found), searched };
+  const found = searched.map((dir) => path.join(dir, override || tool)).find(executable);
+  return { command: found || override || tool, installed: Boolean(found), searched };
+}
+
+/**
+ * True when a person's own CLI could not be executed at all (126/127, or the
+ * spawn itself failed), as opposed to running and reporting a problem. A host
+ * with runtime packs installs its own CLIs, so its results are never read
+ * this way.
+ */
+function operatorCliStartFailed(result = {}) {
+  if (runtimePackRoot() || result?.ok === true) return false;
+  return [126, 127].includes(result?.exitCode) || /\bspawn \S+ (?:ENOENT|EACCES)\b/u.test(String(result?.error || ""));
 }
 
 function operatorCliCommand(tool = "", options = {}) {
@@ -80,22 +72,18 @@ function operatorCliCommand(tool = "", options = {}) {
 }
 
 /**
- * Plain wording for a CLI that is missing or did not start. `install` is
- * present only when the person installs their own tools.
+ * Plain wording for a person's own CLI that is missing or did not start. A
+ * host with runtime packs always has its CLIs, so this never applies there.
  */
 function operatorCliProblem(tool = "", { installed = false } = {}) {
   const { name, provider, install, guideUrl } = OPERATOR_CLIS[tool];
-  const ownTools = !runtimePackRoot();
-  const message = !installed
-    ? `${name} isn't installed on this computer. Vibe64 uses it to work with ${provider}. Install it, then choose Check again.`
-    : ownTools
-      ? `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
-      : `${name} didn't start. Choose Check again; if it keeps failing, contact whoever runs this Vibe64.`;
   return {
     code: installed ? "vibe64_cli_unavailable" : "vibe64_cli_not_installed",
     status: installed ? "unavailable" : "not_installed",
-    message,
-    ...(ownTools ? { install: { command: install, guideUrl } } : {})
+    message: installed
+      ? `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
+      : `${name} isn't installed on this computer. Vibe64 uses it to work with ${provider}. Install it, then choose Check again.`,
+    install: { command: install, guideUrl }
   };
 }
 
@@ -103,5 +91,6 @@ export {
   OPERATOR_CLIS,
   operatorCliCommand,
   operatorCliProblem,
+  operatorCliStartFailed,
   resolveOperatorCli
 };

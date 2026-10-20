@@ -109,9 +109,10 @@ instead of the sign-in or key form:
   official one-line install command, a **Copy** button and **Other ways to install**.
   Open a terminal on this computer, paste the command and press Enter, then choose
   **Check again**. You run the command yourself.
-- **[Program] didn't start**: it is installed but failed to run. Choose **Check
-  again**; if it keeps failing, reinstall it. Its own error output is under
-  **Details**, collapsed.
+- **[Program] didn't start**: it is installed but could not be run at all. Choose
+  **Check again**; if it keeps failing, reinstall it. Its own error output is under
+  **Details**, collapsed. A program that runs but reports a sign-in problem keeps
+  the usual sign-in button.
 
 Both warnings also offer **Choose another AI**. See
 [AI accounts](ai-accounts-and-routing.md#install-claude-code-codex-or-opencode-first)
