@@ -1284,8 +1284,6 @@ function createService({
         projectContextRoot: requestContext.projectRuntimeRoot,
         projectRuntimeRoot: requestContext.projectRuntimeRoot,
         learningScope: requestContext.learningScope,
-        learningInstructions: requestContext.learningInstructions,
-        learningTeaching: requestContext.learningTeaching,
         store: sessionStore()
       });
     }
@@ -1297,8 +1295,6 @@ function createService({
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selectedSessionSourceRoot(),
       learningScope: requestContext.learningScope,
-      learningInstructions: requestContext.learningInstructions,
-      learningTeaching: requestContext.learningTeaching,
       promptEnvironment: () => runWithProjectRequestContext(requestContext, promptEnvironment),
       store: sessionStore()
     });

@@ -52,7 +52,6 @@ mode menu retains user selection of Senior, Junior and Custom without new contro
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
-- `packages/vibe64-training/src/server/learningSessions.js`
 - `packages/vibe64-sessions/src/server/service.js`
 
 ## Public contract
@@ -260,45 +259,13 @@ progress or flattened Main history is promoted into those facts. Main speech now
 transport scope described below; an empty project path cannot supply that scope. Native/source-less visual
 and installed/browser/audio acceptance remain open.
 
-## Source-less Main optional voice transport
+## Retired lesson voice
 
-The existing VoiceProvider registers one additional Learning socket URL with the
-same original JSKIT proxy/configuration. Original origin validation precedes the
-canonical Session Inspect action; its existing contributor reauthenticates the
-actor and exact saved attempt, then Training and Store validate the immutable
-session/owner/pin. Successful exact inspected ID is required before upstream.
-There is no project fallback, copied auth reader, separate proxy/controller or
-new active-work rule. Inspect grants observation; every original Main Send still
-requires fresh write authority. Voice is optional and local typed Learning stays
-independent of the service.
-
-The same projectVoiceBinding branches only on its captured typed Learning Main
-identity, requiring exact API path/learner/actor and no project. Its explicit
-Learning voice ID includes learner/attempt/session, the socket uses that captured
-path, and its label is Lesson plus actual session name. Capture/submission retain
-exact learner/attempt/API provenance; an accepted old target never retargets or
-resends after navigation. Original Working URL/ID, narration preferences,
-controller, retention and queued delivery remain unchanged. No cue/current
-question/native receipt field is created by this routing increment.
-
-Original Voice and Runtime tests retain exact full prefixes. Appended cases
-exercise the real canonical contributor/action/proxy and same retained Main
-binding; the Voice unit saved-context/session reader is explicitly controlled.
-Actual saved-state owners retain their own original proof. Installed service,
-physical audio, browser/phone and canonical teacher narration cues remain open.
-
-Learning speaks by default where a speech service is configured: one read of the
-existing global voice catalogue per page gates it. The conversation log opens the visible Learning
-Main's existing voice binding once per lesson conversation and page when its
-narration is eligible (chat access and loaded conversation), read-aloud is on and
-no other voice owner is active. It opens narration only; capture still needs Talk.
-An ended session is not reopened on remount, and Working keeps opt-in voice. The
-original session primes on existing history, so nothing earlier is replayed, and
-its blocked-playback control handles browser autoplay refusal.
-Main also invites speech when it sends a new request, as Colleague does, so a
-failed, hidden or muted reply that stopped the session's speech does not silence
-later teacher replies. Only Main's own bound voice session is invited.
-
+Learning v2 phase 2 removed the Learning voice socket route from the
+VoiceProvider and the lesson branch of `projectVoiceBinding`: a binding for a
+lesson conversation now refuses with "Lesson conversations have no voice. Use
+Colleague voice to learn with a lesson." Working voice is unchanged. Client code
+that still opens Main narration in Learning mode is removed with that mode.
 
 ## Original navigation client ownership
 
@@ -506,8 +473,9 @@ option.
 
 ## Teacher guide overlay
 
-`vibe64.training.view.open` guides the learner to a closed product list of real
-places (`guideTargets.js`): `preview`, `dashboard`, `database-erd`,
+Main's `vibe64.training.view.open` was retired with the Main lesson teacher;
+Colleague's `navigation.open` and `navigation.open-learning` guides use the same
+closed product list of real places (`guideTargets.js`): `preview`, `dashboard`, `database-erd`,
 `database-data`, `files` (optional relative `filePath` without `..`), `changes`,
 `git-log`, `session-info`, `architecture` and `learning`. The older
 `workspace-preview` and `workspace-erd` names remain aliases that open their view.

@@ -26,7 +26,6 @@ function registerTrainingRoutes(http) {
   actionRoute("GET", "/available", "available.list");
   actionRoute("POST", "/courses/install", "course.install");
   actionRoute("GET", "/learning", "learning.read");
-  actionRoute("GET", "/attempts/:attemptId/brief", "teaching-brief.read", true);
   actionRoute("POST", "/lessons/start", "lesson.start");
   actionRoute("POST", "/attempts/:attemptId/resume", "lesson.resume", true);
   actionRoute("POST", "/attempts/:attemptId/end", "lesson.end", true);

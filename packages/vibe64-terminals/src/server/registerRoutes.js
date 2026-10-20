@@ -6,7 +6,6 @@ import {
   terminalControlTextInputValidator
 } from "./inputSchemas.js";
 import {
-  createTerminalActions,
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
   ACTION_OPEN_OUTPUT_TARGET,
   ACTION_LIST_TEMPORARY_CONVERSATIONS,
@@ -192,7 +191,6 @@ function registerRoutes(
   {
     fastify,
     projectContext = null,
-    learningScoped = false,
     routeSurface = "",
     routeRelativePath = "",
     terminals,
@@ -202,7 +200,7 @@ function registerRoutes(
   if (!terminals || typeof terminals !== "object") {
     throw new TypeError(VIBE64_TERMINALS_UNAVAILABLE);
   }
-  if (!learningScoped && (!uploads || typeof uploads.readSingleMultipartFile !== "function")) {
+  if (!uploads || typeof uploads.readSingleMultipartFile !== "function") {
     throw new TypeError("Vibe64 terminal routes require runtime.uploads.");
   }
   const routes = createVibe64FeatureRoutes(http, {
@@ -210,7 +208,6 @@ function registerRoutes(
     projectContext,
     routeRelativePath,
     routeSurface,
-    learningActions: learningScoped ? createTerminalActions({ terminals }) : null,
     tags: ["studio", "vibe64-terminals"]
   });
   routes.actionRoute("GET", "/codex-terminal", {
@@ -315,15 +312,12 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions/:sessionId/agent-goal", {
     actionId: "vibe64.terminals.agent-goal.read",
-    // Main's goal tools use this internally; it has no lesson URL.
-    learning: false, buildInput: sessionInput,
+    buildInput: sessionInput,
     summary: "Read the selected assistant conversation goal."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-goal", {
     actionId: "vibe64.terminals.agent-goal.update",
-    // Main's goal tools use this internally; it has no lesson URL.
-    learning: false,
     buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Set, pause, resume, or cancel the selected assistant conversation goal."
   });
@@ -505,9 +499,7 @@ function registerRoutes(
     closeSummary: "Close a global Vibe64 Codex terminal."
   });
 
-  // Lesson-scoped routes have no sockets: a practice project's output opens
-  // through its ordinary project routes (Learning v2).
-  if (!learningScoped) registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext });
+  registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext });
 }
 
 function bodyWithSessionId(routes) {

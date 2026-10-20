@@ -19,24 +19,16 @@ function createVibe64FeatureRoutes(
     projectContext = null,
     routeRelativePath = "",
     routeSurface = "",
-    projectScoped: requestedProjectScoped = true,
-    learningActions = null,
+    projectScoped = true,
     tags = []
   } = {}
 ) {
   requireHttpCapability(http);
 
-  // A lesson registration serves the same adapters under the saved attempt's
-  // URL, and only for actions whose definition declares learningAccess. That
-  // declaration is the single allowlist; every other operation has no lesson URL.
-  const learningScoped = learningActions !== null;
-  const learningAllowed = learningScoped ? new Set([...learningActions]
-    .filter(action => action?.extensions?.vibe64?.learningAccess).map(action => action.id)) : null;
-  const projectScoped = learningScoped ? false : requestedProjectScoped;
   const router = http.router;
   const routeBase = resolveScopedApiBasePath({
     routeBase: projectScoped ? VIBE64_PROJECT_ROUTE_BASE : "/",
-    relativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
+    relativePath: routeRelativePath,
     strictParams: false
   });
   const surface = normalizeSurfaceId(routeSurface);
@@ -48,21 +40,8 @@ function createVibe64FeatureRoutes(
   function actionRoute(method, pathSuffix, options) {
     const {
       actionId,
-      buildInput = () => ({}),
-      learning = {}
+      buildInput = () => ({})
     } = options;
-    if (learningScoped) {
-      // `learning: false` keeps a declared internal operation off HTTP;
-      // `learning: { path, ...options }` adapts only the lesson URL shape.
-      if (!learningAllowed.has(actionId) || learning === false) return;
-      const { path: learningPath = pathSuffix, ...learningOptions } = learning;
-      registerRoute(method, learningPath, { ...options, ...learningOptions }, (request) => request.executeAction({
-        actionId,
-        input: actionInput(request, buildInput(request))
-      }));
-      return;
-    }
-
     registerRoute(method, pathSuffix, options, (request) => {
       return request.executeAction({
         actionId,
@@ -71,26 +50,8 @@ function createVibe64FeatureRoutes(
     });
   }
 
-  // Transport adapters (downloads, streams) join a lesson registration only
-  // with `learning: true`; their action still checks its own learningAccess.
   function serviceRoute(method, pathSuffix, options, handler) {
-    if (learningScoped && options?.learning !== true) return;
     registerRoute(method, pathSuffix, options, handler);
-  }
-
-  // Lesson input carries identity only from the URL: the saved attempt and the
-  // session. Browser-sent user, project and attempt fields are dropped.
-  function actionInput(request, input = {}) {
-    if (!learningScoped) return input;
-    const learningAttemptId = request.params?.learningAttemptId;
-    if (!learningAttemptId) {
-      throw Object.assign(new Error("Use the exact saved lesson URL."), {
-        code: "vibe64_learning_attempt_required", statusCode: 400
-      });
-    }
-    const { vibe64User: _user, projectSlug: _project, learningAttemptId: _attempt, ...rest } = input || {};
-    void _user; void _project; void _attempt;
-    return { ...rest, ...(request.params.sessionId ? { sessionId: request.params.sessionId } : {}), learningAttemptId };
   }
 
   function registerRoute(method, pathSuffix, options, handler) {
@@ -139,9 +100,7 @@ function createVibe64FeatureRoutes(
   }
 
   return {
-    actionInput,
     actionRoute,
-    learningScoped,
     requestBody: requestBodyObject,
     requestQuery: requestQueryObject,
     routeBase,

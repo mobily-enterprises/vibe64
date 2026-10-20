@@ -197,17 +197,6 @@ async function vibe64DriverInputFromRegistry(request = {}, {
   if (workdir && selected.workdir && path.resolve(workdir) !== path.resolve(selected.workdir)) {
     throw new Error("The managed conversation belongs to a different project directory.");
   }
-  if (context.scope === "learning") {
-    exactFields(context, ["scope", "instructions"], "Vibe64 learning context");
-    if (selected.conversation?.nativeTools !== false) {
-      throw new TypeError("Learning instructions require the restricted native conversation binding.");
-    }
-    const instructions = context.instructions;
-    if (typeof instructions !== "string" || !instructions.trim() || Buffer.byteLength(instructions) > 128 * 1024) {
-      throw new TypeError("Learning native context requires bounded nonempty teaching instructions.");
-    }
-    return { scope: "learning", instructions };
-  }
   return normalizedDriverInput(context);
 }
 

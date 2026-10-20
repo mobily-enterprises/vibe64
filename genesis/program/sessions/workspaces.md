@@ -689,14 +689,9 @@ execution proof. Ordinary calls retain the original source descriptor exactly. M
 are unavailable, not recreated by reads. Source getters/inspection remain
 truthful and source operations do not turn this directory into a source checkout.
 
-One constructor-only `learningInstructions(sessionId)` reader is supplied by the
-original Training owner. `getLearningInstructions` validates exact active durable
-scope before/after awaiting it and returns a bounded nonempty string (the
-original Brief128KiB bound). The owner independently refreshes attempt/content
-permissions and pin/progress, without truncating or substituting project guidance.
-Learning `renderPrompt` returns the actual normalized user request; it does not
-read project Env, invoke Genesis or pretend the native cwd is project source.
-Ordinary prompt rendering is unchanged.
+Learning v2 phase 2 removed the `learningInstructions` reader and lesson teaching
+instructions from the runtime and the Codex, Claude and OpenCode adapters; a
+learning-scoped session receives no teaching instructions.
 
 This is a genuinely new optional explicitly admitted binding, not a changed
 historical format or conversion: no prior working session or Colleague-teacher

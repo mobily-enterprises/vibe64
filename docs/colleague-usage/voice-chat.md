@@ -159,14 +159,8 @@ Open voice for a different conversation to switch. Unfinished words require
 completion or **Discard and switch**; **Stay here** keeps the original target.
 There is only one voice window and one active capture/playback owner.
 
-On installations with speech configured, a source-less Learning conversation
-uses Main's same microphone, spoken replies and review controls; it does not
-require an invented project. Its voice target is labelled **Lesson** and the
-actual conversation name. Capture stays attached to that person's saved attempt
-and conversation. Switching attempts does not resend or redirect words. Reading
-lesson history does not authorize new teaching work: each Send still checks the
-current saved lesson and access. Without a speech service, use the same typed
-Main conversation; voice availability is optional.
+Lesson conversations have no voice of their own: the Main lesson teacher was
+retired, so use Colleague's voice to learn with a lesson.
 
 Signing out, losing access to the target, or leaving the page releases its
 resources. A project agent remains the selected voice target even if its text

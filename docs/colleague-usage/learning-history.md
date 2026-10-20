@@ -6,15 +6,11 @@ lesson; see [Choosing lessons and Learning conversations](learning-mode-ui.md).
 Ending or restarting learning requires your request to Colleague; it retains earlier progress and does
 not delete the practice project. These rules apply to desktop and phone.
 
-Explicit lesson retirement preserves the original pinned quiz and practical
-results. Once the end is saved, the lesson's teacher conversation stops: its
-running assistant work and session processes are stopped the same way session
-Stop does, because an ended lesson has no teaching instructions. The
-conversation stays readable in history. Separate lesson conversations of
-lessons without an exercise saved before Learning v2 are an exception: the
-installation upgrade retired them, so they no longer appear in Learning; they
-are kept, not deleted, and only the installation owner can inspect or restore
-them. The practice project and its session
+Explicit lesson retirement preserves the original pinned step, quiz and
+practical results; ending a lesson stops no agent work. Separate lesson
+conversations saved before Learning v2 were retired by the installation upgrade,
+so they no longer appear in Learning; they are kept, not deleted, and only the
+installation owner can inspect or restore them. The practice project and its session
 are ordinary and stay yours: ending a lesson neither stops nor archives nor
 deletes them. When the person requests disposal, use the existing
 authorised project/session close, archive and deletion workflow; do not claim
@@ -43,19 +39,15 @@ content requires exact owner restoration, even when no lesson is active.
 
 When the installation supplies its lesson host, the shared `lesson.end` operation
 can retire the person's exact learning attempt after a direct request or accepted
-offer. State clearly that it stops the lesson conversation's work but retains
-the exercise and all history; the reason `discard` records a learning decision,
-not project disposal. Use existing separate close, archive or delete operations
-only when requested and authorised. If the end reports that its stop was not
-confirmed, the end itself is saved; retry the same end request to finish the stop.
-An unavailable retirement host is not a successful end. The same tool is used on
+offer. State clearly that it retains the exercise and all history; the reason
+`discard` records a learning decision, not project disposal. Use existing
+separate close, archive or delete operations only when requested and
+authorised. An unavailable retirement host is not a successful end. The same tool is used on
 desktop and mobile; this addition creates no new layout control.
 
-Read learning state and the current teaching brief before continuing. Ended
-history preserves original answers, assistance and native practical observations.
-The brief's retained passes name the original attempt/submission and exact pin;
-current submissions are separate. Explain already-passed assessments and remaining
-work without claiming an old observation happened in the new project. A replay of
+Read learning state before continuing. Ended history preserves original answers,
+step results and earlier practical observations. Explain already-passed steps
+and assessments and remaining work without claiming an old observation happened in the new project. A replay of
 an old start/end returns its original ended target and the actual current active
 attempt, and cannot prepare or end a successor. A fresh exercise uses a separately requested continuation or enabled new start.
 
@@ -77,8 +69,7 @@ the earlier project, and does not prove that the new Preview runs. Ordinary new
 starts still require an enabled release. A no-exercise lesson creates no project.
 
 If an owner separately archived and deleted an ended exercise, its lesson history,
-passed assessments and evidence remain. Learning omits that deleted conversation
-and can still open the healthy continued lesson. Reading history does not recreate
+passed assessments and evidence remain. Learning can still open the healthy continued lesson. Reading history does not recreate
 the old project. Incomplete deletion, inaccessible storage, changed ownership or
 missing pinned content remains an error requiring owner inspection. A missing
 active exercise is not treated as harmless old history.
@@ -92,18 +83,11 @@ content or history capacity refusal needs owner inspection; keep the original
 progress. Ask Colleague to offer the supported recovery, then accept it when ready.
 
 For a lesson without an exercise, retain its exact learner, attempt and installed
-content when diagnosing an unavailable learning conversation. An ended attempt
-may supply history but does not permit new teaching work. Missing or unconfirmed
+content when diagnosing an unavailable lesson. An ended attempt supplies history
+but cannot be continued in place. Missing or unconfirmed
 reservation summaries require the existing supported recovery; simply reading
 state does not repair them or create a substitute workspace. Ask the installation
 owner to inspect corrupt, foreign or missing content rather than changing the pin.
-
-In an open **Learning** Main conversation, progress reads and question preparation
-use that conversation's exact saved lesson, including an owner-only author trial.
-They do not substitute progress from an ordinary lesson. If Vibe64 refuses to save
-a question, Main must say it is unrecorded; discussing or answering those words
-does not create an assessment receipt. Keep the saved attempt and ask the owner
-to inspect the error. Do not start another attempt or change accounts to bypass it.
 
 ## Step results in step-based lessons
 

@@ -98,10 +98,6 @@ function createVibe64TerminalsFeature({
         terminals,
         uploads
       });
-      registerRoutes(http, {
-        fastify, learningScoped: true,
-        routeSurface: "app", terminals
-      });
       fastify.addHook("onReady", async () => {
         // All feature boot hooks (including hosted execution/auth configuration)
         // have completed before recovery can admit work.

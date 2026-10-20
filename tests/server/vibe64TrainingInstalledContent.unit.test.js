@@ -728,7 +728,6 @@ import { createCourseLock } from "../../packages/vibe64-training/src/server/cata
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
@@ -744,7 +743,7 @@ async function titleCatalogue(f) {
 function titleActions(f, catalogue) {
   const actions = createActionCatalogue();
   actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ catalogue,
-    learners: createTrainingLearnerState({ systemRoot: f.systemRoot }), teachingBrief: createTrainingTeachingBrief({ systemRoot: f.systemRoot })
+    learners: createTrainingLearnerState({ systemRoot: f.systemRoot })
   }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => ({ uid: 42, username: "reader", role: "member" }),
     authorizeProject() { assert.fail("Course title reads must not require a project."); } });

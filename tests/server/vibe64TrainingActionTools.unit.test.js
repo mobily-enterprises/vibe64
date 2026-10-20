@@ -7,21 +7,12 @@ import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createTrainingLearningWatchSource } from "../../packages/vibe64-training/src/server/learningWatchCoordinator.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
-import { createTrainingPresentationActions } from "../../packages/vibe64-training/src/server/presentationActions.js";
-import { trainingLearningModeGuideCommand as trainingGuideCommand } from "../../packages/vibe64-training/src/shared/guideTargets.js";
-import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
-import { createTrainingAssessmentActions } from "../../packages/vibe64-training/src/server/assessmentActions.js";
-import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
-import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 
 async function fixture(t, { presentation = false, released = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-actions-"));
@@ -61,7 +52,6 @@ async function fixture(t, { presentation = false, released = false } = {}) {
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
   await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
   const learners = createTrainingLearnerState({ systemRoot });
-  const teachingBrief = createTrainingTeachingBrief({ systemRoot });
   const pin = { course: { courseId: course.courseId, release: course.release }, topic, lesson: { code: "USE-ONE", hash: bundle.lessons[0].hash } };
   const auth = { user: { uid: 42, username: "member", role: "member" } };
   const reserve = () => learners.reserveAttempt({ actor: auth.user, requestId: "start-one", expectedRevision: 0, pin });
@@ -84,21 +74,12 @@ async function fixture(t, { presentation = false, released = false } = {}) {
       return learners.runPreparationExclusive(value, () => learners.endAttempt(value));
     }
   };
-  function register(host = null, replacements = {}, colleague = null) {
+  function register(host = null, replacements = {}) {
     const actions = createActionCatalogue();
-    const definitions = [...createTrainingActions({ catalogue, learners, teachingBrief, exercises: host, ...replacements }),
-      ...(colleague ? createTrainingTeachingActions({ colleague }) : []),
-      ...(colleague?.evaluateTrainingAnswer ? createTrainingAssessmentActions({ colleague }) : [])];
+    const definitions = createTrainingActions({ catalogue, learners, exercises: host, ...replacements });
     actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
       authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
-    if (colleague) actions.registerContextContributor({ id: "training.teaching-owner", contribute({ context }) {
-      // Approved teacher-role move: the existing transport coordinator fixture
-      // is explicitly Main authority. Actual native proof remains in the Main
-      // teaching/lifecycle owners, not this controlled API/schema fixture.
-      return { trainingTeaching: createTrainingTeachingOwner({ learners, content }),
-        trainingMain: context.trainingMain ?? colleague };
-    } });
     const tools = createServiceToolCatalog(actions, { maxDirectTools: 100 });
     const context = { channel: "automation", surface: "app" };
     const toolSet = tools.resolveToolSet(context);
@@ -112,7 +93,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     };
     return { actions, definitions, toolSet, execute, tool };
   }
-  return { root, systemRoot, snapshot, auth, catalogue, content, learners, teachingBrief, pin, reserve, input, calls, exercises, register };
+  return { root, systemRoot, snapshot, auth, catalogue, content, learners, pin, reserve, input, calls, exercises, register };
 }
 
 async function inventory(root) {
@@ -130,327 +111,10 @@ async function inventory(root) {
 
 const excluded = /PRIVATE_SOURCE|PRIVATE_SHELL|SVG_SOURCE_ONLY|CONTROLLER_SOURCE_MUST_NOT_RUN|sourceRoot|repository|controller\.js|diagram\.svg|lesson\.md#|learnerId/u;
 
-test("learning polling reads one exact active pinned task and sends bounded guidance through its Main owner", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  // USE-ONE declares no exercise: its task has no project, although the attempt reserved a practice slug.
-  const projectSlug = "";
-  const sessionId = `learning-${attemptId}`;
-  const guidance = [];
-  const learningSessions = {
-    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
-    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
-  };
-  const c = f.register(null, { learningSessions });
-  const definition = c.definitions.find(value => value.id === "vibe64.training.polling.read");
-  assert.equal(definition.extensions.assistant.exclude, true);
-  assert.equal(c.toolSet.tools.some(value => value.actionId === definition.id), false);
-  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
-  const result = await c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
-    criterion: "Open the lesson and explain the saved request flow." });
-  assert.equal(result.task.attemptId, attemptId);
-  assert.equal(result.task.conversationId, conversationId);
-  assert.equal(result.task.criterion, "Open the lesson and explain the saved request flow.");
-  // A watched criterion is a whole installed rubric section, which can be several thousand characters.
-  const longCriterion = "Explain the title rule and why it protects the saved notes. ".repeat(60);
-  assert.equal((await c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
-    criterion: longCriterion })).task.criterion, longCriterion.trim());
-  assert.equal(result.task.pin.topicHash, f.pin.topic.topicHash);
-  assert.equal(result.task.pin.lessonHash, f.pin.lesson.hash);
-  assert.equal(result.task.progress.revision, reserved.revision);
-  const guideDefinition = c.definitions.find(value => value.id === "vibe64.training.polling.guide");
-  assert.equal(guideDefinition.extensions.assistant.exclude, true);
-  assert.equal(c.toolSet.tools.some(value => value.actionId === guideDefinition.id), false);
-  const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
-    failure: "workspace-settle-failed", workspace: { projectSlug, sessionId, pane: "preview", ready: false, learningView: "learning" } };
-  const guided = await c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId,
-    criterion: "Open the lesson and explain the saved request flow.", guidanceId: "guide-one", evidence });
-  assert.deepEqual(guided, { ok: true, status: "accepted" });
-  assert.equal(guidance.length, 1);
-  assert.equal(guidance[0].actor, f.auth.user);
-  assert.equal(guidance[0].actorId, "42");
-  assert.equal(guidance[0].guidanceId, "guide-one");
-  assert.deepEqual(guidance[0].evidence, evidence);
-  assert.equal(guidance[0].task.conversationId, conversationId);
-  await assert.rejects(c.execute("polling.read", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
-    conversationId, criterion: "Wrong target" }), /project or conversation changed/);
-  await assert.rejects(c.execute("polling.guide", { attemptId, targetProjectSlug: projectSlug, sessionId: "learning-other",
-    conversationId, criterion: "Wrong target", guidanceId: "guide-wrong", evidence }), /project or conversation changed/);
-  assert.equal(guidance.length, 1, "a stale target cannot reach Main");
-  await assert.rejects(c.execute("polling.read", { attemptId, targetProjectSlug: reserved.attempt.projectSlug, sessionId,
-    conversationId, criterion: "Reserved slug" }), /project or conversation changed/, "an exercise-less lesson has no project to watch");
-});
-
-test("learning polling projects declared app routes and forwards only the reduced app-request failure to Main", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const projectSlug = "";
-  const sessionId = `learning-${attemptId}`;
-  const appRoutes = [{ method: "POST", path: "/api/notes" }];
-  const guidance = [];
-  const learningSessions = {
-    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
-    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
-  };
-  // The installed reader supplies a declared route list; this fixture lesson has none of its own.
-  const teachingBrief = { async readBrief(input) {
-    const brief = await f.teachingBrief.readBrief(input);
-    return { ...brief, lesson: { ...brief.lesson, appRoutes } };
-  } };
-  const c = f.register(null, { learningSessions, teachingBrief });
-  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
-  const target = { attemptId, targetProjectSlug: projectSlug, sessionId, conversationId, criterion: "Add one note." };
-  const read = await c.execute("polling.read", target);
-  assert.deepEqual(read.task.appRoutes, appRoutes);
-  const evidence = { outcome: "failed", control: "app-request", origin: "learner", failure: "http-4xx",
-    request: { method: "POST", path: "/api/notes", status: 400 },
-    workspace: { projectSlug, sessionId, pane: "preview", ready: true, learningView: "workspace" } };
-  assert.deepEqual(await c.execute("polling.guide", { ...target, guidanceId: "guide-app", evidence }), { ok: true, status: "accepted" });
-  assert.deepEqual(guidance[0].evidence, evidence);
-  for (const invalid of [{ ...evidence, request: { ...evidence.request, body: "typed title" } },
-    { ...evidence, request: { ...evidence.request, method: "GET" } }, { ...evidence, failure: "http-3xx" }]) {
-    await assert.rejects(c.execute("polling.guide", { ...target, guidanceId: "guide-invalid", evidence: invalid }), /validation|Invalid|unexpected|not allowed/iu);
-  }
-  assert.equal(guidance.length, 1);
-});
-
-test("learning watch polling reads its exact attempt owner without replacing ordinary progress or reentering practice admission", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const projectSlug = ""; // USE-ONE declares no exercise, so its watched task has no project.
-  const sessionId = `learning-${attemptId}`;
-  const conversationId = mainConversationId({ learningAttemptId: attemptId, sessionId });
-  const ordinary = createTrainingLearnerState({ systemRoot: path.join(f.root, "ordinary") });
-  const reads = [], guidance = [];
-  let allowed = true;
-  const c = f.register(null, { learners: ordinary, attemptLearners: {
-    async readState(input) {
-      reads.push(input);
-      assert.equal(input.actor, f.auth.user);
-      assert.equal(input.attemptId, attemptId, "the existing scope selector receives the exact saved attempt");
-      if (!allowed) throw Object.assign(new Error("Owner authority was revoked"), { code: "vibe64_owner_required", statusCode: 403 });
-      return f.learners.readState(input);
-    }
-  }, learningSessions: {
-    async readSessions() { return [{ sessionId, learningAttemptId: attemptId, archived: false }]; },
-    async guideTask(input) { guidance.push(input); return { status: "accepted" }; }
-  } });
-  const source = createTrainingLearningWatchSource(c.actions);
-  const watch = { projectSlug, sessionId, conversationId,
-    learningTask: { attemptId, sessionId, conversationId, criterion: "Open the saved exercise." } };
-  const context = { channel: "automation", surface: "app", projectSlug };
-  assert.equal((await c.execute("learning.read")).active, null, "normal progress remains in its own store");
-  const result = await source.read(watch, context);
-  assert.equal(result.runId, attemptId);
-  assert.equal(result.details.task.progress.revision, reserved.revision);
-  assert.equal(reads.length, 1);
-  const evidence = { outcome: "failed", control: "preview-select", origin: "learner",
-    failure: "workspace-settle-failed", workspace: { projectSlug, sessionId, pane: "preview", ready: false, learningView: "learning" } };
-  // The coordinator's pending evidence keeps the observation's eventId; Main receives the evidence without it.
-  assert.deepEqual(await source.notify(watch, { guidanceId: "same-task-guide", evidence: { eventId: "event-one", ...evidence } }, context),
-    { ok: true, status: "accepted" });
-  assert.equal(reads.length, 2);
-  assert.equal(guidance.length, 1);
-  assert.equal(guidance[0].attemptId, attemptId);
-  assert.deepEqual(guidance[0].evidence, evidence);
-  allowed = false;
-  await assert.rejects(source.read(watch, context), { code: "vibe64_owner_required" });
-  await assert.rejects(source.notify(watch, { guidanceId: "revoked-guide", evidence }, context), { code: "vibe64_owner_required" });
-  assert.equal(guidance.length, 1, "revoked scope cannot reach Main");
-  assert.equal((await c.execute("learning.read")).active, null);
-});
-
-test("answer evaluation shares the native API/tool contract and projects only the saved result", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const input = { attemptId: reserved.attempt.attemptId, expectedRevision: 4, submissionId: "answer-one", messageId: "canonical-answer-one" };
-  const calls = [];
-  const colleague = { requireTrainingQuestionTurn() {}, stageTrainingQuestion() {},
-    evaluateTrainingPractical() { assert.fail("An answer action cannot invoke practical grading."); },
-    async evaluateTrainingAnswer(value, context) {
-      calls.push({ value, actor: context.vibe64Action.user });
-      return { revision: 5, replayed: calls.length > 1,
-        attempt: { learning: { submissions: [{ submissionId: "answer-one", assessmentId: "explain", outcome: "passed",
-          explanation: "You identified the place to try the app.", evidence: { text: "PRIVATE_SOURCE", learnerId: "42" }, rubric: "lesson.md#explain" }] } },
-        completion: { lessonCode: "USE-ONE", lessonHash: f.pin.lesson.hash, required: 1, passed: 1, completed: true } };
-    } };
-  const c = f.register(null, {}, colleague);
-  const definition = c.definitions.find(value => value.id === "vibe64.training.answer.evaluate");
-  assert.equal(definition.idempotency, "domain_native");
-  assert.equal(definition.extensions.vibe64.projectScoped, false);
-  const api = await c.execute("answer.evaluate", input);
-  assert.equal(api.outcome, "passed");
-  assert.equal(api.revision, 5);
-  assert.equal(api.completion.completed, true);
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.deepEqual(calls[0], { value: input, actor: f.auth.user });
-  const tool = await c.tool("answer.evaluate", input);
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, { ...api, replayed: true });
-  assert.deepEqual(calls[1], { value: input, actor: f.auth.user });
-});
-
-test("answer evaluation admits no caller words, question or outcome and preserves native recovery errors", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const input = { attemptId: reserved.attempt.attemptId, expectedRevision: 4, submissionId: "answer-one", messageId: "canonical-answer-one" };
-  let calls = 0;
-  const c = f.register(null, {}, { requireTrainingQuestionTurn() {}, stageTrainingQuestion() {},
-    evaluateTrainingPractical() { assert.fail("An answer action cannot invoke practical grading."); },
-    async evaluateTrainingAnswer() {
-      calls++;
-      throw Object.assign(new Error("Cannot confirm save at /PRIVATE_SOURCE/progress.json"), {
-        code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
-    } });
-  for (const extra of [{ text: "My invented answer" }, { question: {} }, { outcome: "passed" }, { assistance: "none" }, { actor: { uid: 1 } }]) {
-    await assert.rejects(c.execute("answer.evaluate", { ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
-  }
-  f.auth.user = null;
-  await assert.rejects(c.execute("answer.evaluate", input), { code: "vibe64_auth_required" });
-  assert.equal(calls, 0);
-  f.auth.user = { uid: 42, username: "member", role: "member" };
-  await assert.rejects(c.execute("answer.evaluate", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" && error.cause.message.includes("PRIVATE_SOURCE"));
-  const tool = await c.tool("answer.evaluate", input);
-  assert.equal(tool.ok, false);
-  assert.doesNotMatch(JSON.stringify(tool), excluded);
-  assert.equal(calls, 2);
-});
-
-async function questionFixture(t) {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  await f.learners.beginPreparation({ actor: f.auth.user, attemptId, expectedRevision: 1 });
-  await f.learners.recordPreparationReady({ actor: f.auth.user, attemptId,
-    initialSessionId: `training-${attemptId}`, expectedRevision: 2 });
-  const calls = [];
-  let preflightFailure = null, stageFailure = null;
-  // The native current-turn/transaction guards remain the original Colleague
-  // suite's evidence. This transport seam proves action ordering and real
-  // checkpoint/capture effects without inventing another conversation runtime.
-  const colleague = {
-    async requireTrainingQuestionTurn(context) {
-      calls.push({ operation: "preflight", actor: context.vibe64Action.user });
-      if (preflightFailure) throw preflightFailure;
-      return { conversationId: "original-scope", turnId: "accepted-turn", generation: 1 };
-    },
-    async stageTrainingQuestion(reference, context) {
-      calls.push({ operation: "stage", reference, actor: context.vibe64Action.user });
-      if (stageFailure) throw stageFailure;
-      const captured = await context.trainingTeaching.captureQuestion({ actor: context.vibe64Action.user, reference });
-      assert.equal(captured.question.id, reference.questionId);
-      return { schemaVersion: 1, reference, conversationId: "original-scope", turnId: "accepted-turn", phase: "prepared" };
-    }
-  };
-  const c = f.register(null, {}, colleague);
-  return { ...f, c, questionCalls: calls,
-    questionInput: { attemptId, expectedRevision: 3, requestId: "question-one", assessmentId: "explain",
-      text: "What did you try in Preview?", assistance: "hint" },
-    setPreflightFailure(error) { preflightFailure = error; }, setStageFailure(error) { stageFailure = error; } };
-}
-
-test("question preparation shares native API/tool schema and only returns prepared after checkpoint then staging", async t => {
-  const f = await questionFixture(t);
-  const definition = f.c.definitions.find(value => value.id === "vibe64.training.question.prepare");
-  assert.equal(definition.idempotency, "domain_native");
-  assert.equal(definition.extensions.vibe64.projectScoped, false);
-  const api = await f.c.execute("question.prepare", f.questionInput);
-  assert.equal(api.delivery, "prepared");
-  assert.equal(api.questionText, f.questionInput.text);
-  assert.equal(api.assessmentId, "explain");
-  assert.equal(api.revision, 4);
-  assert.equal(api.replayed, false);
-  assert.deepEqual(f.questionCalls.map(value => value.operation), ["preflight", "stage"]);
-  assert.deepEqual(api.reference, f.questionCalls.at(-1).reference);
-  assert.equal(f.questionCalls.at(-1).actor, f.auth.user);
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.equal(Object.hasOwn(api, "outcome"), false);
-  const before = await inventory(f.systemRoot);
-  const tool = await f.c.tool("question.prepare", f.questionInput);
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, { ...api, replayed: true });
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  assert.deepEqual((await f.learners.readState({ actor: f.auth.user })).active.learning.submissions, []);
-});
-
-test("question action rejects invalid fields, stale actor and native turn/cue ineligibility before checkpoint effects", async t => {
-  const f = await questionFixture(t);
-  const before = await inventory(f.systemRoot);
-  for (const change of [{ attemptId: "../attempt" }, { requestId: " " }, { expectedRevision: -1 }, { assistance: "inferred" },
-    { text: "x".repeat(2049) }, { reference: {} }, { outcome: "passed" }, { vibe64User: { uid: 42 } }]) {
-    await assert.rejects(f.c.execute("question.prepare", { ...f.questionInput, ...change }), { code: "ACTION_VALIDATION_FAILED" });
-  }
-  assert.equal(f.questionCalls.length, 0);
-  f.setPreflightFailure(Object.assign(new Error("Finish the current explanation cue."), { code: "ACTION_VALIDATION_FAILED", statusCode: 400 }));
-  await assert.rejects(f.c.execute("question.prepare", f.questionInput), { code: "ACTION_VALIDATION_FAILED" });
-  assert.deepEqual(f.questionCalls.map(value => value.operation), ["preflight"]);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  f.setPreflightFailure(null);
-  f.auth.user = { uid: 43, username: "other", role: "member" };
-  await assert.rejects(f.c.execute("question.prepare", f.questionInput), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-  assert.equal(f.questionCalls.at(-1).actor, f.auth.user);
-  assert.equal(f.questionCalls.some(value => value.operation === "stage"), false);
-  f.auth.user = null;
-  const calls = f.questionCalls.length;
-  assert.equal((await f.c.tool("question.prepare", f.questionInput)).ok, false);
-  assert.equal(f.questionCalls.length, calls);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
-
-test("saved question with failed native staging remains undelivered and same preparation retry stages without rewriting it", async t => {
-  const f = await questionFixture(t);
-  f.setStageFailure(Object.assign(new Error("Current native turn retired."), { code: "ACTION_VALIDATION_FAILED", statusCode: 400 }));
-  await assert.rejects(f.c.execute("question.prepare", f.questionInput), error =>
-    error.code === "ACTION_VALIDATION_FAILED" && error.questionPrepared === true && error.revision === 4 && /not confirmed delivered/.test(error.message));
-  const saved = await f.learners.readState({ actor: f.auth.user });
-  assert.equal(saved.active.learning.resume.pendingQuestion.text, f.questionInput.text);
-  assert.deepEqual(saved.active.learning.submissions, []);
-  const before = await inventory(f.systemRoot);
-  f.setStageFailure(null);
-  const retried = await f.c.execute("question.prepare", f.questionInput);
-  assert.equal(retried.revision, 4);
-  assert.equal(retried.replayed, true);
-  assert.equal(retried.delivery, "prepared");
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  const changed = { ...f.questionInput, text: "Another question" };
-  const stages = f.questionCalls.filter(value => value.operation === "stage").length;
-  await assert.rejects(f.c.execute("question.prepare", changed), { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
-  assert.equal(f.questionCalls.filter(value => value.operation === "stage").length, stages);
-});
-
-test("unconfirmed checkpoint and unavailable teaching preserve native causes and never stage or claim question delivery", async t => {
-  const f = await questionFixture(t);
-  const save = f.learners.saveLessonResume;
-  const before = await inventory(f.systemRoot);
-  f.learners.saveLessonResume = async () => { throw Object.assign(new Error("Atomic checkpoint save uncertain /PRIVATE_SOURCE"), {
-    code: "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED" }); };
-  try {
-    const tool = await f.c.tool("question.prepare", f.questionInput);
-    assert.equal(tool.ok, false);
-    assert.doesNotMatch(JSON.stringify(tool), excluded);
-    assert.equal(f.questionCalls.some(value => value.operation === "stage"), false);
-    await assert.rejects(f.c.execute("question.prepare", f.questionInput), error =>
-      error.code === "VIBE64_TRAINING_ACTIVE_SAVE_UNCONFIRMED" && /retry the same/.test(error.message));
-    assert.deepEqual(await inventory(f.systemRoot), before);
-  } finally { f.learners.saveLessonResume = save; }
-  const main = {
-    requireTrainingQuestionTurn() { throw new Error("Unavailable teaching must not reach native preflight."); },
-    stageTrainingQuestion() { throw new Error("Unavailable teaching must not stage."); }
-  };
-  const action = createTrainingTeachingActions({ colleague: main })[0];
-  await assert.rejects(action.execute(f.questionInput, { trainingMain: main,
-    requestMeta: { request: { vibe64User: f.auth.user } } }),
-    { code: "VIBE64_TRAINING_TEACHING_UNAVAILABLE" });
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
-
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const api = await c.execute(name);
@@ -464,19 +128,6 @@ test("training queries share API/tool catalogue contracts and fresh member autho
   await rm(path.join(f.systemRoot, "training/users/NDI/active-lesson.json"));
   before = await inventory(f.systemRoot);
   const input = { attemptId: reserved.attempt.attemptId };
-  const api = await c.execute("teaching-brief.read", input);
-  const tool = await c.tool("teaching-brief.read", input);
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, api);
-  assert.match(api.brief.lesson.teachingText, /your own words/u);
-  assert.equal(api.brief.lesson.exerciseRequired, false);
-  assert.equal(tool.result.brief.lesson.exerciseRequired, false);
-  assert.match(api.brief.lesson.assessments[0].rubric.text, /your own words/u);
-  assert.equal(api.brief.learning.completion.required, 1);
-  assert.equal(api.brief.learning.completion.completed, false);
-  assert.equal(api.brief.activeSummaryCurrent, false);
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.deepEqual(await inventory(f.systemRoot), before);
   const current = await c.execute("learning.read");
   assert.equal(current.activeSummaryCurrent, false);
   assert.equal(current.active.attemptId, input.attemptId);
@@ -526,7 +177,7 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   const f = await fixture(t);
   const c = f.register(f.exercises);
   const reserved = await f.reserve();
-  const inputs = { "courses.list": {}, "learning.read": {}, "teaching-brief.read": { attemptId: reserved.attempt.attemptId },
+  const inputs = { "courses.list": {}, "learning.read": {},
     "lesson.start": f.input, "lesson.resume": { attemptId: reserved.attempt.attemptId },
     "lesson.end": { attemptId: reserved.attempt.attemptId, requestId: "end-one", expectedRevision: reserved.revision, reason: "discard" } };
   for (const [name, input] of Object.entries(inputs)) {
@@ -538,7 +189,6 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   assert.equal(f.calls.length, 0);
   f.auth.user = { uid: 43, username: "another-member", role: "member" };
   assert.equal((await c.tool("learning.read")).result.active, null);
-  assert.equal((await c.tool("teaching-brief.read", inputs["teaching-brief.read"])).ok, false);
   f.auth.user = null;
   for (const [name, input] of Object.entries(inputs)) assert.equal((await c.tool(name, input)).ok, false);
   assert.equal(f.calls.length, 0);
@@ -557,7 +207,7 @@ test("invalid exact identities and revisions fail before exercise admission", as
     await assert.rejects(() => c.execute("lesson.start", { ...f.input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
   }
   for (const attemptId of ["", "../attempt", "aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa", "x".repeat(37)]) {
-    for (const name of ["teaching-brief.read", "lesson.resume"]) await assert.rejects(() => c.execute(name, { attemptId }), { code: "ACTION_VALIDATION_FAILED" });
+    await assert.rejects(() => c.execute("lesson.resume", { attemptId }), { code: "ACTION_VALIDATION_FAILED" });
   }
   assert.equal(f.calls.length, 0);
 });
@@ -574,9 +224,13 @@ test("a refused preview start reports its owner-only admission message", async t
 test("oversized projections and native failures remain bounded, truthful and source-free", async t => {
   const f = await fixture(t);
   const saved = await f.reserve();
-  const original = await f.teachingBrief.readBrief({ actor: f.auth.user, attemptId: saved.attempt.attemptId });
-  const large = f.register(null, { teachingBrief: { async readBrief() { return { ...original, lesson: { ...original.lesson, teachingText: "x".repeat(128 * 1024) } }; } } });
-  await assert.rejects(() => large.execute("teaching-brief.read", { attemptId: saved.attempt.attemptId }), { code: "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE" });
+  // The retired teaching brief was this bound's largest reader; an oversized
+  // catalogue projection now proves the same shared result bound.
+  const large = f.register(null, { catalogue: { ...f.catalogue, async readCatalogue() {
+    return { revision: 1, courses: [{ enabled: true, lock: { topics: [] },
+      course: { courseId: "large", release: "0.1.0", title: "x".repeat(128 * 1024), status: "released" } }] };
+  } } });
+  await assert.rejects(() => large.execute("courses.list"), { code: "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE" });
   const failure = f.register({ async startLesson() {
     throw Object.assign(new Error("Cannot rename /PRIVATE_SOURCE/progress.json"), { code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
   }, async prepareLesson() { return { ok: false, error: "PRIVATE_SOURCE" }; } });
@@ -604,154 +258,6 @@ test("known preparation contention retains the same attempt and gives a safe spe
   });
 });
 
-test("lesson presentation tools use exact pinned commands and native browser receipts with fresh project authority", async t => {
-  const f = await fixture(t, { presentation: true });
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const preparing = await f.learners.beginPreparation({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision });
-  const saved = await f.learners.recordPreparationReady({ actor: f.auth.user, attemptId,
-    expectedRevision: preparing.revision, initialSessionId: preparing.attempt.preparation.initialSessionId });
-  const calls = [];
-  const colleague = { async navigate(input, context) {
-    calls.push(structuredClone(input));
-    assert.equal(context.vibe64Action.user.uid, 42);
-    const command = input.presentation;
-    if (command) assert.equal(context.vibe64Action.project.slug, saved.attempt.projectSlug);
-    else assert.equal(context.vibe64Action.project, null, "bound Main view derives the project instead of accepting it from the model");
-    if (input.guide && !input.guide.navigate) return { ok: true, guide: { shown: true, step: input.guide.steps[0].id } };
-    if (!command) return { ok: true, focus: { ...input, pane: input.learningView === "learning" ? "lessons" : input.pane,
-      databaseScreen: input.databaseView ? "workspace" : undefined } };
-    return { ok: true, focus: { projectSlug: input.projectSlug, sessionId: input.sessionId, pane: "preview" },
-      presentation: { attemptId, visualId: command.visualId, playerInstanceId: "player-1",
-        ...(command.operation === "snapshot" ? { snapshot: { state: "overview", paused: true, labels: {} } }
-          : { phase: command.operation === "open" ? "ready" : command.operation === "cue" ? "armed" : "completed", state: "overview",
-            ...(command.cueId ? { cueId: command.cueId } : {}),
-            ...(command.commandId ? { commandId: command.commandId } : {}) }) } };
-  }, async readCue(input) {
-    return { ok: true, presentation: { ...input, phase: "completed", outputId: "actual-output", canonicalFinal: true,
-      audioPhase: "completed", visualPhase: "completed" } };
-  } };
-  const definitions = createTrainingPresentationActions({ learners: f.learners, content: f.content, colleague });
-  const actions = createActionCatalogue();
-  actions.register({ contributorId: "presentations", domain: "training", actions: definitions.map(definition => ({ ...definition,
-    channels: ["api", "automation"], surfaces: ["app"] })) });
-  let allowProject = true;
-  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
-    projectContext: { projectsRoot: f.root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(f.root, slug) } }; } },
-    authorizeProject() { if (!allowProject) throw Object.assign(new Error("Project access denied."), { statusCode: 403 }); } });
-  const tools = createServiceToolCatalog(actions, { maxDirectTools: 100 });
-  // Same prepared content/project/receipt fixture, explicitly Main authority.
-  // The paired practice admission hunk validates these exact saved facts; this
-  // controlled action proof is not actual native/browser practice acceptance.
-  actions.registerContextContributor({ id: "original-visual-main-host", contribute() {
-    return { trainingMain: {
-      async requirePresentationAttempt(requested) {
-        const current = await f.learners.readState({ actor: f.auth.user, attemptId: requested, includeCompletion: true });
-        const attempt = current.active;
-        const projectSlug = currentProjectRequestContext()?.slug;
-        if (requested !== attemptId || attempt?.attemptId !== attemptId ||
-            projectSlug && projectSlug !== attempt.projectSlug || attempt.preparation.phase !== "ready") {
-          throw Object.assign(new Error("Use this exact prepared Main lesson."), {
-            code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH", statusCode: 409
-          });
-        }
-        return { noExercise: false, pin: attempt.pin, projectSlug: attempt.projectSlug,
-          sessionId: attempt.preparation.initialSessionId };
-      },
-      navigatePresentation(presentation, context) {
-        return colleague.navigate({ projectSlug: saved.attempt.projectSlug,
-          sessionId: saved.attempt.preparation.initialSessionId, pane: "preview", presentation }, context);
-      },
-      navigateLearningView(request, context) {
-        return colleague.navigate(trainingGuideCommand(request, { id: "guide-command", projectSlug: saved.attempt.projectSlug,
-          sessionId: saved.attempt.preparation.initialSessionId, attemptId }), context);
-      },
-      readPresentationCue(input) { return colleague.readCue(input); }
-    } };
-  } });
-  const context = { channel: "automation", surface: "app" };
-  const toolSet = tools.resolveToolSet(context);
-  const common = { projectSlug: saved.attempt.projectSlug, attemptId, visualId: "request" };
-  const execute = (name, input = {}) => actions.execute({ actionId: `vibe64.training.visual.${name}`, input: { ...common, ...input }, context });
-  const before = await inventory(f.systemRoot);
-  for (const name of ["open", "command", "snapshot", "cue", "cue.read"]) {
-    const input = ["command", "cue"].includes(name) ? { commandId: "command-1", name: "show", parameters: { label: "One request" },
-      ...(name === "cue" ? { cueId: "cue-one" } : {}) } : name === "cue.read" ? { cueId: "cue-one" } : {};
-    const api = await execute(name, input);
-    const tool = toolSet.tools.find(item => item.actionId === `vibe64.training.visual.${name}`);
-    assert.ok(tool);
-    assert.doesNotThrow(() => tools.toOpenAiToolSchema(tool));
-    const result = await tools.executeToolCall({ toolName: tool.name, toolSet, context, argumentsText: JSON.stringify({ ...common, ...input }) });
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.deepEqual(result.result, api);
-    assert.doesNotMatch(JSON.stringify(result.result), excluded);
-    assert.equal(calls.at(-1).sessionId, saved.attempt.preparation.initialSessionId);
-    assert.equal(calls.at(-1).pane, "preview");
-  }
-  // Older names keep opening their view; every real place can be opened ("show me").
-  for (const [target, pane, databaseView, navigate] of [["workspace-preview", "preview"], ["workspace-erd", "database", "erd"],
-    ["learning", "lessons", undefined, true], ["preview", "preview", undefined, true], ["database-erd", "database", "erd", true],
-    ["database-data", "database", "data", true], ["files", "files", undefined, true], ["changes", "changes", undefined, true],
-    ["git-log", "repository", undefined, true], ["session-info", "session", undefined, true], ["architecture", "system", undefined, true]]) {
-    const result = await actions.execute({ actionId: "vibe64.training.view.open",
-      input: { attemptId, target, ...(navigate ? { navigate } : {}) }, context });
-    assert.equal(result.ok, true);
-    assert.equal(result.focus.pane, pane);
-    assert.equal(result.focus.learningAttemptId, attemptId);
-    assert.equal(result.focus.learningView, target === "learning" ? "learning" : "workspace");
-    assert.equal(result.focus.databaseView, databaseView);
-    assert.equal(calls.at(-1).guide.navigate, true);
-  }
-  const viewTool = toolSet.tools.find(item => item.actionId === "vibe64.training.view.open");
-  assert.doesNotThrow(() => tools.toOpenAiToolSchema(viewTool));
-  assert.match(viewTool.description, /point only \(navigate=false, highlight=true\)/u);
-  // The default points at the real control without moving the learner's view.
-  const pointed = await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "database-erd" }, context });
-  assert.deepEqual(pointed, { ok: true, guide: { shown: true, step: "dashboard" } });
-  assert.deepEqual(calls.at(-1), { id: "guide-command", learningAttemptId: attemptId, status: "pending", guide: {
-    target: "database-erd", navigate: false, highlight: true, caption: "Dashboard → Database → ERD",
-    steps: [{ id: "dashboard", label: "Dashboard" }, { id: "database", label: "Database" }, { id: "database-erd", label: "ERD" }] } });
-  await actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "files", filePath: "src/server/app.js" }, context });
-  assert.equal(calls.at(-1).guide.caption, "Dashboard → Files → src/server/app.js");
-  assert.deepEqual(calls.at(-1).guide.steps.at(-1), { id: "file", path: "src/server/app.js", label: "src/server/app.js" });
-  const guided = calls.length;
-  for (const input of [{ target: "dashboard", navigate: true }, { target: "preview", navigate: false, highlight: false },
-    { target: "preview", filePath: "src/app.js" }, { target: "files", filePath: "../outside.js" },
-    { target: "files", filePath: "/etc/passwd" }, { target: "files", filePath: "src/../../x.js" }]) {
-    await assert.rejects(() => actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, ...input }, context }),
-      { code: "VIBE64_TRAINING_GUIDE_INVALID", statusCode: 422 });
-  }
-  await assert.rejects(() => actions.execute({ actionId: "vibe64.training.view.open", input: { attemptId, target: "#erd" }, context }));
-  assert.equal(calls.length, guided, "invalid guide requests never reach the browser");
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  const called = calls.length;
-  for (const input of [{ name: "eval", parameters: {} }, { name: "show", parameters: {} },
-    { name: "show", parameters: { label: "x".repeat(17) } }, { name: "show", parameters: { label: "ok", code: "run" } }]) {
-    await assert.rejects(() => execute("command", { commandId: "command-invalid", ...input }), { code: "VIBE64_TRAINING_PRESENTATION_COMMAND_INVALID" });
-  }
-  await assert.rejects(() => execute("open", { projectSlug: "other" }), { code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH" });
-  allowProject = false;
-  await assert.rejects(() => execute("open"), { statusCode: 403 });
-  allowProject = true;
-  f.auth.user = { uid: 43, username: "another-member", role: "member" };
-  await assert.rejects(() => execute("open"), { code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH" });
-  f.auth.user = null;
-  await assert.rejects(() => execute("open"), { statusCode: 401 });
-  assert.equal(calls.length, called, "invalid or revoked commands cannot reach the browser");
-  f.auth.user = { uid: 42, username: "member", role: "member" };
-  const readState = f.learners.readState;
-  f.learners.readState = async () => { throw Object.assign(new Error("Could not read /PRIVATE_SOURCE/attempt.json"), { code: "PIN_MISSING", statusCode: 409 }); };
-  try {
-    await assert.rejects(() => execute("open"), error => error.code === "PIN_MISSING" && error.statusCode === 409 &&
-      !error.message.includes("PRIVATE_SOURCE") && error.cause.message.includes("PRIVATE_SOURCE"));
-    const tool = toolSet.tools.find(item => item.actionId === "vibe64.training.visual.cue");
-    const result = await tools.executeToolCall({ toolName: tool.name, toolSet, context,
-      argumentsText: JSON.stringify({ ...common, cueId: "cue-one", commandId: "command-1", name: "show", parameters: { label: "One request" } }) });
-    assert.equal(result.ok, false);
-    assert.doesNotMatch(JSON.stringify(result), excluded);
-  } finally { f.learners.readState = readState; }
-});
-
 test("native lesson end and ended-start replay expose the original target and actual active state without project effects", async t => {
   const f = await fixture(t);
   const c = f.register(f.exercises);
@@ -768,7 +274,7 @@ test("native lesson end and ended-start replay expose the original target and ac
   assert.equal(f.calls.at(-1).value.actor, f.auth.user);
   const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.end");
   assert.equal(definition.idempotency, "domain_native");
-  assert.match(definition.extensions.assistant.description, /stops this attempt's lesson conversation work/u);
+  assert.match(definition.extensions.assistant.description, /the project's ordinary sessions, step results and history remain readable and usable/u);
   assert.match(definition.extensions.assistant.description, /does not close, archive or delete anything/u);
   const beforeReplay = await inventory(f.systemRoot);
   const replay = await c.tool("lesson.end", input);
@@ -865,114 +371,13 @@ test("history and retained-pass tool projections preserve original provenance wi
   assert.deepEqual(read.lessonProgress, [{ lessonCode: "USE-ONE", lessonHash: f.pin.lesson.hash, required: 1, passed: 1, completed: true, open: true }],
     "one per-lesson summary joins the ended pass and the open successor");
   assert.equal(read.active.learning.submissions.length, 0);
-  const brief = await c.tool("teaching-brief.read", { attemptId: next.active.attemptId });
-  assert.equal(brief.ok, true, JSON.stringify(brief));
-  const retained = brief.result.brief.learning.retainedPasses;
-  assert.equal(retained.length, 1);
-  assert.equal(retained[0].attemptId, attemptId);
-  assert.equal(retained[0].submission.submissionId, "answer-one");
-  assert.equal(retained[0].submission.evidence.messageId, "message-one");
-  assert.equal(retained[0].submission.evidence.attemptId, attemptId);
-  assert.equal(retained[0].pin.lesson.hash, f.pin.lesson.hash);
-  assert.deepEqual(brief.result.brief.learning.submissions, []);
-  assert.equal(brief.result.brief.learning.completion.completed, true);
-  assert.doesNotMatch(JSON.stringify([read, brief.result]), excluded);
+  assert.equal(read.active.attemptId, next.active.attemptId);
+  assert.doesNotMatch(JSON.stringify(read), excluded);
   assert.deepEqual(await inventory(f.systemRoot), before);
   f.auth.user = { uid: 43, username: "other", role: "member" };
   assert.equal((await c.tool("learning.read")).result.history.length, 0);
-  assert.equal((await c.tool("teaching-brief.read", { attemptId: next.active.attemptId })).ok, false);
 });
 
-
-test("practical evaluation forwards only native identities and retains API/tool feedback parity", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const input = { attemptId: reserved.attempt.attemptId, expectedRevision: 4, submissionId: "practical-one",
-    messageId: "canonical-explanation", observationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
-  const calls = [];
-  const c = f.register(null, {}, { requireTrainingQuestionTurn() {}, stageTrainingQuestion() {},
-    evaluateTrainingAnswer() { assert.fail("A practical cannot be graded as a quiz answer."); },
-    async evaluateTrainingPractical(value, context) {
-      calls.push({ value, actor: context.vibe64Action.user });
-      return { revision: 5, replayed: calls.length > 1, attempt: { learning: { submissions: [{
-        submissionId: "practical-one", assessmentId: "try-the-application", outcome: "passed",
-        explanation: "You tried the application and explained its response.", evidence: { text: "PRIVATE_SOURCE", learnerId: "42" }
-      }] } }, completion: { lessonCode: "USE-ONE", lessonHash: f.pin.lesson.hash, required: 1, passed: 1, completed: true } };
-    } });
-  const definition = c.definitions.find(value => value.id === "vibe64.training.practical.evaluate");
-  assert.equal(definition.idempotency, "domain_native");
-  assert.equal(definition.extensions.vibe64.projectScoped, false);
-  const api = await c.execute("practical.evaluate", input);
-  const tool = await c.tool("practical.evaluate", input);
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, { ...api, replayed: true });
-  assert.deepEqual(calls, [{ value: input, actor: f.auth.user }, { value: input, actor: f.auth.user }]);
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.doesNotMatch(JSON.stringify(tool), excluded);
-});
-
-test("practical evaluation rejects fabricated proof and sanitizes unconfirmed saving", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const input = { attemptId: reserved.attempt.attemptId, expectedRevision: 4, submissionId: "practical-one",
-    messageId: "canonical-explanation", observationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
-  let calls = 0;
-  const c = f.register(null, {}, { requireTrainingQuestionTurn() {}, stageTrainingQuestion() {},
-    evaluateTrainingAnswer() { assert.fail("A practical cannot invoke answer grading."); },
-    async evaluateTrainingPractical() {
-      calls++;
-      throw Object.assign(new Error("Cannot confirm save at /PRIVATE_SOURCE/progress.json"), {
-        code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
-    } });
-  for (const extra of [{ observation: {} }, { origin: "learner" }, { checkResult: { outcome: "passed" } },
-    { text: "Invented explanation" }, { assistance: "none" }, { outcome: "passed" }, { actor: { uid: 1 } }]) {
-    await assert.rejects(c.execute("practical.evaluate", { ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
-  }
-  await assert.rejects(c.execute("practical.evaluate", { ...input, observationId: "not-a-native-uuid" }), { code: "ACTION_VALIDATION_FAILED" });
-  f.auth.user = null;
-  await assert.rejects(c.execute("practical.evaluate", input), { code: "vibe64_auth_required" });
-  assert.equal(calls, 0);
-  f.auth.user = { uid: 42, username: "member", role: "member" };
-  await assert.rejects(c.execute("practical.evaluate", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED");
-  const tool = await c.tool("practical.evaluate", input);
-  assert.equal(tool.ok, false);
-  assert.doesNotMatch(JSON.stringify(tool), excluded);
-  assert.equal(calls, 2);
-});
-
-test("resumed lesson brief projects remaining coverage while retaining the passed checkpoint through API and native tools", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const pendingQuestion = { id: "question-old", assessmentId: "explain", text: "What did you try?", assistance: "hint", issuedRevision: 2 };
-  const saved = await f.learners.saveLessonResume({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision,
-    requestId: "question-old", resume: { stage: "question", pendingQuestion, visuals: [], summary: "The learner tried Preview." } });
-  const recorded = await f.learners.recordAssessment({ actor: f.auth.user, attemptId, expectedRevision: saved.revision,
-    submissionId: "answer-old", assessmentId: "explain", outcome: "passed", assistance: "hint",
-    explanation: "The learner identified Preview.", evidence: { kind: "answer", learnerId: "42", attemptId,
-      messageId: "accepted-answer-old", questionId: pendingQuestion.id, text: "I tried Preview." } });
-  const c = f.register(f.exercises);
-  const resumed = await c.execute("lesson.resume", { attemptId });
-  assert.equal(resumed.revision, recorded.revision);
-  assert.equal(resumed.completion.passed, 1);
-  assert.deepEqual(resumed.active.learning.resume.pendingQuestion, { id: pendingQuestion.id, assessmentId: "explain", text: pendingQuestion.text });
-  const before = await inventory(f.systemRoot);
-  const api = await c.execute("teaching-brief.read", { attemptId });
-  const tool = await c.tool("teaching-brief.read", { attemptId });
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, api);
-  assert.deepEqual(api.brief.learning.passedAssessmentIds, ["explain"]);
-  assert.deepEqual(api.brief.learning.remainingAssessmentIds, []);
-  assert.deepEqual(api.brief.learning.resume.pendingQuestion, resumed.active.learning.resume.pendingQuestion);
-  assert.equal(api.brief.learning.completion.passed, 1);
-  assert.match(api.brief.pacing.join("\n"), /last checkpoint/u);
-  assert.match(api.brief.pacing.join("\n"), /control request, not a learner answer/u);
-  assert.match(c.definitions.find(value => value.id === "vibe64.training.lesson.resume").extensions.assistant.description,
-    // Learning v2: Colleague continues from the lesson's steps, not a teaching brief.
-    /After success, read lesson.read for this same attempt/u);
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
 
 
 test("retained continuation uses fresh member authority and bounded native input on API and tools", async t => {
@@ -1044,33 +449,6 @@ test("ended continuation replay projects its own history and actual successor wi
   assert.doesNotMatch(JSON.stringify(result), excluded);
 });
 
-
-test("presentation supplies its exact captured attempt ID to the configured original learner reader", async t => {
-  const f = await fixture(t, { presentation: true });
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const preparing = await f.learners.beginPreparation({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision });
-  const ready = await f.learners.recordPreparationReady({ actor: f.auth.user, attemptId,
-    expectedRevision: preparing.revision, initialSessionId: preparing.attempt.preparation.initialSessionId });
-  const reads = [];
-  const learners = { async readState(input) { reads.push(input); return f.learners.readState(input); } };
-  const colleague = { async navigate() { return { ok: true }; } };
-  const definition = createTrainingPresentationActions({ learners, content: f.content, colleague })
-    .find(value => value.id === "vibe64.training.visual.open");
-  const result = await definition.execute({ projectSlug: ready.attempt.projectSlug, attemptId, visualId: "request" },
-    { vibe64Action: { user: f.auth.user, project: { slug: ready.attempt.projectSlug } },
-      trainingMain: {
-        async requirePresentationAttempt(id) {
-          assert.equal(id, attemptId);
-          return { noExercise: false, pin: f.pin, projectSlug: ready.attempt.projectSlug,
-            sessionId: ready.attempt.preparation.initialSessionId };
-        },
-        navigatePresentation: colleague.navigate
-      } });
-  assert.equal(result.ok, true);
-  assert.equal(reads.length, 1);
-  assert.deepEqual(reads[0], { actor: f.auth.user, attemptId, includeCompletion: true });
-});
 
 import { createTrainingAuthorPreviewActions } from "../../packages/vibe64-training/src/server/actions.js";
 
@@ -1174,18 +552,12 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
-  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners", "learningSessions", "mainTeaching",
-    "practiceProjects", "publishLearnerChanged", "steps", "teaching"]);
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
+    "practiceProjects", "publishLearnerChanged", "steps"]);
   // Learning v2 (C5): the standalone practice facility offers delete and its read-only preflight.
   assert.deepEqual(Object.keys(training.practiceProjects).sort(), ["canRemove", "remove"]);
-  assert.equal(typeof training.teaching.prepareQuestion, "function");
-  assert.equal(typeof training.assessment.evaluateAnswer, "function");
-  assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
-    "vibe64.training.question.prepare", "vibe64.training.answer.evaluate"]);
-  assert.equal(training.mainTeaching.actionIds[4], "vibe64.training.view.open");
-  assert.deepEqual(training.mainTeaching.actionIds.slice(5, 10), ["vibe64.training.visual.open", "vibe64.training.visual.command",
-    "vibe64.training.visual.cue", "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot"]);
-  assert.ok(registered.some(route => route.url.startsWith("/api/learning/:learningAttemptId/vibe64/")));
+  // Learning v2 phase 2 retired the source-less Main teacher and its lesson-scoped routes.
+  assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   const observed = [];
   actions.register({ contributorId: "original-local-scopes", domain: "test", actions: ["vibe64.working.fixture", "vibe64.colleague.fixture"].map(id =>
@@ -1209,18 +581,12 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(state.progress.learnerId, String(osActor.uid));
   assert.equal(state.active.attemptId, id);
   assert.equal(state.active.preparation.phase, "reserved");
-  const learningContext = await training.learningSessions.resolveContext({ actor: osActor, attemptId: id });
-  assert.equal(learningContext.learningTeaching, training.mainTeaching, "the original learner context retains the exact composed Main owner");
   assert.equal((await training.learners.readState({ actor: { uid: 999, username: "forged" } })).progress.attempts.length, 0);
   const resumed = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/resume`, payload: {
     attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
   } });
   assert.equal(resumed.statusCode, 200, resumed.body);
   assert.equal(resumed.json().active.attemptId, id, "the saved path attempt wins over a conflicting body");
-  const brief = await server.inject({ method: "GET", url: `/api/vibe64/training/attempts/${id}/brief` });
-  assert.equal(brief.statusCode, 200, brief.body);
-  assert.equal(brief.json().brief.attemptId, id);
-  assert.equal(brief.json().brief.lesson.exerciseRequired, false);
   const ended = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/end`, payload: {
     requestId: "local-end", expectedRevision: state.revision, reason: "restart"
   } });
@@ -1251,41 +617,31 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   }
 });
 
-test("hosted Training Feature retains exact supplied owners and registers no second actions, authority or Main routes", async t => {
+test("hosted Training Feature retains exact supplied owners and registers no second actions, authority or lesson routes", async t => {
   const f = await fixture(t);
   const { Vibe64TrainingProvider } = await import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js");
   const registered = [];
   const trainingHost = Object.freeze({ catalogue: f.catalogue, content: f.content, learners: f.learners,
-    brief: f.teachingBrief, exercises: f.exercises, learningSessions: { resolveContext() {}, openSession() {} } });
+    exercises: f.exercises });
   const outputs = await Vibe64TrainingProvider.setup({ actionCatalogue: {
     register() { assert.fail("the hosted original action catalogue must not be registered twice"); },
     registerContextContributor() { assert.fail("the hosted original authority must not be registered twice"); }
   }, http: { router: { register(method, url, options, handler) { registered.push({ method, url, options, handler }); } } },
     project: {}, sessions: {}, terminals: {}, trainingHost });
   assert.equal(outputs.training, trainingHost);
-  const presentationRoutes = registered.filter(route => /\/training\/presentation(?:\/focus|\/ack)?$/u.test(route.url));
-  assert.deepEqual(presentationRoutes.map(route => [route.method, route.url]), [
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/presentation"],
-    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/presentation/focus"],
-    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/presentation/ack"]
-  ]);
-  const practicalRoutes = registered.filter(route => route.url.endsWith("/training/observations"));
-  assert.deepEqual(practicalRoutes.map(route => [route.method, route.url]), [
-    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
-  ]);
-  const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
+  // Learning v2 phase 2 retired the Main teacher's presentation, practical,
+  // brief, visual checkpoint and lesson-scoped visual routes.
+  const originalRoutes = registered;
   // Learning v2 adds the lesson reader, step, reader-position and practice routes,
   // and the learner's own teacher notes (contract C7).
-  assert.equal(originalRoutes.length, 25);
+  assert.equal(originalRoutes.length, 21);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
-  assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
-    route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
-  "Online retains its one existing Main route registration; Training adds only its explicit Learning visual adapter");
+  assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   assert.deepEqual(originalRoutes.map(route => [route.method, route.url]), [
     ["GET", "/api/vibe64/training/courses"], ["POST", "/api/vibe64/training/courses"],
     ["GET", "/api/vibe64/training/available"], ["POST", "/api/vibe64/training/courses/install"], ["GET", "/api/vibe64/training/learning"],
-    ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
+    ["POST", "/api/vibe64/training/lessons/start"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],
     ["GET", "/api/vibe64/training/lesson"], ["GET", "/api/vibe64/training/attempts/:attemptId/lesson"],
@@ -1294,136 +650,18 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/vibe64/training/attempts/:attemptId/reader"], ["POST", "/api/vibe64/training/attempts/:attemptId/practice/delete"],
     ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],
     ["POST", "/api/vibe64/training/teacher-notes/clear"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
-    ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
-    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"]
+    ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"]
   ]);
-});
-
-test("canonical learning read shares bounded owned session summaries and actual learner identity across API and tool without changing saved progress", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const session = { sessionId: `learning-${reserved.attempt.attemptId}`, sessionName: "First lesson", status: "active", revision: 1,
-    createdAt: "2026-10-08T00:00:00.000Z", updatedAt: "2026-10-08T00:00:00.000Z",
-    purpose: "learning", learningAttemptId: reserved.attempt.attemptId, lessonCode: "USE-ONE" };
-  const calls = [];
-  const learningSessions = { async readSessions(input) { calls.push(input); return [structuredClone(session)]; } };
-  const c = f.register(null, { learningSessions });
-  const before = await inventory(f.systemRoot);
-  const read = await c.execute("learning.read");
-  const tool = await c.tool("learning.read");
-  assert.equal(read.learnerId, String(f.auth.user.uid));
-  assert.deepEqual(read.sessions, [session]);
-  // Learning v2: Colleague teaches from steps, so the earlier Learning mode's
-  // conversations stay a browser-only field (with the learner identity) until
-  // that transport is removed in phase 2.
-  const { learnerId: browserIdentity, sessions: _browserSessions, ...visible } = read;
-  assert.equal(browserIdentity, String(f.auth.user.uid));
-  assert.deepEqual(tool.result, visible);
-  assert.equal(Object.hasOwn(tool.result, "learnerId"), false);
-  assert.equal(Object.hasOwn(tool.result, "sessions"), false);
-  assert.deepEqual(read.attempts.map(value => [value.attemptId, value.preparation.phase, value.practiceSlug]),
-    [[reserved.attempt.attemptId, "reserved", undefined]], "a reserved attempt has no practice project yet");
-  assert.doesNotMatch(JSON.stringify(tool.result), excluded);
-  for (const field of ["learnerId", "sessions"]) {
-    assert.equal(Object.hasOwn(c.definitions.find(value => value.id === "vibe64.training.learning.read").extensions.assistant.output.schema.getFieldDefinitions(), field), false);
-  }
-  assert.deepEqual(read.history, []);
-  assert.equal(read.active.attemptId, reserved.attempt.attemptId);
-  assert.equal(calls.length, 2);
-  for (const input of calls) { assert.deepEqual(Object.keys(input), ["actor"]); assert.equal(input.actor, f.auth.user); }
-  assert.deepEqual(await inventory(f.systemRoot), before);
-  const defaultRead = await f.register().execute("learning.read");
-  assert.equal(Object.hasOwn(defaultRead, "sessions"), false, "the optional summary facility does not change unconfigured callers");
-  assert.equal(Object.hasOwn(defaultRead, "learnerId"), false, "the original unconfigured projection stays unchanged");
-  learningSessions.readSessions = async () => { throw Object.assign(new Error("corrupt saved binding"), { code: "vibe64_learning_session_scope_mismatch" }); };
-  await assert.rejects(c.execute("learning.read"), { code: "vibe64_learning_session_scope_mismatch" });
-  assert.deepEqual(await inventory(f.systemRoot), before);
 });
 
 
 // Approved role change: actual original contracts refuse supervisor authority
 // before saved-question, grading Helper or navigation effects. These refusals
 // do not substitute for actual Main practical/native acceptance.
-test("all eight teacher contracts refuse Colleague and missing Main before teacher effects", async t => {
-  const f = await fixture(t, { presentation: true });
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  let effects = 0;
-  const unexpected = () => { effects++; assert.fail("A supervisor must not reach a teaching effect."); };
-  const colleague = { requireTrainingQuestionTurn: unexpected, stageTrainingQuestion: unexpected,
-    evaluateTrainingAnswer: unexpected, evaluateTrainingPractical: unexpected,
-    navigate: unexpected, readCue: unexpected };
-  const definitions = [...createTrainingTeachingActions({ colleague }),
-    ...createTrainingAssessmentActions({ colleague }),
-    ...createTrainingPresentationActions({ learners: { readState: unexpected }, content: { readVisual: unexpected }, colleague })];
-  const actions = createActionCatalogue();
-  actions.register({ contributorId: "original-teacher-role-proof", domain: "training", actions: definitions.map(value => ({
-    ...value, channels: ["api", "automation"], surfaces: ["app"] })) });
-  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
-    projectContext: { projectsRoot: f.root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(f.root, slug) } }; } },
-    authorizeProject() {} });
-  const rows = [
-    ["question.prepare", { attemptId, expectedRevision: 1, requestId: "role-question", assessmentId: "explain", text: "Where do you try it?", assistance: "none" }],
-    ["answer.evaluate", { attemptId, expectedRevision: 1, submissionId: "role-answer", messageId: "answer-message" }],
-    ["practical.evaluate", { attemptId, expectedRevision: 1, submissionId: "role-practical", messageId: "practical-message", observationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
-    ["visual.open", { attemptId, visualId: "request" }],
-    ["visual.command", { attemptId, visualId: "request", commandId: "role-command", name: "show", parameters: { label: "Request" } }],
-    ["visual.cue", { attemptId, visualId: "request", cueId: "role-cue", commandId: "role-cue-command", name: "show", parameters: { label: "Request" } }],
-    ["visual.cue.read", { attemptId, visualId: "request", cueId: "role-cue" }],
-    ["visual.snapshot", { attemptId, visualId: "request" }]
-  ];
-  const before = await inventory(f.systemRoot);
-  for (const [name, original] of rows) {
-    const input = { ...original, ...(name.startsWith("visual.") ? { projectSlug: reserved.attempt.projectSlug } : {}) };
-    const execute = extra => actions.execute({ actionId: `vibe64.training.${name}`, input,
-      context: { channel: "api", surface: "app", ...extra } });
-    await assert.rejects(execute({ colleague: { clientId: "original-tab" } }), { code: "VIBE64_TRAINING_SUPERVISOR_ONLY", statusCode: 403 });
-    await assert.rejects(execute({ colleague: { clientId: "original-tab" }, trainingMain: colleague }), { code: "VIBE64_TRAINING_SUPERVISOR_ONLY", statusCode: 403 });
-    await assert.rejects(execute({}), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE", statusCode: 503 });
-    f.auth.user = null;
-    await assert.rejects(execute({ colleague: { clientId: "original-tab" } }), { code: "vibe64_auth_required", statusCode: 401 });
-    f.auth.user = { uid: 42, username: "member", role: "member" };
-  }
-  assert.equal(effects, 0);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
 
 // Preserve actual Main facility error rather than falling through to a legacy
 // constructor or dereferencing an undefined grading coordinator.
-test("missing Main practical method remains explicitly unavailable without Helper effects", async t => {
-  const f = await fixture(t); const reserved = await f.reserve(); let effects = 0;
-  const c = f.register(null, {}, { requireTrainingQuestionTurn() {}, stageTrainingQuestion() {},
-    evaluateTrainingAnswer() { effects++; }, evaluateTrainingPractical() { effects++; } });
-  await assert.rejects(c.execute("practical.evaluate", { attemptId: reserved.attempt.attemptId, expectedRevision: 1,
-    submissionId: "unavailable-practical", messageId: "accepted-words", observationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
-    "api", { trainingMain: { evaluateTrainingAnswer() { effects++; } } }), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE", statusCode: 503 });
-  assert.equal(effects, 0);
-});
 
-
-test("Main practical read contract preserves the original bounded DTO and refuses supervisor or caller-selected browser evidence", async t => {
-  const f = await fixture(t); const reserved = await f.reserve();
-  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
-  const actions = createActionCatalogue(); let reads = 0;
-  actions.register({ contributorId: "actual-practical-read", domain: "training", actions: createTrainingPracticalActions().map(value => ({
-    ...value, channels: ["api", "automation", "internal"], surfaces: ["app"] })) });
-  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user, authorizeProject() {} });
-  const input = { attemptId: reserved.attempt.attemptId };
-  const context = { channel: "internal", surface: "app", trainingMain: { async readTrainingPractical(value) {
-    reads++; assert.deepEqual(value.attemptId, input.attemptId); return { ok: true };
-  } } };
-  const execute = (value, extra = {}) => actions.execute({ actionId: "vibe64.training.practical.read", input: value, context: { ...context, ...extra } });
-  assert.deepEqual(await execute(input), { ok: true });
-  for (const supplied of [{ clientId: "another-tab" }, { observationId: "chosen-observation" }, { origin: "learner" }, { outcome: "passed" }, { text: "invented fact" }]) {
-    await assert.rejects(execute({ ...input, ...supplied }));
-  }
-  await assert.rejects(execute(input, { colleague: {} }), { code: "VIBE64_TRAINING_SUPERVISOR_ONLY" });
-  await assert.rejects(execute(input, { trainingMain: undefined }), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE" });
-  f.auth.user = null; await assert.rejects(execute(input), { code: "vibe64_auth_required" });
-  assert.equal(reads, 1);
-});
 
 
 // Optional HTTP read uses the original owner action, not a new snapshot service.
@@ -1463,112 +701,6 @@ test("saved author-trial HTTP read retains fresh owner/actor isolation and perfo
 });
 
 
-test("teacher definitions register without Colleague and dispatch the current request Main through the original catalogue", async t => {
-  const f = await questionFixture(t);
-  const teaching = createTrainingTeachingOwner({ learners: f.learners, content: f.content });
-  const definitions = [...createTrainingTeachingActions(), ...createTrainingAssessmentActions(),
-    ...createTrainingPresentationActions({ learners: f.learners, content: f.content })];
-  const actions = createActionCatalogue();
-  actions.register({ contributorId: "request-main-registration", domain: "training", actions: definitions.map(value => ({
-    ...value, channels: ["api", "automation"], surfaces: ["app"] })) });
-  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
-    authorizeProject() { assert.fail("Question registration must not admit a Working project."); } });
-  actions.registerContextContributor({ id: "registered-question-owner", contribute() { return { trainingTeaching: teaching }; } });
-  const calls = [];
-  const firstMain = {
-    requireTrainingQuestionTurn(context) { calls.push(["first", "preflight", context.vibe64Action.user]); return {}; },
-    async stageTrainingQuestion(reference, context) {
-      calls.push(["first", "stage", context.vibe64Action.user]);
-      assert.deepEqual((await teaching.captureQuestion({ actor: context.vibe64Action.user, reference })).question.text, f.questionInput.text);
-    }
-  };
-  const nextMain = {
-    requireTrainingQuestionTurn(context) { calls.push(["next", "preflight", context.vibe64Action.user]); return {}; },
-    async stageTrainingQuestion(reference, context) {
-      calls.push(["next", "stage", context.vibe64Action.user]);
-      assert.equal((await teaching.captureQuestion({ actor: context.vibe64Action.user, reference })).question.id, reference.questionId);
-    }
-  };
-  const execute = extra => actions.execute({ actionId: "vibe64.training.question.prepare", input: f.questionInput,
-    context: { channel: "api", surface: "app", ...extra } });
-  const prepared = await execute({ trainingMain: firstMain });
-  assert.equal(prepared.delivery, "prepared");
-  assert.equal(prepared.questionText, f.questionInput.text);
-  const saved = await inventory(f.systemRoot);
-  const replay = await execute({ trainingMain: nextMain });
-  assert.deepEqual(replay, { ...prepared, replayed: true });
-  assert.deepEqual(calls, [["first", "preflight", f.auth.user], ["first", "stage", f.auth.user],
-    ["next", "preflight", f.auth.user], ["next", "stage", f.auth.user]]);
-  await assert.rejects(execute({ trainingMain: nextMain, colleague: { clientId: "supervisor" } }),
-    { code: "VIBE64_TRAINING_SUPERVISOR_ONLY", statusCode: 403 });
-  await assert.rejects(execute({}), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE", statusCode: 503 });
-  f.auth.user = null;
-  await assert.rejects(execute({ trainingMain: nextMain }), { code: "vibe64_auth_required", statusCode: 401 });
-  assert.equal(calls.length, 4, "registration supplies no cached teacher or supervisor fallback");
-  assert.deepEqual(await inventory(f.systemRoot), saved, "replay and refused authority do not change original saved learning");
-});
-
-
-test("Main Training reply budget preserves complete valid briefs while default and owner bounds still refuse oversize", async t => {
-  const f = await fixture(t);
-  const saved = await f.reserve();
-  const original = await f.teachingBrief.readBrief({ actor: f.auth.user, attemptId: saved.attempt.attemptId });
-  const input = { attemptId: saved.attempt.attemptId };
-  const teachingText = `${original.lesson.teachingText}\n${"é".repeat(27 * 1024)}`;
-  const c = f.register(null, { teachingBrief: { async readBrief() {
-    return { ...original, lesson: { ...original.lesson, teachingText } };
-  } } });
-  const before = await inventory(f.systemRoot);
-  const api = await c.execute("teaching-brief.read", input);
-  const bytes = Buffer.byteLength(JSON.stringify(api));
-  assert.ok(bytes > 48 * 1024 && bytes <= 128 * 1024);
-  assert.deepEqual(await c.tool("teaching-brief.read", input), {
-    ok: false, error: { code: "assistant_tool_result_too_large",
-      message: "Tool result exceeds the assistant size limit. Narrow the request and try again.", status: 413 }
-  });
-
-  // The existing catalog option covers Training's bounded result plus discovery's
-  // identity envelope. Actual Main service composition is checked by the live brief.
-  const tools = createServiceToolCatalog(c.actions, { maxDirectTools: 100,
-    maxToolResultBytes: 128 * 1024 + 1024 });
-  const context = { channel: "automation", surface: "app" };
-  const direct = tools.resolveToolSet(context);
-  const definition = direct.tools.find(value => value.actionId === "vibe64.training.teaching-brief.read");
-  const reply = await tools.executeToolCall({ toolName: definition.name, toolSet: direct, context,
-    argumentsText: JSON.stringify(input) });
-  assert.equal(reply.ok, true, JSON.stringify(reply));
-  assert.deepEqual(reply.result, api);
-  assert.equal(reply.result.brief.lesson.teachingText, teachingText);
-  assert.deepEqual(reply.result.brief.lesson.assessments, api.brief.lesson.assessments);
-  assert.deepEqual(reply.result.brief.learning, api.brief.learning);
-
-  const discovered = tools.resolveToolSet(context, { discoveryOnly: true });
-  const contract = await tools.executeToolCall({ toolName: "assistant_action_contract", toolSet: discovered, context,
-    argumentsText: JSON.stringify({ actionId: definition.actionId }) });
-  assert.equal(contract.ok, true, JSON.stringify(contract));
-  const result = await tools.executeToolCall({ toolName: "assistant_action_execute", toolSet: discovered, context,
-    argumentsText: JSON.stringify({ actionId: definition.actionId, input }) });
-  assert.equal(result.ok, true, JSON.stringify(result));
-  assert.deepEqual(result.result, { actionId: definition.actionId, version: 1, result: api });
-  assert.ok(Buffer.byteLength(JSON.stringify(result.result)) - bytes <= 1024);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-
-  const oversized = f.register(null, { teachingBrief: { async readBrief() {
-    return { ...original, lesson: { ...original.lesson, teachingText: "é".repeat(64 * 1024) } };
-  } } });
-  await assert.rejects(() => oversized.execute("teaching-brief.read", input), {
-    code: "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE"
-  });
-  const largeTools = createServiceToolCatalog(oversized.actions, { maxDirectTools: 100,
-    maxToolResultBytes: 128 * 1024 + 1024 });
-  const largeSet = largeTools.resolveToolSet(context);
-  const largeDefinition = largeSet.tools.find(value => value.actionId === definition.actionId);
-  const refused = await largeTools.executeToolCall({ toolName: largeDefinition.name, toolSet: largeSet, context,
-    argumentsText: JSON.stringify(input) });
-  assert.equal(refused.ok, false);
-  assert.equal(refused.error.code, "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE");
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
 
 test("owner custom course pins installed released topics through the original catalogue owner", async t => {
   const f = await fixture(t, { released: true });

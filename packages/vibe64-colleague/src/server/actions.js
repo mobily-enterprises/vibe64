@@ -1,9 +1,7 @@
-import { trainingAppRequestFailures, trainingAppRequestSchema, trainingQuestionField, trainingObservationFields, trainingPracticalProgressField,
-  trainingPracticalField } from "@local/vibe64-training/shared/practical-schemas";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge, maxGuideCharacters } from "./usageKnowledge.js";
-import { guideReceipt, presentationReceipt, presentationCueReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
+import { guideReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
 import { TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_TARGETS } from "@local/vibe64-training/shared/guide-targets";
 
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
@@ -34,16 +32,6 @@ const guideRequest = { type: "object", required: false, schema: createSchema({
   filePath: { ...text, noTrim: true, minLength: 1, maxLength: 512 },
   caption: { ...text, minLength: 1, maxLength: TRAINING_GUIDE_CAPTION_LIMIT }
 }) };
-const learningPollingTask = { type: "object", required: false, schema: createSchema({
-  attemptId: { ...learningAttemptId, required: true },
-  projectSlug: { ...text, required: true, maxLength: 128 },
-  sessionId: { ...text, required: true, minLength: 1, maxLength: 128 },
-  conversationId: { ...text, required: true, minLength: 1, maxLength: 256 },
-  learningClientId: presentationClientId,
-  topicHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
-  lessonHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
-  reference: { ...trainingQuestionField, required: false }
-}) };
 const focusSchema = createSchema({
   ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
   integrationId,
@@ -73,7 +61,6 @@ const navigationOutput = {
     ok: { type: "boolean", required: true },
     error: { ...text, maxLength: 2000 },
     focus: focusField,
-    presentation: presentationReceipt,
     guide: guideReceipt
   })
 };
@@ -87,37 +74,7 @@ const watchFields = {
   question: { ...text, maxLength: 1000, required: true }, once: { type: "boolean", required: false }
 };
 const watchSchema = createSchema({ ...watchFields, source: text, status: { ...text, required: true }, error: { ...text, maxLength: 512 },
-  availability: { type: "string", required: false, enum: ["active", "paused", "unavailable"] },
-  learningTask: { type: "object", additionalProperties: true, required: false },
-  latestObservation: { type: "object", additionalProperties: true, required: false },
-  lastGuidance: { type: "object", additionalProperties: true, required: false },
-  assessmentEvidence: { type: "object", additionalProperties: true, required: false } });
-const learningWatchFields = {
-  watchId: clientId, browserClientId: { ...clientId, required: false }, learningClientId: { ...clientId, required: false },
-  attemptId: { ...text, required: false, maxLength: 36 },
-  targetProjectSlug: { ...text, required: false, maxLength: 128 },
-  sessionId: { ...text, required: false, minLength: 1, maxLength: 128 },
-  conversationId: { ...text, required: false, minLength: 1, maxLength: 256 },
-  topicHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
-  lessonHash: { ...text, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
-  reference: trainingQuestionField,
-  criterion: { ...text, maxLength: 16000 }
-};
-const learningObservationFields = {
-  watchId: clientId, learningClientId: clientId, eventId: clientId,
-  outcome: { type: "string", required: false, enum: ["confirmed", "failed"] },
-  failure: { type: "string", required: false,
-    enum: ["workspace-settle-failed", "exercise-observation-failed", ...trainingAppRequestFailures] },
-  control: { type: "string", required: true,
-    enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response", "view-change", "app-request"] },
-  // Only with app-request: a failed in-app request's method, declared path or "other", and status.
-  request: { type: "object", required: false, schema: trainingAppRequestSchema },
-  workspace: { type: "object", required: true, schema: createSchema({
-    projectSlug: { ...text, required: true, maxLength: 128 },
-    sessionId: { ...text, required: true, maxLength: 128 }, pane: { ...text, required: true, maxLength: 64 },
-    ready: { type: "boolean", required: true }, learningView: { type: "string", required: true, enum: ["workspace", "learning"] }
-  }) }
-};
+ });
 const watchOutput = { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
   watch: { type: "object", schema: watchSchema, required: false },
   watches: { type: "array", items: watchSchema, required: false } }) };
@@ -141,10 +98,6 @@ const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "
   assignment: { type: "object", schema: assignmentSchema, required: false },
   assignments: { type: "array", items: assignmentSchema, required: false } }) };
 
-// The transport carries only the issued reference. Training validates its
-// provenance and supplies the server-owned snapshot before native admission.
-
-
 function createColleagueActions(colleague, usage = createColleagueUsageKnowledge()) {
   const definition = (name, fields, execute, assistant, projectScoped = false) => withVibe64ActionContext({
     id: `vibe64.colleague.${name}`, version: 1,
@@ -154,9 +107,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     ...(assistant ? { extensions: { assistant } } : {}),
     execute
   }, { projectScoped });
-  const nativeObservation = definition("training.observe-native", trainingObservationFields, (input, context) => colleague.observeTrainingPractical(input, context), { exclude: true });
   return [
-    { ...nativeObservation, channels: ["api"], surfaces: ["app"], idempotency: "domain_native" },
     definition("usage.topics.read", {
       query: { ...text, maxLength: 200 },
       offset: { type: "integer", min: 0, required: false },
@@ -191,10 +142,10 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       conversationId: clientId, beforeTurnId: { ...clientId, required: false },
       limit: { type: "integer", min: 1, max: 100, required: false }
     }, (input, context) => colleague.readHistoryPage(input, context)),
-    definition("focus.update", { clientId, focus: { ...focusField, required: true }, learningTask: learningPollingTask },
+    definition("focus.update", { clientId, focus: { ...focusField, required: true } },
       (input, context, deps) => colleague.focus(input, context, deps)),
     definition("message.send", {
-      clientId, focus: focusField, trainingQuestion: trainingQuestionField, expectedConversationId: { ...clientId, required: false },
+      clientId, focus: focusField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
@@ -202,7 +153,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     definition("turn.stop", { expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.stop(input, context)),
     definition("model.select", { ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.selectModel(input, context)),
     definition("watches.read", {}, (input, context) => colleague.listWatches(input, context), {
-      description: "List your conversation and Learning watches. For a Learning watch, report its exact goal and target, active/paused/unavailable state, latest valid observation with observedAt freshness, last delivered guidance, and saved assessment outcome when present. An observation or guidance receipt is not assessment evidence and does not prove the requested outcome. Paused reads need attention; silence does not prove an agent or learner is blocked.", output: watchOutput
+      description: "List your conversation watches with their exact target, condition and active/paused state. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
     }),
     definition("assignments.read", { assignmentId: { ...clientId, required: false } }, (input, context) => colleague.assignment("read", input, context), {
       alwaysAvailable: true,
@@ -263,25 +214,17 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       description: "Watch a Main or temporary conversation using code, without repeated model calls. Supply exact project/session IDs and optional temporary conversationId, a unique watchId (reuse it on retry), and the user's question. reply reports the next completed visible response, including commentary while a goal continues; a response may be progress rather than the requested answer, so report its actual meaning and continuing work honestly. finished reports work ending; attention reports explicit failures, interruptions or structured input requests, not inferred inactivity. Partial tokens, thinking and tool output do not count as replies. All conditions also report failures. once defaults to true. If a response already exists, report it immediately. Watches only authorize reporting, never further coding or stopping agents. Assignment follow-through uses its own retained watches and completion guards.", output: watchOutput
     }, true),
     definition("watch.cancel", { watchId: clientId }, (input, context) => colleague.cancelWatch(input, context), {
-      description: "Stop the exact watch by its watchId. For Learning this is the same Stop operation as the visible watch controls. It stops observation and pending guidance only; it does not stop the application, Main teacher, lesson or coding agent.", output: watchOutput
+      description: "Stop the exact watch by its watchId. It stops observation and pending notifications only; it does not stop the application or coding agent.", output: watchOutput
     }),
     definition("watch.pause", { watchId: clientId }, (input, context) => colleague.pauseWatch(input, context), {
-      description: "Pause the exact active watch without losing its last observation cursor. For Learning this is the same Pause operation as the visible watch controls.", output: watchOutput
+      description: "Pause the exact active watch without losing its last observation cursor.", output: watchOutput
     }),
-    definition("watch.resume", { watchId: clientId, browserClientId: { ...clientId, required: false },
-      learningClientId: { ...clientId, required: false } }, (input, context) => colleague.resumeWatch(input, context), {
-      description: "Resume the exact paused watch, checking current access and reconciling changes since its last observation. A Learning watch resumes only from its exact current task in this connected browser; omit browser-only IDs when acting for the person.", output: watchOutput
+    definition("watch.resume", { watchId: clientId }, (input, context) => colleague.resumeWatch(input, context), {
+      description: "Resume the exact paused watch, checking current access and reconciling changes since its last observation.", output: watchOutput
     }),
-    definition("learning-watch.start", learningWatchFields, (input, context) => colleague.startLearningWatch({ ...input,
-      projectSlug: input.targetProjectSlug }, context), {
-      description: "Start watching the exact Learning task currently open in this connected browser, using the same watch record and controls as Start polling in the UI. Use a unique watchId and, when there is no delivered lesson question, one bounded criterion copied from the person's requested goal. Omit browser and target identity fields: the server derives them from the current trusted Learning binding and revalidates the saved attempt. Start only for a direct request such as ‘Watch me while I do this’ or an accepted offer; a how-to question only needs an explanation. This grants observation and bounded guidance only, never source/Git/publication, paid-provider, account or unrelated mutation authority. Use watches.read for truthful status and watch.pause/watch.resume/watch.cancel for the same visible lifecycle.",
-      output: watchOutput
-    }),
-    definition("learning-watch.observe", learningObservationFields, (input, context) => colleague.observeLearningTask(input, context), { exclude: true }),
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
-      error: { ...text, maxLength: 2000 }, focus: focusField, presentation: presentationReceipt,
-      cue: presentationCueReceipt, guide: guideReceipt
+      error: { ...text, maxLength: 2000 }, focus: focusField, guide: guideReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       learningMode, learningView, learningContent, learningTargetAttemptId, guide: guideRequest,
@@ -302,16 +245,13 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
-      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. learningOpen reports whether the Learning environment is open above the app; learningSurface is courses or lesson while it is open; learningAttemptId and learningStepId identify the person's current lesson step even while Learning is minimised. Read that step with lesson.read before teaching it. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request. Optional trainingPracticalProgress reports accepted native steps for the same delivered question: its collecting phase, acceptedSteps and lastControl are coaching context, never an observation or assessment pass. Continue the next step without replacing the question or repeating accepted steps. Workspace navigation is project selection, then revealing the exact reserved session’s Main chat through its session tab or Show chat, then Preview. Optional trainingPractical reports only a completed current native learner observation for this connection's delivered question, with its exact observationId/reference and declared producer/operation, saved assistance/origin and optional check outcome. It is not an assessment pass. Use these facts to explain saved progress and direct the learner to the saved Learning Main teacher for practical evaluation with their accepted explanation. Colleague cannot prepare questions or grade answers. Absent completed facts do not erase accepted collecting steps; never invent evidence. If both projections are absent, inspect saved readiness and ask Main to check the current question before recommending a repeated native task.",
-      output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true },
-        trainingPracticalProgress: trainingPracticalProgressField,
-        trainingPractical: trainingPracticalField
-      }), mode: "replace" }
+      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. learningOpen reports whether the Learning environment is open above the app; learningSurface is courses or lesson while it is open; learningAttemptId and learningStepId identify the person's current lesson step even while Learning is minimised. Read that step with lesson.read before teaching it. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request.",
+      output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
     })
   ];
 }
 
-const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField, trainingQuestion: trainingQuestionField });
+const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });
 const colleagueConversationSelectionSchema = createSchema(modelSelectionFields);
 
 export { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema };

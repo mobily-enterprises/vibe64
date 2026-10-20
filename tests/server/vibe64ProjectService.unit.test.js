@@ -2400,8 +2400,7 @@ test("trusted source-bearing Learning Project runtime keeps original physical ro
     let runtime;
     let captured;
     await service.runInProjectContext(slug, () => core.runWithHostedTrainingProjectScope({ actor, training, access: "write" },
-      () => runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope: scope, vibe64User: actor,
-        learningInstructions: () => "Exact installed practice instructions" }, async () => {
+      () => runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope: scope, vibe64User: actor }, async () => {
         const current = currentProjectRequestContext();
         runtime = await service.createRuntime({ inspectSource: false });
         assert.deepEqual(runtime.learningScope, scope);

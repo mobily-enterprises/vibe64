@@ -21,29 +21,12 @@ watch without stopping the agent. Close this view to return to the same chat and
 draft. On phone, use **Close watches and assignments** in its header. Ask
 Colleague to list, cancel or resume watches if you prefer.
 
-In an active Learning task, “Watch me while I do this” starts the same polling
-watch shown in that dialog; asking how it works does not start anything. You can
-ask Colleague to read, pause, resume or stop it. Learning status reports the exact
-goal/target, active/paused/unavailable state, latest valid observation and time,
-last delivered-help receipt, and any saved assessment outcome. Observation and
-help are not themselves proof of completion. When Main points you to a place
-(a ring and caption on the real control), the view switch you then make yourself,
-such as Preview to **Dashboard → Database** or **Dashboard → Files**, is observed as
-your step; a database sub-view switch (Overview/ERD/Data) is not yet observed
-separately. Besides Vibe64 view and control
-steps, the watch notices a failed data-changing request that your own click or
-submit in the visible practice-app **Preview** started (method, a lesson-declared
-path or `other`, status and failure code only—never typed text, bodies, headers
-or queries); Main gets at most one hint for it per 30 seconds. A separate Learning watcher checks
-only those validated facts; Colleague manages its controls, while Main receives
-bounded updates and never checks your activity itself. Each observation is
-delivered to Main once. Switching between the practice project's **Preview** or
-**Dashboard** and the graduation-cap **Learning** option, and between project panes such as
-**Preview**, **Dashboard → Database** and **Dashboard → Files**, is observed; a
-lesson without a practice project, such as Lesson 0, can be watched too. Stop
-removes the watch without stopping Main, the lesson or the app, and polling grants
-no unrelated mutation permission. For the eye dialog's controls, see
-[Watching a lesson step by step](learning-lesson-watch.md).
+Colleague no longer watches lessons: the Learning watch (“Watch me while I do
+this”) was retired with the Main lesson teacher. In the Learning environment
+your own step actions (an answer, **Done**, or an automatic check from your App
+press or a code step's **Check**) record step results directly; see
+[The Learning environment (L)](learning-environment.md). Earlier Learning
+watches no longer appear here.
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.

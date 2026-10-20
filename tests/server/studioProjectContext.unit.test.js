@@ -1937,18 +1937,14 @@ test("original nested practice Project resolver retains immutable Learning facts
     const actor = { uid: 42, username: "learner" };
     const slug = `training-${training.attemptId.replaceAll("-", "")}`;
     const learningScope = Object.freeze({ learnerId: "42", attemptId: training.attemptId, pin: training.pin, noExercise: false });
-    const learningInstructions = () => "Exact pinned practice instructions";
-    const learningTeaching = Object.freeze({ bindConversation() {} });
     let captured;
     let expired;
     await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
       await core.createWorkspaceProjectRecord({ slug, training });
-      await runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope, learningInstructions, learningTeaching },
+      await runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope },
         () => project.runInProjectContext(slug, async () => {
           const current = currentProjectRequestContext();
           assert.equal(current.learningScope, learningScope);
-          assert.equal(current.learningInstructions, learningInstructions);
-          assert.equal(current.learningTeaching, learningTeaching);
           const runtime = await project.createRuntime({ inspectSource: false });
           assert.deepEqual(runtime.learningScope, learningScope);
           assert.equal(runtime.projectContextRoot, current.targetRoot);
@@ -1961,7 +1957,6 @@ test("original nested practice Project resolver retains immutable Learning facts
       { code: "vibe64_practice_scope_expired" });
     await runWithProjectRequestContext(captured, () => project.runInProjectContext(slug, async () => {
       assert.equal(currentProjectRequestContext().learningScope, learningScope);
-      assert.equal(currentProjectRequestContext().learningInstructions, learningInstructions);
       assert.equal(core.currentPracticeProjectScope().access, "control");
       assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
       assert.deepEqual((await project.createRuntime({ inspectSource: false })).learningScope, learningScope);

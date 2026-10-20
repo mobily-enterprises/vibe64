@@ -112,18 +112,13 @@ function createCodexSessionProviderHost(host) {
             // the provider's construction options here would restore an old prompt
             // during an unrelated control check after their catalogue changes.
             if (options.assistantScope) return undefined;
-            if (await learningSessionExecutionRoot(learningRuntime, sessionId)) {
-              return learningRuntime.getLearningInstructions(sessionId);
-            }
+            // A source-less learning root has no project guidance to read.
+            if (await learningSessionExecutionRoot(learningRuntime, sessionId)) return undefined;
             const registry = await vibe64HostContextRegistry(runtimeRoot);
             const binding = params.hostContext
               ? { promptContext: params.hostContext, workdir: params.cwd }
               : registry.get(threadId);
-            const instructions = binding ? await vibe64ConversationInstructions(binding) : undefined;
-            if (learningRuntime?.learningScope?.noExercise === false) {
-              return [instructions, await learningRuntime.getLearningInstructions(sessionId)].filter(Boolean).join("\n\n");
-            }
-            return instructions;
+            return binding ? await vibe64ConversationInstructions(binding) : undefined;
           },
           bindThreadContext: async (threadId, hostContext, params) => {
             if (await learningSessionExecutionRoot(learningRuntime, sessionId)) return;

@@ -78,29 +78,13 @@ try it; it becomes startable when released** and no start button, and the server
 refuses their start. Drafts and disabled courses stay unavailable to everyone.
 Once released, everyone gets **Start**.
 
-Ending a lesson stops its lesson conversation's running work, as **Stop** does,
-and keeps the conversation and history; it does not archive or delete anything.
+Ending a lesson keeps its history; it does not archive or delete anything.
 It does not stop or close the practice project: that project and its session
 are ordinary and stay yours. An ended lesson cannot be resumed; ask Colleague to
 continue it in a fresh exercise (see [Lesson history and resume](learning-history.md)).
 
-When Learning first creates its teacher session, it uses the first available AI
-workflow shown by the normal session picker, then checks your current Junior
-model and account access. It does not assume OpenCode is configured. You can
-change the teacher's AI through the normal chat model controls afterward. If no
-workflow is available, connect/configure one in **AI Accounts → Model routing**,
-then resume the same saved lesson or author trial; do not start a replacement.
-
-The Main teacher uses the saved lesson's exact instructions with Codex, Claude
-or OpenCode; switching AI does not turn the lesson into an ordinary coding task.
-A practice project's own session carries no lesson instructions: it is an
-ordinary coding session. The teacher should give the declared learner task and wait
-for your own answer or action. It must not ask you to reconstruct the installed
-lesson, invent an observation or count its own demonstration as your pass.
-
-After a confirmed active Start or Resume, the existing Main conversation is
-opened and selected only if its loaded row matches your learner and attempt.
-Learning uses the same header as Working: the session row on the left, the
+The lesson Main teacher conversation has been retired: Colleague teaches every
+lesson from its steps in the Learning environment. Learning uses the same header as Working: the session row on the left, the
 collapse-chat arrow, the **Preview** | **Dashboard** tab group and, while
 Preview is shown, the same Preview toolbar (address, reload, pause, copy and
 status). Learning adds exactly one thing: a graduation-cap option at the end of
@@ -109,7 +93,7 @@ courses and lesson"). Selecting the graduation-cap button beside Preview and
 Dashboard shows the Learning panes (**Courses**, **Check my code**, the lesson
 and its history); Preview and Dashboard then appear unselected, exactly as one
 option of three. Selecting **Preview** or **Dashboard** deselects the cap. The
-collapse-chat arrow hides or shows the teacher chat exactly as it hides or shows
+collapse-chat arrow hides or shows the chat exactly as it hides or shows
 the Working chat. A practice lesson's project is an ordinary project of yours
 and its session is an ordinary session of that project: open it with **Open
 practice project** in Learning (or from **Practice** in the project list). Its
@@ -118,7 +102,7 @@ chat, **Preview** and every **Dashboard** section (including **Files**, **Env**,
 ordinary ones, with full access, during and after the lesson; see
 [Practice projects in standalone lessons](learning-practice-projects.md). Moving between Dashboard sections keeps Learning
 on. Switching between Preview, Dashboard and Learning keeps Learning mode on and
-retains the same selected teacher session; it does not switch to your last
+retains the same selected session; it does not switch to your last
 Working session. The graduation-cap **Learning** option shows the **Courses** | **Presentation**
 switch. Returning to it keeps the selected Courses or
 Presentation content visible without requiring another click. A supervised
@@ -126,7 +110,7 @@ project opens on its Preview by default.
 A source-less lesson disables **Preview** and **Dashboard** (their tooltip says
 the lesson has no project workspace) and keeps the graduation cap selected,
 instead of showing a remembered Working project. On phones and tablets Learning
-behaves like Working: the teacher chat and the right-hand pane are shown one at
+behaves like Working: the chat and the right-hand pane are shown one at
 a time; the arrow button or a horizontal swipe switches between them, and the
 header's next-pane button (shown while the right-hand pane is open) steps through
 **Dashboard**, **Learning** and **Preview**. On the projectless **Courses** page,
@@ -143,15 +127,10 @@ This does not restart stopped Working agents or outputs. Explicit project Close
 or deletion still leaves the project view; a missing runtime or revoked access
 is not treated as ordinary inactivity.
 
-The selected Learning conversation prepares the configured agent through the same
-Main readiness flow as Working. Preparation retains that saved conversation and
-checks your current access; it does not send your draft or begin teaching. An
-ended or inaccessible attempt cannot start agent preparation.
-
 While a start is in progress, the Courses pane says **Starting the selected
 lesson and preparing its practice project. Its teacher conversation opens when
 this finishes.** Every **Start**, **Start next lesson** and **Start lesson**
-button stays disabled until the request settles; the teacher conversation then
+button stays disabled until the request settles; the lesson then
 opens by itself. A practice project's Workspace setup can continue afterwards;
 the lesson becomes ready by itself when setup succeeds, so you do not need
 **Resume saved lesson** after a normal start (see
@@ -173,7 +152,7 @@ late result cannot open a new conversation or select the new view. Local request
 errors are cleared when their view is retired. Colleague can explain this flow
 and offer existing actions; a how-to question alone does not authorize execution.
 Private provider key entry remains a human-only step. A diagram belongs to its
-original signed-in learner and Main conversation; changing accounts retires its
+original signed-in learner; changing accounts retires its
 display and pending reads rather than transferring it to the next person.
 
 In a practice project, setup repair is ordinary project work in its session:
@@ -181,12 +160,10 @@ ask that session's agent, or use the ordinary Workspace setup recovery. A repair
 or successful setup is not a learner answer or passed assessment. Colleague can
 explain and coordinate this recovery but has no source-editing or shell access.
 
-After Main finishes a Learning turn, **Courses** refreshes the saved progress
-for that same lesson. An owner’s author trial remains separate from ordinary
-lesson progress. If updates were disconnected, use **Refresh courses** to read
-the current saved results before choosing Start or Resume. The saved checkpoint
-question may already have been assessed; it is not a new unanswered question.
+After a step result is saved, **Courses** refreshes the saved progress for that
+same lesson. An owner’s author trial remains separate from ordinary lesson
+progress. If updates were disconnected, use **Refresh courses** to read the
+current saved results before choosing Start or Resume.
 
-Related topics: [Answering a code question in a lesson](learning-code-questions.md),
-[Watching a lesson step by step](learning-lesson-watch.md) and
-[Lesson diagrams and voice](learning-diagrams-and-voice.md).
+Related topics: [Answering a code question in a lesson](learning-code-questions.md)
+and [The Learning environment (L)](learning-environment.md).

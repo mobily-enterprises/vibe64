@@ -12,8 +12,8 @@ those same owners.
 Internal assessment and resume writes retain pinned evidence and derive lesson
 completion. The shared preparation coordinator composes these original state/content
 owners with existing project, repository, session and Workspace setup facilities.
-A standalone learning host and the Main Learning-mode teacher remain unfinished;
-the module alone does not provide infrastructure or prove a delivered lesson.
+Colleague teaches from lesson steps; the Main Learning-mode teacher was retired.
+The module alone does not provide infrastructure or prove a delivered lesson.
 
 ## Sources
 
@@ -113,8 +113,9 @@ push, remote release, installation or course enabling.
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.
 Optional `appRoutes` (exercise lessons only, ≤16 unique `{method,path}` with
-literal or `:id` segments) are projected into the teaching brief and polling task
-so a Learning watch can label a failed in-app request; they never grade.
+literal or `:id` segments) are validated with the lesson; the teaching brief and
+Learning watch that labelled failed in-app requests with them were retired, so no
+current reader consumes them. They never grade.
 A `code` producer also requires a bundled exercise, a `kind:"code"` check and
 1–8 unique, safe exercise-relative `files` that are bundled exercise files; only
 code evidence may name files or a code check, and `timeoutSeconds` (1–60) is
@@ -398,7 +399,7 @@ The original coordinator and its original twenty-one controlled-owner unit cases
 move together without changing bodies or assertions. Hosts retain their resource
 bindings, concrete repository composition and actual lifecycle integration
 proofs. The shared module and unit fixtures alone do not prove standalone
-provisioning, hosted native execution or Main teacher/browser acceptance.
+provisioning, hosted native execution or browser acceptance.
 
 ## Durable assessment and lesson resume
 
@@ -412,7 +413,7 @@ validates private records without installed content for backup inspection.
 Staged restore instead uses the content-aware read against the live exact pin.
 The explicit read-only `readState({actor,includeCompletion:true})` verifies the
 saved pins of every retained attempt and reuses the required-pass calculation
-for teaching briefs; it returns `completion:null` without an active attempt and
+for completion; it returns `completion:null` without an active attempt and
 never repairs a summary. Historical pins and descriptor semantics remain checked
 when no lesson is active, including staged offline recovery.
 Content-aware reads/resume and writes validate saved receipt IDs, kinds, rubrics
@@ -420,7 +421,9 @@ and practical producer/operation/check contracts against that descriptor, before
 summary reconciliation. Historical receipts do not depend on today's pending
 question or preparation phase.
 
-A resume checkpoint retains teaching stage, pending question identity/text,
+Since the Main teacher was retired (see `teaching.md`), no host operation calls
+`saveLessonResume` or `recordAssessment`; they and their validation remain for
+retained version 1 records. A resume checkpoint retains teaching stage, pending question identity/text,
 bounded declared visual semantic snapshots and a summary. Repeating its current
 request ID with identical content is idempotent; a conflicting payload is refused.
 An assessment submission retains actual admitted learner answer text/message and
@@ -497,13 +500,10 @@ course pins for that learner. Topic-only changes do not invalidate an unchanged
 lesson. Different lesson content keeps historical evidence but contributes no pass
 to the current lesson. This read projection never rewrites pins or copies receipts
 into a new attempt; existing exact installed-pin validation remains authoritative.
-The original teaching brief and shared action projections identify historical
-passes by their original attempt/submission IDs and native provenance, separately
-from current submissions. `learning.read` includes ended history; `lesson.end`
-uses the supplied original host retirement owner, then stops that attempt's
-lesson session work through the original session Stop owner (see `teaching.md`),
-and does not dispose of the exercise. The teacher must distinguish historical provenance from new practical
-observations.
+Saved history keeps historical passes with their original attempt/submission IDs
+and native provenance, separately from current submissions. `learning.read`
+includes ended history; `lesson.end` uses the supplied original host retirement
+owner, stops no agent work and does not dispose of the exercise (see `teaching.md`).
 
 With no active attempt, `active-lesson.json` stores the strict versioned object
 `{schemaVersion:1,learnerId,progressRevision,attemptId:null}`. The API still returns

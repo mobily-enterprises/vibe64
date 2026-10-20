@@ -350,27 +350,3 @@ test("temporary AI creation and turns use the authenticated Vibe64 actor", async
   });
 });
 
-test("lesson-scoped terminal registration keeps only the source-less agent session route and no sockets", async () => {
-  // Learning v2: a practice project's output opens through its ordinary
-  // project routes, so the lesson URLs keep no output routes or socket.
-  const calls = [];
-  const service = {};
-  const app = terminalControlRouteApp(service);
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  registerTerminalRoutes(app.http, { fastify: app.fastify, learningScoped: true, routeSurface: "app", terminals: service });
-  const base = "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId";
-  assert.deepEqual(app.registeredRoutes.map(route => `${route.method} ${route.path}`), [`POST ${base}/agent-session`]);
-  assert.equal(app.websocketRoutes.length, 0);
-  await withLocalRequestBypass(async () => {
-    const route = findRegisteredRoute(app, { method: "POST", path: `${base}/agent-session` });
-    const request = { params: { learningAttemptId: attemptId, sessionId: "saved-initial" },
-      input: { body: { learningAttemptId: "caller-attempt", vibe64User: { username: "invented" } } },
-      executeAction(action) { calls.push(action); return { ok: true }; } };
-    await route.handler(request, testReply());
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].actionId, "vibe64.terminals.agent-session.prepare");
-    assert.equal(calls[0].input.learningAttemptId, attemptId, "the URL attempt, never the body's");
-    assert.equal(Object.hasOwn(calls[0].input, "vibe64User"), false);
-  });
-});
-

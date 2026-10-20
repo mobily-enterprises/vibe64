@@ -21,12 +21,10 @@ button/check correlation and declared SVG/controller protocol unless the person'
 request explicitly changes that content. New lesson content may be authored as
 a draft using the existing template below; a draft is not another learner release.
 
-For the revised Learning flow, Main teaches the lesson and Colleague stays the
-general supervisor. Keep the introduction’s original Colleague leave/restore task:
-the learner uses that real drawer and returns to its retained task while the Main
-lesson stays saved. Hiding Main does not replace that practical. Review genuine
-workspace, application and diagram evidence before calling the candidate ready;
-content validation does not supply missing teaching controls. Changed teaching
+Colleague teaches every lesson from its steps in the Learning environment; the
+separate Main lesson teacher has been retired. Review genuine workspace,
+application and diagram evidence before calling the candidate ready; content
+validation does not supply missing teaching controls. Changed teaching
 text needs a new immutable topic/course pin, keeping earlier learners’ versions.
 
 ## Delegate and review
@@ -179,7 +177,7 @@ own snapshots, and for disabling a release.
 In supported hosted installations, ask Colleague to admit your exact clean
 committed snapshot from the authorized authoring session. Then turn on Learning
 mode in that project view and use **Resume author trial** under **Courses** to
-open its same Main teacher. This saved trial has isolated progress; it is not an
+reopen it. This saved trial has isolated progress; it is not an
 enabled learner course. Ordinary **Start** still requires a published lesson in
 an enabled release. Local validation/bundling alone admits no trial. Do not change
 a draft's status to bypass that guard or report a trial as published progress.

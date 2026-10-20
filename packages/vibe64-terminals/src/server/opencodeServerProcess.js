@@ -27,7 +27,7 @@ import { normalizePlainObject as record, openCodeError, openCodeRuntimeFailure }
 import {
   OPENCODE_EXPECTED_VERSION, OPENCODE_HOST, OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess as startOpenCodeServer, openCodeProcessEnvironment, openCodeModel,
-  openCodeConversationAgents, openCodeConversationAgent, openCodeApplicationToolSchemas,
+  openCodeConversationAgents, openCodeApplicationToolSchemas,
   readOpenCodeCatalog as readNativeOpenCodeCatalog,
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
@@ -277,16 +277,6 @@ function createOpenCodeHostPreparation({
     }), context.selection.modelProviderId);
     const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
     const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
-    const learningTeaching = Boolean(context.runtime.learningScope && context.runtime.learningTeaching);
-    const conversation = learningTeaching && options.applicationTools
-      ? { systemPrompt: await context.runtime.getLearningInstructions(context.sessionId), nativeTools: false,
-        tools: options.applicationTools } : null;
-    // The original owner may already hold this shared-process target. Refresh
-    // its exact private binding before Send rather than waiting for acquisition.
-    if (conversation && sessionEnvironments.has(context.key)) {
-      sessionEnvironments.get(context.key).conversation = conversation;
-      await writeSessionEnvironmentRegistry();
-    }
     return { key: context.key, connection, failure: openCodeRuntimeFailure, async configure() {
       let helperModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
@@ -305,14 +295,11 @@ function createOpenCodeHostPreparation({
       });
       sessionEnvironments.set(context.key, {
         helperModelId,
-        ...(conversation ? { conversation } : {}),
         modelProviderId: context.selection.modelProviderId,
         env: commands.env,
         pathEntries: commands.shimDirs,
         projectContextRoot,
-        promptContext: learningTeaching ? { scope: "learning",
-          instructions: await context.runtime.getLearningInstructions(context.sessionId) }
-          : promptContext("main", context.assistantScope),
+        promptContext: promptContext("main", context.assistantScope),
         sessionId: context.sessionId,
         upstreamSessionId: storedUpstreamSessionId(context),
         workdir: context.workdir
@@ -337,10 +324,9 @@ function createOpenCodeHostPreparation({
     } };
   }
 
-  function upstreamSessionOptions(context, options = {}) {
+  function upstreamSessionOptions(context) {
     return {
-      selection: context.runtime?.learningScope && context.runtime.learningTeaching && options.applicationTools
-        ? { ...context.selection, agentId: openCodeConversationAgent({ tools: true }) } : context.selection,
+      selection: context.selection,
       model: openCodeModel(context.selection), workdir: context.workdir,
       invalidIdentity: () => openCodeError("vibe64_opencode_session_id_invalid", "OpenCode did not return a native conversation ID."),
       identity: {

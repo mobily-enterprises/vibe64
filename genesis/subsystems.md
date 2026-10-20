@@ -209,14 +209,11 @@ The existing project layout owner supplies actual pane visibility and reveal
 operations; the integration owner refreshes status through its current command.
 Code subscribes to session events and reconciles watched conversations through
 their existing authorized actions. Colleague owns that ordinary conversation and
-assignment watch scheduler. It also exposes the Learning watch controls and hosts
-their persisted records, but delegates Learning observation, lifecycle, cursor,
-deduplication and bounded delivery to Training's separate watcher. Shared Core
-predicates normalize watch observations and cursors without knowing either host.
-Training remains the fresh task/pin/progress and trusted-observation authority and
-delivers accepted evidence to the existing Learning Main teacher, which still owns
-guidance and assessment and never polls learner behavior. Browser and presentation
-IDs are transient and must be rebound through a fresh access check after restart;
+assignment watch scheduler. Learning watches were retired with the Main lesson
+teacher; the numbered practice-sessions upgrade removes their saved records.
+Colleague teaches lessons from their steps through Training's lesson and step
+operations and its own acknowledged navigation and guides. Shared Core predicates
+normalize watch observations and cursors. Browser and navigation IDs are transient and must be rebound through a fresh access check after restart;
 queued or running notifications are suppressed when the watch is paused, stopped
 or leaves its exact target.
 It consumes existing native conversation, the JSKIT instruction lifecycle runtime,
@@ -256,113 +253,38 @@ Start/Resume/Open coordination; server owners retain admission and progress.
 The same original Panel retains Learning Main and Preview views; the host supplies
 actual viewer, layout and selected saved-session context. Live learner acceptance
 remains a separate gate.
-Owns the original canonical delivered-question and completed-practical proof
-readers plus delivery promotion, staging, accepted-answer correlation and
-delivered-question capture, originally reused by Colleague and now composed by
-the admitted Main teacher. The shared teacher role set excludes
-these teaching effects from Colleague's common discovery/contract/execute policy;
-the original action boundaries also authenticate and require Main authority.
-Colleague retains lifecycle, progress and authoring coordination. Its private
-compatibility producer remains source-preserved until the corresponding Main
-producer and original assertions are proved; it grants no supervisor tool access.
-Owns the original native practical transaction, strict gesture/reference schemas
-and bounded partial/completed facts moved once from Colleague, which immediately
-reuses them with its unchanged connection and admission lifetime. Main uses the
-same collector with its saved practice authority, current delivered question and
-accepted browser identity; assessment retains the original Helper and sole
-learner writer. Training also owns the original browser person-event collector and workspace
-settler, moved once with immediate Colleague/Online consumer reuse. The selected
-Main supplies its exact delivered question and captured saved practice target;
-hosts supply real drawer/view and actual local or authenticated actor facts. Native question-to-
-gesture-to-answer, acoustic and whole-lesson acceptance remain open.
-For every selected Learning Main, including source-less lessons, Training also
-owns the exact polling-task descriptor and validation of its attempt, immutable
-pin, delivered question or bounded criterion, project/session and current progress.
-Its separate watcher owns the active/paused/unavailable lifecycle, timer, stable
-cursor, idempotent event identities and one pending guidance receipt. It emits only
-allowlisted settled control/view facts through the existing gesture owner, then
-revalidates and notifies the exact Main teacher. Colleague starts and controls the
-watch through its existing UI and stores the record, but neither its model nor Main
-polls learner behavior. Source-less attempts keep their actual saved session
-identity. Training defers delivery while Main is busy and sends application-origin
-context only; Colleague's model is not awakened.
-Duplicate evidence, inactivity, Pause, Stop, target departure and restart cannot
-create repeated guidance. Existing assessment/Helper/progress owners alone decide
-and persist a pass.
-Owns the original ephemeral browser presentation transaction and cue/receipt
-predicates, immediately consumed by Colleague using its unchanged connection
-objects. One original pending slot, deadlines, output binding and terminal ACK
-rules are shared; consumers retain maps, fresh authority, native turn admission,
-general navigation grammar and Stop/focus/replacement call sites. The shared
-client dispatch returns the original player promise and projects its bounded
-receipt only after the host's existing fresh actor/view/handle fence. No new
-Main client identity, persisted format or player is introduced. The same
-transaction now validates exact Learning mode/view/content/attempt receipts.
-Colleague extends its existing navigation action, while Training owns one
-Main-only bound view action for Workspace Preview, Workspace ERD and retained
-Learning content. Both consume the host's single browser navigator; these
-display receipts are demonstrations and cannot satisfy learner evidence.
-Owns bounded durable assessment receipts and lesson resume state, checked against
-the installed pin, plus a read-only teaching brief without executable assets or
-source paths. Owns internal pinned-rubric grading through the existing retained
-tool-free Helper; admission, serialized lifetime and progress writes stay with
-their original owners. The answer-assessment action requires Main's accepted
-native message and the original retained Helper; it cannot accept model-supplied
-answers or outcomes. Internal
-declared exercise checks reuse the original project/App/managed-command owners and
-confirm server observations, not learner passes. Provides shared fresh-actor
-course/read/start/resume and current interactive question-preparation actions; a host
-composes the shared preparation coordinator with the original project/repository,
-session and Workspace setup facilities. Without an exercise provisioner,
-exercise start/resume reports unavailable before practice effects.
-This subsystem owns start/resume/end/retained-pin continuation policy while hosts
-supply concrete resources and provisioning. Reserved
-no-exercise quizzes reuse these pins and answer owners without project effects;
-practical and visual operations retain their preparation gates. Its read-only
-learning-scope owners derive the actual learner, saved attempt and exact installed
-pin without repair. No-exercise attempts use a private server namespace; explicit
-configured practice admission reuses the saved actual Project and initial session,
-including its original source, Git and Workspace setup owners. The same internal
-learning-session coordinator derives fresh authenticated authority and pinned
-teaching instructions. Preparation reuses its already-held original barrier;
-subsequent effects reenter the original saved-attempt admission. Captured
-observation/control cannot admit new work or change project selection. Runtime
-construction, immutable session binding and native providers remain with their
-existing owners; no historical session is silently adopted or replaced. The
+Owns the shared fresh-actor lesson operations (course list/create/install,
+learning read, start, resume, end and retained-pin continuation) and the step
+operations (lesson read, step observe/check/answer/done, reader position and
+practice deletion). A step result is recorded only for the learner's own action;
+a check Colleague runs reports its finding and saves nothing. Colleague teaches
+every lesson from its steps; the separate Main lesson teacher, its teaching brief,
+question preparation and delivery proof, answer/practical grading Helper,
+conversation assessment, Learning watches and polling, lesson presentation and
+cues, visual checkpoints and lesson-scoped routes were retired in Learning v2
+phase 2. Owns bounded durable assessment receipts and lesson resume state from
+version 1 lessons, checked against the installed pin and kept readable; no host
+operation writes them any more. Internal declared exercise checks reuse the
+original project/App/managed-command owners and confirm server observations, not
+learner passes. A host composes the shared preparation coordinator with the
+original project/repository, session and Workspace setup facilities. Without an
+exercise provisioner, exercise start/resume reports unavailable before practice
+effects. This subsystem owns start/resume/end/retained-pin continuation policy
+while hosts supply concrete resources and provisioning; ending a lesson stops no
+agent work, because a practice project and its sessions are ordinary. The
 explicit numbered practice-history operation separately adopts only an exact
 preparation-owned initial session under its saved learner/pin and immutable
 project marker. Training owns authority/retry validation, Runtime owns offline
 metadata/archive staging, Core owns verified file publication and the ledger;
 Online retains stopped-service activation. Progress/source/native histories and
-unreferenced Working sessions remain unchanged. Main
-teaching coordinator supplies its original nine learning, question, assessment
-and declared visual actions plus the two practical read/evaluate operations to the original Codex/OpenCode Main native host for no-exercise
-and authorized prepared practice attempts. Source-bearing validation precedes
-the fresh authority grant, retaining the actual source/Genesis/Env/Git owners.
-The captured Main browser uses the existing subscriber to refresh one
-presentation resource and the original navigation/cue/player and speech owners.
-Three browser-only presentation read/focus/acknowledgement actions remain outside
-the model tool catalogue. Codex narrated cues require the original final-result
-owner and exact canonical output. OpenCode narrated cues use the same original published final-result owner;
-progress alone cannot authorize them and actual native/browser cue acceptance
-remains open. Fresh originating-request WRITE authority and
-accepted thread/turn/message guards fence every effect and final progress save;
-the original retained Helper, transcript transaction and native checkpoint remain
-the execution, receipt and delivery owners. Practice presentation retains its
-actual captured initial session and display-only source slug. Terminals supplies
-the closed false-scope App/output route and stream adapter through its existing
-actions, process and proxy owners; Project supplies only its original onboarding
-read. The same client App uses captured Learning transport identity while source
-and manual-terminal controls remain absent. Main practical observations reuse the same server producer, declared checks,
-Helper and progress writer. Actual provider, installed/browser/device and whole-
-lesson acceptance remain open.
+unreferenced Working sessions remain unchanged. The read-only lesson visual
+resource serves the pinned diagram bytes of any of the learner's retained attempts.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional
 host's exact existing services without duplicating hosted authority or writers.
 Standalone learning-only admission uses the actual OS owner through the original
 trusted local transport; Working/Colleague identity stays unchanged. Original
-preparation reports missing exercise provisioning before project effects. Teaching
-delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and
+preparation reports missing exercise provisioning before project effects. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
 
@@ -372,13 +294,12 @@ current revision. They reuse the original installer/catalogue owners and unchang
 formats, with no browser/model paths or automatic seeding. Publication,
 installation and learner admission remain separate operations.
 
-Owns code practicals: their `code` evidence/check schema, the per-question
-starting-file baseline and the private server-side save ledger beside learner
-state, the learner-scoped ledgered save action used by the lesson Files tab, and
-the code check that runs a pinned check on a private overlay copy through the
-existing execution owner. The generic source-editor save, its baseHash check and
-the existing practical observation, Helper grading and progress writer remain
-their original owners.
+Owns code checks: their `code` evidence/check schema, the per-step starting-file
+baseline and the private server-side save ledger beside learner state, the
+ordinary Files editor's save owner for practice projects, and the code check that
+runs a pinned check on a private overlay copy through the existing execution
+owner. The generic source-editor save and its baseHash check remain their
+original owners.
 
 Release-matched lesson-authoring guidance connects existing Colleague assignments
 and same-session review to requested native Save/PR publication, while retaining

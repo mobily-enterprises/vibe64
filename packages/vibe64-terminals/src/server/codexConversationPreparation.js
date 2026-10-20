@@ -124,9 +124,6 @@ function createCodexConversationPreparation({
       return { value: await writeCodexAppServerControlDisabledFailure(sessionId) };
     }
     const runtime = await createRuntimeForSession();
-    if (options.applicationTools && !runtime.learningScope) {
-      throw new TypeError("Codex application tools require an admitted learning session.");
-    }
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
     return {
@@ -174,7 +171,7 @@ function createCodexConversationPreparation({
   }
 
   async function withCodexAppServerThreadReadiness(sessionId, {
-    agentSettings = {}, applicationTools, providerReady
+    agentSettings = {}
   } = {}, operation) {
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
@@ -187,9 +184,6 @@ function createCodexConversationPreparation({
       toolHomeSource,
       workdir
     } = context;
-    if (applicationTools && !runtime.learningScope) {
-      throw new TypeError("Codex application tools require an admitted learning session.");
-    }
     let healthAttempt = null;
     try {
       const health = await writeCodexAppServerRunning(runtime, sessionId, {
@@ -214,8 +208,6 @@ function createCodexConversationPreparation({
         preparation(currentSession) {
           return codexAppServerThreadPreparationForSession({
             agentSettings: { ...codexAgentSettingsFromSession(currentSession), ...agentSettings },
-            applicationTools,
-            providerReady,
             hostContext: vibe64SessionContextInput(),
             runtime,
             session: currentSession,

@@ -1,14 +1,12 @@
-import { isDeepStrictEqual } from "node:util";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
 const TRAINING_VISUAL_RESOURCE_ACTION = "vibe64.training.visual-resource.read";
-const TRAINING_VISUAL_CHECKPOINT_ACTION = "vibe64.training.visual.checkpoint";
 // The original lesson bundle permits 32 MiB; base64 expansion and metadata
 // remain bounded without reducing that original file contract.
 const MAX_RESOURCE_BYTES = 48 * 1024 * 1024;
 
-function createTrainingVisualResourceActions({ learners, content, teaching, actions } = {}) {
+function createTrainingVisualResourceActions({ learners, content } = {}) {
   if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function") {
     throw new TypeError("Visual resource reads require the original learner and installed content owners.");
   }
@@ -19,31 +17,21 @@ function createTrainingVisualResourceActions({ learners, content, teaching, acti
       attemptId: { type: "string", required: true, noTrim: true, maxLength: 36,
         pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
       visualId: { type: "string", required: true, noTrim: true, maxLength: 64,
-        pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" },
-      sessionId: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 128 }
+        pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" }
     }) }, output: null,
     extensions: { assistant: { exclude: true } },
-    async execute({ attemptId, visualId, sessionId }, context) {
+    async execute({ attemptId, visualId }, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before reading your lesson diagram."), {
         code: "vibe64_auth_required", statusCode: 401
       });
       const state = await learners.readState({ actor, attemptId, includeCompletion: true });
-      const learning = context.vibe64Action?.learning;
-      // Learning v2: the plain route reads any of this learner's retained
-      // attempts (the reader shows ended lessons too). The learning-scoped
-      // route keeps its exact active-attempt rule until phase 2 removes it.
-      const attempt = learning ? state.active : state.progress.attempts.find(value => value.attemptId === attemptId);
-      if (!attempt || attempt.attemptId !== attemptId) {
+      // The reader shows ended lessons too, so any of this learner's retained
+      // attempts may read its pinned diagram.
+      const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+      if (!attempt) {
         throw Object.assign(new Error("Read one of this learner's exact saved attempts before requesting its diagram."), {
           code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404
-        });
-      }
-      if (learning && (!sessionId || learning.learningScope.attemptId !== attemptId ||
-          learning.learningScope.learnerId !== state.progress.learnerId ||
-          !isDeepStrictEqual(learning.learningScope.pin, attempt.pin))) {
-        throw Object.assign(new Error("Read only this learning conversation’s exact saved lesson diagram."), {
-          code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 409
         });
       }
       const { pin } = attempt;
@@ -65,68 +53,7 @@ function createTrainingVisualResourceActions({ learners, content, teaching, acti
       }
       return result;
     }
-  }, { projectScoped: false, learningAccess: "observe" }), withVibe64ActionContext({
-    id: TRAINING_VISUAL_CHECKPOINT_ACTION, version: 1, kind: "command", idempotency: "domain_native",
-    channels: ["api"], surfaces: ["app"], extensions: { assistant: { exclude: true } },
-    input: { mode: "create", schema: createSchema({
-      attemptId: { type: "string", required: true, noTrim: true, maxLength: 36,
-        pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
-      visualId: { type: "string", required: true, noTrim: true, maxLength: 64,
-        pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" },
-      requestId: { type: "string", required: true, noTrim: true, maxLength: 64,
-        pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
-      expectedRevision: { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER },
-      projectSlug: { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128 },
-      sessionId: { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128 },
-      snapshot: { type: "object", required: true }
-    }) }, output: null,
-    async execute(input, context) {
-      const actor = authenticatedVibe64User(context);
-      if (!actor) throw Object.assign(new Error("Log in before saving your lesson diagram."), {
-        code: "vibe64_auth_required", statusCode: 401
-      });
-      const state = await learners.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
-      const attempt = state.active;
-      const learning = context.vibe64Action?.learning;
-      if (!attempt || attempt.attemptId !== input.attemptId || (learning
-        ? !input.sessionId || learning.learningScope.attemptId !== input.attemptId ||
-          learning.learningScope.learnerId !== state.progress.learnerId ||
-          !isDeepStrictEqual(learning.learningScope.pin, attempt.pin)
-        : attempt.preparation.phase !== "ready" || attempt.projectSlug !== input.projectSlug ||
-          attempt.preparation.initialSessionId !== input.sessionId)) {
-        throw Object.assign(new Error("Save only this learner's exact prepared exercise diagram."), {
-          code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 409
-        });
-      }
-      if (typeof teaching?.saveVisualCheckpoint !== "function") {
-        throw Object.assign(new Error("Lesson diagram checkpointing is unavailable."), {
-          code: "VIBE64_TRAINING_TEACHING_UNAVAILABLE", statusCode: 503
-        });
-      }
-      let facilities;
-      if (learning) {
-        if (typeof actions?.execute !== "function") {
-          throw Object.assign(new Error("Learning diagram checkpoint authority is unavailable."), {
-            code: "VIBE64_TRAINING_TEACHING_UNAVAILABLE", statusCode: 503
-          });
-        }
-        facilities = { learningScope: learning.learningScope, signal: context.signal,
-          async requireCurrent() {
-            const fresh = await actions.execute({ actionId: "vibe64.sessions.conversation.teaching-context.read",
-              input: { learningAttemptId: input.attemptId, sessionId: input.sessionId },
-              context: { channel: "internal", surface: context.surface, requestMeta: context.requestMeta, signal: context.signal } });
-            if (fresh.actor.id !== learning.learningScope.learnerId ||
-                !isDeepStrictEqual(fresh.project?.learningScope, learning.learningScope)) {
-              throw Object.assign(new Error("The learning conversation changed before its diagram could be saved."), {
-                code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 409
-              });
-            }
-          } };
-      }
-      return teaching.saveVisualCheckpoint({ actor, attemptId: input.attemptId, visualId: input.visualId,
-        expectedRevision: input.expectedRevision, requestId: input.requestId, snapshot: input.snapshot }, facilities);
-    }
-  }, { projectScoped: true, learningAccess: "write" })];
+  }, { projectScoped: false })];
 }
 
-export { TRAINING_VISUAL_RESOURCE_ACTION, TRAINING_VISUAL_CHECKPOINT_ACTION, createTrainingVisualResourceActions };
+export { TRAINING_VISUAL_RESOURCE_ACTION, createTrainingVisualResourceActions };

@@ -17,10 +17,6 @@ import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-tra
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
-import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
-import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
-import { createTrainingAssessmentGrader } from "../../packages/vibe64-training/src/server/assessmentGrader.js";
-import { createTrainingAnswerAssessment } from "../../packages/vibe64-training/src/server/answerAssessment.js";
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the
@@ -377,11 +373,10 @@ test("a v2 lesson passes start, resume, learning.read, completion and end withou
     sessions: { async createSession(_input, { sessionId }) { session = { sessionId, status: "open", workspaceSetup: { status: "succeeded" } }; return session; } },
     terminals: { async workspaceSetupIsPrepared() { return true; } }
   });
-  const teachingBrief = createTrainingTeachingBrief({ content: f.content, learners: f.learners });
   const actions = createActionCatalogue();
   actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
-    learners: f.learners, teachingBrief, exercises
+    learners: f.learners, exercises
   }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
     authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
@@ -404,12 +399,7 @@ test("a v2 lesson passes start, resume, learning.read, completion and end withou
   assert.deepEqual(read.lessonProgress, [{ ...progress, open: true }]);
   assert.equal(read.attempts[0].practiceSlug, started.active.projectSlug);
 
-  // Teacher-model readers refuse a v2 lesson with a clear format error.
-  await assert.rejects(run("teaching-brief.read", { attemptId }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
-  const teaching = createTrainingTeachingOwner({ learners: f.learners, content: f.content });
-  await assert.rejects(teaching.prepareQuestion({ actor: f.auth.user, attemptId, assessmentId: "which-side", requestId: "question-v2",
-    expectedRevision: read.revision, text: "Which side?", assistance: "none" }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
-  assert.equal(await teaching.readQuestionReference({ actor: f.auth.user }), null);
+  // The retained v1 lesson-resume writer refuses a v2 lesson with a clear format error.
   await assert.rejects(f.learners.saveLessonResume({ actor: f.auth.user, attemptId, expectedRevision: read.revision, requestId: "resume-v2",
     resume: { stage: "question", pendingQuestion: null, visuals: [], summary: "" } }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
 
@@ -421,34 +411,6 @@ test("a v2 lesson passes start, resume, learning.read, completion and end withou
   assert.deepEqual(after.lessonProgress, [{ ...progress, open: false }], "ended attempts keep their step passes");
   assert.deepEqual(after.history.map(value => value.attemptId), [attemptId]);
   assert.deepEqual(touched, [], "no reader touched a v1 document, assessment or rubric field");
-});
-
-test("the assessment grader and practical answer assessment find no v1 assessment in a v2 lesson", async t => {
-  const touched = [];
-  const f = await fixture(t, { contentWrapper: content => withoutV1Readers(content, touched) });
-  const attempt = await f.start();
-  const helper = { async runHelper() { throw new Error("A v2 lesson must not reach the grading Helper."); } };
-  const grader = createTrainingAssessmentGrader({ content: f.content, helper });
-  const saved = await f.learners.readState({ actor: f.auth.user });
-  const learnerId = saved.progress.learnerId;
-  const evidence = { kind: "answer", learnerId, attemptId: attempt.attemptId, messageId: "message-1", questionId: "question-1", text: "The server side." };
-  await assert.rejects(grader.grade({}, { pin: f.pin, assessmentId: "which-side", evidence,
-    question: { id: "question-1", assessmentId: "which-side", text: "Which side?" } }), /Grade only an assessment and rubric/u);
-
-  const active = saved.progress.attempts.find(value => value.attemptId === attempt.attemptId);
-  const assessments = createTrainingAnswerAssessment({ learners: f.learners, content: f.content,
-    teaching: { async captureQuestion() { throw new Error("A v2 lesson must not capture a teacher question."); } } });
-  const message = { role: "user", messageId: "message-1", text: "I opened the Preview.", data: { trainingQuestion: {
-    schemaVersion: 1, learnerId, attemptId: attempt.attemptId, pin: active.pin,
-    delivery: { conversationId: "conversation-1", outputId: "output-1", turnId: "turn-1" },
-    question: { id: "question-1", assessmentId: "open-preview", text: "Open the Preview.", assistance: "none" } } } };
-  const observationValue = { kind: "observation", learnerId, attemptId: attempt.attemptId, questionId: "question-1",
-    projectSlug: attempt.projectSlug, sessionId: attempt.sessionId, assistance: "none", origin: "learner",
-    operationId: "operation-1", observationId: "observation-1", observedAt: new Date().toISOString(),
-    producer: "vibe64", operation: "preview.open", text: "Opened." };
-  await assert.rejects(assessments.evaluatePractical({ actor: f.auth.user, attemptId: attempt.attemptId, expectedRevision: saved.revision,
-    submissionId: "submission-1", message, observation: observationValue }), /only for this pinned practical assessment/u);
-  assert.deepEqual(touched, [], "neither owner touched a v1 document, assessment or rubric field");
 });
 
 test("HTTP routes map each v2 action to its attempt path without accepting a caller identity", async () => {

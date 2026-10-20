@@ -214,7 +214,6 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.changes.inspect",
     "vibe64.sessions.conversation-log.read",
     "vibe64.sessions.conversation.context.read",
-    "vibe64.sessions.conversation.teaching-context.read",
     "vibe64.sessions.create",
     "vibe64.sessions.current.update",
     "vibe64.sessions.inspect",
@@ -241,11 +240,8 @@ test("project and sessions register routes and captured actions during setup", a
   const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
   assert.deepEqual(contextRead.channels, ["internal"]);
   assert.equal(contextRead.extensions?.assistant, undefined);
-  const teachingContextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.teaching-context.read");
-  assert.deepEqual(teachingContextRead.channels, ["internal"]);
-  assert.equal(teachingContextRead.extensions?.assistant, undefined);
-  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 2,
-    "the internal conversation and teaching access queries have no HTTP routes");
+  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 1,
+    "the internal conversation access query has no HTTP route");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
   const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
     turnId: "000001", requestId: "a".repeat(64)
@@ -395,61 +391,4 @@ test("project and sessions package declarations contain no scaffold or container
     assert.equal(Object.hasOwn(declaration.jskit, "mutations"), false);
     assert.doesNotMatch(source, /containerTokens|scaffoldMode|scaffoldShape/u);
   }
-});
-
-test("learning HTTP routes reuse original session adapters and only canonical learning action permissions", async () => {
-  const { registerRoutes } = await import("../../packages/vibe64-sessions/src/server/registerRoutes.js");
-  const original = [], learning = [];
-  const http = entries => ({ router: { register: (...args) => entries.push(args) } });
-  registerRoutes(http(original), { routeSurface: "app" });
-  registerRoutes(http(learning), { routeSurface: "app", learningScoped: true,
-    projectContext: { readWorkspaceProject: () => assert.fail("A learning URL cannot resolve a substitute project") } });
-  const allowed = new Set(createSessionActions({ sessions: {} })
-    .filter(action => action.extensions.vibe64.learningAccess).map(action => action.id));
-  const seen = new Set();
-  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  for (const [method, routePath, options, handler] of learning) {
-    assert.equal(routePath.startsWith("/api/learning/:learningAttemptId/vibe64/"), true, routePath);
-    assert.equal(routePath.includes(":slug"), false);
-    const suffix = routePath.slice("/api/learning/:learningAttemptId/vibe64".length);
-    const ordinary = original.find(([verb, url]) => verb === method && url.endsWith(suffix));
-    assert.ok(ordinary, `${method} ${suffix} must reuse an original adapter`);
-    assert.deepEqual(options, ordinary[2], "body validators, limits and response metadata are retained");
-    const calls = [];
-    const reply = { code(status) { assert.equal(status, 200); return this; }, send(result) { assert.equal(result.ok, true); return this; } };
-    await handler({ ip: "127.0.0.1", hostname: "localhost", headers: { origin: "http://localhost" },
-      params: { learningAttemptId: attemptId, sessionId: "learning-session" }, query: {},
-      body: { message: "actual user words", vibe64User: { uid: "browser-selected" }, learningAttemptId: "browser-attempt" },
-      async executeAction(call) { calls.push(call); return { ok: true }; }
-    }, reply);
-    assert.equal(calls.length, 1);
-    assert.equal(allowed.has(calls[0].actionId), true, calls[0].actionId);
-    assert.equal(calls[0].input.learningAttemptId, attemptId);
-    assert.equal(Object.hasOwn(calls[0].input, "vibe64User"), false);
-    seen.add(calls[0].actionId);
-  }
-  assert.deepEqual([...seen].sort(), [...allowed].filter(id => id !== "vibe64.sessions.conversation.context.read").sort());
-  // Learning v2 F1: a practice project's Git log and current changes are read
-  // through its ordinary project routes, and the source-less teacher has no
-  // source, so no repository or changes route has a lesson URL any more;
-  // setup, renewal, saving, updates and pull requests never had one.
-  assert.deepEqual(learning.map(([method, url]) => [method, url]).filter(([, url]) => /repository|changes/u.test(url)), []);
-  assert.deepEqual(original.map(([method, url]) => [method, url]).filter(([, url]) => /repository\/history$|sessions\/:sessionId\/changes$/u.test(url)).length, 2,
-    "the ordinary project routes still serve them");
-  assert.equal(learning.some(([, url]) => /setup|renewal|pull-request|updates|\/work\b/u.test(url)), false);
-});
-
-test("learning route admission rejects missing attempt URL and non-local transport before executing any action", async () => {
-  const { registerRoutes } = await import("../../packages/vibe64-sessions/src/server/registerRoutes.js");
-  const entries = [];
-  registerRoutes({ router: { register: (...args) => entries.push(args) } }, { learningScoped: true });
-  const create = entries.find(([method, url]) => method === "POST" && url.endsWith("/sessions"));
-  assert.ok(create);
-  const base = { ip: "127.0.0.1", hostname: "localhost", headers: { origin: "http://localhost" }, params: {}, body: {},
-    executeAction: () => assert.fail("Rejected transport must not execute Create") };
-  const reply = { code(status) { this.status = status; return this; }, send(result) { this.result = result; return this; } };
-  await assert.rejects(create[3](base, reply), { code: "vibe64_learning_attempt_required", statusCode: 400 });
-  await create[3]({ ...base, ip: "203.0.113.10", hostname: "remote.invalid" }, reply);
-  assert.equal(reply.status, 403);
-  assert.equal(reply.result.errors[0].code, "studio_local_request_required");
 });

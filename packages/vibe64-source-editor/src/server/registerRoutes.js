@@ -171,7 +171,7 @@ function registerRoutes(http, {
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
     summary: "Download an original source file."
   }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
-    actionId: "vibe64.source-editor.file.download", input: routes.actionInput(request, query(request)) })));
+    actionId: "vibe64.source-editor.file.download", input: query(request) })));
   route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });
   route("POST", "/source-editor/stars", "star.set", { bodyLimit: 16 * 1024, summary: "Star or unstar a file." }, body);
   route("POST", "/source-editor/resolve-path", "path.resolve", { bodyLimit: 32 * 1024, summary: "Resolve a source path reference." }, body);

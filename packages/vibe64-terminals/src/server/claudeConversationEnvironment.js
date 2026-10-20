@@ -107,14 +107,12 @@ function createClaudeConversationEnvironment({
     const identity = JSON.stringify(applicationTools
       ? [selection, profile, input.outputSchema, entry.accountIdentity, entry.toolSchemas]
       : [selection, profile, input.outputSchema, entry.accountIdentity]);
+    // A source-less learning root has no project guidance to read.
     const learningRoot = await learningSessionExecutionRoot(entry.context.runtime, entry.context.sessionId);
     let systemPrompt = entry.context.assistantScope?.stableContext || (profile
       ? "Complete only the supplied task."
-      : learningRoot ? await entry.context.runtime.getLearningInstructions(entry.context.sessionId)
+      : learningRoot ? ""
       : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
-    if (!profile && !entry.context.assistantScope && entry.context.runtime.learningScope?.noExercise === false) {
-      systemPrompt += `\n\n${await entry.context.runtime.getLearningInstructions(entry.context.sessionId)}`;
-    }
     if (applicationTools && entry.main && !entry.context.runtime.learningScope && !profile && !entry.context.assistantScope) {
       systemPrompt += "\n\nYou cannot create a goal through Claude's application tools. When the human asks you to create or set a goal, explain that they need to use the chat UI: choose Set goal, enter the objective, then choose Start goal. Offer a concise objective they can paste. If an unfinished goal already exists, explain Resume goal for continuing it or Cancel goal before setting a different one. Do not claim that stating an objective creates a goal.";
       systemPrompt += "\n\nWhen the human explicitly asks to pause the goal, finish any requested checkpoint and drain delegated work, then use the application action vibe64.terminals.main-goal.pause through the application tools. Saying paused does not pause the goal. Do not invoke Pause merely because work is unfinished, delegated work is running, or prerequisites are missing. When a concrete external prerequisite prevents all useful work, use vibe64.terminals.main-goal.block with a short reason explaining what must change before Resume. Do not mark a goal blocked while delegated/background agents or checks are still working; wait for their results. Do not repeatedly answer that you are waiting for missing human input.";

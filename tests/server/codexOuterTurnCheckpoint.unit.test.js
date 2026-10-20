@@ -90,7 +90,7 @@ async function learningNativeFixture(t) {
       release: "0.1.0", repository: "vibe64/learn-getting-started", commit: "a".repeat(40), topicHash: "b".repeat(64) },
       lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
   const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private"),
-    learningScope, learningInstructions: async () => "Teach the exact authorized lesson.",
+    learningScope,
     promptRenderer: async () => assert.fail("No workspace Genesis rendering"), promptEnvironment: async () => assert.fail("No project Env") });
   return { root, runtime, learningScope };
 }
@@ -152,7 +152,6 @@ test("closing learning contexts retain only the original explicit native control
     const inactive = { code: "vibe64_learning_session_inactive" };
     await assert.rejects(() => runtime.getNativeExecutionRoot(id), inactive);
     await assert.rejects(() => runtime.getNativeExecutionRoot(id, { allowClosing: "true" }), inactive);
-    await assert.rejects(() => runtime.getLearningInstructions(id), inactive);
     await assert.rejects(() => runtime.renderPrompt(id, { request: "New work" }), inactive);
     assert.equal(await runtime.getNativeExecutionRoot(id, { allowClosing: true }), root);
     const context = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id,
@@ -320,7 +319,7 @@ test("original Codex completion queue restores the source-less learning context 
     providerTurnId: turnId, outerTurnId, state: "completed", providerStatus: "completed"
   } });
   const context = Object.freeze({ learningScope, projectRuntimeRoot: runtime.stateRoot,
-    vibe64User: { userId: "42" }, learningInstructions: async () => "Exact saved lesson" });
+    vibe64User: { userId: "42" } });
   const failures = [];
   const queue = createCodexAppServerNotificationQueue({ runInContext: runWithCodexAppServerProjectContext,
     reportError: error => failures.push(error) });
@@ -374,12 +373,10 @@ test("source-bearing Learning retains the original native source and Git checkpo
   const { learningSessionExecutionRoot, readSessionConversationContext } =
     await import("../../packages/vibe64-terminals/src/server/mainConversationBinding.js");
   await withTemporaryRoot(async root => {
-    const completions = [], checkpoints = [], publications = [];
+    const checkpoints = [], publications = [];
     const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
       projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: { ...learningScope, noExercise: false },
       inspectSourceByDefault: false,
-      learningTeaching: { bindConversation: () => assert.fail("Context reads do not bind teaching"),
-        completeConversation: async input => { completions.push(input); } },
       createSessionSource: async ({ session, store }) => {
         const metadata = sourceMetadata(root, session.sessionId);
         await mkdir(metadata.source_path, { recursive: true });
@@ -417,12 +414,9 @@ test("source-bearing Learning retains the original native source and Git checkpo
         await mkdir(nativeRoot, { recursive: true });
       }
       const project = Object.freeze({ slug: "actual-practice" });
-      const nativeTurn = Object.freeze({ threadId: "native-thread", turnId: `native-${engine}`,
-        outerTurnId: `outer-${engine}`, active: false });
-      const input = { runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed", nativeTurn,
+      const input = { runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed",
         projectService: { readCurrentProject: async () => project },
         createCheckpoint: async value => {
-          assert.equal(completions.at(-1).outerTurnId, value.outerTurnId, "Teaching completion precedes the original Git checkpoint");
           checkpoints.push(value); return { created: true, commit: "d".repeat(40) };
         },
         publishSessionChanged: async (receivedId, event) => publications.push({ id: receivedId, event }) };
@@ -433,11 +427,6 @@ test("source-bearing Learning retains the original native source and Git checkpo
       assert.equal(checkpoints.at(-1).worktreePath, nativeRoot);
       assert.equal(checkpoints.at(-1).project, project);
       assert.equal(checkpoints.at(-1).outerTurnId, input.outerTurnId);
-      assert.equal(completions.at(-1).runtime, runtime);
-      assert.equal(completions.at(-1).sessionId, id);
-      assert.equal(completions.at(-1).nativeTurn, nativeTurn);
-      assert.equal(completions.at(-1).outerTurnId, input.outerTurnId);
-      assert.equal(completions.at(-1).outcome, "completed");
       assert.equal(publications.at(-1).event.reason, "session-turn-checkpoint-updated");
       const failed = await checkpointSessionTurn({ ...input, outerTurnId: `failed-${engine}`,
         createCheckpoint: async () => { throw new Error("Original practice checkpoint failure"); } });
@@ -456,33 +445,24 @@ test("source-bearing Learning retains the original native source and Git checkpo
       const interrupted = await checkpointSessionTurn({ ...input, outerTurnId: `closing-${engine}`, outcome: "interrupted" });
       assert.equal(interrupted.processed, true);
       assert.equal(checkpoints.at(-1).outcome, "interrupted");
-      assert.equal(completions.at(-1).outcome, "interrupted");
     }
     assert.equal(checkpoints.length, 6);
-    assert.equal(completions.length, 9);
     assert.equal(publications.length, 9);
   });
 });
 
-test("source-less Learning still completes teaching before its truthful no-Git result", async t => {
+// Learning v2 phase 2 retired the Main teacher: a source-less checkpoint no
+// longer completes teaching, but keeps its truthful no-Git result.
+test("source-less Learning returns its truthful no-Git result without a teacher", async t => {
   const { runtime } = await learningNativeFixture(t);
-  const calls = [];
-  runtime.learningTeaching = { completeConversation: async input => calls.push(input) };
   const id = "source-less-teaching-checkpoint";
   await runtime.createSession({ sessionId: id });
   const before = await runtime.store.readSession(id);
-  const nativeTurn = Object.freeze({ threadId: "native-thread", turnId: "native-turn",
-    outerTurnId: "native-outer", active: false });
-  const result = await checkpointSessionTurn({ runtime, sessionId: id, outerTurnId: "native-outer", nativeTurn,
+  const result = await checkpointSessionTurn({ runtime, sessionId: id, outerTurnId: "native-outer",
     projectService: { readCurrentProject: () => assert.fail("No source-less project lookup") },
     createCheckpoint: () => assert.fail("No source-less Git checkpoint"),
     publishSessionChanged: () => assert.fail("No source-less checkpoint task") });
   assert.equal(result.reason, "learning_session_no_git_checkpoint");
   assert.equal(result.checkpoint.applicable, false);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].runtime, runtime);
-  assert.equal(calls[0].sessionId, id);
-  assert.equal(calls[0].nativeTurn, nativeTurn);
-  assert.equal(calls[0].outerTurnId, "native-outer");
   assert.deepEqual(await runtime.store.readSession(id), before);
 });

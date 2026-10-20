@@ -31,8 +31,7 @@ no saved request or application operation is replayed merely by reopening.
 
 Browser focus uses the existing realtime connection and original `focus.update`
 action authorization. Its transient binding releases on socket disconnect or
-component unmount, retires presentation and delegates Learning watch retirement
-to Training's existing focus-change owner. The release is fenced against a
+component unmount and retires its pending navigation command. The release is fenced against a
 newer connection for the same client; one tab cannot release another. Reconnect
 registers current focus only, without replaying stale focus or resuming watches.
 
@@ -48,7 +47,6 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
 - `packages/vibe64-colleague/src/server/protocol.js`
-- `packages/vibe64-training/src/server/teachingRole.js`
 - `packages/vibe64-colleague/src/server/usageKnowledge.js`
 - `docs/colleague-usage/colleague.md`
 - `docs/colleague-usage/lesson-authoring.md`
@@ -72,18 +70,15 @@ registers current focus only, without replaying stale focus or resuming watches.
 
 ## Public contract
 
-Colleague is the lesson supervisor and authoring coordinator, not a second teacher.
-The Training-owned exact eight-action role set is applied before its original
-interactive/autonomous policy. The same common catalogue predicate governs direct
-schemas, search, contracts and execution, retaining the original assignment-only
-background mutation rule. Original Training execute boundaries authenticate first,
-then refuse Colleague authority and require the actual Main coordinator before
-question, grading or player effects. Lifecycle/progress/brief reads, start/resume/
-end/continuation, authoring assignments and ordinary navigation remain available
-through their existing permissions. No saved history is rewritten. Compatibility
-teacher coordination remains source-preserved until its Main counterpart is proved;
-it grants no supervisor tool authority. Unsupported Main practical assessment
-remains an explicit facility error, not a legacy fallback.
+Colleague is the lesson teacher and authoring coordinator. It teaches from a
+lesson's steps through Training's lesson read, step and lifecycle operations,
+its own acknowledged navigation and guides, and the learner's private notes; it
+never decides, changes or proves a step result. The separate Main lesson teacher
+and its teacher-only actions, question admission, grading, Learning watches,
+presentation and cues were retired in Learning v2 phase 2, so no teacher-role
+exclusion remains in the common catalogue policy. The same common catalogue
+predicate governs direct schemas, search, contracts and execution, retaining the
+original assignment-only background mutation rule. No saved history is rewritten.
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
@@ -115,9 +110,8 @@ While a response is in flight, later rows wait without native steering or Stop.
 The product drains them into the next completed response together, retaining
 cumulative authored IDs as application authority. Its internal native response
 has a distinct verified receipt; app acceptance never fabricates native user ACKs.
-Browser navigators share one result contract: a presentation operation returns
-its settled focus with the player receipt, and ordinary navigation returns the
-settled focus itself, which the shared receipt builder acknowledges unchanged.
+Browser navigators share one result contract: navigation returns the settled
+focus itself, which the shared receipt builder acknowledges unchanged.
 A failed Colleague turn shows its product error even when the native snapshot
 reports none.
 Before parsing or executing, the product settlement checks pending rows and
@@ -623,50 +617,11 @@ existing records without it remain coding-conversation watches without rewriting
 Unknown sources pause rather than falling back to a coding session. Reusing a
 watch ID for a different target, source, condition or question is refused.
 
-Training registers `learning-task` as a bounded non-conversation source on the
-same host record. Start captures the exact learner attempt, initiating browser,
-Learning Main client/conversation, project/session, immutable content pin and
-either the delivered question or one bounded criterion. Colleague exposes the
-controls and persisted record; Training's separate watcher owns its lifecycle,
-timer, stable cursor, latest allowlisted control/view observation and guidance
-delivery. Shared Core predicates normalize observations and cursors. Start takes a
-silent baseline. Stable revisions and event identities suppress duplicate reports,
-and arbitrary DOM, typed text, screenshots, secrets and foreign projects never
-enter the observation. Active, paused and unavailable states are visible. Leaving
-the target pauses the watch, restart makes unfinished polling unavailable, and
-Resume binds fresh browser identities and rechecks authority. Training's watcher
-uses bounded 30-second code-only reconciliation; neither Colleague's model nor the
-Learning Main polls or runs a timer-driven model loop.
+Training's `learning-task` watch source and its Learning watches were retired
+with the Main lesson teacher; the numbered practice-sessions upgrade removes their
+saved records and observations.
 
-The browser publishes its validated current polling binding alongside—not inside—
-assistant-visible focus. The hidden Learning client identity stays on that live
-connection. The existing `learning-watch.start` action is discoverable to
-Colleague and, for an interactive request, derives all target identity from that
-connection instead of accepting model-selected browser IDs. Human Start polling
-continues through the same action with its explicit binding, mapping the task's
-project slug to the action's `targetProjectSlug` field without also forwarding
-the forbidden `projectSlug` field. `watches.read`,
-`watch.pause`, `watch.resume` and `watch.cancel` therefore operate on one retained
-watch ID for both paths. Resume requires the exact current connection and reruns
-the source read; Stop suppresses pending guidance without stopping Main, the
-lesson or its application. Public status retains goal/target, timestamped latest
-observation, last accepted/duplicate guidance receipt and saved Training progress;
-none of those fields grants mutation authority or independently proves a pass.
-The dialog summarizes the watch with its question and keeps full criteria in
-collapsed native details below the controls, so a long rubric cannot push the
-pause/resume/stop controls beyond the initial viewport.
-
-A meaningful confirmed learner event or explicit bounded failure is retained as
-one pending guidance receipt by Training's watcher. That watcher, not Colleague or
-Main, revalidates the exact task and delivers it to the existing Main teacher as
-application-origin context. Busy Main turns defer the unchanged receipt; accepted
-and duplicate receipts clear it. Identical evidence is
-coalesced, while quiet reconciliation creates no guidance. Pause, Stop,
-leave-target and restart remove undelivered guidance. Public watch state exposes
-only the latest delivered guidance summary; its internal receipt and suppression
-key remain private. Main's assessment owners remain unchanged.
-
-The existing session event bus asks the separate watcher to schedule coalesced
+The existing session event bus asks the watch scheduler to schedule coalesced
 reads outside the publisher's write lock. A 30-second code-only reconciliation
 catches missing events while a watch is active. No watches, unrelated events,
 unchanged state and partial tokens start no model calls. Watches and pending
@@ -710,7 +665,7 @@ summary root, existing `summaryHelper` receipt publication and workflow selector
 The shared block retains the original tool-free profile, account connection,
 native ID publication, timeout, cancellation and cleanup-before-reuse contract.
 Excerpt/citation policy and Stop serialization remain in Colleague. This move
-does not compose a Main teacher or create another progress/Helper runtime.
+does not create another progress/Helper runtime.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed
 canonical acknowledgement after Stop speaking; it changes no stored history.
@@ -973,156 +928,6 @@ without copying those messages into the new delivery owner or reopening archived
 runtimes. The retention is local to the browser tab when storage is available;
 there is no new server journal or cross-tab archive protocol.
 
-### Lesson presentation acknowledgement
-
-Training now owns the original client navigation/cache/ACK coordinator through
-createTrainingNavigation. Colleague immediately uses the same handle at apply and
-resets its cache in the original actor-watch order. Its host retains mobile
-minimise before the cache branch; desktop/no-op adds no awaited yield. The
-original pending-only, one-navigation guard, cached success/failure receipt,
-actor/unmount checks and uncertain-ACK retry remain unchanged. Server connection
-timeouts, product navigation and player authority retain their original owners.
-No Main effect/cue fields, subscriber, runtime or receipt transport are introduced
-by this client move.
-
-The original initiating-browser navigation receipt also carries bounded lesson
-presentation operations supplied by the Training action owner. The browser's
-existing Preview handle awaits the original player's readiness, completed command
-or semantic snapshot. A successful acknowledgement must match the requested
-attempt, visual, command and exercise view; command acceptance cannot settle it.
-The receipt remains private to the initiating connection and is retired through
-the original Stop/disconnection lifetime. It adds no speech or grading authority.
-
-
-## Issued lesson references at message authorship
-
-The existing Colleague state read optionally asks the host-supplied
-`context.trainingTeaching.readQuestionReference` for one bounded issued reference.
-The read also supplies the latest actually delivered native reference as a host
-routing hint. It derives that hint through Public Training's unchanged canonical
-delivery reader, which checks completed output/current scope, skips prepared and invalid
-marks, and never uses retained Fresh history. The same Training owner projects
-exact completed native practical receipts; Colleague retains its current
-conversation record and all original admission/control coordination.
-A host with independently active normal and author-preview stores selects the
-original teaching owner by that exact attempt; an absent hint retains ordinary
-normal-owner discovery. The selected owner still validates its active question,
-and the original native delivery check still decides whether a reference is
-exposed. This adds no persisted field, grading shortcut or mutable preview mode.
-It exposes that reference only when original current-scope turn metadata proves
-the matching native question reply completed. `stageTrainingQuestion` saves a
-prepared mark for the current interactive accepted turn/generation.
-`requireTrainingQuestionTurn` uses the same eligibility check before the question
-action saves its checkpoint; stage rechecks inside the native transaction.
-A present cue must be completed in the initiating current conversation. The
-original final-save transaction promotes it only with native completion and the actual
-saved canonical assistant output ID whose trimmed final text exactly matches
-the captured authoritative question text. Unrelated finals, commentary,
-cancelled outputs and tool progress never promote it. Restart reads the retained
-mark; Fresh archives never qualify.
-
-Typed submission captures it through the original runtime data getter; voice
-stores it in the original utterance capture context, then separates it from view
-focus before forwarding it as ordinary conversation data. The shared capture,
-serial delivery, deferred admission, draft and canonical transcript owners are
-unchanged. No JSKIT teaching concept, queue or second reference store is added.
-
-The original native facade and message action accept only the six-field reference.
-After an existing accepted UUID returns its original receipt, send admission can
-call `captureQuestion` using the fresh authenticated actor and that submitted
-reference. Only the detached Training-owned snapshot enters canonical
-`data.trainingQuestion`, together with server-derived question conversation, turn
-and output identities; caller snapshots and outcomes are never trusted. Stale,
-absent or unavailable references leave messages ordinary and ungraded without
-blocking Send or reassigning them to a new question. Stop and closure fences are
-rechecked after the asynchronous read before original preparation/cancellation.
-Actual accepted message and turn identities retain their native authority. No
-grading caller is registered by this integration. Optional new writes require
-the release's prospective upgrade; no historical question association is inferred.
-
-
-## Native lesson answer evaluation
-
-The following original teacher/observation coordination is preserved for the
-remaining Main counterpart migration and old receipt/history interpretation.
-It is not supervisor authority: the common tool policy and Training contract
-role guards refuse new Colleague question, grading and visual effects. The
-original actual gesture producer remains until Main owns its genuine receipt;
-its presence must not be advertised as a supported Colleague grading path.
-
-`evaluateTrainingAnswer` selects the actual canonical user message from the
-current admitted interactive turn and its original context user-message IDs. It
-requires the saved server-owned question capture and exact current-scope native
-question delivery/final-output proof. Archives, autonomous turns, caller
-snapshots and unrelated messages cannot supply evidence. It uses the shared
-Training proof readers without writing progress; the host's single
-`trainingAssessment` owner
-validates the pin/question, grades and saves through its native assessment owner.
-
-The operation reuses original `summaryRunning`/`summaryAbort` serialization,
-Helper process creation and cleanup. Its one original `runHelper` method is
-adapted to recheck fresh actor, scope, turn, generation and operation abort before
-returning Helper text to Training, preventing a retired turn from saving a grade.
-The optional caller signal aborts only this operation; listeners are removed and
-transient owners are cleared by identity. Original Stop joins and cleans up the
-same Helper. Persisted submission replay remains Training-owned before inference.
-
-Native practical gestures use the existing initiating connection and admission
-tail. The HTTP-only, assistant-excluded `training.observe-native` action
-reauthenticates the caller, requires an actually delivered current question, reads
-the Training owner's exact ready exercise contract, and uses ordinary session
-inspection for project access. One transient slot retains at most three exact
-gesture payload/receipt pairs and one server-derived observation. Same-ID retry
-returns the original step receipt; conflicting payloads fail. Workspace navigation
-requires project selection, revealing the exact reserved Main session through its
-session tab or Show chat, then visible Preview; return requires actual body
-minimize, same-exercise workspace use, then restore. These formative observations
-preserve saved assistance and do not grade, write progress, wake Colleague, or run
-a coding agent. Restart requires repetition; no durable gesture journal or
-anti-cheating attestation is claimed. The client admits Colleague minimise/restore
-tickets only for the return-to-Colleague assessment. Ordinary launcher use during
-workspace navigation retains the conversation and collection without an unrelated
-observation request or error; strict server sequence/target checks remain intact.
-
-The same native receipt endpoint admits `exercise-response` only for the pinned
-`try-the-application` practical. Four bounded protocol UUIDs and the original
-numeric frame generation travel as browser identities; terminal, origin, check
-and outcome never do. The existing `terminals.outputs.read` action selects the
-current App terminal, and the host's original declared-check owner verifies its
-run/pin and server interaction. A late question/scope/access change rejects the
-receipt before mutation. One exact payload/receipt, factual observation and
-server check result occupy the same connection slot; duplicates do not rerun the
-check. Stop marks the original admission fence and joins the finite check; its
-original managed execution/cleanup and caller signal remain authoritative.
-
-Answer and practical evaluation share the original private native admission and
-serialized Helper lifetime. `evaluateTrainingPractical` accepts IDs, selects only
-the current connection's exact observation/reference/check and actual accepted
-current-turn explanation, and passes them to the host Training assessment owner.
-Fresh scope/generation/auth and the captured observation object/facts are checked
-again before Helper text returns. The original owner saves and consumes evidence;
-Colleague supplies no grade setter, journal or parallel Helper.
-
-The original `context.read` query projects accepted partial steps separately as
-`trainingPracticalProgress`: exact reference/assessment, collecting phase, bounded
-count and actual last control. The same question, target, fresh access and
-connection fences guard this read-only coaching context. It has no observation
-ID, outcome, pass or persistence; Colleague continues the next step under the same
-question. Completion removes this projection and retains the original completed
-`trainingPractical` DTO. The query projects that completed native practical
-observation only for this connected current conversation and delivered
-question. It uses fresh Training capture and ordinary session authority, then
-rechecks the same slot after awaited reads. The whitelist includes the issued
-reference, observation/assessment identity, declared producer/operation, observed
-time, assistance/origin and optional check outcome. Teacher origin projects
-as demonstration assistance. Stale, unavailable and unauthorized facts are
-omitted without changing the original context response or writing state.
-This retains discovery of real IDs for historical observations; it does not wake
-the teacher or grant access to App/window/source/check bytes. The supervisor
-query guidance directs practical evaluation to the saved Learning Main teacher,
-not to Colleague. Missing facts do not invalidate accepted collecting steps;
-Main checks the current question before a repeated task is recommended.
-
 ### Lesson authoring through existing operations
 
 The release's `lesson-authoring` guide connects existing assignment creation,
@@ -1146,130 +951,3 @@ raising that limit or changing the reader. No new runtime action, state format,
 conversation loop or browser authoring control is introduced.
 
 
-### Browser question admission
-
-The existing native answer/practical coordinator delegates only its original
-authenticated actor, Helper invocation and domain call to Training's shared
-conversation-assessment owner. Its original current actor, native turn,
-generation, cue, practical observation and cancellation checks remain here. The
-same fresh-current guard now reaches the canonical assessment writer after its
-last awaited question read and before retained replay. No retired operation can
-save a stale result merely because the Helper already finished cleanup. This
-shared cut does not enable Main teaching or remove Colleague's compatibility
-caller before that path is proved.
-
-The original browser facade omits undefined Training owners so native action
-contributors can supply them on each operation; explicit owners or null remain
-unchanged. Future admitted answers retain the existing canonical question
-snapshot and delivery identity. Older ordinary messages stay ungraded; this
-correction performs no historical conversion or inferred association.
-
-### Shared browser presentation transaction
-
-Colleague delegates its original pending navigation/cue receipt lifetime and
-predicates to Training's presentation coordinator, immediately using the same
-connection objects. General view grammar, map ownership, current native turn
-admission, event ordering and every Stop/fresh/focus/failure call site remain in
-this service. The coordinator is an ephemeral state facility and never enters
-the saved conversation record. Original browser/cue assertions remain unchanged;
-this move adds no connection identity or persisted field.
-
-The existing navigation action now carries optional Learning mode, right-view
-and lesson-selection fields. Colleague validates picker versus active-attempt
-grammar, keeps normal project/session/Database targeting, and delegates the
-pending command and exact settled acknowledgement to that same Training
-coordinator. The host publishes one browser navigator used by both Colleague and
-the selected Main teacher. Training's Main-only `vibe64.training.view.open`
-derives its project/session/attempt from the freshly admitted teacher scope and
-supports only Workspace Preview, Workspace ERD or the retained Learning pane.
-Start/resume/end remain their existing Training actions; view receipts remain
-demonstrations and never enter practical or assessment evidence.
-
-
-The separate `20261010-colleague-codex-completed-policy` numbered operation uses
-that existing application record owner and verified backup publisher. It retires
-only the exact original nonempty discovery manifest through JSKIT's original
-`retireNative:true` replacement builders. The old binding/account/run/goal and
-canonical transcript remain intact; the successor is inert and keeps selection.
-Current empty/inert or other-engine bindings and previous chats are unchanged.
-Saved active/pending delivery, replacement/Undo and uncertain application effects
-refuse before publication. Earlier numbered formats must complete before apply.
-The standard stopped application/watch/product-writer contract and original
-upgrade lock govern publication; no new global native lock, goal RPC or native
-file mutation is introduced. Native CLI writers do not write this product record.
-Retry verifies both saved sides, reuses immutable prepared replacement IDs and
-compares the full expected product. The next explicit native admission owns
-fresh account validation and original history seeding, never old-work replay.
-
-The original OpenCode host's `conversationHost` explicitly permits its own
-credential refresh only after resolving the current authorized provider connection
-and checking the supplied key and URL. The common driver's authored preparation
-refreshes that same facility and fences the native database, runtime directory and
-shared runtime before rotating the binding fingerprint. Its original shared
-`ensure` stops the previous process with verified exit, then reloads the current
-connection while preserving the native session and history. Standalone bindings
-keep their default credential pin. Admission inspection cannot rotate it, and
-completed-envelope preparation, effect and reply publication retain the exact
-saved fingerprint check. This is the original managed refresh policy through the
-existing host seam; it neither shares credentials between orchestrators nor
-invents an old account identity for a converted session.
-
-
-The native continuity converter supplies the existing `protocol.instructions`
-base prompt before the shared runtime's saved-configuration open validation.
-Existing prepared empty-prompt backups keep their exact original retry bytes.
-The separate `20261010-colleague-native-instructions` operation repairs only that
-known empty imported configuration through the same stopped-state publisher and
-verified before/after backups. Exact original selection/native identity, inert
-import shape and settled receipts qualify the correction; pending or uncertain
-work refuses it. Only `configuration.systemPrompt` changes. The failed authored
-row, error, full transcript, binding/account and seen cursor remain unchanged,
-with no inference, credential operation, native file write or automatic resend.
-The original upgrade file exercises the actual shared SDK open validation before
-and after repair, instead of treating metadata shape validation as usability.
-
-
-The separate `20261012-colleague-retired-operation-receipt` repair preserves a
-proven completed legacy Codex application marker in the inert
-`retiredConversation.completedOperationReceipt` field. Only the old active-marker
-field is removed; its exact arguments encoding, result and other fields remain.
-Ready current schema-three legacy records qualify, while changed selection,
-conflicting receipts, pending delivery and uncertain effects refuse. The existing
-native continuity owner remains immutable and independently validates native
-completion and identity before continuation. The explicit stopped-writer bootstrap
-uses the ordinary upgrade lock but leaves the ordered ledger unchanged, with a
-separate before-continuity backup root. The later normal numbered operation can
-record its no-op after continuity; retries of either publication verify original
-and prepared bytes through the existing Core publisher. There is no runtime
-backfill, native file mutation, replay or fresh conversation creation.
-
-
-The separate `20261012-colleague-interactive-continuity` owner qualifies the
-original `31d4c318^` interactive prompt shape without an autonomous flag. It calls
-the original native continuity inspector through a private explicit mode; the
-earlier public operation still uses its strict default. Exact original field/type
-and no-watch/read-only-false checks supplement every existing native identity,
-goal, final-answer, authored-input and custody fence. This correction sends no
-request and changes no native file; it retains canonical history and the completed
-receipt. Its explicit operator bootstrap and later numbered ledger entry have
-separate backup namespaces and reuse the original publisher and apply exclusion.
-
-
-The appended `20261012-colleague-continuity-scope` correction records explicit-mode
-inputs as outside the historical inspector's scope. They remain with the original
-strict owner and do not produce a historical replacement or backup. Missing-mode
-inputs retain all qualified protocol and native proofs. Both old numbered script
-files remain unchanged; the shared owner fixes applicability without weakening
-continuity eligibility or modifying current chat/native state.
-
-
-Window focus does not refresh Colleague. Initial mounting, relevant realtime
-events, reconnects and explicit product operations retain their existing refresh
-paths. A ready conversation permits a different message after an unknown receipt;
-the unconfirmed message remains inspection-only and is never replayed implicitly.
-
-
-The browser focus adapter is a separate provider, composed after the Colleague
-service and authenticated realtime. Hosted authentication can depend on Colleague
-without a dependency cycle. Adapter shutdown releases its subscriptions before
-the service and realtime owners shut down.

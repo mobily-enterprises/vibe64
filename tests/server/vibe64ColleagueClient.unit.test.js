@@ -14,8 +14,6 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
 import { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
-import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
@@ -2381,38 +2379,6 @@ test("watch details preserve the conversation and use existing resume/cancel adm
   assert.equal(view.state.assignments.value.length, 0);
 });
 
-test("Learning polling publishes its exact private browser binding and uses the same visible start owner", async t => {
-  const attemptId = "33333333-3333-4333-8333-333333333333";
-  const task = { attemptId, projectSlug: "practice", sessionId: "practice-session",
-    conversationId: "learning-main", learningClientId: "learning-client" };
-  const gestureChannel = vue.shallowRef({ pollingTask: () => task, setPollingWatch() {}, clearPollingWatch() {} });
-  const props = vue.reactive({ name: "Colleague", focus: { projectSlug: "practice", sessionId: "practice-session",
-    pane: "lessons", learningAttemptId: attemptId, learningView: "learning" } });
-  const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], watches: [], status: "ready" }),
-    props, vue.ref({ actorKey: "person-a" }), null, null, gestureChannel);
-  await flush();
-  const focusRequest = view.focusUpdates.at(-1);
-  assert.deepEqual(focusRequest.focus, props.focus);
-  assert.deepEqual(focusRequest.learningTask, task);
-  assert.equal(Object.hasOwn(focusRequest.focus, "learningClientId"), false,
-    "the assistant-visible focus does not receive the transient Learning client identity");
-  view.state.pollingCriterion.value = "Explain the visible result.";
-  assert.equal(await view.state.startLearningWatch(), true);
-  const startRequest = view.requests.find(({ url }) => url.endsWith("/learning-watches/start"));
-  const action = createColleagueActions({}).find(item => item.id === "vibe64.colleague.learning-watch.start");
-  assert.doesNotThrow(() => validateSchemaPayload(action.input, startRequest.options.body),
-    "the actual browser payload must pass the original action's strict input contract");
-  const { projectSlug, ...binding } = task;
-  assert.deepEqual(startRequest.options.body, { ...binding, targetProjectSlug: projectSlug,
-    browserClientId: view.state.clientId, watchId: startRequest.options.body.watchId,
-    criterion: "Explain the visible result." });
-  gestureChannel.value = { pollingTask: () => null, setPollingWatch() {}, clearPollingWatch() {} };
-  await flush();
-  const latestFocus = view.focusUpdates.at(-1);
-  assert.equal(Object.hasOwn(latestFocus, "learningTask"), false,
-    "leaving the task clears the private browser binding through the original focus owner");
-});
-
 
 test("an active Learning watch hands the lesson's declared app routes to the gesture owner", async t => {
   const attemptId = "33333333-3333-4333-8333-333333333333";
@@ -2671,199 +2637,9 @@ test("window focus and clicks never refresh Colleague while explicit refresh sti
   assert.ok(requests.length > before);
 });
 
-for (const scenario of ["stable", "route", "replace-during-effect", "retire-main", "focus-inflight"]) test(`Main visual open preserves actual navigation lifetime: ${scenario}`, async t => {
-  const replacesPreviewOnRoute = scenario !== "stable";
-  const { createTrainingPresentationCoordination } = await import("../../packages/vibe64-training/src/server/presentationCoordination.js");
-  const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
-  const { createTrainingMainPresentationActions, TRAINING_MAIN_PRESENTATION_ACK_ACTION } = await import("../../packages/vibe64-training/src/server/mainPresentationActions.js");
-  const ackAction = createTrainingMainPresentationActions({ project: { createRuntime() {} }, actions: { execute() {} } })
-    .find(action => action.id === TRAINING_MAIN_PRESENTATION_ACK_ACTION);
-  const validationErrors = [];
-  const { mainConversationId } = await import("@local/vibe64-sessions/shared/conversation");
-  const source = new URL("../../packages/vibe64-training/src/client/useTrainingMainPresentation.js", import.meta.url);
-  const { code: mainCode } = await transform(await readFile(source, "utf8"), { format: "cjs" });
-  const attemptId = "9490f94a-c614-4581-9111-0debb2339ca8";
-  const identity = { actorKey: "learning-local", learnerId: "1000", learningAttemptId: attemptId,
-    sourceProjectSlug: "training-9490f94ac614458191110debb2339ca8", sessionId: `training-${attemptId}`,
-    sessionsApiPath: `/api/learning/${attemptId}/vibe64/sessions`, noExercise: false };
-  const command = { id: "lm16-open", status: "pending", projectSlug: identity.sourceProjectSlug,
-    sessionId: identity.sessionId, pane: "preview", learningMode: true, learningView: "learning",
-    learningContent: "active", learningAttemptId: attemptId,
-    presentation: { operation: "open", attemptId, visualId: "client-server" } };
-  // The original routed navigator owns focus after opening. A keyed Preview
-  // subtree may be replaced by the real Vue renderer during its route transition.
-  const focus = { projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
-    pane: "lessons", learningMode: true, learningView: "learning", learningContent: "active", learningAttemptId: attemptId };
-  const effects = [], receipts = [], serverResults = [];
-  const coordination = createTrainingPresentationCoordination({ changed() {} });
-  const connection = {};
-  const pending = coordination.begin(connection, command, { conversationId: mainConversationId(identity), generation: 0 });
-  t.after(async () => { connection.acknowledge?.({ ok: false }); await pending; });
-  const data = vue.shallowRef({ generation: 0, value: { navigation: command } });
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const navigationKey = hostKeys.VIBE64_BROWSER_NAVIGATION_KEY;
-  // Exercise the original command busy gate, not a stub that accepts every ACK.
-  const coreUrl = new URL("./runtime/useCommandCore.js", import.meta.resolve("@jskit-ai/http-web/client/composables/useCommand"));
-  const { code: coreCode } = await transform(await readFile(coreUrl, "utf8"), { format: "cjs" });
-  const { validateOperationInput } = await import(new URL("./operationValidationHelpers.js", coreUrl));
-  const coreModule = { exports: {} };
-  new Function("require", "module", "exports", coreCode)(name => ({
-    "@tanstack/vue-query": { useQueryClient: () => ({}) },
-    "@jskit-ai/http-runtime/client": { resolveFieldErrors: () => ({}) },
-    "./operationValidationHelpers.js": { validateOperationInput }
-  })[name], coreModule, coreModule.exports);
-  const commandRuns = [];
-  let releaseFocus, focusInFlight = false;
-  const focusPending = new Promise(resolve => { releaseFocus = resolve; });
-  t.after(releaseFocus);
-  const imports = {
-    vue,
-    "@jskit-ai/http-web/client/composables/useEndpointResource": { useEndpointResource: () => ({ data,
-      query: { error: vue.ref(null), refetch: async () => data.value } }) },
-    "@jskit-ai/http-web/client/composables/useCommand": { useCommand: options => {
-      async function send({ path, body }) {
-        if (!path.endsWith("/ack")) {
-          if (scenario === "focus-inflight" && previewMounts >= 2) {
-            focusInFlight = true;
-            await focusPending;
-            focusInFlight = false;
-          }
-          return { ok: true };
-        }
-        receipts.push(structuredClone(body));
-        try { validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, ...body }); }
-        catch (error) { validationErrors.push(error.message); throw error; }
-        const result = coordination.acknowledge(connection, body, { conversationId: mainConversationId(identity), generation: 0 });
-        serverResults.push(result); return result;
-      }
-      if (scenario !== "focus-inflight") return { run: send };
-      const isSaving = vue.ref(false), canRun = vue.ref(true);
-      const original = coreModule.exports.useCommandCore({ ...options, canRun,
-        resource: { isSaving, async save(body, request) {
-          isSaving.value = true;
-          try { return await send({ path: request.path, body }); }
-          finally { isSaving.value = false; }
-        } } });
-      return { async run(context) {
-        const operands = { path: context.path, canRun: canRun.value, running: isSaving.value };
-        const result = await original.run(context);
-        commandRuns.push({ ...operands, result });
-        return result;
-      } };
-    } },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@jskit-ai/kernel/shared/support/visibility": { ROUTE_VISIBILITY_PUBLIC: "public" },
-    "@local/vibe64-sessions/shared/conversation": { mainConversationId },
-    "./createTrainingNavigation.js": { createTrainingNavigation },
-    "./useTrainingPresentationCue.js": { useTrainingPresentationCue },
-    "./presentationOperation.js": operations,
-    "./trainingGuide.js": await import("../../packages/vibe64-training/src/client/trainingGuide.js"),
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_BROWSER_NAVIGATION_KEY: navigationKey,
-      VIBE64_COLLEAGUE_VIEW_KEY: hostKeys.VIBE64_COLLEAGUE_VIEW_KEY }
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", mainCode)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const view = vue.ref({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId, ready: true,
-    pane: "lessons", learningView: "learning", learningBinding: identity });
-  const presentation = { state: {}, retireCue() {}, async open(input) {
-    effects.push(input); focus.pane = "preview"; view.value.pane = "preview";
-    if (scenario === "replace-during-effect") { route.path += "/replacement"; await vue.nextTick(); }
-    if (scenario === "retire-main") { current.value = false; await vue.nextTick(); }
-    return { ok: true, attemptId, visualId: "client-server", playerInstanceId: "actual-player", phase: "ready" };
-  } };
-  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const preview = vue.shallowRef(null), current = vue.ref(true);
-  let previewMounts = 0, mainDisposals = 0;
-  const PreviewPublisher = { setup() {
-    previewMounts += 1;
-    const handle = { projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
-      learnerId: identity.learnerId, learningAttemptId: attemptId, presentation: { ...presentation } };
-    preview.value = handle;
-    vue.onScopeDispose(() => { if (preview.value === handle) preview.value = null; });
-    return () => null;
-  } };
-  let owner;
-  const app = renderer.createApp({ setup() {
-    vue.onScopeDispose(() => { mainDisposals += 1; });
-    owner = module.exports.useTrainingMainPresentation({ identity, current, enabled: vue.ref(true), ready: vue.ref(true), preview });
-    return () => null;
-  } });
-  const navigation = vue.shallowRef(null);
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor: hostDescriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code: hostCode } = await transform(compileScript(hostDescriptor, { id: "lm16-original-navigation" }).content, { format: "cjs" });
-  const route = vue.reactive({ path: `/app/project/${replacesPreviewOnRoute ? "original-course-project" : identity.sourceProjectSlug}`, query: { mode: "learning", learningView: "learning" } });
-  const hostImports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: {} },
-    "@local/vibe64-training/client/presentation-operation": operations,
-    "@local/vibe64-training/client/workspace-observation": { useTrainingWorkspaceObservation: () => ({}) },
-    "@jskit-ai/http-web/client/lib/httpClient": imports["@jskit-ai/http-web/client/lib/httpClient"],
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
-      projectSlugFromRoute: () => identity.sourceProjectSlug },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => false },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const hostModule = { exports: {} };
-  new Function("require", "module", "exports", hostCode)(name => {
-    assert.ok(Object.hasOwn(hostImports, name), name); return hostImports[name];
-  }, hostModule, hostModule.exports);
-  const host = renderer.createApp({ ...hostModule.exports.default, render: () => vue.h(PreviewPublisher, { key: route.path }) });
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(navigationKey, navigation);
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: identity.actorKey });
-  host.provide(hostKeys.VIBE64_COLLEAGUE_VIEW_KEY, view);
-  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: identity.sourceProjectSlug,
-    projectVisible: true, showProject() {}, showChat() {} }));
-  host.provide(hostKeys.VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
-  host.provide(hostKeys.VIBE64_LEARNING_NAVIGATION_KEY, vue.ref(async () => { view.value.pane = "lessons"; }));
-  host.mount({}); t.after(() => host.unmount());
-  app.provide(navigationKey, navigation);
-  app.mount({}); t.after(() => app.unmount());
-  await flush();
-  assert.equal(effects.length, 1, "original player opened once");
-  if (scenario === "retire-main") {
-    assert.equal(current.value, false);
-    assert.equal(receipts.length, 0, "a retired Main cannot acknowledge even a finished visual");
-    return;
-  }
-  if (scenario === "focus-inflight") {
-    t.diagnostic(JSON.stringify({ commandRuns, error: owner.error.value, previewMounts, mainDisposals }));
-    assert.equal(focusInFlight, true, "focus remains in flight while ACK is delivered");
-    assert.ok(commandRuns.some(run => run.path.endsWith("/ack") && run.canRun), "ACK permission remains admitted");
-  }
-  assert.equal(receipts.length, 1, "one authoritative ACK, no retry");
-  assert.equal(current.value, true);
-  assert.equal(mainDisposals, 0, "the admitted Main lifetime was not retired");
-  if (scenario === "replace-during-effect") {
-    assert.equal(previewMounts, 3);
-    assert.equal(receipts[0].ok, false);
-    assert.match(receipts[0].error, /presentation changed/u);
-    assert.deepEqual(serverResults, [{ ok: true }], "the server acknowledges the failure, not a visual success");
-    assert.equal((await pending).ok, false);
-    return;
-  }
-  assert.equal(previewMounts, replacesPreviewOnRoute ? 2 : 1);
-  t.diagnostic(JSON.stringify({ replacesPreviewOnRoute, previewMounts, mainDisposals, current: current.value, receipt: receipts[0] }));
-  assert.deepEqual(validationErrors, [], owner.error.value);
-  assert.equal(receipts[0].ok, true, receipts[0].error);
-  assert.equal(receipts[0].presentation.phase, "ready");
-  t.diagnostic(JSON.stringify({ returnedPane: receipts[0].focus.pane, displayedPane: focus.pane, serverResults }));
-  assert.equal(receipts[0].focus.pane, focus.pane, "Main must not reuse pre-open Lessons focus after the player opens");
-  assert.deepEqual(serverResults, [{ ok: true }], owner.error.value);
-});
 
 test("the local browser navigator returns plain settled focus for an ordinary Learning workspace view", async t => {
   const operations = await import("../../packages/vibe64-training/src/client/presentationOperation.js");
-  const { createTrainingMainPresentationActions, TRAINING_MAIN_PRESENTATION_ACK_ACTION } = await import("../../packages/vibe64-training/src/server/mainPresentationActions.js");
-  const ackAction = createTrainingMainPresentationActions({ project: { createRuntime() {} }, actions: { execute() {} } })
-    .find(action => action.id === TRAINING_MAIN_PRESENTATION_ACK_ACTION);
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const attemptId = "9490f94a-c614-4581-9111-0debb2339ca8";
   const identity = { actorKey: "learning-local", learnerId: "1000", learningAttemptId: attemptId,
@@ -2914,11 +2690,7 @@ test("the local browser navigator returns plain settled focus for an ordinary Le
   assert.equal(Object.hasOwn(result, "focus"), false, "only presentation operations wrap their focus");
   assert.equal(result.pane, "preview");
   assert.equal(result.learningView, "workspace");
-  // Main's acknowledgement keeps only display-report fields; the server requires focus.pane.
-  const focus = Object.fromEntries(["projectSlug", "sessionId", "pane", "learningMode", "learningView", "learningContent",
-    "learningAttemptId"].filter(key => Object.hasOwn(result, key)).map(key => [key, result[key]]));
-  validateSchemaPayload(ackAction.input, { sessionId: identity.sessionId, clientId: "3c85e5a4-2990-43ed-b56e-d4ea63286c79",
-    commandId: "ed44616a-14ac-4235-9e0b-acf13032f5bf", ok: true, focus });
+  // Phase 2 retired Main's presentation acknowledgement action that validated this focus.
 });
 
 test("the local Colleague host hands Colleague its own browser navigator", async t => {

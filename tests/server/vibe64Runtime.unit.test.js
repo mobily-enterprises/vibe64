@@ -1008,7 +1008,6 @@ test("authorized source-less learning session retains original store identity ac
       projectContextRoot: root, sessionId: "lesson-zero", sessionRoot: created.sessionRoot
     });
     assert.deepEqual(await restarted.renderPrompt("lesson-zero", { request: "Teach me" }), { prompt: "Teach me" });
-    await assert.rejects(() => restarted.getLearningInstructions("lesson-zero"), { code: "vibe64_learning_instructions_unavailable" });
   });
 });
 
@@ -1074,45 +1073,16 @@ test("archived source-less learning history retains exact binding without requir
 });
 
 
-test("learning instructions use only the fresh exact owner and reject stale, absent or invalid results", async () => {
-  await withTemporaryRoot(async root => {
-    let result = "Teach this exact pin.";
-    let reads = 0;
-    const runtime = sourceLessLessonRuntime(root, {
-      promptRenderer: async () => assert.fail("Learning never renders Genesis"),
-      promptEnvironment: async () => assert.fail("Learning never reads project Env"),
-      learningInstructions: async sessionId => { assert.equal(sessionId, "fresh-teaching"); reads += 1; return result; }
-    });
-    await runtime.createSession({ sessionId: "fresh-teaching" });
-    assert.equal(await runtime.getLearningInstructions("fresh-teaching"), result);
-    result = "Updated progress on the same pin.";
-    assert.equal(await runtime.getLearningInstructions("fresh-teaching"), result);
-    assert.equal(reads, 2);
-    assert.deepEqual(await runtime.renderPrompt("fresh-teaching", { request: "Can you repeat that?" }), { prompt: "Can you repeat that?" });
-    assert.equal(reads, 2, "The actual authored request is separate from native system instructions");
-    for (result of [null, "", "a".repeat(128 * 1024 + 1)]) {
-      await assert.rejects(() => runtime.getLearningInstructions("fresh-teaching"), { code: "vibe64_learning_instructions_invalid" });
-    }
-    const late = sourceLessLessonRuntime(root, { learningInstructions: async () => {
-      await runtime.store.writeStatus("fresh-teaching", "blocked"); return "Late instructions";
-    } });
-    await assert.rejects(() => late.getLearningInstructions("fresh-teaching"), { code: "vibe64_learning_session_inactive" });
-    await assert.rejects(() => runtime.renderPrompt("fresh-teaching", { request: "Cannot run" }), { code: "vibe64_learning_session_inactive" });
-  });
-});
 
-
-test("closing learning session cannot expose execution or instructions or admit another request", async () => {
+test("closing learning session cannot expose execution or admit another request", async () => {
   await withTemporaryRoot(async root => {
-    let instructionsRead = false;
-    const runtime = sourceLessLessonRuntime(root, { learningInstructions: async () => { instructionsRead = true; return "Teach"; } });
+    const runtime = sourceLessLessonRuntime(root);
     await runtime.createSession({ sessionId: "closing-learning" });
     await runtime.markSessionClosing("closing-learning", { reason: "archived" });
-    for (const operation of [() => runtime.getNativeExecutionRoot("closing-learning"), () => runtime.getLearningInstructions("closing-learning"),
+    for (const operation of [() => runtime.getNativeExecutionRoot("closing-learning"),
       () => runtime.renderPrompt("closing-learning", { request: "Continue" })]) {
       await assert.rejects(operation, { code: "vibe64_learning_session_inactive" });
     }
-    assert.equal(instructionsRead, false);
     assert.equal((await runtime.getSession("closing-learning")).purpose, "learning", "Retained history remains readable during close");
   });
 });
@@ -1122,7 +1092,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
   await withTemporaryRoot(async root => {
     const scope = { ...sourceLessLessonScope(), noExercise: false };
     const environment = { PRACTICE_VALUE: "original environment" };
-    let sourceCreates = 0, environmentReads = 0, instructionReads = 0;
+    let sourceCreates = 0, environmentReads = 0;
     const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
       projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: scope, inspectSourceByDefault: false,
       createSessionSource: async ({ session, store, originalActor }) => {
@@ -1136,8 +1106,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
         assert.equal(projectRoot, sourcePath(root, "practice-learning")); assert.equal(actual, environment);
         assert.equal(action.genesisTask, "start"); assert.equal(input.request, "Explain the exercise.");
         return { prompt: "Original Genesis exercise prompt" };
-      },
-      learningInstructions: async id => { assert.equal(id, "practice-learning"); instructionReads++; return "Teach this exact practice pin."; }
+      }
     });
     const created = await runtime.createSession({ sessionId: "practice-learning", sourceContext: { originalActor: "learner42" } });
     assert.equal(sourceCreates, 1); assert.equal(created.sourceReady, true); assert.equal(created.sourcePath, sourcePath(root, created.sessionId));
@@ -1146,9 +1115,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
     assert.equal(await runtime.getNativeExecutionRoot(created.sessionId), created.sourcePath);
     await assert.rejects(access(path.join(created.sessionRoot, "native")), { code: "ENOENT" });
     assert.deepEqual(await runtime.renderPrompt(created.sessionId, { request: "Explain the exercise." }), { prompt: "Original Genesis exercise prompt" });
-    assert.equal(environmentReads, 1); assert.equal(instructionReads, 0);
-    assert.equal(await runtime.getLearningInstructions(created.sessionId), "Teach this exact practice pin.");
-    assert.equal(instructionReads, 1, "Training system instructions remain separate from the original source prompt");
+    assert.equal(environmentReads, 1);
     await runtime.writeConversationUserMessage(created.sessionId, { messageId: "practice-question", text: "Teach this exercise." });
     await runtime.writeConversationAssistantMessage(created.sessionId, { messageId: "practice-answer", text: "Here is the retained explanation." });
     const history = await runtime.readConversationLog(created.sessionId);
@@ -1159,7 +1126,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
     assert.equal((await restarted.listSessionSummaries())[0].nativeExecutionRoot, created.sourcePath);
     await restarted.markSessionClosing(created.sessionId);
     for (const operation of [() => restarted.getNativeExecutionRoot(created.sessionId),
-      () => restarted.renderPrompt(created.sessionId, { request: "New work" }), () => restarted.getLearningInstructions(created.sessionId)]) {
+      () => restarted.renderPrompt(created.sessionId, { request: "New work" })]) {
       await assert.rejects(operation, { code: "vibe64_learning_session_inactive" });
     }
     assert.equal(await restarted.getNativeExecutionRoot(created.sessionId, { allowClosing: true }), created.sourcePath);

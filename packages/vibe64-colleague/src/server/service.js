@@ -1,7 +1,5 @@
-import { createTrainingPracticalObservations } from "@local/vibe64-training/server/practical-observations";
 import { trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/guide-targets";
-import { publicCue, createColleagueNavigationCoordination } from "./navigationCoordination.js";
-import { evaluateAdmittedTrainingAssessment } from "@local/vibe64-training/server/conversation-assessment";
+import { createColleagueNavigationCoordination } from "./navigationCoordination.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -10,25 +8,12 @@ import { createConversationRuntime, createConversationTranscript, createConversa
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
-  stageAdmittedTrainingQuestion, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
-import { createLearningWatchCoordinator } from "@local/vibe64-training/server/learning-watch";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, nativeInstructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
-// The retired Main teacher's operations refuse a Colleague context and are
-// removed with the teacher model (Learning v2 phase 2); Colleague teaches
-// through lesson.read, navigation, guides and checks instead.
-const RETIRED_MAIN_TEACHER_ACTIONS = new Set([
-  "vibe64.training.question.prepare", "vibe64.training.answer.evaluate",
-  "vibe64.training.practical.evaluate", "vibe64.training.view.open", "vibe64.training.visual.open",
-  "vibe64.training.visual.command", "vibe64.training.visual.cue",
-  "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot",
-  "vibe64.training.practical.read"
-]);
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
@@ -126,7 +111,6 @@ function colleagueBrowserStream(streaming) {
 }
 
 function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
-  const practicalObservations = createTrainingPracticalObservations({ actions, failure });
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const toolLimits = { maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT };
   const conversationOwners = new Map();
@@ -144,7 +128,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (!state || state.record.runtimeId !== key) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
       decorateOperationReceipts(state, conversationLog);
-      await promoteTrainingQuestionDeliveries(conversationLog, state.record.scopeId, transaction);
       const selected = state.selecting;
       const selectedConfiguration = selected?.configuration;
       const committedSelection = selected && !metadata.runtime?.replacement && metadata.runtime?.engine === selected.engine &&
@@ -159,7 +142,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
-  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" && !RETIRED_MAIN_TEACHER_ACTIONS.has(actionId) &&
+  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" &&
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));
   const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });
@@ -226,10 +209,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const conversationSources = new Map();
   let closed = false;
   let resolveName = async () => "Colleague";
-  const learningWatches = createLearningWatchCoordinator({
-    host: { persist, actionContext, closed: () => closed }, pollMs: watchPollMs, debounceMs: watchDebounceMs
-  });
-  const presentWatch = watch => learningWatches.isWatch(watch) ? learningWatches.publicWatch(watch) : publicWatch(watch);
 
   function userKey(context) {
     const user = authenticatedVibe64User(context);
@@ -278,7 +257,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
-    state.presentation = createColleagueNavigationCoordination({ changed: () => publishBrowserChange(state) });
+    state.navigation = createColleagueNavigationCoordination({ changed: () => publishBrowserChange(state) });
     if (record.status === "working") {
       record.status = "interrupted";
       record.error ||= "The server restarted. Your history is kept. Inspect unfinished operations before continuing; nothing was repeated.";
@@ -291,7 +270,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         for (const watch of record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
       }
     }
-    await learningWatches.restore(state);
     for (const chat of [record, ...record.previousConversations]) conversationOwners.set(chat.runtimeId, state);
     return state;
   }
@@ -381,11 +359,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             messageId: event.messageId, streaming: colleagueBrowserStream(event.streaming), interimReply });
           return;
         }
-        const presentationCue = state.presentation.outputCue(state.connections.values(), event);
         observer.listener({ ...event, interimReply,
           ...(event.type === "message" && event.status === "inProgress"
             ? { text: event.text.replace(/[\uD800-\uDBFF]$/, "") } : {}),
-          ...(presentationCue ? { presentationCue: publicCue(presentationCue) } : {}),
           ...(event.streaming ? { streaming: colleagueBrowserStream(event.streaming) } : {}) });
       });
       if (!state.browserObservers.has(observer)) release();
@@ -431,22 +407,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     };
   }
 
-  function interactiveTrainingTurn(state, context, { requireCompletedCue = true } = {}) {
-    const conversationId = context.colleague?.conversationId;
-    const turnId = state.replyTurnId;
-    const generation = context.colleague?.generation;
-    const connection = state.connections.get(context.colleague?.clientId);
-    assertCurrentConversation(state, conversationId);
-    if (closed || state.stopping || conversationId !== state.record.scopeId || !state.running ||
-        context.colleague?.autonomous || generation !== state.generation || !turnId || !connection) {
-      throw failure("Stage a lesson question only in its current admitted interactive turn.");
-    }
-    if (requireCompletedCue && !state.presentation.allowsQuestion(connection, conversationId)) {
-      throw failure("Finish the current explanation cue before asking the next lesson question.");
-    }
-    return { conversationId, turnId, generation };
-  }
-
   async function snapshot(state, clientId = "") {
     const page = await transcript.readConversationLogPage(state.record.runtimeId, { limit: 50, presentation: true });
     const record = state.record;
@@ -462,10 +422,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
       streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
       pagination: page.pagination,
-      watches: record.watches.map(presentWatch),
+      watches: record.watches.map(publicWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
-      navigation: state.connections.get(clientId)?.navigation || null,
-      cue: state.connections.get(clientId)?.cue ? publicCue(state.connections.get(clientId).cue) : null
+      navigation: state.connections.get(clientId)?.navigation || null
     };
   }
 
@@ -591,9 +550,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return { context, observations, readOnly, observedAssignmentIds };
   }
 
-  async function workerData(state, connection, currentContext, autonomous, message) {
+  async function workerData(state, connection, currentContext, autonomous) {
     return { assistantName: await resolveName(), focus: connection.focus,
-      ...(message?.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}),
       userMessageIds: currentContext.context.colleague.userMessageIds, observations: currentContext.observations, readOnly: currentContext.readOnly, autonomous,
       assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || currentContext.observedAssignmentIds.includes(item.assignmentId))
         .map(item => {
@@ -624,8 +582,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       // prepared owner decides whether this request needs native app admission.
       if (message) {
         const turn = await transcript.writeConversationUserMessage(state.record.runtimeId, {
-          messageId: message.messageId, text: message.text,
-          ...(message.trainingQuestion ? { data: { trainingQuestion: message.trainingQuestion } } : {}) });
+          messageId: message.messageId, text: message.text });
         if (!turn) throw failure("The authored Colleague message could not be admitted.");
         state.pendingMessages.push({ ...message, turnId: turn.turnId });
         state.nextConnection = connection;
@@ -633,7 +590,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       return runNative(state, connection, generation, controller);
     }
-    const data = await workerData(state, connection, currentContext, autonomous, message);
+    const data = await workerData(state, connection, currentContext, autonomous);
     const streamId = randomUUID();
     const messageId = message?.messageId || `observation-${randomUUID()}`;
     let replyTurnId = "";
@@ -686,7 +643,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           return;
         }
         if (progress && (event.role === "commentary" || (event.outputId || event.messageId) === progress.id)) return;
-        state.presentation.bindOutput(state.connections.get(connection.clientId), event, generation);
         state.interimReply = null;
         state.streamingReply = { id: event.outputId || event.messageId, turnId: event.turnId,
           ...(event.outputId ? { outputId: event.outputId } : {}), role: "assistant",
@@ -816,10 +772,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           const conversation = await prepare(state, currentContext.context, connection.assistantSelection, systemPrompt);
           await conversation.configure({ outputSchema });
           controller.signal.throwIfAborted();
-          const data = await workerData(state, connection, currentContext, autonomous, messages.at(-1));
+          const data = await workerData(state, connection, currentContext, autonomous);
           const operation = state.record.conversationLog.findLast(turn => turn.metadata?.applicationTools?.length)?.metadata.applicationTools.at(-1);
-          const text = JSON.stringify({ ...data, userMessages: messages.map(message => ({ messageId: message.messageId, text: message.text,
-            ...(message.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}) })), progressAlreadySaid,
+          const text = JSON.stringify({ ...data, userMessages: messages.map(message => ({ messageId: message.messageId, text: message.text })),
+            progressAlreadySaid,
             previousOperation: operation ? { ...operation, toolName: operation.name,
               status: operation.status === "running" ? "executing" : operation.status === "complete" ? "completed" : operation.status }
               : data.previousOperation, feedback });
@@ -935,7 +891,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       .catch(async error => {
         admission.reject(error);
         if (state.generation !== generation) return;
-        state.presentation.failCue(state.connections.get(connection.clientId), generation);
         state.record.status = "failed";
         state.record.error = error.message;
         await persist(state);
@@ -982,7 +937,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   function scheduleWatches(state, delay = watchPollMs) {
     if (closed || state.rotating || !state.requestContext ||
-        !state.record.watches.some((watch) => !learningWatches.isWatch(watch) && watch.status === "active")) return;
+        !state.record.watches.some((watch) => watch.status === "active")) return;
     if (state.watchTimer && delay === watchPollMs) return;
     clearTimeout(state.watchTimer);
     state.watchTimer = setTimeout(() => {
@@ -1056,7 +1011,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     state.polling = (async () => {
       for (const watch of state.record.watches) {
         if (closed || !state.requestContext) break;
-        if (learningWatches.isWatch(watch) || watch.status !== "active") continue;
+        if (watch.status !== "active") continue;
         try {
           await observeWatch(state, watch);
         }
@@ -1091,83 +1046,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const payload = event.realtime?.payload || {};
         const relevant = watch => watch.status === "active" && watch.sessionId === event.entityId &&
           (!payload.projectSlug || watch.projectSlug === payload.projectSlug);
-        if (state.record.watches.some(watch => !learningWatches.isWatch(watch) && relevant(watch))) {
-          scheduleWatches(state, watchDebounceMs);
-        }
-        if (state.record.watches.some(watch => learningWatches.isWatch(watch) && relevant(watch))) {
-          learningWatches.schedule(state, watchDebounceMs);
-        }
+        if (state.record.watches.some(relevant)) scheduleWatches(state, watchDebounceMs);
       });
     }
   });
-
-  async function evaluateTraining(kind, input, context) {
-    const state = await stateFor(context);
-    const admitted = interactiveTrainingTurn(state, context, { requireCompletedCue: false });
-    if (state.summaryRunning) throw failure("Finish or stop the current Colleague Helper operation first.");
-    if (!context.colleague.userMessageIds?.includes(input.messageId)) {
-      throw failure("Evaluate only the learner message admitted in this interactive turn.");
-    }
-    const evaluate = kind === "practical"
-      ? context.trainingAssessment?.evaluatePractical : context.trainingAssessment?.evaluateAnswer;
-    if (typeof evaluate !== "function") {
-      throw failure("Lesson assessment evaluation is unavailable in this host.");
-    }
-    let practical, connection, practicalFacts;
-    const controller = new AbortController();
-    const abort = () => controller.abort(context.signal.reason);
-    if (context.signal?.aborted) abort();
-    else context.signal?.addEventListener("abort", abort, { once: true });
-    const authorizationContext = { ...context };
-    delete authorizationContext.vibe64Action;
-    const requireCurrent = async () => {
-      controller.signal.throwIfAborted();
-      await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: authorizationContext });
-      if (await stateFor(context) !== state ||
-          !isDeepStrictEqual(interactiveTrainingTurn(state, context, { requireCompletedCue: false }), admitted)) {
-        throw failure("The admitted learner answer turn changed before evaluation finished.");
-      }
-      if (practical && (state.connections.get(context.colleague.clientId) !== connection ||
-          connection.trainingPractical !== practical ||
-          !isDeepStrictEqual({ reference: practical.reference, observation: practical.observation, checkResult: practical.checkResult }, practicalFacts))) {
-        throw failure("The native practical observation changed before evaluation finished.");
-      }
-      controller.signal.throwIfAborted();
-    };
-    state.requestContext = context;
-    state.summaryAbort = controller;
-    const operation = Promise.resolve().then(async () => {
-      await requireCurrent();
-      const log = await transcript.readConversationLog(state.record.runtimeId);
-      const accepted = readAcceptedTrainingAnswer(log, { ...admitted, messageId: input.messageId });
-      if (!accepted) {
-        throw failure("Evaluate an accepted learner answer associated with its exact delivered native question.");
-      }
-      const { message, reference } = accepted;
-      if (kind === "practical") {
-        connection = state.connections.get(context.colleague.clientId);
-        practical = connection?.trainingPractical;
-        if (!practical?.observation || practical.observation.observationId !== input.observationId ||
-            !isDeepStrictEqual(practical.reference, reference)) {
-          throw failure("Evaluate only this connection's completed observation for its exact delivered question.");
-        }
-        practicalFacts = structuredClone({ reference: practical.reference,
-          observation: practical.observation, checkResult: practical.checkResult });
-      }
-      await requireCurrent();
-      return evaluateAdmittedTrainingAssessment(kind, {
-        attemptId: input.attemptId, expectedRevision: input.expectedRevision, submissionId: input.submissionId,
-        message: structuredClone(message),
-        ...(kind === "practical" ? { observation: structuredClone(practicalFacts.observation), checkResult: structuredClone(practicalFacts.checkResult) } : {})
-      }, context, { assessment: context.trainingAssessment, state, helper: summaries, requireCurrent });
-    }).finally(() => {
-      context.signal?.removeEventListener("abort", abort);
-      if (state.summaryRunning === operation) state.summaryRunning = null;
-      if (state.summaryAbort === controller) state.summaryAbort = null;
-    });
-    state.summaryRunning = operation;
-    return operation;
-  }
 
   const service = {
     browserConversations: {
@@ -1179,8 +1061,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const requestContext = { surface: "app", channel: "internal", requestMeta: request ? {
           ...context.requestMeta, request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
         } : context?.requestMeta,
-          ...(context?.trainingTeaching === undefined ? {} : { trainingTeaching: context.trainingTeaching }),
-          ...(context?.trainingAssessment === undefined ? {} : { trainingAssessment: context.trainingAssessment }),
           colleague: { userKey: userKey(context), clientId: "", focus: null } };
         await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
         const state = await stateFor(context);
@@ -1265,7 +1145,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           normalized.notify !== undefined && typeof normalized.notify !== "function") {
         throw new TypeError("A conversation source needs a unique name and an authorized reader.");
       }
-      if (name === "learning-task") return learningWatches.registerSource(normalized);
       if (conversationSources.has(name)) throw new TypeError("A conversation source needs a unique name and an authorized reader.");
       conversationSources.set(name, Object.freeze({ read: normalized.read, ...(normalized.notify ? { notify: normalized.notify } : {}) }));
     },
@@ -1277,64 +1156,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = await stateFor(context);
       state.requestContext = context;
       scheduleWatches(state);
-      learningWatches.schedule(state);
       wakeForObservations(state);
-      const result = await snapshot(state, input.clientId);
-      let trainingQuestion = null;
-      try {
-        // Scope discovery to an actual native delivery, never whichever lesson
-        // store happens to be active. The host still revalidates its question.
-        const delivery = deliveredQuestion(state);
-        const deliveredReference = delivery && state.record.conversationLog.find(turn => turn.turnId === delivery.turnId)
-          ?.metadata.trainingQuestionDelivery.reference;
-        const reference = await context.trainingTeaching?.readQuestionReference({ actor: authenticatedVibe64User(context),
-          ...(deliveredReference ? { reference: structuredClone(deliveredReference) } : {}),
-          completedPracticals: completedPracticalQuestions(state) });
-        if (reference && deliveredQuestion(state, reference)) trainingQuestion = { ...reference };
-      } catch { /* Missing or unavailable teaching never blocks ordinary chat. */ }
-      return { ...result, trainingQuestion };
-    },
-    async requireTrainingQuestionTurn(context) {
-      return interactiveTrainingTurn(await stateFor(context), context);
-    },
-    async stageTrainingQuestion(reference, context) {
-      const state = await stateFor(context);
-      const admitted = interactiveTrainingTurn(state, context);
-      return stageAdmittedTrainingQuestion(reference, {
-        actor: authenticatedVibe64User(context), teaching: context.trainingTeaching,
-        storage, storageId: state.record.runtimeId, admitted, failure,
-        requireCurrent() {
-          if (!isDeepStrictEqual(interactiveTrainingTurn(state, context), admitted)) {
-            throw failure("The admitted lesson question turn changed before staging.");
-          }
-        }
-      });
-    },
-    evaluateTrainingAnswer(input, context) {
-      return evaluateTraining("answer", input, context);
-    },
-    evaluateTrainingPractical(input, context) {
-      return evaluateTraining("practical", input, context);
-    },
-    async observeTrainingPractical(input, context) {
-      const state = await stateFor(context);
-      const observing = state.admission.then(async () => {
-        const connection = state.connections.get(input.clientId);
-        const requireCurrent = () => {
-          assertCurrentConversation(state, input.conversationId);
-          if (closed || state.stopping || state.rotating || input.conversationId !== state.record.scopeId ||
-              !connection || state.connections.get(input.clientId) !== connection || !deliveredQuestion(state, input.reference)) {
-            throw failure("Repeat the practical task in its current connected lesson question.");
-          }
-        };
-        const authorizationContext = { ...context, colleague: { ...context.colleague,
-          userKey: state.key, conversationId: input.conversationId, clientId: input.clientId } };
-        delete authorizationContext.vibe64Action;
-        return practicalObservations.observe(input, { connection, context: authorizationContext, requireCurrent,
-          authorizeCurrent: () => actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: authorizationContext }) });
-      });
-      state.admission = observing.catch(() => {});
-      return observing;
+      return snapshot(state, input.clientId);
     },
     async startFresh(input, context) {
       const state = await stateFor(context);
@@ -1396,7 +1219,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           state.streamRevision = 0;
           state.requestContext = context;
           for (const connection of state.connections.values()) {
-            state.presentation.retireCue(connection);
             connection.acknowledge?.({ ok: false,
               error: "The previous Colleague conversation was retained as history before navigation completed." });
           }
@@ -1406,7 +1228,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         } finally {
           state.rotating = false;
           scheduleWatches(state);
-          learningWatches.schedule(state);
           wakeForObservations(state);
         }
       }));
@@ -1483,22 +1304,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         return { ok: true, watch: publicWatch(watch) };
       });
     },
-    async startLearningWatch(input, context) {
-      const state = await stateFor(context);
-      return changeWatches(state, () => learningWatches.start(state, input, context));
-    },
-    async observeLearningTask(input, context) {
-      const state = await stateFor(context);
-      return changeWatches(state, async () => {
-        state.requestContext = context;
-        return learningWatches.observe(state, input);
-      });
-    },
     async cancelWatch(input, context) {
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
-        if (learningWatches.isWatch(watch)) return learningWatches.cancel(state, watch);
         if (watch) {
           watch.status = "cancelled";
           const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
@@ -1515,20 +1324,18 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find(item => item.watchId === input.watchId);
-        if (learningWatches.isWatch(watch)) return learningWatches.pause(state, watch);
         if (!watch || !["active", "pending"].includes(watch.status)) throw failure("Only an active watch can be paused.");
         if (watch.assignmentId) throw failure("Pause the assignment through its retained assignment controls.");
         watch.status = "paused";
         watch.error = "Watching paused by the learner.";
         await suppressWatchObservation(state, input.watchId);
-        return { ok: true, watch: presentWatch(watch) };
+        return { ok: true, watch: publicWatch(watch) };
       });
     },
     async resumeWatch(input, context) {
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
-        if (learningWatches.isWatch(watch)) return learningWatches.resume(state, watch, input, context);
         if (!watch || watch.status !== "paused") throw failure("Only a paused watch can be resumed.");
         if (watch.assignmentId) throw failure("Resume the assignment through assignment.update after a new user instruction.");
         state.requestContext = context;
@@ -1607,11 +1414,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await selecting;
       return snapshot(state);
     },
-    async readCue(input, context) {
-      const state = await stateFor(context);
-      assertCurrentConversation(state, context.colleague?.conversationId);
-      return state.presentation.readCue(state.connections.get(context.colleague?.clientId), input, { conversationId: state.record.scopeId });
-    },
     async context(_input, context = {}) {
       const state = await stateFor(context);
       assertCurrentConversation(state, context.colleague?.conversationId);
@@ -1621,29 +1423,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (context.requestMeta?.request) state.requestContext = context;
       const connection = state.connections.get(context.colleague?.clientId);
       const focused = context.colleague?.focus || connection?.focus || null;
-      const result = { ok: true, focus: focused || {} };
-      const authorizationContext = { ...context };
-      delete authorizationContext.vibe64Action;
-      const requireCurrent = () => {
-        if (closed || state.stopping || state.rotating || context.colleague?.conversationId !== state.record.scopeId ||
-            state.connections.get(context.colleague?.clientId) !== connection ||
-            !deliveredQuestion(state, connection?.trainingPractical?.reference)) {
-          throw failure("Repeat the practical task in its current connected lesson question.");
-        }
-      };
-      return { ...result, ...await practicalObservations.read({ connection, context, authorizationContext, requireCurrent
-      }) };
+      return { ok: true, focus: focused || {} };
     },
     async focus(input, context, { browserBinding } = {}) {
       const state = await stateFor(context);
       if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
-      const previousFocus = connection.focus;
-      const previousLearningTask = connection.learningTask;
-      const demonstration = connection.navigation?.status === "pending";
-      state.presentation.retireForFocus(connection, input.focus);
       connection.focus = input.focus;
-      connection.learningTask = input.learningTask ? structuredClone(input.learningTask) : null;
       state.connections.set(input.clientId, connection);
       if (browserBinding) {
         if (connection.browserBinding?.owner !== browserBinding.owner) {
@@ -1652,25 +1438,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             const current = state.connections.get(input.clientId);
             if (current?.browserBinding?.owner !== owner) return;
             state.connections.delete(input.clientId);
-            state.presentation.retireCue(current);
             current.acknowledge?.({ ok: false, error: "The initiating browser disconnected." });
-            const previous = current.focus;
             current.focus = null;
-            current.learningTask = null;
-            await learningWatches.focusChanged(state, current, previous, false);
           } };
         }
         browserBinding.onRelease(connection.browserBinding.release);
       }
       state.requestContext = context;
-      await learningWatches.focusChanged(state, connection, previousFocus, demonstration, previousLearningTask);
       return { ok: true, focus: connection.focus };
     },
     async navigate(input, context) {
       const state = await stateFor(context);
       const learningFields = input.learningView || input.learningContent || input.learningTargetAttemptId;
-      if ((input.learning || input.guide) && (input.learningMode !== undefined || learningFields || input.presentation)) {
-        return { ok: false, error: "Use learning or guide without the retired Learning mode fields or a lesson presentation." };
+      if ((input.learning || input.guide) && (input.learningMode !== undefined || learningFields)) {
+        return { ok: false, error: "Use learning or guide without the retired Learning mode fields." };
       }
       if (input.learning && input.learning.open !== true && (input.learning.attemptId || input.learning.stepId)) {
         return { ok: false, error: "Minimising Learning cannot also select a lesson or step." };
@@ -1718,10 +1499,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (input.learningContent === "active" && (!input.learningTargetAttemptId || !input.sessionId || input.conversationId)) {
         return { ok: false, error: "Choose the exact active lesson attempt and session without a temporary conversation." };
       }
-      if (input.presentation && (!input.sessionId || input.pane !== "preview" || input.conversationId || input.planView ||
-          !["open", "command", "snapshot", "cue"].includes(input.presentation.operation))) {
-        return { ok: false, error: "A lesson presentation requires its exact exercise session and Preview." };
-      }
       if (input.planView && (!input.sessionId || input.pane || input.conversationId)) {
         return { ok: false, error: "Choose the exact session's Main chat, without another pane or conversation, to open its plan viewer." };
       }
@@ -1740,15 +1517,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       const connection = state.connections.get(context.colleague?.clientId);
       if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
-      if (input.presentation?.operation === "cue") {
-        const result = state.presentation.admitCue(connection, input, { conversationId: state.record.scopeId, turnId: state.replyTurnId,
-          interactive: Boolean(state.running && context.colleague?.generation === state.generation && !context.colleague?.autonomous && state.replyTurnId) });
-        if (result) return result;
-      }
       if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
       if (guided) {
-        return state.presentation.begin(connection, trainingGuideCommand(guided, { id: randomUUID(),
-          projectSlug: input.projectSlug || "", sessionId: input.sessionId || "" }), { get generation() { return state.generation; } });
+        return state.navigation.begin(connection, trainingGuideCommand(guided, { id: randomUUID(),
+          projectSlug: input.projectSlug || "", sessionId: input.sessionId || "" }));
       }
       const command = { id: randomUUID(), projectSlug: input.projectSlug,
         ...(input.managementView ? { managementView: input.managementView } : {}),
@@ -1765,18 +1537,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.learning ? { learning: { open: input.learning.open === true,
           ...(input.learning.attemptId ? { attemptId: input.learning.attemptId } : {}),
           ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
-        ...(input.presentation ? { presentation: structuredClone(input.presentation) } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
-      if (input.presentation?.operation === "cue") {
-        Object.assign(command.presentation, { navigationId: command.id, clientId: connection.clientId,
-          conversationId: state.record.scopeId, turnId: state.replyTurnId });
-      }
-      return state.presentation.begin(connection, command, { get generation() { return state.generation; } });
+      return state.navigation.begin(connection, command);
     },
     async acknowledgeNavigation(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId);
-      return state.presentation.acknowledge(connection, input, { conversationId: state.record.scopeId });
+      return state.navigation.acknowledge(connection, input);
     },
     async send(input, context, { receiptOnly = false } = {}) {
       const state = await stateFor(context);
@@ -1795,15 +1562,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (previousMessage) {
           if (previousMessage.text !== input.message) throw failure("This message ID belongs to a different request. Use a new message ID.");
           return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
-        }
-        let trainingQuestion;
-        if (input.trainingQuestion) {
-          try {
-            trainingQuestion = await captureDeliveredTrainingQuestion(state.record.conversationLog, {
-              conversationId: state.record.scopeId, reference: input.trainingQuestion,
-              teaching: context.trainingTeaching, actor: authenticatedVibe64User(context)
-            });
-          } catch { /* A stale question leaves this request ordinary and ungraded. */ }
         }
         assertCurrentConversation(state, expected);
         if (closed || state.stopping) throw failure("Colleague is stopping. Send again once it has stopped.");
@@ -1826,17 +1584,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           // App admission is independent of native admission: these are the
           // actual authored rows, not fabricated native acknowledgements.
           const turn = await transcript.writeConversationUserMessage(state.record.runtimeId, {
-            messageId: input.messageId, text: input.message,
-            ...(trainingQuestion ? { data: { trainingQuestion } } : {}) });
+            messageId: input.messageId, text: input.message });
           if (!turn) throw failure("The authored Colleague message could not be admitted.");
-          state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId,
-            ...(trainingQuestion ? { trainingQuestion } : {}) });
+          state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
           state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
           if (!state.running) void startWorker(state, state.nextConnection, null, true).catch(() => {});
           return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
         }
-        return startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message,
-          ...(trainingQuestion ? { trainingQuestion } : {}) });
+        return startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message });
       });
       state.admission = admitted.catch(() => {});
       const receipt = await admitted;
@@ -1853,7 +1608,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       try { assertCurrentConversation(state, expected); } catch (error) { state.stopping = false; throw error; }
       state.generation += 1;
       state.pendingMessages = [];
-      for (const connection of state.connections.values()) state.presentation.retireCue(connection);
       state.streamingReply = null;
       state.interimReply = null;
       publishReply(state);
@@ -1897,7 +1651,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await state.running;
         await state.saving;
       }
-      await learningWatches.close();
       await Promise.all([runtime.close(), nativeRuntime.close()]);
     }
   };

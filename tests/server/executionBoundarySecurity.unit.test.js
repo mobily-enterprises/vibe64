@@ -168,7 +168,9 @@ test("the daemon's generic commands admit only exact Learning source scratch dir
   assert.throws(() => resolveAllowedCwd(scratch, owner.username, { ...options, operation: "github-workflow-command" }));
 });
 
-test("the daemon's generic commands admit only exact Learning session agent directories", async (t) => {
+// Learning v2 retired the source-less teacher: its former agent directory is
+// no longer an allowed working directory (the rule was removed with it).
+test("the daemon's generic commands no longer admit retired Learning session agent directories", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-learning-session-security-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const home = path.join(root, "home");
@@ -190,12 +192,9 @@ test("the daemon's generic commands admit only exact Learning session agent dire
   await symlink(outside, escaping);
   const owner = { home, username: "v64d_workspace" };
   const options = { operation: "vibe64-command", targetUser: owner };
-  assert.equal(resolveAllowedCwd(native, owner.username, options), native);
-  for (const refused of [users, session, nested, mismatched, malformedLearner, otherNamespace, escaping]) {
+  for (const refused of [native, users, session, nested, mismatched, malformedLearner, otherNamespace, escaping]) {
     assert.throws(() => resolveAllowedCwd(refused, owner.username, options), undefined, refused);
   }
-  assert.throws(() => resolveAllowedCwd(native, "v64d_another", options));
-  assert.throws(() => resolveAllowedCwd(native, owner.username, { ...options, operation: "github-workflow-command" }));
 });
 
 test("workspace cache jobs use an exact daemon scratch directory without opening other private state", async (t) => {

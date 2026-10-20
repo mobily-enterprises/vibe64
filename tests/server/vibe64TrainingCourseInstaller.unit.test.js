@@ -13,7 +13,6 @@ import { createTrainingCourseInstaller } from "../../packages/vibe64-training/sr
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 
 // Real local Git repositories stand in for GitHub: the installer's remote
 // resolver maps each canonical owner/name slug to a file:// URL.
@@ -237,7 +236,7 @@ test("catalogue actions require a signed-in user and report install results", as
   const auth = { user: null };
   const actions = createActionCatalogue();
   const missing = { readCatalogue: f.catalogue.readCatalogue };
-  const definitions = createTrainingActions({ catalogue: f.catalogue, learners: { readState() {} }, teachingBrief: { readBrief() {} },
+  const definitions = createTrainingActions({ catalogue: f.catalogue, learners: { readState() {} },
     courseInstaller: f.make() });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
@@ -256,7 +255,7 @@ test("catalogue actions require a signed-in user and report install results", as
   await assert.rejects(execute("course.install", { courseId: "first-course", release: "9.9.9" }), { code: "VIBE64_TRAINING_COURSE_NOT_AVAILABLE" });
   const unavailable = createActionCatalogue();
   unavailable.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ catalogue: missing,
-    learners: { readState() {} }, teachingBrief: { readBrief() {} } }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
+    learners: { readState() {} } }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(unavailable, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
   const result = await unavailable.execute({ actionId: "vibe64.training.course.install", input: { courseId: "first-course", release: "0.1.0" },
     context: { channel: "api", surface: "app" } });
@@ -304,8 +303,11 @@ test("an update installs the newer release and retires older releases for new st
   await content.readTopic(oldPin.topic);
   const resumed = await learners.resumeAttempt({ actor, attemptId: reserved.attempt.attemptId });
   assert.equal(resumed.attempt.attemptId, reserved.attempt.attemptId);
-  const brief = await createTrainingTeachingBrief({ content, learners }).readBrief({ actor, attemptId: reserved.attempt.attemptId });
-  assert.equal(brief.lesson.hash, oldLesson.hash);
+  // The retired teaching brief read this pinned lesson; the installed-content
+  // owner still serves the saved attempt's exact pinned lesson.
+  const lesson = await content.readLesson({ ...state.active.pin.topic, lessonCode: state.active.pin.lesson.code,
+    lessonHash: state.active.pin.lesson.hash });
+  assert.equal(lesson.hash, oldLesson.hash);
 
   // Repeating the update changes nothing.
   assert.equal((await f.make().installCourse({ courseId: "first-course", release: "0.2.0" })).changed, false);

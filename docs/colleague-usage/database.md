@@ -74,12 +74,12 @@ ordinary Dashboard) shows the practice app's ERD, tables and data. It is
 editable like any project's database: cell edits, **Add row**, row deletion,
 confirmed data-changing SQL, snippets and ERD arrangement work as described
 above and change only that lesson's practice database. The database
-**Copilot** is not available there; ask your lesson teacher instead. See
+**Copilot** is not available there; ask Colleague instead. See
 [Choosing lessons and Learning conversations](learning-mode-ui.md).
-For an active supervised lesson, Colleague or its bound Main teacher can reveal
-the exact exercise session's **ERD** in **Workspace** while Learning stays on.
-The initiating browser must confirm the same project, session and attempt; this
-teacher demonstration never counts as the learner's own ERD task or a pass.
+For an active lesson, Colleague can reveal the exact exercise session's **ERD**
+while Learning stays on. The initiating browser must confirm the same project,
+session and attempt; this demonstration never counts as the learner's own ERD
+task or a pass.
 Ask it to send database investigation or a requested change to a coding conversation
 and report the evidence. Data-changing work retains its existing confirmation
 requirements; a how-to question alone authorizes no query or mutation.

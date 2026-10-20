@@ -168,6 +168,6 @@ controller.
 For managed browser checks, test ownership and recovery, read
 [Browser checks from chat](preview-browser-checks.md).
 
-For lesson diagrams shown over Preview, see [Lesson presentation in Preview](preview-lesson-presentation.md).
+Lesson diagrams play in the Learning environment, not over Preview; see [The Learning environment (L)](learning-environment.md).
 
 To choose which application Preview starts, see [Choose a starting application](preview-starting-application.md).

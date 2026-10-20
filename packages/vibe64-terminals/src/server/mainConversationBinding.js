@@ -1,13 +1,10 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { codexAppServerTurnState } from "./codexConversationStorage.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from "./sessionGitCommandActor.js";
 import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalSignals.js";
-import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-core/server/opencode-process";
-import { conversationRequestText } from "@jskit-ai/assistant-core/server/conversation";
-import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection,
@@ -382,69 +379,13 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
-  const teachingAvailable = (["codex", "opencode"].includes(engine) || engine === "claude" &&
-    host.native.owner.applicationToolsSupported === true && typeof host.native.owner.readFinalAssistantResult === "function") &&
-    runtime.learningScope && runtime.learningTeaching;
-  const teachingProjectContext = teachingAvailable ? captureProjectRequestContext() : null;
-  let teaching;
-  const bindTeaching = () => runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
-      terminals: openingContext.teachingTerminals, native: {
-        ...(engine === "codex" || typeof host.native.owner.readFinalAssistantResult === "function" ? {
-          readFinalAssistantResult({ threadId, turnId }) {
-            // Read the existing final owner, scoped to this immutable Main session.
-            const result = engine === "codex"
-              ? host.native.runOwner.readFinalAssistantResult(sessionId, threadId, turnId)
-              : host.native.owner.readFinalAssistantResult(host.context.key, threadId, turnId);
-            return result ? structuredClone(result) : null;
-          }
-        } : {}),
-        notifyPresentation: event => runWithProjectRequestContext(teachingProjectContext,
-          () => host.publish(sessionId, event)),
-        ...(engine === "claude" ? {
-          async readCompletedTurn({ threadId, turnId }) {
-            const current = await host.state.read();
-            // Only the original settled final owner can establish inactivity.
-            // The active-only tool reader remains unchanged below.
-            if (current.threadId !== threadId || !host.native.owner.readFinalAssistantResult(
-              host.context.key, threadId, turnId)) return null;
-            return { threadId, turnId, active: false, outerTurnId: `claude:${threadId}:${turnId}`,
-              assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
-          }
-        } : {}),
-        async readTurn() {
-        if (engine === "codex") {
-          const current = await host.state.read();
-          return { ...codexAppServerTurnState(current.session),
-            assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
-        }
-        if (engine === "claude") {
-          const current = await host.state.read();
-          const turn = host.native.owner.readRetainedTurn(host.context.key, current.threadId, { saved: null, current: true });
-          if (!turn) throw new Error("Claude's lesson tools require their current admitted native process.");
-          return { threadId: current.threadId, turnId: turn?.id || "", active: Boolean(turn?.active),
-            outerTurnId: `claude:${current.threadId}:${turn?.id || ""}`,
-            assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
-        }
-        const native = await host.native.owner.readSessionState(openingContext, host.native.preparation.state);
-        const current = await runtime.getSession(sessionId, { inspectSource: false });
-        return { threadId: native.thread.id, turnId: native.turn.id, active: native.turn.active,
-          outerTurnId: `opencode:${native.thread.id}:${native.turn.id}`,
-          assistantSelection: vibe64AssistantSelectionFromMetadata(current.metadata) };
-      } } });
   const binding = {
     ...conversation, namespace: host.namespace, engine,
-    prepareInput: teachingAvailable || engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
-      let prepared = typeof prepareInput === "function" ? await prepareInput(input, current) : input;
-      if (teachingAvailable && !prepared.goal && !/^\/goal(?:\s|$)/u.test(String(prepared.message ?? "").trim())) {
-        prepared = { ...prepared, message: conversationRequestText({
-          text: prepared.message ?? prepared.text ?? "", origin: prepared.origin,
-          data: { ...prepared.data, userMessageIds: prepared.origin === "application" ? [] : [input.messageId] }
-        }) };
-      }
-      return engine === "codex" && typeof prepareInput === "function"
-        ? { ...prepared, actorContext: prepared.vibe64User || null } : prepared;
+    prepareInput: engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
+      const prepared = await prepareInput(input, current);
+      return { ...prepared, actorContext: prepared.vibe64User || null };
     } : prepareInput,
-    ...(!teachingAvailable && host.readContextUsage ? {
+    ...(host.readContextUsage ? {
       async maximumHistoryBytes({ context, signal, input, handover, setPhase }) {
         // Count UTF-8 bytes conservatively instead of assuming English text's
         // usual characters/token ratio. Keep normal model settings unchanged.
@@ -509,16 +450,6 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       messagePreparation: createCodexMainMessagePreparation(sessionId, host.messageEnvironment, host.native.messagePreparation)
     } : host.native
   };
-  if (teachingAvailable) Object.defineProperty(binding, "applicationTools", {
-    enumerable: true,
-    get() {
-      // Only the descriptor retained by the original runtime initializes this
-      // facility. Routine opens may prepare a descriptor then reuse its cached
-      // predecessor; they must not retire that predecessor's browser evidence.
-      teaching ||= bindTeaching();
-      return teaching.applicationTools;
-    }
-  });
   return binding;
 }
 
@@ -752,7 +683,6 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
       const { input, context: ctx, message, messageId, uuid, actorMetadata } = event;
       const conversationTurn = await ctx.runtime.store.writeConversationUserMessage(ctx.sessionId, {
         messageId, text: text(input.displayMessage) || message, attachments: input.displayAttachments,
-        ...(ctx.runtime.learningScope && ctx.runtime.learningTeaching && input.data !== undefined ? { data: input.data } : {}),
         turnMetadata: { ...actorMetadata, assistantSelection: ctx.selection, engineId: ENGINE, upstreamMessageId: uuid }
       });
       await publishSessionChanged(ctx.sessionId, { reason: "claude-stream-message-delivered", payload: {
@@ -800,10 +730,10 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
       onPromptRejected: () => input.onPromptRejected?.()
     }, application: {
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
-      monitor: messageMonitorProjection(context, options.applicationTools),
+      monitor: messageMonitorProjection(context),
       async prepare() {
         const process = await prepareProcess(context, options);
-        return { process, get session() { return upstreamSessionOptions(context, options); } };
+        return { process, get session() { return upstreamSessionOptions(context); } };
       },
       commit(conversationTurn) {
         return publishConversationTurn(context, conversationTurn, "opencode-server-message-delivered");
@@ -934,8 +864,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             : { prompt: message };
           const renderedPrompt = text(rendered?.prompt) || message;
           return {
-            get agent() { return context.runtime.learningScope && context.runtime.learningTeaching && options.applicationTools
-              ? openCodeConversationAgent({ tools: true }) : context.selection.agentId; },
+            get agent() { return context.selection.agentId; },
             get model() { return openCodeModel(context.selection); },
             get prompt() { return { text: renderedPrompt }; },
             get attachments() { return input.attachments; },
@@ -949,8 +878,6 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             context.sessionId,
             {
               attachments: input.displayAttachments,
-              ...(context.runtime.learningScope && context.runtime.learningTeaching && input.data !== undefined
-                ? { data: input.data } : {}),
               messageId,
               text: text(input.displayMessage) || message,
               turnMetadata: {

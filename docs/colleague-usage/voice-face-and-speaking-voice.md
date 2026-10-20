@@ -6,7 +6,7 @@ This is part of [Voice chat with Colleague or a project agent](voice-chat.md).
 
 Colleague and the project agent show an illustrated face that blinks, moves and
 animates its mouth while listening, thinking and speaking. Colleague starts with
-**Merc · male**; project agents, including the Learning teacher, start with
+**Merc · male**; project agents start with
 **Yu · female**. To change one, open that assistant's **Voice settings** cog
 beside the microphone and speaker controls (below its face when expanded) and
 choose **Avatar**. Colleague and project agents keep separate choices. A project

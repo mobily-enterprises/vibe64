@@ -1,23 +1,11 @@
-// A Learning watch delivers its observation to the Main teacher as an
-// application wake. The canonical conversation saves that wake's text as the
-// turn's authored message, so the teacher's full instructions and evidence stay
-// in history unchanged. Presentation shows the learner a short status line
-// instead of the internal prompt, in the same way as other application-origin
-// messages.
+// A retired Learning watch delivered its observation to the Main teacher as an
+// application wake, saved as that turn's authored message. The teacher model
+// is gone (Learning v2), but saved conversations keep those wakes: presentation
+// still shows the learner a short status line instead of the internal prompt,
+// in the same way as other application-origin messages.
 const LEARNING_GUIDANCE_MESSAGE_PREFIX = "learning-guidance-";
 const GUIDANCE_HEADING = "A supervised Learning observation is available for this exact pinned lesson.";
 const FACT_PREFIX = "Observed application fact: ";
-
-function learningGuidanceText(task, evidence) {
-  return [
-    GUIDANCE_HEADING,
-    `Current lesson outcome or criterion: ${task.criterion}`,
-    `${FACT_PREFIX}${JSON.stringify({ evidence, progress: task.progress })}`,
-    "Treat this as application-origin context, not as the learner's authored answer and not as assessment evidence.",
-    "If the observation confirms meaningful progress, briefly connect it to the current criterion. If it reports a failure, explain only the supported failure and offer at most one useful hint. If it is insufficient, say so rather than inventing progress.",
-    "Do not mark an assessment passed, answer a pending question for the learner, create a second goal, or start an idle follow-up loop."
-  ].join("\n");
-}
 
 function paneLabel(pane) {
   const words = String(pane || "").trim().replace(/[-_]+/gu, " ");
@@ -46,4 +34,4 @@ function learningGuidancePresentation(message) {
   return { text: learningGuidanceSummary(evidence) };
 }
 
-export { LEARNING_GUIDANCE_MESSAGE_PREFIX, learningGuidanceText, learningGuidanceSummary, learningGuidancePresentation };
+export { LEARNING_GUIDANCE_MESSAGE_PREFIX, learningGuidanceSummary, learningGuidancePresentation };

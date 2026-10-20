@@ -113,8 +113,6 @@ function registerRoutes(http, {
     actionId: ACTION_READ_ONBOARDING,
     buildInput: routes.requestQuery,
     query: projectOnboardingInputValidator,
-    // The lesson URL names the session; the original action validates it.
-    learning: { path: "/sessions/:sessionId/onboarding", query: undefined },
     summary: "Inspect project opening state and available templates."
   });
   routes.actionRoute("POST", "/templates/apply", {

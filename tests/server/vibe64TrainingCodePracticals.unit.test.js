@@ -14,9 +14,6 @@ import { createTrainingDeclaredCheckOwner } from "../../packages/vibe64-training
 import { createTrainingCodeAuthorship } from "../../packages/vibe64-training/src/server/codeAuthorship.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
-import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
-import { createTrainingPracticalObservations } from "../../packages/vibe64-training/src/server/practicalObservations.js";
-import { createTrainingAssessmentGrader } from "../../packages/vibe64-training/src/server/assessmentGrader.js";
 import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeEditorActions.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import * as vue from "vue";
@@ -39,7 +36,9 @@ async function writeTopic(root, change) {
 const codeStep = { id: "refuse-empty", title: "Refuse empty titles", body: "steps/refuse-empty.md",
   check: { kind: "auto", check: "notes-title-required", files: ["notes.mjs"] }, required: true };
 
-async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [codeStep] } = {}) {
+// enter: start on the first step, as the learner's reader does, so its
+// starting files are recorded (the retired teacher's v1 code question did this).
+async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [codeStep], enter = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-code-practical-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = await writeTopic(root, async topic => {
@@ -80,10 +79,11 @@ async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [c
   const checks = runCommand => createTrainingDeclaredCheckOwner({ learners, content, project, terminals: { async outputTargetStatus() {} },
     runCommand: async command => { calls.push(command); return (runCommand || runVibe64Command)(command); } });
   const authorship = createTrainingCodeAuthorship({ learners, content, project });
-  const teaching = createTrainingTeachingOwner({ learners, content, codeBaseline: authorship.recordBaseline });
   const learnerFile = path.join(sourcePath, "notes.mjs");
-  const asked = lessonVersion === 2 ? null : await teaching.prepareQuestion({ actor, attemptId, expectedRevision: 3, requestId: "code-question",
-    assessmentId: "require-note-title", text: "Open Dashboard, Code and make notes.mjs refuse empty titles.", assistance: "none" });
+  if (enter) {
+    await createTrainingStepChecks({ learners, content, checks: checks(), authorship })
+      .enterStep({ actor, attemptId, stepId: steps[0].id });
+  }
   // The lesson Code tab's save path with a stand-in for the generic editor's
   // baseHash-checked write; the real wrapper records the ledger entry.
   async function learnerSave(text, { baseHash } = {}) {
@@ -95,16 +95,18 @@ async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [c
       return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(learnerFile)) } };
     } });
   }
-  const input = { actor, attemptId, sessionId, observationId: randomUUID() };
-  return { root, systemRoot, paths, actor, attemptId, sessionId, learners, content, checks, calls, authorship, teaching,
-    asked, learnerFile, learnerSave, input, project, projectSlug: reserved.attempt.projectSlug };
+  const input = { actor, attemptId, sessionId, observationId: randomUUID(), ...(enter ? { stepId: steps[0].id } : {}) };
+  return { root, systemRoot, paths, actor, attemptId, sessionId, learners, content, checks, calls, authorship,
+    learnerFile, learnerSave, input, project, projectSlug: reserved.attempt.projectSlug };
 }
 
-test("a code question records its starting files and only the learner's own chained saves verify", async t => {
-  const f = await fixture(t);
+const entered = { lessonVersion: 2, enter: true };
+
+test("an entered code step records its starting files and only the learner's own chained saves verify", async t => {
+  const f = await fixture(t, entered);
   const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
-  assert.deepEqual(ledger.baseline, [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }]);
-  assert.equal(ledger.question.id, "code-question");
+  assert.deepEqual(ledger.steps[0].baseline, [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }]);
+  assert.equal(ledger.steps[0].stepId, "refuse-empty");
   await f.learnerSave("export function isValidTitle(title) {\n  return title.length > 0;\n}\n");
   await f.learnerSave(solved);
   const saved = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
@@ -128,7 +130,7 @@ test("a code question records its starting files and only the learner's own chai
 });
 
 test("an incomplete learner attempt reports the check's own reason", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, entered);
   await f.learnerSave("export function isValidTitle(title) {\n  return title !== \"\";\n}\n");
   const result = await f.checks().runCodeCheck(f.input);
   assert.equal(result.checkResult.outcome, "not-yet-passed");
@@ -138,7 +140,7 @@ test("an incomplete learner attempt reports the check's own reason", async t => 
 
 test("another writer in a declared file breaks the chain: automatic not passed without running the check", async t => {
   for (const scenario of ["agent-only", "learner-after-agent", "agent-after-learner", "foreign-write-during-save"]) {
-    const f = await fixture(t);
+    const f = await fixture(t, entered);
     if (scenario === "agent-after-learner") await f.learnerSave(solved.replace("> 0", ">= 1"));
     if (scenario !== "foreign-write-during-save") await writeFile(f.learnerFile, solved);
     if (scenario === "learner-after-agent") await f.learnerSave(`${solved}\n`);
@@ -155,27 +157,8 @@ test("another writer in a declared file breaks the chain: automatic not passed w
   }
 });
 
-test("a replayed question keeps its original baseline and a new question starts a new one", async t => {
-  const f = await fixture(t);
-  const original = (await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).baseline;
-  await writeFile(f.learnerFile, solved);
-  await f.teaching.prepareQuestion({ actor: f.actor, attemptId: f.attemptId, expectedRevision: 4, requestId: "code-question",
-    assessmentId: "require-note-title", text: "Open Dashboard, Code and make notes.mjs refuse empty titles.", assistance: "none" });
-  assert.deepEqual((await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).baseline, original,
-    "a replay cannot adopt another writer's edit as the starting point");
-  assert.equal((await f.checks().runCodeCheck(f.input)).authorship, "other");
-  await f.teaching.prepareQuestion({ actor: f.actor, attemptId: f.attemptId, expectedRevision: 4, requestId: "code-question-2",
-    assessmentId: "require-note-title", text: "Try again: make notes.mjs refuse empty titles.", assistance: "none" });
-  const fresh = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
-  assert.equal(fresh.question.id, "code-question-2");
-  assert.deepEqual(fresh.entries, []);
-  await assert.rejects(createTrainingTeachingOwner({ learners: f.learners, content: f.content }).prepareQuestion({
-    actor: f.actor, attemptId: f.attemptId, expectedRevision: 5, requestId: "code-question-3",
-    assessmentId: "require-note-title", text: "Again.", assistance: "none" }), { code: "VIBE64_TRAINING_CODE_UNAVAILABLE" });
-});
-
 test("a check result for other files is rejected", async t => {
-  const f = await fixture(t, { check: 'import { readFileSync } from "node:fs";\nconst input = JSON.parse(readFileSync(0, "utf8"));\n' +
+  const f = await fixture(t, { ...entered, check: 'import { readFileSync } from "node:fs";\nconst input = JSON.parse(readFileSync(0, "utf8"));\n' +
     'console.log(JSON.stringify({ check: input.check, filesHash: "0".repeat(64), outcome: "verified" }));\n' });
   await f.learnerSave(solved);
   await assert.rejects(f.checks().runCodeCheck(f.input), { code: "VIBE64_TRAINING_CHECK_RESULT_INVALID" });
@@ -183,7 +166,7 @@ test("a check result for other files is rejected", async t => {
 });
 
 test("a check that never finishes is not yet passed after its declared timeout", async t => {
-  const f = await fixture(t, { timeoutSeconds: 1 });
+  const f = await fixture(t, { ...entered, timeoutSeconds: 1 });
   await f.learnerSave("export function isValidTitle(title) {\n  for (;;) {}\n}\n");
   const result = await f.checks().runCodeCheck(f.input);
   assert.equal(f.calls[0].timeout, 1000);
@@ -193,60 +176,11 @@ test("a check that never finishes is not yet passed after its declared timeout",
 });
 
 test("learner code that crashes the check is not yet passed, never an error pass", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, entered);
   await f.learnerSave("export function isValidTitle(title) {\n  throw new Error(\"boom\");\n}\n");
   const result = await f.checks().runCodeCheck(f.input);
   assert.equal(result.checkResult.outcome, "not-yet-passed");
   assert.match(result.reason, /stopped with an error/u);
-});
-
-test("the native observer records a broken chain as teacher origin and grading states the reason", async t => {
-  const f = await fixture(t);
-  await writeFile(f.learnerFile, solved);
-  const reference = f.asked.reference;
-  const target = { projectSlug: (await f.learners.readState({ actor: f.actor })).active.projectSlug, sessionId: f.sessionId };
-  const context = { requestMeta: { request: { vibe64User: f.actor } }, trainingChecks: f.checks(),
-    trainingPractical: { capturePractical: input => f.teaching.capturePractical(input) } };
-  const observations = createTrainingPracticalObservations({ actions: { async execute() { return { ok: true }; } },
-    failure: (message, code = "X", statusCode = 409) => Object.assign(new Error(message), { code, statusCode }) });
-  const connection = {};
-  const submit = gestureId => observations.observe({ clientId: "client", gestureId, control: "code-submit", reference,
-    workspace: { ...target, mainChatVisible: false, projectVisible: true, pane: "dashboard", ready: true } },
-  { connection, context, requireCurrent() {}, async authorizeCurrent() {} });
-  const response = await submit("gesture-1");
-  assert.equal(response.checkOutcome, "not-yet-passed");
-  assert.equal(response.checkReason, "needs an independent attempt: other edits detected in notes.mjs");
-  const observation = connection.trainingPractical.observation;
-  assert.equal(observation.origin, "teacher");
-  assert.equal(observation.producer, "code");
-  const grader = createTrainingAssessmentGrader({ content: f.content, helper: { async runHelper() { throw new Error("Helper must not grade a broken chain"); } } });
-  const state = await f.learners.readState({ actor: f.actor });
-  const graded = await grader.grade(null, { pin: state.active.pin, assessmentId: "require-note-title", assistance: "none",
-    evidence: { kind: "observation", learnerId: "42", attemptId: f.attemptId, observationId: observation.observationId,
-      observedAt: observation.observedAt, ...target, producer: "code", operation: "edit-and-check", origin: "demonstration",
-      check: "notes-title-required", text: "I made blank titles invalid." },
-    checkResult: connection.trainingPractical.checkResult,
-    observedAction: { observationId: observation.observationId, text: observation.text } });
-  assert.deepEqual(graded, { outcome: "not-yet-passed",
-    explanation: "Not passed: needs an independent attempt: other edits detected in notes.mjs" });
-  // A later genuine attempt is a new observation of the same question.
-  await f.learnerSave(`${solved}\n`);
-  assert.equal((await submit("gesture-2")).checkOutcome, "not-yet-passed", "the agent's bytes are still in the chain");
-});
-
-test("the native observer accepts the learner's own verified code as learner evidence", async t => {
-  const f = await fixture(t);
-  await f.learnerSave(solved);
-  const target = { projectSlug: (await f.learners.readState({ actor: f.actor })).active.projectSlug, sessionId: f.sessionId };
-  const connection = {};
-  const response = await createTrainingPracticalObservations({ actions: { async execute() { return { ok: true }; } },
-    failure: message => new Error(message) }).observe({ clientId: "client", gestureId: "gesture-1", control: "code-submit",
-    reference: f.asked.reference, workspace: { ...target, mainChatVisible: false, projectVisible: true, pane: "dashboard", ready: true } },
-  { connection, requireCurrent() {}, async authorizeCurrent() {}, context: { requestMeta: { request: { vibe64User: f.actor } },
-    trainingChecks: f.checks(), trainingPractical: { capturePractical: input => f.teaching.capturePractical(input) } } });
-  assert.equal(response.checkOutcome, "passed");
-  assert.equal(connection.trainingPractical.observation.origin, "learner");
-  assert.match(connection.trainingPractical.observation.text, /^Saved notes\.mjs \(sha256 [a-f0-9]{12}\) through the learner's own lesson Code editor/u);
 });
 
 test("bundling validates code questions, their files, check kind and timeout", async t => {
@@ -279,7 +213,7 @@ test("bundling validates code questions, their files, check kind and timeout", a
 });
 
 test("the ordinary Files editor save in the learner's own active practice project is ledgered; every other save is plain", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, entered);
   const owner = createTrainingCodeSaveOwner({ authorship: f.authorship, learners: f.learners });
   let plainSaves = 0;
   const save = async text => {
@@ -310,7 +244,7 @@ test("the ordinary Files editor save in the learner's own active practice projec
 });
 
 test("a host with several learner stores selects the store holding the practice project's attempt for each save", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, entered);
   const selections = [];
   let selected = null;
   const owner = createTrainingCodeSaveOwner({ async selectOwners(input) { selections.push(input); return selected; } });
@@ -402,29 +336,6 @@ test("Check my code before the lesson conversation has re-read its saved questio
 // The code question, its starting-file baseline and the learner's ledgered
 // saves are saved state. Owners recreated over the same state (a restarted
 // server) keep the question open and Check my code evaluates it unchanged.
-test("an issued code question stays open across a restart and the recreated owners check the learner's saves", async t => {
-  const f = await fixture(t);
-  await f.learnerSave(solved);
-  const learners = createTrainingLearnerState({ systemRoot: f.systemRoot });
-  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const authorship = createTrainingCodeAuthorship({ learners, content, project: f.project });
-  const teaching = createTrainingTeachingOwner({ learners, content, codeBaseline: authorship.recordBaseline });
-  const checks = createTrainingDeclaredCheckOwner({ learners, content, project: f.project,
-    terminals: { async outputTargetStatus() {} }, runCommand: runVibe64Command });
-  assert.deepEqual(await teaching.readQuestionReference({ actor: f.actor }), f.asked.reference, "the question is still open");
-  const ledger = await learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
-  assert.equal(ledger.question.id, "code-question");
-  assert.equal(ledger.entries.length, 1, "the learner's save before the restart still counts");
-  const target = { projectSlug: (await learners.readState({ actor: f.actor })).active.projectSlug, sessionId: f.sessionId };
-  const connection = {};
-  const response = await createTrainingPracticalObservations({ actions: { async execute() { return { ok: true }; } },
-    failure: message => new Error(message) }).observe({ clientId: "client", gestureId: "after-restart", control: "code-submit",
-    reference: f.asked.reference, workspace: { ...target, mainChatVisible: false, projectVisible: true, pane: "dashboard", ready: true } },
-  { connection, requireCurrent() {}, async authorizeCurrent() {}, context: { requestMeta: { request: { vibe64User: f.actor } },
-    trainingChecks: checks, trainingPractical: { capturePractical: input => teaching.capturePractical(input) } } });
-  assert.equal(response.checkOutcome, "passed");
-  assert.equal(connection.trainingPractical.observation.origin, "learner");
-});
 
 test("a v2 code step keys its ledger by the entered step and only the learner's own Check records the pass", async t => {
   const f = await fixture(t, { lessonVersion: 2 });

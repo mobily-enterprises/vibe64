@@ -11,24 +11,10 @@ The internal orientation check reads the lesson's exact installed check and runs
 it against the current App server. It does not run a mutable copy from the
 learner's project and is not a Colleague shell tool. A successful check confirms
 only that server's matching button response; the lesson still requires the
-learner's own observed interaction and explanation before assessment. If the App
+learner's own observed interaction. If the App
 restarts or the response expires, repeat the actual button interaction. If native
 execution cleanup is uncertain, report that failure for operator recovery rather
 than claiming success or resending an old observation.
-
-Opening or minimising Colleague during workspace-navigation is ordinary chat
-use, not an assessment step; it preserves the question and accepted steps. Only
-return-to-Colleague collects actual minimise/restore gestures. After its saved
-pass is confirmed against the native accepted-answer and evaluation receipt,
-normal launcher use no longer arms that completed question, including after a
-restart. Explicitly requested practice uses a new delivered question; earlier
-passes stay saved. Unconfirmed current tasks still require the original order.
-Continue project → Main coding conversation → Preview under the same question.
-
-On a phone, after minimising Colleague, **Show project** counts as the workspace
-step when it reveals the selected **Preview**. Reopen Colleague with its dedicated
-avatar launcher under the same pending question. Dashboard, automatic attention,
-swipes and programmatic navigation do not create Preview evidence.
 
 A lesson version must remain pinned to the content the learner started. If its
 content is reported missing or invalid, ask the workspace owner to restore that
@@ -55,16 +41,9 @@ loader, and leaves placement to the existing Preview host. It does not by itself
 authenticated learner control, a Colleague tool or saved learner progress. Colleague
 must not claim an animation played or obtain controller source or screenshots.
 
-In a prepared lesson, the Preview host saves the real diagram's semantic state
-after a completed command or a confirmed pause. Reopening that same attempt
-restores its last confirmed state, paused flag and labels into a new player; it
-does not replay motion, narration or a completed cue. Snapshot reads alone save
-nothing. If **Retry diagram checkpoint** appears, retry the retained exact save.
-**Save current diagram** captures a fresh state after a rejected revision conflict.
-Keep the diagram open until confirmation; a hard reload can recover only the last
-confirmed checkpoint. These saves preserve the question and earlier assessments,
-and never grant a pass. If a concurrent assessment conflicts, read its saved
-result and retry its existing operation with the current revision.
+Saving new diagram checkpoints was retired with the Main teacher. A lesson
+diagram plays from its beginning with **Play** in the Learning environment;
+diagram states saved earlier stay in the lesson record.
 
 The application also has a server-side verified-snapshot installation facility.
 For official catalogue courses it is reached through **Install** and **Update**
@@ -140,24 +119,16 @@ neither catalogue failure nor publishing a newer release resets the reservation.
 An unconfirmed catalogue save requires reading its actual current revision before
 the owner deliberately retries. It is not evidence that enablement changed.
 
-The private lesson record can now retain a pending question, teaching position,
-diagram state and assessment results for the saved lesson version. These storage methods alone add no
-quiz/start/resume control or Colleague grading tool. A pass requires an admitted actual learner answer or a native
-practical observation tied to that learner's prepared project/session. An assistant
+The private lesson record retains step results, the reader position and, for
+lessons started before Learning v2, their earlier assessment results for the
+saved lesson version. Colleague has no grading tool. A pass requires the
+learner's own step action: a choice answer, **Done** on a self-check step or an
+automatic check tied to that learner's practice project. An assistant
 paraphrase, demonstration or animation is not evidence of a learner pass. Completion
-requires every required pinned assessment to pass; preparation alone does not count.
+requires every required pinned step (or, for an earlier lesson, assessment) to
+pass; preparation alone does not count.
 Colleague can explain this boundary and offer supported assistance, but cannot
 assert trusted observations, fabricate results or erase history by retrying.
-
-After starting or resuming, Colleague must read the fresh teaching brief, recap
-its exact pinned passed and remaining assessment IDs, and normally continue a
-remaining task. The saved `resume.pendingQuestion` is the last checkpoint; it may
-belong to an assessment that already passed. Explicitly requested practice or
-reassessment remains supported and keeps the earlier pass. A request to resume,
-open the project, inspect setup or navigate is not an answer to grade. A fresh
-conversation must prepare and actually deliver its next question before assessing
-a new learner answer; it cannot reattach old messages or infer missing provenance.
-These read-only progress facts preserve the checkpoint, visual state and history.
 
 If a future result/resume save is unconfirmed, read or retry its exact submission
 or current checkpoint identity. A changed revision requires reading current state

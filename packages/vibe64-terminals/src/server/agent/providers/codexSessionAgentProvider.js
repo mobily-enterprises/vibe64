@@ -568,8 +568,7 @@ function createCodexSessionAgentProvider({
       };
       return (async () => {
         if (mode === "readiness") return {
-          native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId, context.runtime?.learningScope && context.runtime.learningTeaching
-            ? { applicationTools: context.applicationTools } : undefined) } }
+          native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
         };
         if (mode === "scoped" || mode === "create" || mode === "dispose") return {
           ...(mode === "dispose" ? { cleanupOptions: {
@@ -657,8 +656,7 @@ function createCodexSessionAgentProvider({
       if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
         input, context: { runtime: context.runtime, session: context.session }
       };
-      if (method === "ensureSession") return { context: context.runtime?.learningScope && context.runtime.learningTeaching
-        ? { runtime: context.runtime, applicationTools: context.applicationTools } : {} };
+      if (method === "ensureSession") return { context: {} };
       if (method === "createConversation") return {
         input: { ...input, agentSettings: codexAssistantSettings(context, input) },
         context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }

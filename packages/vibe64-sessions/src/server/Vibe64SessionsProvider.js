@@ -5,7 +5,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
-import { createSessionActions, createLearningTeachingContextActions } from "./actions.js";
+import { createSessionActions } from "./actions.js";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
@@ -120,7 +120,7 @@ function createVibe64SessionsFeature() {
       return { sessions };
     },
     actions({ sessions }) {
-      return [...createSessionActions({ sessions }), ...createLearningTeachingContextActions()];
+      return [...createSessionActions({ sessions })];
     },
     boot({ project }, { outputs }) {
       if (!String(project?.targetRoot || "").trim()) {

@@ -1251,22 +1251,21 @@ function createService({
     runNativeDetachedConversation
   });
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
-    // Training keeps complete results within 128 KiB; discovery adds an identity envelope.
+    // Discovery adds an identity envelope to each bounded result.
     maxToolResultBytes: 128 * 1024 + 1024,
-    isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId)
-      ? Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
+    // Main's application tools are Claude goal control only.
+    isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId) &&
+      Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
         (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
         !context.assistantScope && !context.scopedConversationId)
-      : Boolean(context.runtime?.learningScope && context.runtime.learningTeaching?.actionIds.includes(actionId))
   }) : null;
   function applicationToolManifest(context) {
     // Tools decorate the context; a missing selection must not block cleanup.
     const selection = context.assistantSelection ||
       vibe64AssistantSelectionFromMetadata(context.session?.metadata, { required: false });
-    const teaching = context.runtime?.learningScope && context.runtime.learningTeaching;
     const mainClaude = selection?.engineId === "claude" && !context.runtime?.learningScope &&
       !context.assistantScope && !context.temporaryConversationId && !context.scopedConversationId;
-    if (!mainToolCatalog || !teaching && !mainClaude) return context;
+    if (!mainToolCatalog || !mainClaude) return context;
     const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });
     return { ...context, applicationTools: { schemas: toolSet.tools.map(mainToolCatalog.toOpenAiToolSchema) } };
   }
@@ -1374,20 +1373,13 @@ function createService({
           if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
           if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, applicationToolManifest(context));
           if (operation === "updateSettings") return prepareSessionConversationSettings(provider, id, context);
-          if (operation === "dispose") {
-            const runtime = context.runtime;
-            if (runtime?.learningScope && runtime.learningTeaching) {
-              await runtime.learningTeaching.cleanupConversation({ runtime, sessionId: id, terminals: service, context });
-            }
-            return prepareSessionConversationDisposal(provider, id, context, input);
-          }
+          if (operation === "dispose") return prepareSessionConversationDisposal(provider, id, context, input);
           // Scoped work already has its own authorized host and native identity;
           // opening its existing handle must not hydrate a project session.
           if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
           const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
           const binding = await createSessionConversationBinding(provider, id, {
             ...context, runtime,
-            ...(runtime.learningScope && runtime.learningTeaching ? { teachingTerminals: service, teachingActions: actions } : {}),
             prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
           });
           if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.temporaryConversationId && actions) {
@@ -1514,14 +1506,7 @@ function createService({
   });
 
   async function closeAgentSession(sessionId, options = {}) {
-    const result = await sessionAgent.closeSession(sessionId, options);
-    if (result?.ok === false) return result;
-    const runtime = options.runtime || (currentProjectRequestContext()?.learningScope
-      ? await projectService.createRuntime({ inspectSource: false }) : null);
-    if (runtime?.learningScope && runtime.learningTeaching) {
-      await runtime.learningTeaching.cleanupConversation({ runtime, sessionId, terminals: service, context: options });
-    }
-    return result;
+    return sessionAgent.closeSession(sessionId, options);
   }
 
   async function prepareAssistantChangeover(sessionId, context) {
@@ -4182,24 +4167,7 @@ function createService({
           "Prompt suggestion cleanup will be retried on session close.");
       });
       try {
-        let request = input;
-        if (options.runtime?.learningScope && options.runtime.learningTeaching) {
-          try {
-            request = await options.runtime.learningTeaching.captureMessage({ runtime: options.runtime, sessionId, input,
-              context: options, actions });
-          } catch (error) {
-            // This host gate precedes routing and native admission. Do not expose
-            // arbitrary internal exceptions or classify failures after dispatch.
-            const delivery = { status: "not-sent", messageId: input.messageId };
-            if (error instanceof AppError && error.status >= 400 && error.status < 500) {
-              error.details = { ...error.details, delivery };
-            } else if (error?.code === "VIBE64_TRAINING_PREPARATION_BUSY" && error.statusCode === 409) {
-              throw new AppError(409, error.message, { code: error.code, details: { delivery } });
-            }
-            throw error;
-          }
-        }
-        const result = await assistantRouting.send(sessionId, request, { ...options, deliveryMessageId: input.messageId });
+        const result = await assistantRouting.send(sessionId, input, { ...options, deliveryMessageId: input.messageId });
         const deliveryDurationMs = performance.now() - deliveryStartedAt;
         logOperationalEvent(logger, deliveryDurationMs >= 1000 ? "warn" : "info", {
           event: "vibe64.agent_message.delivery_finished", component: "vibe64.agent_message",
@@ -4612,19 +4580,12 @@ function createService({
           browserProjectContext: captureProjectRequestContext() };
         const conversation = await mainConversations.open({ id: sessionId, context: current });
         completed = true;
-        const browser = Object.freeze({ ...conversation, async inspectDelivery(input) {
+        return Object.freeze({ ...conversation, async inspectDelivery(input) {
           const receipt = await conversation.inspectDelivery(input);
           if (receipt?.status !== "unknown") return receipt;
           const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
           if (routed?.delivered === true) return conversation.inspectDelivery(input);
           return routed?.status === "not-sent" ? routed : receipt;
-        } });
-        if (!context.runtime.learningScope || !context.runtime.learningTeaching) return browser;
-        return Object.freeze({ ...browser, async read(query) {
-          const result = await conversation.read(query);
-          const trainingQuestion = await context.runtime.learningTeaching.readQuestion({ runtime: context.runtime,
-            sessionId, context: current, actions });
-          return { ...result, trainingQuestion };
         } });
       } finally {
         if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",

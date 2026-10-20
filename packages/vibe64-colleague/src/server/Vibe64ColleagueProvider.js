@@ -4,7 +4,6 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "./actions.js";
 import { createColleagueService } from "./service.js";
 import { registerColleagueFocus } from "./registerColleagueFocus.js";
-import { createTrainingLearningWatchSource } from "@local/vibe64-training/server/learning-watch";
 
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
@@ -13,7 +12,6 @@ const Vibe64ColleagueProvider = defineFeature({
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ accounts, http, terminals, events }, { actionCatalogue }) {
     const colleague = createColleagueService({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
-    colleague.registerConversationSource("learning-task", createTrainingLearningWatchSource(actionCatalogue));
     const routes = createVibe64FeatureRoutes(http, {
       projectScoped: false, routeRelativePath: "vibe64/colleague", routeSurface: "app", tags: ["vibe64-colleague"]
     });
@@ -24,10 +22,8 @@ const Vibe64ColleagueProvider = defineFeature({
     routes.actionRoute("GET", "/models", { actionId: "vibe64.assistants.capabilities.list", buildInput: routes.requestQuery, summary: "Read the existing actor-aware model catalogue for Colleague." });
     routes.actionRoute("GET", "/usage/topics", { actionId: "vibe64.colleague.usage.topics.read", buildInput: routes.requestQuery, summary: "Find Vibe64 usage topics shipped in this release." });
     routes.actionRoute("GET", "/usage/guide", { actionId: "vibe64.colleague.usage.guide.read", buildInput: routes.requestQuery, summary: "Read a shipped Vibe64 usage guide." });
-    routes.actionRoute("POST", "/training/observations", { actionId: "vibe64.colleague.training.observe-native", buildInput: routes.requestBody, summary: "Record an actual native learner workspace gesture without grading it." });
     for (const [route, operation] of [["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"],
       ["/watches/cancel", "watch.cancel"], ["/watches/pause", "watch.pause"], ["/watches/resume", "watch.resume"],
-      ["/learning-watches/start", "learning-watch.start"], ["/learning-watches/observations", "learning-watch.observe"],
       ["/navigation/ack", "navigation.acknowledge"]]) {
       routes.actionRoute("POST", route, {
         actionId: `vibe64.colleague.${operation}`, buildInput: routes.requestBody, summary: `Colleague ${operation}.`

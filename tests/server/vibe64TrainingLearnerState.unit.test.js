@@ -16,7 +16,6 @@ import { createTrainingContentInstaller } from "../../packages/vibe64-training/s
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState, passedAssessmentIds } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 
 async function fixture(t, { published = true, learning = false, noExercise = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
@@ -2346,12 +2345,6 @@ test("unchanged lesson completion survives a new installed topic and course revi
   assert.deepEqual(saved.active.learning?.submissions || [], [], "Historical evidence is counted, never copied to the fresh attempt.");
   assert.notEqual(saved.active.attemptId, f.attemptId);
   assert.notEqual(saved.active.projectSlug, old.active.projectSlug);
-  const brief = await createTrainingTeachingBrief({ systemRoot: f.systemRoot }).readBrief({ actor: f.actor, attemptId: saved.active.attemptId });
-  assert.deepEqual(brief.learning.passedAssessmentIds, ["answer-one", "exercise-practice"]);
-  assert.deepEqual(brief.learning.remainingAssessmentIds, ["answer-two", "answer-three", "workspace-practice", "colleague-practice"]);
-  assert.deepEqual(brief.learning.retainedPasses, ended.attempt.learning.submissions.map(submission => ({
-    attemptId: f.attemptId, pin: f.pin, submission
-  })), "Colleague receives the original provenance for passes counted across topic revisions.");
   const beforeRead = await treeState(f.systemRoot);
   assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 2);
   assert.deepEqual(await treeState(f.systemRoot), beforeRead, "Completion reads do not rewrite progress.");
@@ -3026,7 +3019,7 @@ test("post-upgrade original Preparation resumes the same still-pending initial s
   await f.runOrdinary(true);
   const preparation = createTrainingService({ catalogue: createInstalledTrainingCatalogue({ systemRoot: f.systemRoot }),
     content: f.content, learners: f.state, projectContext: f.core, projectRepositoryService: f.repository,
-    project: f.project, learningSessions: { async stopAttemptSessions() { assert.fail("Resume never stops a session"); } },
+    project: f.project,
     sessions: { createSession() { assert.fail("Resume must retain the already-adopted exact initial session"); } },
     terminals: { workspaceSetupIsPrepared() { assert.fail("this fixture has no successful Workspace setup to claim"); } } });
   const resumed = await preparation.prepareLesson({ actor: f.actor, attemptId: f.saved.scope.attemptId });
@@ -3200,49 +3193,5 @@ test("exercise scope preserves no-exercise pin inactive and unavailable-reader r
   }
 });
 
-
-test("normal source-less dispatch is unchanged and a practice-shaped hint cannot grant a practice namespace", async t => {
-  const f = await fixture(t, { noExercise: true });
-  const reserved = await f.reserve();
-  const [{ createTrainingLearningSessions }, { createStudioProjectContext }, { createService: createProject },
-    { runWithProjectRequestContext }] = await Promise.all([
-    import("../../packages/vibe64-training/src/server/learningSessions.js"),
-    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
-    import("../../packages/vibe64-project/src/server/service.js"),
-    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
-  ]);
-  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
-    home: f.root, runtimeProfile: { local: true } });
-  const project = createProject({ projectContext: core });
-  const saved = await f.state.readLearningSessionScope({ actor: f.actor, attemptId: reserved.attempt.attemptId });
-  const sessionId = `learning-${reserved.attempt.attemptId}`;
-  await runWithProjectRequestContext({ projectRuntimeRoot: saved.projectRuntimeRoot, systemRoot: f.systemRoot,
-    learningScope: saved.scope, vibe64User: f.actor }, async () => {
-    const runtime = await project.createRuntime({ inspectSource: false });
-    await runtime.store.createSession({ sessionId, runtimeKind: "genesis" });
-  });
-  const calls = [];
-  const learners = { ...f.state,
-    readLearningSessionScope(input) { calls.push("source-less"); return f.state.readLearningSessionScope(input); },
-    readExerciseProjectScope(input) { calls.push("exercise"); return f.state.readExerciseProjectScope(input); }
-  };
-  const learning = createTrainingLearningSessions({ learners,
-    teachingBrief: createTrainingTeachingBrief({ learners, content: createInstalledTrainingContent({ systemRoot: f.systemRoot }) }),
-    project, sessions: { createSession() { assert.fail("identity reads must not create sessions"); },
-      inspectSession() { assert.fail("identity reads must not open sessions"); } } });
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, sessionId, access: "observe" };
-  const before = await treeState(f.systemRoot);
-  assert.deepEqual((await learning.resolveContext(input)).learningScope, saved.scope);
-  assert.deepEqual(calls, ["source-less"]);
-  assert.deepEqual((await learning.resolveContext(input)).learningScope, saved.scope);
-  assert.deepEqual(calls, ["source-less", "source-less"]);
-  // Learning v2: practice sessions are ordinary project sessions, so a
-  // practice-shaped hint only ever reaches the source-less scope.
-  const forged = { ...input, sessionId: `training-${input.attemptId}` };
-  await assert.rejects(learning.resolveContext(forged), { code: "vibe64_session_not_found" });
-  assert.deepEqual(calls, ["source-less", "source-less", "source-less"]);
-  await assert.rejects(learning.resolveContext({ ...forged, actor: { uid: 43 } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-  assert.deepEqual(await treeState(f.systemRoot), before, "dispatch hints cannot create practice storage or alter learner state");
-});
 
 

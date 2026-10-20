@@ -77,13 +77,11 @@ Operators can investigate slow assistant delivery through content-free timings
 shared across these engines, distinguishing preparation, native acknowledgement,
 receipt storage and the first response.
 
-The approved learning direction gives the existing left-hand session agent the
-teacher role. Colleague remains the general supervisor for application assistance
-and coordination. New Learning conversations start with Junior; people can change
-the teacher through the existing Chat mode controls, and Resume keeps their choice.
-Opening a saved lesson chat checks the person's current access and exact lesson
-identity without requiring every teaching file to be healthy. Using teaching or
-exercise content still requires full validation of the pinned snapshot.
+Colleague teaches every lesson from its steps in the Learning environment. The
+earlier left-hand lesson teacher conversation, its lesson watches, quizzes,
+practical grading and lesson presentations have been retired; lessons started
+that way stay readable in history but cannot continue. Using lesson or exercise
+content still requires full validation of the pinned snapshot.
 A yellow learner plate with a black L enters Learning mode,
 with a yellow-ish active appearance and learning-session navigation. Working
 sessions are hidden from that view while their work, drafts and histories remain
@@ -99,15 +97,14 @@ settings or reach outside the practice project are not offered. A supervised pro
 source-less lesson honestly stays in Learning. Both views retain their application, Dashboard and interactive
 visual state in the same session/conversation implementation, on desktop and
 phones. Hidden visuals pause without being treated as completed teaching.
-Colleague can open Courses, the active lesson or exact supervised Workspace view,
-and the bound Main teacher can reveal that lesson's Preview, ERD, Learning pane
-or declared visual. Both wait for the same browser's settled selection. Showing
-a view is a teacher demonstration, not learner evidence, and leaving Learning
-does not end the saved attempt.
+Colleague can open Courses, the active lesson or exact supervised Workspace view
+and waits for the same browser's settled selection. Showing a view is a
+demonstration, not learner evidence, and leaving Learning does not end the saved
+attempt.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 Online or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,
-with the same teacher/player used for an isolated author trial.
+with an isolated author trial.
 
 Teaching authors can validate local topic content and produce reproducible lesson
 bundles through the Vibe64 command. Draft lessons stay labelled as drafts. This
@@ -119,9 +116,8 @@ Private server-only state can reserve and resume one exact lesson identity befor
 project preparation. It preserves retry identity and the original pin; it does
 not yet expose exercise start or assessment submission to a learner. Internal
 storage retains bounded assessment evidence and resume state against that pin,
-and derives completion from every required assessment rather than a teacher
-claim. A read-only teaching brief supplies lesson instructions and saved evidence
-without exposing source files or executable visual controllers.
+and derives completion from every required step or assessment rather than a
+teacher claim, without exposing source files or executable visual controllers.
 A learner who explicitly starts another release keeps passes for an unchanged
 lesson, even when other lessons or their order change. Earlier evidence keeps
 its original identity; changed lesson content requires its own assessment.
@@ -195,24 +191,8 @@ host's current permissions and the same code-driven notifications. Watching does
 not prevent the person from continuing their conversation with Colleague.
 A compact watch-count control opens watch and assignment details when needed;
 these lists never consume space below the chat.
-In Learning, that same control can poll the exact current learner task. It shows
-the captured project/session and active, paused or unavailable state, and offers
-Pause, Resume and Stop. Only structured task progress and allowlisted settled
-control/view facts are observed; typed content, page contents, screenshots,
-credentials and other projects are excluded. Leaving the target pauses polling,
-and Colleague-performed navigation is recorded as a demonstration rather than
-learner evidence. Polling status cannot pass an assessment.
-An explicit user request can make Colleague start that same current-browser watch
-through its ordinary action catalogue; how-to questions remain explanatory. Its
-read/pause/resume/stop tools and the human controls share one watch ID and owner.
-Status includes observation freshness, last delivered guidance and the saved
-assessment result when available. Stop does not stop the app, lesson or teacher,
-and observation grants no unrelated mutation authority.
-Confirmed meaningful steps and explicit observed failures can prompt one bounded
-application-origin response from the same Main teacher after the learner's current
-turn. Main may connect evidence to the current criterion or offer one useful hint;
-silence and repeated unchanged evidence produce no nudges. These updates are not
-learner-authored answers and cannot award progress or bypass existing assessment.
+Learning tasks are no longer watched: the learner's own step actions record their
+results directly.
 People can also delegate bounded implementation assignments: Colleague retains
 the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their
@@ -1861,10 +1841,9 @@ available; project Close and inactivity shutdown stop all project work, includin
 shared services. Failed cleanup is reported before a project can be considered
 closed. Idle services continue to consume and be charged for their resources.
 
-A pinned lesson without a declared practice exercise can teach its quiz answers
-without creating a project or session. It keeps the original reserved attempt
-and durable progress; exercise tasks and lesson graphics retain their preparation
-requirements. Teaching distinguishes this from pending Workspace setup.
+A pinned lesson without a declared practice exercise is taught without creating
+a project or session. It keeps the original reserved attempt and durable
+progress; exercise tasks retain their preparation requirements.
 
 
 Architecture is one pannable, zoomable sheet: explicit UI pages, screens and

@@ -33,7 +33,6 @@ workspace.
 - `packages/vibe64-core/src/server/actionContext.js`
 - `tests/server/vibe64ActionContext.unit.test.js`
 - `packages/vibe64-training/src/server/learnerState.js`
-- `packages/vibe64-training/src/server/learningSessions.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`

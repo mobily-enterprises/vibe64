@@ -38,7 +38,6 @@ import {
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
-  createSessionActions,
 } from "./actions.js";
 import {
   sessionRenameInputValidator,
@@ -60,8 +59,7 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(http, {
   projectContext = null,
   routeSurface = "",
-  routeRelativePath = "",
-  learningScoped = false
+  routeRelativePath = ""
 } = {}) {
   // Reuse every original HTTP validator/input builder. The canonical action
   // metadata is the single allowlist: source/setup/Git operations stay on the
@@ -71,7 +69,6 @@ function registerRoutes(http, {
     projectContext,
     routeRelativePath,
     routeSurface,
-    learningActions: learningScoped ? createSessionActions({ sessions: {} }) : null,
     tags: ["studio", "vibe64-sessions"]
   });
 

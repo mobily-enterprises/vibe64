@@ -925,24 +925,18 @@ function codexAppServerToolSchemaIdentityForSession(session = {}, workdir = "") 
 
 function codexAppServerThreadPreparationForSession({
   agentSettings = {},
-  applicationTools,
   hostContext = null,
   observeThread,
   provider,
-  providerReady,
   runtime,
   session = {},
   workdir = ""
 } = {}) {
-  if (applicationTools && !runtime?.learningScope) {
-    throw new TypeError("Codex application tools require an admitted learning session.");
-  }
   return {
     observeThread,
     provider,
     workdir,
     projectHooks: true,
-    ...(applicationTools ? { applicationTools, providerReady } : {}),
     settings(normalizedWorkdir, config) {
       const threadSettings = codexAppServerThreadSettings({
         agentSettings,

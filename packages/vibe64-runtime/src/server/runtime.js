@@ -265,8 +265,6 @@ class Vibe64SessionRuntime {
     createSessionSource = null,
     inspectSourceByDefault = true,
     learningScope = null,
-    learningInstructions = null,
-    learningTeaching = null,
     projectContextRoot = process.cwd(),
     projectRuntimeRoot = "",
     projectSessionSourceRoot = "",
@@ -277,14 +275,6 @@ class Vibe64SessionRuntime {
     store = undefined
   } = {}) {
     this.learningScope = validateLearningSessionScope(learningScope);
-    if (learningInstructions !== null && (typeof learningInstructions !== "function" || !this.learningScope)) {
-      throw vibe64Error("Learning instructions require an authorized learning runtime and its server-owned reader.", "vibe64_learning_scope_invalid");
-    }
-    this.learningInstructions = learningInstructions;
-    if (learningTeaching !== null && (!this.learningScope || typeof learningTeaching?.bindConversation !== "function")) {
-      throw vibe64Error("Learning teaching requires an authorized runtime and its typed Training owner.", "vibe64_learning_scope_invalid");
-    }
-    this.learningTeaching = learningTeaching;
     if (this.learningScope?.noExercise && (projectSessionSourceRoot || createSessionSource)) {
       throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
     }
@@ -639,25 +629,6 @@ class Vibe64SessionRuntime {
       throw vibe64Error("Historical or inactive learning sessions cannot execute.", "vibe64_learning_session_inactive");
     }
     return this.learningScope.noExercise ? requireLearningNativeDirectory(session) : requireSessionSourceRoot(session);
-  }
-
-  async getLearningInstructions(sessionId) {
-    const requireActive = session => {
-      if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId) ||
-          session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
-        throw vibe64Error("Learning instructions require the exact active learning session.", "vibe64_learning_session_inactive");
-      }
-    };
-    requireActive(assertUsableSession(await this.store.readSession(sessionId)));
-    if (!this.learningInstructions) {
-      throw vibe64Error("The learning instruction owner is unavailable; no project guidance was substituted.", "vibe64_learning_instructions_unavailable");
-    }
-    const instructions = await this.learningInstructions(sessionId);
-    requireActive(assertUsableSession(await this.store.readSession(sessionId)));
-    if (typeof instructions !== "string" || !instructions.trim() || Buffer.byteLength(instructions) > 128 * 1024) {
-      throw vibe64Error("The learning owner must return bounded nonempty teaching instructions.", "vibe64_learning_instructions_invalid");
-    }
-    return instructions;
   }
 
   async renderPrompt(sessionId, {

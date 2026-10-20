@@ -16,11 +16,7 @@ function requireSuccess(result) {
 // Internal orchestration, supplied with the existing owners. Authenticated
 // actions admit actors and pins; neither model input nor HTTP selects paths,
 // initializers, session identities or shell commands here.
-function createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
-  learningSessions = null } = {}) {
-  if (learningSessions !== null && typeof learningSessions.stopAttemptSessions !== "function") {
-    throw new TypeError("Lesson ending requires the existing Learning session stop owner.");
-  }
+function createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision } = {}) {
     // This native namespace belongs only to retained-pin continuation.
     if (typeof requestId === "string" && requestId.startsWith("continue_")) {
@@ -54,14 +50,10 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
     // A confirmed end replay may belong to an earlier attempt. It cannot take
     // the active preparation lock, reactivate old work or end its successor.
-    const ended = attempt?.ended ? await learners.endAttempt(input)
-      : await learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
-    // The durable end retires the teaching instructions, so stop the attempt's
-    // agent work. A replay retries an unconfirmed stop of that same attempt.
-    if (ended?.attempt?.ended && ended.attempt.attemptId === attemptId) {
-      await learningSessions?.stopAttemptSessions({ actor, attemptId });
-    }
-    return ended;
+    // A practice project's sessions are ordinary project sessions the learner
+    // keeps using, so ending the lesson stops no agent work.
+    return attempt?.ended ? learners.endAttempt(input)
+      : learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
   }
 
   async function continueLesson({ actor, attemptId, requestId, expectedRevision } = {}) {

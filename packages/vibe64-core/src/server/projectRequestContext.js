@@ -56,9 +56,7 @@ async function resolveProjectRequestContext({
       targetRoot: project.projectRoot,
       vibe64User: practice.vibe64User,
       ...(currentProjectRequestContext().learningScope ? {
-        learningScope: currentProjectRequestContext().learningScope,
-        learningInstructions: currentProjectRequestContext().learningInstructions,
-        learningTeaching: currentProjectRequestContext().learningTeaching
+        learningScope: currentProjectRequestContext().learningScope
       } : {}),
       [practiceScopeKey]: currentProjectRequestContext()[practiceScopeKey]
     });
@@ -215,11 +213,7 @@ function retainPracticeContext(access) {
   const scope = Object.freeze({ ...grant.scope, access,
     vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
   return Object.freeze({ ...scope,
-    ...(context.learningScope ? {
-      learningScope: context.learningScope,
-      learningInstructions: context.learningInstructions,
-      learningTeaching: context.learningTeaching
-    } : {}),
+    ...(context.learningScope ? { learningScope: context.learningScope } : {}),
     [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(ordinary ? { ordinary: true } : {}) })
   });
 }
