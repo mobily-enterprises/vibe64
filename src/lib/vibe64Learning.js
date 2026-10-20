@@ -105,7 +105,7 @@ function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
 
 function createVibe64Learning({ request: requestOverride = null, browserNavigation = null, colleagueView = null,
   runGuide = null, now = () => Date.now() } = {}) {
-  // hiddenBy: "learner" when the learner's own Minimise, Close or Escape hid L
+  // hiddenBy: "learner" when the learner's own L or Escape hid L
   // (Colleague then returns a phone learner to its conversation), else "".
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, error: "", actorKey: "", busy: "", hiddenBy: "" });
@@ -236,8 +236,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   }
 
   // Hide L with its state kept; the L button or Colleague brings it back.
-  // by = "learner" only for the learner's own Minimise; Show me, Teach me and
-  // app navigation hide L to show something else.
+  // by = "learner" only for the learner's own L or Escape; Show me, Teach me
+  // and app navigation hide L to show something else.
   function minimise(by = "") {
     if (!state.open) return;
     state.hiddenBy = by === "learner" ? "learner" : "";
@@ -246,15 +246,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     flushReader();
   }
 
-  function close(by = "") {
-    state.hiddenBy = by === "learner" ? "learner" : "";
-    state.open = false;
-    state.minimised = false;
-    flushReader();
-  }
-
+  // L is the one control that opens and hides Learning; hiding keeps the place.
   function toggle() {
-    return state.open ? close() : show();
+    return state.open ? minimise("learner") : show();
   }
 
   function selectStep(stepId) {
@@ -552,7 +546,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get scroll() { return state.scroll; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
-    setViewer, show, minimise, close, toggle, selectStep, setScroll, flushReader, loadLesson,
+    setViewer, show, minimise, toggle, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, endLesson, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes

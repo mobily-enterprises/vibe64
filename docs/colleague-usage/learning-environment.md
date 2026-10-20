@@ -1,8 +1,8 @@
 # The Learning environment (L)
 
 Learning does not belong to a project. The yellow-outlined **L** button opens
-the Learning environment above whatever page you are on; closing it returns you
-to exactly that page. The app underneath keeps working and is never replaced.
+the Learning environment above whatever page you are on; pressing **L** again
+hides it and returns you to exactly that page. The app underneath keeps working and is never replaced.
 
 ## Where the L button is
 
@@ -11,26 +11,29 @@ to exactly that page. The app underneath keeps working and is never replaced.
   management screens): the first control in the header, after the menu button.
 - It is the same size as the other header icon buttons (40px on a phone) and
   the first keyboard stop in the header; Enter or Space presses it.
-- Tooltips: **Open Learning**, **Close Learning** while it is open, and
-  **Return to your lesson** when the lesson is minimised. A minimised lesson
-  also shows a small amber dot on the L.
+- Tooltips: **Open Learning**, **Hide Learning** while it is open, and
+  **Return to your lesson** when the lesson is hidden. A hidden lesson also
+  shows a small amber dot on the L.
 - It appears only for a signed-in person. Hosted Vibe64 shows it after the
   account prerequisites are complete.
 
-Pressing **L** again while Learning is open closes it. An old
+**L** is the one control that opens and hides Learning. An old
 `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
 
 ## The Learning screen
 
-Learning fills the screen. Its top bar shows the L mark, a **Courses** tab, a
-tab named after your open lesson, **Minimise** and a close button (✕, label
-**Close Learning**). Escape also closes it.
+Learning fills the screen, covering the header, so its own top bar starts with
+the same yellow **L** in the same place, followed by a **Courses** tab and a
+tab named after your open lesson. There is no separate minimise or close
+button.
 
-- **Minimise** hides Learning but keeps everything as it was, so the app and
-  Colleague are visible. Press **L** to come back.
-- **Close Learning** returns to the page you were on. Your place is kept too:
-  reopening L shows the same tab, lesson, step and scroll position.
+- Press that **L** (label **Hide Learning**, tooltip **Hide Learning (your
+  place is kept)**; a 48px target on a phone) or Escape to hide Learning. The
+  page you were on, and Colleague, are visible again, and the header **L**
+  shows the amber dot.
+- Press **L** again to come back to exactly where you were: the same tab,
+  lesson, step and scroll position.
 - Your place is also saved for your account. A reload in the same tab reopens
   L where it was; in another browser L opens on **Courses**, and **Resume saved
   lesson** opens the lesson at the step you last read.
@@ -166,8 +169,8 @@ correct answers of a question.
 
 On a phone, **Open lesson** on the step card in Colleague's full-screen chat
 minimises that chat and shows the lesson at that step. The same happens when
-Colleague opens Learning for you. When you then press **Minimise** or **Close
-Learning** (or Escape), you return to Colleague's chat, not the page behind it.
+Colleague opens Learning for you. When you then hide Learning with **L** (or
+Escape), you return to Colleague's chat, not the page behind it.
 **Show me** and **Open practice project** still show the app.
 
 An ended lesson stays readable with the note **This lesson has ended.** A lesson

@@ -96,7 +96,7 @@ L at an attempt/step, minimises it, or points at a real place or the L button;
 Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
 On a phone the dialog minimises itself before opening L or ringing a control;
 after it gave way to L (a Learning command or **Open lesson**), the learner's
-own Minimise or Close of L (controller `hiddenBy === "learner"`) reopens the
+own L or Escape hiding L (controller `hiddenBy === "learner"`) reopens the
 dialog, while Show me and other app navigation leave the app visible.
 The pinned current-step card (lesson title, Step N of M, step title, Passed,
 **Open lesson**) is rendered from the L controller in the drawer, the phone

@@ -2,13 +2,13 @@
 import { computed } from "vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
-// The L plate: opens the Learning environment above the current page. It is
+// The L plate: opens and hides the Learning environment above the current page. It is
 // shown only where a host has a signed-in Learning overlay bound to it.
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const active = computed(() => Boolean(learning?.state.open));
 const minimised = computed(() => Boolean(learning?.state.minimised));
-const title = computed(() => active.value ? "Close Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
+const title = computed(() => active.value ? "Hide Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
 </script>
 
 <template>

@@ -42,12 +42,15 @@ guide overlay 3000 above L 2400 above Colleague.
   the previous person's lesson, notes and pending requests, and restores only
   the new person's own saved place.
 - Place: `show({surface?, attemptId?, stepId?})`, `minimise(by?)` (state kept,
-  app and Colleague visible), `close(by?)`, `toggle()`; `hiddenBy` is
-  `"learner"` only when L's own Minimise, Close or Escape hid it (Colleague
+  app and Colleague visible), `toggle()` (L is the one open/hide control: open
+  L shows, hiding is `minimise("learner")`; there is no separate close); the
+  overlay covers the app bar, so its header L plate is the same toggle button,
+  and Escape also calls `minimise("learner")`. `hiddenBy` is
+  `"learner"` only when the learner's own L or Escape hid it (Colleague
   then returns a phone learner to its dialog), and `""` for Show me, Teach me,
   Open practice project and app navigation, `selectStep`, `setScroll`. The
   place is kept per tab in `sessionStorage` and saved for the account through
-  `reader.save` (debounced, flushed on minimise/close), so a reload or another
+  `reader.save` (debounced, flushed on minimise), so a reload or another
   browser reopens the same step and scroll.
 - Lesson: `loadLesson(attemptId)` reads `lesson.read`; every step action is
   followed by a fresh read. `answer(stepId, selected)` (`step.answer`),

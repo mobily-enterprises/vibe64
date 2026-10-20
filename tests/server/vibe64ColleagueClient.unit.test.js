@@ -215,10 +215,9 @@ test("Teach me without a usable AI model opens Colleague, says so and sends noth
   assert.equal(commands[0].options.body.text, "Teach me this step.");
 });
 
-test("on a phone, the learner's own Minimise of Learning opened from Colleague returns to Colleague's dialog", async t => {
+test("on a phone, the learner's own L hiding Learning opened from Colleague returns to Colleague's dialog", async t => {
   const learning = vue.reactive({ open: false, hiddenBy: "", surface: "courses", attemptId: "", stepId: "", lesson: null, results: [],
-    show() { learning.open = true; learning.hiddenBy = ""; }, minimise(by = "") { learning.hiddenBy = by; learning.open = false; },
-    close(by = "") { learning.hiddenBy = by; learning.open = false; } });
+    show() { learning.open = true; learning.hiddenBy = ""; }, minimise(by = "") { learning.hiddenBy = by; learning.open = false; } });
   const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning });
   await flush();
@@ -232,7 +231,7 @@ test("on a phone, the learner's own Minimise of Learning opened from Colleague r
   assert.equal(learning.open, true);
   learning.minimise("learner");
   await flush();
-  assert.equal(view.state.shown.value, true, "minimising Learning returns to Colleague, not the app");
+  assert.equal(view.state.shown.value, true, "hiding Learning with L returns to Colleague, not the app");
 
   // Show me (or any other programmatic hide) shows the app instead.
   await view.state.handleNavigation({ id: "phone-learning-2", status: "pending", learning: { open: true } });
@@ -245,7 +244,7 @@ test("on a phone, the learner's own Minimise of Learning opened from Colleague r
   // Learning the learner opened without Colleague never brings the dialog back.
   learning.show();
   await flush();
-  learning.close("learner");
+  learning.minimise("learner");
   await flush();
   assert.equal(view.state.shown.value, false);
 
@@ -259,7 +258,7 @@ test("on a phone, the learner's own Minimise of Learning opened from Colleague r
   await flush();
   assert.equal(view.state.shown.value, false);
   assert.equal(learning.open, true);
-  learning.close("learner");
+  learning.minimise("learner");
   await flush();
   assert.equal(view.state.shown.value, true);
 });

@@ -189,7 +189,7 @@ async function renderLearningShell(environment = { actorKey: "local", open: fals
 describe("controlled Learning shell", () => {
   it.each([
     [false, "false", "Open Learning"],
-    [true, "true", "Close Learning"]
+    [true, "true", "Hide Learning"]
   ])("renders the actual L button with truthful state (open %s)", async (open, pressed, title) => {
     const html = await renderLearningShell({ actorKey: "local", open, minimised: false });
     expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);

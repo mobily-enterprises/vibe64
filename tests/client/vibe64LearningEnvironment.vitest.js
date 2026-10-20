@@ -88,7 +88,7 @@ describe("useVibe64Learning controller", () => {
     expect(learning.lesson.value.steps.find(step => step.id === "read").bodyText).toBe("# Hello");
   });
 
-  it("records whether the learner's own Minimise or Close hid L, for Colleague's phone return", async () => {
+  it("records whether the learner's own L or Escape hid L, for Colleague's phone return", async () => {
     const { learning } = controller();
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
@@ -99,12 +99,12 @@ describe("useVibe64Learning controller", () => {
     learning.minimise();
     expect(learning.hiddenBy, "Show me, Teach me and app navigation hide L to show something else").toBe("");
     await learning.show();
-    learning.close("learner");
-    expect(learning.hiddenBy).toBe("learner");
-    expect(learning.minimised).toBe(false);
+    learning.toggle();
+    expect(learning.hiddenBy, "L is the learner's own hide").toBe("learner");
+    expect(learning.minimised).toBe(true);
   });
 
-  it("minimise keeps the place, close returns to the app and reopening restores the exact step", async () => {
+  it("minimise keeps the place, L hides and reopens L at the exact step", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();
     learning.setViewer("member");
@@ -124,9 +124,13 @@ describe("useVibe64Learning controller", () => {
     expect(learning.open).toBe(true);
     expect(learning.surface).toBe("lesson");
     expect(learning.stepId).toBe("preview");
-    learning.close();
+    expect(learning.close, "L is the one control that opens and hides Learning").toBeUndefined();
+    learning.toggle();
     expect(learning.open).toBe(false);
-    expect(learning.minimised).toBe(false);
+    expect(learning.minimised, "hiding L with L keeps its place").toBe(true);
+    await learning.toggle();
+    expect(learning.open).toBe(true);
+    expect(learning.stepId).toBe("preview");
 
     // A new page in the same tab restores this browser's place before reader.json.
     const again = controller({ reads: () => lessonResult({ reader: { attemptId: ATTEMPT, stepId: "quiz", scroll: 7 } }) });
@@ -726,7 +730,7 @@ describe("Learning reader", () => {
 });
 
 describe("Learning overlay", () => {
-  it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and closes on Escape", async () => {
+  it("binds the signed-in viewer, mounts one guide overlay, opens courses and the reader, and hides on Escape or its own L", async () => {
     const { learning } = controller();
     const realtime = [];
     const coursesOptions = [];
@@ -776,10 +780,24 @@ describe("Learning overlay", () => {
       await flush();
       expect(learning.surface).toBe("lesson");
       expect(byTest(root, "reader").props.revision).toBe(9);
+      expect(byTest(root, "learning-minimise"), "L itself hides Learning").toBeUndefined();
+      expect(byTest(root, "learning-close")).toBeUndefined();
+      const hide = byTest(root, "learning-hide");
+      expect(hide.props["aria-label"]).toBe("Hide Learning");
+      expect(hide.props.title).toBe("Hide Learning (your place is kept)");
+      hide.props.onClick();
+      await flush();
+      expect(learning.open).toBe(false);
+      expect(learning.minimised).toBe(true);
+      expect(learning.hiddenBy, "the header L is the learner's own hide").toBe("learner");
+      await learning.show();
+      await flush();
+      expect(learning.surface, "L returns to exactly where the learner was").toBe("lesson");
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
       await flush();
       expect(learning.open).toBe(false);
-      expect(learning.hiddenBy, "Escape is the learner's own close").toBe("learner");
+      expect(learning.hiddenBy, "Escape is the learner's own hide").toBe("learner");
+      expect(learning.minimised, "Escape keeps the place").toBe(true);
       // Kept mounted (hidden) so the place stays exactly as it was.
       expect(byTest(root, "reader")).toBeTruthy();
       viewer.value = { actorKey: "someone-else" };
