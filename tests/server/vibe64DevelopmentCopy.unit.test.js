@@ -50,29 +50,6 @@ test("offline scoped Claude preparation preserves native identity and never foll
   });
 });
 
-test("offline copy uses the admitted Learning scope for private source-less history", async () => {
-  await withTemporaryRoot(async root => {
-    const learningScope = { learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
-      pin: { course: { courseId: "first-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "getting-started",
-        release: "0.1.0", repository: "vibe64/learn-getting-started", commit: "a".repeat(40), topicHash: "b".repeat(64) },
-        lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
-    const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: root, learningScope });
-    await store.createSession({ sessionId: "learning-one", runtimeKind: "genesis" });
-    await store.conversationStorage.write("learning-one", async transaction => {
-      await transaction.appendMessage("000001", { role: "user", text: "Retained lesson question", messageId: "lesson-question", at: "2026-10-15T00:00:00.000Z",
-        turnMetadata: { runtime: { status: "running" } } });
-    });
-    await prepareVibe64DevelopmentCopy({ store, sessionId: "learning-one" });
-    const session = await store.readSession("learning-one");
-    assert.deepEqual(JSON.parse(session.metadata.learning_session), { schemaVersion: 1, ...learningScope, conversationId: "learning-one" });
-    await store.conversationStorage.read("learning-one", async transaction => {
-      const turn = await transaction.readTurn("000001");
-      assert.equal(turn.metadata.runtime.status, "interrupted");
-      assert.equal(turn.messages[0].text, "Retained lesson question");
-    });
-  });
-});
-
 test("copied Colleague retains chat history but cannot restart watches or assignments", async () => {
   const at = "2026-10-15T00:00:00.000Z";
   const original = { schemaVersion: 3, scopeId: "colleague_one", runtimeId: "owner", previousConversations: [],

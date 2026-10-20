@@ -13218,67 +13218,6 @@ test("Codex real provider restores the same-account Helper after an actual auth 
   }
 });
 
-// Additive binding cases use the existing Runtime/Store learning constructor
-// fixture shape from codexOuterTurnCheckpoint.unit.test.js, without inference.
-import { Vibe64SessionRuntime as LearningBindingRuntime } from "@local/vibe64-runtime/server";
-import { createMainConversationBinding as schemaMainBinding } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
-import { createCodexConversationStorage as schemaNativeStorage } from "../../packages/vibe64-terminals/src/server/codexConversationStorage.js";
-
-test("learning Main reads schema identity through fresh original bounded storage and retires it with its native binding", async t => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-schema-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const learningScope = { learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
-    pin: { course: { courseId: "first-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "getting-started",
-      release: "0.1.0", repository: "vibe64/learn-getting-started", commit: "a".repeat(40), topicHash: "b".repeat(64) },
-      lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
-  const runtime = new LearningBindingRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private"),
-    learningScope,
-    promptRenderer: async () => assert.fail("No source prompt"), promptEnvironment: async () => assert.fail("No project Env") });
-  const id = "learning-schema-session";
-  await runtime.store.createSession({ sessionId: id, runtimeKind: "genesis", metadata: {
-    assistant_selection: serializeVibe64AssistantSelection({ agentId: "codex", catalogRevision: `sha256:${"f".repeat(64)}`,
-      engineId: "codex", modelId: "gpt-5.5", modelProviderId: "openai", variantId: "high" })
-  } });
-  const session = await runtime.getSession(id, { inspectSource: false });
-  const workdir = await runtime.getNativeExecutionRoot(id);
-  const nativeStorage = schemaNativeStorage({ projectService: { createSessionStore: async () => runtime.store },
-    runOwner: { readAgentRunForSession: async () => null } });
-  const state = nativeStorage.state(id);
-  const threadId = randomUUID();
-  const original = schemaMainBinding(runtime.store, id, { runtime, session,
-    readSession: () => runtime.getSession(id, { inspectSource: false }) });
-  const native = original.conversation({ publish() {} });
-  const supplied = await createSessionConversationBinding({ id: "codex", async prepareConversationHost() {
-    return { context: { runtime, session }, namespace: "original-learning", state, native: { messagePreparation: {} }, publish() {} };
-  } }, id);
-  assert.equal(await supplied.identity.readToolSchemaIdentity(), "");
-  await native.identity.write({ appServerRuntime: { modelProviderId: "openai" }, threadId,
-    toolSchemaIdentity: "d".repeat(64), workdir });
-  assert.equal(await supplied.identity.read(), threadId, "the captured empty snapshot is not reused");
-  assert.equal(await supplied.identity.readToolSchemaIdentity(), "d".repeat(64));
-  const readSession = runtime.getSession;
-  runtime.getSession = async () => assert.fail("Fresh schema reads do not hydrate Runtime history or acquire a provider");
-  try {
-    await runtime.store.writeMetadataValue(id, "codex_conversation_tool_schema_identity", "e".repeat(64));
-    assert.equal(await supplied.identity.readToolSchemaIdentity(), "e".repeat(64));
-  } finally { runtime.getSession = readSession; }
-  const binding = await original.identity.inspect(threadId);
-  assert.ok(binding.bindingNames.includes("codex_conversation_tool_schema_identity"));
-  await original.state.transaction(tx => tx.releaseBinding(binding));
-  assert.equal(await runtime.store.readMetadataValue(id, "codex_conversation_tool_schema_identity"), "");
-  assert.equal(await state.readIdentity(), "");
-  assert.equal(await state.readToolSchemaIdentity(), "");
-  await runtime.store.writeMetadataValue(id, "agent_identity_conversation_id", "incomplete-thread");
-  await runtime.store.writeMetadataValue(id, "codex_conversation_tool_schema_identity", "d".repeat(64));
-  await assert.rejects(original.identity.inspect("incomplete-thread"), /binding is incomplete/,
-    "an optional schema hash cannot substitute for either of the original two native IDs");
-});
-
-// The original controlled native owner receives a genuine saved no-exercise
-// Runtime/Store and the same Training factories. This is source integration,
-// not a logged-in provider or installed package acceptance case.
-
-
 test("R11 original persistent scoped Codex preserves history and excludes stopped writers without retiring a sibling", async () => {
   const wires = new Map();
   await withConversationController(async ({ captures, controller, calls, subscribers, temporaryRoot, projectContextRoot, projectService }) => {

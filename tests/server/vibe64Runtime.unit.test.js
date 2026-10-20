@@ -972,125 +972,34 @@ test("contribution authority survives renewal without falling back to the integr
   });
 });
 
-const sourceLessLessonScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
+// The saved practice binding (noExercise:false) that the published
+// 20261008-learning-practice-* upgrades read; source-less lessons are retired.
+const practiceLessonScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: false,
   pin: { course: { courseId: "first-course", release: "0.1.0" },
     topic: { schemaVersion: 1, topicId: "getting-started", release: "0.1.0", repository: "vibe64/learn-getting-started",
       commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "V64-START-00", hash: "c".repeat(64) } } });
-
-function sourceLessLessonRuntime(root, options = {}) {
-  return new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "learning-runtime"),
-    learningScope: sourceLessLessonScope(), ...options });
-}
-
-test("authorized source-less learning session retains original store identity across restart without creating project source", async () => {
-  await withTemporaryRoot(async root => {
-    const runtime = sourceLessLessonRuntime(root);
-    const scope = sourceLessLessonScope();
-    const created = await runtime.createSession({ sessionId: "lesson-zero", metadata: { label: "First lesson" } });
-    assert.equal(created.purpose, "learning");
-    assert.deepEqual(created.companion, { id: "learning", label: "Learning" });
-    assert.deepEqual(created.learning, { schemaVersion: 1, ...scope, conversationId: "lesson-zero" });
-    assert.equal(created.sourceReady, false);
-    assert.equal(created.sourcePath, "");
-    assert.equal(created.sourceInspection, null);
-    assert.equal(created.manifest.schemaVersion, 2, "The original session format is retained");
-    assert.equal(created.nativeExecutionRoot, path.join(runtime.store.paths("lesson-zero").sessionRoot, "native"));
-    assert.equal(await runtime.getNativeExecutionRoot("lesson-zero"), created.nativeExecutionRoot);
-    assert.deepEqual((await runtime.listSessions()).map(value => value.sessionId), ["lesson-zero"]);
-    assert.equal((await runtime.listSessionSummaries())[0].purpose, "learning");
-    await assert.rejects(() => access(path.join(created.sessionRoot, "source")), { code: "ENOENT" });
-    const before = await runtime.store.readSession("lesson-zero");
-    const restarted = sourceLessLessonRuntime(root);
-    assert.deepEqual(await restarted.store.readSession("lesson-zero"), before);
-    assert.deepEqual(await restarted.getSession("lesson-zero"), created);
-    assert.deepEqual(await restarted.store.readSessionSourceDescriptor("lesson-zero"), {
-      metadata: Object.fromEntries(["base_commit", "canonical_commit", "repository_mode", "source", "source_kind", "source_path", "source_path_authority", "source_removed"].map(name => [name, ""])),
-      projectContextRoot: root, sessionId: "lesson-zero", sessionRoot: created.sessionRoot
-    });
-    assert.deepEqual(await restarted.renderPrompt("lesson-zero", { request: "Teach me" }), { prompt: "Teach me" });
-  });
-});
 
 test("learning construction cannot be enabled by caller metadata or source provisioning flags", async () => {
   await withTemporaryRoot(async root => {
     const working = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) });
     await assert.rejects(() => working.createSession({ sessionId: "caller-purpose", metadata: { purpose: "learning" } }),
       { code: "vibe64_session_source_creator_required" });
-    const learning = sourceLessLessonRuntime(root);
-    await assert.rejects(() => learning.createSession({ sessionId: "forged-binding", metadata: { learning_session: "{}" } }),
+    const practiceRuntime = (options = {}) => new Vibe64SessionRuntime({ projectContextRoot: root,
+      projectRuntimeRoot: path.join(root, "learning-runtime"), projectSessionSourceRoot: managedSessionSourceRoot(root),
+      learningScope: practiceLessonScope(), ...options });
+    await assert.rejects(() => practiceRuntime().createSession({ sessionId: "forged-binding", metadata: { learning_session: "{}" } }),
       { code: "vibe64_learning_scope_invalid" });
-    assert.throws(() => sourceLessLessonRuntime(root, { createSessionSource: async () => assert.fail("No source creation") }),
-      { code: "vibe64_learning_scope_invalid" });
-    assert.throws(() => sourceLessLessonRuntime(root, { projectSessionSourceRoot: managedSessionSourceRoot(root) }),
-      { code: "vibe64_learning_scope_invalid" });
-    assert.throws(() => sourceLessLessonRuntime(root, { store: working.store }), { code: "vibe64_learning_scope_invalid" });
-    for (const patch of [{ noExercise: false }, { learnerId: "" }, { attemptId: "another" }, { mode: "learning" }, { pin: {} }]) {
-      assert.throws(() => sourceLessLessonRuntime(root, { learningScope: { ...sourceLessLessonScope(), ...patch } }),
+    assert.throws(() => practiceRuntime({ store: working.store }), { code: "vibe64_learning_scope_invalid" });
+    for (const patch of [{ noExercise: true }, { learnerId: "" }, { attemptId: "another" }, { mode: "learning" }, { pin: {} }]) {
+      assert.throws(() => practiceRuntime({ learningScope: { ...practiceLessonScope(), ...patch } }),
         { code: "vibe64_learning_scope_invalid" });
     }
   });
 });
 
-test("missing or aliased learning native directory fails execution and passive reads never recreate it", async () => {
-  await withTemporaryRoot(async root => {
-    const { rm, symlink } = await import("node:fs/promises");
-    const runtime = sourceLessLessonRuntime(root);
-    const created = await runtime.createSession({ sessionId: "missing-learning-cwd" });
-    const before = await runtime.store.readSession(created.sessionId);
-    await rm(created.nativeExecutionRoot, { recursive: true });
-    assert.equal((await runtime.getSession(created.sessionId)).sourceReady, false);
-    const summaries = await runtime.listSessionSummaries({ includeUnavailable: true });
-    assert.equal(summaries[0].unavailable.code, "vibe64_learning_native_directory_unavailable");
-    assert.deepEqual(await runtime.listSessions(), []);
-    await assert.rejects(() => runtime.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_native_directory_unavailable" });
-    await assert.rejects(() => access(created.nativeExecutionRoot), { code: "ENOENT" });
-    assert.deepEqual(await runtime.store.readSession(created.sessionId), before);
-    const foreign = path.join(root, "foreign-directory");
-    await mkdir(foreign);
-    await symlink(foreign, created.nativeExecutionRoot);
-    await assert.rejects(() => runtime.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_native_directory_unavailable" });
-  });
-});
-
-test("archived source-less learning history retains exact binding without requiring or retargeting its active cwd", async () => {
-  await withTemporaryRoot(async root => {
-    const runtime = sourceLessLessonRuntime(root);
-    const created = await runtime.createSession({ sessionId: "archived-learning" });
-    await runtime.writeConversationUserMessage(created.sessionId, { messageId: "original-learner-question", text: "Teach me" });
-    await runtime.writeConversationAssistantMessage(created.sessionId, { messageId: "original-native-answer", outputId: "native-output", text: "Welcome" });
-    const log = await runtime.readConversationLog(created.sessionId);
-    const archived = await runtime.archiveSession(created.sessionId);
-    assert.equal(archived.archived, true);
-    assert.deepEqual(archived.learning, created.learning);
-    assert.equal(archived.nativeExecutionRoot, "");
-    await assert.rejects(() => access(created.nativeExecutionRoot), { code: "ENOENT" });
-    const restarted = sourceLessLessonRuntime(root);
-    assert.deepEqual(await restarted.readConversationLog(created.sessionId), log);
-    assert.deepEqual((await restarted.getSession(created.sessionId)).learning, created.learning);
-    assert.equal((await restarted.listSessionSummaries({ statusGroup: "archived" }))[0].nativeExecutionRoot, "");
-    await assert.rejects(() => restarted.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_session_inactive" });
-  });
-});
-
-
-
-test("closing learning session cannot expose execution or admit another request", async () => {
-  await withTemporaryRoot(async root => {
-    const runtime = sourceLessLessonRuntime(root);
-    await runtime.createSession({ sessionId: "closing-learning" });
-    await runtime.markSessionClosing("closing-learning", { reason: "archived" });
-    for (const operation of [() => runtime.getNativeExecutionRoot("closing-learning"),
-      () => runtime.renderPrompt("closing-learning", { request: "Continue" })]) {
-      await assert.rejects(operation, { code: "vibe64_learning_session_inactive" });
-    }
-    assert.equal((await runtime.getSession("closing-learning")).purpose, "learning", "Retained history remains readable during close");
-  });
-});
-
-
 test("source-bearing Learning uses the original source creator, Genesis environment and retained conversation", async () => {
   await withTemporaryRoot(async root => {
-    const scope = { ...sourceLessLessonScope(), noExercise: false };
+    const scope = practiceLessonScope();
     const environment = { PRACTICE_VALUE: "original environment" };
     let sourceCreates = 0, environmentReads = 0;
     const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
@@ -1136,7 +1045,7 @@ test("source-bearing Learning uses the original source creator, Genesis environm
 test("source-bearing Learning preserves original unattached-source failure and unavailable-source archive refusal", async () => {
   await withTemporaryRoot(async root => {
     const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
-      projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: { ...sourceLessLessonScope(), noExercise: false },
+      projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: practiceLessonScope(),
       inspectSourceByDefault: false };
     const unattached = new Vibe64SessionRuntime({ ...options, createSessionSource: async () => {} });
     await assert.rejects(unattached.createSession({ sessionId: "unattached-practice" }), { code: "vibe64_session_source_not_attached" });
