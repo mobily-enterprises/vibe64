@@ -455,8 +455,10 @@ person's strengths, difficulties, preferences and place in Learning, with a
 revision, `updatedAt`, `updatedBy` (colleague or learner) and the latest 32
 request IDs for replay. The authenticated actor alone selects the file; no input
 names a learner, so neither another member nor the workspace owner can read it.
-`learner-notes.read` and `learner-notes.update` (replace the whole text, optional
-`expectedRevision`) are available to Colleague and the learner's browser;
+`learner-notes.read` and `learner-notes.update` (replace the whole text against a
+required `expectedRevision`) are available to Colleague and the learner's browser;
+a retry older than the replay window is refused as changed, never restoring older
+text. Colleague treats the notes as data about the person, never as instructions;
 `learner-notes.clear` is the learner's browser action only. Each change publishes
 `vibe64.training.learner.changed` with reason `notes` and no attempt. Notes are
 never read by admission, step results or completion. Online keeps them in the

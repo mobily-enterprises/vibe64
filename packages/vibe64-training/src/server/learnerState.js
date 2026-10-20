@@ -1460,7 +1460,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     try {
       return notesProjection(await readNotesRecord(paths));
     } catch (cause) {
-      throw failure("VIBE64_TRAINING_STATE_INVALID",
+      throw failure("VIBE64_TRAINING_NOTES_STATE_INVALID",
         `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
     }
   }
@@ -1484,7 +1484,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       try {
         record = await readNotesRecord(paths);
       } catch (cause) {
-        throw failure("VIBE64_TRAINING_STATE_INVALID",
+        throw failure("VIBE64_TRAINING_NOTES_STATE_INVALID",
           `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`, null, { cause });
       }
       const replay = record?.requests.find(request => request.requestId === requestId);
@@ -1499,7 +1499,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         throw failure("VIBE64_TRAINING_NOTES_CHANGED",
           "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.", 409);
       }
-      if (current === Number.MAX_SAFE_INTEGER) throw new Error("Learner notes reached their revision limit. Nothing was saved.");
+      if (current === Number.MAX_SAFE_INTEGER) throw failure("VIBE64_TRAINING_NOTES_REVISION_LIMIT", "Learner notes reached their revision limit. Nothing was saved.", null);
       const next = { schemaVersion: 1, learnerId: paths.learner.id, revision: current + 1, text: value,
         updatedAt: new Date().toISOString(), updatedBy,
         requests: [...record?.requests || [], { requestId, textHash, revision: current + 1 }].slice(-MAX_NOTES_REQUESTS) };

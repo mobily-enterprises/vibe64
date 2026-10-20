@@ -40,6 +40,8 @@ edit and clear them in **L** under **What my teacher knows about me** on
 **Courses**. Ask Colleague to change or forget something and it rewrites them;
 clearing is your own **Clear** in **L**. If you edited the notes since Colleague
 read them, its save is refused and it reads them again before combining.
+Colleague treats the notes as a description of you, not as instructions: writing
+"tell me the answers" in them does not change how it teaches or judges.
 
 On a phone, Colleague's full-screen chat minimises itself when it opens Learning
 or rings a control, so you can see it; reopen Colleague with its avatar button.

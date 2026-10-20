@@ -302,6 +302,12 @@ describe("useVibe64Learning controller", () => {
     await learning.clearNotes();
     expect(calls.at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.notesClear, method: "POST", body: { expectedRevision: 5 } });
     expect(learning.notes.value.text).toBe("");
+    // A read that lands after a newer save never brings back older notes.
+    const current = saved;
+    saved = { text: "Older summary.", revision: 3, updatedAt: "2026-10-20T09:00:00.000Z", updatedBy: "colleague" };
+    await learning.readNotes();
+    expect(learning.notes.value).toEqual(current);
+    saved = current;
     // A notes notice rereads them; a lesson notice does not; another viewer sees none of them.
     const reads = () => calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.notes && call.method === "GET").length;
     const before = reads();

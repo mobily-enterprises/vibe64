@@ -49,7 +49,9 @@ function useVibe64PracticeProjects({ enabled = true } = {}) {
     queryOptions: { retry: false },
     refreshOnPull: true,
     requestRecoveryLabel: "Practice projects",
-    realtime: { events: [VIBE64_TRAINING_LEARNER_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT] }
+    // Learner notes changes never touch a practice project.
+    realtime: { events: [VIBE64_TRAINING_LEARNER_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT],
+      matches: ({ payload } = {}) => payload?.reason !== "notes" }
   });
   const practiceProjects = computed(() => active.value ? practiceProjectsFromLearning(resource.data.value) : []);
   const deleteCommand = useCommand({

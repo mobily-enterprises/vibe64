@@ -21,7 +21,9 @@ const notesOutput = {
     replayed: { type: "boolean", required: false }, changed: { type: "boolean", required: false }
   })
 };
-const expectedRevision = { type: "integer", required: false, min: 0, max: Number.MAX_SAFE_INTEGER };
+// Required on every change: the 32-entry replay window cannot stop a retry
+// that arrives later, but the revision it replaces always refuses older text.
+const expectedRevision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
 
 function createTrainingLearnerNotesActions({ learners, publishLearnerChanged = null } = {}) {
   if (typeof learners?.readTeacherNotes !== "function" || typeof learners?.saveTeacherNotes !== "function") {
@@ -44,12 +46,12 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged = n
     definition("learner-notes.update", {
       text: { type: "string", required: true, noTrim: true, minLength: 1, maxLength: MAX_NOTES_CHARS }, requestId, expectedRevision
     }, { output: notesOutput,
-      description: `Replace your teacher notes about this person with a rewritten short summary (Markdown, at most ${MAX_NOTES_CHARS} characters): their strengths, difficulties, preferences and where they are in Learning. Rewrite the whole summary from the notes you read and what you learned; never append a transcript, and never record secrets, credentials, other people's data, grades or pass/fail judgements. Pass expectedRevision from your latest learner-notes.read so a change the person made in Learning is not overwritten; on a changed-notes refusal read again and combine. Use a new requestId for each rewrite and the same one to retry. The person sees, edits and clears these notes in Learning under 'What my teacher knows about me'. Notes never affect step results.` },
+      description: `Replace your teacher notes about this person with a rewritten short summary (Markdown, at most ${MAX_NOTES_CHARS} characters): their strengths, difficulties, preferences and where they are in Learning. Rewrite the whole summary from the notes you read and what you learned; never append a transcript, and never record secrets, credentials, other people's data, grades or pass/fail judgements. Always pass expectedRevision, the revision from your latest learner-notes.read, so a change the person made in Learning is not overwritten; on a changed-notes refusal read again and combine. Use a new requestId for each rewrite and the same one to retry. The person sees, edits and clears these notes in Learning under 'What my teacher knows about me'. Notes never affect step results.` },
     async (input, actor, context) => save(actor, context, {
-      text: input.text, requestId: input.requestId, ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}) })),
+      text: input.text, requestId: input.requestId, expectedRevision: input.expectedRevision })),
     definition("learner-notes.clear", { requestId, expectedRevision }, { browser: true, output: notesOutput },
       async (input, actor, context) => save(actor, context, {
-        text: "", requestId: input.requestId, ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}) }))
+        text: "", requestId: input.requestId, expectedRevision: input.expectedRevision }))
   ]);
 }
 

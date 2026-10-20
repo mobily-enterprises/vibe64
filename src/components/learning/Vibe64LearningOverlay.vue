@@ -50,7 +50,8 @@ useRealtimeEvent({
   enabled: computed(() => Boolean(actorKey.value)),
   onEvent: ({ payload } = {}) => {
     void learning?.learnerChanged(payload || {});
-    if (open.value) void mode.learningResource.reload();
+    // A notes change touches no course, attempt or practice project.
+    if (open.value && payload?.reason !== "notes") void mode.learningResource.reload();
   }
 });
 

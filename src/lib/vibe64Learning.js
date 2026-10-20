@@ -385,7 +385,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     try {
       const result = await request(VIBE64_LEARNING_ROUTES.notes, { method: "GET" });
       if (result?.ok !== true || !result.notes) throw new Error(result?.error || "The notes could not be read.");
-      if (expected === viewer) notes.value = Object.freeze({ ...result.notes });
+      // A read that finishes after a newer save never brings back older notes.
+      if (expected === viewer && !(result.notes.revision < (notes.value?.revision ?? 0))) notes.value = Object.freeze({ ...result.notes });
       return expected === viewer ? notes.value : null;
     } catch (cause) {
       if (expected === viewer) notesState.error = String(cause?.message || "The notes could not be read.");

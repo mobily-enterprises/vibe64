@@ -1300,7 +1300,8 @@ Learner notes (Learning v2 contract C7) add, per learner under
 `training/users/<key>/`, an optional `teacher-notes.json` (schema version 1: the
 learner identity, a revision, Markdown text of at most 4000 characters,
 `updatedAt`, `updatedBy` colleague or learner, and the latest 32 request IDs with
-their text hashes for replay; 32 KiB bound) with its own `teacher-notes.lock`.
+their text hashes for replay; 32 KiB bound; a later retry is refused by the
+required expected revision) with its own `teacher-notes.lock`.
 Only an explicit `learner-notes.update` or `learner-notes.clear` creates it. No
 existing record changes and nothing is backfilled: a missing file means no notes.
 A release without notes never opens the file, so it needs no compatibility

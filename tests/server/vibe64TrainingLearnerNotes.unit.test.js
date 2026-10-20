@@ -96,7 +96,7 @@ test("Colleague reads and rewrites the notes; clearing is the learner's browser 
 
 test("another learner and the workspace owner can never read or change a learner's notes", async t => {
   const f = await fixture(t);
-  await f.execute("learner-notes.update", { text: "Alice finds Git confusing.", requestId: "a1" });
+  await f.execute("learner-notes.update", { text: "Alice finds Git confusing.", requestId: "a1", expectedRevision: 0 });
   f.auth.user = BOB;
   assert.deepEqual(await f.execute("learner-notes.read"), { ok: true, notes: EMPTY });
   assert.deepEqual(await f.tool("learner-notes.read"), { ok: true, notes: EMPTY });
@@ -105,10 +105,10 @@ test("another learner and the workspace owner can never read or change a learner
     const result = await f.execute("learner-notes.read", input).catch(error => error);
     assert.doesNotMatch(JSON.stringify(result?.notes ?? result?.message ?? ""), /Alice/u);
   }
-  await f.execute("learner-notes.update", { text: "Bob likes examples.", requestId: "a1" });
+  await f.execute("learner-notes.update", { text: "Bob likes examples.", requestId: "a1", expectedRevision: 0 });
   f.auth.user = OWNER;
   assert.deepEqual((await f.execute("learner-notes.read")).notes, EMPTY, "an owner reads only their own notes");
-  await f.execute("learner-notes.clear", { requestId: "o1" });
+  await f.execute("learner-notes.clear", { requestId: "o1", expectedRevision: 0 });
   f.auth.user = ALICE;
   assert.equal((await f.execute("learner-notes.read")).notes.text, "Alice finds Git confusing.",
     "another person's same request ID and clear never touch this learner");
@@ -117,23 +117,23 @@ test("another learner and the workspace owner can never read or change a learner
   // A record copied from another learner is refused, not adopted or repaired.
   const bobRecord = await readFile(path.join(f.userRoot(BOB), "teacher-notes.json"), "utf8");
   await writeFile(path.join(f.userRoot(ALICE), "teacher-notes.json"), bobRecord, { mode: 0o600 });
-  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_STATE_INVALID" });
+  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
   await assert.rejects(f.learners.saveTeacherNotes({ actor: ALICE, text: "x", requestId: "a2", updatedBy: "learner" }),
-    { code: "VIBE64_TRAINING_STATE_INVALID" });
+    { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
   assert.equal(await readFile(path.join(f.userRoot(ALICE), "teacher-notes.json"), "utf8"), bobRecord, "nothing was overwritten");
 });
 
 test("a retry with the same request ID replays the save without a second change", async t => {
   const f = await fixture(t);
-  const first = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1" });
-  const replay = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1" });
+  const first = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1", expectedRevision: 0 });
+  const replay = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1", expectedRevision: 0 });
   assert.deepEqual(replay, { ...first, replayed: true, changed: false });
   assert.equal(f.published.length, 1, "a replay does not notify again");
-  await assert.rejects(f.execute("learner-notes.update", { text: "Different text.", requestId: "r1" }, "automation"),
+  await assert.rejects(f.execute("learner-notes.update", { text: "Different text.", requestId: "r1", expectedRevision: 1 }, "automation"),
     { code: "VIBE64_TRAINING_NOTES_REQUEST_REUSED" });
   // A delayed retry of an older request after a newer write replays; it never restores the older text.
-  await f.execute("learner-notes.update", { text: "Newer summary.", requestId: "r2" });
-  const late = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1" });
+  await f.execute("learner-notes.update", { text: "Newer summary.", requestId: "r2", expectedRevision: 1 });
+  const late = await f.tool("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1", expectedRevision: 0 });
   assert.equal(late.replayed, true);
   assert.equal(late.notes.text, "Newer summary.");
   await assert.rejects(f.execute("learner-notes.update", { text: "Stale edit.", requestId: "r3", expectedRevision: 1 }),
@@ -147,18 +147,27 @@ test("a retry with the same request ID replays the save without a second change"
   assert.equal(saved.requests.length, 32);
   assert.deepEqual([saved.requests[0].requestId, saved.requests.at(-1).requestId], ["w0", "w31"]);
   assert.equal(saved.revision, 34);
+  // Once a request has left that window, the required expectedRevision still
+  // refuses a late retry instead of restoring its older text.
+  await assert.rejects(f.execute("learner-notes.update", { text: "Strength: reads errors carefully.", requestId: "r1", expectedRevision: 0 },
+    "automation"), { code: "VIBE64_TRAINING_NOTES_CHANGED" });
+  assert.equal((await f.execute("learner-notes.read")).notes.text, "Summary 31.");
+  for (const name of ["learner-notes.update", "learner-notes.clear"]) {
+    await assert.rejects(f.execute(name, name.endsWith(".clear") ? { requestId: "x1" } : { text: "No revision.", requestId: "x1" }), { code: "ACTION_VALIDATION_FAILED" },
+      `${name} requires the revision it replaces`);
+  }
 });
 
 test("notes are bounded to 4000 characters of Markdown text without control characters", async t => {
   const f = await fixture(t);
   const longest = "é".repeat(3999) + "\n";
-  assert.equal((await f.execute("learner-notes.update", { text: longest, requestId: "b1" })).notes.text, longest);
-  await assert.rejects(f.execute("learner-notes.update", { text: "x".repeat(4001), requestId: "b2" }), { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(f.execute("learner-notes.update", { text: "x".repeat(4001), requestId: "b2" }, "automation"),
+  assert.equal((await f.execute("learner-notes.update", { text: longest, requestId: "b1", expectedRevision: 0 })).notes.text, longest);
+  await assert.rejects(f.execute("learner-notes.update", { text: "x".repeat(4001), requestId: "b2", expectedRevision: 1 }), { code: "ACTION_VALIDATION_FAILED" });
+  await assert.rejects(f.execute("learner-notes.update", { text: "x".repeat(4001), requestId: "b2", expectedRevision: 1 }, "automation"),
     { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(f.execute("learner-notes.update", { text: "", requestId: "b3" }), { code: "ACTION_VALIDATION_FAILED" },
+  await assert.rejects(f.execute("learner-notes.update", { text: "", requestId: "b3", expectedRevision: 1 }), { code: "ACTION_VALIDATION_FAILED" },
     "an empty update is a clear, which only the learner's browser does");
-  await assert.rejects(f.execute("learner-notes.update", { text: "bell\u0007", requestId: "b4" }), { code: "VIBE64_TRAINING_NOTES_INVALID" });
+  await assert.rejects(f.execute("learner-notes.update", { text: "bell\u0007", requestId: "b4", expectedRevision: 1 }), { code: "VIBE64_TRAINING_NOTES_INVALID" });
   await assert.rejects(f.learners.saveTeacherNotes({ actor: ALICE, text: "x".repeat(4001), requestId: "b5", updatedBy: "colleague" }),
     { code: "VIBE64_TRAINING_NOTES_INVALID" });
   await assert.rejects(f.learners.saveTeacherNotes({ actor: ALICE, text: "x", requestId: "b6", updatedBy: "owner" }),
@@ -167,9 +176,9 @@ test("notes are bounded to 4000 characters of Markdown text without control char
   // An oversized or noncanonical file is refused on read, never truncated or repaired.
   const file = path.join(f.userRoot(ALICE), "teacher-notes.json");
   await writeFile(file, JSON.stringify({ padding: "x".repeat(33 * 1024) }), { mode: 0o600 });
-  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_STATE_INVALID" });
+  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
   const record = { schemaVersion: 1, learnerId: "42", revision: 1, text: "x".repeat(4001), updatedAt: new Date().toISOString(),
     updatedBy: "learner", requests: [] };
   await writeFile(file, JSON.stringify(record), { mode: 0o600 });
-  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_STATE_INVALID" });
+  await assert.rejects(f.execute("learner-notes.read"), { code: "VIBE64_TRAINING_NOTES_STATE_INVALID", message: /^Learner notes are invalid: .*Keep the file/su });
 });

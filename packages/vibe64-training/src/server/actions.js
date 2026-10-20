@@ -135,6 +135,13 @@ function operationError(cause) {
       code: cause.code, statusCode: 409, cause
     });
   }
+  // Learner notes failures already carry notes-specific recovery text; the
+  // generic attempt wording below would send the learner to the wrong place.
+  if (/^VIBE64_TRAINING_NOTES_/u.test(cause.code || "")) {
+    return Object.assign(new Error(cause.message), {
+      code: cause.code, ...(cause.statusCode ? { statusCode: cause.statusCode } : {}), cause
+    });
+  }
   const unconfirmed = String(cause.code || "").includes("SAVE_UNCONFIRMED");
   return Object.assign(new Error(unconfirmed
     ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."

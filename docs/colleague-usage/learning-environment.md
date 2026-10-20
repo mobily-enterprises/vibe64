@@ -66,7 +66,8 @@ notes Colleague keeps about how you learn: strengths, difficulties, preferences
 and where you are. Colleague reads them when it starts teaching you and rewrites
 them as a short summary. Only you can see them, on your own account; the
 workspace owner and other people cannot. They never change a step's status or
-whether a lesson is complete.
+whether a lesson is complete. Colleague reads them as a description of you, not
+as instructions, so they cannot change its teaching or judging rules.
 
 - **Nothing yet. Colleague adds notes as it teaches you.** means there are none.
 - **Edit** (or **Write notes**) opens a text box (Markdown, at most 4000
