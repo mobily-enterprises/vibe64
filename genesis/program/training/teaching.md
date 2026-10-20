@@ -20,7 +20,7 @@ Colleague teaches every lesson from its steps.
 - `packages/vibe64-training/src/server/learnerState.js`
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`
-- `packages/vibe64-training/src/server/practiceSessionsOrdinaryUpgrade.js`
+- `packages/vibe64-training/src/server/learningSpaceResetUpgrade.js`
 - `packages/vibe64-training/src/shared/practicalSchemas.js`
 - `packages/vibe64-training/src/shared/presentationSchemas.js`
 
@@ -182,20 +182,18 @@ Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
 `bin/upgrade-state.js`, existing Core `stateUpgrades.js`/`stateUpgradeFiles.js`,
 original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.
 
-### Ordinary practice sessions upgrade
+### Learning-space reset upgrade
 
-`20261021-practice-sessions-ordinary` (Core registry, candidate CLI only) calls
-two owners. Training `practiceSessionsOrdinaryUpgrade.js`
-`upgradeLearningPracticeSessionsOrdinary` uses the Runtime offline owner
-`prepareLearningSessionUnbindingUpgrade` in each practice project runtime to
-remove the saved practice `learning_session` file and archive index entry
-through the backed-up publisher (renewal state refuses), then renames each
-source-less store `training/users/<key>/learning-sessions/<attempt>` (normal and
-author-preview) into durable `training/retired/<id>/<original path>`, outside
-the upgrade backups that retention removes; nothing reads it afterwards. Colleague
+`20261022-learning-space-reset` (Core registry, candidate CLI only) calls two
+owners. Training `learningSpaceResetUpgrade.js` `resetLearningForLearningSpace`
+moves every v1-marked practice project (namespace, local session source and
+runtime root) and the learners' attempt state and source-less `learning-*`
+stores out of use, keeping `teacher-notes.json`; it selects nothing without a
+valid v1 training marker, so normal projects are untouched. Colleague
 `learningWatchUpgrade.js` `retireColleagueLearningWatches` removes
 `learning-task` watches and their observations. It lives in Colleague because
 Colleague depends on Training. Check mode writes nothing; retry resumes the
-frozen manifest. Sources: `packages/vibe64-core/src/server/stateUpgrades/20261021-practice-sessions-ordinary.js`;
-evidence: `stateUpgrades`, `colleagueConversationUpgrade` and
-`vibe64TrainingLearnerState` unit tests.
+frozen manifest. Details: `docs/state-upgrades.md`. Sources:
+`packages/vibe64-core/src/server/stateUpgrades/20261022-learning-space-reset.js`;
+evidence: `learningSpaceResetUpgrade`, `stateUpgrades` and
+`colleagueConversationUpgrade` unit tests.

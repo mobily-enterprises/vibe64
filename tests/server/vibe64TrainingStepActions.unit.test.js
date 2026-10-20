@@ -397,7 +397,8 @@ test("a v2 lesson passes start, resume, learning.read, completion and end withou
       lock: { topics: [{ ...f.pin.topic, manifestHash: f.pin.topic.topicHash, lessons: [{ ...f.pin.lesson, status: "published" }] }] } }] }; } },
     content: f.content, learners: f.learners,
     projectContext: { async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; },
-      async runWithPracticeProjectScope(_input, operation) { return operation(); } },
+      async runWithPracticeProjectScope(_input, operation) { return operation(); },
+      async listLearningSpaceProjects() { return []; } },
     projectRepositoryService: {
       async verifyTrainingProjectSource() { return { commit: "d".repeat(40), branch: "main" }; },
       async createManagedGitProject(input, { initializeProject }) {

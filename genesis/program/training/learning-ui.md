@@ -31,7 +31,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/actions.js`
-- `packages/vibe64-training/src/server/practiceProjects.js`
+- `packages/vibe64-training/src/server/learningSpace.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
@@ -134,16 +134,14 @@ addresses is Online's.
 ## Local practice-project address
 
 Standalone (local) Vibe64 serves only its selected project, plus one exception:
-the current learner's own practice projects. Training registers
-`registerLocalPracticeAdmission` (`practiceProjects.js`
-`admitLocalPracticeProject`); core `resolveProjectRequestContext` derives the
-attempt from the `training-<attempt>` slug, rechecks the saved attempt through
-`readOwnPracticeScope` over `readExerciseProjectScope` (control, so an ended
-attempt still qualifies; local deletion and the Files save owner use the same
-own-project check) and
-admits it with ordinary `write` access marked `ordinary`, which
-`captureProjectRequestContext` retains for helpers and agent turns. Ending a
-lesson leaves the practice project and its sessions the learner's.
+the current learner's own practice projects in the learning space
+(`<managedSourceRoot>/.learning`). Training registers the local person with
+core `registerPracticeRequestActor`, and core `resolveProjectRequestContext`
+admits a `training-<hex>` slug through `admitPracticeProject`, which reads the
+project's own training marker: only its learner is admitted, with ordinary
+`write` access that `captureProjectRequestContext` retains for helpers and
+agent turns. Ending a lesson leaves the practice project and its sessions the
+learner's.
 
 ## Teacher guide overlay
 

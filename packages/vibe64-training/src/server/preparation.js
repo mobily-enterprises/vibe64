@@ -37,7 +37,7 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     const topic = entry.lock.topics.find(value => value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
     if (!topic) throw trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE", "Choose a published lesson in the approved course release.");
     const lesson = topic.lessons.find(value => value.code === lessonCode);
-    const reserved = await learners.reserveAttempt({ actor, requestId, expectedRevision, pin: {
+    const reserved = await learners.reserveAttempt({ actor, requestId, expectedRevision, livePracticeIds: await livePracticeIds(actor), pin: {
       course: { courseId, release },
       topic: { schemaVersion: 1, topicId: topic.topicId, release: topic.release, repository: topic.repository,
         commit: topic.commit, topicHash: topic.manifestHash },
@@ -84,9 +84,15 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     // Pass the admitted revision unchanged. A racing start must fail the
     // original CAS, rather than silently join its same-pin active successor.
     const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision, pin: previous.pin,
-      ...(reuse ? { practiceId } : {}) });
+      livePracticeIds: await livePracticeIds(actor), ...(reuse ? { practiceId } : {}) });
     if (reserved.attempt.ended) return { ...reserved, previewReady: false };
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
+  }
+
+  // Every practice project still in this learner's learning space, so a new
+  // reservation at the attempt cap can drop attempts of deleted or archived ones.
+  async function livePracticeIds(actor) {
+    return (await projectContext.listLearningSpaceProjects({ learnerKey: practiceLearnerKey(actor) })).map(value => value.practiceId);
   }
 
   // This learner's practice project, or null. One being deleted (a removal
@@ -125,7 +131,8 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     // Scoped like continuation, so an id used by lesson.start or by another
     // open never collides; bounded to the stored request length.
     const scopedRequestId = `open_${practiceId.replaceAll("-", "")}_${createHash("sha256").update(requestId).digest("hex").slice(0, 26)}`;
-    const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision: saved.revision, pin, practiceId });
+    const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision: saved.revision, pin, practiceId,
+      livePracticeIds: await livePracticeIds(actor) });
     if (reserved.attempt.ended) return { ...reserved, previewReady: false };
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }

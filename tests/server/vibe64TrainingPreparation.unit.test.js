@@ -54,7 +54,10 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
     projectContext: {
       async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; },
       async runWithPracticeProjectScope(input, operation) { scopes.push(input); return operation(); },
-      async readLearningSpaceProject() { return practiceRecord; }
+      async readLearningSpaceProject() { return practiceRecord; },
+      async listLearningSpaceProjects({ learnerKey }) {
+        return practiceRecord?.learnerKey === learnerKey ? [practiceRecord] : [];
+      }
     },
     projectRepositoryService: {
       async verifyTrainingProjectSource(input, options) { calls.push(["source-proof", input, options]); return { commit: "d".repeat(40), branch: "main" }; },
@@ -83,7 +86,7 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
 test("enabled course reserves exact approved pin before effects and pending setup is not ready", async t => {
   const f = await fixture(t);
   const result = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin }]);
+  assert.deepEqual(f.calls[0], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin, livePracticeIds: [] }]);
   assert.deepEqual(f.calls.slice(0, 5).map(value => value[0]), ["reserve", "lock", "lesson", "begin", "exercise"]);
   assert.equal(result.attempt.preparation.phase, "preparing");
   assert.equal(result.previewReady, false);
@@ -141,7 +144,7 @@ test("a preview course admits a new start only for the workspace owner; released
   const owner = { ...actor, role: "owner" };
   const tried = await fixture(t, { courseStatus: "preview" });
   const started = await tried.service.startLesson({ actor: owner, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "try-1" });
-  assert.deepEqual(tried.calls[0], ["reserve", { actor: owner, expectedRevision: 0, requestId: "try-1", pin }]);
+  assert.deepEqual(tried.calls.find(([name]) => name === "reserve"), ["reserve", { actor: owner, expectedRevision: 0, requestId: "try-1", pin, livePracticeIds: [] }]);
   assert.equal(started.attempt.preparation.phase, "preparing");
   // The owner's preview attempt is ordinary saved work: resume reads no catalogue.
   tried.owners.catalogue.readCatalogue = () => assert.fail("Resume must not re-admit the course");
@@ -328,7 +331,7 @@ test("explicit continuation derives a disabled release pin from ended learner hi
   };
   f.owners.catalogue.readCatalogue = () => assert.fail("Continuation is bound to retained content, not new course admission.");
   const result = await f.service.continueLesson({ actor, attemptId: oldId, requestId: "continue-one", expectedRevision: 8 });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, pin, requestId: `continue_${oldId}_continue-one`, expectedRevision: 8 }]);
+  assert.deepEqual(f.calls.find(([name]) => name === "reserve"), ["reserve", { actor, pin, requestId: `continue_${oldId}_continue-one`, expectedRevision: 8, livePracticeIds: [] }]);
   assert.equal(result.attempt.attemptId, attemptId);
   assert.notEqual(result.attempt.attemptId, oldId);
   assert.deepEqual(result.attempt.pin, previous.pin);
@@ -574,7 +577,9 @@ async function continuationFixture(t, { session = true, project = true } = {}) {
 test("Continue lesson reuses the previous practice project and its session", async t => {
   const f = await continuationFixture(t);
   const result = await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, pin, requestId: `continue_${f.practiceId}_next`, expectedRevision: 4, practiceId: f.practiceId }]);
+  // The live practice projects let a reservation at the attempt cap prune only attempts no kept project needs.
+  assert.deepEqual(f.calls.find(([name]) => name === "reserve"), ["reserve", { actor, pin, requestId: `continue_${f.practiceId}_next`, expectedRevision: 4,
+    livePracticeIds: [f.practiceId], practiceId: f.practiceId }]);
   assert.deepEqual(f.calls.find(([name]) => name === "begin"), ["begin", `training-${f.practiceId}`]);
   assert.equal(result.attempt.preparation.phase, "ready");
   assert.deepEqual(f.calls.filter(([name]) => ["project", "source-proof", "session-create"].includes(name)), [],
@@ -618,7 +623,8 @@ test("opening a practice project ends another lesson in progress (left) and cont
   // Scoped and bounded, so it never collides with a lesson.start id or another open.
   const scoped = `open_${f.practiceId.replaceAll("-", "")}_${createHash("sha256").update("open-1").digest("hex").slice(0, 26)}`;
   assert.equal(scoped.length, 64);
-  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: scoped, expectedRevision: 6, pin, practiceId: f.practiceId });
+  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: scoped, expectedRevision: 6, pin, practiceId: f.practiceId,
+    livePracticeIds: [f.practiceId] });
   await assert.rejects(service.startLesson({ actor, courseId: "intro", release: "0.1.0", lessonCode: "X", requestId: scoped, expectedRevision: 6 }),
     { code: "VIBE64_TRAINING_REQUEST_INVALID" }, "the open namespace is host-owned");
   f.setPracticeRecord(null);

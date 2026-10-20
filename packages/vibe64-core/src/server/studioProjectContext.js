@@ -50,6 +50,7 @@ import {
   PRACTICE_SLUG_PATTERN,
   normalizeProjectTraining,
   practiceIdFromSlug,
+  practiceLearnerKey,
   practiceNamespace,
   practiceProjectDeletedError,
   practiceSlug
@@ -830,8 +831,7 @@ function createStudioProjectContext({
     for (const value of [training.pin.course, training.pin.topic, training.pin.lesson, training.pin, training.exercise, training]) {
       Object.freeze(value);
     }
-    const learnerId = String(actor?.uid ?? actor?.username ?? "");
-    if (!learnerId || Buffer.from(learnerId).toString("base64url") !== training.learnerKey) {
+    if (practiceLearnerKey(actor) !== training.learnerKey) {
       throw Object.assign(new Error("Practice access belongs to the admitted learner."), { code: "vibe64_practice_scope_mismatch" });
     }
     const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceNamespace(learningSpaceRoot, training);
