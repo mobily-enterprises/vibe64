@@ -77,8 +77,11 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
       }
       const current = currentProjectRequestContext();
+      // An action from a person's request stays that person's request (its
+      // headers, through the prototype), so practice admission compares the
+      // learner; only requestless internal work runs as the marker's learner.
       const project = resolved || (current?.slug === slug ? current : await resolveProjectRequestContext({
-        request: { params: { slug }, vibe64User: user, allowDeleting }
+        request: Object.assign(request ? Object.create(request) : {}, { params: { slug }, vibe64User: user, allowDeleting })
       }));
       return runWithProjectRequestContext({ ...project, vibe64User: user }, () => execute(trustedInput, context, deps), {
         requestMeta: context.requestMeta

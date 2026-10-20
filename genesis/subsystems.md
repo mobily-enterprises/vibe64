@@ -876,7 +876,7 @@ The shared upload byte policy keeps Files, chat HTTP admission and browser valid
 
 Persisted-state upgrades use the existing numbered registry, preflight, backups and retry rules. Product services supply the data and admission boundary; normal reads do not silently repair historical state.
 
-Owns the learning space (`learningSpace.js` with the Project context): practice projects live only in their learner's namespace `<root>/<learnerKey>/<practiceId>/<slug>`, apart from the catalogue, on both hosts, with their runtime roots in the shared `<systemRoot>/projects` inventory. It owns the practice slug and ID, the immutable schema-2 training marker, the one practice scope, the learning-space listing and the one admission rule: a person opens only their own practice project, and work without a person is admitted as the marker's learner. The host supplies only the space root; Training owns lessons, attempts and the Practice list.
+Owns the learning space (`learningSpace.js` with the Project context): practice projects live only in their learner's namespace `<root>/<learnerKey>/<practiceId>/<slug>`, apart from the catalogue, on both hosts, with their runtime roots in the shared `<systemRoot>/projects` inventory. It owns the practice slug and ID, the immutable schema-2 training marker, the one practice scope, the learning-space listing and the one admission rule: a person opens only their own practice project, and work without a person is admitted as the marker's learner. A catalogue entry with a retired training marker is skipped with a one-time warning and never fails the normal projects' listing. The host supplies only the space root; Training owns lessons, attempts and the Practice list.
 
 ### Source
 - Directory `packages/vibe64-core`

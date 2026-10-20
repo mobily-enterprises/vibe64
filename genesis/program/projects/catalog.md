@@ -264,7 +264,11 @@ under the daemon-private system root. `.learning` is not a valid slug, so the
 catalogue never lists it. `listWorkspaceProjects` never shows a practice
 project, and its orphan-runtime sweep leaves every `training-<hex>` runtime
 whose record has a training marker (a warning when its learning-space project
-is missing). `createWorkspaceProjectRecord` and `assertWorkspaceProjectAvailable`
+is missing). A catalogue entry whose record carries a retired or invalid
+training marker (an old hosted practice project awaiting the 20261022 scrap
+upgrade) is left out of the listing, never failing it for the other projects,
+and opening its slug is `vibe64_practice_project_deleted` (404). Every such skip
+warns once per process, not on every listing. `createWorkspaceProjectRecord` and `assertWorkspaceProjectAvailable`
 refuse a new catalogue project with a `training-<hex>` name
 (`vibe64_project_slug_reserved`); a pre-existing one still opens.
 `listLearningSpaceProjects({learnerKey?})` returns
@@ -280,6 +284,10 @@ request, is `vibe64_practice_project_deleted` (404). Work without a person
 (agent turns after the browser closes, maintenance, archive) is admitted as the
 marker's learner. Admission reads the marker, not an attempt. A local host
 supplies the person of its local transport through `registerPracticeRequestActor`.
+An action that resolves its own project (`withVibe64ActionContext` without a
+host-resolved project) keeps the person's original request, so a local
+browser action is admitted only for that person's own practice project; only an
+action with no request runs as the marker's learner.
 When the learning space has no such project, only a pre-existing project of that
 name (the explicit local project or `<projectsRoot>/<slug>`) opens. Learning
 mode (`learningMode.js`) allows only the active lesson's `practiceSlug`.

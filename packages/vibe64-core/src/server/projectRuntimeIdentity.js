@@ -27,12 +27,15 @@ function learningSpaceSlugFromTargetRoot(targetRoot, learningSpaceRoot) {
   return practiceId && practiceIdFromSlug(slug) === practiceId ? slug : "";
 }
 
+// A caller that names its projectsRoot names its learning space too; only the
+// default (no roots) reads the configured context's learning space.
 function catalogProjectSlugFromTargetRoot(targetRoot = "", {
   projectsRoot = "",
-  learningSpaceRoot = getStudioProjectContext().learningSpaceRoot
+  learningSpaceRoot = projectsRoot ? "" : getStudioProjectContext()?.learningSpaceRoot
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
-  const practiceSlug = learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot));
+  const practiceSlug = String(learningSpaceRoot || "").trim()
+    ? learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot)) : "";
   if (practiceSlug) return practiceSlug;
   const resolvedProjectsRoot = path.resolve(String(projectsRoot || "").trim() || resolveStudioProjectsRoot());
   if (!pathInsideOrEqual(resolvedProjectsRoot, resolvedTargetRoot)) {

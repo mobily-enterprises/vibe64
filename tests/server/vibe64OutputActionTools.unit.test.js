@@ -116,15 +116,15 @@ test("output definitions keep no lesson access; a practice project's output is a
   const calls = [];
   const terminals = { outputTargetStatus: (...args) => { calls.push(args); return { ok: true }; } };
   const definitions = createTerminalActions({ terminals });
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
   for (const suffix of ["outputs.read", "output-terminal.read", "output-result.read", "output-target.start", "output-target.open",
     "preview-identity.select", "output-target.stop", "output-terminal.close"]) {
     const action = definitions.find(item => item.id === `vibe64.terminals.${suffix}`);
     assert.ok(action, suffix);
     assert.equal(action.extensions.vibe64.learningAccess, undefined, suffix);
-    await assert.rejects(action.execute({ sessionId: "initial-session", learningAttemptId: attemptId }, {
-      vibe64Action: { learning: { learningScope: { noExercise: false, attemptId } } }
-    }), { code: "vibe64_learning_authority_required" });
+    // No learning-attempt route remains: the action takes no attempt input and
+    // still requires an ordinary project before any output work.
+    assert.equal(Object.hasOwn(action.input.schema.getFieldDefinitions(), "learningAttemptId"), false, suffix);
+    await assert.rejects(action.execute({ sessionId: "initial-session" }, {}), { code: "vibe64_invalid_project_slug" });
   }
   assert.equal(calls.length, 0);
   for (const suffix of ["agent-terminal.start", "global-terminal.start", "temporary-conversation.create"])

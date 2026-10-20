@@ -13,6 +13,7 @@ import {
   captureProjectRequestContext,
   currentProjectActionRequestMeta,
   currentProjectRequestContext,
+  registerPracticeRequestActor,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -369,6 +370,19 @@ test("a practice project action admits only its own learner, through the host co
     const direct = (vibe64User) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { vibe64User } } });
     assert.deepEqual(await direct(learner), { targetRoot: practice.projectRoot });
     await assert.rejects(direct(other), deleted);
+    // A local person's action carries no vibe64User: it stays that person's
+    // request, so the host-supplied actor is compared with the learner.
+    const local = (headers) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { headers } } });
+    await assert.rejects(local({ host: "localhost" }), deleted, "a person without an actor is not admitted as the marker's learner");
+    registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
+    try {
+      assert.deepEqual(await local({ host: "localhost" }), { targetRoot: practice.projectRoot });
+      await assert.rejects(local({ host: "remote" }), deleted, "another local person is refused");
+    } finally {
+      registerPracticeRequestActor(null);
+    }
+    assert.deepEqual(await definition.execute({ projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
+      "requestless internal work runs as the marker's learner");
   } finally {
     configureStudioProjectContext();
     await rm(root, { force: true, recursive: true });

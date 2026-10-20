@@ -717,8 +717,15 @@ function createStudioProjectContext({
     return true;
   }
 
+  // Each skipped entry warns once per process: listings run on every
+  // Projects page load, and the scrap upgrade, not the listing, clears them.
+  const warnedSkippedEntries = new Set();
   function skipLearningSpaceEntry(entry, reason) {
-    console.warn(`Vibe64 learning space: skipped ${entry}: ${reason}`);
+    const key = `${entry}: ${reason}`;
+    if (!warnedSkippedEntries.has(key)) {
+      warnedSkippedEntries.add(key);
+      console.warn(`Vibe64 learning space: skipped ${key}`);
+    }
     return null;
   }
 
@@ -1130,8 +1137,16 @@ function createStudioProjectContext({
       projectRuntimeRoot: projectRuntimeRootForTarget(projectPath),
       projectSessionSourceRoot: projectSessionSourceRootForTarget(projectPath),
       projectsRoot
+    }).catch((error) => {
+      // A catalogue entry with a retired training marker (an old hosted
+      // practice project awaiting the scrap upgrade) is not a project of the
+      // catalogue; it never takes the other projects' listing down with it.
+      if (error?.code === "vibe64_project_training_invalid") {
+        return skipLearningSpaceEntry(path.basename(projectPath), "catalogue entry with an invalid training marker");
+      }
+      throw error;
     }))))
-      .filter((project) => project.repository)
+      .filter((project) => project?.repository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,

@@ -1130,13 +1130,13 @@ test("admitted practice Workspace setup finishes in original owner control after
     const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
     const project = createProjectService({ projectContext: core });
-    const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
-      attemptId: "12345678-1234-4234-8234-123456789abc",
+    const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),
+      practiceId: "12345678-1234-4234-8234-123456789abc",
       pin: { course: { courseId: "intro-course", release: "0.1.0" },
         topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
           commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
       exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const slug = `training-${training.practiceId.replaceAll("-", "")}`;
     let release;
     const commandMayFinish = new Promise(resolve => { release = resolve; });
     let started;

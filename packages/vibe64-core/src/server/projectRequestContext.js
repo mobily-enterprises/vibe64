@@ -97,10 +97,18 @@ async function resolveProjectRequestContext({
     error.code = "vibe64_project_route_unavailable";
     throw error;
   }
-  const result = await resolvedProjectContext.readWorkspaceProject({
-    allowDeleting: request.allowDeleting === true,
-    slug
-  });
+  let result;
+  try {
+    result = await resolvedProjectContext.readWorkspaceProject({
+      allowDeleting: request.allowDeleting === true,
+      slug
+    });
+  } catch (error) {
+    // A catalogue entry with a retired training marker is an old practice
+    // project awaiting the scrap upgrade: not found, like a deleted one.
+    if (practiceIdFromSlug(slug) && error?.code === "vibe64_project_training_invalid") throw practiceProjectDeletedError();
+    throw error;
+  }
   const project = result.project || {};
   const targetRoot = project.projectRoot || project.path || resolveProjectContextRoot({
     projectsRoot,

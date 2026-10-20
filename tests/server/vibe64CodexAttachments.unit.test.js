@@ -2162,6 +2162,12 @@ test("practice session attachments keep their project identity with or without a
     configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),
       env: {}, home: root, learningSpace: { root: learningSpaceRoot } });
     assert.equal(catalogProjectSlugFromTargetRoot(executionRoot), slug);
+    // A caller naming its own roots never reads the configured default space.
+    const projectsRoot = path.join(root, "projects");
+    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot, { projectsRoot, learningSpaceRoot }), slug);
+    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot, { projectsRoot }), "");
+    assert.equal(catalogProjectSlugFromTargetRoot(path.join(projectsRoot, "ordinary", "app"), { projectsRoot, learningSpaceRoot: "" }),
+      "ordinary");
     assert.equal(targetRuntimeIdentity(executionRoot), `project:${slug}`);
     assert.equal(await runWithProjectRequestContext({ slug, targetRoot: namespace, projectSessionSourceRoot: namespace },
       () => targetRuntimeIdentity(executionRoot)), `project:${slug}`);

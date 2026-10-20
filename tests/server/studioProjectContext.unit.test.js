@@ -1804,6 +1804,11 @@ test("a practice runtime root survives the catalogue sweep and bad learning-spac
     assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDI" }), expected);
     assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDM" }), []);
     assert.ok(warn.mock.calls.some(call => String(call.arguments[0]).includes(misleading)));
+    const misleadingWarnings = () => warn.mock.calls.filter(call => String(call.arguments[0]).includes(misleading)).length;
+    const warned = misleadingWarnings();
+    await context.listWorkspaceProjects();
+    await access(context.projectRuntimeRootForSlug(misleading));
+    assert.equal(misleadingWarnings(), warned, "a kept practice runtime warns once per process, not on every Projects page load");
     // Bad entries are skipped with a warning; they never reject either listing.
     await writeTestFile(path.join(context.learningSpaceRoot, "stray.txt"), "stray\n");
     await mkdir(path.join(context.learningSpaceRoot, "NDI", "not-a-practice-id"));
@@ -2006,6 +2011,36 @@ test("a pre-existing normal training-<hex> project still opens and new projects 
     }
     await assert.rejects(() => access(path.join(root, "projects", "training-42345678123442348234123456789abc")), { code: "ENOENT" });
     assert.equal((await context.createWorkspaceProjectRecord({ slug: "training-notes" })).project.slug, "training-notes");
+  });
+});
+
+test("an old v1 practice project in the hosted catalogue never takes the normal projects' listing down", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  await withTemporaryRoot(async root => {
+    const context = hostedPracticeContext(root);
+    for (const slug of ["alpha", "beta"]) {
+      await context.createWorkspaceProjectRecord({ slug });
+      await writeTestFile(path.join(root, "projects", slug, "app.js"), `${slug} work\n`);
+    }
+    const normal = (await context.listWorkspaceProjects()).projects;
+    assert.deepEqual(normal.map(project => project.slug), ["alpha", "beta"]);
+    // Rev 2 hosted practice: a catalogue namespace and a v1 attemptId marker.
+    const { practiceId, ...rest } = trainingProvenance();
+    const v1 = { ...rest, schemaVersion: 1, attemptId: practiceId };
+    const slug = practiceSlugOf(trainingProvenance());
+    await writeTestFile(path.join(root, "projects", slug, "app.js"), "old practice\n");
+    await writeTestFile(context.projectRecordPathForSlug(slug), JSON.stringify({
+      repository: { mode: "managed_git", defaultBranch: "main" }, training: v1 }));
+    const recordBefore = await readFile(context.projectRecordPathForSlug(slug));
+    for (let listing = 0; listing < 2; listing += 1) {
+      assert.deepEqual((await context.listWorkspaceProjects()).projects, normal, "every normal project is listed unchanged");
+    }
+    assert.equal(warn.mock.calls.filter(call => String(call.arguments[0]).includes(slug)).length, 1, "the skip warns once");
+    await assert.rejects(resolveProjectRequestContext({ projectContext: context,
+      request: { params: { slug }, headers: {}, vibe64User: learner } }), { code: "vibe64_practice_project_deleted", statusCode: 404 },
+    "opening it is not found, not a server error");
+    assert.deepEqual(await readFile(context.projectRecordPathForSlug(slug)), recordBefore, "the old record is left for the scrap upgrade");
+    assert.equal(await readFile(path.join(root, "projects", slug, "app.js"), "utf8"), "old practice\n");
   });
 });
 
