@@ -2,8 +2,7 @@
 
 Training's shared lesson operations start, resume, end and continue saved
 lessons, read and record step results, and run each lesson's declared checks.
-Colleague teaches every lesson from its steps; the separate Main lesson teacher
-was retired in Learning v2 phase 2.
+Colleague teaches every lesson from its steps.
 
 ## Sources
 
@@ -36,8 +35,8 @@ context and expose bounded saved facts without source paths, executable
 controllers or shell authority. A host supplies the existing exercise
 preparation/retirement owner; without its relevant method,
 start/resume/end/continue reports unavailable. `learning.read` returns progress,
-completion, per-lesson summaries and bounded ended history; it no longer lists
-lesson conversations or the learner identity. Readers do not reserve or repair
+completion, per-lesson summaries and bounded ended history; the learner identity
+reaches only the browser, never Colleague's tool result. Readers do not reserve or repair
 state. An ended start replay returns its original target and actual current
 active attempt without provisioning it.
 
@@ -63,20 +62,14 @@ The inner session-inspect and App-run reads of `step.observe` and
 `step.check.run` re-admit the learner's own request on the practice project's
 ordinary project target; practice sessions carry no learning-scoped input.
 
-### Retired Main teacher
+### Version 1 lessons
 
-Learning v2 phase 2 removed the Main lesson teacher: the teaching brief and
-`teaching-brief.read`, question preparation and delivery proof, answer and
-practical grading with its Helper workload, conversation assessment, Learning
-watches and polling, lesson presentation and explanation cues, visual
-checkpoints and the lesson-scoped `/api/learning/` routes. Version 1 lesson
-records keep their saved questions, assessment results and visual snapshots;
-`assessmentLesson(lesson)` still gates every version 1 reader, and completion of
-an earlier lesson still counts its saved passes. The internal
-`saveLessonResume` and `recordAssessment` writers remain on the learner store
-but no host operation calls them. `practicalSchemas.js` keeps only the step
-observation schema; `presentationSchemas.js` keeps only the guide receipt and
-client identity used by Colleague navigation.
+Version 1 (assessment) lesson records keep their saved questions, assessment
+results and visual snapshots; `assessmentLesson(lesson)` gates every version 1
+reader, and completion of a version 1 lesson still counts its saved passes. No
+current operation teaches, grades or presents them. `practicalSchemas.js` keeps
+only the step observation schema; `presentationSchemas.js` keeps only the guide
+receipt and client identity used by Colleague navigation.
 
 ### Internal declared application check
 
@@ -99,10 +92,8 @@ tool is introduced. Only a proven empty execution scope permits scratch deletion
 uncertain cleanup retains files and fails for the original cleanup owner.
 
 Strict native check output confirms only the exact server observation. A missing
-or restarted server interaction is incomplete, not a learner pass. The step owner
-(`stepChecks.js`) records a step result only for the learner's own App press in
-the lesson's Preview; a check Colleague runs reports its finding and saves
-nothing. This internal owner has no API/tool registration or persisted state
+or restarted server interaction is incomplete, not a learner pass; `stepChecks.js`
+records a step result only for the learner's own App press. This internal owner has no API/tool registration or persisted state
 upgrade. Its focused fixture preserves the original topic
 check and uses real standalone finite execution against a loopback HTTP transport
 fixture; it does not claim hosted fleet or learner gesture acceptance.
@@ -127,9 +118,7 @@ Otherwise it copies the pinned exercise (declared files replaced by the learner'
 bytes), check and assets into private session artifacts and runs `node <check>`
 through `runVibe64Command` (`training-code-check`, empty env, allowed root =
 scratch, lesson timeout default 15 s and at most 60 s, 4 KiB output), accepting
-only a result echoing the computed `filesHash`. An earlier question ledger is
-still verified for its saves, but no new question baseline is recorded since the
-teacher was retired.
+only a result echoing the computed `filesHash`.
 
 ### Preparation checkpoint and live Workspace setup
 
@@ -152,23 +141,18 @@ assistant-excluded read, `GET /api/vibe64/training/attempts/:attemptId/visuals/:
 It authenticates the actor, finds any of that learner's retained attempts
 (the reader shows ended lessons too), and returns the verified SVG, controller
 and asset bytes of the pinned lesson revision as a bounded base64 envelope with
-`Cache-Control: private, no-store`, plus a diagram state saved before phase 2 if
-one exists. Online reuses these owners with its paired normal/author-preview
-learner scope. The checkpoint write and the lesson-scoped route were retired.
+`Cache-Control: private, no-store`, plus the diagram state a version 1 lesson
+saved, if any. Online reuses these owners with its paired normal/author-preview
+learner scope.
 
 ### Question-admission release boundary
 
-Before activating these writes, operators must apply the prospective
-`20261007-training-question-admission` boundary through the complete candidate
-registry with learner and conversation writers stopped. It covers these optional
-question fields, native `turn.metadata.trainingQuestionDelivery` prepared/delivered
-metadata with actual saved output identity, and canonical user
-`data.trainingQuestion` with its exact delivery conversation/turn/output identity.
-Check/apply changes only the ordered ledger; no historical records, messages or
-question provenance are inferred or converted. Missing legacy facts stay ungraded.
-
-This published upgrade remains in the ordered registry; the question fields it
-covers are no longer written.
+The published `20261007-training-question-admission` boundary stays in the
+ordered registry. It covered optional question fields, native
+`turn.metadata.trainingQuestionDelivery` metadata and canonical user
+`data.trainingQuestion`, which are no longer written. Check/apply changes only
+the ordered ledger; no historical records, messages or question provenance are
+inferred or converted.
 
 ### Offline adoption of original prepared practice sessions
 

@@ -4,14 +4,12 @@ A lesson can ask you to change code, for example "make `notes.mjs` refuse an
 empty title". Make the change yourself in the practice project's ordinary
 **Dashboard → Files** editor, then press the step's **Check now** in the Learning
 environment; see [The Learning environment (L)](learning-environment.md).
+Earlier-format code questions (**Check my code**) were retired; their passes
+stay in your saved history.
 
-Code questions asked by the earlier Main lesson teacher, answered with **Check
-my code** and an explanation to that teacher, were retired with the teacher.
-Earlier passes stay in your saved history.
+## How a code step is checked
 
-## Code steps in step-based lessons
-
-In newer, step-based lessons a code step names the files to change. Opening the
+A code step names the files to change. Opening the
 step for the first time in an attempt records their starting contents; every
 code step keeps its own start for the rest of the attempt, so reopening it or
 moving between code steps never changes it. Code already in a file when you

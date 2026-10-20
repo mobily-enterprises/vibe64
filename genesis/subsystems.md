@@ -209,9 +209,8 @@ The existing project layout owner supplies actual pane visibility and reveal
 operations; the integration owner refreshes status through its current command.
 Code subscribes to session events and reconciles watched conversations through
 their existing authorized actions. Colleague owns that ordinary conversation and
-assignment watch scheduler. Learning watches were retired with the Main lesson
-teacher; the numbered practice-sessions upgrade removes their saved records.
-Colleague teaches lessons from their steps through Training's lesson and step
+assignment watch scheduler; the numbered practice-sessions upgrade removes saved
+Learning watches. Colleague teaches lessons from their steps through Training's lesson and step
 operations and its own acknowledged navigation and guides. Shared Core predicates
 normalize watch observations and cursors. Browser and navigation IDs are transient and must be rebound through a fresh access check after restart;
 queued or running notifications are suppressed when the watch is paused, stopped
@@ -250,21 +249,15 @@ explicit start/resume/create intent through the original Training operations. It
 neither API reads, permission/pin/progress rules nor writes. One shared client
 Learning UI adapter supplies actor-scoped original Training reads and captured
 Start/Resume coordination for the Learning environment (L); server owners retain
-admission and progress. Learning mode, its Panel views, learner gestures,
-presentation cues and workspace observation were retired in Learning v2 phase 2
-(F3). Live learner acceptance remains a separate gate.
+admission and progress. Live learner acceptance remains a separate gate.
 Owns the shared fresh-actor lesson operations (course list/create/install,
 learning read, start, resume, end and retained-pin continuation) and the step
 operations (lesson read, step observe/check/answer/done, reader position and
 practice deletion). A step result is recorded only for the learner's own action;
 a check Colleague runs reports its finding and saves nothing. Colleague teaches
-every lesson from its steps; the separate Main lesson teacher, its teaching brief,
-question preparation and delivery proof, answer/practical grading Helper,
-conversation assessment, Learning watches and polling, lesson presentation and
-cues, visual checkpoints and lesson-scoped routes were retired in Learning v2
-phase 2. Owns bounded durable assessment receipts and lesson resume state from
-version 1 lessons, checked against the installed pin and kept readable; no host
-operation writes them any more. Internal declared exercise checks reuse the
+every lesson from its steps. Owns bounded durable assessment receipts and lesson
+resume state from version 1 lessons, checked against the installed pin and kept
+readable. Internal declared exercise checks reuse the
 original project/App/managed-command owners and confirm server observations, not
 learner passes. A host composes the shared preparation coordinator with the
 original project/repository, session and Workspace setup facilities. Without an
@@ -706,8 +699,8 @@ No-exercise scopes retain private native identity; explicit practice scopes reus
 the original actual-source creator, descriptor, Genesis environment and Git owner.
 It preserves the existing supported storage format, archive history and native
 state readers; it does not authorize Training content or create a parallel
-runtime. Historical learning reads cannot acquire an executable root. The Main
-Learning mode client was retired (F3); no browser selects a Learning session.
+runtime. Historical learning reads cannot acquire an executable root; no browser
+selects a Learning session.
 Sessions exposes the open/archive actions and bounded discovery; Runtime retains the stored descriptors, archival history, Git workspaces and native state readers. It does not own teaching content or UI presentation.
 
 ### Source

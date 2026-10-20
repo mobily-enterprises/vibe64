@@ -74,10 +74,8 @@ registers current focus only, without replaying stale focus or resuming watches.
 Colleague is the lesson teacher and authoring coordinator. It teaches from a
 lesson's steps through Training's lesson read, step and lifecycle operations,
 its own acknowledged navigation and guides, and the learner's private notes; it
-never decides, changes or proves a step result. The separate Main lesson teacher
-and its teacher-only actions, question admission, grading, Learning watches,
-presentation and cues were retired in Learning v2 phase 2, so no teacher-role
-exclusion remains in the common catalogue policy. The same common catalogue
+never decides, changes or proves a step result. There is no teacher-role
+exclusion in the common catalogue policy. The same common catalogue
 predicate governs direct schemas, search, contracts and execution, retaining the
 original assignment-only background mutation rule. No saved history is rewritten.
 
@@ -649,9 +647,8 @@ existing records without it remain coding-conversation watches without rewriting
 Unknown sources pause rather than falling back to a coding session. Reusing a
 watch ID for a different target, source, condition or question is refused.
 
-Training's `learning-task` watch source and its Learning watches were retired
-with the Main lesson teacher; the numbered practice-sessions upgrade removes their
-saved records and observations.
+There is no `learning-task` watch source; the numbered practice-sessions upgrade
+removes saved Learning watches and their observations.
 
 The existing session event bus asks the watch scheduler to schedule coalesced
 reads outside the publisher's write lock. A 30-second code-only reconciliation

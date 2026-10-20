@@ -71,9 +71,3 @@ Colleague can open Learning above the app at your current lesson step, or
 minimise it so you can see the app, without ending the lesson. While Learning is
 minimised, the current step card stays pinned at the top of Colleague's chat;
 **Open lesson** returns to that exact step.
-
-## Earlier lessons
-
-Lessons started before Learning v2 kept a separate Main teacher in the retired Learning mode.
-Those attempts can be read and ended but not continued; earlier completions keep
-counting.

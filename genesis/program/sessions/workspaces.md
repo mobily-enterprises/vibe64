@@ -180,10 +180,7 @@ the session toolbar and dashboard. Only an omitted projection uses the full
 session list. Navigation does not mutate the authoritative session collection,
 cancel its work, or replace the runtime's exact selected-session identity.
 
-The Working/Learning purpose filter, the Learning resource contribution to the
-Data collection, the per-learner selection owner and the Learning session API
-path were retired with Learning mode (F3). The panel lists, retains and
-selects only the project's own sessions through its project-scoped sessions
+The panel lists, retains and selects only the project's own sessions through its project-scoped sessions
 API; one load error covers its hosts. Ordinary New session, renewal and archive
 are not lesson operations.
 
@@ -573,10 +570,7 @@ retrying continuously.
 Learning v2 has no learning-scoped sessions: Colleague teaches every lesson in
 its own conversation, a lesson without an exercise creates no session, and a
 practice lesson's sessions are ordinary sessions of its practice project. The
-source-less teacher sessions, their `/api/learning` Session routes, the Learning
-tabs and purpose filter, and the lesson teaching instructions in the Codex,
-Claude and OpenCode adapters were retired (F1 to F3); the numbered
-`20261021-practice-sessions-ordinary` upgrade unbinds saved practice sessions
+numbered `20261021-practice-sessions-ordinary` upgrade unbinds saved practice sessions
 and retires source-less lesson stores.
 
 The Runtime and Store still accept a constructor-only `learningScope`
@@ -602,9 +596,7 @@ evidence: `tests/server/vibe64SessionStore.unit.test.js`,
 Learning v2 practice projects are ordinary projects and their sessions are
 ordinary sessions: no host constructs a `noExercise:false` scope, and session
 commands, Git, Preview and Database helpers run in the session's captured
-ordinary project request context. The former per-lesson helper admission
-(`runLearningOperation`, parent-execution helper re-entry) is retired.
-The session store still accepts a `noExercise:false` scope with its actual
+ordinary project request context. The session store still accepts a `noExercise:false` scope with its actual
 project session source root only so that the published
 `20261008-learning-practice-history` readers and their tests can verify an
 adopted historical binding; the store refuses that scope without a source root.

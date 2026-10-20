@@ -102,10 +102,8 @@ learner's own Done change a step's status, and Colleague never reveals the corre
 choice. Colleague keeps short private notes about how each person learns, which
 that person can read, edit and clear in Learning and nobody else can read; notes
 never affect results.
-The earlier left-hand lesson teacher conversation, Learning mode, lesson watches,
-quizzes, practical grading and lesson presentations have been retired; lessons
-started that way stay readable in history and can be ended, but cannot continue,
-and their completions keep counting.
+Lessons started in the earlier teacher-conversation format stay readable in
+history and can be ended, but cannot continue; their completions keep counting.
 A lesson that needs an application gives the learner a practice project: an
 ordinary project of theirs, marked practice, with its ordinary chat, Preview and
 Dashboard and full access during and after the lesson. Practice projects are
@@ -189,8 +187,6 @@ host's current permissions and the same code-driven notifications. Watching does
 not prevent the person from continuing their conversation with Colleague.
 A compact watch-count control opens watch and assignment details when needed;
 these lists never consume space below the chat.
-Learning tasks are no longer watched: the learner's own step actions record their
-results directly.
 People can also delegate bounded implementation assignments: Colleague retains
 the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their

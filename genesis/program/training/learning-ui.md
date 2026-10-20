@@ -68,27 +68,18 @@ The adapter serializes its UI operation only. Captured actor and L's open
 generation fence follow-up requests; closing L or changing account does not undo
 or resend admitted work. Retry identity is temporary UI state.
 
-## Retired Learning mode (F3)
+## Retired Learning mode
 
-Learning v2 phase 2 removed the earlier client Learning mode: the
-`mode=learning`/`learningView` query and `useVibe64LearningMode`, the
-Preview | Dashboard | graduation-cap tab group and Learning panes, the old
-lesson launcher (its Courses surface moved to
-`src/components/learning/Vibe64LearningCourses.vue`), the practice-project
-selector, `ProjectSelectionGate`'s independent-content props, session-panel
-purpose filters and keyed Learning hosts, learning-scoped client transport
-(`/api/learning/...` session, Dashboard, Database and System Graph paths), the
-lesson Dashboard, Training's learner-gesture, presentation-cue,
-workspace-observation, preview-registration and Main presentation client
-modules and their package exports. Training navigation moved to Colleague as
-`createColleagueNavigation`; Colleague's `navigation.open` refuses the retired
-`learningMode`/`learningView` inputs by schema. Incoming browser focus (focus
-updates, messages, navigation acknowledgements and start-fresh evidence) still
-accepts the retired focus keys from tabs loaded before this release and drops
-them before use, so an open tab keeps working until it reloads. An old `?mode=learning` address
-renders the ordinary project page. Session realtime matchers still ignore events
-that carry a `learningAttemptId`, because the server can still emit them without
-a project.
+The earlier client Learning mode, its lesson Dashboard and learning-scoped client
+transport are gone; Training navigation lives in Colleague as
+`createColleagueNavigation`. Remaining compatibility: Colleague's
+`navigation.open` refuses the retired `learningMode`/`learningView` inputs by
+schema; incoming browser focus (focus updates, messages, navigation
+acknowledgements and start-fresh evidence) still accepts the retired focus keys
+from tabs loaded before this release and drops them before use, so an open tab
+keeps working until it reloads; an old `?mode=learning` address renders the
+ordinary project page; and session realtime matchers ignore events that carry a
+`learningAttemptId`, because the server can still emit them without a project.
 
 ## Saved hosted author-trial reader
 
@@ -135,9 +126,8 @@ the current learner's own practice projects. Training registers
 attempt from the `training-<attempt>` slug, rechecks the saved attempt through
 `readExerciseProjectScope` (observe, so an ended attempt still qualifies) and
 admits it with ordinary `write` access marked `ordinary`, which
-`captureProjectRequestContext` retains for helpers and agent turns. Learning v2:
-a practice project and its sessions are ordinary; ending a lesson leaves them
-the learner's.
+`captureProjectRequestContext` retains for helpers and agent turns. Ending a
+lesson leaves the practice project and its sessions the learner's.
 
 ## Teacher guide overlay
 
@@ -183,15 +173,13 @@ a reason (`highlight-off`, `target-hidden`, `overlay-unavailable`).
 
 ## Full Dashboard in a practice lesson
 
-Learning v2 (F1) retired the lesson-scoped Dashboard. A practice project is an
-ordinary project of its learner and the session preparation creates in it is an
-ordinary project session (no `learning_session` binding). The learner opens it
-like any project, so every Dashboard section, Preview, the chat and AI Terminal
-are the ordinary project-scoped ones under `/api/app/<slug>/vibe64/…`, with
-ordinary project authorization and realtime routing. The database, project,
-source-editor, system-graph and terminal-output providers no longer register
-`/api/learning/<attempt>/vibe64/…` routes and their actions declare no
-`learningAccess`; `vibe64.training.code.file.save` is gone.
+A practice project is an ordinary project of its learner and the session
+preparation creates in it is an ordinary project session (no `learning_session`
+binding). The learner opens it like any project, so every Dashboard section,
+Preview, the chat and AI Terminal are the ordinary project-scoped ones under
+`/api/app/<slug>/vibe64/…`, with ordinary project authorization and realtime
+routing. No server route registers an `/api/learning/<attempt>/…` path and no
+action declares `learningAccess`.
 
 Authorship: Training installs `createTrainingCodeSaveOwner`
 (`codeEditorActions.js`) on the source editor with `setFileSaveOwner`. The
@@ -201,13 +189,6 @@ project is the actor's own practice project with an active attempt; every other
 save is the editor's plain save. Agent or other-route writes stay unledgered and
 still void a code attempt. Hosted Online installs the same owner with its
 normal/author-preview store selector (`selectOwners`).
-
-F2 retired the remaining lesson-scoped server transport: the source-less
-teacher's Session routes, the voice learning socket, the learning-scoped Training
-visual route and the teacher actions. No server route registers an
-`/api/learning/<attempt>/…` path any more; the `learningAttemptId` reads left in
-the terminal socket and action context serve no route. F3 removed the client
-code that still called `/api/learning` for Database, Architecture or Learning mode.
 
 Evidence: `tests/server/vibe64LearningDashboardRoutes.unit.test.js` (no Dashboard
 action declares lesson access; no lesson URLs), `vibe64TrainingCodePracticals`

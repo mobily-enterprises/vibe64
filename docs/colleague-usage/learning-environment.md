@@ -17,10 +17,9 @@ to exactly that page. The app underneath keeps working and is never replaced.
 - It appears only for a signed-in person. Hosted Vibe64 shows it after the
   account prerequisites are complete.
 
-Pressing **L** again while Learning is open closes it. The old Learning mode
-(tinted header, graduation-cap tab, teacher conversation) has been retired; an
-earlier `?mode=learning` address opens the ordinary project page, and earlier
-lesson history stays readable in Learning.
+Pressing **L** again while Learning is open closes it. An old
+`?mode=learning` address from the retired Learning mode opens the ordinary
+project page.
 
 ## The Learning screen
 
@@ -45,22 +44,18 @@ reopen the lesson, so the step you are reading always stays in view.
 
 ## Courses
 
-**Courses** is the same course page as before: course cards with progress,
-**View course** with its lesson path and statuses, **Refresh courses**, the
-**Course catalogue** with **Install** and **Update** (see
-[Installing and updating Learning courses](learning-course-catalogue.md)) and,
-for the workspace owner, **New course** (see
-[Choosing lessons and courses](learning-mode-ui.md)).
+**Courses** shows course cards with progress, course pages, the **Course
+catalogue** and, for the workspace owner, **New course**; see
+[Choosing lessons and courses](learning-mode-ui.md).
 
 - **Start**, **Start next lesson**, **Start lesson** or **Try preview** start
-  the lesson and open it straight away in the lesson tab. No teacher chat is
-  created.
+  the lesson and open it in the lesson tab. No chat is created.
 - **Continue** and **Resume saved lesson** open your saved lesson.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
 - Below the courses, **Practice** lists your practice projects by name,
   **Practice:** followed by the lesson title (or its lesson code), with the
-  project's address underneath. Select one to open it
-  (Learning minimises); the bin button deletes it for good.
+  project's address underneath. Select one to open it (Learning
+  minimises); the bin button deletes it for good.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the same
   reader (see the hosted author-trial guide).

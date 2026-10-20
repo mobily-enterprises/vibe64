@@ -21,12 +21,10 @@ watch without stopping the agent. Close this view to return to the same chat and
 draft. On phone, use **Close watches and assignments** in its header. Ask
 Colleague to list, cancel or resume watches if you prefer.
 
-Colleague no longer watches lessons: the Learning watch (“Watch me while I do
-this”) was retired with the Main lesson teacher. In the Learning environment
-your own step actions (an answer, **Done**, or an automatic check from your App
-press or a code step's **Check now**) record step results directly; see
-[The Learning environment (L)](learning-environment.md). Earlier Learning
-watches no longer appear here.
+Colleague does not watch lessons. In the Learning environment your own step
+actions (an answer, **Done**, or an automatic check from your App press or a
+code step's **Check now**) record step results directly; see
+[The Learning environment (L)](learning-environment.md).
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.

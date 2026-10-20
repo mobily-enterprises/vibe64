@@ -92,19 +92,16 @@ recovery and open the session; the person selects **Reload chat**.
 
 ## Lessons and session navigation
 
-The session tabs and chat panel list the project's ordinary sessions only; there
-is no Working/Learning filter and no Learning mode. The **L** button opens the
-Learning environment above the page without changing the selected session (see
-[Choosing lessons and courses](learning-mode-ui.md)).
+The session tabs and chat panel list the project's ordinary sessions. The **L**
+button opens the Learning environment above the page without changing the
+selected session (see [Choosing lessons and courses](learning-mode-ui.md)).
 
-The lesson teacher
-conversation was retired and Colleague teaches every lesson from its steps in
-the Learning environment. A lesson's practice sessions are ordinary sessions of
-its practice project and appear with its other sessions. Colleague can explain this; it
-cannot grant access or repair saved identities. **New session** and
-**Archive session** are ordinary session operations, not ways to start or end a lesson.
-These rules apply on desktop and mobile. Start, resume and end lessons through
-Learning → **Courses** and Colleague instead.
+A lesson's practice sessions are ordinary sessions of its practice project and
+appear with its other sessions. **New session** and **Archive session** are
+ordinary session operations, not ways to start or end a lesson: start, resume
+and end lessons through Learning → **Courses** and Colleague. Colleague can
+explain this; it cannot grant access or repair saved identities. These rules
+apply on desktop and mobile.
 
 ## Keep the fresh session's link after renewal
 

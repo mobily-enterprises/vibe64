@@ -1336,7 +1336,7 @@ the historical practice cases in `vibe64TrainingLearnerState.unit.test.js`.
 
 ## Training learner notes (no upgrade)
 
-Learner notes (Learning v2 contract C7) add, per learner under
+Learner notes add, per learner under
 `training/users/<key>/`, an optional `teacher-notes.json` (schema version 1: the
 learner identity, a revision, Markdown text of at most 4000 characters,
 `updatedAt`, `updatedBy` colleague or learner, and the latest 32 request IDs with

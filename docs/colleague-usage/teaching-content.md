@@ -41,9 +41,9 @@ loader, and leaves placement to the existing Preview host. It does not by itself
 authenticated learner control, a Colleague tool or saved learner progress. Colleague
 must not claim an animation played or obtain controller source or screenshots.
 
-Saving new diagram checkpoints was retired with the Main teacher. A lesson
-diagram plays from its beginning with **Play** in the Learning environment;
-diagram states saved earlier stay in the lesson record.
+A lesson diagram plays from its beginning with **Play** in the Learning
+environment; diagram states saved by earlier-format lessons stay in the lesson
+record.
 
 The application also has a server-side verified-snapshot installation facility.
 For official catalogue courses it is reached through **Install** and **Update**
@@ -120,8 +120,7 @@ An unconfirmed catalogue save requires reading its actual current revision befor
 the owner deliberately retries. It is not evidence that enablement changed.
 
 The private lesson record retains step results, the reader position and, for
-lessons started before Learning v2, their earlier assessment results for the
-saved lesson version. Colleague has no grading tool. A pass requires the
+earlier-format lessons, their assessment results for the saved lesson version. Colleague has no grading tool. A pass requires the
 learner's own step action: a choice answer, **Done** on a self-check step or an
 automatic check tied to that learner's practice project. An assistant
 paraphrase, demonstration or animation is not evidence of a learner pass. Completion

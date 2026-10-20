@@ -12,8 +12,8 @@ those same owners.
 Internal assessment and resume writes retain pinned evidence and derive lesson
 completion. The shared preparation coordinator composes these original state/content
 owners with existing project, repository, session and Workspace setup facilities.
-Colleague teaches from lesson steps; the Main Learning-mode teacher was retired.
-The module alone does not provide infrastructure or prove a delivered lesson.
+Colleague teaches from lesson steps. The module alone does not provide
+infrastructure or prove a delivered lesson.
 
 ## Sources
 
@@ -113,9 +113,8 @@ push, remote release, installation or course enabling.
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.
 Optional `appRoutes` (exercise lessons only, ≤16 unique `{method,path}` with
-literal or `:id` segments) are validated with the lesson; the teaching brief and
-Learning watch that labelled failed in-app requests with them were retired, so no
-current reader consumes them. They never grade.
+literal or `:id` segments) are validated with the lesson; no current reader
+consumes them and they never grade.
 A `code` producer also requires a bundled exercise, a `kind:"code"` check and
 1–8 unique, safe exercise-relative `files` that are bundled exercise files; only
 code evidence may name files or a code check, and `timeoutSeconds` (1–60) is
@@ -421,9 +420,7 @@ and practical producer/operation/check contracts against that descriptor, before
 summary reconciliation. Historical receipts do not depend on today's pending
 question or preparation phase.
 
-Since the Main teacher was retired (see `teaching.md`), no host operation calls
-`saveLessonResume` or `recordAssessment`; they and their validation remain for
-retained version 1 records. A resume checkpoint retains teaching stage, pending question identity/text,
+A version 1 resume checkpoint retains teaching stage, pending question identity/text,
 bounded declared visual semantic snapshots and a summary. Repeating its current
 request ID with identical content is idempotent; a conflicting payload is refused.
 An assessment submission retains actual admitted learner answer text/message and

@@ -56,9 +56,8 @@ By default Colleague points at the real tab or Dashboard section (Database, File
 Current changes, Git log, Session info, Architecture) with a short ring and
 caption so you click it yourself. A changed project, session or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,
-not proof that the learner used the control.
-Colleague no longer starts a Learning watch for “Watch me while I do this”; your
-own step actions in the Learning environment record step results directly.
+not proof that the learner used the control; only the learner's own step
+actions in the Learning environment record step results.
 Code, file, terminal and visual investigation belongs to a coding conversation;
 Colleague can ask that agent and relay its result, but cannot itself read source,
 execute a shell command or inspect the screen. A navigation request does not
