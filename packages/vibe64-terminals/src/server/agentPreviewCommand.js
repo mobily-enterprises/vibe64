@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import {
@@ -24,6 +25,8 @@ import {
   agentPlaywrightCommandSource,
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource,
+  processGroupHasLiveMember,
+  readProcessStart,
   runVibe64Command,
   runtimePackBinPaths,
   runtimePackRoot,
@@ -55,6 +58,8 @@ import {
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";
+const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
+  "Browser checks need Playwright in this project. Run npm install -D playwright and npx playwright install chromium, then try again.";
 const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
@@ -1250,41 +1255,17 @@ async function browserWorkerRequest({
   );
 }
 
-async function registeredProcessIdentity(pid) {
-  try {
-    const statText = await readFile(`/proc/${pid}/stat`, "utf8");
-    const closeIndex = statText.lastIndexOf(") ");
-    const fields = statText.slice(closeIndex + 2).trim().split(/\s+/u);
-    return {
-      groupId: Number(fields[2]),
-      startTimeTicks: String(fields[19] || ""),
-      state: String(fields[0] || "")
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function registeredProcessGroupIsAlive(entry = {}) {
   const groupId = Number(entry?.groupId);
-  const leader = await registeredProcessIdentity(groupId);
+  const leader = await readProcessStart(groupId);
   if (
-    !leader ||
+    leader.status !== "exact" ||
     leader.groupId !== groupId ||
     leader.startTimeTicks !== normalizeText(entry?.startTimeTicks)
   ) {
     return false;
   }
-  for (const processEntry of await readdir("/proc", { withFileTypes: true }).catch(() => [])) {
-    if (!processEntry.isDirectory() || !/^\d+$/u.test(processEntry.name)) {
-      continue;
-    }
-    const identity = await registeredProcessIdentity(Number(processEntry.name));
-    if (identity?.groupId === groupId && identity.state !== "Z") {
-      return true;
-    }
-  }
-  return false;
+  return processGroupHasLiveMember(groupId);
 }
 
 async function drainRegisteredProcessGroup(entry = {}) {
@@ -1678,6 +1659,15 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   }), validate);
 }
 
+function projectHasPlaywright(worktreePath = "") {
+  try {
+    createRequire(path.join(worktreePath, "package.json")).resolve("playwright");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
   browserWorkers = new Map(),
   runCommand = runVibe64Command,
@@ -1689,6 +1679,9 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
     return registered.error;
   }
   const { cwd, descriptor } = registered;
+  if (!descriptor.runtimeRoot && !projectHasPlaywright(descriptor.worktreePath)) {
+    return responseError(PROJECT_PLAYWRIGHT_MISSING_MESSAGE, "vibe64_preview_playwright_missing");
+  }
   if (descriptor.startPromise) {
     return descriptor.startPromise;
   }
@@ -2075,21 +2068,18 @@ async function prepareAgentPreviewCommand({
   const packRoot = runtimePackRoot({
     env
   });
-  const [nodeBinDir] = runtimePackBinPaths("node26", {
-    env
-  });
-  const managedNodePath = path.join(nodeBinDir, "node");
+  // Without runtime packs, the browser runs on this server's Node.js and the
+  // project's own Playwright.
+  const [nodeBinDir] = packRoot
+    ? runtimePackBinPaths("node26", { env })
+    : [path.dirname(process.execPath)];
+  const managedNodePath = packRoot ? path.join(nodeBinDir, "node") : process.execPath;
   const managedNpmPath = path.join(nodeBinDir, "npm");
   const normalizedWorktreePath = path.resolve(normalizeText(worktreePath) || process.cwd());
   const workerScriptPath = browserWorkerHostPath(normalizedWrapperHostDir);
-  const playwrightModulePath = path.join(
-    packRoot,
-    "playwright",
-    "runtime",
-    "lib",
-    "node_modules",
-    "playwright"
-  );
+  const playwrightModulePath = packRoot
+    ? path.join(packRoot, "playwright", "runtime", "lib", "node_modules", "playwright")
+    : "";
   const browserSocketPath = unixCommandSocketPath(
     path.join(normalizedWrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME), { env }
   );
@@ -2108,7 +2098,8 @@ async function prepareAgentPreviewCommand({
       controlHealthIntervalMs: browserControlHealthIntervalMs,
       identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
       idleTimeoutMs: browserIdleTimeoutMs,
-      playwrightModulePath
+      playwrightModulePath,
+      playwrightProjectRoot: normalizedWorktreePath
     }),
     previewWrapperSource: agentPreviewWrapperSource({
       browserSocketPath,

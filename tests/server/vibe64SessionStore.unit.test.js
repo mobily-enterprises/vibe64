@@ -233,10 +233,43 @@ test("session locks persist the exact live owner process identity", {
   });
 });
 
-test("session locks use conservative pid ownership when Linux process fingerprints are unavailable", async () => {
+test("session locks record a ps start identity on macOS", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot, {
       sessionLockProcessPlatform: "darwin"
+    });
+    let releaseOperation;
+    let enterOperation;
+    const entered = new Promise((resolve) => {
+      enterOperation = resolve;
+    });
+    const first = store.runSessionRenewalWorkflowExclusive("darwin-lock", async () => {
+      enterOperation();
+      await new Promise((resolve) => {
+        releaseOperation = resolve;
+      });
+      return "released";
+    });
+    await entered;
+    const owner = JSON.parse(await readFile(
+      path.join(renewalWorkflowLockPath(store, "darwin-lock"), "owner.json"),
+      "utf8"
+    ));
+    assert.equal(owner.processIdentity.platform, "darwin-ps");
+    assert.match(owner.processIdentity.startTimeTicks, /^\d+$/u);
+    assert.deepEqual(
+      await store.runSessionRenewalWorkflowExclusive("darwin-lock", async () => "must-not-run"),
+      { acquired: false, value: null }
+    );
+    releaseOperation();
+    assert.deepEqual(await first, { acquired: true, value: "released" });
+  });
+});
+
+test("session locks use conservative pid ownership when process fingerprints are unavailable", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot, {
+      sessionLockProcessPlatform: "freebsd"
     });
     let enterOperation;
     let releaseOperation;

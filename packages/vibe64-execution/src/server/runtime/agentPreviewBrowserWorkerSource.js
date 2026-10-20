@@ -184,9 +184,11 @@ function agentPreviewBrowserWorkerSource({
   controlHealthIntervalMs = 15_000,
   identityControlPath = "",
   idleTimeoutMs = 5 * 60 * 1000,
-  playwrightModulePath = ""
+  playwrightModulePath = "",
+  playwrightProjectRoot = ""
 } = {}) {
   return `#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -205,6 +207,8 @@ const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERA
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
 const executionId = String(process.env.VIBE64_EXECUTION_ID || "").trim();
 const playwrightModulePath = ${JSON.stringify(String(playwrightModulePath || ""))};
+// Without a pinned Playwright module, the project's own Playwright is used.
+const playwrightProjectRoot = ${JSON.stringify(String(playwrightProjectRoot || ""))};
 const identityControlPath = ${JSON.stringify(String(identityControlPath || ""))};
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
 const idleTimeoutMs = ${Number(idleTimeoutMs) || 5 * 60 * 1000};
@@ -212,13 +216,13 @@ const requestLimitBytes = 1024 * 1024;
 const controlHealthIntervalMs = ${Number(controlHealthIntervalMs) || 15_000};
 const controlHealthFailureLimit = ${Number(controlHealthFailureLimit) || 4};
 
-if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !controlToken || !controlGeneration || !sessionId || !executionId || !playwrightModulePath || !identityControlPath) {
+if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !controlToken || !controlGeneration || !sessionId || !executionId || !(playwrightModulePath || playwrightProjectRoot) || !identityControlPath) {
   process.stderr.write("Vibe64 managed browser worker configuration is incomplete.\\n");
   process.exit(64);
 }
 
-const require = createRequire(import.meta.url);
-const { chromium, request } = require(playwrightModulePath);
+const require = createRequire(playwrightModulePath ? import.meta.url : path.join(playwrightProjectRoot, "package.json"));
+const { chromium, request } = require(playwrightModulePath || "playwright");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
 const pngVisualMetrics = ${pngVisualMetrics.toString()};
@@ -266,7 +270,37 @@ function jsonValue(value) {
   }
 }
 
+// Linux reads /proc. Elsewhere ps reports the same fields; lstart becomes
+// whole seconds since the epoch, as in runtime/processStart.js.
+function psLines(args) {
+  try {
+    return execFileSync("ps", args, {
+      encoding: "utf8",
+      env: { ...process.env, LC_ALL: "C" },
+      stdio: ["ignore", "pipe", "ignore"]
+    }).split(/\\r?\\n/u);
+  } catch (error) {
+    return String(error?.stdout || "").split(/\\r?\\n/u);
+  }
+}
+
+function psIdentity(line) {
+  const match = /^\\s*(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(\\S.*\\S)\\s*$/u.exec(String(line || ""));
+  const startedAt = match ? Date.parse(match[4]) : Number.NaN;
+  return Number.isFinite(startedAt)
+    ? {
+        groupId: Number(match[2]),
+        parentId: Number(match[1]),
+        startTimeTicks: String(Math.floor(startedAt / 1000)),
+        state: match[3].slice(0, 1)
+      }
+    : null;
+}
+
 function processIdentity(pid) {
+  if (process.platform !== "linux") {
+    return psIdentity(psLines(["-o", "ppid=,pgid=,stat=,lstart=", "-p", String(pid)])[0]);
+  }
   try {
     const stat = readFileSync("/proc/" + pid + "/stat", "utf8");
     const closeIndex = stat.lastIndexOf(") ");
@@ -282,24 +316,45 @@ function processIdentity(pid) {
   }
 }
 
+// Every visible process with its identity, or null when the table is unreadable.
+function processTable() {
+  if (process.platform !== "linux") {
+    const lines = psLines(["-ax", "-o", "pid=,ppid=,pgid=,stat=,lstart="]);
+    const processes = [];
+    for (const line of lines) {
+      const match = /^\\s*(\\d+)\\s+(.*)$/u.exec(line);
+      const identity = match && psIdentity(match[2]);
+      if (identity) processes.push({ pid: Number(match[1]), ...identity });
+    }
+    return processes.length ? processes : null;
+  }
+  try {
+    const processes = [];
+    for (const entry of readdirSync("/proc", { withFileTypes: true })) {
+      if (!entry.isDirectory() || !/^\\d+$/u.test(entry.name)) continue;
+      const pid = Number(entry.name);
+      const identity = processIdentity(pid);
+      if (identity) processes.push({ pid, ...identity });
+    }
+    return processes;
+  } catch {
+    return null;
+  }
+}
+
 function processGroupAlive(groupId) {
   if (!Number.isSafeInteger(groupId) || groupId <= 1) {
     return false;
   }
+  const processes = processTable();
+  if (processes) {
+    return processes.some((entry) => entry.groupId === groupId && entry.state !== "Z");
+  }
   try {
-    for (const entry of readdirSync("/proc", { withFileTypes: true })) {
-      if (!entry.isDirectory() || !/^\\d+$/u.test(entry.name)) continue;
-      const identity = processIdentity(Number(entry.name));
-      if (identity?.groupId === groupId && identity.state !== "Z") return true;
-    }
-    return false;
+    process.kill(-groupId, 0);
+    return true;
   } catch {
-    try {
-      process.kill(-groupId, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -376,15 +431,8 @@ async function writeWorkerMetadata() {
 }
 
 function descendantBrowserProcessGroups() {
-  const processes = [];
-  try {
-    for (const entry of readdirSync("/proc", { withFileTypes: true })) {
-      if (!entry.isDirectory() || !/^\\d+$/u.test(entry.name)) continue;
-      const pid = Number(entry.name);
-      const identity = processIdentity(pid);
-      if (identity) processes.push({ pid, ...identity });
-    }
-  } catch {
+  const processes = processTable();
+  if (!processes) {
     return [];
   }
   const descendantIds = new Set([process.pid]);

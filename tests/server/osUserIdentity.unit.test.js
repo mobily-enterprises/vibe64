@@ -136,6 +136,7 @@ test("numeric lookup keys keep getent's UID interpretation", async () => {
 
 test("OS user listing sorts parsed passwd records", async () => {
   const users = await listOsUsers({
+    platform: "linux",
     async execFileFn(command, args) {
       assert.equal(command, "getent");
       assert.deepEqual(args, ["passwd"]);
@@ -149,6 +150,64 @@ test("OS user listing sorts parsed passwd records", async () => {
   });
 
   assert.deepEqual(users.map((user) => user.username), ["ada", "grace"]);
+});
+
+const DSCACHEUTIL_USERS = [
+  "name: grace",
+  "password: ********",
+  "uid: 502",
+  "gid: 20",
+  "dir: /Users/grace",
+  "shell: /bin/zsh",
+  "gecos: Grace Hopper",
+  "",
+  "name: ada",
+  "password: ********",
+  "uid: 501",
+  "gid: 20",
+  "dir: /Users/ada",
+  "shell: /bin/zsh",
+  "gecos: Ada Lovelace",
+  ""
+].join("\n");
+
+test("macOS resolves the current user from the process and others through dscacheutil", async () => {
+  const calls = [];
+  const options = {
+    platform: "darwin",
+    readFileFn: async () => { throw new Error("macOS must not read passwd files"); },
+    userInfo: () => ({ gid: 20, homedir: "/Users/ada", shell: "/bin/zsh", uid: 501, username: "ada" }),
+    async execFileFn(command, args) {
+      calls.push([command, ...args]);
+      return { stdout: DSCACHEUTIL_USERS.split("\n\n")[0] + "\n" };
+    }
+  };
+  assert.deepEqual(await resolveOsUser("ada", options), {
+    displayName: "ada", gid: 20, home: "/Users/ada", shell: "/bin/zsh", uid: 501, username: "ada"
+  });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(await resolveOsUser("grace", options), {
+    displayName: "Grace Hopper", gid: 20, home: "/Users/grace", shell: "/bin/zsh", uid: 502, username: "grace"
+  });
+  assert.deepEqual(calls, [["dscacheutil", "-q", "user", "-a", "name", "grace"]]);
+  await assert.rejects(resolveOsUser("nobody-here", { ...options, execFileFn: async () => ({ stdout: "" }) }), {
+    code: "vibe64_os_user_not_found"
+  });
+});
+
+test("macOS lists users through dscacheutil", async () => {
+  const users = await listOsUsers({
+    platform: "darwin",
+    async execFileFn(command, args) {
+      assert.equal(command, "dscacheutil");
+      assert.deepEqual(args, ["-q", "user"]);
+      return { stdout: DSCACHEUTIL_USERS };
+    }
+  });
+  assert.deepEqual(users.map((user) => [user.username, user.uid, user.home]), [
+    ["ada", 501, "/Users/ada"],
+    ["grace", 502, "/Users/grace"]
+  ]);
 });
 
 test("OS user eligibility rejects obvious service accounts without treating UID as identity", () => {

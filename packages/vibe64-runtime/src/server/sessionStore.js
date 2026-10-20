@@ -28,6 +28,8 @@ import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { explicitPathIsManagedSessionSource, managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  processStartIdentityPlatform,
+  readProcessStart,
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
@@ -185,7 +187,6 @@ const SESSION_LOCK_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_LOCK_OWNER_GRACE_MS = 2_000;
 const SESSION_LOCK_OWNER_SCHEMA_VERSION = 1;
 const SESSION_LOCK_POLL_MS = 20;
-const SESSION_LOCK_PROCESS_IDENTITY_PLATFORM = "linux-proc";
 const SESSION_LOCK_PROCESS_IDENTITY_PID_ONLY_PLATFORM = "pid-only";
 const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();
@@ -588,54 +589,15 @@ function processIsAlive(pid) {
   }
 }
 
-function linuxProcessStartTimeTicks(statText = "") {
-  const text = String(statText || "").trim();
-  const commandEnd = text.lastIndexOf(")");
-  if (commandEnd < 0) {
-    return "";
-  }
-  const fields = text.slice(commandEnd + 1).trim().split(/\s+/u);
-  const state = String(fields[0] || "");
-  const startTimeTicks = String(fields[19] || "");
-  return /^[A-Z]$/u.test(state) && /^\d+$/u.test(startTimeTicks)
-    ? startTimeTicks
-    : "";
-}
-
-async function readLinuxProcessStartTimeTicks(pid) {
-  const normalizedPid = Number(pid);
-  if (
-    process.platform !== "linux" ||
-    !Number.isSafeInteger(normalizedPid) ||
-    normalizedPid <= 0
-  ) {
-    return {
-      status: "ambiguous",
-      startTimeTicks: ""
-    };
-  }
-  try {
-    const startTimeTicks = linuxProcessStartTimeTicks(
-      await readFile(`/proc/${normalizedPid}/stat`, "utf8")
-    );
-    return startTimeTicks
-      ? { status: "exact", startTimeTicks }
-      : { status: "ambiguous", startTimeTicks: "" };
-  } catch (error) {
-    return isMissingPathError(error)
-      ? { status: "absent", startTimeTicks: "" }
-      : { status: "ambiguous", startTimeTicks: "" };
-  }
-}
-
 async function currentSessionLockProcessIdentity(processPlatform = process.platform) {
-  if (processPlatform !== "linux") {
+  const platform = processStartIdentityPlatform(processPlatform);
+  if (!platform) {
     return {
       platform: SESSION_LOCK_PROCESS_IDENTITY_PID_ONLY_PLATFORM,
       startTimeTicks: ""
     };
   }
-  const observed = await readLinuxProcessStartTimeTicks(process.pid);
+  const observed = await readProcessStart(process.pid, { platform: processPlatform });
   if (observed.status !== "exact") {
     throw vibe64Error(
       "Vibe64 could not establish the session-lock owner process identity.",
@@ -643,7 +605,7 @@ async function currentSessionLockProcessIdentity(processPlatform = process.platf
     );
   }
   return {
-    platform: SESSION_LOCK_PROCESS_IDENTITY_PLATFORM,
+    platform,
     startTimeTicks: observed.startTimeTicks
   };
 }
@@ -653,7 +615,7 @@ async function sessionLockOwnerProcessStatus(owner = {}) {
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     return "ambiguous";
   }
-  const observed = await readLinuxProcessStartTimeTicks(pid);
+  const observed = await readProcessStart(pid);
   if (observed.status === "absent") {
     return "absent";
   }
@@ -662,7 +624,7 @@ async function sessionLockOwnerProcessStatus(owner = {}) {
     : {};
   if (
     Number(owner?.schemaVersion) !== SESSION_LOCK_OWNER_SCHEMA_VERSION ||
-    normalizeText(identity.platform) !== SESSION_LOCK_PROCESS_IDENTITY_PLATFORM ||
+    normalizeText(identity.platform) !== processStartIdentityPlatform() ||
     !/^\d+$/u.test(normalizeText(identity.startTimeTicks)) ||
     observed.status !== "exact"
   ) {

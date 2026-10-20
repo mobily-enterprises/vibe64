@@ -4,7 +4,6 @@ import {
   mkdir,
   open,
   readFile,
-  realpath,
   rename,
   rm,
   writeFile
@@ -15,6 +14,7 @@ import path from "node:path";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import { openedFileWithin } from "./openedFileWithin.js";
 
 const OUTPUT_RESULTS_DIRECTORY = "output-results";
 const OUTPUT_RESULTS_INDEX = "index.json";
@@ -157,8 +157,7 @@ async function snapshotRegularFile(sourcePath = "", destinationPath = "", {
         `A declared download exceeds the ${Math.floor(maxBytes / (1024 * 1024))} MB result limit.`
       );
     }
-    const openedPath = await realpath(`/proc/self/fd/${source.fd}`);
-    if (!pathInside(sourceRoot, openedPath)) {
+    if (!await openedFileWithin(source, sourcePath, (openedPath) => pathInside(sourceRoot, openedPath))) {
       throw outputResultError(
         "vibe64_output_result_outside_source",
         "A declared download resolved outside the session source."
@@ -402,8 +401,7 @@ async function readOutputResult(session = {}, resultId = "") {
         await fileHandle.close();
         break;
       }
-      const openedPath = await realpath(`/proc/self/fd/${fileHandle.fd}`);
-      if (!pathInside(root, openedPath)) {
+      if (!await openedFileWithin(fileHandle, filePath, (openedPath) => pathInside(root, openedPath))) {
         await fileHandle.close();
         break;
       }

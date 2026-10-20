@@ -206,3 +206,8 @@ export {
   operatorCliStartFailed,
   resolveOperatorCli
 } from "./runtime/operatorCli.js";
+export {
+  processGroupHasLiveMember,
+  processStartIdentityPlatform,
+  readProcessStart
+} from "./runtime/processStart.js";

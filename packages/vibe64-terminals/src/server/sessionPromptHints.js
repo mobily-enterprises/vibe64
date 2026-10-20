@@ -27,6 +27,7 @@ import {
   vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
 
+import { openedFileWithin } from "./openedFileWithin.js";
 import {
   pathInsideOrEqual,
   terminalProjectScopeKey,
@@ -367,8 +368,7 @@ async function readPromptHintBlueprint(sourceRoot = "") {
     if (!fileStat.isFile()) {
       throw promptHintBlueprintError("Prompt hint Blueprint must be a regular file.");
     }
-    const openedPath = await realpath(`/proc/self/fd/${handle.fd}`);
-    if (!pathInsideOrEqual(canonicalSourceRoot, openedPath)) {
+    if (!await openedFileWithin(handle, blueprintPath, (openedPath) => pathInsideOrEqual(canonicalSourceRoot, openedPath))) {
       throw promptHintBlueprintError("Prompt hint Blueprint escapes the session source.");
     }
     const buffer = Buffer.alloc(16_384);

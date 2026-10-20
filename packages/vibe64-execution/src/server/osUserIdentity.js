@@ -30,24 +30,54 @@ function assertSafeOsUsername(username = "") {
   return normalized;
 }
 
-function parsePasswdLine(line = "") {
-  const parts = String(line || "").trim().split(":");
-  if (parts.length < 7 || !/^\d+$/u.test(parts[2]) || !/^\d+$/u.test(parts[3])) {
+function osUserRecord([username, uid, gid, gecos, home, shell] = []) {
+  if (!/^\d+$/u.test(uid) || !/^\d+$/u.test(gid)) {
     return null;
   }
-  const uid = Number(parts[2]);
-  const gid = Number(parts[3]);
-  if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) {
+  const numericUid = Number(uid);
+  const numericGid = Number(gid);
+  if (!Number.isSafeInteger(numericUid) || !Number.isSafeInteger(numericGid)) {
     return null;
   }
   return {
-    displayName: String(parts[4] || "").split(",")[0],
-    gid,
-    home: String(parts[5] || ""),
-    shell: String(parts[6] || ""),
-    uid,
-    username: String(parts[0] || "")
+    displayName: String(gecos || "").split(",")[0],
+    gid: numericGid,
+    home: String(home || ""),
+    shell: String(shell || ""),
+    uid: numericUid,
+    username: String(username || "")
   };
+}
+
+function parsePasswdLine(line = "") {
+  const parts = String(line || "").trim().split(":");
+  if (parts.length < 7) {
+    return null;
+  }
+  return osUserRecord([parts[0], parts[2], parts[3], parts[4], parts[5], parts[6]]);
+}
+
+// macOS has no getent: `dscacheutil -q user` prints "key: value" lines for
+// each user, with a blank line between users.
+function parseDscacheutilUsers(text = "") {
+  return String(text || "")
+    .split(/\r?\n[\t ]*\r?\n/u)
+    .map((block) => {
+      const fields = {};
+      for (const line of block.split(/\r?\n/u)) {
+        const match = /^\s*([a-z]+):\s?(.*)$/u.exec(line);
+        if (match) fields[match[1]] = match[2].trim();
+      }
+      return osUserRecord([fields.name, fields.uid, fields.gid, fields.gecos, fields.dir, fields.shell]);
+    })
+    .filter(Boolean);
+}
+
+async function commandOutput(execFileFn, command, args) {
+  const result = await execFileFn(command, args, {
+    encoding: "utf8"
+  });
+  return String((typeof result === "string" ? result : result?.stdout) || "");
 }
 
 function currentOsUser({
@@ -70,7 +100,8 @@ function currentOsUser({
 async function resolveOsUser(username = "", {
   execFileFn = execFile,
   platform = process.platform,
-  readFileFn = readFile
+  readFileFn = readFile,
+  userInfo = os.userInfo
 } = {}) {
   const safeUsername = assertSafeOsUsername(username);
   if (platform === "linux" && !/^\d+$/u.test(safeUsername)) {
@@ -86,11 +117,16 @@ async function resolveOsUser(username = "", {
       if (localUser) return localUser;
     }
   }
-  const result = await execFileFn("getent", ["passwd", safeUsername], {
-    encoding: "utf8"
-  });
-  const stdout = typeof result === "string" ? result : result?.stdout;
-  const record = parsePasswdLine(String(stdout || "").split(/\r?\n/u)[0]);
+  let record;
+  if (platform === "darwin") {
+    const current = currentOsUser({ userInfo });
+    if (current.username === safeUsername) return current;
+    [record] = parseDscacheutilUsers(
+      await commandOutput(execFileFn, "dscacheutil", ["-q", "user", "-a", "name", safeUsername])
+    );
+  } else {
+    record = parsePasswdLine((await commandOutput(execFileFn, "getent", ["passwd", safeUsername])).split(/\r?\n/u)[0]);
+  }
   if (!record || record.username !== safeUsername) {
     const error = new Error(`OS user was not found: ${safeUsername}`);
     error.code = "vibe64_os_user_not_found";
@@ -100,17 +136,13 @@ async function resolveOsUser(username = "", {
 }
 
 async function listOsUsers({
-  execFileFn = execFile
+  execFileFn = execFile,
+  platform = process.platform
 } = {}) {
-  const result = await execFileFn("getent", ["passwd"], {
-    encoding: "utf8"
-  });
-  const stdout = typeof result === "string" ? result : result?.stdout;
-  return String(stdout || "")
-    .split(/\r?\n/u)
-    .map(parsePasswdLine)
-    .filter(Boolean)
-    .sort((left, right) => left.username.localeCompare(right.username));
+  const users = platform === "darwin"
+    ? parseDscacheutilUsers(await commandOutput(execFileFn, "dscacheutil", ["-q", "user"]))
+    : (await commandOutput(execFileFn, "getent", ["passwd"])).split(/\r?\n/u).map(parsePasswdLine).filter(Boolean);
+  return users.sort((left, right) => left.username.localeCompare(right.username));
 }
 
 function osUserEligibility(user = {}, {
