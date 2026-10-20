@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
+import { runCodeCheckObservation, runExerciseResponseCheck } from "./stepChecks.js";
 
 // The original transaction and bounded context projection moved from Colleague.
 // The consumer retains its admission tail, connection and actual lifetime fence;
@@ -84,36 +85,18 @@ function createTrainingPracticalObservations({ actions, failure }) {
     if (completed) {
       const observationId = randomUUID();
       if (assessment.id === "try-the-application") {
-        if (typeof context.trainingChecks?.runOrientationCheck !== "function") {
-          throw failure("The installed exercise response check is unavailable in this host.");
-        }
-        const outputs = requireResult(await actions.execute({ actionId: "vibe64.terminals.outputs.read",
-          input: targetInput || captured.target, context }));
-        const terminalId = outputs?.activeTerminal?.id;
-        if (!terminalId) throw failure("Use the exact ready App run for this exercise before repeating the interaction.");
-        const checked = await context.trainingChecks.runOrientationCheck({ actor, signal: context.signal,
-          attemptId: question.attemptId, sessionId: captured.target.sessionId, terminalId, observationId,
-          instanceId: input.exercise.instanceId, interactionId: input.exercise.interactionId, requestId: input.exercise.requestId });
-        if (checked?.checkResult?.check !== assessment.evidence.check || checked.checkResult.observationId !== observationId ||
-            !["passed", "not-yet-passed"].includes(checked.checkResult.outcome)) {
-          throw failure("The declared check did not confirm this exact native observation.");
-        }
+        // The check invocation moved to the step check owner; v1 keeps this collector.
+        const checked = await runExerciseResponseCheck({ actions, checks: context.trainingChecks, context, failure, actor,
+          target: captured.target, targetInput, attemptId: question.attemptId, observationId, exercise: input.exercise,
+          checkId: assessment.evidence.check });
         await requireCurrentQuestion();
         practical.checkResult = structuredClone(checked.checkResult);
       }
       let codeText = "";
       let ownWork = true;
       if (code) {
-        if (typeof context.trainingChecks?.runCodeCheck !== "function") {
-          throw failure("The installed code check is unavailable in this host.");
-        }
-        const checked = await context.trainingChecks.runCodeCheck({ actor, signal: context.signal,
-          attemptId: question.attemptId, sessionId: captured.target.sessionId, observationId });
-        if (checked?.checkResult?.check !== assessment.evidence.check || checked.checkResult.observationId !== observationId ||
-            !["passed", "not-yet-passed"].includes(checked.checkResult.outcome) || !["learner", "other"].includes(checked.authorship) ||
-            checked.authorship === "other" && checked.checkResult.outcome !== "not-yet-passed") {
-          throw failure("The declared code check did not confirm this exact native observation.");
-        }
+        const checked = await runCodeCheckObservation({ checks: context.trainingChecks, context, failure, actor,
+          attemptId: question.attemptId, sessionId: captured.target.sessionId, observationId, checkId: assessment.evidence.check });
         await requireCurrentQuestion();
         practical.checkResult = structuredClone(checked.checkResult);
         practical.checkReason = checked.reason ? String(checked.reason).slice(0, 256) : undefined;

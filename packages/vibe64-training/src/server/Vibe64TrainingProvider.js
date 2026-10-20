@@ -1,5 +1,6 @@
 import { createTrainingDeclaredCheckOwner } from "./declaredCheck.js";
 import { createTrainingCodeAuthorship } from "./codeAuthorship.js";
+import { createTrainingStepChecks } from "./stepChecks.js";
 import { createTrainingCodeEditorActions, registerTrainingCodeEditorRoutes } from "./codeEditorActions.js";
 import { createTrainingPracticalActions } from "./practicalActions.js";
 import { createTrainingMainPracticalActions } from "./mainPracticalActions.js";
@@ -59,6 +60,8 @@ const Vibe64TrainingProvider = defineFeature({
     const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
     const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
     const mainTeaching = createTrainingMainTeaching({ teaching, assessment, checks });
+    // Version 2 step results; the action layer supplies the action executor.
+    const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue });
     const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, terminals, projectContext,
       learningTeaching: mainTeaching, practiceSessions: true });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
@@ -85,7 +88,7 @@ const Vibe64TrainingProvider = defineFeature({
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     if (sourceEditor) registerTrainingCodeEditorRoutes(http);
     return { training: Object.freeze({ catalogue, courseInstaller, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
-      codeAuthorship }) };
+      codeAuthorship, steps }) };
   },
   actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
     if (trainingHost) return [];

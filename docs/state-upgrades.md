@@ -1268,6 +1268,29 @@ into human Pause. No historical prose or inactivity is interpreted, no existing
 record is rewritten, and no application-file backup is necessary. Record the
 boundary through the ordinary stopped-service upgrade before activating writes.
 
+## Training step progress (version 2 lessons)
+
+`20261020-training-step-progress` records the new-write boundary for version 2
+lesson learner state. New writes may add, per learner under
+`training/users/<key>/`, an append-only `step-progress.json` (schema version 1:
+per attempt at most 64 step results with request-ID replay, plus the latest
+learner-origin App receipt per step; 1 MiB bound) with its own
+`step-progress.lock`, and a last-write-wins `reader.json` with `reader.lock`.
+The code-authorship ledger may key on `{stepId, enteredRevision}` instead of a
+v1 question, and progress may retain up to 32 attempts (the 64 KiB progress bound
+is unchanged). Existing schema-version-1 records stay valid and byte-for-byte
+unchanged; version 1 lessons keep their assessment completion path.
+
+The assembled candidate CLI supplies the Training owner
+`inspectTrainingStepProgress`. Its read-only preflight validates every learner
+record in the normal and author-preview stores with the candidate's readers
+(and any step or reader record a newer writer created) and reports counts. It
+converts, creates and backs up nothing; an invalid record blocks apply before the
+ledger entry, so retry after owner inspection is safe. An older registry refuses
+the newer ledger, which is the downgrade protection: never remove the entry to
+start an older release. Focused evidence: `stateUpgrades.unit.test.js`,
+`vibe64TrainingStepProgress.unit.test.js` and the original learner-state tests.
+
 ## Shared database session override
 
 The optional project metadata boolean `allowSharedDatabaseSessions` is written

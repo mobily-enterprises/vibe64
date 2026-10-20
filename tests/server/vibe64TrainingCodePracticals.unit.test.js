@@ -12,6 +12,8 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingDeclaredCheckOwner } from "../../packages/vibe64-training/src/server/declaredCheck.js";
 import { createTrainingCodeAuthorship } from "../../packages/vibe64-training/src/server/codeAuthorship.js";
+import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
+import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
 import { createTrainingPracticalObservations } from "../../packages/vibe64-training/src/server/practicalObservations.js";
 import { createTrainingAssessmentGrader } from "../../packages/vibe64-training/src/server/assessmentGrader.js";
@@ -36,7 +38,10 @@ async function writeTopic(root, change) {
   return source;
 }
 
-async function fixture(t, { check, timeoutSeconds } = {}) {
+const codeStep = { id: "refuse-empty", title: "Refuse empty titles", body: "steps/refuse-empty.md",
+  check: { kind: "auto", check: "notes-title-required", files: ["notes.mjs"] }, required: true };
+
+async function fixture(t, { check, timeoutSeconds, lessonVersion = 1 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-code-practical-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = await writeTopic(root, async topic => {
@@ -55,8 +60,9 @@ async function fixture(t, { check, timeoutSeconds } = {}) {
   const topic = { schemaVersion: 1, topicId: "code", release: "0.1.0", repository: "examples/learn-code-fixture", commit, topicHash: bundle.topicHash };
   await writeFile(path.join(snapshotRoot, "pin.json"), JSON.stringify(topic));
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "CODE-ONE", hash: bundle.lessons[0].hash } };
-  const learners = createTrainingLearnerState({ systemRoot });
-  const content = createInstalledTrainingContent({ systemRoot });
+  const installed = createInstalledTrainingContent({ systemRoot });
+  const content = lessonVersion === 2 ? v2Content(installed, { steps: [codeStep] }) : installed;
+  const learners = createTrainingLearnerState({ systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   const reserved = await learners.reserveAttempt({ actor, expectedRevision: 0, requestId: "start", pin });
   const attemptId = reserved.attempt.attemptId, sessionId = `training-${attemptId}`;
@@ -78,7 +84,7 @@ async function fixture(t, { check, timeoutSeconds } = {}) {
   const authorship = createTrainingCodeAuthorship({ learners, content, project });
   const teaching = createTrainingTeachingOwner({ learners, content, codeBaseline: authorship.recordBaseline });
   const learnerFile = path.join(sourcePath, "notes.mjs");
-  const asked = await teaching.prepareQuestion({ actor, attemptId, expectedRevision: 3, requestId: "code-question",
+  const asked = lessonVersion === 2 ? null : await teaching.prepareQuestion({ actor, attemptId, expectedRevision: 3, requestId: "code-question",
     assessmentId: "require-note-title", text: "Open Dashboard, Code and make notes.mjs refuse empty titles.", assistance: "none" });
   // The lesson Code tab's save path with a stand-in for the generic editor's
   // baseHash-checked write; the real wrapper records the ledger entry.
@@ -396,4 +402,52 @@ test("an issued code question stays open across a restart and the recreated owne
     trainingChecks: checks, trainingPractical: { capturePractical: input => teaching.capturePractical(input) } } });
   assert.equal(response.checkOutcome, "passed");
   assert.equal(connection.trainingPractical.observation.origin, "learner");
+});
+
+test("a v2 code step keys its ledger by the entered step and only the learner's own Check records the pass", async t => {
+  const f = await fixture(t, { lessonVersion: 2 });
+  assert.equal(await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId }), null, "no baseline before the step is entered");
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  const entered = await steps.saveReader({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", scroll: 0 });
+  assert.deepEqual(entered.baseline.step, { stepId: "refuse-empty", enteredRevision: 0 });
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  assert.equal(ledger.question, undefined);
+  assert.deepEqual(ledger.baseline, [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }]);
+  await f.learnerSave(solved);
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  assert.equal((await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length, 1,
+    "re-entering the same step keeps its baseline and the learner's saves");
+  await assert.rejects(f.checks().runCodeCheck(f.input), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" }, "a v2 lesson needs the step");
+  const direct = await f.checks().runCodeCheck({ ...f.input, stepId: "refuse-empty" });
+  assert.deepEqual(direct.checkResult, { check: "notes-title-required", observationId: f.input.observationId, outcome: "passed" });
+  assert.equal(direct.authorship, "learner");
+  const stepProgress = path.join(f.systemRoot, "training/users/NDI/step-progress.json");
+  const byAssistant = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "colleague-check", trigger: "assistant" });
+  assert.equal(byAssistant.outcome, "passed");
+  assert.equal(byAssistant.recorded, false, "an assistant-triggered check never writes a pass");
+  await assert.rejects(readFile(stepProgress), { code: "ENOENT" });
+  assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.completed, false);
+  const byLearner = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", trigger: "learner" });
+  assert.deepEqual({ outcome: byLearner.outcome, recorded: byLearner.recorded }, { outcome: "passed", recorded: true });
+  const saved = JSON.parse(await readFile(stepProgress, "utf8")).attempts[0].results[0];
+  assert.equal(saved.origin, "check");
+  assert.equal(saved.evidence.checkId, "notes-title-required");
+  assert.equal(saved.evidence.filesHash, sha256(JSON.stringify([{ path: "notes.mjs", sha256: sha256(Buffer.from(solved)) }])));
+  const completed = await f.learners.readState({ actor: f.actor, includeCompletion: true });
+  assert.deepEqual(completed.completion, { lessonCode: "CODE-ONE", lessonHash: completed.progress.attempts[0].pin.lesson.hash,
+    required: 1, passed: 1, completed: true });
+});
+
+test("another writer in a v2 step's file breaks its chain: an automatic not passed without running the check", async t => {
+  const f = await fixture(t, { lessonVersion: 2 });
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  const missing = await f.checks().runCodeCheck({ ...f.input, stepId: "refuse-empty" });
+  assert.equal(missing.checkResult.outcome, "not-yet-passed");
+  assert.match(missing.reason, /this step has no recorded starting files/u);
+  await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
+  await writeFile(f.learnerFile, solved);
+  const result = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", trigger: "learner" });
+  assert.deepEqual({ outcome: result.outcome, recorded: result.recorded }, { outcome: "not-yet-passed", recorded: true });
+  assert.equal(result.reason, "needs an independent attempt: other edits detected in notes.mjs");
+  assert.equal(f.calls.length, 0, "a broken chain never executes code");
 });

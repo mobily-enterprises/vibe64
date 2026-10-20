@@ -53,3 +53,15 @@ when the server restarts or the page reloads, including the next day: open the
 lesson again and press **Check my code**; you do not need a new question, and
 your earlier saves in **Dashboard → Files** still count. Colleague can explain
 these steps but cannot type, save or check code for you.
+
+## Code steps in step-based lessons
+
+In newer, step-based lessons a code step names the files to change. Opening the
+step records their starting contents; reopening the same step keeps that start,
+while opening another code step starts a new one for that step. Only your own
+saves in **Dashboard → Files** since you opened the step count; any other change
+to a named file makes the check report "needs an independent attempt: other edits
+detected in `<file>`" without running. If the step has no recorded start, the
+check says so: open the step again, then make your change. The pass is recorded
+only when you press the step's **Check** yourself; a check Colleague runs reports
+the result without recording a pass. No explanation or grading is needed.

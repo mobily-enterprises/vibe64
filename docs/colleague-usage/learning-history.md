@@ -30,9 +30,9 @@ history but requires its own assessment. There is no separate restart/discard bu
 If an end/new-start save is unconfirmed, read progress and retry its original
 request identity rather than inventing another exercise. Replaying an ended
 reservation does not resume or reactivate it; use an explicitly requested continuation or enabled new start after
-an explicit retirement. Replaying an old end cannot close a later attempt. The
-pilot keeps up to eight attempts and 64 KiB without pruning; capacity refusal
-requires owner review and keeps all evidence. Historical missing/corrupt pinned
+an explicit retirement. Replaying an old end cannot close a later attempt. Each
+learner keeps up to 32 attempts and 64 KiB of progress without pruning; capacity
+refusal requires owner review and keeps all evidence. Historical missing/corrupt pinned
 content requires exact owner restoration, even when no lesson is active.
 
 
@@ -99,3 +99,20 @@ They do not substitute progress from an ordinary lesson. If Vibe64 refuses to sa
 a question, Main must say it is unrecorded; discussing or answering those words
 does not create an assessment receipt. Keep the saved attempt and ask the owner
 to inspect the error. Do not start another attempt or change accounts to bypass it.
+
+## Step results in step-based lessons
+
+Newer lessons are made of steps. Each step result is saved separately from the
+lesson's progress and is never removed: a choice answer, **Done** on a self-check
+step, or an automatic check result. A lesson is complete when every required step
+has passed in any attempt of the same lesson content, so passes from an ended
+attempt still count. Only these record a pass: the automatic check run by the
+person's own action (pressing the App's control in the lesson's Preview, or
+**Check** on a code step after editing the files themselves), the server's answer
+comparison, or **Done** on a self-check step. When Colleague runs a step check,
+it can only report "not yet" or what the check found; it never records a pass,
+and it never sees or reveals choice answers. After a step passes, later answers
+or checks for it change nothing. An attempt keeps at most 64 step results; at
+that limit the owner must review it. The lesson remembers the last step and
+scroll position across reloads. Earlier assessment-based lessons keep their
+original history and completion.

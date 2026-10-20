@@ -6,22 +6,25 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
-import { readDeclaredFiles, verifyAuthorship } from "./codeAuthorship.js";
+import { codeStepOf, readDeclaredFiles, verifyAuthorship, verifyStepAuthorship } from "./codeAuthorship.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
 const uuid = { ...identity, maxLength: 36,
   pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$" };
+// A version 2 lesson names the step whose automatic check runs; version 1
+// lessons keep their original assessment-declared checks.
+const stepId = { ...identity, required: false, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
 const inputSchema = createSchema({
   attemptId: { ...uuid, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
   sessionId: identity, terminalId: identity, observationId: identity,
-  instanceId: uuid, interactionId: uuid, requestId: uuid
+  instanceId: uuid, interactionId: uuid, requestId: uuid, stepId
 });
 const codeInputSchema = createSchema({
   attemptId: { ...uuid, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
-  sessionId: identity, observationId: identity
+  sessionId: identity, observationId: identity, stepId
 });
-const checkId = "orientation-response";
+const orientationCheckId = "orientation-response";
 const DEFAULT_CODE_TIMEOUT_SECONDS = 15;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
@@ -84,8 +87,9 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const attempt = await readAttempt(actor, input);
     const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
     const lesson = await content.readLesson(pin);
-    if (!lesson.lesson.assessments.some(value => value.kind === "practical" &&
-        value.evidence?.producer === "exercise" && value.evidence.operation === "try-the-application" && value.evidence.check === checkId)) {
+    const checkId = input.stepId ? responseStepCheck(lesson, input.stepId) : orientationCheckId;
+    if (!input.stepId && (lesson.lesson.schemaVersion !== 1 || !lesson.lesson.assessments.some(value => value.kind === "practical" &&
+        value.evidence?.producer === "exercise" && value.evidence.operation === "try-the-application" && value.evidence.check === checkId))) {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installed lesson does not declare the orientation response practical.");
     }
     const declared = await content.readCheck({ ...pin, checkId });
@@ -149,7 +153,8 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
         }
         if (result.exitCode !== 0 || result.ok !== true || canonicalJson(Object.keys(row).sort()) !== canonicalJson(["check", "instanceId", "interactionId", "message", "outcome", "requestId"]) ||
             row.check !== checkId || row.outcome !== "verified" || row.instanceId !== input.instanceId || row.interactionId !== input.interactionId ||
-            row.requestId !== input.requestId || row.message !== "Hello from the server!") {
+            row.requestId !== input.requestId || (checkId === orientationCheckId ? row.message !== "Hello from the server!"
+              : typeof row.message !== "string" || !row.message || row.message.length > 256)) {
           throw failure("VIBE64_TRAINING_CHECK_RESULT_INVALID", "The check result does not match this exact server interaction.");
         }
         return { checkResult: { check: checkId, observationId: input.observationId, outcome: "passed" } };
@@ -164,6 +169,17 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     });
   }
 
+  // A version 2 step's automatic response check: an exercise interaction check
+  // (not a code check) declared by the exact pinned lesson.
+  function responseStepCheck(lesson, id) {
+    const step = lesson.lesson.schemaVersion === 2 ? lesson.lesson.steps?.find(value => value.id === id) : null;
+    const check = step?.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
+    if (!check || check.kind === "code") {
+      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare an exercise response check.");
+    }
+    return check.id;
+  }
+
   function safeRelative(file) {
     const relative = file.split("/");
     if (relative.some(part => !part || part === "." || part === ".." || part.includes("\\")) || path.isAbsolute(file)) {
@@ -173,6 +189,9 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
   }
 
   function openCodeQuestion(attempt, lesson) {
+    if (lesson.lesson.schemaVersion !== 1) {
+      throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "Choose the lesson step whose code check should run.");
+    }
     const question = attempt.learning?.resume?.pendingQuestion;
     const assessment = lesson.lesson.assessments.find(value => value.id === question?.assessmentId);
     const check = lesson.lesson.checks?.find(value => value.id === assessment?.evidence?.check);
@@ -180,7 +199,19 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
         assessment.evidence?.producer !== "code" || check?.kind !== "code" || !assessment.evidence.files?.length) {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "The open question in this lesson does not declare a code check.");
     }
-    return { question, assessment, check };
+    return { question, check, files: assessment.evidence.files,
+      authorship: (ledger, files) => verifyAuthorship(ledger, question, files),
+      same: current => canonicalJson(current.learning?.resume?.pendingQuestion) === canonicalJson(question),
+      missingBaseline: "needs an independent attempt: this question has no recorded starting files. Ask for the question again." };
+  }
+
+  // v2: the step's own declared files; the ledger baseline is the entered step.
+  function openCodeStep(lesson, id) {
+    const code = codeStepOf(lesson, id);
+    if (!code) throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare a code check.");
+    return { check: code.check, files: code.files,
+      authorship: (ledger, files) => verifyStepAuthorship(ledger, id, files), same: () => true,
+      missingBaseline: "needs an independent attempt: this step has no recorded starting files. Open the step again, then make your change." };
   }
 
   // A code check runs the pinned check on a private copy: the pinned exercise
@@ -193,7 +224,8 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const attempt = await readAttempt(actor, input);
     const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
     const lesson = await content.readLesson(pin);
-    const { question, assessment, check } = openCodeQuestion(attempt, lesson);
+    const { check, files: declaredFiles, authorship: verifyFiles, same, missingBaseline } = input.stepId
+      ? openCodeStep(lesson, input.stepId) : openCodeQuestion(attempt, lesson);
     if (typeof learners.readCodeLedger !== "function" || typeof content.readExercise !== "function") {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installation cannot verify code questions.");
     }
@@ -201,20 +233,20 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const exercise = await content.readExercise(pin);
     const result = (outcome, extra = {}) => ({ checkResult: { check: check.id, observationId: input.observationId, outcome }, ...extra });
     const sameQuestion = current => canonicalJson(current.pin) === canonicalJson(attempt.pin) && current.projectSlug === attempt.projectSlug &&
-      canonicalJson(current.learning?.resume?.pendingQuestion) === canonicalJson(question);
+      same(current);
     return project.runInProjectContext(attempt.projectSlug, async () => {
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(input.sessionId, { inspectSource: false });
       if (!session || session.sessionId !== input.sessionId) throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
       const paths = runtime.store.paths(input.sessionId);
       if (paths.sessionRoot !== session.sessionRoot) throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson session artifact identity changed.");
-      const files = await readDeclaredFiles(sessionSourcePath(session), assessment.evidence.files);
+      const files = await readDeclaredFiles(sessionSourcePath(session), declaredFiles);
       const checked = files.map(file => ({ path: file.path, sha256: file.sha256 }));
-      const authorship = verifyAuthorship(await learners.readCodeLedger({ actor, attemptId: input.attemptId }), question, files);
+      const authorship = verifyFiles(await learners.readCodeLedger({ actor, attemptId: input.attemptId }), files);
       if (!authorship.intact) {
         return result("not-yet-passed", { authorship: "other", files: checked,
           reason: authorship.missingBaseline
-            ? "needs an independent attempt: this question has no recorded starting files. Ask for the question again."
+            ? missingBaseline
             : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
       }
       const filesHash = sha256(canonicalJson(checked));
