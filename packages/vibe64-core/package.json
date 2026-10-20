@@ -20,7 +20,7 @@
     "./server/logging": "./src/server/logging.js",
     "./server/launchRestartRules": "./src/server/launchRestartRules.js",
     "./server/osUserIdentity": "./src/server/osUserIdentity.js",
-    "./server/practiceProjects": "./src/server/practiceProjects.js",
+    "./server/learningSpace": "./src/server/learningSpace.js",
     "./server/learningMode": "./src/server/learningMode.js",
     "./server/personalAiProfile": "./src/server/personalAiProfile.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",

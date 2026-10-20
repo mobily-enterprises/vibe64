@@ -1,6 +1,6 @@
-// Learning mode (Learning v2 product decision 8). While a learner has a lesson
-// in progress and has not left it, their projects are the practice projects of
-// that lesson only: listings show only those, and opening any other project
+// Learning mode. While a learner has a lesson in progress, they are in the
+// learning space only: the lesson's practice project (none for a lesson
+// without one) is the one project they open, and opening any other project
 // page or session is refused with a short reason. Nothing inside the lesson's
 // practice project is limited, and non-project pages (Learning, Account
 // settings, AI Accounts) are never affected, so leaving is always one click.
@@ -35,8 +35,7 @@ async function readLearningModeFor(actor = null, { request = null } = {}) {
     mode = value?.on === true ? Object.freeze({
       attemptId: String(value.attemptId || ""),
       lessonCode: String(value.lessonCode || ""),
-      practiceSlug: String(value.practiceSlug || ""),
-      projectSlugs: Object.freeze((Array.isArray(value.projectSlugs) ? value.projectSlugs : []).map(String).filter(Boolean))
+      practiceSlug: String(value.practiceSlug || "")
     }) : null;
   } catch (error) {
     learningModeReadFailure?.(error);
@@ -47,7 +46,7 @@ async function readLearningModeFor(actor = null, { request = null } = {}) {
 }
 
 function learningModeAllowsProject(mode = null, slug = "") {
-  return !mode || mode.projectSlugs.includes(String(slug || ""));
+  return !mode || (Boolean(mode.practiceSlug) && mode.practiceSlug === String(slug || ""));
 }
 
 function refusal(mode = null) {
@@ -74,13 +73,6 @@ async function assertLearningModeAllowsProject({ actor = null, slug = "", reques
   if (!learningModeAllowsProject(mode, slug)) throw learningModeProjectError(mode);
 }
 
-// A listing as a learner in learning mode sees it: only this lesson's
-// practice projects (none for a lesson without a practice project).
-function learningModeProjects(projects = [], mode = null) {
-  if (!mode) return projects;
-  return projects.filter((project) => mode.projectSlugs.includes(String(project?.slug || "")));
-}
-
 export {
   LEARNING_MODE_PROJECT_CODE,
   LEARNING_MODE_PROJECT_MESSAGE,
@@ -88,7 +80,6 @@ export {
   learningModeAllowsProject,
   learningModeProjectBlock,
   learningModeProjectError,
-  learningModeProjects,
   readLearningModeFor,
   registerLearningModeReader
 };

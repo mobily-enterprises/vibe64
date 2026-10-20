@@ -4,7 +4,9 @@ import process from "node:process";
 import {
   currentProjectRequestContext
 } from "./projectRequestContext.js";
+import { practiceIdFromSlug } from "./learningSpace.js";
 import {
+  getStudioProjectContext,
   localProjectKeyFromTargetRoot,
   normalizeProjectSlug,
   pathInsideOrEqual,
@@ -18,10 +20,20 @@ function projectRuntimeIdentity(slug = "") {
   return `project:${normalizeProjectSlug(slug)}`;
 }
 
+// A learning-space path is <root>/<learnerKey>/<practiceId>/<slug>/...
+function learningSpaceSlugFromTargetRoot(targetRoot, learningSpaceRoot) {
+  if (!pathInsideOrEqual(learningSpaceRoot, targetRoot)) return "";
+  const [, practiceId = "", slug = ""] = path.relative(learningSpaceRoot, targetRoot).split(path.sep);
+  return practiceId && practiceIdFromSlug(slug) === practiceId ? slug : "";
+}
+
 function catalogProjectSlugFromTargetRoot(targetRoot = "", {
-  projectsRoot = ""
+  projectsRoot = "",
+  learningSpaceRoot = getStudioProjectContext().learningSpaceRoot
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
+  const practiceSlug = learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot));
+  if (practiceSlug) return practiceSlug;
   const resolvedProjectsRoot = path.resolve(String(projectsRoot || "").trim() || resolveStudioProjectsRoot());
   if (!pathInsideOrEqual(resolvedProjectsRoot, resolvedTargetRoot)) {
     return "";

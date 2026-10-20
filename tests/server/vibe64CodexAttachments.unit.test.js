@@ -2148,3 +2148,29 @@ test("attachment download route streams bytes and restricts inline previews to r
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("practice session attachments keep their project identity with or without a request context", async () => {
+  const { catalogProjectSlugFromTargetRoot, targetRuntimeIdentity } =
+    await import("../../packages/vibe64-core/src/server/projectRuntimeIdentity.js");
+  const { configureStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-practice-identity-"));
+  const learningSpaceRoot = path.join(root, "projects", ".learning");
+  const slug = "training-12345678123442348234123456789abc";
+  const namespace = path.join(learningSpaceRoot, "NDI", "12345678-1234-4234-8234-123456789abc", slug);
+  const executionRoot = path.join(namespace, "sessions", "active", "lesson", "source");
+  try {
+    configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),
+      env: {}, home: root, learningSpace: { root: learningSpaceRoot } });
+    assert.equal(catalogProjectSlugFromTargetRoot(executionRoot), slug);
+    assert.equal(targetRuntimeIdentity(executionRoot), `project:${slug}`);
+    assert.equal(await runWithProjectRequestContext({ slug, targetRoot: namespace, projectSessionSourceRoot: namespace },
+      () => targetRuntimeIdentity(executionRoot)), `project:${slug}`);
+    for (const lookalike of [path.join(learningSpaceRoot, "NDI", "12345678-1234-4234-8234-123456789abd", slug),
+      path.join(learningSpaceRoot, "NDI", slug)]) {
+      assert.equal(catalogProjectSlugFromTargetRoot(lookalike), "", "only the exact namespace layout names a practice project");
+    }
+  } finally {
+    configureStudioProjectContext();
+    await rm(root, { force: true, recursive: true });
+  }
+});

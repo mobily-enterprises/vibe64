@@ -24,10 +24,8 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
   assertProjectEffectAdmission,
-  currentPracticeProjectScope,
-  registerLocalPracticeAdmission,
+  registerPracticeRequestActor,
   resolveProjectRequestContext,
-  runWithPracticeProjectContext,
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -1477,9 +1475,9 @@ test("local project authority follows the checked-out branch and reports detache
 
 function trainingProvenance() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     learnerKey: Buffer.from("42").toString("base64url"),
-    attemptId: "12345678-1234-4234-8234-123456789abc",
+    practiceId: "12345678-1234-4234-8234-123456789abc",
     pin: {
       course: { courseId: "intro-course", release: "0.1.0" },
       topic: {
@@ -1540,7 +1538,7 @@ test("Project metadata and deletion updates preserve immutable training provenan
     const before = await readFile(recordPath);
     assert.deepEqual(JSON.parse(before).training, training);
     const replacement = trainingProvenance();
-    replacement.attemptId = "22345678-1234-4234-8234-123456789abc";
+    replacement.practiceId = "22345678-1234-4234-8234-123456789abc";
     await assert.rejects(() => context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", training: replacement }), {
       code: "vibe64_project_training_immutable"
     });
@@ -1568,11 +1566,12 @@ test("Invalid project training provenance fails before preparation or source/run
     const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), env: {}, home: root });
     const invalidMarkers = [null, {}, { ...trainingProvenance(), extra: true }];
     for (const mutate of [
-      value => { value.schemaVersion = 2; },
+      value => { value.schemaVersion = 1; },
+      value => { value.attemptId = value.practiceId; delete value.practiceId; },
       value => { value.learnerKey = "NDI="; },
       value => { value.learnerKey = Buffer.from(" bad ").toString("base64url"); },
       value => { value.learnerKey = Buffer.alloc(129, 97).toString("base64url"); },
-      value => { value.attemptId = "not-an-attempt"; },
+      value => { value.practiceId = "not-a-practice"; },
       value => { value.pin.course.release = "latest"; },
       value => { value.pin.topic.schemaVersion = 2; },
       value => { value.pin.topic.repository = "example/ordinary-app"; },
@@ -1626,37 +1625,58 @@ test("Corrupt stored project training provenance is rejected without repairing m
   });
 });
 
+const learner = Object.freeze({ uid: 42, username: "learner" });
+
+function practiceSlugOf(training) {
+  return `training-${training.practiceId.replaceAll("-", "")}`;
+}
+
+async function localPracticeContext(root) {
+  const working = path.join(root, "working");
+  await mkdir(working, { recursive: true });
+  return createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+    explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
+}
+
+// Online's configuration: the space lives inside the managed projects root.
+function hostedPracticeContext(root) {
+  const projectsRoot = path.join(root, "projects");
+  return createStudioProjectContext({ explicitProjectsRoot: projectsRoot, explicitSystemRoot: path.join(root, "system"),
+    explicitManagedSourceRoot: projectsRoot, env: {}, home: root, learningSpace: { root: path.join(projectsRoot, ".learning") } });
+}
+
+async function createPracticeProject(context, training = trainingProvenance()) {
+  return context.runWithPracticeProjectScope({ actor: learner, training, access: "create" },
+    async () => (await context.createWorkspaceProjectRecord({ slug: practiceSlugOf(training), training })).project);
+}
 
 test("local practice callback uses the same real record and Project ALS without widening local catalogue", async () => {
   await withTemporaryRoot(async root => {
     const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true, mode: "local" } });
+    const context = await localPracticeContext(root);
+    const working = context.targetRoot;
     const project = createProjectService({ projectContext: context });
     const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    const actor = { uid: 42, username: "learner" };
+    const slug = practiceSlugOf(training);
     const workingBefore = await context.listProjects();
     let retained;
     let later;
     let releaseLater;
     const afterCallback = new Promise(resolve => { releaseLater = resolve; });
-    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+    await context.runWithPracticeProjectScope({ actor: learner, training, access: "create" }, async () => {
       const before = await context.readWorkspaceProjectState({ slug });
       assert.equal(before.projectRuntimeRoot, path.join(context.systemRoot, "projects", slug));
-      assert.equal(before.projectContextRoot, path.join(context.systemRoot, "training", "practice", "NDI", training.attemptId, slug));
+      assert.equal(context.learningSpaceRoot, path.join(root, "managed-source", ".learning"), "the standalone space is inside the managed source root");
+      assert.equal(before.projectContextRoot, path.join(context.learningSpaceRoot, "NDI", training.practiceId, slug));
       assert.deepEqual(before.metadata, {});
       const created = await context.createWorkspaceProjectRecord({ slug, training });
       assert.equal(created.project.slug, slug);
       assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
-      assert.equal(created.project.sourceRoot, undefined, "original record result does not fabricate a source root");
-      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
+      assert.equal(created.project.projectSessionSourceRoot, before.projectContextRoot, "the session source root is the namespace");
+      assert.equal(Object.hasOwn(created.project, "practice"), false);
+      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.practiceId, training.practiceId);
       await project.runInProjectContext(slug, async () => {
         assert.deepEqual(context.currentPracticeProjectScope().training, training, "original nested Project context retains the exact live grant");
-        assert.equal(currentProjectRequestContext().learningScope, undefined);
-        assert.equal(currentProjectRequestContext().createLearningSession, undefined);
         const actual = await project.readCurrentProject();
         assert.equal(actual.slug, slug);
         assert.equal(actual.projectRoot, before.projectContextRoot);
@@ -1676,39 +1696,29 @@ test("local practice callback uses the same real record and Project ALS without 
     await assert.rejects(() => runWithProjectRequestContext({ practiceProjectScope: { training }, slug },
       () => context.readWorkspaceProjectState({ slug })), { code: "vibe64_project_catalog_unavailable" });
     await assert.rejects(() => context.readWorkspaceProject({ slug }), { code: "vibe64_project_catalog_unavailable" });
-    await assert.rejects(() => resolveProjectRequestContext({ projectContext: context, request: { params: { slug }, vibe64User: actor } }),
-      { code: "vibe64_project_route_unavailable" });
     assert.deepEqual(await context.listProjects(), workingBefore);
-    await context.runWithPracticeProjectScope({ actor, training }, async () => {
+    await context.runWithPracticeProjectScope({ actor: learner, training }, async () => {
       assert.equal((await context.readWorkspaceProject({ slug })).project.slug, slug, "fresh explicit admission can reread the same original record");
       await assert.rejects(() => context.createWorkspaceProjectRecord({ slug, training }), { code: "vibe64_practice_scope_mismatch" });
     });
-    await runWithProjectRequestContext({ learningScope: { noExercise: true }, createLearningSession: () => assert.fail() }, () =>
-      context.runWithPracticeProjectScope({ actor, training }, async () => {
-        assert.equal(currentProjectRequestContext().learningScope, undefined);
-        assert.equal(currentProjectRequestContext().createLearningSession, undefined);
-        await project.runInProjectContext(slug, async () => {
-          assert.equal(currentProjectRequestContext().learningScope, undefined);
-          assert.equal(currentProjectRequestContext().createLearningSession, undefined);
-          assert.deepEqual(context.currentPracticeProjectScope().training, training);
-        });
-      }));
   });
 });
 
-test("local practice scope refuses foreign identity, unmarked storage and aliases while retaining atomic original rollback", async () => {
+test("practice scope refuses foreign identity, unmarked storage and aliases while retaining atomic original rollback", async () => {
   await withTemporaryRoot(async root => {
-    const working = path.join(root, "working");
-    await mkdir(working);
+    const context = await localPracticeContext(root);
+    const working = context.targetRoot;
     await writeFile(path.join(working, "keep.txt"), "keep");
-    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
     const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const slug = practiceSlugOf(training);
     const actor = { uid: 42 };
     await assert.rejects(() => context.runWithPracticeProjectScope({ actor: { uid: 43 }, training, access: "create" }, () => assert.fail()),
       { code: "vibe64_practice_scope_mismatch" });
     await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training, access: "any" }, () => assert.fail()), /supported/u);
+    const v1 = { ...structuredClone(training), schemaVersion: 1, attemptId: training.practiceId };
+    delete v1.practiceId;
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training: v1, access: "create" }, () => assert.fail()),
+      { code: "vibe64_project_training_invalid" }, "only the v2 marker is admitted");
     let roots;
     const failed = new Error("original prepare failed");
     await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
@@ -1740,93 +1750,128 @@ test("local practice scope refuses foreign identity, unmarked storage and aliase
   });
 });
 
-test("simultaneous local practice callbacks stay on their exact original runtime roots", async () => {
+test("simultaneous practice callbacks stay on their exact original runtime roots", async () => {
   await withTemporaryRoot(async root => {
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
+    const context = await localPracticeContext(root);
     const first = trainingProvenance();
     const second = structuredClone(first);
-    second.attemptId = "12345678-1234-4234-8234-123456789abd";
+    second.practiceId = "12345678-1234-4234-8234-123456789abd";
     let admitted = 0;
     let release;
     const both = new Promise(resolve => { release = resolve; });
     await Promise.all([first, second].map(training => context.runWithPracticeProjectScope({ actor: { uid: 42 }, training, access: "create" }, async () => {
-      const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+      const slug = practiceSlugOf(training);
       const before = await context.readWorkspaceProjectState({ slug });
       admitted++;
       if (admitted === 2) release();
       await both;
       const created = await context.createWorkspaceProjectRecord({ slug, training });
       assert.equal(created.project.projectRuntimeRoot, before.projectRuntimeRoot);
-      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
-      const other = training === first ? second : first;
-      await assert.rejects(() => context.readWorkspaceProjectState({ slug: `training-${other.attemptId.replaceAll("-", "")}` }),
+      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.practiceId, training.practiceId);
+      await assert.rejects(() => context.readWorkspaceProjectState({ slug: practiceSlugOf(training === first ? second : first) }),
         { code: "vibe64_practice_scope_mismatch" });
     })));
     const { listProjectRuntimeRoots } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
     assert.deepEqual(await listProjectRuntimeRoots(context.systemRoot), [first, second].map(training =>
-      path.join(context.systemRoot, "projects", `training-${training.attemptId.replaceAll("-", "")}`)).sort());
-    assert.equal(context.targetRoot, working);
+      path.join(context.systemRoot, "projects", practiceSlugOf(training))).sort());
+    assert.deepEqual((await context.listLearningSpaceProjects()).map(project => project.slug), [first, second].map(practiceSlugOf).sort());
   });
 });
 
-test("original catalogue orphan cleanup retains only an exact marked real private practice namespace", async () => {
+test("a practice runtime root survives the catalogue sweep and bad learning-space entries are skipped", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
   await withTemporaryRoot(async root => {
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const roots = { explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "source"), home: root, env: {} };
-    const local = createStudioProjectContext({ ...roots, explicitTargetRoot: working, runtimeProfile: { local: true } });
-    const catalogue = createStudioProjectContext({ ...roots, explicitProjectsRoot: path.join(root, "catalogue") });
+    const context = hostedPracticeContext(root);
     const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    let practice;
-    await local.runWithPracticeProjectScope({ actor: { uid: 42 }, training, access: "create" }, async () => {
-      await local.createWorkspaceProjectRecord({ slug, training });
-      practice = await local.readWorkspaceProjectState({ slug });
-    });
+    const slug = practiceSlugOf(training);
+    const practice = await createPracticeProject(context, training);
+    assert.equal(practice.projectRoot, path.join(root, "projects", ".learning", "NDI", training.practiceId, slug));
     const recordBefore = await readFile(practice.projectRecordPath);
     const retainedSession = path.join(practice.projectRuntimeRoot, "sessions", "retained.txt");
-    await writeTestFile(retainedSession, "retained admitted session\n");
-    const misleadingSlug = "training-22345678123442348234123456789abc";
-    const orphans = ["ordinary-orphan", "training-unmarked", misleadingSlug];
-    for (const orphan of orphans) {
-      const created = await catalogue.createWorkspaceProjectRecord({ slug: orphan, ...(orphan === misleadingSlug ? { training } : {}) });
-      await rm(created.project.projectRoot, { recursive: true });
-    }
-    assert.deepEqual((await catalogue.listWorkspaceProjects()).projects, [], "private practice is preserved, never listed or authorized by catalogue");
+    await writeTestFile(retainedSession, "retained practice session\n");
+    const orphan = await context.createWorkspaceProjectRecord({ slug: "ordinary-orphan" });
+    await rm(orphan.project.projectRoot, { recursive: true });
+    // A marked runtime root with no learning-space project: kept, never removed.
+    const misleading = "training-22345678123442348234123456789abc";
+    await writeTestFile(context.projectRecordPathForSlug(misleading), JSON.stringify({ training: { schemaVersion: 1 } }));
+    assert.deepEqual((await context.listWorkspaceProjects()).projects, [], "practice is never listed by the catalogue");
+    await assert.rejects(() => access(context.projectRuntimeRootForSlug("ordinary-orphan")), { code: "ENOENT" });
+    await access(context.projectRuntimeRootForSlug(misleading));
     assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore);
-    assert.equal(await readFile(retainedSession, "utf8"), "retained admitted session\n");
-    for (const orphan of orphans) await assert.rejects(() => access(catalogue.projectRuntimeRootForSlug(orphan)), { code: "ENOENT" });
-    await assert.rejects(() => catalogue.readWorkspaceProject({ slug }), { code: "vibe64_project_path_not_accessible" });
-    await rm(practice.projectContextRoot, { recursive: true });
-    await fs.promises.symlink(working, practice.projectContextRoot);
-    await assert.rejects(() => catalogue.listWorkspaceProjects(), { code: "vibe64_practice_path_unsafe" });
-    assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore, "unsafe alias cannot authorize destructive cleanup");
-    assert.equal(await readFile(retainedSession, "utf8"), "retained admitted session\n");
+    assert.equal(await readFile(retainedSession, "utf8"), "retained practice session\n");
+    const expected = [{ slug, learnerKey: "NDI", practiceId: training.practiceId, training }];
+    assert.deepEqual(await context.listLearningSpaceProjects(), expected);
+    assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDI" }), expected);
+    assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDM" }), []);
+    assert.ok(warn.mock.calls.some(call => String(call.arguments[0]).includes(misleading)));
+    // Bad entries are skipped with a warning; they never reject either listing.
+    await writeTestFile(path.join(context.learningSpaceRoot, "stray.txt"), "stray\n");
+    await mkdir(path.join(context.learningSpaceRoot, "NDI", "not-a-practice-id"));
+    const wrongLearner = path.join(context.learningSpaceRoot, "NDM", training.practiceId, slug);
+    await mkdir(wrongLearner, { recursive: true });
+    assert.deepEqual(await context.listLearningSpaceProjects(), expected);
+    const calls = warn.mock.callCount();
+    await rm(practice.projectRoot, { recursive: true });
+    await fs.promises.symlink(path.join(root, "projects"), practice.projectRoot);
+    assert.deepEqual(await context.listLearningSpaceProjects(), [], "an aliased namespace is skipped");
+    assert.deepEqual((await context.listWorkspaceProjects()).projects, []);
+    assert.ok(warn.mock.callCount() > calls);
+    assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore, "an unsafe alias cannot authorize destructive cleanup");
+    assert.equal(await readFile(retainedSession, "utf8"), "retained practice session\n");
+    await rm(practice.projectRoot);
+    await writeFile(practice.projectRecordPath, "{ not json");
+    assert.deepEqual(await context.listLearningSpaceProjects(), [], "a corrupt record is skipped");
   });
 });
 
+test("practice space directories inherit the managed-source ACL contract", async (t) => {
+  if (process.platform !== "linux") {
+    t.skip("Managed ACL verification requires Linux ACL semantics.");
+    return;
+  }
+  for (const command of ["getfacl", "setfacl"]) {
+    try { await execFileAsync(command, ["--version"]); }
+    catch { t.skip(`Managed ACL verification requires ${command}.`); return; }
+  }
+  await withTemporaryRoot(async root => {
+    const projectsRoot = path.join(root, "projects");
+    await mkdir(projectsRoot);
+    const group = String((await execFileAsync("id", ["-gn"])).stdout || "").trim();
+    await execFileAsync("chmod", ["2770", projectsRoot]);
+    await execFileAsync("setfacl", ["-m", `g:${group}:rwx,m::rwx,o::---`, projectsRoot]);
+    await execFileAsync("setfacl", ["-m", `d:u::rwx,d:g::rwx,d:g:${group}:rwx,d:m::rwx,d:o::---`, projectsRoot]);
+    const previousUmask = process.umask(0o007);
+    try {
+      const context = hostedPracticeContext(root);
+      const training = trainingProvenance();
+      const practice = await createPracticeProject(context, training);
+      for (const directory of [context.learningSpaceRoot, path.join(context.learningSpaceRoot, "NDI"),
+        path.dirname(practice.projectRoot), practice.projectRoot]) {
+        const acl = String((await execFileAsync("getfacl", ["--omit-header", directory])).stdout || "").split("\n");
+        assert.ok(acl.includes(`group:${group}:rwx`), `${directory} grants the managed group`);
+        assert.ok(acl.includes(`default:group:${group}:rwx`), `${directory} passes the contract on`);
+        assert.equal((await fs.promises.stat(directory)).mode & 0o070, 0o070, `${directory} is not private to the daemon`);
+      }
+    } finally {
+      process.umask(previousUmask);
+    }
+  });
+});
 
 test("admitted practice capture retains only same-owner control after the fresh callback ends", async () => {
   await withTemporaryRoot(async root => {
-    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
+    const { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
       await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const options = { explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } };
-    const context = createStudioProjectContext(options);
-    const foreign = createStudioProjectContext(options);
+    const context = await localPracticeContext(root);
+    const foreign = await localPracticeContext(root);
+    const working = context.targetRoot;
     const project = createProjectService({ projectContext: context });
     const training = trainingProvenance();
-    const actor = { uid: 42, username: "learner" };
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const slug = practiceSlugOf(training);
     let captured;
     let expired;
     let actual;
-    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+    await context.runWithPracticeProjectScope({ actor: learner, training, access: "create" }, async () => {
       assert.doesNotThrow(assertProjectEffectAdmission);
       await context.createWorkspaceProjectRecord({ slug, training });
       await project.runInProjectContext(slug, async () => {
@@ -1845,9 +1890,11 @@ test("admitted practice capture retains only same-owner control after the fresh 
       assert.equal((await project.readCurrentProject()).projectRoot, actual.projectRoot);
       assert.equal((await project.createRuntime({ inspectSource: false })).stateRoot, actual.projectRuntimeRoot);
       assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => context.discardWorkspaceProjectRecord({ slug }), { code: "vibe64_practice_effect_admission_required" });
+      for (const effect of [() => context.discardWorkspaceProjectRecord({ slug }), () => context.beginWorkspaceProjectDeletion({ slug }),
+        () => context.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "project" })]) {
+        await assert.rejects(effect, { code: "vibe64_practice_effect_admission_required" });
+      }
       await assert.rejects(() => context.createWorkspaceProjectRecord({ slug, training }), { code: "vibe64_practice_scope_mismatch" });
-      await assert.rejects(() => context.beginWorkspaceProjectDeletion({ slug }), { code: "vibe64_project_catalog_unavailable" });
       await assert.rejects(() => foreign.readWorkspaceProjectState({ slug }), { code: "vibe64_practice_context_mismatch" });
       const state = await context.readWorkspaceProjectState({ slug });
       const bytes = await readFile(state.projectRecordPath);
@@ -1860,7 +1907,7 @@ test("admitted practice capture retains only same-owner control after the fresh 
       await fs.promises.symlink(working, actual.projectRoot);
       await assert.rejects(() => project.readCurrentProject(), { code: "vibe64_practice_path_unsafe" });
     });
-    const plain = { slug: "working", targetRoot: working, vibe64User: actor };
+    const plain = { slug: "working", targetRoot: working, vibe64User: learner };
     await runWithProjectRequestContext(plain, async () => {
       assert.equal(captureProjectRequestContext(), currentProjectRequestContext(), "ordinary capture preserves the exact original context");
       assert.doesNotThrow(assertProjectEffectAdmission);
@@ -1870,399 +1917,127 @@ test("admitted practice capture retains only same-owner control after the fresh 
   });
 });
 
-test("hosted saved practice shares original callback expiry and captured control without widening catalogue effects", async () => {
+test("hosted practice uses the same learning-space scope, outside the catalogue", async () => {
   await withTemporaryRoot(async root => {
-    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
-      await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-    const options = { explicitProjectsRoot: path.join(root, "catalogue"), explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root };
-    const core = createStudioProjectContext(options);
-    const foreign = createStudioProjectContext(options);
-    const project = createProjectService({ projectContext: core });
-    const actor = { uid: 42, username: "learner" };
+    const context = hostedPracticeContext(root);
+    const project = createProjectService({ projectContext: context });
     const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    await assert.rejects(() => core.runWithPracticeProjectScope({ actor, training }, () => assert.fail()), /Local practice access/u);
-    await core.createWorkspaceProjectRecord({ slug, training });
-    let captured;
-    let expired;
-    await project.runInProjectContext(slug, () => core.runWithHostedTrainingProjectScope({ actor, training, access: "write" }, async () => {
-      assert.doesNotThrow(assertProjectEffectAdmission);
-      await core.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "session" });
-      expired = currentProjectRequestContext();
-      captured = captureProjectRequestContext();
-      assert.equal(core.currentPracticeProjectScope().access, "write");
-      assert.equal(captured.projectSessionSourceRoot, core.projectSessionSourceRootForSlug(slug), "hosted retains its original real source namespace");
-    }));
-    const recordPath = core.projectRecordPathForSlug(slug);
-    const before = await readFile(recordPath);
-    await assert.rejects(() => runWithProjectRequestContext(expired, () => core.readWorkspaceProject({ slug })),
-      { code: "vibe64_practice_scope_expired" });
-    await runWithProjectRequestContext(captured, async () => {
-      assert.equal(core.currentPracticeProjectScope().access, "control");
-      assert.equal((await project.readCurrentProject()).slug, slug);
-      assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => core.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "project" }),
-        { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => core.beginWorkspaceProjectDeletion({ slug }), { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => core.selectWorkspaceProject({ slug }), { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => core.discardWorkspaceProjectRecord({ slug }), { code: "vibe64_practice_effect_admission_required" });
-      await assert.rejects(() => foreign.readWorkspaceProject({ slug }), { code: "vibe64_practice_context_mismatch" });
+    const slug = practiceSlugOf(training);
+    const practice = await createPracticeProject(context, training);
+    assert.equal(practice.projectSessionSourceRoot, practice.projectRoot);
+    assert.equal(practice.projectRuntimeRoot, path.join(root, "system", "projects", slug));
+    await context.createWorkspaceProjectRecord({ slug: "ordinary" });
+    assert.deepEqual((await context.listWorkspaceProjects()).projects.map(entry => entry.slug), ["ordinary"]);
+    await assert.rejects(() => context.readWorkspaceProject({ slug }), { code: "vibe64_project_path_not_accessible" },
+      "outside its scope a practice project is not a catalogue project");
+    await context.runWithPracticeProjectScope({ actor: learner, training, access: "write" }, async () => {
+      await context.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "project" });
+      assert.equal((await project.runInProjectContext(slug, () => project.readCurrentProject())).projectRoot, practice.projectRoot);
+      assert.deepEqual((await context.listWorkspaceProjects()).projects.map(entry => entry.slug), [slug]);
     });
-    assert.deepEqual(await readFile(recordPath), before);
-    await project.runInProjectContext(slug, async () => {
-      await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor: { uid: 43 }, training }, () => assert.fail()),
-        { code: "vibe64_practice_scope_mismatch" });
-      const changed = structuredClone(training);
-      changed.pin.lesson.hash = "e".repeat(64);
-      await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor, training: changed }, () => assert.fail()),
-        { code: "vibe64_practice_scope_mismatch" });
-    });
-    await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor, training }, () => assert.fail()),
-      { code: "vibe64_practice_scope_mismatch" });
-    assert.deepEqual(await readFile(recordPath), before);
+    assert.equal((await context.runWithPracticeProjectScope({ actor: learner, training },
+      () => context.readWorkspaceProjectState({ slug }))).metadata.developmentDatabaseScope, "project");
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor: { uid: 43, role: "owner" }, training }, () => assert.fail()),
+      { code: "vibe64_practice_scope_mismatch" }, "the workspace owner gets no exception");
   });
 });
 
-test("original nested practice Project resolver retains immutable Learning facts while captured control stays read-only", async () => {
-  await withTemporaryRoot(async root => {
-    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
-      await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
-    const project = createProjectService({ projectContext: core });
-    const training = trainingProvenance();
-    const actor = { uid: 42, username: "learner" };
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    const learningScope = Object.freeze({ learnerId: "42", attemptId: training.attemptId, pin: training.pin, noExercise: false });
-    let captured;
-    let expired;
-    await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
-      await core.createWorkspaceProjectRecord({ slug, training });
-      await runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope },
-        () => project.runInProjectContext(slug, async () => {
-          const current = currentProjectRequestContext();
-          assert.equal(current.learningScope, learningScope);
-          const runtime = await project.createRuntime({ inspectSource: false });
-          assert.deepEqual(runtime.learningScope, learningScope);
-          assert.equal(runtime.projectContextRoot, current.targetRoot);
-          assert.equal(runtime.projectSessionSourceRoot, current.projectSessionSourceRoot);
-          captured = captureProjectRequestContext();
-          expired = current;
-        }));
+test("practice admission opens only the learner's own project on both hosts, for every kind of caller", async () => {
+  const { practiceIdFromSlug } = await import("../../packages/vibe64-core/src/server/learningSpace.js");
+  const deleted = { code: "vibe64_practice_project_deleted", statusCode: 404 };
+  const other = Object.freeze({ uid: 43, username: "other", role: "owner" });
+  for (const host of ["local", "hosted"]) {
+    await withTemporaryRoot(async root => {
+      const context = host === "local" ? await localPracticeContext(root) : hostedPracticeContext(root);
+      const training = trainingProvenance();
+      const slug = practiceSlugOf(training);
+      assert.equal(practiceIdFromSlug(slug), training.practiceId);
+      const practice = await createPracticeProject(context, training);
+      const open = (request) => resolveProjectRequestContext({ projectContext: context, request: { params: { slug }, ...request } });
+      const headers = { host: "localhost" };
+      for (const request of [{ headers, vibe64User: learner }, { vibe64User: learner }]) {
+        const admitted = await open(request);
+        assert.equal(admitted.targetRoot, practice.projectRoot, `${host}: the learner opens their own practice project`);
+        assert.deepEqual(admitted.vibe64User, learner);
+        await runWithProjectRequestContext(admitted, async () => {
+          assert.equal(context.currentPracticeProjectScope().access, "write", "it is an ordinary project to its learner");
+          assert.doesNotThrow(assertProjectEffectAdmission);
+        });
+      }
+      for (const request of [{ headers, vibe64User: other }, { vibe64User: other }, { headers }]) {
+        await assert.rejects(open(request), deleted, `${host}: another person is refused as not found`);
+      }
+      const internal = await open({});
+      assert.equal(internal.targetRoot, practice.projectRoot, `${host}: work without a person is admitted as the marker's learner`);
+      assert.deepEqual(internal.vibe64User, { username: "42" });
+      registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
+      try {
+        assert.equal((await open({ headers })).targetRoot, practice.projectRoot, "a host supplies the local-transport person");
+        await assert.rejects(open({ headers: { host: "remote" } }), deleted);
+      } finally {
+        registerPracticeRequestActor(null);
+      }
+      await assert.rejects(resolveProjectRequestContext({ projectContext: context,
+        request: { params: { slug: "training-00000000000040008000000000000000" }, vibe64User: learner } }), deleted,
+      "a practice slug outside the space is not found");
+      const project = createProjectService({ projectContext: context });
+      assert.equal((await project.runInProjectContext(slug, () => project.readCurrentProject(), { vibe64User: learner })).projectRoot,
+        practice.projectRoot);
     });
-    await assert.rejects(() => runWithProjectRequestContext(expired, () => project.createRuntime({ inspectSource: false })),
-      { code: "vibe64_practice_scope_expired" });
-    await runWithProjectRequestContext(captured, () => project.runInProjectContext(slug, async () => {
-      assert.equal(currentProjectRequestContext().learningScope, learningScope);
-      assert.equal(core.currentPracticeProjectScope().access, "control");
-      assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
-      assert.deepEqual((await project.createRuntime({ inspectSource: false })).learningScope, learningScope);
-    }));
-    assert.equal(core.targetRoot, working);
-  });
-});
-
-// Learning v2 (F1): the learner's own practice project is an ordinary
-// project to them, so local admission grants full write (it was control-only
-// while practice work re-entered the learning-scoped lesson admission).
-test("local mode opens only the admitted learner practice Project with full write", async () => {
-  const owner = Object.freeze({});
-  const actor = Object.freeze({ uid: 1000, username: "learner" });
-  const training = Object.freeze({ attemptId: "9490f94a-c614-4581-9111-0debb2339ca8" });
-  const slug = "training-9490f94ac614458191110debb2339ca8";
-  const calls = [];
-  const projectContext = {
-    projectCatalogEnabled: false,
-    currentPracticeProjectScope: () => null,
-    runWithPracticeProjectScope(input, operation) {
-      calls.push(input);
-      return runWithPracticeProjectContext(owner, { training: input.training, access: input.access, slug,
-        targetRoot: "/practice/root", projectRuntimeRoot: "/practice/runtime", projectSessionSourceRoot: "/practice/source",
-        projectRecordPath: "/practice/runtime/project.json", projectsRoot: "/practice", systemRoot: "/system",
-        sourceRoot: "", sourceConfigRoot: "", vibe64User: input.actor }, operation);
-    }
-  };
-  registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
-  try {
-    const context = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
-    assert.deepEqual(calls, [{ actor, training, access: "write", requireProject: true }]);
-    assert.equal(context.slug, slug);
-    assert.equal(context.targetRoot, "/practice/root");
-    assert.equal(context.learningScope, undefined);
-    await runWithProjectRequestContext(context, async () => {
-      assert.equal(currentPracticeProjectScope(owner).access, "write");
-      assert.doesNotThrow(() => assertProjectEffectAdmission());
-    });
-    await assert.rejects(() => resolveProjectRequestContext({ projectContext,
-      request: { params: { slug: "training-00000000000040008000000000000000" } } }), { code: "vibe64_project_route_unavailable" });
-    assert.equal(calls.length, 1);
-  } finally {
-    registerLocalPracticeAdmission(async () => null);
   }
 });
 
-test("workspace records derive the practice field from the immutable training marker only", async () => {
+test("a pre-existing normal training-<hex> project still opens and new projects cannot take that name", async () => {
   await withTemporaryRoot(async root => {
-    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "catalogue"),
-      explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root });
-    const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    const created = await context.createWorkspaceProjectRecord({ slug, training });
-    assert.deepEqual(created.project.practice, { learnerKey: training.learnerKey, attemptId: training.attemptId,
-      lessonCode: training.pin.lesson.code });
-    await context.createWorkspaceProjectRecord({ slug: "ordinary" });
-    const listed = await context.listWorkspaceProjects();
-    assert.deepEqual(listed.projects.map(project => [project.slug, project.practice || null]), [
-      ["ordinary", null], [slug, { learnerKey: training.learnerKey, attemptId: training.attemptId, lessonCode: training.pin.lesson.code }]
-    ], "the workspace listing stays unfiltered; presentation splits Practice");
-    assert.deepEqual((await context.readWorkspaceProject({ slug })).project.practice, created.project.practice);
-    const { projectPracticeForActor, practiceProjectAccessBlock } = await import("../../packages/vibe64-core/src/server/practiceProjects.js");
-    assert.equal(projectPracticeForActor(created.project, { uid: 42 }).practice.mine, true);
-    assert.equal(projectPracticeForActor(created.project, { uid: 43 }).practice.mine, false);
-    assert.equal(projectPracticeForActor(listed.projects[0], { uid: 42 }), listed.projects[0]);
-    assert.equal(practiceProjectAccessBlock(created.project, { uid: 42, role: "member" }), null);
-    assert.equal(practiceProjectAccessBlock(created.project, { uid: 43, role: "owner" }), null);
-    assert.equal(practiceProjectAccessBlock(created.project, { uid: 43, role: "member" }).code, "vibe64_practice_project_private");
-    assert.equal(practiceProjectAccessBlock(listed.projects[0], { uid: 43, role: "member" }), null);
-  });
-});
-
-async function withLocalPracticeProject(callback) {
-  await withTemporaryRoot(async root => {
-    const working = path.join(root, "working");
-    await mkdir(working);
-    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
-      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
-    const project = createProjectService({ projectContext: context });
-    const training = trainingProvenance();
-    const actor = { uid: 42, username: "learner" };
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    let paths;
-    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
-      const created = await context.createWorkspaceProjectRecord({ slug, training });
-      paths = { projectContextRoot: created.project.projectRoot, projectRuntimeRoot: created.project.projectRuntimeRoot,
-        projectSessionSourceRoot: created.project.projectSessionSourceRoot };
-    });
-    await writeTestFile(path.join(paths.projectContextRoot, "sessions", "active", "s1", "notes.txt"), "practice\n");
-    await writeTestFile(path.join(paths.projectSessionSourceRoot, "sessions", "active", "s1", "source", "app.js"), "practice\n");
-    // Learner state as preparation.endLesson uses it: the preparation barrier
-    // around the typed retirement of this learner's exact active attempt.
-    const progress = { revision: 3, activeAttemptId: training.attemptId, attempts: [{ attemptId: training.attemptId }] };
-    const ends = [];
-    const learners = { async readExerciseProjectScope(input) {
-      if (input.actor.uid !== 42 || input.attemptId !== training.attemptId) {
-        throw Object.assign(new Error("missing"), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-      }
-      assert.equal(input.access, "observe", "removal needs no active attempt");
-      return { training, projectSlug: slug };
-    },
-    async readState({ actor: reader }) {
-      assert.equal(reader.uid, 42);
-      return { revision: progress.revision, progress: structuredClone(progress) };
-    },
-    async runPreparationExclusive({ attemptId }, operation) {
-      assert.equal(attemptId, progress.activeAttemptId);
-      return operation();
-    },
-    async endAttempt(input) {
-      assert.equal(input.expectedRevision, progress.revision);
-      ends.push({ attemptId: input.attemptId, requestId: input.requestId, reason: input.reason });
-      progress.revision += 1;
-      progress.activeAttemptId = null;
-      progress.attempts[0].ended = { requestId: input.requestId, reason: input.reason };
-      return { revision: progress.revision, attempt: progress.attempts[0] };
-    } };
-    const closed = [];
-    const terminals = { async closeProjectRuntime(input) {
-      const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-      closed.push({ ...input, slug: currentProjectRequestContext().slug });
-      return { ok: true };
-    } };
-    await callback({ root, context, project, training, actor, slug, paths, learners, terminals, closed, working, ends });
-  });
-}
-
-test("standalone light practice deletion removes the learner's private namespace through the archive lifecycle steps", async () => {
-  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-  await withLocalPracticeProject(async ({ root, context, project, training, actor, slug, paths, learners, terminals, closed, working, ends }) => {
-    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
-    await assert.rejects(practiceProjects.remove({ slug: "working", actor }), { code: "vibe64_project_not_practice" });
-    await assert.rejects(practiceProjects.remove({ slug, actor: { uid: 43, username: "other" } }), { code: "vibe64_project_not_practice" });
-    await assert.rejects(practiceProjects.remove({ slug }), { code: "vibe64_auth_required" });
-    assert.equal(closed.length, 0);
-    assert.deepEqual(ends, [], "refused removals end no attempt");
-    // Learning v2 (C3 practice.delete): the read-only preflight reports the same refusals without throwing.
-    assert.deepEqual(await practiceProjects.canRemove({ slug: "working", actor }), { ok: false, reason: "This is not one of your practice projects." });
-    assert.equal((await practiceProjects.canRemove({ slug, actor: { uid: 43, username: "other" } })).ok, false);
-    assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true });
-    // The read-only presence check behind learning.read's practice list.
-    assert.equal(await practiceProjects.exists({ slug, actor }), true);
-    assert.equal(await practiceProjects.exists({ slug: "working", actor }), false);
-    assert.equal(await practiceProjects.exists({ slug, actor: { uid: 43, username: "other" } }), false);
-    assert.equal(await practiceProjects.exists({ slug }), false);
-    assert.deepEqual(ends, [], "the preflight ends no attempt");
-    assert.equal(closed.length, 0, "the preflight closes no runtime");
-    assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: true });
-    assert.deepEqual(ends, [{ attemptId: training.attemptId, requestId: `practice-delete-${training.attemptId}`, reason: "discard" }],
-      "the owning attempt is ended with reason discard");
-    assert.deepEqual(closed, [{ reason: "project-delete", slug }], "the runtime closes inside the practice project context");
-    for (const directory of Object.values(paths)) await assert.rejects(() => access(directory), { code: "ENOENT" });
-    await assert.rejects(() => access(path.dirname(paths.projectContextRoot)), { code: "ENOENT" }, "the empty attempt namespace goes");
-    await access(working);
-    await access(path.join(root, "system"));
-    assert.equal(await practiceProjects.exists({ slug, actor }), false, "a deleted practice project is no longer listed");
-    assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: false });
-    assert.equal(closed.length, 1);
-    assert.equal(ends.length, 1, "a repeated delete does not end the attempt twice");
-  });
-});
-
-test("standalone light practice deletion resumes its persisted steps and refuses a pinned session", async () => {
-  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals, closed, ends }) => {
-    const pinned = path.join(paths.projectSessionSourceRoot, "sessions", "pinned");
-    await fs.promises.symlink("active/main-session", pinned);
-    const unpinned = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
-    assert.deepEqual(await unpinned.canRemove({ slug, actor }),
-      { ok: false, reason: "Unpin session main-session before deleting this practice project." });
-    await assert.rejects(unpinned.remove({ slug, actor }), { code: "vibe64_project_pinned", statusCode: 409 });
-    assert.deepEqual(ends, [], "a pinned refusal keeps the attempt active");
-    const readMetadata = () => context.runWithPracticeProjectScope({ actor, training, access: "observe" },
-      async () => (await context.readWorkspaceProjectState({ slug })).metadata);
-    assert.equal((await readMetadata()).deletion, undefined, "a pinned refusal writes no deletion marker");
-    await rm(pinned);
-    let failures = 1;
-    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals,
-      async removePath(target, options) {
-        if (target === paths.projectSessionSourceRoot && failures-- > 0) throw Object.assign(new Error("busy"), { code: "source_busy" });
-        return rm(target, options);
-      } });
-    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "source_busy" });
-    await assert.rejects(readMetadata(), { code: "vibe64_practice_scope_mismatch" },
-      "ordinary practice scopes still refuse a project being deleted");
-    const steps = await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
-      async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
-    assert.ok(steps["runtime-closed"]);
-    assert.deepEqual(await practiceProjects.canRemove({ slug, actor }), { ok: true }, "an interrupted deletion can be retried");
-    assert.equal(await practiceProjects.exists({ slug, actor }), true, "an interrupted deletion stays listed for the retry");
-    assert.equal(steps["source-removed"], undefined);
-    await assert.rejects(context.runWithPracticeProjectScope({ actor, training, access: "observe", allowDeleting: true }, () => assert.fail()),
-      /explicit write access/u);
-    assert.equal(ends.length, 1, "the attempt ends before removal starts");
-    assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
-    assert.equal(closed.length, 1, "the completed runtime close is not repeated");
-    assert.equal(ends.length, 1, "the resumed deletion does not end the attempt again");
-    for (const directory of Object.values(paths)) await assert.rejects(() => access(directory), { code: "ENOENT" });
-    assert.equal(await practiceProjects.exists({ slug, actor }), false);
-  });
-});
-
-test("standalone light practice deletion refuses to record removal its directories survived", async () => {
-  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals }) => {
-    const kept = new Set([paths.projectContextRoot]);
-    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals,
-      async removePath(target, options) { if (!kept.has(target)) return rm(target, options); } });
-    const readSteps = () => context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
-      async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
-    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_project_namespace_delete_failed" });
-    assert.equal((await readSteps())["source-removed"], undefined, "a surviving namespace is not recorded as removed");
-    assert.equal(await practiceProjects.exists({ slug, actor }), true, "it stays listed for the retry");
-    kept.clear();
-    kept.add(paths.projectRuntimeRoot);
-    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_project_state_delete_failed" });
-    assert.ok((await readSteps())["source-removed"]);
-    assert.equal(await practiceProjects.exists({ slug, actor }), true);
-    kept.clear();
-    assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
-    assert.equal(await practiceProjects.exists({ slug, actor }), false);
-  });
-});
-
-test("standalone practice presence keeps leftover storage with missing ownership listed", async () => {
-  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
-  await withLocalPracticeProject(async ({ context, project, actor, slug, paths, learners, terminals }) => {
-    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
-    // The project record (in the runtime root) is gone but the namespace remains: admission refuses it as foreign.
-    await rm(paths.projectRuntimeRoot, { recursive: true, force: true });
-    assert.equal(await practiceProjects.exists({ slug, actor }), true, "leftover storage is present, so delete can report it");
-    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "vibe64_practice_scope_mismatch" });
-  });
-});
-
-test("public project listing carries practice for its viewer and omits other learners' practice projects", async () => {
-  await withTemporaryRoot(async root => {
-    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "catalogue"),
-      explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root });
-    const service = createProjectService({ env: {}, projectContext: context });
-    const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    await context.createWorkspaceProjectRecord({ slug, training });
-    await context.createWorkspaceProjectRecord({ slug: "ordinary" });
-    const practiceOf = (listed) => listed.projects.map(project => [project.slug, project.practice || null]);
-    const shared = { learnerKey: training.learnerKey, attemptId: training.attemptId, lessonCode: training.pin.lesson.code };
-    assert.deepEqual(practiceOf(await service.listProjects({ actor: { uid: 42, role: "member" } })),
-      [["ordinary", null], [slug, { ...shared, mine: true }]], "the learner sees its own practice project, marked mine");
-    assert.deepEqual(practiceOf(await service.listProjects({ actor: { uid: 7, role: "owner" } })),
-      [["ordinary", null], [slug, { ...shared, mine: false }]], "the owner sees every learner's practice project");
-    assert.deepEqual(practiceOf(await service.listProjects({ actor: { uid: 43, role: "member" } })), [["ordinary", null]],
-      "another member does not see it");
-    assert.deepEqual(practiceOf(await service.listProjects({ actor: null })), [["ordinary", null]]);
-    assert.deepEqual(practiceOf(await service.listProjects()), [["ordinary", null], [slug, shared]],
-      "internal callers (runtime cleanup, recovery) still list every project");
-    const ordinary = await resolveProjectRequestContext({ projectContext: context,
-      request: { params: { slug: "ordinary" }, vibe64User: { uid: 43, role: "member" } } });
-    const scoped = await runWithProjectRequestContext(ordinary, () => service.listProjects({ actor: { uid: 43, role: "member" } }));
-    assert.equal(scoped.currentProject.slug, "ordinary");
-    assert.deepEqual(practiceOf(scoped), [["ordinary", null]], "a project-scoped hosted listing filters the same way");
+    const context = hostedPracticeContext(root);
+    const slug = "training-32345678123442348234123456789abc";
+    await mkdir(path.join(root, "projects", slug), { recursive: true });
+    await writeTestFile(path.join(root, "projects", slug, "app.js"), "real work\n");
+    await writeTestFile(context.projectRecordPathForSlug(slug), JSON.stringify({ repository: { mode: "managed_git", defaultBranch: "main" } }));
+    assert.deepEqual((await context.listWorkspaceProjects()).projects.map(project => project.slug), [slug]);
+    const opened = await resolveProjectRequestContext({ projectContext: context,
+      request: { params: { slug }, headers: {}, vibe64User: learner } });
+    assert.equal(opened.targetRoot, path.join(root, "projects", slug));
+    assert.equal(context.currentPracticeProjectScope(), null);
+    assert.equal(await readFile(path.join(root, "projects", slug, "app.js"), "utf8"), "real work\n");
+    for (const reserve of [() => context.createWorkspaceProjectRecord({ slug: "training-42345678123442348234123456789abc" }),
+      () => context.assertWorkspaceProjectAvailable({ slug: "training-42345678123442348234123456789abc" })]) {
+      await assert.rejects(reserve, { code: "vibe64_project_slug_reserved", statusCode: 409 });
+    }
+    await assert.rejects(() => access(path.join(root, "projects", "training-42345678123442348234123456789abc")), { code: "ENOENT" });
+    assert.equal((await context.createWorkspaceProjectRecord({ slug: "training-notes" })).project.slug, "training-notes");
   });
 });
 
 test("a deleted practice project is not found to its open page on both hosts, not an ownership failure", async () => {
-  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
   const { projectRequestErrorStatusCode } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
   const deleted = { code: "vibe64_practice_project_deleted", statusCode: 404,
     message: "This practice project was deleted. Its lesson is still in Learning." };
   assert.equal(projectRequestErrorStatusCode(deleted), 404);
-  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals }) => {
-    registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
-    try {
-      const open = () => resolveProjectRequestContext({ projectContext: context, request: { params: { slug } } });
+  for (const host of ["local", "hosted"]) {
+    await withTemporaryRoot(async root => {
+      const context = host === "local" ? await localPracticeContext(root) : hostedPracticeContext(root);
+      const training = trainingProvenance();
+      const slug = practiceSlugOf(training);
+      const practice = await createPracticeProject(context, training);
+      const open = (request = {}) => resolveProjectRequestContext({ projectContext: context,
+        request: { params: { slug }, headers: {}, vibe64User: learner, ...request } });
       assert.equal((await open()).slug, slug, "the existing practice project opens");
-      await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
+      await context.runWithPracticeProjectScope({ actor: learner, training, access: "write", allowDeleting: true },
         () => context.beginWorkspaceProjectDeletion({ slug }));
-      await assert.rejects(open, deleted, "a practice project being deleted is not found to its page");
-      await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
-        () => context.completeWorkspaceProjectDeletionStep({ slug, step: "runtime-closed" }));
-      const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
-      assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
+      await assert.rejects(open, deleted, `${host}: a practice project being deleted is not found to its page`);
+      assert.equal((await open({ allowDeleting: true })).slug, slug, "its exact delete request resumes");
+      await rm(practice.projectRuntimeRoot, { recursive: true });
+      await assert.rejects(open, deleted, `${host}: deleted`);
+      // A late request from the open page recreated runtime storage: still not found, never an ownership refusal.
+      await mkdir(practice.projectRuntimeRoot, { recursive: true });
       await assert.rejects(open, deleted);
-      // A late request from the open page recreated runtime storage: still not found, never a 500 ownership refusal.
-      await mkdir(paths.projectRuntimeRoot, { recursive: true });
-      await assert.rejects(open, deleted);
-      await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training }, () => assert.fail()),
+      await assert.rejects(() => context.runWithPracticeProjectScope({ actor: learner, training }, () => assert.fail()),
         { code: "vibe64_practice_scope_mismatch" }, "other practice scopes still refuse leftover unmarked storage");
-    } finally {
-      registerLocalPracticeAdmission(async () => null);
-    }
-  });
-  await withTemporaryRoot(async root => {
-    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "catalogue"),
-      explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root });
-    const training = trainingProvenance();
-    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
-    const created = await context.createWorkspaceProjectRecord({ slug, training });
-    await context.beginWorkspaceProjectDeletion({ slug });
-    await assert.rejects(() => context.readWorkspaceProject({ slug }), deleted, "hosted: being deleted");
-    assert.equal((await context.readWorkspaceProject({ slug, allowDeleting: true })).project.slug, slug, "its exact delete request resumes");
-    for (const directory of [created.project.projectRoot, created.project.projectRuntimeRoot, created.project.projectSessionSourceRoot]) {
-      await rm(directory, { force: true, recursive: true });
-    }
-    await assert.rejects(() => context.readWorkspaceProject({ slug }), deleted, "hosted: deleted");
-    await assert.rejects(() => context.readWorkspaceProject({ slug: "ordinary-missing" }), { code: "vibe64_project_path_not_accessible" },
-      "an ordinary missing project keeps its original refusal");
-  });
+      if (host === "hosted") {
+        await assert.rejects(() => context.readWorkspaceProject({ slug: "ordinary-missing" }), { code: "vibe64_project_path_not_accessible" },
+          "an ordinary missing project keeps its original refusal");
+      }
+    });
+  }
 });

@@ -11,7 +11,7 @@ import {
   runWithResolvedProjectRequestContext,
   projectRequestErrorStatusCode
 } from "./projectRequestContext.js";
-import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
+import { PRACTICE_PROJECT_DELETED_CODE } from "./learningSpace.js";
 import { LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
 
 function createVibe64FeatureRoutes(

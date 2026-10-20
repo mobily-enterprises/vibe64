@@ -8,20 +8,26 @@ import {
   resolveStudioProjectsRoot,
   resolveProjectContextRoot
 } from "./studioProjectContext.js";
-import { PRACTICE_PROJECT_DELETED_CODE } from "./practiceProjects.js";
+import { pathExists } from "./core.js";
+import {
+  PRACTICE_PROJECT_DELETED_CODE,
+  admitPracticeProject,
+  practiceIdFromSlug,
+  practiceProjectDeletedError
+} from "./learningSpace.js";
 import { assertLearningModeAllowsProject, LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
 const practiceScopeKey = Symbol("Vibe64 server practice scope");
 const actionRequestMetaKey = Symbol("Vibe64 original action request metadata");
-let localPracticeAdmission = null;
+let practiceRequestActor = null;
 
-// Standalone Training supplies this. It names the learner's own saved
-// practice Project for a slug, or null; core still derives the exact scope.
-function registerLocalPracticeAdmission(admit) {
-  if (typeof admit !== "function") throw new TypeError("Local practice admission requires its Training owner.");
-  localPracticeAdmission = admit;
+// A host whose person requests carry no vibe64User (the local transport)
+// supplies the person here: resolve({request}) returns the actor or null.
+function registerPracticeRequestActor(resolve) {
+  if (resolve !== null && typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
+  practiceRequestActor = resolve;
 }
 
 function projectSlugFromRequest(request = {}) {
@@ -61,13 +67,19 @@ async function resolveProjectRequestContext({
       systemRoot: practice.systemRoot,
       targetRoot: project.projectRoot,
       vibe64User: practice.vibe64User,
-      ...(currentProjectRequestContext().learningScope ? {
-        learningScope: currentProjectRequestContext().learningScope
-      } : {}),
       [practiceScopeKey]: currentProjectRequestContext()[practiceScopeKey]
     });
   }
   const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
+  if (practiceIdFromSlug(slug)) {
+    const admitted = await admitPracticeRequest({ projectContext: resolvedProjectContext, request, slug, vibe64User });
+    if (admitted) return admitted;
+    // Not in the learning space: only a pre-existing project of that name opens.
+    if (!explicitContext && !(resolvedProjectContext.projectCatalogEnabled !== false &&
+        await pathExists(resolveProjectContextRoot({ projectsRoot, slug })))) {
+      throw practiceProjectDeletedError();
+    }
+  }
   if (explicitContext) {
     await assertProjectDirectoryUsable(explicitContext.targetRoot);
     if (explicitContext.projectRuntimeRoot) {
@@ -81,14 +93,6 @@ async function resolveProjectRequestContext({
     });
   }
   if (resolvedProjectContext?.projectCatalogEnabled === false) {
-    // A local learner's own practice Project is an ordinary project to them
-    // (Learning v2): it opens through the original practice grant with full
-    // write. Admission re-reads the saved attempt on every request.
-    const admitted = localPracticeAdmission ? await localPracticeAdmission({ slug }) : null;
-    if (admitted) {
-      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "write", requireProject: true },
-        async () => retainPracticeContext("write"));
-    }
     const error = new Error("Local editor mode only serves the selected project.");
     error.code = "vibe64_project_route_unavailable";
     throw error;
@@ -119,6 +123,17 @@ async function resolveProjectRequestContext({
     targetRoot,
     vibe64User
   });
+}
+
+// A practice project opens as an ordinary project to its learner, with full
+// write, through the one learning-space admission; null when the learning
+// space has no such project.
+async function admitPracticeRequest({ projectContext, request, slug, vibe64User }) {
+  const person = Boolean(request?.headers);
+  const actor = vibe64User || (person && practiceRequestActor ? await practiceRequestActor({ request }) : null);
+  const admitted = await admitPracticeProject({ projectContext, slug, actor, person });
+  return admitted && projectContext.runWithPracticeProjectScope({ ...admitted, access: "write", requireProject: true,
+    ...(request.allowDeleting === true ? { allowDeleting: true } : {}) }, async () => retainPracticeContext("write"));
 }
 
 function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", projectsRoot = "") {
@@ -171,7 +186,7 @@ function currentProjectRequestContext() {
 // the prior action's authorization result, and must never become saved state.
 function currentProjectActionRequestMeta() {
   const context = currentProjectRequestContext();
-  if (context?.learningScope || context?.[practiceScopeKey]) return null;
+  if (context?.[practiceScopeKey]) return null;
   return context?.[actionRequestMetaKey] || null;
 }
 
@@ -201,16 +216,16 @@ async function runWithPracticeProjectContext(owner, scope, operation) {
 
 // Existing accepted-work owners retain only this exact observation/control
 // projection. Fresh effects must re-enter the saved-attempt request admission.
-// A local practice Project admitted as an ordinary project (below) keeps its
-// write: that admission depends only on the learner's ownership, not on lesson
-// activity, so later work (agent turns, helpers) behaves as in any project.
+// A practice project admitted as an ordinary project (admitPracticeRequest)
+// keeps its write: that admission depends only on the learner's ownership, not
+// on lesson activity, so later work (agent turns, helpers) behaves as in any project.
 function captureProjectRequestContext() {
   const grant = currentProjectRequestContext()?.[practiceScopeKey];
   return retainPracticeContext(grant?.ordinary === true ? "write" : "control");
 }
 
-// The retained projection outlives the owning callback. Only core's local
-// practice admission retains write; every other caller retains control.
+// The retained projection outlives the owning callback. Only core's practice
+// admission retains write; every other caller retains control.
 function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];
@@ -218,7 +233,6 @@ function retainPracticeContext(access) {
   const scope = Object.freeze({ ...grant.scope, access,
     vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
   return Object.freeze({ ...scope,
-    ...(context.learningScope ? { learningScope: context.learningScope } : {}),
     [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(access === "write" ? { ordinary: true } : {}) })
   });
 }
@@ -264,9 +278,6 @@ function currentProjectScopeKey({
   fallback = "global"
 } = {}) {
   const context = currentProjectRequestContext();
-  if (context?.learningScope) {
-    return `learning:${JSON.stringify([context.learningScope.learnerId, context.learningScope.attemptId])}`;
-  }
   const slug = String(context?.slug || "").trim();
   if (slug) {
     return `project:${slug}`;
@@ -279,7 +290,7 @@ async function runWithProjectRequestContext(context = {}, operation, options = {
     throw new TypeError("runWithProjectRequestContext requires operation().");
   }
   const scopedContext = { ...context };
-  if (scopedContext.learningScope || scopedContext[practiceScopeKey]) {
+  if (scopedContext[practiceScopeKey]) {
     delete scopedContext[actionRequestMetaKey];
   } else if (Object.hasOwn(options, "requestMeta")) {
     if (options.requestMeta?.request) scopedContext[actionRequestMetaKey] = options.requestMeta;
@@ -317,7 +328,7 @@ function projectRequestErrorStatusCode(error = {}) {
 
 export {
   VIBE64_PROJECT_ROUTE_BASE,
-  registerLocalPracticeAdmission,
+  registerPracticeRequestActor,
   currentPracticeProjectScope,
   runWithPracticeProjectContext,
   captureProjectRequestContext,
