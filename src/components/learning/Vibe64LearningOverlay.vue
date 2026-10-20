@@ -39,25 +39,34 @@ onBeforeUnmount(() => globalThis.document?.body?.classList.remove(IN_LESSON_CLAS
 
 // Learning mode keeps the learner in the learning space: any other project URL
 // goes to the lesson's practice project (or the Learning page without one),
-// with a short note. The server refuses those projects' requests anyway.
+// with a short note. The server refuses those projects' requests anyway. A
+// lesson the learner just started or opened is where they asked to go, so that
+// move has no note.
 const route = useRoute();
 const router = useRouter();
-watch(() => [learning?.learningMode, route?.fullPath], () => {
+watch(() => [learning?.learningMode, route?.fullPath], (_value, previous) => {
   if (!route || !router || !learning) return;
   const target = learningModeRedirect({ mode: learning.learningMode, slug: projectSlugFromRoute(route) });
   if (!target || target.path === route.path) return;
-  learning.showNotice(VIBE64_LEARNING_MODE_NOTE);
+  if (previous?.[0]?.on !== false) learning.showNotice(VIBE64_LEARNING_MODE_NOTE);
   void router.replace(target.path);
 }, { immediate: true });
 
 const leaving = computed(() => learning?.state.modeBusy === "leave");
 // When the lesson ends (left or finished, here or elsewhere) the projects come
-// back: a practice project page, or the Learning page that held a lesson
-// without one, returns to /app.
+// back: the lesson's place (its practice project, or the Learning page for a
+// lesson without one) returns to /app. While L is open (the Lesson finished
+// screen) that waits until L is hidden, so the choices stay over the lesson.
+const atLessonPlace = () => isPracticeProjectSlug(projectSlugFromRoute(route)) || route?.path === VIBE64_LEARNING_PAGE_PATH;
+const returnPending = ref(false);
 watch(() => Boolean(learning?.inLesson), (value, previous) => {
-  if (!previous || value || !router) return;
-  if (isPracticeProjectSlug(projectSlugFromRoute(route)) || route?.path === VIBE64_LEARNING_PAGE_PATH) void router.replace("/app");
+  returnPending.value = Boolean(previous && !value && router && atLessonPlace());
 });
+watch(() => returnPending.value && !learning?.state.open, ready => {
+  if (!ready) return;
+  returnPending.value = false;
+  if (!learning.inLesson && atLessonPlace()) void router.replace("/app");
+}, { flush: "post" });
 async function leaveLesson() {
   if (await learning.leaveLesson()) learning.minimise();
 }

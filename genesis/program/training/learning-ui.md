@@ -108,7 +108,11 @@ for a lesson without one. A loaded lesson opens at the saved reader place,
 else, once any step has passed for this lesson content, the first required
 step not passed, else the first step (a fresh lesson starts at its
 introduction). When the overlay sees learning mode turn off while the route is
-a practice project or the Learning page, it replaces the route with `/app`.
+a practice project or the Learning page, it replaces the route with `/app`;
+while L is open (the Lesson finished screen) it waits until L is hidden. Its
+learning mode redirect (`learningModeRedirect`) shows the "You're in a lesson"
+note only for another project's address, not when it moves a learner whose
+lesson has just started or opened to that lesson's place.
 
 L's **Practice** tab (`Vibe64LearningPractice.vue`, surface `practice`) reads
 `practice.list` through `useVibe64PracticeProjects` (its own endpoint resource,

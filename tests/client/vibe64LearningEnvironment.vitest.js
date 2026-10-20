@@ -934,6 +934,25 @@ describe("Learning overlay", () => {
       await flush();
       expect(replace, "out of learning mode every project opens").toHaveBeenCalledTimes(2);
       // Continuing the lesson elsewhere (another tab or Colleague) turns learning mode on again here.
+      learning.clearNotice();
+      modeOn = true;
+      learning.learnerChanged({ attemptId: ATTEMPT, reason: "learning-mode" });
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith("/app/project/training-1111");
+      expect(learning.notice, "going to a lesson that just started needs no note").toBeFalsy();
+      // A lesson that ends while L is open (the Lesson finished screen) keeps its
+      // practice project page until L is hidden, because local /app reloads.
+      await learning.show();
+      await flush();
+      modeOn = false;
+      learning.learnerChanged({ attemptId: ATTEMPT, reason: "learning-mode" });
+      await flush();
+      expect(replace, "L's Lesson finished screen keeps the page").toHaveBeenCalledTimes(3);
+      learning.minimise("learner");
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith("/app");
+      expect(replace).toHaveBeenCalledTimes(4);
+      Object.assign(route, { path: "/app/project/my-shop", fullPath: "/app/project/my-shop", params: { slug: "my-shop" } });
       modeOn = true;
       learning.learnerChanged({ attemptId: ATTEMPT, reason: "learning-mode" });
       await flush();
