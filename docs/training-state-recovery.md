@@ -1,7 +1,9 @@
 # Back up and restore private learning state
 
 This explicit operator procedure covers the current schema-version-1 learner
-store. Project archives and installed-content snapshots do not back up
+store: `progress.json`, its derived `active-lesson.json`, the code-authorship
+ledger, and the version 2 lesson records `step-progress.json` (append-only step
+results) and `reader.json` (last reader position). Project archives and installed-content snapshots do not back up
 `training/users`. Use trusted local checkpoint directories owned by the same OS
 user as the state; do not import an archive or another installation's identities.
 There is no automatic backup, retention or rollback service.
@@ -37,7 +39,7 @@ fi
 # Hold existing persistent lock inodes; never create or unlink a state lock.
 shopt -s nullglob dotglob
 held_locks=()
-for lock_file in "$users"/*/state.lock "$users"/*/preparation.lock; do
+for lock_file in "$users"/*/state.lock "$users"/*/preparation.lock "$users"/*/step-progress.lock "$users"/*/reader.lock; do
   test ! -L "$(dirname -- "$lock_file")"
   test -f "$lock_file"
   test ! -L "$lock_file"
@@ -52,9 +54,10 @@ Absent `training/users` means no learner state to copy. An unsafe or contended
 lock means stop and investigate without deleting it. Malformed record bytes can
 still be copied as evidence; copying does not declare them restorable.
 The optional preparation lock spans project/session/setup effects between short
-state writes. Holding only `state.lock` does not exclude that operation. Both
-existing lock files must be canonical, empty and uncontended; absent preparation
-locks are not created by maintenance or validation.
+state writes. Holding only `state.lock` does not exclude that operation. Step
+results and the reader position have their own `step-progress.lock` and
+`reader.lock`. Every existing lock file must be canonical, empty and uncontended;
+absent locks are not created by maintenance or validation.
 
 Create a new checkpoint. `cp -a` preserves bytes and modes, including corrupt
 records and links as evidence, without following those links. An interrupted copy
@@ -88,7 +91,8 @@ cp -a -- "$checkpoint/training/users" "$stage/training/users"
 
 Validate the candidate through the existing readers before touching live state.
 The function also verifies every saved published topic/lesson pin and its saved
-assessment/rubric/evidence and resume semantics against the live installed
+assessment/rubric/evidence and resume semantics, and every saved version 2 step
+result and receipt against its pinned lesson step, against the live installed
 content, including all ended attempts when no lesson is active. It creates no project, runs no check, repairs no summary
 and prints no record bodies. It can assess a completed checkpoint too.
 
@@ -104,6 +108,7 @@ for (const key of await readdir(path.join(copyRoot, "training/users"))) {
   const identity = Buffer.from(key, "base64url").toString("utf8");
   if (Buffer.from(identity).toString("base64url") !== key) throw new Error("Noncanonical learner key; inspect the checkpoint.");
   await state.readState({ actor: { username: identity }, includeCompletion: true });
+  await state.readReader({ actor: { username: identity } });
 }
 console.log("Reservation records and installed pins validated; no files changed.");
 NODE
@@ -176,7 +181,12 @@ The same private copy preserves ended-attempt history and the versioned empty
 active summary; it never creates a replacement exercise or rebinds old practical
 evidence. Missing or valid stale summaries remain recoverable only against their
 retained attempt/end revision. Preserve every historical exact pin in the installed
-content cache before restoring this state. The pilot refuses growth beyond eight
-retained attempts or 64 KiB rather than pruning evidence. A candidate supporting
+content cache before restoring this state. The store refuses growth beyond 32
+retained attempts, 64 KiB of progress, 64 step results per attempt or 1 MiB of
+step results rather than pruning evidence. A candidate supporting
 these explicit writes must complete the `20261007-training-attempt-history` ledger
-boundary before activation; older single-reservation records need no conversion.
+boundary before activation; older single-reservation records need no conversion. A candidate writing
+version 2 step results, reader positions, step-keyed code ledgers or more than
+eight attempts must first complete the `20261020-training-step-progress` boundary,
+whose read-only preflight validates every normal and author-preview learner record;
+an older release then refuses the newer ledger instead of misreading those files.

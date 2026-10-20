@@ -33,6 +33,8 @@
     "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js",
     "./client/navigation": "./src/client/createTrainingNavigation.js",
     "./server/practical-observations": "./src/server/practicalObservations.js",
+    "./server/step-checks": "./src/server/stepChecks.js",
+    "./server/step-progress-upgrade": "./src/server/stepProgressUpgrade.js",
     "./server/practical-actions": "./src/server/practicalActions.js",
     "./server/main-practical-actions": "./src/server/mainPracticalActions.js",
     "./shared/practical-schemas": "./src/shared/practicalSchemas.js",
