@@ -13,7 +13,8 @@ import { createTrainingLearnerState } from "../../packages/vibe64-training/src/s
 import { createTrainingDeclaredCheckOwner } from "../../packages/vibe64-training/src/server/declaredCheck.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 
-// Preserved topic check, executed through the actual standalone finite gateway.
+// Preserved topic check, run as a lesson step's response check through the
+// actual standalone finite gateway.
 // Project/output transport seams below are explicit fixtures, not fleet proof.
 const originalCheck = await readFile(new URL("../fixtures/training/orientation-response.mjs", import.meta.url));
 
@@ -22,7 +23,7 @@ const v2Steps = [
   { id: "look-around", title: "Look around", body: "steps/look.md", check: { kind: "none" }, required: false }
 ];
 
-async function fixture(t, { script = originalCheck, assets = false, lessonVersion = 1 } = {}) {
+async function fixture(t, { script = originalCheck, assets = false, lessonVersion = 2 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-declared-check-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "topic"), systemRoot = path.join(root, "system");
@@ -69,7 +70,7 @@ async function fixture(t, { script = originalCheck, assets = false, lessonVersio
   let session = { sessionId, sessionRoot: paths.sessionRoot,
     metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: sourcePath } };
   const input = { actor, attemptId, sessionId, terminalId: randomUUID(), observationId: randomUUID(),
-    instanceId: randomUUID(), interactionId: randomUUID(), requestId: randomUUID() };
+    instanceId: randomUUID(), interactionId: randomUUID(), requestId: randomUUID(), stepId: "press-button" };
   let row = { instanceId: input.instanceId, interactionId: input.interactionId, requestId: input.requestId, message: "Hello from the server!" };
   const requests = [];
   const server = createServer((request, response) => {
@@ -215,16 +216,16 @@ test("explicit cleanup-uncertain gateway fixture retains scratch and never verif
   assert.deepEqual(await f.saved(), before);
 });
 
-test("a v2 step's declared response check runs through the same bounded gateway and v1/v2 identities do not cross", async t => {
-  const f = await fixture(t, { lessonVersion: 2 });
-  await assert.rejects(f.owner().runOrientationCheck(f.input), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" },
-    "a v2 lesson has no assessment-declared orientation practical");
+test("a step's declared response check runs through the bounded gateway only for that exact step", async t => {
+  const f = await fixture(t);
+  const { stepId: _stepId, ...withoutStep } = f.input;
+  await assert.rejects(f.owner().runOrientationCheck(withoutStep), /Schema validation failed/u, "a response check names its step");
   await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "look-around" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
   await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "missing-step" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
   await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "../escape" }));
   assert.equal(f.calls.length, 0);
   const before = await f.saved();
-  assert.deepEqual(await f.owner().runOrientationCheck({ ...f.input, stepId: "press-button" }), { checkResult: {
+  assert.deepEqual(await f.owner().runOrientationCheck(f.input), { checkResult: {
     check: "orientation-response", observationId: f.input.observationId, outcome: "passed" } });
   assert.deepEqual(await f.saved(), before, "checking does not write progress");
   assert.equal(f.calls.length, 1);
@@ -233,7 +234,7 @@ test("a v2 step's declared response check runs through the same bounded gateway 
 });
 
 test("a v1 lesson refuses a step-scoped check", async t => {
-  const f = await fixture(t);
-  await assert.rejects(f.owner().runOrientationCheck({ ...f.input, stepId: "press-button" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
+  const f = await fixture(t, { lessonVersion: 1 });
+  await assert.rejects(f.owner().runOrientationCheck(f.input), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
   assert.equal(f.calls.length, 0);
 });

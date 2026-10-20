@@ -35,8 +35,8 @@ const codeStep = { id: "refuse-empty", title: "Refuse empty titles", body: "step
   check: { kind: "auto", check: "notes-title-required", files: ["notes.mjs"] }, required: true };
 
 // enter: start on the first step, as the learner's reader does, so its
-// starting files are recorded (the retired teacher's v1 code question did this).
-async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [codeStep], enter = false } = {}) {
+// starting files are recorded.
+async function fixture(t, { check, timeoutSeconds, lessonVersion = 2, steps = [codeStep], enter = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-code-practical-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = await writeTopic(root, async topic => {
@@ -87,27 +87,27 @@ async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [c
   async function learnerSave(text, { baseHash } = {}) {
     const current = sha256(await readFile(learnerFile));
     const input = { sessionId, path: "notes.mjs", baseHash: baseHash || current, text };
-    return authorship.saveLearnerFile({ actor, attemptId, input, async save() {
+    return authorship.saveLearnerFile({ actor, practiceId: attemptId, input, async save() {
       if (sha256(await readFile(learnerFile)) !== input.baseHash) return { ok: false, code: "vibe64_source_editor_conflict" };
       await writeFile(learnerFile, text);
       return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(learnerFile)) } };
     } });
   }
-  const input = { actor, attemptId, sessionId, observationId: randomUUID(), ...(enter ? { stepId: steps[0].id } : {}) };
+  const input = { actor, attemptId, sessionId, observationId: randomUUID(), stepId: steps[0].id };
   return { root, systemRoot, paths, actor, attemptId, sessionId, learners, content, checks, calls, authorship,
     learnerFile, learnerSave, input, project, projectSlug: reserved.attempt.projectSlug };
 }
 
-const entered = { lessonVersion: 2, enter: true };
+const entered = { enter: true };
 
 test("an entered code step records its starting files and only the learner's own chained saves verify", async t => {
   const f = await fixture(t, entered);
-  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
   assert.deepEqual(ledger.steps[0].baseline, [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }]);
   assert.equal(ledger.steps[0].stepId, "refuse-empty");
   await f.learnerSave("export function isValidTitle(title) {\n  return title.length > 0;\n}\n");
   await f.learnerSave(solved);
-  const saved = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  const saved = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
   assert.equal(saved.entries.length, 1, "consecutive clean saves form one chain link");
   assert.equal(saved.entries[0].saves, 2);
   assert.equal(saved.entries[0].actorId, "42");
@@ -143,7 +143,7 @@ test("another writer in a declared file breaks the chain: automatic not passed w
     if (scenario !== "foreign-write-during-save") await writeFile(f.learnerFile, solved);
     if (scenario === "learner-after-agent") await f.learnerSave(`${solved}\n`);
     if (scenario === "foreign-write-during-save") {
-      await f.authorship.saveLearnerFile({ actor: f.actor, attemptId: f.attemptId,
+      await f.authorship.saveLearnerFile({ actor: f.actor, practiceId: f.attemptId,
         input: { sessionId: f.sessionId, path: "notes.mjs", baseHash: sha256(await readFile(f.learnerFile)), text: "export const x = 1;\n" },
         async save() { await writeFile(f.learnerFile, solved); return { ok: true, file: { path: "notes.mjs", hash: sha256(Buffer.from(solved)) } }; } });
     }
@@ -223,7 +223,7 @@ test("the ordinary Files editor save in the learner's own active practice projec
       return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(f.learnerFile)) } };
     } });
   };
-  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length;
+  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).entries.length;
   const inProject = (slug, actor, operation) => runWithProjectRequestContext({ slug, vibe64User: actor }, operation);
   await inProject("alpha", f.actor, () => save("// another project\n"));
   await inProject(f.projectSlug, { uid: 43, username: "bob" }, () => save("// another person\n"));
@@ -235,7 +235,7 @@ test("the ordinary Files editor save in the learner's own active practice projec
   assert.equal(await entries(), 1, "the learner's own practice save records authorship");
   const current = await f.learners.resumeAttempt({ actor: f.actor, attemptId: f.attemptId });
   await f.learners.endAttempt({ actor: f.actor, attemptId: f.attemptId, expectedRevision: current.revision,
-    requestId: "end-code-lesson", reason: "restart" });
+    requestId: "end-code-lesson", reason: "left" });
   await inProject(f.projectSlug, f.actor, () => save("// after the lesson\n"));
   assert.equal(plainSaves, 5, "the ended lesson's project keeps ordinary saves");
   assert.throws(() => createTrainingCodeSaveOwner({ authorship: {}, learners: f.learners }), TypeError);
@@ -253,7 +253,7 @@ test("a host with several learner stores selects the store holding the practice 
       await writeFile(f.learnerFile, text);
       return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(f.learnerFile)) } };
     } });
-  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length;
+  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).entries.length;
   const inPractice = operation => runWithProjectRequestContext({ slug: f.projectSlug, vibe64User: f.actor }, operation);
   await runWithProjectRequestContext({ slug: "alpha", vibe64User: f.actor }, () => save("// another project\n"));
   assert.deepEqual(selections, [], "only a practice project selects a learner store");
@@ -272,21 +272,22 @@ test("a host with several learner stores selects the store holding the practice 
 });
 
 test("a v2 code step keys its ledger by the entered step and only the learner's own Check records the pass", async t => {
-  const f = await fixture(t, { lessonVersion: 2 });
-  assert.equal(await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId }), null, "no baseline before the step is entered");
+  const f = await fixture(t);
+  assert.equal(await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId }), null, "no baseline before the step is entered");
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
   const entered = await steps.saveReader({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", scroll: 0 });
   assert.deepEqual(entered.baseline.step, { stepId: "refuse-empty", enteredRevision: 0 });
-  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
-  assert.equal(ledger.question, undefined);
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
+  assert.equal(ledger.practiceId, f.attemptId, "the ledger belongs to the practice project");
   assert.deepEqual(ledger.steps, [{ stepId: "refuse-empty", enteredRevision: 0, entryStart: 0,
     baseline: [{ path: "notes.mjs", sha256: sha256(await readFile(f.learnerFile)) }] }]);
   await f.learnerSave(solved);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
-  assert.equal((await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length, 1,
+  assert.equal((await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).entries.length, 1,
     "re-entering the same step keeps its baseline and the learner's saves");
-  await assert.rejects(f.checks().runCodeCheck(f.input), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" }, "a v2 lesson needs the step");
-  const direct = await f.checks().runCodeCheck({ ...f.input, stepId: "refuse-empty" });
+  const { stepId: _stepId, ...withoutStep } = f.input;
+  await assert.rejects(f.checks().runCodeCheck(withoutStep), /Schema validation failed/u, "a code check names its step");
+  const direct = await f.checks().runCodeCheck(f.input);
   assert.deepEqual(direct.checkResult, { check: "notes-title-required", observationId: f.input.observationId, outcome: "passed" });
   assert.equal(direct.authorship, "learner");
   const stepProgress = path.join(f.systemRoot, "training/users/NDI/step-progress.json");
@@ -298,7 +299,7 @@ test("a v2 code step keys its ledger by the entered step and only the learner's 
   assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.completed, false);
   const byLearner = await steps.runCheck({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty", requestId: "learner-check", context: { channel: "api" } });
   assert.deepEqual({ outcome: byLearner.outcome, recorded: byLearner.recorded }, { outcome: "passed", recorded: true });
-  const saved = JSON.parse(await readFile(stepProgress, "utf8")).attempts[0].results[0];
+  const saved = JSON.parse(await readFile(stepProgress, "utf8")).lessons[0].results[0];
   assert.equal(saved.origin, "check");
   assert.equal(saved.evidence.checkId, "notes-title-required");
   assert.equal(saved.evidence.filesHash, sha256(JSON.stringify([{ path: "notes.mjs", sha256: sha256(Buffer.from(solved)) }])));
@@ -308,9 +309,9 @@ test("a v2 code step keys its ledger by the entered step and only the learner's 
 });
 
 test("another writer in a v2 step's file breaks its chain: an automatic not passed without running the check", async t => {
-  const f = await fixture(t, { lessonVersion: 2 });
+  const f = await fixture(t);
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
-  const missing = await f.checks().runCodeCheck({ ...f.input, stepId: "refuse-empty" });
+  const missing = await f.checks().runCodeCheck(f.input);
   assert.equal(missing.checkResult.outcome, "not-yet-passed");
   assert.match(missing.reason, /this step has no recorded starting files/u);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
@@ -325,7 +326,7 @@ test("another writer in a v2 step's file breaks its chain: an automatic not pass
 // coding agent, Colleague, Git or an earlier step) is the step's starting
 // point, never the learner's work for it.
 test("a v2 code step never passes on code written before it was entered; the learner must change each declared file", async t => {
-  const f = await fixture(t, { lessonVersion: 2 });
+  const f = await fixture(t);
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
   await writeFile(f.learnerFile, solved);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
@@ -342,7 +343,7 @@ test("a v2 code step never passes on code written before it was entered; the lea
 
 test("each v2 code step keeps the baseline of its first entry when the learner moves between code steps", async t => {
   const second = { ...codeStep, id: "refuse-empty-again", title: "Again" };
-  const f = await fixture(t, { lessonVersion: 2, steps: [codeStep, second] });
+  const f = await fixture(t, { steps: [codeStep, second] });
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
   const start = sha256(await readFile(f.learnerFile));
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
@@ -350,7 +351,7 @@ test("each v2 code step keeps the baseline of its first entry when the learner m
   await writeFile(f.learnerFile, solved);
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again" });
-  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
   assert.deepEqual(ledger.steps.map(step => [step.stepId, step.baseline[0].sha256]), [["refuse-empty", start], ["refuse-empty-again", start]],
     "switching steps never adopts the intervening edit as a new start");
   for (const stepId of ["refuse-empty", "refuse-empty-again"]) {
@@ -363,7 +364,7 @@ test("each v2 code step keeps the baseline of its first entry when the learner m
 
 test("a v2 step entered after earlier learner saves starts at that point and counts only later saves", async t => {
   const second = { ...codeStep, id: "refuse-empty-again", title: "Again" };
-  const f = await fixture(t, { lessonVersion: 2, steps: [codeStep, second] });
+  const f = await fixture(t, { steps: [codeStep, second] });
   const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
   await steps.enterStep({ actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty" });
   await f.learnerSave(solved);
@@ -373,7 +374,58 @@ test("a v2 step entered after earlier learner saves starts at that point and cou
   const again = await steps.runCheck({ ...learner, actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again", requestId: "second-1" });
   assert.match(again.reason, /needs your own change/u, "the first step's save is the second step's starting point");
   await f.learnerSave(`${solved}// again\n`);
-  const ledger = await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId });
+  const ledger = await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId });
   assert.equal(ledger.entries.length, 2, "a save after a later step entry never collapses into an earlier link");
   assert.equal((await steps.runCheck({ ...learner, actor: f.actor, attemptId: f.attemptId, stepId: "refuse-empty-again", requestId: "second-2" })).outcome, "passed");
+});
+
+// Continue lesson reuses the practice project, and its ledger with it.
+async function continueLesson(f, requestId = "continue") {
+  const state = await f.learners.readState({ actor: f.actor });
+  const ended = state.progress.activeAttemptId ? (await f.learners.endAttempt({ actor: f.actor, attemptId: state.progress.activeAttemptId,
+    expectedRevision: state.revision, requestId: `${requestId}-end`, reason: "left" })).revision : state.revision;
+  const reserved = await f.learners.reserveAttempt({ actor: f.actor, expectedRevision: ended, requestId, pin: state.progress.attempts[0].pin,
+    practiceId: f.attemptId });
+  const begun = await f.learners.beginPreparation({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision });
+  assert.equal(begun.attempt.preparation.initialSessionId, f.sessionId, "the continued attempt reuses the practice session");
+  await f.learners.recordPreparationReady({ actor: f.actor, attemptId: reserved.attempt.attemptId, initialSessionId: f.sessionId,
+    expectedRevision: begun.revision });
+  return reserved.attempt.attemptId;
+}
+
+test("code the learner wrote before Continue lesson still counts in the continued attempt", async t => {
+  const f = await fixture(t, entered);
+  await f.learnerSave(solved);
+  const attemptId = await continueLesson(f);
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  await steps.enterStep({ actor: f.actor, attemptId, stepId: "refuse-empty" });
+  assert.equal((await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).steps.length, 1,
+    "re-entering the step in the continued attempt keeps its first baseline");
+  const result = await steps.runCheck({ actor: f.actor, attemptId, stepId: "refuse-empty", requestId: "continued-check", context: { channel: "api" } });
+  assert.deepEqual({ outcome: result.outcome, recorded: result.recorded }, { outcome: "passed", recorded: true });
+});
+
+test("pruning attempts keeps a live practice project's ledger; forgetting the project removes it", async t => {
+  const f = await fixture(t, entered);
+  await f.learnerSave(solved);
+  let state = await f.learners.readState({ actor: f.actor });
+  let revision = (await f.learners.endAttempt({ actor: f.actor, attemptId: f.attemptId, expectedRevision: state.revision,
+    requestId: "end-first", reason: "left" })).revision;
+  for (let index = 0; index < 32; index++) {
+    const reserved = await f.learners.reserveAttempt({ actor: f.actor, expectedRevision: revision, requestId: `other-${index}`,
+      pin: state.progress.attempts[0].pin });
+    revision = (await f.learners.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision,
+      requestId: `other-end-${index}`, reason: "discard" })).revision;
+  }
+  state = await f.learners.readState({ actor: f.actor });
+  assert.equal(state.progress.attempts.length, 32);
+  assert.equal(state.progress.attempts.some(attempt => attempt.attemptId === f.attemptId), false, "the creating attempt was pruned");
+  assert.equal((await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId })).entries.length, 1);
+  const attemptId = await continueLesson(f);
+  const steps = createTrainingStepChecks({ learners: f.learners, content: f.content, checks: f.checks(), authorship: f.authorship });
+  assert.equal((await steps.runCheck({ actor: f.actor, attemptId, stepId: "refuse-empty", requestId: "after-prune", context: { channel: "api" } })).outcome,
+    "passed");
+  await f.learners.forgetPracticeLedger({ actor: f.actor, practiceId: f.attemptId });
+  assert.equal(await f.learners.readCodeLedger({ actor: f.actor, practiceId: f.attemptId }), null);
+  await f.learners.forgetPracticeLedger({ actor: f.actor, practiceId: f.attemptId });
 });

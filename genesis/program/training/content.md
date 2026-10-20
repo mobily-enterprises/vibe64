@@ -308,8 +308,8 @@ without repeating seed checks or overwriting learner edits. The shared preparati
 coordinator uses this proof through its supplied original project/repository owner
 before first session creation; the module does not provide a standalone host.
 
-The original Core project metadata normalizer accepts optional schema-1 `training`
-provenance at trusted record creation: `learnerKey`, `attemptId`, the exact
+The original Core project metadata normalizer accepts optional schema-2 `training`
+provenance at trusted record creation: `learnerKey`, `practiceId`, the exact
 `pin:{course,topic,lesson}` retained by learner state, and
 `exercise:{kind:"bundled",sourcePath}` from the installed exercise reader. Core
 validates and copies this structure without importing Training. Creation and
@@ -400,53 +400,41 @@ bindings, concrete repository composition and actual lifecycle integration
 proofs. The shared module and unit fixtures alone do not prove standalone
 provisioning, hosted native execution or browser acceptance.
 
-## Durable assessment and lesson resume
+## Retired format-1 learning records
 
-The existing learner-state owner exposes internal `saveLessonResume` and
-`recordAssessment` operations for the saved active attempt. Both require the
-admitted actor, exact attempt and revision; the original persistent state lock
-serializes compare-and-swap writes. `learning` is an optional schema-version-1
-field. Older records remain valid and absent state is not converted on reads.
-Resume and new writes verify the exact installed lesson, while `readState` still
-validates private records without installed content for backup inspection.
-Staged restore instead uses the content-aware read against the live exact pin.
-The explicit read-only `readState({actor,includeCompletion:true})` verifies the
-saved pins of every retained attempt and reuses the required-pass calculation
-for completion; it returns `completion:null` without an active attempt and
-never repairs a summary. Historical pins and descriptor semantics remain checked
-when no lesson is active, including staged offline recovery.
-Content-aware reads/resume and writes validate saved receipt IDs, kinds, rubrics
-and practical producer/operation/check contracts against that descriptor, before
-summary reconciliation. Historical receipts do not depend on today's pending
-question or preparation phase.
+Lesson format 1 (assessments and a teaching document) is retired. Its write
+paths (`saveLessonResume`, `recordAssessment`, question admission) are deleted;
+the content CLI's `validate` and `publish-manifest` refuse a v1 lesson, while
+`bundle` and the installed reader still verify one so installed history stays
+readable. Saved `learning` fields of earlier attempts keep their schema-version-1
+read validation: receipts, rubrics, practical producers and resume facts are
+checked against the exact installed pin on content-aware reads, and
+`readState({actor,includeCompletion:true})` still derives v1 completion from
+passed required assessments of the identical lesson code/hash. Reads never
+convert or repair these records. Reservation still accepts an installed v1 pin
+because the published upgrades and author-preview tooling reach it; nothing can
+record new v1 learning.
 
-A version 1 resume checkpoint retains teaching stage, pending question identity/text,
-bounded declared visual semantic snapshots and a summary. Repeating its current
-request ID with identical content is idempotent; a conflicting payload is refused.
-An assessment submission retains actual admitted learner answer text/message and
-saved question identity, or the learner/attempt/project/session/native producer,
-operation/check and immutable observation identity. The admitted application
-owner authenticates those facts, executes checks and evaluates the pinned rubric;
-the store does none of those jobs and exposes no model assertion of trusted evidence.
-Demonstration evidence cannot record a learner pass. Each evidence reference is
-consumed once; identical submission replay returns the existing result before CAS.
+## Step results, practice identity and learning mode
 
-Results retain outcome, rubric/hash, reason, assistance and server recording time.
-Resume and write responses derive completion from passes for every required
-assessment in the pinned descriptor; there is no writable completion flag.
-Completion for a version 2 lesson instead counts its required step results.
-Resume checkpoints, assessment learning and receipt validation apply only to
-schemaVersion 1 lessons (`assessmentLesson`); resume and learning writes refuse a
-version 2 lesson, and any other lesson format is refused as unsupported.
-There is at most one active attempt; original preparation identity and ordinary
-permissions remain unchanged. Each attempt retains up to 64 receipts, and the
-whole serialized record remains limited to 64 KiB; excess writes fail without
-evicting evidence. Historical receipts retain their own attempt/project/session
-identities and are never transferred to a new exercise. Unconfirmed atomic
-saves require read/same-identity retry. Only explicit operations reconcile reachable
-stale derived summaries. The appended prospective assessment upgrade changes the
-ordered compatibility ledger, without transforming historical application records.
+`step-progress.json` (schema version 2) keeps step results per lesson content
+`{code,hash}` rather than per attempt (`lessonStepEntry`), so they survive
+leaving, continuing and pruning. Completion of a v2 lesson means every required
+step has passed for that lesson content. Code authorship ledgers belong to the
+practice project: `code-ledgers/<practiceId>.json` under one shared
+`code-ledger.lock`. Saves are ledgered only while that practice project's attempt
+is in progress (`saveLearnerFile({actor,practiceId,input,save})`); otherwise they
+are the editor's plain save. `forgetPracticeLedger` removes a ledger when the
+practice project is deleted or archived; pruning never does.
 
+An attempt may record `practiceId` (stored only when it differs from its own ID)
+when Continue reuses an existing practice project. Its project slug is
+`training-<practiceId ?? attemptId hex>` and its initial session is
+`training-<practiceId ?? attemptId>` or `training-<attemptId>`. Reservation with
+a `practiceId` refuses another lesson pin for that practice or another practice
+in progress. `readLearningMode` derives learning mode from
+`progress.activeAttemptId` alone: there is no separate learning-mode record or
+pause.
 
 ## Learner teacher notes
 
@@ -470,7 +458,8 @@ additive and needs no numbered upgrade (`docs/state-upgrades.md`).
 ## Explicit attempt retirement and history
 
 The internal `endAttempt({actor,attemptId,requestId,expectedRevision,reason})`
-accepts `reason: "restart" | "discard"`. It returns
+accepts `reason: "left" | "finished" | "discard"` (saved `restart` ends stay
+readable). It returns
 `{revision,attempt,active,replayed}` and adds immutable
 `ended:{requestId,revision,reason}` to that exact retained attempt. This records a
 learning retirement decision, not a Stop, archive, deletion or disposal receipt.
@@ -482,18 +471,21 @@ preparation must not be reacquired for an already ended attempt.
 
 Reservation and end replays resolve their original IDs before revision checks.
 They return the retained attempt and actual current active summary, never reactivate
-an ended attempt or end its successor. Preparation, learning writes and resume
-remain active-only. A host must not provision an ended reservation replay. A new
-start is separately admitted against the enabled course, uses a new request ID,
-and allocates a new UUID/project slug and subsequent initial session identity.
+an ended attempt or end its successor. Preparation and resume remain
+active-only. A host must not provision an ended reservation replay. A new start
+is separately admitted against the enabled course, uses a new request ID and
+allocates a new UUID; it reuses a practice project slug only when continuing
+that project with its `practiceId`.
 Every existing write updates only the matching attempt rather than replacing history.
 
-At most eight attempts are retained, in reservation order. Ended revisions and
+At most 32 attempts are retained, in reservation order. Ended revisions and
 request identities are validated, and only the final unended attempt can be
-active. Capacity refusal preserves every receipt and retry identity; the pilot
-has no automatic pruning or multicourse scheduler. Completion unions passed
-assessment IDs for the identical lesson code/hash across validated topic and
-course pins for that learner. Topic-only changes do not invalidate an unchanged
+active. A new reservation at the cap removes the oldest ended attempt and its
+reader position; step results stay with their lesson content and ledgers with
+their practice project. The serialized progress record stays limited to 64 KiB
+and an end that would exceed it is refused. For a v1 lesson, completion unions
+passed assessment IDs for the identical lesson code/hash across validated topic
+and course pins for that learner. Topic-only changes do not invalidate an unchanged
 lesson. Different lesson content keeps historical evidence but contributes no pass
 to the current lesson. This read projection never rewrites pins or copies receipts
 into a new attempt; existing exact installed-pin validation remains authoritative.

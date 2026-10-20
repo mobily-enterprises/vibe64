@@ -36,6 +36,8 @@ const lessonFields = {
   appRoutes: { ...list(createSchema({ method: { ...text, enum: ["POST", "PUT", "PATCH", "DELETE"] },
     path: { ...text, maxLength: 128, pattern: "^/[A-Za-z0-9._~:/-]*$" } }), 16), required: false }
 };
+// Lesson format v1 (retired): authoring commands refuse it; installed
+// snapshots of it still validate.
 const lessonSchema = createSchema({
   schemaVersion: version, ...lessonFields, document: text,
   assessments: list(assessment, 32)

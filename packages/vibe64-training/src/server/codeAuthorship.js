@@ -2,22 +2,16 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { canonicalJson } from "./content.js";
-import { assessmentLesson } from "./learnerState.js";
+import { attemptPracticeId } from "./learnerState.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
-// One slot stays free so a save that cannot extend the previous entry still fits.
-const MAX_SEPARATE_ENTRIES = 127;
-// v2 code steps share one save log per attempt (the ledger holds 256).
-const MAX_SEPARATE_STEP_ENTRIES = 255;
+// Code steps share one save log per practice project (the ledger holds 256);
+// one slot stays free so a save that cannot extend the previous entry fits.
+const MAX_SEPARATE_ENTRIES = 255;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
-}
-
-function questionKey(question) {
-  return { id: question.id, assessmentId: question.assessmentId, issuedRevision: question.issuedRevision };
 }
 
 // Reads the bytes of declared exercise-relative files from the live session
@@ -44,17 +38,10 @@ async function readDeclaredFiles(source, files) {
 }
 
 // A declared file counts as the learner's only when every byte change since the
-// question's (v1) or entered step's (v2) baseline arrived through this learner's
-// own lesson editor saves.
-function verifyAuthorship(ledger, question, files) {
-  const matches = Boolean(ledger?.question) && canonicalJson(ledger.question) === canonicalJson(questionKey(question));
-  return verifyLedgerChain(matches ? ledger.baseline : null, ledger?.entries, files);
-}
-
-// v2 additionally requires that the learner's own saves changed every declared
-// file after the step was first entered: code already present at entry (from
-// the coding agent, Colleague, Git or an earlier step) is the starting point,
-// never the learner's work for this step.
+// entered step's baseline arrived through this learner's own editor saves, and
+// those saves changed every declared file after the step was first entered:
+// code already present at entry (from the coding agent, Colleague, Git or an
+// earlier step) is the starting point, never the learner's work for this step.
 function verifyStepAuthorship(ledger, stepId, files) {
   const step = ledger?.steps?.find(value => value.stepId === stepId);
   const verified = verifyLedgerChain(step?.baseline, ledger?.entries.slice(step?.entryStart), files);
@@ -81,10 +68,10 @@ function verifyLedgerChain(baselineFiles, entries, files) {
   return { intact: broken.length === 0, files: broken };
 }
 
-// Paths whose saves the ledger records: the v1 question's files, or the files
-// of every v2 code step entered so far in this attempt.
+// Paths whose saves the ledger records: the files of every code step entered
+// so far in this practice project.
 function trackedPaths(ledger) {
-  return new Set((ledger.question ? ledger.baseline : ledger.steps.flatMap(step => step.baseline)).map(file => file.path));
+  return new Set(ledger.steps.flatMap(step => step.baseline).map(file => file.path));
 }
 
 // The code step of a v2 lesson: an automatic step whose declared check is a
@@ -97,25 +84,14 @@ function codeStepOf(lesson, stepId) {
   return { step, check, files: step.check.files };
 }
 
-// Training owns the authorship baseline and the save ledger for code questions
-// and code steps. The generic source editor still performs every save; this
-// owner only records it.
+// Training owns the authorship baseline and the save ledger for code steps.
+// The generic source editor still performs every save; this owner only
+// records it. The ledger belongs to the practice project, so code saved before
+// Continue lesson still counts in the continued attempt.
 function createTrainingCodeAuthorship({ learners, content, project } = {}) {
-  if (!learners?.readState || !learners?.updateCodeLedger || !content?.readLesson || !project?.runInProjectContext || !project?.createRuntime) {
+  if (!learners?.readState || !learners?.activeAttemptForPractice || !learners?.updateCodeLedger || !content?.readLesson ||
+      !project?.runInProjectContext || !project?.createRuntime) {
     throw new TypeError("Code authorship requires the original learner, installed content and Project owners.");
-  }
-
-  async function openCodeQuestion(actor, attemptId) {
-    const state = await learners.readState({ actor, includeCompletion: true });
-    const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    const question = attempt?.learning?.resume?.pendingQuestion;
-    if (!attempt || attempt.attemptId !== attemptId || attempt.preparation.phase !== "ready" ||
-        !question?.assistance || !question.issuedRevision) return null;
-    const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
-    if (!assessmentLesson(lesson)) return null;
-    const assessment = lesson.lesson.assessments.find(value => value.id === question.assessmentId);
-    if (assessment?.kind !== "practical" || assessment.evidence?.producer !== "code") return null;
-    return { attempt, question, assessment, lesson };
   }
 
   async function liveFiles(attempt, files) {
@@ -129,24 +105,24 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     });
   }
 
-  async function openCodeStep(actor, attemptId, stepId) {
-    const state = await learners.readState({ actor });
-    const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    if (!attempt || attempt.attemptId !== attemptId || attempt.preparation.phase !== "ready") return null;
+  async function openCodeStep(attempt, stepId) {
+    if (!attempt || attempt.preparation.phase !== "ready") return null;
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const code = codeStepOf(lesson, stepId);
     return code ? { attempt, lesson, ...code } : null;
   }
 
-  // Called when the learner enters a v2 code step. Each code step keeps the
-  // baseline of its first entry for the whole attempt: returning to it, or
-  // moving between code steps, never adopts intervening edits as its start.
+  // Called when the learner enters a code step. Each code step keeps the
+  // baseline of its first entry in this practice project: returning to it,
+  // moving between code steps or continuing the lesson never adopts
+  // intervening edits as its start.
   async function recordStepBaseline({ actor, attemptId, stepId } = {}) {
-    const open = await openCodeStep(actor, attemptId, stepId);
+    const { progress } = await learners.readState({ actor });
+    const active = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
+    const open = active?.attemptId === attemptId ? await openCodeStep(active, stepId) : null;
     if (!open) return { recorded: false };
     const { revision } = await learners.readStepProgress({ actor });
-    const { ledger } = await learners.updateCodeLedger({ actor, attemptId }, async current => {
-      if (current?.question) throw failure("VIBE64_TRAINING_CODE_QUESTION_STALE", "This attempt records code questions, not code steps.");
+    const { ledger } = await learners.updateCodeLedger({ actor, practiceId: attemptPracticeId(active) }, async current => {
       if (current?.steps.some(step => step.stepId === stepId)) return null;
       const files = await liveFiles(open.attempt, open.files);
       const entries = current?.entries || [];
@@ -157,23 +133,16 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     return { recorded: true, step: { stepId, enteredRevision: step.enteredRevision }, baseline: structuredClone(step.baseline) };
   }
 
-  async function tracksLedger(actor, attemptId, current) {
-    if (!current) return false;
-    if (current.steps) return Boolean(await openCodeStep(actor, attemptId, current.steps[0].stepId));
-    const open = await openCodeQuestion(actor, attemptId);
-    return Boolean(open && canonicalJson(current.question) === canonicalJson(questionKey(open.question)));
-  }
-
-  // The admitted learning save. `save` is the generic editor save already bound
-  // to this learner's exact practice session; it enforces baseHash itself.
-  async function saveLearnerFile({ actor, attemptId, input, save } = {}) {
+  // The admitted learning save in a practice project. `save` is the generic
+  // editor save already bound to this learner's practice session; it enforces
+  // baseHash itself. Without an active attempt there, it is a plain save.
+  async function saveLearnerFile({ actor, practiceId, input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
-    const result = await learners.updateCodeLedger({ actor, attemptId }, async (current, { learnerId }) => {
-      const tracking = await tracksLedger(actor, attemptId, current);
-      if (tracking && current.entries.length >= (current.steps ? MAX_SEPARATE_STEP_ENTRIES : MAX_SEPARATE_ENTRIES)) {
-        throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", current.steps
-          ? "This code step recorded too many separate edits. Ask the lesson owner to review it."
-          : "This code question recorded too many separate edits. Ask your teacher for a new question.");
+    if (!await learners.activeAttemptForPractice({ actor, practiceId })) return save();
+    const result = await learners.updateCodeLedger({ actor, practiceId }, async (current, { learnerId, attempt }) => {
+      const tracking = Boolean(current && await openCodeStep(attempt, current.steps[0].stepId));
+      if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
+        throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", "This code step recorded too many separate edits. Ask the lesson owner to review it.");
       }
       const saved = await save();
       const savedPath = saved?.file?.path;
@@ -185,7 +154,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
       const last = entries.at(-1);
       // Consecutive clean saves of one file collapse into one link of the
       // chain, never across a later step entry (which starts at the next save).
-      const sealed = Math.max(0, ...(current.steps || []).map(step => step.entryStart));
+      const sealed = Math.max(0, ...current.steps.map(step => step.entryStart));
       if (last && entries.length > sealed && last.path === entry.path && last.actorId === entry.actorId && last.savedHash === last.intendedHash &&
           entry.baseHash === last.savedHash && entry.savedHash === entry.intendedHash) {
         Object.assign(last, { savedHash: entry.savedHash, intendedHash: entry.intendedHash, at: entry.at, saves: last.saves + 1 });
@@ -200,4 +169,4 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
   return Object.freeze({ recordStepBaseline, saveLearnerFile });
 }
 
-export { codeStepOf, createTrainingCodeAuthorship, readDeclaredFiles, verifyAuthorship, verifyStepAuthorship };
+export { codeStepOf, createTrainingCodeAuthorship, readDeclaredFiles, verifyStepAuthorship };
