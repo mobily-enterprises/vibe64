@@ -430,6 +430,10 @@ consumed once; identical submission replay returns the existing result before CA
 Results retain outcome, rubric/hash, reason, assistance and server recording time.
 Resume and write responses derive completion from passes for every required
 assessment in the pinned descriptor; there is no writable completion flag.
+Completion for a version 2 lesson instead counts its required step results.
+Resume checkpoints, assessment learning and receipt validation apply only to
+schemaVersion 1 lessons (`assessmentLesson`); resume and learning writes refuse a
+version 2 lesson, and any other lesson format is refused as unsupported.
 There is at most one active attempt; original preparation identity and ordinary
 permissions remain unchanged. Each attempt retains up to 64 receipts, and the
 whole serialized record remains limited to 64 KiB; excess writes fail without
