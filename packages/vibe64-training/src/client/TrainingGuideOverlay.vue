@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { clearTrainingGuide, guideElementVisible, registerTrainingGuideOverlay, trainingGuide } from "./trainingGuide.js";
+import { clearTrainingGuide, currentTrainingGuideElement, registerTrainingGuideOverlay, trainingGuide } from "./trainingGuide.js";
 
 // A coach mark over one real Vibe64 control: a soft spotlight, a ring with a
 // ripple and a short caption pointing at it. It never takes input: the
@@ -11,6 +11,7 @@ const lifetime = ref(0);
 const reducedMotion = ref(Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches));
 let frame = 0;
 let timer = null;
+let element = null;
 
 function stop() {
   if (frame) globalThis.cancelAnimationFrame?.(frame);
@@ -27,17 +28,19 @@ function measure() {
   const guide = trainingGuide.value;
   if (!guide) return;
   // The learner moved on (or the view changed): the ring would point at nothing.
-  if (!guideElementVisible(guide.element)) {
+  element = currentTrainingGuideElement({ ...guide, element });
+  if (!element) {
     clearTrainingGuide(guide.id);
     return;
   }
-  const box = guide.element.getBoundingClientRect();
+  const box = element.getBoundingClientRect();
   rect.value = { top: box.top, left: box.left, width: box.width, height: box.height };
   if (globalThis.requestAnimationFrame) frame = globalThis.requestAnimationFrame(measure);
 }
 watch(trainingGuide, guide => {
   stop();
   rect.value = null;
+  element = guide?.element || null;
   if (!guide) return;
   lifetime.value = Math.max(0, guide.expiresAt - Date.now());
   timer = setTimeout(() => clearTrainingGuide(guide.id), lifetime.value);

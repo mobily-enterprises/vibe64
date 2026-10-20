@@ -135,6 +135,8 @@ also has:
   project's **Dashboard → Files** editor. A step about the database (**ERD** or
   **Data**) opens **Dashboard → Database** for the practice project's selected
   session, opening the practice project first when another page is showing.
+  The ring stays for a few seconds, also on a phone while the practice
+  project's page is still loading, and clears when you tap or click anywhere.
   Click the control yourself. If the place is not
   available on the current page, Learning comes back with the reason; open
   your practice project and try again.

@@ -175,6 +175,39 @@ describe("teacher guide overlay", () => {
     expect(trainingGuide.value.element).toBe(nextPane);
   });
 
+  it("keeps ringing a pane the navigated view re-renders, and clears when the pane is hidden", async () => {
+    const frames = [];
+    vi.stubGlobal("requestAnimationFrame", callback => frames.push(callback));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal("innerWidth", 390);
+    vi.stubGlobal("innerHeight", 844);
+    mountOverlay();
+    const preview = trainingGuideCommand(trainingGuideRequest({ target: "preview" }), { id: "preview" }).guide;
+    const previewPane = control({ "data-vibe64-guide-pane": "preview" }, { top: 56, left: 0, width: 390, height: 788 });
+    document.controls.push(previewPane);
+    expect(await showTrainingGuide(preview)).toEqual({ shown: true, step: "preview" });
+    await Vue.nextTick();
+    expect(overlay()).toBeDefined();
+
+    // Opening another project's Preview on a phone replaces the pane element just after the ring lands.
+    previewPane.isConnected = false;
+    document.controls.splice(document.controls.indexOf(previewPane), 1);
+    const replacement = control({ "data-vibe64-guide-pane": "preview" }, { top: 62, left: 0, width: 390, height: 782 });
+    document.controls.push(replacement);
+    frames.splice(0).forEach(frame => frame());
+    await Vue.nextTick();
+    expect(trainingGuide.value).not.toBeNull();
+    const ring = find(overlay(), child => child.props.class === "training-guide-overlay__ring")[0];
+    expect(ring.props.style).toMatchObject({ top: "56px", height: "794px" });
+
+    // A pane that is still there but hidden means the learner's view changed: the ring clears.
+    replacement.hidden = true;
+    frames.splice(0).forEach(frame => frame());
+    await Vue.nextTick();
+    expect(trainingGuide.value).toBeNull();
+    expect(overlay()).toBeUndefined();
+  });
+
   it("on a phone, rings the Dashboard section select, then the open section's pane", async () => {
     mountOverlay();
     document.controls[0].hidden = true; // the phone header hides the Dashboard tab
