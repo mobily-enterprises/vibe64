@@ -130,7 +130,10 @@ also has:
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control
   with a short caption. A step about one file opens that file in the practice
-  project's **Dashboard → Files** editor. Click the control yourself. If the place is not
+  project's **Dashboard → Files** editor. A step about the database (**ERD** or
+  **Data**) opens **Dashboard → Database** for the practice project's selected
+  session, opening the practice project first when another page is showing.
+  Click the control yourself. If the place is not
   available on the current page, Learning comes back with the reason; open
   your practice project and try again.
 - **Teach me**: minimises Learning, opens Colleague and sends it the message

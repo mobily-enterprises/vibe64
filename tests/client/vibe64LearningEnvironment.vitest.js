@@ -227,6 +227,37 @@ describe("useVibe64Learning controller", () => {
     expect(stale.value.openFile).not.toHaveBeenCalled();
   });
 
+  it("Show me opens a Database view with the practice project's selected session", async () => {
+    const dataStep = { id: "rows", title: "Rows", bodyText: "Look.", required: true, check: { kind: "self" },
+      guide: { target: "database-data", navigate: true } };
+    const reads = () => { const value = lessonResult(); value.lesson.steps.push(dataStep); return value; };
+    const runGuide = vi.fn(async () => ({ guide: { shown: true, step: "database-data" } }));
+    // Already on the practice project: its selected session is used directly.
+    const here = Vue.shallowRef({ projectSlug: "practice-one", sessionId: "session-b", ready: true });
+    const navigateHere = vi.fn();
+    const first = controller({ reads, browserNavigation: Vue.shallowRef(navigateHere), colleagueView: here, runGuide });
+    first.learning.setViewer("member");
+    await first.learning.show({ attemptId: ATTEMPT, stepId: "rows" });
+    await first.learning.showMe("rows");
+    expect(navigateHere).not.toHaveBeenCalled();
+    expect(runGuide.mock.calls[0][0]).toMatchObject({ projectSlug: "practice-one", sessionId: "session-b",
+      pane: "database", databaseView: "data", guide: { target: "database-data", navigate: true } });
+
+    // From another page: open the practice project, then use the session it selects.
+    const elsewhere = Vue.shallowRef({ projectSlug: "elsewhere", sessionId: "other", ready: true });
+    const navigateBrowser = vi.fn(async () => {
+      setTimeout(() => { elsewhere.value = { projectSlug: "practice-one", sessionId: "session-a", ready: false }; }, 60);
+      return {};
+    });
+    const second = controller({ reads, browserNavigation: Vue.shallowRef(navigateBrowser), colleagueView: elsewhere, runGuide });
+    second.learning.setViewer("member");
+    await second.learning.show({ attemptId: ATTEMPT, stepId: "rows" });
+    await second.learning.showMe("rows");
+    expect(navigateBrowser).toHaveBeenCalledWith({ projectSlug: "practice-one" });
+    expect(runGuide.mock.calls[1][0]).toMatchObject({ projectSlug: "practice-one", sessionId: "session-a", databaseView: "data" });
+    expect(showMeCommand({ target: "preview", navigate: true }, { projectSlug: "p", sessionId: "s" })).toMatchObject({ sessionId: "s" });
+  });
+
   it("Teach me opens this host's Colleague and sends the fixed message once, for the same person only", async () => {
     const { learning } = controller();
     learning.setViewer("member");
