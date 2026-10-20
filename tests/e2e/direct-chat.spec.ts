@@ -2336,6 +2336,66 @@ for (const width of [320, 390, 820]) {
   });
 }
 
+// A practice project is named by its lesson, not its training-<attempt> slug,
+// and on a phone the project name, the session controls, the pane switch and
+// the account/Colleague buttons share the app bar without overlapping, with the
+// chat shown and with the project pane shown.
+const PRACTICE_SLUG = `training-${"0123456789abcdef".repeat(2)}`;
+for (const width of [320, 360, 390, 540]) {
+  test(`@phone-header practice project name fits the phone app bar at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockDirectChat(page);
+    const practiceProject = { ...readyProjectSelectionPayload.projects[0], runtime: { open: true },
+      practice: { learnerKey: "NDI", attemptId: "01234567-89ab-cdef-0123-456789abcdef", lessonCode: "REFUSE-EMPTY-TITLES", mine: true } };
+    await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, { ...readyProjectSelectionPayload,
+      currentProject: practiceProject, projects: [practiceProject] }));
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+    const selector = page.locator(".studio-home-shell-project-selector");
+    await expect(selector).toContainText("Practice: REFUSE-EMPTY-TITLES");
+    await expect(selector).not.toContainText(PRACTICE_SLUG);
+    for (const pane of ["chat", "project"]) {
+      if (pane === "project") await page.getByRole("button", { name: "Show project", exact: true }).click();
+      await expect(page.locator(".studio-home-shell-chat-toggle")).toBeVisible();
+      const boxes = await page.evaluate(() => {
+        const bar = document.querySelector("[data-testid=jskit-shell-app-bar]");
+        // The title area clips the project selector, so its box is what must not overlap.
+        const selectors = [".studio-app-shell-layout__learning-plate", ".studio-home-shell-title-area",
+          ".studio-home-shell-create-session-host", ".studio-home-shell-local-remotes-host", ".studio-home-shell-github-actor-host",
+          ".studio-home-shell-chat-toggle", ".studio-home-shell-preview-toolbar-host", ".studio-home-shell-project-mobile-action",
+          ".studio-app-shell-layout__top-right"];
+        return selectors.flatMap(name => Array.from(bar?.querySelectorAll(name) || []).map(element => {
+          const rect = element.getBoundingClientRect();
+          return { name, left: rect.left, right: rect.right, width: rect.width, height: rect.height,
+            visible: rect.width > 0 && rect.height > 0 && getComputedStyle(element).display !== "none" };
+        })).filter(box => box.visible);
+      });
+      await page.screenshot({ path: info.outputPath(`practice-header-${pane}-${width}.png`), animations: "disabled" });
+      // The name is readable, or (only beside Preview's controls on the narrowest
+      // phones) hidden rather than squeezed to a sliver.
+      if (pane === "chat" || width >= 390) await expect(selector).toBeVisible();
+      if (await selector.isVisible()) {
+        const label = await selector.locator("span").first().evaluate(element => element.getBoundingClientRect().width);
+        expect(label, `the project name stays readable with the ${pane} pane`).toBeGreaterThanOrEqual(44);
+      }
+      for (const box of boxes) {
+        expect(box.left, `${box.name} starts inside the phone app bar`).toBeGreaterThanOrEqual(0);
+        expect(box.right, `${box.name} ends inside the phone app bar`).toBeLessThanOrEqual(width + 0.5);
+      }
+      for (const [index, left] of boxes.entries()) {
+        for (const right of boxes.slice(index + 1)) {
+          const overlap = Math.min(left.right, right.right) - Math.max(left.left, right.left);
+          expect(overlap, `${left.name} and ${right.name} do not overlap with the ${pane} pane`).toBeLessThanOrEqual(0.5);
+        }
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const width of [390, 1280]) {
   test(`@workflow-continue Continue review reaches the session action and shows rejection at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });

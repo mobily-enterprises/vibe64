@@ -255,8 +255,22 @@ opens per runtime root so simultaneous visits observe one transition.
 
 A practice project is an ordinary project whose immutable record carries the
 saved Learning `training` marker. Core `practiceProjects.js` derives the public
-`practice: {learnerKey, attemptId}` field from it and adds `mine` only for a
-known viewer; it never reads or changes saved progress. The workspace listing
+`practice: {learnerKey, attemptId, lessonCode}` field from it and adds `mine` only for a
+known viewer; it never reads or changes saved progress.
+
+People see a practice project by its lesson, never its `training-<attempt>`
+slug, which stays the address. The client `vibe64PracticeProjectName.js`
+(`projectDisplayName`, `practiceProjectName`) is the one naming rule for both
+hosts: **Practice:** plus the lesson title where the client knows it (the open
+lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; L's
+courses.list in `useVibe64PracticeProjects`), else the marker's lesson code,
+else "Practice project" for a bare practice slug. Headers, the project
+switcher, both Practice lists and Online Management use it; Colleague's
+protocol names practice projects the same way. On phones (≤600px) the project
+page heading takes only the room the header actions leave: the pane controls
+keep their size, the selector shortens with an ellipsis inside a clipped title
+area, a `@container` rule hides it below 4rem rather than show a sliver, and at
+≤480px the next-pane button becomes a pane icon that keeps its "Go to …" name. The workspace listing
 stays unfiltered for internal callers; a listing for a viewer omits other learners' practice
 projects (`practiceProjectsForViewer`), and the presentation splits Practice from
 ordinary projects. `practiceProjectAccessBlock` refuses a non-owner whose learner

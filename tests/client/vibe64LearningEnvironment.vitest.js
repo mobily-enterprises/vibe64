@@ -731,11 +731,11 @@ describe("L's Practice section", () => {
     const { learning } = controller();
     learning.setViewer("member");
     await learning.show();
-    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() } };
+    const courses = { learningResource: { data: Vue.ref(null), reload: vi.fn() }, coursesResource: { data: Vue.ref(null) } };
     const practiceOptions = [];
     const practiceProjects = Vue.ref([
-      { slug: "training-mine", attemptId: ATTEMPT, lessonCode: "V64-START-02", lessonTitle: "", ended: false, mine: true, deleteAvailable: true },
-      { slug: "training-old", attemptId: OTHER, lessonCode: "", lessonTitle: "", ended: true, mine: true, deleteAvailable: false }
+      { slug: "training-mine", attemptId: ATTEMPT, lessonCode: "V64-START-02", lessonTitle: "", name: "Practice: V64-START-02", ended: false, mine: true, deleteAvailable: true },
+      { slug: "training-old", attemptId: OTHER, lessonCode: "", lessonTitle: "", name: "Practice project", ended: true, mine: true, deleteAvailable: false }
     ]);
     const deletePracticeProject = vi.fn(async () => true);
     const push = vi.fn();
@@ -755,17 +755,18 @@ describe("L's Practice section", () => {
       await flush();
       // No project listing: L's own learning.read resource feeds the section.
       expect(practiceOptions[0].learningResource).toBe(courses.learningResource);
+      expect(practiceOptions[0].coursesResource, "lesson titles come from L's own courses.list").toBe(courses.coursesResource);
       expect(practiceOptions[0].enabled.value).toBe(true);
       expect(byTest(root, "learning-practice")).toBeTruthy();
       expect(nodes(root).filter(node => node.props?.["data-practice-slug"]).map(node => node.props["data-practice-slug"]))
         .toEqual(["training-mine", "training-old"]);
-      expect(textOf(root)).toContain("V64-START-02");
-      const deletes = nodes(root).filter(node => String(node.props?.["aria-label"] || "").startsWith("Delete practice project"));
-      expect(deletes.map(node => node.props["aria-label"])).toEqual(["Delete practice project training-mine"]);
+      expect(textOf(root)).toContain("Practice: V64-START-02");
+      const deletes = nodes(root).filter(node => String(node.props?.["aria-label"] || "").startsWith("Delete Practice"));
+      expect(deletes.map(node => node.props["aria-label"])).toEqual(["Delete Practice: V64-START-02"]);
       deletes[0].props.onClick();
       await flush();
       expect(deletePracticeProject).toHaveBeenCalledWith(practiceProjects.value[0]);
-      nodes(root).find(node => node.props?.["aria-label"] === "Open practice project training-old").props.onClick();
+      nodes(root).find(node => node.props?.["aria-label"] === "Open Practice project").props.onClick();
       await flush();
       expect(learning.open, "opening keeps L's place by minimising it").toBe(false);
       expect(push).toHaveBeenCalledWith("/app/project/training-old");

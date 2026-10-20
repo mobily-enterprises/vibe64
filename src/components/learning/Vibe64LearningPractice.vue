@@ -16,7 +16,7 @@ const props = defineProps({
 });
 const router = useRouter();
 const practice = useVibe64PracticeProjects({ enabled: computed(() => Boolean(props.learning.state.open)),
-  learningResource: props.courses.learningResource });
+  learningResource: props.courses.learningResource, coursesResource: props.courses.coursesResource });
 const projects = computed(() => practice.practiceProjects.value);
 const deleting = computed(() => toValue(practice.deletingSlug));
 
@@ -36,13 +36,13 @@ function openProject(slug) {
     <ul class="vibe64-learning-practice__list">
       <li v-for="project in projects" :key="project.slug" class="vibe64-learning-practice__row" :data-practice-slug="project.slug">
         <button type="button" class="vibe64-learning-practice__open" :disabled="Boolean(deleting)"
-          :aria-label="`Open practice project ${project.slug}`" @click="openProject(project.slug)">
-          <span class="vibe64-learning-practice__name">{{ project.lessonTitle || project.lessonCode || project.slug }}</span>
+          :aria-label="`Open ${project.name}`" @click="openProject(project.slug)">
+          <span class="vibe64-learning-practice__name">{{ project.name }}</span>
           <span class="vibe64-learning-practice__slug">{{ project.slug }}</span>
         </button>
         <v-btn v-if="project.mine && project.deleteAvailable && project.attemptId" variant="text" :icon="mdiDeleteOutline"
-          min-width="48" min-height="48" :aria-label="`Delete practice project ${project.slug}`"
-          :title="`Delete practice project ${project.slug}`" :disabled="Boolean(deleting)" :loading="deleting === project.slug"
+          min-width="48" min-height="48" :aria-label="`Delete ${project.name}`"
+          :title="`Delete ${project.name}`" :disabled="Boolean(deleting)" :loading="deleting === project.slug"
           @click="practice.deletePracticeProject(project)" />
       </li>
     </ul>

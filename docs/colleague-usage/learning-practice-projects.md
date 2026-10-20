@@ -42,15 +42,16 @@ still reports "Local editor mode only serves the selected project."
 Practice projects are ordinary projects marked as practice. Learning lists
 yours: press **L**, and the **Courses** page shows a **Practice** section below
 the courses (above **What my teacher knows about me**) once you have at least
-one practice project. Each row names the lesson and the practice project's
-address. Select a row to open that project; Learning minimises and keeps your
+one practice project. Each row shows the project's name, **Practice:** followed
+by the lesson title (the lesson code while the title cannot be read), and below
+it the project's address (`training-…`). Select a row to open that project; Learning minimises and keeps your
 place, so **L** returns to it. A local installation normally serves only its
 selected project and has no project list to open, so use this section there.
 On a hosted workspace the same section appears, and Management → **Projects**
 still lists practice projects under **Practice** (see that guide).
 
-The trash button beside one of your practice projects (**Delete practice
-project** followed by its name) deletes it with one click; there is no
+The trash button beside one of your practice projects (**Delete** followed by
+its name, for example **Delete Practice: First change**) deletes it with one click; there is no
 confirmation dialog. A **Practice project deleted.** message confirms it and the
 row disappears; **Open practice project** in that lesson disappears too. The
 project's source, sessions and runtime state are removed and no archive is
@@ -75,6 +76,24 @@ alike). The lesson stays there; start it again for a new practice project. The
 page's requests answer not found with the code `vibe64_practice_project_deleted`
 from the moment deletion starts. Colleague can explain this; only you press
 **Open Learning**.
+
+## How a practice project is named
+
+A practice project keeps its address (`/app/project/training-…`), but Vibe64
+names it after its lesson everywhere a project name is shown: the project
+header, the project picker's list, Learning's **Practice** section and
+Management on a hosted workspace. The name is **Practice:** followed by the
+lesson title when it is known there (the open lesson's own practice project, or
+Learning's course list), otherwise the lesson code, for example **Practice:
+V64-START-02**. Hover the header name on a computer to see the address too.
+Colleague uses the same name.
+
+On a phone the header name shortens with **…** so it never covers the other
+header buttons. While Preview's controls are showing on a very narrow phone
+there may be no room for it at all; the name is then hidden, and **Show chat**
+brings it back. On phones narrower than about 480px the button that switches
+between **Preview** and **Dashboard** shows that pane's icon instead of the word
+(its name is still **Go to dashboard** or **Go to preview**).
 
 ## Working in the practice project
 

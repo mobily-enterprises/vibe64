@@ -23,6 +23,7 @@ import {
   useVibe64PracticeProjects
 } from "@/composables/useVibe64PracticeProjects.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
+import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 
 const cachedProjectSelections = new Map();
 // The server's not-found code for a practice project deleted while its page is open.
@@ -130,8 +131,9 @@ function useProjectSelectionGate(emit, {
     : listedProjects.value.filter((project) => project?.practice).map((project) => ({
       slug: project.slug,
       attemptId: String(project.practice.attemptId || ""),
-      lessonCode: "",
+      lessonCode: String(project.practice.lessonCode || ""),
       lessonTitle: "",
+      name: projectDisplayName(project),
       ended: false,
       mine: project.practice.mine === true,
       // The hosted host owns its delete (Online management page); the shared
