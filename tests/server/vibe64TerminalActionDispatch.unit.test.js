@@ -17,12 +17,12 @@ import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/co
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
-function catalogue(terminals, projectContext, { resolveUser, authorizeProject, resolveLearningContext } = {}) {
+function catalogue(terminals, projectContext, { resolveUser, authorizeProject } = {}) {
   const actions = createActionCatalogue();
   actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action
   })) });
-  registerVibe64ActionContext(actions, { projectContext, ...(resolveLearningContext ? { resolveLearningContext } : {}),
+  registerVibe64ActionContext(actions, { projectContext,
     resolveUser: resolveUser || (async () => ({ username: "owner", role: "owner" })),
     authorizeProject: authorizeProject || (async () => {})
   });
@@ -290,108 +290,6 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
     assert.equal(calls.length, count, "revoked or changed actors cannot reach the retained goal service");
   });
 });
-
-test("learning Main goals retain original internal controls and reauthorize the saved learner attempt", async () => {
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const actor = { uid: 42, username: "learner", role: "member" };
-  let user = actor;
-  let active = true;
-  const calls = [];
-  const goal = { status: "available", goal: { id: "saved-native-goal", objective: "Keep the admitted lesson objective", status: "paused" } };
-  const terminals = {
-    openBrowserConversation() { assert.fail("Goal controls must retain the original internal service route."); },
-    readAgentGoal(...args) { calls.push({ kind: "read", args, scope: currentProjectRequestContext().learningScope }); return goal; },
-    updateAgentGoal(...args) { calls.push({ kind: "write", args, scope: currentProjectRequestContext().learningScope }); return { ok: true }; }
-  };
-  const actions = catalogue(terminals, null, {
-    resolveUser: async () => user,
-    authorizeProject() { assert.fail("Learning goals cannot borrow project authorization."); },
-    async resolveLearningContext({ actor: current, attemptId: requested, sessionId, access }) {
-      assert.equal(requested, attemptId);
-      assert.equal(sessionId, "learning-session");
-      if (access === "write" && !active) throw Object.assign(new Error("Ended attempt"), { code: "attempt_inactive" });
-      return { projectRuntimeRoot: "/actual/private/learner/attempt", learningScope: {
-        learnerId: String(current.uid), attemptId, noExercise: true
-      } };
-    }
-  });
-  actions.register({ contributorId: "learning-goal-context", domain: "sessions",
-    actions: createSessionActions({ sessions: {} }).filter(definition => definition.id === ACTION_READ_CONVERSATION_CONTEXT)
-      .map(definition => ({ surfaces: ["app"], ...definition })) });
-  const facade = await createMainBrowserConversations({ actions, terminals }).open({
-    id: mainConversationId({ learningAttemptId: attemptId, sessionId: "learning-session" }),
-    context: { channel: "internal", surface: "app" }
-  });
-  assert.deepEqual(await facade.readGoal(), goal);
-  assert.deepEqual(calls[0].args, ["learning-session", { vibe64User: actor }, { canonical: true }]);
-  const input = { action: "set", expectedSegmentId: null, expectedGoalId: null,
-    messageId: "lesson-goal-one", objective: "Keep the admitted lesson objective", tokenBudget: 1000 };
-  assert.deepEqual(await facade.updateGoal(input), { ok: true });
-  assert.deepEqual(calls[1].args, ["learning-session", { ...input, sessionId: "learning-session", vibe64User: actor }, { canonical: true }]);
-  for (const call of calls) assert.equal(call.scope.attemptId, attemptId);
-  for (const actionId of [ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL]) {
-    assert.deepEqual(actions.getDefinition(actionId).channels, ["internal"]);
-    await assert.rejects(actions.execute({ actionId, input: { sessionId: "learning-session", learningAttemptId: attemptId,
-      ...(actionId === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? input : {}) }, context: { channel: "api", surface: "app" } }), {
-      code: "ACTION_CHANNEL_FORBIDDEN"
-    });
-  }
-  active = false;
-  await assert.rejects(facade.updateGoal(input), { code: "attempt_inactive" });
-  assert.deepEqual(await facade.readGoal(), goal);
-  assert.equal(calls.length, 3);
-  user = { uid: 43, username: "other", role: "member" };
-  await assert.rejects(facade.readGoal(), { code: "conversation_forbidden" });
-  assert.equal(calls.length, 3);
-  assert.equal(currentProjectRequestContext(), null);
-});
-
-
-test("Learning Main readiness uses the original preparer with fresh saved write authority", async () => {
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const actor = { uid: 42, username: "learner", role: "member" };
-  let user = actor;
-  let active = true;
-  const calls = [];
-  const grants = [];
-  const actions = catalogue({
-    ensureAgentSession(...args) {
-      calls.push({ args, scope: currentProjectRequestContext().learningScope });
-      return { ok: true, nativeThreadId: "retained-teacher-thread" };
-    }
-  }, null, {
-    resolveUser: async () => user,
-    authorizeProject() { assert.fail("Learning readiness cannot borrow Working project authority."); },
-    async resolveLearningContext({ actor: current, attemptId: requested, sessionId, access }) {
-      grants.push({ actor: current.uid, requested, sessionId, access });
-      assert.equal(access, "write");
-      if (current.uid !== actor.uid || requested !== attemptId || sessionId !== "saved-teacher") {
-        throw Object.assign(new Error("Foreign learning binding"), { code: "learning_forbidden" });
-      }
-      if (!active) throw Object.assign(new Error("Ended attempt"), { code: "attempt_inactive" });
-      return { projectRuntimeRoot: "/actual/private/learner/attempt", learningScope: {
-        learnerId: String(current.uid), attemptId, noExercise: true
-      } };
-    }
-  });
-  const execute = (input = {}) => actions.execute({ actionId: "vibe64.terminals.agent-session.prepare",
-    input: { sessionId: "saved-teacher", learningAttemptId: attemptId, ...input },
-    context: { channel: "api", surface: "app" } });
-  assert.deepEqual(await execute(), { ok: true, nativeThreadId: "retained-teacher-thread" });
-  assert.deepEqual(calls, [{ args: ["saved-teacher", { vibe64User: actor }],
-    scope: { learnerId: "42", attemptId, noExercise: true } }]);
-  active = false;
-  await assert.rejects(execute(), { code: "attempt_inactive" });
-  active = true;
-  user = { uid: 43, username: "other", role: "member" };
-  await assert.rejects(execute(), { code: "learning_forbidden" });
-  user = actor;
-  await assert.rejects(execute({ sessionId: "foreign-teacher" }), { code: "learning_forbidden" });
-  assert.equal(grants.length, 4);
-  assert.equal(calls.length, 1);
-  assert.equal(currentProjectRequestContext(), null);
-});
-
 
 test("opt-in Preview diagnostics retain module identity without credentials and cap the private log", () => {
   const entries = [];

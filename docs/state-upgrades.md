@@ -776,8 +776,8 @@ and the previous registry refuses its newer completed ledger. Existing Working
 and no-exercise Learning bindings, metadata and progress are unchanged. There is
 no historical adoption, inference or lazy repair. Full practice preparation,
 teacher transport and installed learner acceptance require their own proofs.
-Learning v2 retires this binding for practice sessions: see
-`20261021-practice-sessions-ordinary`.
+Learning v2 retires the practice projects that carry this binding: see
+`20261022-learning-space-reset`.
 
 
 ## Historical preparation-owned practice binding
@@ -1270,69 +1270,83 @@ into human Pause. No historical prose or inactivity is interpreted, no existing
 record is rewritten, and no application-file backup is necessary. Record the
 boundary through the ordinary stopped-service upgrade before activating writes.
 
-## Training step progress (version 2 lessons)
+## Retired unpublished Learning boundaries
 
-`20261020-training-step-progress` records the new-write boundary for version 2
-lesson learner state. New writes may add, per learner under
-`training/users/<key>/`, an append-only `step-progress.json` (schema version 1:
-per attempt at most 64 step results with request-ID replay, plus the latest
-learner-origin App receipt per step; 1 MiB bound) with its own
-`step-progress.lock`, and a last-write-wins `reader.json` with `reader.lock`.
-The code-authorship ledger may hold, instead of a v1 question, one baseline per
-entered v2 code step (keyed on `{stepId, enteredRevision}` with the index of its
-first save) over one shared save log of at most 256 entries (256 KiB bound);
-App receipts bound only the session ID format, so practice-session naming may
-change without converting them, and progress may retain up to 32 attempts (the 64 KiB progress bound
-is unchanged). Existing schema-version-1 records stay valid and byte-for-byte
-unchanged; version 1 lessons keep their assessment completion path.
+`20261020-training-step-progress` (a read-only learner-record preflight) and
+`20261021-practice-sessions-ordinary` (practice-session unbinding) were
+registered on main after the vibe64 0.1.35 release commit `a5266dcd` and are in
+no npm release. No ledger holds them: `vibe64-local update` refuses any
+candidate with a pending upgrade, so it never applies one; development parent
+copies applied the 20261021 owners directly, without the ledger; and no normal
+deployment ran after 0.1.35. A read-only check of the operator's local
+workspace-daemon ledger (`<systemRoot>/upgrades/applied.json`) on 2026-10-20 found
+neither ID. They were therefore removed from the registry with their owners and tests
+instead of being kept as immutable history. This is not a precedent for any
+published upgrade: an ID that any ledger may hold is never removed.
 
-The assembled candidate CLI supplies the Training owner
-`inspectTrainingStepProgress`. Its read-only preflight validates every learner
-record in the normal and author-preview stores with the candidate's readers
-(and any step or reader record a newer writer created) and reports counts. It
-converts, creates and backs up nothing; an invalid record blocks apply before the
-ledger entry, so retry after owner inspection is safe. An older registry refuses
-the newer ledger, which is the downgrade protection: never remove the entry to
-start an older release. Focused evidence: `stateUpgrades.unit.test.js`,
-`vibe64TrainingStepProgress.unit.test.js` and the original learner-state tests.
+## Learning space reset (Learning v2)
 
-## Ordinary practice sessions (Learning v2)
+`20261022-learning-space-reset` follows `20261017-claude-blocked-goal`. Practice
+projects now live in their learner's learning space, and old Learning data is
+disposable: there is no conversion. The candidate CLI supplies two owners, each
+with its own backup root under this upgrade's (`training/` and `colleague/`);
+Core keeps the registry, lock and ledger. `bin/upgrade-state.js` takes
+`--projects-root=<absolute>` on hosted installations (Online's
+`upgrade-vibe64-state.sh` passes `/var/lib/vibe64/<workspace>/projects`);
+without it the local managed source root is resolved as runtime resolves it.
 
-`20261021-practice-sessions-ordinary` follows the step-progress boundary. A
-lesson's practice project is now an ordinary project of its learner, and its
-sessions are ordinary project sessions. The candidate CLI supplies two owners,
-each with its own backed-up publisher under this upgrade's backup root
-(`training/` and `colleague/`); Core keeps the registry, lock and ledger.
+- Training (`resetLearningForLearningSpace`) selects a practice project only
+  when `projects/<slug>` is a real directory whose slug matches
+  `^training-[a-f0-9]{32}$`, whose `project.json` parses with a schema 1
+  `training` marker (canonical base64url `learnerKey`, UUID `attemptId` whose
+  hex is the slug's, a `pin` object, `exercise.kind: "bundled"`) and
+  `repository.mode: "managed_git"`. A look-alike without that marker gets a
+  WARNING and is left unchanged; no other project is read beyond its name, so
+  normal projects, their sessions, chats and code are never touched. Its old
+  namespace is `<projectsRoot>/<slug>` (hosted) or
+  `training/practice/<learnerKey>/<attemptId>/<slug>` plus the session source
+  `<managedSourceRoot>/<slug>` (local). A selected project without a namespace
+  is an ERROR (on hosted, pass `--projects-root`). For every learner in
+  `training/users/` and `author-preview/training/users/` it also selects
+  `progress.json`, `active-lesson.json`, `step-progress.json`, `reader.json`,
+  `code-ledger.json`, `learning-mode.json`, stale `*.lock` files (WARNING) and
+  the source-less `learning-sessions/` stores. `teacher-notes.json` (the
+  learner's own notes) stays.
+- Colleague (`retireColleagueLearningWatches`) removes every `learning-task`
+  watch and its queued observations from `colleague/<owner>/conversation.json`
+  through the backed-up publisher; history and other watches are kept.
 
-- Training (`upgradeLearningPracticeSessionsOrdinary`): in every practice
-  project runtime (`projects/training-*`), the Runtime offline owner stages
-  removal of each `training-<attemptId>` session's `learning_session` file, in
-  active, closing and archived sessions, plus the archive index entry. Only a
-  saved practice binding (`noExercise:false`, matching session and attempt) is
-  accepted; any other binding, or retained renewal state, refuses the upgrade
-  for inspection. Sessions without a binding (including those the 20261008
-  history upgrade never adopted) are unchanged. Source, Git, transcripts,
-  native identities, progress and archive history are kept. Then each
-  source-less teacher store `training/users/<key>/learning-sessions/<attemptId>`
-  (normal and author-preview) is moved whole into durable training state at
-  `training/retired/20261021-practice-sessions-ordinary/<original path>`,
-  outside `upgrades/backups/`, so backup retention never removes it. Nothing
-  reads a retired store: its separate lesson conversation no longer appears in
-  Learning and only the owner can inspect or restore it. Nothing is deleted.
-  An existing retired copy refuses the move instead of overwriting; a store
-  already moved by an interrupted apply is not listed again on retry.
-- Colleague (`retireColleagueLearningWatches`): every `learning-task` watch and
-  its queued observations are removed from `colleague/<owner>/conversation.json`;
-  conversation history and every other watch are kept.
+Training only moves; it deletes nothing. Apply first writes
+`upgrades/backups/20261022-learning-space-reset/training/manifest.json` with
+every source and destination, then moves hosted namespaces to
+`<projectsRoot>/.learning-reset-20261022/<slug>`, local session sources to
+`<managedSourceRoot>/.learning-reset-20261022/<slug>`, and runtime roots,
+learner files and local namespaces to
+`training/retired/20261022-learning-space-reset/<original path>`, outside
+`upgrades/backups/`, so backup retention never removes them. Namespaces move
+before the runtime root that carries their marker. A rename across filesystems
+copies, verifies the file list, types, sizes, SHA-256 and link targets, and only
+then removes the source. Retry finishes the same manifest: a move whose source
+is gone and whose destination exists is complete, and a verified copy whose
+source is still present has its source removed. Check (`--check`) is
+read-only; it lists every selected slug (learner key, lesson code) and every
+learner file, warns that hosted managed databases or resource profiles keyed by
+those slugs are not removed (they become unreachable and never collide with new
+practice slugs, which come from new UUIDs), and reports an ERROR for a symlink,
+a non-directory, or a destination that exists without its manifest entry.
 
-Check is read-only and reports what would change. Apply backs up before and
-after copies of every changed file through the existing manifest and resumes the
-same frozen bytes on retry. Keep every writer stopped; never edit the ledger or
-start an older release against partial state. The published
-`20261008-learning-practice-*` upgrades and their readers stay unchanged; the
-older registry refuses this newer ledger. Focused evidence:
-`stateUpgrades.unit.test.js`, `colleagueConversationUpgrade.unit.test.js` and
-the historical practice cases in `vibe64TrainingLearnerState.unit.test.js`.
+Removing the retired data is a manual, owner-confirmed step after the upgraded
+installation has been verified: remove `<projectsRoot>/.learning-reset-20261022`
+(hosted) or `<managedSourceRoot>/.learning-reset-20261022` (local) and
+`training/retired/20261022-learning-space-reset`. Vibe64 never removes them;
+until then they count in "Project files". Because this upgrade is pending,
+`vibe64-local update` refuses until a normal deployment has applied it. Keep
+every writer stopped; never edit the ledger or start an older release against
+partial state; the older registry refuses this newer ledger. Focused evidence:
+`learningSpaceResetUpgrade.unit.test.js` (check-only, apply and interrupted
+retry, the cross-filesystem copy, a tree-hash proof that normal projects stay
+byte-identical, kept teacher notes, refusals and a fresh install),
+`stateUpgrades.unit.test.js` and `colleagueConversationUpgrade.unit.test.js`.
 
 ## Training learner notes (no upgrade)
 
