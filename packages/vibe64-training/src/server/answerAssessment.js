@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { createTrainingAssessmentGrader } from "./assessmentGrader.js";
-import { evidenceSchema } from "./learnerState.js";
+import { assessmentLesson, evidenceSchema } from "./learnerState.js";
 import { validateContent } from "./contentSchemas.js";
 
 function failure(code, message) {
@@ -32,7 +32,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     if (attempt.preparation.phase === "reserved") {
       const lesson = await content.readLesson({ ...attempt.pin.topic,
         lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
-      if (lesson.lesson.exercise || !lesson.lesson.assessments.some(item => item.id === captured.question?.assessmentId && item.kind === "answer")) {
+      if (lesson.lesson.exercise || !assessmentLesson(lesson) || !lesson.lesson.assessments.some(item => item.id === captured.question?.assessmentId && item.kind === "answer")) {
         throw failure("VIBE64_TRAINING_ANSWER_UNADMITTED", "Use an answer declared in this exact no-exercise lesson; exercise assessments require their prepared attempt.");
       }
     }
@@ -54,7 +54,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
       }
       const lesson = await content.readLesson({ topicId: attempt.pin.topic.topicId, commit: attempt.pin.topic.commit,
         topicHash: attempt.pin.topic.topicHash, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
-      const assessment = lesson.lesson.assessments.find(value => value.id === question?.assessmentId);
+      const assessment = assessmentLesson(lesson) ? lesson.lesson.assessments.find(value => value.id === question?.assessmentId) : null;
       if (assessment?.kind !== "practical") throw new Error("Evaluate a native observation only for this pinned practical assessment.");
       proof = { kind: "observation", learnerId: observation.learnerId, attemptId,
         observationId: observation.observationId, observedAt: observation.observedAt,

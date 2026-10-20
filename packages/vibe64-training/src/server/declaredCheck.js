@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
 import { codeStepOf, readDeclaredFiles, verifyAuthorship, verifyStepAuthorship } from "./codeAuthorship.js";
+import { assessmentLesson } from "./learnerState.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
@@ -88,7 +89,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
     const lesson = await content.readLesson(pin);
     const checkId = input.stepId ? responseStepCheck(lesson, input.stepId) : orientationCheckId;
-    if (!input.stepId && (lesson.lesson.schemaVersion !== 1 || !lesson.lesson.assessments.some(value => value.kind === "practical" &&
+    if (!input.stepId && (!assessmentLesson(lesson) || !lesson.lesson.assessments.some(value => value.kind === "practical" &&
         value.evidence?.producer === "exercise" && value.evidence.operation === "try-the-application" && value.evidence.check === checkId))) {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installed lesson does not declare the orientation response practical.");
     }
@@ -189,7 +190,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
   }
 
   function openCodeQuestion(attempt, lesson) {
-    if (lesson.lesson.schemaVersion !== 1) {
+    if (!assessmentLesson(lesson)) {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "Choose the lesson step whose code check should run.");
     }
     const question = attempt.learning?.resume?.pendingQuestion;

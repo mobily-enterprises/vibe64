@@ -1,6 +1,6 @@
 import { canonicalJson } from "./content.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
-import { createTrainingLearnerState, passedAssessmentIds } from "./learnerState.js";
+import { assessmentLesson, createTrainingLearnerState, passedAssessmentIds } from "./learnerState.js";
 
 const MAX_BRIEF_BYTES = 128 * 1024;
 const sharedPacing = [
@@ -53,6 +53,13 @@ function createTrainingTeachingBrief({ systemRoot, content: suppliedContent, lea
     const { pin } = attempt;
     const input = { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash };
     const lesson = await content.readLesson(input);
+    // A version 2 lesson has no teaching document or rubrics: Colleague teaches
+    // it from its steps, so there is no teacher brief to read.
+    if (!assessmentLesson(lesson)) {
+      throw Object.assign(new Error("This lesson is taught from its steps; it has no teaching brief."), {
+        code: "VIBE64_TRAINING_LESSON_VERSION", statusCode: 409
+      });
+    }
     const passed = passedAssessmentIds(attempt, lesson, state.progress.attempts);
     const visuals = [];
     for (const resource of lesson.visuals) {

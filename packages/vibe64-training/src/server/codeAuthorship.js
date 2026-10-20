@@ -3,6 +3,7 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { canonicalJson } from "./content.js";
+import { assessmentLesson } from "./learnerState.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 // One slot stays free so a save that cannot extend the previous entry still fits.
@@ -110,6 +111,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     if (!attempt || attempt.attemptId !== attemptId || attempt.preparation.phase !== "ready" ||
         !question?.assistance || !question.issuedRevision) return null;
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    if (!assessmentLesson(lesson)) return null;
     const assessment = lesson.lesson.assessments.find(value => value.id === question.assessmentId);
     if (assessment?.kind !== "practical" || assessment.evidence?.producer !== "code") return null;
     return { attempt, question, assessment, lesson };

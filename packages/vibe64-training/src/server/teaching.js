@@ -3,7 +3,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
-import { validateSnapshot } from "./learnerState.js";
+import { assessmentLesson, validateSnapshot } from "./learnerState.js";
 
 const { text, attemptId, requestId, assessmentId, revision } = trainingQuestionIdentityFields;
 const prepareSchema = createSchema({
@@ -47,6 +47,7 @@ function questionReference(snapshot) {
 }
 
 function questionPreparationReady(attempt, lesson, assessmentId) {
+  if (!assessmentLesson(lesson)) return false;
   return attempt.preparation.phase === "ready" ||
     attempt.preparation.phase === "reserved" && !lesson.lesson.exercise &&
     lesson.lesson.assessments.some(item => item.id === assessmentId && item.kind === "answer");
@@ -67,6 +68,9 @@ function createTrainingTeachingOwner({ learners, content, codeBaseline } = {}) {
     }
     const lesson = await content.readLesson({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    if (!assessmentLesson(lesson)) {
+      throw failure("VIBE64_TRAINING_LESSON_VERSION", "This lesson is taught from its steps; it has no assessment questions or teacher checkpoints.");
+    }
     const learningVisual = typeof learningScope?.noExercise === "boolean" &&
       learningScope.learnerId === state.progress.learnerId &&
       learningScope.attemptId === requestedAttemptId &&

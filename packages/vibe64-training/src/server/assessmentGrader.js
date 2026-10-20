@@ -1,7 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, VIBE64_AGENT_HELPER_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { validateContent } from "./contentSchemas.js";
-import { evidenceSchema } from "./learnerState.js";
+import { assessmentLesson, evidenceSchema } from "./learnerState.js";
 
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128 };
 const questionSchema = createSchema({
@@ -32,8 +32,9 @@ function createTrainingAssessmentGrader({ content, helper } = {}) {
     if (!["none", "hint", "demonstration", "substantial"].includes(assistance)) throw new Error("Choose the retained assistance level.");
     const lesson = await content.readLesson({ topicId: pin?.topic?.topicId, commit: pin?.topic?.commit,
       topicHash: pin?.topic?.topicHash, lessonCode: pin?.lesson?.code, lessonHash: pin?.lesson?.hash });
-    const assessment = lesson.lesson.assessments.find(value => value.id === assessmentId);
-    const rubric = lesson.rubrics.find(value => value.id === assessmentId);
+    const v1 = assessmentLesson(lesson);
+    const assessment = v1 ? lesson.lesson.assessments.find(value => value.id === assessmentId) : null;
+    const rubric = v1 ? lesson.rubrics.find(value => value.id === assessmentId) : null;
     if (!assessment || !rubric) throw new Error("Grade only an assessment and rubric in this exact installed lesson.");
     let savedQuestion = null;
     if (assessment.kind === "answer") {

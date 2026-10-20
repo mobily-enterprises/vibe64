@@ -52,6 +52,15 @@
 
 ## Public contract
 
+Everything in this page applies only to version 1 lessons (teaching document,
+assessments and rubrics). Every reader of that data checks
+`assessmentLesson(lesson)` (`schemaVersion === 1`) first: the teaching brief,
+question preparation and capture, resume checkpoints, assessment receipts,
+the AI grader, answer/practical admission and code-question authorship refuse a
+version 2 lesson with `VIBE64_TRAINING_LESSON_VERSION` or treat it as having
+no open question, and v2 completion counts step results only. A version 2 lesson
+is taught by Colleague from its steps.
+
 Main alone owns admitted teaching operations. The shared teacher identity set excludes the original eight teaching operations
 and the new bounded Main practical read from Colleague's existing tool policy. Each original contract
 also authenticates then requires Main authority, so retained contracts and direct

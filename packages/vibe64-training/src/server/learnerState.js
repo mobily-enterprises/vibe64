@@ -240,6 +240,13 @@ function lessonSteps(lesson) {
   return lesson.lesson.schemaVersion === 2 && Array.isArray(lesson.lesson.steps) ? lesson.lesson.steps : null;
 }
 
+// Only a version 1 lesson has assessments, rubrics and a teaching document.
+// Every reader of that data checks this first, so a version 2 lesson never
+// reaches an assessment path.
+function assessmentLesson(lesson) {
+  return lesson?.lesson?.schemaVersion === 1;
+}
+
 // Saved step results must match the exact pinned version 2 lesson.
 function validateLessonStepResults(entry, lesson) {
   const steps = lessonSteps(lesson);
@@ -474,7 +481,7 @@ async function readRecord(filename, limit = MAX_RECORD_BYTES) {
 // Callers supply content-validated progress and the exact installed lesson.
 // Version 2 lessons have steps, not assessments; their passes are step results.
 function passedAssessmentIds(attempt, lesson, attempts = [attempt]) {
-  if (lesson.lesson.schemaVersion === 2) return [];
+  if (!assessmentLesson(lesson)) return [];
   const matching = attempts.filter(value => canonicalJson(value.pin.lesson) === canonicalJson(attempt.pin.lesson));
   return lesson.lesson.assessments.filter(assessment => matching.some(value => value.learning?.submissions.some(result =>
     result.assessmentId === assessment.id && result.rubricRevision === lesson.hash && result.outcome === "passed")))
@@ -1056,9 +1063,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       required = steps.filter(value => value.required).map(value => value.id);
       passed = required.filter(id => stepAttempts.some(entry => matching.has(entry.attemptId) &&
         entry.results.some(result => result.stepId === id && result.outcome === "passed")));
-    } else {
+    } else if (assessmentLesson(lesson)) {
       required = lesson.lesson.assessments.filter(value => value.required).map(value => value.id);
       passed = passedAssessmentIds(attempt, lesson, attempts).filter(id => required.includes(id));
+    } else {
+      throw new Error(`Lesson ${lesson.lesson.code} uses an unsupported format.`);
     }
     return {
       lessonCode: lesson.lesson.code,
@@ -1070,6 +1079,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   }
 
   function validateResume(resume, lesson) {
+    if (!assessmentLesson(lesson)) throw new Error("A lesson resume checkpoint belongs only to a version 1 lesson.");
     if (resume.pendingQuestion && !lesson.lesson.assessments.some(value => value.id === resume.pendingQuestion.assessmentId)) {
       throw new Error("The pending question must name an assessment in the exact pinned lesson.");
     }
@@ -1084,7 +1094,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   function validateLessonLearning(attempt, lesson) {
     if (!attempt.learning) return;
-    if (lessonSteps(lesson)) throw new Error("A version 2 lesson records step results, not assessment learning.");
+    if (!assessmentLesson(lesson)) throw new Error("A version 2 lesson records step results, not assessment learning.");
     if (attempt.learning.resume) validateResume(attempt.learning.resume, lesson);
     for (const result of attempt.learning.submissions) {
       const declared = lesson.lesson.assessments.find(value => value.id === result.assessmentId);
@@ -1118,7 +1128,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       const lessons = await verifyProgressLessons(state.progress);
       const lesson = lessons.get(attempt.attemptId);
-      if (lessonSteps(lesson)) {
+      if (!assessmentLesson(lesson)) {
         throw failure("VIBE64_TRAINING_LESSON_VERSION", "This lesson records step results; assessment learning cannot be saved for it.", 409);
       }
       if (requireCurrent) await requireCurrent();
@@ -1414,4 +1424,4 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader };
 }
 
-export { createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot, MAX_STEP_RESULTS };
+export { assessmentLesson, createTrainingLearnerState, evidenceSchema, learnerIdentity, lessonSteps, passedAssessmentIds, validateSnapshot, MAX_STEP_RESULTS };

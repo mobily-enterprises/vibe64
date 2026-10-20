@@ -14,6 +14,10 @@ import { createTrainingStepChecks } from "../../packages/vibe64-training/src/ser
 import { createTrainingStepActions } from "../../packages/vibe64-training/src/server/stepActions.js";
 import { createTrainingLearnerChangedPublisher, VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
+import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
+import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the
@@ -88,7 +92,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true } =
     assert.doesNotThrow(() => tools.toOpenAiToolSchema(definition));
     return tools.executeToolCall({ toolName: definition.name, toolSet, context: toolContext, argumentsText: JSON.stringify(input) });
   };
-  return { auth, learners, content, definitions, toolSet, execute, tool, start, checkCalls, innerCalls, published, removed, ended,
+  return { root, pin, auth, learners, content, definitions, toolSet, execute, tool, start, checkCalls, innerCalls, published, removed, ended,
     set outcome(value) { outcome = value; } };
 }
 
@@ -324,6 +328,96 @@ test("long step text is paged at 64 KiB and an earlier-format lesson returns its
   assert.deepEqual(Object.keys(read.lesson).sort(), ["code", "hash", "schemaVersion", "title"]);
   assert.equal(read.lesson.schemaVersion, 1);
   assert.equal(read.results, undefined);
+});
+
+// A v2 lesson whose v1 assessment fields fail the test when any reader touches
+// them. The getters are not enumerable, so ordinary projections never see them.
+function withoutV1Readers(content, touched) {
+  const poison = (value, fields) => {
+    for (const field of fields) Object.defineProperty(value, field, { enumerable: false, configurable: true,
+      get() { touched.push(field); throw new Error(`A v1 reader touched ${field} of a version 2 lesson.`); } });
+    return value;
+  };
+  return { ...content, async readLesson(input) {
+    const lesson = await content.readLesson(input);
+    if (lesson.lesson.schemaVersion !== 2) return lesson;
+    return poison({ ...lesson, lesson: poison({ ...lesson.lesson }, ["document", "assessments"]) }, ["document", "rubrics"]);
+  } };
+}
+
+test("a v2 lesson passes start, resume, learning.read, completion and end without reaching a v1 assessment reader", async t => {
+  const touched = [];
+  const f = await fixture(t, { contentWrapper: content => withoutV1Readers(content, touched) });
+  const projectRoot = path.join(f.root, "practice-project");
+  let metadata = {}, session = null;
+  const exercises = createTrainingService({
+    catalogue: { async readCatalogue() { return { revision: 1, courses: [{ enabled: true, course: { ...f.pin.course, status: "released" },
+      lock: { topics: [{ ...f.pin.topic, manifestHash: f.pin.topic.topicHash, lessons: [{ ...f.pin.lesson, status: "published" }] }] } }] }; } },
+    content: f.content, learners: f.learners,
+    projectContext: { async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; } },
+    projectRepositoryService: {
+      async verifyTrainingProjectSource() { return { commit: "d".repeat(40), branch: "main" }; },
+      async createManagedGitProject(input, { initializeProject }) {
+        const source = path.join(f.root, "practice-source");
+        await mkdir(source);
+        await initializeProject({ projectRoot: source });
+        await mkdir(projectRoot);
+        metadata = { training: input.training, repository: { mode: "managed_git" } };
+        return { ok: true };
+      }
+    },
+    project: { async runInProjectContext(_slug, operation) { return operation(); },
+      async createRuntime() { return { async getSession() {
+        if (!session) throw Object.assign(new Error("Missing session"), { code: "vibe64_session_not_found" });
+        return session;
+      } }; } },
+    sessions: { async createSession(_input, { sessionId }) { session = { sessionId, status: "open", workspaceSetup: { status: "succeeded" } }; return session; } },
+    terminals: { async workspaceSetupIsPrepared() { return true; } }
+  });
+  const teachingBrief = createTrainingTeachingBrief({ content: f.content, learners: f.learners });
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
+    catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
+    learners: f.learners, teachingBrief, exercises
+  }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
+    authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
+  const run = (name, input = {}) => actions.execute({ actionId: `vibe64.training.${name}`, input, context: { channel: "api", surface: "app" } });
+
+  const started = await run("lesson.start", { ...f.pin.course, lessonCode: f.pin.lesson.code, requestId: "start-v2", expectedRevision: 0 });
+  assert.equal(started.ok, true);
+  assert.equal(started.active.preparation.phase, "ready");
+  const attemptId = started.active.attemptId;
+  const resumed = await run("lesson.resume", { attemptId });
+  assert.equal(resumed.active.attemptId, attemptId);
+  assert.equal(resumed.active.preparation.phase, "ready");
+  assert.equal((await f.execute("step.answer", { attemptId, stepId: "which-side", selected: [1], requestId: "answer-v2" })).outcome, "passed");
+  assert.equal((await f.execute("step.done", { attemptId, stepId: "reflect", requestId: "done-v2" })).outcome, "passed");
+
+  const read = await run("learning.read");
+  assert.equal(read.active.attemptId, attemptId);
+  const progress = { lessonCode: "STEPS-ONE", lessonHash: f.pin.lesson.hash, required: 3, passed: 1, completed: false };
+  assert.deepEqual(read.completion, progress, "only required steps count: the self step is optional");
+  assert.deepEqual(read.lessonProgress, [{ ...progress, open: true }]);
+  assert.equal(read.attempts[0].practiceSlug, started.active.projectSlug);
+
+  // Teacher-model readers refuse a v2 lesson with a clear format error.
+  await assert.rejects(run("teaching-brief.read", { attemptId }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
+  const teaching = createTrainingTeachingOwner({ learners: f.learners, content: f.content });
+  await assert.rejects(teaching.prepareQuestion({ actor: f.auth.user, attemptId, assessmentId: "which-side", requestId: "question-v2",
+    expectedRevision: read.revision, text: "Which side?", assistance: "none" }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
+  assert.equal(await teaching.readQuestionReference({ actor: f.auth.user }), null);
+  await assert.rejects(f.learners.saveLessonResume({ actor: f.auth.user, attemptId, expectedRevision: read.revision, requestId: "resume-v2",
+    resume: { stage: "question", pendingQuestion: null, visuals: [], summary: "" } }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
+
+  const ended = await run("lesson.end", { attemptId, requestId: "end-v2", expectedRevision: read.revision, reason: "restart" });
+  assert.equal(ended.ok, true);
+  const after = await run("learning.read");
+  assert.equal(after.active, null);
+  assert.equal(after.completion, null);
+  assert.deepEqual(after.lessonProgress, [{ ...progress, open: false }], "ended attempts keep their step passes");
+  assert.deepEqual(after.history.map(value => value.attemptId), [attemptId]);
+  assert.deepEqual(touched, [], "no reader touched a v1 document, assessment or rubric field");
 });
 
 test("HTTP routes map each v2 action to its attempt path without accepting a caller identity", async () => {
