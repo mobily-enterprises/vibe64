@@ -66,6 +66,18 @@ describe("practice projects from the learner's saved lessons", () => {
     scope.stop();
   });
 
+  it("reuses L's own learning.read resource instead of reading again", async () => {
+    const scope = Vue.effectScope();
+    const learningResource = { data: Vue.ref({ ok: true, available: true, attempts: [attempt("12345678-1234-4234-8234-123456789abc", "training-l")] }),
+      reload: vi.fn(async () => null) };
+    const practice = scope.run(() => useVibe64PracticeProjects({ enabled: true, learningResource }));
+    expect(mocks.resources).toHaveLength(0);
+    expect(practice.practiceProjects.value.map(value => value.slug)).toEqual(["training-l"]);
+    expect(await practice.deletePracticeProject(practice.practiceProjects.value[0])).toBe(true);
+    expect(learningResource.reload).toHaveBeenCalledTimes(1);
+    scope.stop();
+  });
+
   it("stays empty and reads nothing when disabled", () => {
     const scope = Vue.effectScope();
     const practice = scope.run(() => useVibe64PracticeProjects({ enabled: false }));

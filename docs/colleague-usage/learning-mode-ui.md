@@ -85,8 +85,8 @@ continue it in a fresh exercise (see [Lesson history and resume](learning-histor
 Colleague teaches every lesson from its steps in the Learning environment;
 there is no lesson teacher conversation. A practice lesson's project is an
 ordinary project of yours and its session an ordinary session of that project:
-open it with **Open practice project** in Learning (or from **Practice** in the
-project list). Its chat, **Preview** and every **Dashboard** section are the
+open it with **Open practice project** in the lesson, or from **Practice** on
+the Courses page, where its trash button deletes it with one click. Its chat, **Preview** and every **Dashboard** section are the
 ordinary ones, with full access, during and after the lesson; see
 [Practice projects in standalone lessons](learning-practice-projects.md).
 

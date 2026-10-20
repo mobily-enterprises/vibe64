@@ -5,7 +5,8 @@ import { practiceProjectAttemptId } from "@local/vibe64-core/server/practiceProj
 
 const removalLocks = new Map();
 
-// Standalone host facility practiceProjects.remove({ slug, actor }). It mirrors
+// Standalone host facility practiceProjects.remove({ slug, actor }) (with its
+// read-only canRemove and exists). It mirrors
 // Online's light deletion (the hosted archive lifecycle minus its archive
 // steps): per-slug lock, pinned-session refusal, persisted deletion marker
 // with resumable steps, runtime close, source and runtime removal. Standalone
@@ -62,6 +63,22 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
         const pinnedSessionId = await readPinnedSessionId(slug, state);
         return pinnedSessionId ? { ok: false, reason: pinnedMessage(pinnedSessionId) } : { ok: true };
       });
+  }
+
+  // Read-only presence check for learning.read and lesson.read: a deleted
+  // practice project (no record left) is no longer listed or offered for
+  // deletion. A project whose deletion stopped part-way keeps its record (the
+  // record is removed last), so it stays listed for the retry. Another
+  // learner's slug, or one with no saved attempt behind it, does not exist here.
+  async function exists({ slug, actor } = {}) {
+    let scope;
+    try { scope = await ownPracticeScope({ slug, actor }); }
+    catch (error) {
+      if (error.statusCode && error.statusCode < 500) return false;
+      throw error;
+    }
+    return projectContext.runWithPracticeProjectScope({ actor, training: scope.saved.training, access: "write", allowDeleting: true },
+      async () => Object.keys((await projectContext.readWorkspaceProjectState({ slug })).metadata).length > 0);
   }
 
   function readPinnedSessionId(slug, state) {
@@ -124,7 +141,7 @@ function createLocalPracticeProjects({ learners, projectContext, project, termin
     return { ok: true, slug, removed: true };
   }
 
-  return Object.freeze({ remove, canRemove });
+  return Object.freeze({ remove, canRemove, exists });
 }
 
 // End the practice project's attempt with reason `discard`, as lesson.end

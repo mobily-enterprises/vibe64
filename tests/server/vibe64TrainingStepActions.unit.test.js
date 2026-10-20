@@ -287,6 +287,20 @@ test("practice.delete that fails after ending reports ended true and removed fal
   assert.equal(f.ended.length, 1, "the attempt is ended once");
 });
 
+test("a practice project the host reports deleted is no longer offered for opening or deletion", async t => {
+  const gone = new Set();
+  const f = await fixture(t, { practice: { async canRemove() { return { ok: true }; },
+    async exists({ slug }) { return !gone.has(slug); },
+    async remove(value) { gone.add(value.slug); return { ok: true, slug: value.slug, removed: true }; } } });
+  const attempt = await f.start();
+  assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, attempt.projectSlug);
+  const deleted = await f.execute("practice.delete", { attemptId: attempt.attemptId });
+  assert.deepEqual([deleted.ok, deleted.removed, deleted.ended], [true, true, true]);
+  assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, undefined);
+  await assert.rejects(f.execute("practice.delete", { attemptId: attempt.attemptId }), { code: "VIBE64_TRAINING_PRACTICE_MISSING" });
+  assert.equal(f.ended.length, 1);
+});
+
 test("practice.delete without the host facility reports unavailable and changes nothing", async t => {
   const f = await fixture(t, { practice: false });
   const attempt = await f.start();
