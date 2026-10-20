@@ -2020,6 +2020,9 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   }
   assert.doesNotMatch(colleagueInstructions, /navigation\.open learning/u, "Learning opens through navigation.open-learning");
   assert.match(colleagueInstructions, /step\.check\.run/u);
+  // A learner hears what the guide actually did, never raw receipt fields.
+  assert.match(colleagueInstructions, /Report a guide or navigation result truthfully in plain words/u);
+  assert.match(colleagueInstructions, /never quote receipt fields/u);
   assert.match(colleagueInstructions, /You never judge/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
   assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);

@@ -192,7 +192,9 @@ function useVibe64AppPage() {
   useRealtimeEvent({
     enabled: computed(() => Boolean(projectSlug.value)),
     event: VIBE64_PROJECT_CHANGED_EVENT,
-    matches: ({ payload = {} } = {}) => projectRuntimeClosedPayloadMatches(payload, projectSlug.value),
+    matches: ({ payload = {} } = {}) => projectRuntimeClosedPayloadMatches(payload, projectSlug.value, {
+      practice: Boolean(projects.value.find(project => project?.slug === projectSlug.value)?.practice)
+    }),
     onEvent: ({ payload = {} } = {}) => {
       handleProjectRuntimeClosed(payload);
     }
@@ -557,9 +559,15 @@ function useVibe64AppPage() {
   }
 }
 
-function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "") {
+function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "", { practice = false } = {}) {
   const projectSlug = String(currentSlug || "").trim();
   if (!projectSlug || String(payload?.projectSlug || "").trim() !== projectSlug) {
+    return false;
+  }
+  // Deleting an open practice project closes its runtime first. The project
+  // page's selection gate then shows "This practice project was deleted", so
+  // the page must not leave for the hosted Projects page (absent locally).
+  if (practice && String(payload?.runtimeCloseReason || "").trim() === "project-delete") {
     return false;
   }
   return String(payload?.action || "").trim() === "runtime-closed" && payload?.runtime?.open === false;

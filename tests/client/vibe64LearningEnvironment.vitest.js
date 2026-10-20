@@ -462,6 +462,37 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("keeps the current step in view in the phone's scrolling step row", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const view = await mountReader(learning);
+    try {
+      // The rendered row has no layout here: give it a phone's overflowing
+      // geometry and resolve the current circle from the rendered buttons.
+      const row = nodes(view.root).find(node => node.tag === "ol");
+      const stepButtons = nodes(view.root).filter(node => node.props?.["data-step-id"]);
+      const revealed = [];
+      Object.assign(row, { scrollLeft: 0, scrollWidth: 464, clientWidth: 366, getBoundingClientRect: () => ({ left: 12, right: 378 }),
+        querySelector: selector => {
+          const current = stepButtons.find(button => button.props["aria-current"] === "step");
+          if (selector !== '[aria-current="step"]' || !current) return null;
+          revealed.push(current.props["data-step-id"]);
+          return { getBoundingClientRect: () => ({ left: 428, right: 476 }) };
+        } });
+      stepButtons[3].props.onClick();
+      await flush();
+      expect(revealed).toEqual([stepButtons[3].props["data-step-id"]]);
+      expect(row.scrollLeft).toBe(98);
+      // Reopening L brings the current step back into view as well.
+      learning.minimise();
+      await flush();
+      await learning.show();
+      await flush();
+      expect(revealed).toEqual([stepButtons[3].props["data-step-id"], stepButtons[3].props["data-step-id"]]);
+    } finally { view.app.unmount(); }
+  });
+
   it("shows why an automatic check did not pass without changing the step status", async () => {
     const reason = "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first.";
     const { learning, calls } = controller({ posts: () => ({ ok: true, stepId: "preview", outcome: "not-yet-passed", recorded: false, reason }) });
