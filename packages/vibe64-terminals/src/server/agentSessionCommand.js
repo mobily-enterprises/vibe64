@@ -593,6 +593,9 @@ function createAgentSessionCommandService({
     }
     const requestContext = currentProjectRequestContext();
     const learning = Boolean(requestContext?.learningScope);
+    // Learning v2 F1: practice sessions are ordinary project sessions, so no
+    // host supplies runLearningOperation any more and a learning-scoped binding
+    // is refused here. Remove this branch with the source-less teacher (F2).
     if (learning && typeof requestContext.runLearningOperation !== "function") {
       throw vibe64Error("Managed practice commands require the saved lesson's original admission owner.", "vibe64_agent_session_command_learning_unavailable");
     }

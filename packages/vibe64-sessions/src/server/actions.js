@@ -103,18 +103,10 @@ const learningAccess = {
   [ACTION_UPDATE_ASSISTANT_SELECTION]: "write",
   [ACTION_RENAME_SESSION]: "write",
   [ACTION_INTERRUPT_AGENT_TURN]: "control",
-  [ACTION_UPDATE_SESSION_PRESENCE]: "control",
-  // A practice lesson's Dashboard reads its Git log and current changes.
-  // Save, update, pull-request and setup operations keep no lesson URL.
-  [ACTION_INSPECT_REPOSITORY_HISTORY]: "observe",
-  [ACTION_INSPECT_REPOSITORY_VERSION_FILES]: "observe",
-  [ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF]: "observe",
-  [ACTION_INSPECT_SESSION_CHANGES]: "observe",
-  [ACTION_INSPECT_SESSION_CHANGE_DIFF]: "observe"
+  [ACTION_UPDATE_SESSION_PRESENCE]: "control"
+  // Learning v2: a practice project's Git history and changes are read through
+  // its ordinary project routes; the source-less teacher has no source to read.
 };
-// Source operations need the lesson's actual practice project, never a fallback.
-const practiceOnlyLearning = new Set([ACTION_INSPECT_REPOSITORY_HISTORY, ACTION_INSPECT_REPOSITORY_VERSION_FILES,
-  ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF, ACTION_INSPECT_SESSION_CHANGES, ACTION_INSPECT_SESSION_CHANGE_DIFF]);
 
 function action({
   assistant,
@@ -141,15 +133,7 @@ function action({
     },
     observability: {},
     events,
-    execute: practiceOnlyLearning.has(id) ? (input, context, deps) => {
-      const learning = context?.vibe64Action?.learning;
-      if (learning && learning.learningScope.noExercise !== false) {
-        throw Object.assign(new Error("This lesson has no practice project."), {
-          code: "vibe64_learning_source_required", statusCode: 409
-        });
-      }
-      return execute(input, context, deps);
-    } : execute
+    execute
   }, { projectScoped, learningAccess: learningAccess[id] || false });
 }
 

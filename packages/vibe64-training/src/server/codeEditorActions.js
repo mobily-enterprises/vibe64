@@ -9,18 +9,32 @@ import { practiceProjectAttemptId } from "@local/vibe64-core/server/practiceProj
 // another person, an ended or missing attempt) is the editor's plain save.
 // It replaces the learning-scoped vibe64.training.code.file.save action and
 // its lesson-URL route, whose ledgered save it keeps unchanged.
-function createTrainingCodeSaveOwner({ authorship, learners } = {}) {
-  if (typeof authorship?.saveLearnerFile !== "function" || typeof learners?.readExerciseProjectScope !== "function") {
+//
+// A host with several learner stores (Online: normal and author-preview)
+// passes `selectOwners({ actor, attemptId })`, which returns the store's
+// { authorship, learners } holding that attempt, or null for none.
+function validOwners(owners) {
+  if (typeof owners?.authorship?.saveLearnerFile !== "function" || typeof owners?.learners?.readExerciseProjectScope !== "function") {
     throw new TypeError("Lesson code saves require the original authorship and learner owners.");
   }
+  return owners;
+}
+
+function createTrainingCodeSaveOwner({ authorship, learners, selectOwners } = {}) {
+  if (selectOwners !== undefined && typeof selectOwners !== "function") throw new TypeError("Lesson code save selection must be a function.");
+  const fixed = selectOwners ? null : validOwners({ authorship, learners });
+  const select = selectOwners || (async () => fixed);
   return async function saveCodeFile({ input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     const context = currentProjectRequestContext();
     const attemptId = practiceProjectAttemptId(context?.slug);
     const actor = context?.vibe64User;
     if (!attemptId || !actor) return save();
+    const selected = await select({ actor, attemptId });
+    if (!selected) return save();
+    const owners = validOwners(selected);
     let saved;
-    try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "observe" }); }
+    try { saved = await owners.learners.readExerciseProjectScope({ actor, attemptId, access: "observe" }); }
     catch (error) {
       // Another person's (or no) attempt: this is not the learner's lesson code.
       if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
@@ -28,7 +42,7 @@ function createTrainingCodeSaveOwner({ authorship, learners } = {}) {
       throw error;
     }
     if (saved.projectSlug !== context.slug || !saved.active) return save();
-    return authorship.saveLearnerFile({ actor, attemptId, input, save });
+    return owners.authorship.saveLearnerFile({ actor, attemptId, input, save });
   };
 }
 

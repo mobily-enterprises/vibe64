@@ -1187,6 +1187,9 @@ function createVibe64SessionStore({
   if (admittedLearningScope?.noExercise && projectSessionSourceRoot) {
     throw vibe64Error("A source-less learning runtime cannot use a project session source root.", "vibe64_learning_scope_invalid");
   }
+  // Learning v2 F1: no host constructs a practice (noExercise:false) scope any
+  // more; only the published 20261008 readers and their tests still name one.
+  // Refuse it here once F2 retires those fixtures with the source-less teacher.
   if (admittedLearningScope?.noExercise === false && !projectSessionSourceRoot) {
     throw vibe64Error("A practice learning runtime requires its actual project session source root.", "vibe64_learning_scope_invalid");
   }

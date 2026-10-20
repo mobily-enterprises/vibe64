@@ -1314,9 +1314,13 @@ each with its own backed-up publisher under this upgrade's backup root
   history upgrade never adopted) are unchanged. Source, Git, transcripts,
   native identities, progress and archive history are kept. Then each
   source-less teacher store `training/users/<key>/learning-sessions/<attemptId>`
-  (normal and author-preview) is moved whole into
-  `backups/20261021-practice-sessions-ordinary/training/retired/`; nothing is
-  deleted. An existing retired copy refuses the move instead of overwriting.
+  (normal and author-preview) is moved whole into durable training state at
+  `training/retired/20261021-practice-sessions-ordinary/<original path>`,
+  outside `upgrades/backups/`, so backup retention never removes it. Nothing
+  reads a retired store: its separate lesson conversation no longer appears in
+  Learning and only the owner can inspect or restore it. Nothing is deleted.
+  An existing retired copy refuses the move instead of overwriting; a store
+  already moved by an interrupted apply is not listed again on retry.
 - Colleague (`retireColleagueLearningWatches`): every `learning-task` watch and
   its queued observations are removed from `colleague/<owner>/conversation.json`;
   conversation history and every other watch are kept.

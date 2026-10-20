@@ -705,7 +705,10 @@ in the actor's own practice project with an active attempt, to the
 generic source-editor save under the ledger lock and appends
 `{path, baseHash, intendedHash, savedHash, actorId, at}`; consecutive clean saves
 of one file collapse into one link. A save whose read-back bytes differ from the
-learner's text is recorded as foreign.
+learner's text is recorded as foreign. Local Vibe64 installs it with its one
+learner store; a host with several stores (Online: normal and author-preview)
+passes `selectOwners({actor, attemptId})`, which returns the store holding that
+attempt, or null for a plain save.
 
 `runCodeCheck({actor,attemptId,sessionId,observationId})` reuses the declared
 check skeleton. It reads the declared files from the live source and verifies
@@ -1188,7 +1191,8 @@ two owners. Training `practiceSessionsOrdinaryUpgrade.js`
 remove the saved practice `learning_session` file and archive index entry
 through the backed-up publisher (renewal state refuses), then renames each
 source-less store `training/users/<key>/learning-sessions/<attempt>` (normal and
-author-preview) into `backups/<id>/training/retired/`. Colleague
+author-preview) into durable `training/retired/<id>/<original path>`, outside
+the upgrade backups that retention removes; nothing reads it afterwards. Colleague
 `learningWatchUpgrade.js` `retireColleagueLearningWatches` removes
 `learning-task` watches and their observations. It lives in Colleague because
 Colleague depends on Training. Check mode writes nothing; retry resumes the

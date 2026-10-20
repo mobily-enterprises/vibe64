@@ -37,8 +37,15 @@ async function practiceSessionUpdates({ systemRoot, temporaryRoot, report }) {
 }
 
 // Source-less learning stores (training/users/<key>/learning-sessions/<attemptId>)
-// are retired whole into this upgrade's backup root; nothing is deleted.
-async function sourcelessLearningStores({ systemRoot, backupRoot }) {
+// are retired whole into durable training state outside the upgrade backups
+// (which backup retention removes): training/retired/<upgrade id>/<original
+// path>. Nothing reads them any more, so they no longer appear in Learning;
+// nothing is deleted and the owner can inspect or restore them.
+function retiredStoresRoot(systemRoot) {
+  return path.join(systemRoot, "training", "retired", UPGRADE_ID);
+}
+
+async function sourcelessLearningStores({ systemRoot }) {
   const stores = [];
   for (const namespace of [systemRoot, path.join(systemRoot, "author-preview")]) {
     const usersRoot = path.join(namespace, "training", "users");
@@ -49,7 +56,7 @@ async function sourcelessLearningStores({ systemRoot, backupRoot }) {
       for (const entry of await directoryEntries(root, "Learning session inventory")) {
         if (!entry.isDirectory()) throw new Error("Learning session inventory contains a non-directory. Inspect it before upgrading.");
         const source = path.join(root, entry.name);
-        stores.push({ source, destination: path.join(backupRoot, "retired", path.relative(systemRoot, source)) });
+        stores.push({ source, destination: path.join(retiredStoresRoot(systemRoot), path.relative(systemRoot, source)) });
       }
     }
   }
@@ -73,15 +80,15 @@ export async function upgradeLearningPracticeSessionsOrdinary({ systemRoot, back
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
-  const stores = await sourcelessLearningStores({ systemRoot, backupRoot });
-  report("info", `${stores.length} source-less learning session store(s) to retire.`);
+  const stores = await sourcelessLearningStores({ systemRoot });
+  report("info", `${stores.length} source-less learning session store(s) to retire into ${path.relative(systemRoot, retiredStoresRoot(systemRoot))}.`);
   for (const { source, destination } of stores) {
-    await verifyUpgradeParents(backupRoot, destination);
+    await verifyUpgradeParents(systemRoot, destination);
     if (await lstat(destination).then(() => true, error => { if (error.code === "ENOENT") return false; throw error; })) {
-      throw new Error(`A retired learning session store already exists in the backup: ${path.relative(systemRoot, source)}. Inspect both before retrying.`);
+      throw new Error(`A retired learning session store already exists: ${path.relative(systemRoot, source)}. Inspect both before retrying.`);
     }
     if (!apply) continue;
-    await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+    await mkdir(path.dirname(destination), { recursive: true });
     await rename(source, destination);
     report("info", `Retired learning session store: ${path.relative(systemRoot, source)}`);
   }

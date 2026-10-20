@@ -3092,7 +3092,7 @@ test("ordinary practice-session upgrade removes historical bindings from active 
   }
 });
 
-test("ordinary practice-session upgrade retires source-less learning stores into its backup and refuses a conflicting copy", async t => {
+test("ordinary practice-session upgrade retires source-less learning stores into durable training state and refuses a conflicting copy", async t => {
   const f = await historicalPracticeFixture(t);
   const userRoot = path.dirname(f.paths.progress);
   const store = path.join(userRoot, "learning-sessions", "attempt-sourceless");
@@ -3104,11 +3104,13 @@ test("ordinary practice-session upgrade retires source-less learning stores into
   assert.ok(f.messages.some(entry => /1 source-less learning session store\(s\) to retire/u.test(entry.message)));
   await f.runOrdinary(true);
   await assert.rejects(fs.access(store), { code: "ENOENT" });
-  const retired = path.join(f.ordinaryBackupRoot, "retired", path.relative(f.systemRoot, store));
+  const retired = path.join(f.systemRoot, "training", "retired", "20261021-practice-sessions-ordinary", path.relative(f.systemRoot, store));
   assert.equal(await fs.readFile(path.join(retired, "sessions", "retained.txt"), "utf8"), "teacher history");
+  assert.equal(path.relative(path.join(f.systemRoot, "upgrades"), retired).startsWith(".."), true,
+    "retired stores live outside the upgrade backups that retention removes");
   await f.runOrdinary(true);
   await fs.mkdir(store, { recursive: true });
-  await assert.rejects(f.runOrdinary(), /already exists in the backup/u);
+  await assert.rejects(f.runOrdinary(), /retired learning session store already exists/u);
   await assert.rejects(fs.access(path.join(store, "sessions")), { code: "ENOENT" }, "the backup copy is never overwritten");
 });
 

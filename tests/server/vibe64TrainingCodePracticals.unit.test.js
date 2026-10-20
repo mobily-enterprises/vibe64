@@ -309,6 +309,36 @@ test("the ordinary Files editor save in the learner's own active practice projec
   assert.throws(() => createTrainingCodeSaveOwner({ authorship: {}, learners: f.learners }), TypeError);
 });
 
+test("a host with several learner stores selects the store holding the practice project's attempt for each save", async t => {
+  const f = await fixture(t);
+  const selections = [];
+  let selected = null;
+  const owner = createTrainingCodeSaveOwner({ async selectOwners(input) { selections.push(input); return selected; } });
+  let plainSaves = 0;
+  const save = async text => owner({ input: { sessionId: f.sessionId, path: "notes.mjs", baseHash: sha256(await readFile(f.learnerFile)), text },
+    async save() {
+      plainSaves++;
+      await writeFile(f.learnerFile, text);
+      return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(f.learnerFile)) } };
+    } });
+  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length;
+  const inPractice = operation => runWithProjectRequestContext({ slug: f.projectSlug, vibe64User: f.actor }, operation);
+  await runWithProjectRequestContext({ slug: "alpha", vibe64User: f.actor }, () => save("// another project\n"));
+  assert.deepEqual(selections, [], "only a practice project selects a learner store");
+  await inPractice(() => save("// no store holds this attempt\n"));
+  assert.equal(plainSaves, 2);
+  assert.equal(await entries(), 0, "no selected store is a plain save");
+  assert.deepEqual(selections.map(value => value.attemptId), [f.attemptId]);
+  selected = { authorship: f.authorship, learners: f.learners };
+  await inPractice(() => save(solved));
+  assert.equal(plainSaves, 3);
+  assert.equal(await entries(), 1, "the selected store's ledger records the learner's save");
+  selected = { authorship: {}, learners: f.learners };
+  await assert.rejects(inPractice(() => save("// invalid store\n")), TypeError);
+  assert.equal(plainSaves, 3, "an invalid selected store never saves");
+  assert.throws(() => createTrainingCodeSaveOwner({ selectOwners: "normal" }), TypeError);
+});
+
 test("Check my code sends one genuine code-submit press for the current delivered question", async t => {
   const question = { attemptId: randomUUID(), questionId: "code-question", assessmentId: "require-note-title", issuedRevision: 4,
     topicHash: "a".repeat(64), lessonHash: "b".repeat(64), extra: "not sent" };

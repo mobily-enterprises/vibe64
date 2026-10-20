@@ -36,6 +36,8 @@
     "./client/navigation": "./src/client/createTrainingNavigation.js",
     "./server/practical-observations": "./src/server/practicalObservations.js",
     "./server/step-checks": "./src/server/stepChecks.js",
+    "./server/code-authorship": "./src/server/codeAuthorship.js",
+    "./server/code-save-owner": "./src/server/codeEditorActions.js",
     "./server/step-actions": "./src/server/stepActions.js",
     "./server/learner-notes-actions": "./src/server/learnerNotesActions.js",
     "./server/learner-events": "./src/server/learnerEvents.js",

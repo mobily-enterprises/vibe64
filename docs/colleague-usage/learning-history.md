@@ -10,7 +10,11 @@ Explicit lesson retirement preserves the original pinned quiz and practical
 results. Once the end is saved, the lesson's teacher conversation stops: its
 running assistant work and session processes are stopped the same way session
 Stop does, because an ended lesson has no teaching instructions. The
-conversation stays readable in history. The practice project and its session
+conversation stays readable in history. Separate lesson conversations of
+lessons without an exercise saved before Learning v2 are an exception: the
+installation upgrade retired them, so they no longer appear in Learning; they
+are kept, not deleted, and only the installation owner can inspect or restore
+them. The practice project and its session
 are ordinary and stay yours: ending a lesson neither stops nor archives nor
 deletes them. When the person requests disposal, use the existing
 authorised project/session close, archive and deletion workflow; do not claim

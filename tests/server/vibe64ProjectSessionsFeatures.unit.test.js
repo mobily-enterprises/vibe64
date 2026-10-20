@@ -429,15 +429,13 @@ test("learning HTTP routes reuse original session adapters and only canonical le
     seen.add(calls[0].actionId);
   }
   assert.deepEqual([...seen].sort(), [...allowed].filter(id => id !== "vibe64.sessions.conversation.context.read").sort());
-  // The Dashboard's Git log and current changes are read-only lesson routes;
-  // setup, renewal, saving, updates and pull requests have no lesson URL.
-  assert.deepEqual(learning.map(([method, url]) => [method, url]).filter(([, url]) => /repository|changes/u.test(url)).sort(), [
-    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history/:commit/diff"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/repository/history/:commit/files"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/changes"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/changes/diff"]
-  ]);
+  // Learning v2 F1: a practice project's Git log and current changes are read
+  // through its ordinary project routes, and the source-less teacher has no
+  // source, so no repository or changes route has a lesson URL any more;
+  // setup, renewal, saving, updates and pull requests never had one.
+  assert.deepEqual(learning.map(([method, url]) => [method, url]).filter(([, url]) => /repository|changes/u.test(url)), []);
+  assert.deepEqual(original.map(([method, url]) => [method, url]).filter(([, url]) => /repository\/history$|sessions\/:sessionId\/changes$/u.test(url)).length, 2,
+    "the ordinary project routes still serve them");
   assert.equal(learning.some(([, url]) => /setup|renewal|pull-request|updates|\/work\b/u.test(url)), false);
 });
 

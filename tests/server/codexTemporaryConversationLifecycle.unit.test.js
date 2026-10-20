@@ -13851,6 +13851,103 @@ test("Codex Main host and run owner share the original native conversation publi
 });
 
 
+test("Main browser fresh authorization for a local practice project opened as an ordinary project still revokes access", { timeout: 30_000 }, async () => {
+  // Learning v2 F1: a learner's own practice project opens through the local
+  // ordinary write grant and an ordinary projectSlug browser authority. The
+  // retained grant keeps write (it no longer expires to CONTROL); publication
+  // must still read fresh authority and revocation must still suppress it.
+  const { runWithPracticeProjectContext, currentProjectRequestContext, currentPracticeProjectScope,
+    assertProjectEffectAdmission, registerLocalPracticeAdmission, resolveProjectRequestContext,
+    captureProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const actions = createActionCatalogue();
+  const owner = {}, actor = { uid: 42, username: "scope-reader", role: "owner" };
+  const slug = "training-839fb16d3aed40c88b26cb4ec8fe1229";
+  const access = { allowed: true }, reads = [], denied = [], events = [];
+  const resume = Promise.withResolvers();
+  let publishing = false, held = false, browser, unsubscribe, goalOperation;
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    const projectContext = { projectCatalogEnabled: false, projectsRoot: path.dirname(runtime.projectContextRoot),
+      runWithPracticeProjectScope: (input, operation) => runWithPracticeProjectContext(owner, { slug,
+        targetRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot,
+        projectSessionSourceRoot: runtime.projectContextRoot, access: input.access, vibe64User: input.actor }, operation) };
+    registerLocalPracticeAdmission(async request => request.slug === slug ? { actor } : null);
+    const ordinary = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
+    assert.equal(ordinary.learningScope, undefined, "the practice project is an ordinary project context");
+    const requestContext = { channel: "internal", surface: "app", requestMeta: { request: {
+      params: { slug }, vibe64User: actor } } };
+    actions.register({ contributorId: "original-browser-scope-companion", domain: "vibe64-sessions",
+      actions: createSessionActions({ sessions: {} }).map(definition => ({
+        channels: ["internal"], surfaces: ["app"], ...definition
+      })) });
+    // The original action catalogue and grant are retained; only the host's
+    // current admission is controlled, as in the original browser fixture.
+    actions.registerContextContributor({ id: "controlled-browser-current-admission", async contribute({ input, context }) {
+      assert.equal(input.projectSlug, slug);
+      assert.equal(input.learningAttemptId, undefined);
+      assert.equal(input.sessionId, sessionId);
+      assert.equal(context.requestMeta.request.vibe64User, actor);
+      if (publishing && !held) { held = true; await resume.promise; }
+      const current = currentProjectRequestContext();
+      const practice = currentPracticeProjectScope(owner);
+      if (!access.allowed) {
+        denied.push(current.slug);
+        throw Object.assign(new Error("Current project access denied"), { statusCode: 403 });
+      }
+      assert.equal(practice.access, "write", "the learner's own practice project keeps its ordinary write grant");
+      assert.doesNotThrow(assertProjectEffectAdmission);
+      reads.push({ actorId: String(actor.uid), access: practice.access, slug: current.slug });
+      return { actor: { id: String(actor.uid) }, vibe64Action: { user: actor, learning: captureProjectRequestContext() } };
+    } });
+    captures.onProviderCreated = provider => {
+      let goal = null;
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (threadId, input) => ({ goal: goal = { ...input, threadId,
+        status: "active", createdAt: 10, updatedAt: 10, tokensUsed: 0, timeUsedSeconds: 0 } });
+      provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
+      provider.clearGoal = async () => { goal = null; return {}; };
+    };
+    captures.onSessionChanged = (_id, event) => { if (event.reason === "codex-goal") publishing = true; };
+    try {
+      await runWithProjectRequestContext(ordinary, async () => {
+        const ready = await terminalService.ensureAgentSession(sessionId, { runtime, vibe64User: actor });
+        assert.equal(ready.ok, true, JSON.stringify(ready));
+        browser = await terminalService.openBrowserConversation(sessionId, { runtime, vibe64User: actor,
+          browserAuthority: { sessionId, projectSlug: slug, actorId: "42", requestContext } });
+        unsubscribe = await browser.subscribe(event => events.push(event));
+        const segment = (await browser.read()).segmentId;
+        goalOperation = browser.updateGoal({ action: "set", expectedSegmentId: segment, expectedGoalId: null,
+          objective: "Keep the original browser authorization current" });
+        goalOperation.catch(() => {});
+        await waitForSessionValue(() => held, value => value, "the original native publication's fresh authorization");
+      });
+      resume.resolve();
+      await goalOperation;
+      assert.ok(events.some(event => event.type === "goal" &&
+        event.goal?.objective === "Keep the original browser authorization current"),
+        "the original subscriber receives this goal after its publishing callback ended");
+      assert.ok(reads.filter(read => read.slug === slug).length > 1, "publication reads fresh authority");
+      const beforeRevocation = events.length;
+      access.allowed = false;
+      await assert.rejects(browser.read(), { statusCode: 403 });
+      const deniedBeforePublication = denied.length;
+      emitCodexNotification(captures.subscribers, { method: "thread/goal/updated", params: {
+        threadId: captures.provider.threadId, goal: { objective: "Revoked private goal", status: "paused", createdAt: 10 }
+      } });
+      await waitForSessionValue(() => denied.length, count => count > deniedBeforePublication,
+        "the original subscriber's fresh authorization after revocation");
+      await flushPromises();
+      assert.equal(events.length, beforeRevocation, "genuine revocation still suppresses retained browser publication");
+      assert.equal(denied.at(-1), slug, "revocation rechecks the exact practice project");
+    } finally {
+      resume.resolve();
+      await goalOperation?.catch(() => {});
+      await unsubscribe?.();
+      registerLocalPracticeAdmission(async () => null);
+    }
+  }, { actions, throughTerminalService: true });
+});
+
+
 test("Main Codex active goal continues once after service restart and explicit Pause survives restart", { timeout: 30_000 }, async () => {
   await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     const actor = { ...os.userInfo(), role: "owner" };
