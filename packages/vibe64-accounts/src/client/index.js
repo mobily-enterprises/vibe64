@@ -9,6 +9,7 @@ export { default as AiOnboardingSetUpPill } from "./onboarding/AiOnboardingSetUp
 export {
   aiOnboardingAvailable,
   aiOnboardingBlocked,
+  aiOnboardingNeeded,
   onVibe64AiOnboardingRequested,
   requestVibe64AiOnboarding
 } from "./onboarding/aiOnboardingEvents.js";

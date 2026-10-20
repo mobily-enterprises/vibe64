@@ -4,6 +4,7 @@ import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { createRouter, createWebHistory } from "vue-router/auto";
 import { routes } from "vue-router/auto-routes";
 import "vuetify/styles";
+import "./styles/vibe64-font.css";
 import "./styles/vibe64-m3.css";
 import { createVuetify } from "vuetify";
 import { aliases as mdiAliases, mdi } from "vuetify/iconsets/mdi-svg";

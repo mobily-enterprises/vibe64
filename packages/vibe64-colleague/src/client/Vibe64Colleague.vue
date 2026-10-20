@@ -742,14 +742,27 @@ const colleagueModel = {
     const target = await waitForConversation();
     const sent = target.turns.value.length;
     if (!await sendMessage(message, { focus: { ...props.focus } }, target)) return { ok: false, error: target.error.value || "Colleague didn't receive it." };
+    // Settles on the reply, a failed turn or the conversation's error, within 15 seconds.
+    const outcome = () => {
+      if (target.turns.value.length <= sent) return null;
+      const { status, error } = target.turns.value.at(-1)?.assistant || {};
+      const failure = target.snapshot.value?.status === "working" ? "" : target.snapshot.value?.error;
+      if (["failed", "interrupted"].includes(status) || failure) return { ok: false, error: failure || error || "It stopped with an error." };
+      const reply = latestAssistantMessageAwaitingUserReply(target.turns.value);
+      return reply ? { ok: true, reply } : null;
+    };
     let stop = null;
-    const reply = await new Promise(resolve => {
-      const timer = setTimeout(() => resolve(""), 60000);
-      stop = watch(() => target.turns.value.length > sent ? latestAssistantMessageAwaitingUserReply(target.turns.value) : "",
-        text => { if (text) { clearTimeout(timer); resolve(text); } }, { immediate: true });
+    const result = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve({ ok: false, error: "It took too long to reply." }), 15000);
+      stop = watch(outcome, value => { if (value) { clearTimeout(timer); resolve(value); } }, { immediate: true });
     });
     stop();
-    return reply ? { ok: true, reply } : { ok: false, error: "Colleague took too long to reply." };
+    return result;
+  },
+  // Shows the conversation with its composer focused, for "Start building".
+  async reveal() {
+    reopenConversation();
+    await focusConversationComposer();
   }
 };
 let unregisterModel = null;

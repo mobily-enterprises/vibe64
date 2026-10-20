@@ -11,7 +11,9 @@ import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
 
 const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" },
   setupError: { type: String, default: "" },
-  engineId: { type: String, required: true }, focusRole: { type: String, default: "" }, readonly: Boolean });
+  engineId: { type: String, required: true }, focusRole: { type: String, default: "" }, readonly: Boolean,
+  // Inside onboarding: model display names and plain role names, no heading.
+  plain: Boolean });
 const emit = defineEmits(["close", "saved", "busy"]);
 const { smAndDown } = useDisplay();
 const selectedEngine = computed(() => props.engineId);
@@ -152,9 +154,10 @@ const decisions = computed(() => previewEngine.value?.preview?.[canEdit.value ? 
 function choiceFor(selection, role = "senior") {
   return modelEngines.value.flatMap((item) => item.roles[role]?.choices || []).find((item) => choiceId(item) === choiceId(selection));
 }
-function selectionLabel(selection) {
+const PLAIN_ROLES = { senior: "Building", junior: "Quick tasks", helper: "Background helpers", router: "Request routing" };
+function selectionLabel(selection, role = "senior") {
   if (!selection) return "No model selected";
-  return vibe64AssistantSelectionLabel(selection);
+  return props.plain ? choiceFor(selection, role)?.label || selection.modelId : vibe64AssistantSelectionLabel(selection);
 }
 function items(role) {
   const current = draft.value[selectedEngine.value]?.[role];
@@ -266,9 +269,11 @@ async function reload() {
 <template>
   <section class="model-routing" aria-label="Model routing">
     <div class="model-routing__body">
-      <p class="text-title-large mb-2">{{ proposalMode ? `${connectionLabel || connectionId} connected` : `${engineLabel} routing` }}</p>
-      <p v-if="proposalMode" class="text-body-medium mb-4">Your connection is ready. Model changes are optional.</p>
-      <p v-else class="text-body-small mb-4">Used by all chats with {{ engineLabel }}.</p>
+      <template v-if="!plain">
+        <p class="text-title-large mb-2">{{ proposalMode ? `${connectionLabel || connectionId} connected` : `${engineLabel} routing` }}</p>
+        <p v-if="proposalMode" class="text-body-medium mb-4">Your connection is ready. Model changes are optional.</p>
+        <p v-else class="text-body-small mb-4">Used by all chats with {{ engineLabel }}.</p>
+      </template>
       <v-alert v-if="setupError" type="warning" variant="tonal" class="mb-4">Your AI is connected, but its routing defaults could not be saved. {{ setupError }} Review the choices below to finish setup.</v-alert>
       <v-skeleton-loader v-if="resource.isInitialLoading.value || baseRevision === null && !loadError" type="list-item-two-line@5, actions" />
       <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
@@ -276,11 +281,11 @@ async function reload() {
       <template v-else-if="engine?.connected">
         <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Routing changed in another tab. Your draft is retained. <v-btn variant="text" @click="reload">Reload current choices</v-btn></v-alert>
         <template v-if="proposalMode">
-          <p class="text-title-medium mt-4">{{ engineLabel }}</p>
+          <p v-if="!plain" class="text-title-medium mt-4">{{ engineLabel }}</p>
           <template v-if="suggestedChanges.length">
-            <p v-if="!suggestedChanges.some(change => change.role === 'senior')" class="text-body-small">Senior stays {{ selectionLabel(engine.roles.senior.assignment) }}.</p>
-            <v-checkbox v-for="proposal in suggestedChanges" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details class="model-routing__proposal">
-              <template #label><span class="text-body-medium"><strong>{{ proposal.label }}</strong><br>Current: {{ selectionLabel(proposal.previous) }}<br>Suggested: {{ selectionLabel(proposal.proposed) }} · {{ choiceFor(proposal.proposed, proposal.role)?.accessLabel }}<br><span v-if="proposal.previous?.selectionSource === 'explicit'" class="text-body-small">You chose the current model. Select this change to replace it.</span></span></template>
+            <p v-if="!suggestedChanges.some(change => change.role === 'senior')" class="text-body-small">{{ plain ? "Building" : "Senior" }} stays {{ selectionLabel(engine.roles.senior.assignment) }}.</p>
+            <v-checkbox v-for="proposal in suggestedChanges" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" color="primary" hide-details class="model-routing__proposal">
+              <template #label><span class="text-body-medium"><strong>{{ plain ? PLAIN_ROLES[proposal.role] || proposal.label : proposal.label }}</strong><br>Current: {{ selectionLabel(proposal.previous, proposal.role) }}<br>Suggested: {{ selectionLabel(proposal.proposed, proposal.role) }}<template v-if="!plain"> · {{ choiceFor(proposal.proposed, proposal.role)?.accessLabel }}</template><br><span v-if="proposal.previous?.selectionSource === 'explicit'" class="text-body-small">You chose the current model. Select this change to replace it.</span></span></template>
             </v-checkbox>
           </template>
           <p v-if="!suggestedChanges.length" class="text-body-medium">No model changes are suggested.</p>

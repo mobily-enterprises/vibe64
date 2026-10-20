@@ -1107,11 +1107,13 @@ maintain a separate provider setup implementation.
 AI onboarding makes connecting a frontier model the first thing a new person
 does. It is one shared full-screen flow, used unchanged by the local and hosted
 editors: a short "why intelligence matters" screen, then Claude (crowned,
-recommended), Codex, DeepSeek and GLM, ranked with honest bullets and a
-suggested budget beside each plan's official price, then the existing AI
-Accounts setup for the chosen provider and, when needed, one plain "make it
-your main AI?" decision, then a success screen once Colleague has a Senior
-model, where Colleague says hello as proof it answers. Until AI is set up, a
+recommended), Codex, DeepSeek and GLM, ranked with honest bullets, each
+plan's official name and price first and the suggested budget beneath, then
+the existing AI Accounts setup for the chosen provider and, when an existing
+main AI would change, one plain "build with it or keep the current one"
+choice, then a success screen once Colleague has a Senior model, where
+Colleague says hello as proof it answers (or says why it could not) before
+Start building opens Colleague. Until AI is set up, a
 gold Set up AI button in the top bar reopens it. Prices, plan names and sign-up links live in one small data module
 so they are easy to correct. The flow opens by itself only for someone who can
 connect AI (the local user, or a hosted workspace owner), only after AI status

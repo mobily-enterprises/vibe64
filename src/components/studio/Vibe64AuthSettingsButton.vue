@@ -192,6 +192,7 @@ import {
   AiOnboardingSetUpPill,
   aiOnboardingAvailable,
   aiOnboardingBlocked,
+  aiOnboardingNeeded,
   onVibe64AiOnboardingRequested,
   requestVibe64AiOnboarding,
   useVibe64Accounts
@@ -277,8 +278,9 @@ const selectedProviderLede = computed(() => {
   }
   return "Connect the AI accounts used by this Vibe64 editor.";
 });
+// The Set up AI pill carries the attention while it shows; the button stays neutral.
 const credentialsNeedAttention = computed(() => {
-  if (!statusLoaded.value) {
+  if (!statusLoaded.value || aiOnboardingNeeded.value) {
     return false;
   }
   return allAccountRows.value.some((account) => account.connected !== true);

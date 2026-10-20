@@ -39,6 +39,9 @@ function usesProvider(selection, { connect }) {
   return selection?.engineId === connect.engineId && selection?.modelProviderId === connect.modelProviderId;
 }
 
+// A routed selection named by its onboarding card, or by its model id.
+const providerName = ({ modelProviderId, modelId }) =>
+  AI_ONBOARDING_PROVIDERS.find(({ connect }) => connect.modelProviderId === modelProviderId)?.name || modelId;
 const colleagueChoice = (result) => result?.selection ? { ...result.selection, label: result.modelLabel } : null;
 const HELLO = "Say hello to me in one short, friendly sentence. No questions.";
 
@@ -119,12 +122,14 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
       // The workflow is usable and its Senior is, or would be, this provider.
       available: workflow?.available === true && (routed || senior.recommendation?.modelProviderId === connect.modelProviderId),
       routed,
-      routingWouldChange: routingSuggestsChanges(engine, connect.modelProviderId)
+      routingWouldChange: routingSuggestsChanges(engine, connect.modelProviderId),
+      // The Senior model already in use, which a routing change would replace.
+      currentSenior: senior.assignment ? { ...senior.assignment, name: providerName(senior.assignment) } : null
     };
   }
 
   return { cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, refreshColleague,
-    isSetUp, loadError, loaded, reload, sayHello, selectForColleague, verify };
+    isSetUp, loadError, loaded, reload, revealColleague: colleague.reveal, sayHello, selectForColleague, verify };
 }
 
 export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };

@@ -368,9 +368,9 @@ Removal confirms the exact owning orchestrator/provider.
 AI onboarding is owned by the client `onboarding/` module of
 `packages/vibe64-accounts` and composes these same setup components in their
 embedded mode; it has no connection implementation of its own.
-`aiOnboardingProviders.js` is the only place for provider ranks, copy, the
-suggested budget (the product's advice) beside each plan's official price,
-plan names, sign-up URLs, the orchestrator and provider id each card connects
+`aiOnboardingProviders.js` is the only place for provider ranks, copy, each
+plan's official name and price with the product's budget advice beneath it,
+the monogram shape, sign-up URLs, the orchestrator and provider id each card connects
 through, and which saved connections count as that provider. DeepSeek and GLM
 connect as curated Codex providers (`deepseek`, `zai-coding-plan`).
 `AiOnboardingHost` takes the AI connections endpoint, whether the viewer can
@@ -399,13 +399,22 @@ Colleague's selection through the existing model selection; the exported
 `AiOnboardingNudge` in the Colleague panel and Colleague's no-usable-model
 warning dispatch the same request while setup is needed, as does the exported
 `AiOnboardingSetUpPill` that account menus place in the top bar. On success the
-bridge's `sayHello` sends one ordinary Colleague message and returns its reply
-as proof that Colleague answers. Embedded, `NativeProviderConnections` shows
-only the titled key form and `ProviderAccountsSetup` turns raw sign-in tool
-output into product copy with a Details disclosure. Redo never removes a
-connection and changes routing only through `ModelRoutingForm`; the plain
-"Make [provider] your main AI?" decision calls its exposed `applySuggested`,
-which saves every suggestion for that connection through the normal save.
+bridge's `sayHello` sends one ordinary Colleague message and settles on its
+reply, the failed turn's or conversation's error, or 15 seconds; the success
+check appears only after a reply (or when the person continues anyway), and a
+failure offers Retry and Check connection. **Start building** asks the bridge
+to `reveal` Colleague with its composer focused. Embedded,
+`NativeProviderConnections` shows only the key form under the flow's own step
+title, and `ProviderAccountsSetup` shows nothing before the first attempt; when
+the sign-in tool cannot run it shows a warning with Try again, Choose another
+AI and Details, and disables the sign-in button. Redo never removes a
+connection and changes routing only through `ModelRoutingForm`: with a Senior
+model in use, a plain "Use [provider] / Keep [current] for building" choice
+calls its exposed `applySuggested`, which saves every suggestion for that
+connection through the normal save; with none in use it applies the
+suggestions without asking. Its `plain` mode names roles and models by their
+display names. A connected card's **Manage in AI Accounts** closes the flow and
+requests the account connections dialog.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

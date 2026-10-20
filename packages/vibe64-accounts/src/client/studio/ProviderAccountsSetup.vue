@@ -111,24 +111,33 @@
             !accountsReadyForActions ? 'accounts-setup__item--busy' : ''
           ]"
         >
-          <div v-if="!session" class="accounts-setup__item-main">
+          <!-- Embedded: a missing sign-in tool is a warning with its recovery; nothing is said before the first attempt. -->
+          <v-alert
+            v-if="!session && embedded && !account.connected && technicalStatus(account)"
+            :id="`accounts-setup-unavailable-${account.id}`" type="warning" variant="tonal" class="mb-4"
+            :title="`${signInName(account)} sign-in isn't available here yet`"
+          >
+            Vibe64 couldn't start the {{ signInName(account) }} sign-in tool on this machine. Try again, or choose another AI for now.
+            <details class="accounts-setup__details">
+              <summary>Details</summary>
+              <pre>{{ account.message }}</pre>
+            </details>
+            <div class="d-flex flex-wrap ga-2 mt-3">
+              <v-btn variant="flat" color="warning" :disabled="accountsLoading" :prepend-icon="mdiRefresh" @click="refreshStatus">
+                {{ accountsLoading ? "Checking…" : "Try again" }}
+              </v-btn>
+              <v-btn variant="text" @click="emit('back')">Choose another AI</v-btn>
+            </div>
+          </v-alert>
+          <div v-if="!session && (!embedded || account.connected)" class="accounts-setup__item-main">
             <v-icon
               :icon="account.connected ? mdiCheckCircle : mdiAccountCircleOutline"
               :color="account.connected ? 'success' : 'primary'"
               size="30"
             />
             <div>
-              <h2 class="text-title-medium ma-0">{{ embedded ? `Sign in to ${signInName(account)}` : account.label }}</h2>
-              <template v-if="embedded && !account.connected">
-                <p class="text-body-medium text-medium-emphasis ma-0">
-                  {{ technicalStatus(account) ? `${signInName(account)} sign-in isn't available on this machine yet. Try again or choose another provider.` : "Not signed in yet." }}
-                </p>
-                <details v-if="technicalStatus(account)" class="accounts-setup__details">
-                  <summary>Details</summary>
-                  <pre>{{ account.message }}</pre>
-                </details>
-              </template>
-              <p v-else class="text-body-medium text-medium-emphasis ma-0">
+              <h2 class="text-title-medium ma-0">{{ embedded ? `Signed in to ${signInName(account)}` : account.label }}</h2>
+              <p class="text-body-medium text-medium-emphasis ma-0">
                 {{ account.message || accountStatusMessage(account) }}
               </p>
               <p
@@ -182,7 +191,8 @@
               class="accounts-setup__pending-action"
               color="primary"
               :variant="apiKeyFormVisible(account) ? 'text' : 'flat'"
-              :disabled="!accountsReadyForActions || accountLoginDisabled(account)"
+              :disabled="!accountsReadyForActions || accountLoginDisabled(account) || embedded && technicalStatus(account)"
+              :aria-describedby="embedded && technicalStatus(account) ? `accounts-setup-unavailable-${account.id}` : undefined"
               @click="startAccountAuth(account)"
             >
               {{ primaryAuthLabel(account) }}

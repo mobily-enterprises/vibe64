@@ -10,6 +10,7 @@ so the same command works without a source checkout in the relocated runtime.
 
 - `index.html`
 - `src/main.js`
+- `src/styles/vibe64-font.css`
 - `src/App.vue`
 - `config/public.js`
 - `tooling/release/server-build.mjs`
@@ -218,6 +219,10 @@ background independently. `src/App.vue` keeps disabled actions on these surfaces
 legible through the shared semantic surface and status/alert roles. Connection recovery uses its primary tint and the same on-surface
 foreground. New notices use the theme surface/foreground pair, or a semantic
 warning/error alert; components do not introduce grey background constants.
+The app font, Roboto, ships inside the build: `src/styles/vibe64-font.css`
+self-hosts the variable latin subset from `@fontsource-variable/roboto` under
+the family name Vuetify and the `--v64-font-family` token already use, so every
+first launch renders it even where the system has no Roboto.
 
 
 The numbered `20261016-claude-rejected-input` repair joins the exact original

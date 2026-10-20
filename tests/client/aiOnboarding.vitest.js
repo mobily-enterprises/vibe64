@@ -98,15 +98,17 @@ describe("provider data", () => {
     }
   });
 
-  it("keeps the spending advice as a budget beside each plan's official price", () => {
-    expect(claude).toMatchObject({ crown: true, plan: { budget: "$30/month", detail: "Claude Pro ($20/month) · basic coding" } });
-    expect(glm).toMatchObject({ plan: { budget: "$30/month" },
-      note: "There's no point in getting it if you can get Claude for the same price." });
+  it("leads with each plan's official name and price, the spending advice beneath", () => {
+    expect(claude).toMatchObject({ crown: true, plan: { name: "Claude Pro", price: "$20/month",
+      budget: "Budget about $30/month: Pro plus extra usage when you need it.", more: "Coding a lot? Max · $100/month" } });
+    expect(glm.plan.budget).toContain("$30/month");
+    expect(glm.note).toContain("There's no point in getting it if you can get Claude for the same price.");
     expect(AI_ONBOARDING_PROVIDERS.filter(({ crown }) => crown)).toHaveLength(1);
-    // "Recommended" belongs to Claude's pill alone, and only Claude rates 3 on quota.
+    // "Recommended" belongs to Claude's ribbon alone, and only Claude rates 5 on quota.
     expect(JSON.stringify(AI_ONBOARDING_PROVIDERS)).not.toMatch(/Recommended:/u);
-    expect(AI_ONBOARDING_PROVIDERS.filter(({ bullets }) => bullets.some(([aspect, rating]) => aspect === "quota" && rating === 3))
+    expect(AI_ONBOARDING_PROVIDERS.filter(({ bullets }) => bullets.some(([aspect, rating]) => aspect === "quota" && rating === 5))
       .map(({ id }) => id)).toEqual(["claude"]);
+    expect(new Set(AI_ONBOARDING_PROVIDERS.map(({ shape }) => shape)).size).toBe(AI_ONBOARDING_PROVIDERS.length);
     expect(deepseek.haveTitle).toBe("Already have credit");
   });
 });
@@ -304,7 +306,20 @@ describe("flow", () => {
     expect(state.outcome).toMatchObject({ routed: true, error: "",
       colleague: { engineId: "claude", modelProviderId: "anthropic", label: "claude-model" } });
     expect(state.colleagueNote).toBe("uses");
-    await vi.waitFor(() => expect(state.hello).toEqual({ state: "replied", reply: "Hello there!" }));
+    await vi.waitFor(() => expect(state.hello).toEqual({ state: "replied", reply: "Hello there!", error: "" }));
+    expect(state.proven).toBe(true);
+  });
+
+  it("shows Colleague's failed hello without the check until a retry succeeds", async () => {
+    mocks.colleague.sayHello.mockResolvedValueOnce({ ok: false, error: "Insufficient balance." });
+    const { state } = await flow();
+    state.connect(claude, "have");
+    connectClaude();
+    await state.finish();
+    await vi.waitFor(() => expect(state.hello).toEqual({ state: "failed", reply: "", error: "Insufficient balance." }));
+    expect(state.proven).toBe(false);
+    await state.sayHello();
+    expect([state.hello.state, state.proven]).toEqual(["replied", true]);
   });
 
   it("without a Colleague here, success only points to its model menu", async () => {
@@ -399,7 +414,7 @@ describe("flow", () => {
       recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
     await state.finish();
-    expect(state.screen).toBe("routing");
+    expect([state.screen, state.autoRouting, state.currentSenior?.name]).toEqual(["routing", false, "Codex"]);
     mocks.colleague.seniorProviders.codex = "deepseek";
     state.routingForm = { applySuggested: vi.fn(async () => {
       mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
@@ -409,6 +424,32 @@ describe("flow", () => {
     await state.useAsMain();
     expect([state.screen, state.routingDetails]).toEqual(["success", false]);
     expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+  });
+
+  it("with no Senior model in use, a redo applies the suggestions without asking", async () => {
+    onCodexOpenAi();
+    const { state } = await flow({ setUp: true, start: "choose" });
+    routeDeepSeek({ assignment: null, recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+    state.connect(state.cards.find(({ id }) => id === "deepseek"));
+    await state.finish();
+    expect([state.screen, state.autoRouting, state.currentSenior]).toEqual(["routing", true, null]);
+    mocks.colleague.seniorProviders.codex = "deepseek";
+    state.routingForm = { applySuggested: vi.fn(async () => {
+      mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
+        senior: { assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } } } }];
+      await state.routingDone();
+    }) };
+    await vi.waitFor(() => expect(state.screen).toBe("success"));
+    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+  });
+
+  it("a redo keeps the upsell on Claude's card only and stops selling connected cards", async () => {
+    onCodexOpenAi();
+    const { state } = await flow({ setUp: true, start: "choose" });
+    const card = (id) => state.cards.find((item) => item.id === id);
+    expect(state.cardNote(card("codex"))).toBe("");
+    expect(state.cardNote(card("claude"))).toBe(claude.upgrade);
+    expect(state.connectedLabel(card("codex"))).toBe("Connected · in use");
   });
 
   it("a redo opened before connections load never moves Colleague unasked", async () => {
