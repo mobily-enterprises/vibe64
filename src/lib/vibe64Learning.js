@@ -354,7 +354,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     return value;
   }
 
-  async function endLesson({ expectedRevision, reason } = {}) {
+  // lesson.end requires a reason: "restart" retires the attempt keeping every
+  // result, so the lesson or the next one can be started from Courses.
+  async function endLesson({ expectedRevision, reason = "restart" } = {}) {
     if (!state.attemptId || state.busy) return null;
     const attemptId = state.attemptId;
     const key = JSON.stringify([attemptId, "end"]);
@@ -364,7 +366,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state.error = "";
     try {
       const result = await request(VIBE64_LEARNING_ROUTES.lessonEnd(attemptId), { method: "POST",
-        body: { requestId, expectedRevision, ...(reason ? { reason } : {}) } });
+        body: { requestId, expectedRevision, reason } });
       if (result?.ok !== true) throw new Error(result?.error || "Ending the lesson was not confirmed. Retry the same request.");
       pending.delete(key);
       await loadLesson(attemptId);
@@ -468,4 +470,18 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   });
 }
 
-export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, showMeCommand, stepStatus };
+// A link in lesson text to another site opens in a new tab, so following
+// "open Z.AI's key page" keeps Vibe64, Learning and the reader's place open.
+// Links inside Vibe64, modified clicks and non-web schemes keep the default.
+function openLessonLink(event, browser = globalThis) {
+  const link = event?.target?.closest?.("a[href]");
+  if (!link || event.defaultPrevented || event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  let url;
+  try { url = new URL(link.getAttribute("href"), browser.location?.href); } catch { return false; }
+  if (!/^https?:$/u.test(url.protocol) || url.origin === browser.location?.origin) return false;
+  event.preventDefault();
+  browser.open?.(url.href, "_blank", "noopener,noreferrer");
+  return true;
+}
+
+export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, openLessonLink, showMeCommand, stepStatus };

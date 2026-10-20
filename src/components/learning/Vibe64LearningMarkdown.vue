@@ -2,10 +2,12 @@
 import { computed } from "vue";
 import { Marked } from "marked";
 import GithubMarkdown from "@/components/studio/GithubMarkdown.vue";
+import { openLessonLink } from "@/lib/vibe64Learning.js";
 
 // Lesson text is verified installed content; it is still rendered through the
 // shared DOMPurify allowlist. Images are shown as their alt text: a lesson's
-// pictures are its declared diagrams, never remote addresses.
+// pictures are its declared diagrams, never remote addresses. Links to other
+// sites open in a new tab (openLessonLink), so the lesson stays open.
 const props = defineProps({ text: { type: String, default: "" } });
 const renderer = new Marked({
   async: false,
@@ -21,7 +23,7 @@ const html = computed(() => props.text ? renderer.parse(props.text) : "");
 </script>
 
 <template>
-  <GithubMarkdown class="vibe64-learning-markdown" :html="html" />
+  <GithubMarkdown class="vibe64-learning-markdown" :html="html" @click="openLessonLink" />
 </template>
 
 <style scoped>

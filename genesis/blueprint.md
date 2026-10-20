@@ -82,7 +82,8 @@ present on every signed-in page, opens the Learning environment above the
 current page: Courses (course cards and progress, course pages, the catalogue,
 the owner's custom-course form and author trial) and the open lesson. Closing it
 returns to exactly where the person was; reopening it returns to the same lesson,
-step and scroll position, also from another browser. Minimising it keeps that
+step and scroll position, and resuming the lesson in another browser opens its
+last-read step. Minimising it keeps that
 place while the full application and Colleague stay usable. On a phone Learning
 is a full-screen sheet.
 A lesson is a short sequence of steps that a person can read without AI: text,

@@ -75,7 +75,13 @@ is shown under it until the step changes; it never changes the status),
 **Show me**, **Teach me**,
 lesson notes, previous/next and **Open practice project**. On a phone L is a
 full-screen sheet with a row of numbered step circles. An earlier-format
-(version 1) attempt is shown as readable history with **End this lesson**.
+(version 1) attempt is shown as readable history with **End this lesson**; a
+version 2 lesson whose required steps all passed offers **Finish lesson**. Both
+call `lesson.end` with reason `restart` (results kept), emit `ended` so the
+overlay rereads saved learning, and Finish returns to Courses. A passed choice
+question is not compared again (the server keeps the pass), so the reader says
+so and disables **Check answer**. Links in lesson Markdown to another origin open
+in a new tab (`openLessonLink`), keeping the app and L open.
 
 Evidence: `tests/client/vibe64LearningEnvironment.vitest.js` and
 `tests/client/vibe64LearningCourses.vitest.js`; live browser acceptance is a separate gate.

@@ -1542,6 +1542,17 @@ test("the pinned step card follows the shared Learning controller and reopens it
   assert.equal(view.state.learningStep.value.passed, true);
   view.state.openLearningStep();
   assert.deepEqual(calls, [{ attemptId: controller.attemptId, stepId: "change" }]);
+  // On a phone the full-screen dialog would cover Learning: it minimises first.
+  view.state.xs.value = true;
+  view.state.open.value = true;
+  await flush();
+  assert.equal(view.state.shown.value, true);
+  view.state.openLearningStep();
+  await flush();
+  assert.equal(view.state.shown.value, false, "the phone dialog minimises so the lesson is visible");
+  assert.deepEqual(calls.at(-1), { attemptId: controller.attemptId, stepId: "change" });
+  assert.equal(calls.length, 2);
+  view.state.xs.value = false;
   controller.stepId = "missing";
   await flush();
   assert.equal(view.state.learningStep.value, null, "an unknown step shows no card");

@@ -105,7 +105,7 @@ function keydown(event) {
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>
-      <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" />
+      <Vibe64LearningReader v-else :learning="learning" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
     </div>
   </div>
 </template>
