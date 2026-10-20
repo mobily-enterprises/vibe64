@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 
-const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, openLessonLink, showMeCommand } = LearningLib;
+const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, openLessonLink, revealCurrentStep, showMeCommand } = LearningLib;
 
 // Learning v2 environment (C6): the shared controller and the lesson reader.
 // HTTP is a stub of the C3 actions; verdicts always come from those actions.
@@ -814,5 +814,35 @@ describe("Lesson text links", () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
     expect(browser.open).not.toHaveBeenCalled();
+  });
+});
+
+describe("Phone step row", () => {
+  // The phone walk of V64-START-00: Next to step 9 of 9 left the current step
+  // at 428-476px in a 390px-wide row. The row now follows the current step.
+  const row = ({ left, right, scrollLeft = 0, scrollWidth = 464, clientWidth = 366 }) => {
+    const list = { scrollLeft, scrollWidth, clientWidth, getBoundingClientRect: () => ({ left: 12, right: 378 }),
+      querySelector: selector => (selector === '[aria-current="step"]' ? { getBoundingClientRect: () => ({ left, right }) } : null) };
+    return list;
+  };
+
+  it("scrolls the row just enough to show a current step past either edge", () => {
+    const pastEnd = row({ left: 428, right: 476 });
+    expect(revealCurrentStep(pastEnd)).toBe(true);
+    expect(pastEnd.scrollLeft).toBe(98);
+    const beforeStart = row({ left: -40, right: 8, scrollLeft: 98 });
+    expect(revealCurrentStep(beforeStart)).toBe(true);
+    expect(beforeStart.scrollLeft).toBe(46);
+  });
+
+  it("leaves a visible step, a row that does not overflow and a missing row alone", () => {
+    const visible = row({ left: 100, right: 148, scrollLeft: 5 });
+    expect(revealCurrentStep(visible)).toBe(false);
+    expect(visible.scrollLeft).toBe(5);
+    const desktop = row({ left: 428, right: 476, scrollWidth: 300, clientWidth: 300 });
+    expect(revealCurrentStep(desktop)).toBe(false);
+    expect(desktop.scrollLeft).toBe(0);
+    expect(revealCurrentStep(null)).toBe(false);
+    expect(revealCurrentStep({ querySelector: () => null })).toBe(false);
   });
 });
