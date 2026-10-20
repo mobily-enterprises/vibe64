@@ -193,7 +193,7 @@ describe("controlled Learning shell", () => {
   it.each([
     [false, false, "false", "Open Learning"],
     [false, true, "true", "Close Learning"],
-    [true, false, "true", "Open Learning"]
+    [true, false, "true", "Leave Learning mode and open Learning"]
   ])("renders the actual L button with truthful state (legacy mode %s, open %s)", async (mode, open, pressed, title) => {
     const html = await renderLearningShell(mode, { actorKey: "local", open, minimised: false });
     expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);

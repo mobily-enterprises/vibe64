@@ -11,7 +11,11 @@
     @touchend="endPaneSwipe"
     @touchcancel="cancelPaneSwipe"
   >
-    <Vibe64LearningButton class="studio-app-shell-layout__learning-plate" :legacy-active="learningMode" />
+    <Vibe64LearningButton
+      class="studio-app-shell-layout__learning-plate"
+      :legacy-active="learningMode"
+      @leave-legacy="emit('update:learningMode', false)"
+    />
     <slot name="top-left" />
     <v-spacer />
     <div class="studio-app-shell-layout__top-right">
@@ -59,7 +63,8 @@ const props = defineProps({
   mobilePaneSwipeEnabled: Boolean,
   chatCollapsed: Boolean,
   // Retained for the legacy Learning mode callers; the L button now opens the
-  // Learning environment wherever a signed-in host binds it.
+  // Learning environment wherever a signed-in host binds it, leaving a legacy
+  // mode (update:learningMode false) first.
   showLearningModeControl: Boolean,
   learningMode: Boolean,
   fillViewport: Boolean

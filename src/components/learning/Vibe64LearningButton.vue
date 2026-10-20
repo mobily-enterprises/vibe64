@@ -8,12 +8,20 @@ const props = defineProps({
   // The legacy route mode still warms the plate when someone opens it by URL.
   legacyActive: Boolean
 });
+const emit = defineEmits(["leave-legacy"]);
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const active = computed(() => Boolean(learning?.state.open || props.legacyActive));
 const minimised = computed(() => Boolean(learning?.state.minimised));
-const title = computed(() => learning?.state.open ? "Close Learning"
-  : minimised.value ? "Return to your lesson" : "Open Learning");
+const title = computed(() => props.legacyActive ? "Leave Learning mode and open Learning"
+  : learning?.state.open ? "Close Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
+// From the legacy route mode, L leaves that mode first and then opens the
+// Learning environment; otherwise it opens or closes L.
+function press() {
+  if (!props.legacyActive) return learning.toggle();
+  emit("leave-legacy");
+  return Promise.resolve(learning.show()).catch(() => {});
+}
 </script>
 
 <template>
@@ -31,7 +39,7 @@ const title = computed(() => learning?.state.open ? "Close Learning"
     icon
     size="small"
     :variant="active ? 'flat' : 'outlined'"
-    @click="learning.toggle()"
+    @click="press"
   >
     <span aria-hidden="true">L</span>
   </v-btn>

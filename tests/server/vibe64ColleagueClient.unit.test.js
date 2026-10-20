@@ -15,6 +15,7 @@ import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useR
 import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
+import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
@@ -143,6 +144,42 @@ test("voice admission sends directly to Colleague and preserves its identity and
   assert.equal(commands[0].options.body.messageId, "voice-question");
   assert.deepEqual(commands[0].options.body.data.focus, focus);
   assert.equal(requests.some(request => request.url.includes("/voice/")), false);
+});
+
+// Learning v2 (C6): Teach me in L asks this host's one Colleague to open and
+// send L's fixed message through the ordinary send with the browser focus.
+test("Teach me from the Learning environment opens Colleague and sends its fixed message once", async (t) => {
+  const requests = [];
+  const colleagueRequest = vue.shallowRef(null);
+  const learning = { colleagueRequest, consumeColleagueRequest(id) {
+    if (colleagueRequest.value?.id !== id) return null;
+    const value = colleagueRequest.value;
+    colleagueRequest.value = null;
+    return value;
+  } };
+  const view = mount(t, async (url, options) => {
+    requests.push({ url, options });
+    if (url.endsWith("/messages")) return { status: "accepted", messageId: options.body.messageId, turnId: options.body.messageId };
+    return { ok: true, messages: [], status: "ready" };
+  }, vue.reactive({ name: "Colleague" }), { actorKey: "member" }, null, null, null, null, null, learning);
+  await flush();
+  assert.equal(view.state.open.value, false);
+  colleagueRequest.value = Object.freeze({ id: "teach-1", kind: "teach", message: "Teach me this step.", actorKey: "member",
+    attemptId: "11111111-1111-4111-8111-111111111111", stepId: "quiz" });
+  await flush(); await flush();
+  assert.equal(view.state.open.value, true);
+  assert.equal(colleagueRequest.value, null);
+  const commands = nonFocusPosts(requests);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].url, "/api/assistant/app/conversations/conversation/messages");
+  assert.equal(commands[0].options.body.text, "Teach me this step.");
+  assert.deepEqual(view.notices, []);
+
+  // Another person's request is never sent by this Colleague.
+  colleagueRequest.value = Object.freeze({ id: "teach-2", kind: "teach", message: "Teach me this step.", actorKey: "someone-else" });
+  await flush(); await flush();
+  assert.equal(nonFocusPosts(requests).length, 1);
+  assert.equal(colleagueRequest.value.id, "teach-2");
 });
 
 test("operation receipts open their exact target and prepare recovery without replaying an effect", async t => {
@@ -730,7 +767,7 @@ function conversationSnapshot(response = {}, streamRevision = response.streamRev
   };
 }
 
-function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null) {
+function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null, learning = null) {
   const notices = [];
   const events = [];
   const requests = [];
@@ -825,6 +862,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const module = { exports: {} };
   const imports = {
     "./colleagueFocusBinding.js": { createColleagueFocusBinding },
+    "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
     vue,
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
@@ -838,7 +876,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body") },
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body"), VIBE64_LEARNING_KEY: Symbol("learning") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
@@ -888,6 +926,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   if (preview) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
   if (gestureChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestureChannel);
   if (bodyChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_BODY_KEY, bodyChannel);
+  if (learning) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_LEARNING_KEY, learning);
   app.provide(routeLocationKey, vue.reactive({ path: "/" }));
   app.provide("jskit.realtime.runtime.client.socket", socket);
   app.mount({});

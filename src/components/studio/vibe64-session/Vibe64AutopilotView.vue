@@ -649,6 +649,7 @@
         :update-disabled-reason="saveWorkTitle"
         :can-review-update="Boolean(updateConflictRecovery)"
         :workspace-setup-status="workspaceSetupStatus"
+        :open-file="openWorkingFile"
         @check-update="checkTemporaryAiUpdate"
         @review-update="reviewResolvedUpdate"
         @select-main-chat="showMainChat"
@@ -1848,6 +1849,13 @@ const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 // Dashboard → Files editor (the attempt-scoped source editor).
 function openLearningFile(path) {
   if (!practiceLesson.value || typeof path !== "string" || !path) return false;
+  openSourceEditorFile({ path, presentation: "code" });
+  return sourceEditorOpenRequest.value?.path === path;
+}
+// A Learning environment "Show me" for one file opens it in this session's
+// ordinary Dashboard -> Files editor, as a source link does.
+function openWorkingFile(path) {
+  if (!props.sourceWorkspaceAvailable || typeof path !== "string" || !path) return false;
   openSourceEditorFile({ path, presentation: "code" });
   return sourceEditorOpenRequest.value?.path === path;
 }

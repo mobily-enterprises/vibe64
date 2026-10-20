@@ -24,6 +24,8 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
 const SURFACES = Object.freeze(["courses", "lesson"]);
 const STORAGE_PREFIX = "vibe64:learning-environment:v1:";
 const READER_SAVE_DELAY_MS = 800;
+// How long a file guide waits for the navigated project view to publish itself.
+const PROJECT_VIEW_WAIT_MS = 5000;
 // Teach me sends this exact text; the step itself travels in Colleague's focus.
 const VIBE64_LEARNING_TEACH_MESSAGE = "Teach me this step.";
 
@@ -277,19 +279,42 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!step?.guide) throw new Error("This step has nothing to show.");
     const command = showMeCommand(step.guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
     minimise();
-    const navigateBrowser = browserNavigation?.value || null;
-    const handle = colleagueView?.value;
-    const view = handle?.projectSlug && handle.projectSlug === command.projectSlug ? handle : null;
+    const navigator = browserNavigation?.value || null;
+    // A file guide opens its file through the view the navigation selected:
+    // the view is read only after navigation and must belong to the target project.
+    const navigateBrowser = navigator && command.guide.filePath
+      ? async navigation => {
+        const focus = await navigator(navigation);
+        await waitForProjectView(command.projectSlug);
+        return focus;
+      }
+      : navigator;
+    const view = { openFile(path) {
+      const handle = projectView(command.projectSlug);
+      return handle ? handle.openFile(path) === true : false;
+    } };
     return (runGuide || runTrainingGuideCommand)(command, { navigateBrowser, view });
   }
 
-  // Teach me: minimise L and ask Colleague (E consumes colleagueRequest).
+  function projectView(projectSlug) {
+    const handle = colleagueView?.value;
+    return projectSlug && handle?.projectSlug === projectSlug && handle.ready !== false &&
+      typeof handle.openFile === "function" ? handle : null;
+  }
+
+  async function waitForProjectView(projectSlug) {
+    const deadline = now() + PROJECT_VIEW_WAIT_MS;
+    while (!projectView(projectSlug) && now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  // Teach me: minimise L and ask this host's Colleague, which opens and sends
+  // the fixed message (watchColleagueLearningRequests in vibe64-colleague).
   function teachMe(stepId = currentStep.value?.id) {
     if (!state.attemptId || !stepId) throw new Error("Open a lesson step before asking Colleague to teach it.");
     selectStep(stepId);
     minimise();
     colleagueRequest.value = Object.freeze({ id: `teach-${now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, attemptId: state.attemptId, stepId });
+      kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
     return colleagueRequest.value;
   }
 

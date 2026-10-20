@@ -5,6 +5,7 @@ import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
+import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 
 const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, showMeCommand } = LearningLib;
 
@@ -153,7 +154,11 @@ describe("useVibe64Learning controller", () => {
     const [command, options] = runGuide.mock.calls[0];
     expect(command).toMatchObject({ projectSlug: "practice-one", pane: "preview",
       guide: { target: "preview", navigate: true, highlight: true, caption: "Your app runs here" } });
-    expect(options).toEqual({ navigateBrowser, view });
+    expect(options.navigateBrowser).toBe(navigateBrowser);
+    // The file opener reads the published view when it is used, for this project only.
+    expect(options.view.openFile("src/app.js")).toBe(false);
+    view.openFile.mockReturnValue(true);
+    expect(options.view.openFile("src/app.js")).toBe(true);
 
     await learning.show();
     const request = learning.teachMe("quiz");
@@ -163,6 +168,77 @@ describe("useVibe64Learning controller", () => {
     expect(learning.consumeColleagueRequest("other")).toBeNull();
     expect(learning.consumeColleagueRequest(request.id)).toBe(request);
     expect(learning.colleagueRequest.value).toBeNull();
+  });
+
+  it("Show me opens a file guide through the Working view published after navigation, without the old mode", async () => {
+    const filesStep = { id: "edit", title: "Edit", bodyText: "Open it.", required: false, check: { kind: "none" },
+      guide: { target: "files", navigate: true, filePath: "src/app.js" } };
+    const reads = () => { const value = lessonResult(); value.lesson.steps.push(filesStep); return value; };
+    const colleagueView = Vue.shallowRef({ projectSlug: "elsewhere", ready: true, openFile: vi.fn(() => true) });
+    const working = { projectSlug: "practice-one", ready: true, openFile: vi.fn(path => path === "src/app.js") };
+    const navigateBrowser = vi.fn(async command => {
+      // L was opened from another page: the practice project's ordinary
+      // Working view (no Learning binding) publishes itself after navigation.
+      setTimeout(() => { colleagueView.value = working; }, 60);
+      return { projectSlug: command.projectSlug, pane: command.pane };
+    });
+    const { learning } = controller({ reads, browserNavigation: Vue.shallowRef(navigateBrowser), colleagueView });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "edit" });
+    const receipt = await learning.showMe("edit");
+    expect(navigateBrowser).toHaveBeenCalledWith(expect.objectContaining({ projectSlug: "practice-one", pane: "files" }));
+    expect(working.openFile).toHaveBeenCalledWith("src/app.js");
+    expect(colleagueView.value.learningBinding).toBeUndefined();
+    expect(receipt.focus).toEqual({ projectSlug: "practice-one", pane: "files" });
+    expect(receipt.guide.shown).toBe(false);
+
+    // A view of another project never opens the file; the guide says so.
+    let clock = 0;
+    const stale = Vue.shallowRef({ projectSlug: "elsewhere", ready: true, openFile: vi.fn(() => true) });
+    const other = controller({ reads, browserNavigation: Vue.shallowRef(async () => ({})), colleagueView: stale,
+      now: () => (clock += 10000) });
+    other.learning.setViewer("member");
+    await other.learning.show({ attemptId: ATTEMPT, stepId: "edit" });
+    await expect(other.learning.showMe("edit")).rejects.toThrow("could not open that practice project file");
+    expect(stale.value.openFile).not.toHaveBeenCalled();
+  });
+
+  it("Teach me opens this host's Colleague and sends the fixed message once, for the same person only", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "quiz" });
+    const order = [];
+    let actor = "member";
+    let accepted = true;
+    const report = vi.fn();
+    const stop = watchColleagueLearningRequests({ learning, actorKey: () => actor, report,
+      reveal: vi.fn(async () => { order.push("reveal"); }),
+      send: vi.fn(async message => { order.push(["send", message]); return accepted; }) });
+    try {
+      learning.teachMe("quiz");
+      await flush();
+      expect(learning.minimised).toBe(true);
+      expect(order).toEqual(["reveal", ["send", VIBE64_LEARNING_TEACH_MESSAGE]]);
+      expect(learning.colleagueRequest.value).toBeNull();
+      expect(report).not.toHaveBeenCalled();
+
+      // A rejected send is reported; the request is not resent by itself.
+      accepted = false;
+      learning.teachMe("quiz");
+      await flush();
+      expect(order).toHaveLength(4);
+      expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Teach me") }));
+
+      // Another signed-in person's Colleague never sends this person's request.
+      actor = "someone-else";
+      learning.teachMe("quiz");
+      await flush();
+      expect(order).toHaveLength(4);
+      expect(learning.colleagueRequest.value).toMatchObject({ actorKey: "member" });
+    } finally { stop(); }
+    const colleagueSource = readFileSync(path.resolve("packages/vibe64-colleague/src/client/Vibe64Colleague.vue"), "utf8");
+    expect(colleagueSource).toContain("watchColleagueLearningRequests({ learning");
+    expect(colleagueSource).toContain("const learning = inject(VIBE64_LEARNING_KEY, null);");
   });
 
   it("guides point-only without a practice project or at the L button", () => {

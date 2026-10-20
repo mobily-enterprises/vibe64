@@ -3,8 +3,9 @@
 The **L** button now opens the Learning environment above the current page;
 see [The Learning environment (L)](learning-environment.md). It no longer
 switches the header into Learning mode. The Learning mode described below is
-kept only for lessons opened by an earlier address (`?mode=learning`) and for
-reading earlier history; new lessons start and are read in the Learning
+kept only for lessons opened by an earlier address (`?mode=learning`) or a
+Colleague request, and for reading earlier history; pressing the lit **L** there
+leaves Learning mode and opens the Learning environment; new lessons start and are read in the Learning
 environment, without a teacher conversation. Its **Courses** page is the same
 one described here.
 

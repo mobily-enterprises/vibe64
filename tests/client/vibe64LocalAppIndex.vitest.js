@@ -90,9 +90,10 @@ async function mountLearningIndex({ gestures = null, practiceChoices = [], autho
     vue: Vue, "vue-router": { useRoute: () => route }, "@local/vibe64-training/client/lesson-picker": { default: picker }
   });
   // The L button opens the Learning environment through the shell's one
-  // controller; it no longer switches the legacy route mode.
+  // controller; from the legacy route mode it leaves that mode first.
   calls.environment = [];
   const environment = { state: Vue.reactive({ actorKey: "local", open: false, minimised: false }),
+    show() { calls.environment.push("show"); environment.state.open = true; },
     toggle() { calls.environment.push("toggle"); environment.state.open = !environment.state.open; } };
   const button = compiledUi(path.resolve("src/components/learning/Vibe64LearningButton.vue"), {
     vue: Vue, "@/composables/useVibe64Learning.js": { useVibe64Learning: () => environment }
@@ -136,20 +137,22 @@ it("mounts actual L/root lesson controls without a project and retains one origi
     expect(view.calls.panelProps.purposeFilter).toBe("learning");
     expect(view.calls.gateProps.forcePicker).toBe(true);
     expect(view.calls.gateProps.navigateOnSelect).toBe(true);
-    // Learning v2: the L plate opens the Learning environment; a legacy route
-    // mode (still reachable by URL) only keeps the plate warm.
+    // Learning v2: the L plate opens the Learning environment. In a legacy
+    // route mode (URL or Colleague navigation) it warms the plate, and pressing
+    // it leaves that mode through the original owner before opening L.
     const plate = nodes(view.root).find(node => node.props?.["aria-label"] === "Learning");
     expect(plate.props["aria-pressed"]).toBe(true);
     expect(plate.props["data-vibe64-guide"]).toBe("learning");
+    expect(plate.props.title).toBe("Leave Learning mode and open Learning");
     plate.props.onClick(); await Vue.nextTick();
-    expect(view.calls.environment).toEqual(["toggle"]);
-    expect(view.calls.panelProps.purposeFilter).toBe("learning");
-    await view.owner.setLearningMode(false); await Vue.nextTick();
+    expect(view.calls.environment).toEqual(["show"]);
     expect(view.calls.panelProps.purposeFilter).toBe("working");
     expect(view.calls.panelProps.active).toBe(false);
     expect(plate.props["aria-pressed"]).toBe(true);
     plate.props.onClick(); await Vue.nextTick();
+    expect(view.calls.environment).toEqual(["show", "toggle"]);
     expect(plate.props["aria-pressed"]).toBe(false);
+    // The plate never enters the legacy mode; its original owner still can.
     await view.owner.setLearningMode(true); await Vue.nextTick();
     expect(view.calls.panelProps.purposeFilter).toBe("learning");
     expect(view.calls.panelProps.active).toBe(true);

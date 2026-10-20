@@ -19,7 +19,10 @@ to exactly that page. The app underneath keeps working and is never replaced.
 
 Pressing **L** again while Learning is open closes it. The old Learning mode
 (tinted header, graduation-cap tab, teacher conversation) is no longer opened
-by L; earlier lesson history stays readable.
+by L; earlier lesson history stays readable. If a page is still in the old
+mode (an earlier `?mode=learning` address or a Colleague request), L is lit
+and titled **Leave Learning mode and open Learning**: pressing it leaves that
+mode and opens the Learning environment.
 
 ## The Learning screen
 
@@ -78,11 +81,13 @@ also has:
 - **Done**: for a step you check yourself; press it when you have done the step.
 - **Show me**: minimises Learning, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control
-  with a short caption. Click the control yourself. If the place is not
+  with a short caption. A step about one file opens that file in the practice
+  project's **Dashboard → Files** editor. Click the control yourself. If the place is not
   available on the current page, Learning comes back with the reason; open
   your practice project and try again.
-- **Teach me**: minimises Learning and asks Colleague to teach this step. The
-  step stays pinned above Colleague's chat.
+- **Teach me**: minimises Learning, opens Colleague and sends it the message
+  "Teach me this step." for you. The step stays pinned above Colleague's chat.
+  If Colleague is not connected yet, an error says so; press **Teach me** again.
 - **Lesson notes** (when the lesson has them) and **Previous step** /
   **Next step**.
 - **Open practice project** (when the lesson has one) minimises Learning and
