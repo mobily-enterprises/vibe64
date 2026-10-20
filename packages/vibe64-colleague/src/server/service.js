@@ -1,6 +1,6 @@
 import { createTrainingPracticalObservations } from "@local/vibe64-training/server/practical-observations";
-import { isTrainingTeacherAction } from "@local/vibe64-training/server/teaching-role";
-import { publicCue, createTrainingPresentationCoordination } from "@local/vibe64-training/server/presentation-coordination";
+import { trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/guide-targets";
+import { publicCue, createColleagueNavigationCoordination } from "./navigationCoordination.js";
 import { evaluateAdmittedTrainingAssessment } from "@local/vibe64-training/server/conversation-assessment";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -19,6 +19,16 @@ import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
+// The retired Main teacher's operations refuse a Colleague context and are
+// removed with the teacher model (Learning v2 phase 2); Colleague teaches
+// through lesson.read, navigation, guides and checks instead.
+const RETIRED_MAIN_TEACHER_ACTIONS = new Set([
+  "vibe64.training.question.prepare", "vibe64.training.answer.evaluate",
+  "vibe64.training.practical.evaluate", "vibe64.training.view.open", "vibe64.training.visual.open",
+  "vibe64.training.visual.command", "vibe64.training.visual.cue",
+  "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot",
+  "vibe64.training.practical.read"
+]);
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
@@ -149,7 +159,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
-  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" && !isTrainingTeacherAction(actionId) &&
+  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" && !RETIRED_MAIN_TEACHER_ACTIONS.has(actionId) &&
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));
   const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });
@@ -268,7 +278,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
-    state.presentation = createTrainingPresentationCoordination({ changed: () => publishBrowserChange(state) });
+    state.presentation = createColleagueNavigationCoordination({ changed: () => publishBrowserChange(state) });
     if (record.status === "working") {
       record.status = "interrupted";
       record.error ||= "The server restarted. Your history is kept. Inspect unfinished operations before continuing; nothing was repeated.";
@@ -1659,6 +1669,34 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async navigate(input, context) {
       const state = await stateFor(context);
       const learningFields = input.learningView || input.learningContent || input.learningTargetAttemptId;
+      if ((input.learning || input.guide) && (input.learningMode !== undefined || learningFields || input.presentation)) {
+        return { ok: false, error: "Use learning or guide without the retired Learning mode fields or a lesson presentation." };
+      }
+      if (input.learning && input.learning.open !== true && (input.learning.attemptId || input.learning.stepId)) {
+        return { ok: false, error: "Minimising Learning cannot also select a lesson or step." };
+      }
+      if (input.learning?.stepId && !input.learning.attemptId) {
+        return { ok: false, error: "Choose the exact lesson attempt before its step." };
+      }
+      let guided = null;
+      if (input.guide) {
+        try { guided = trainingGuideRequest(input.guide); }
+        catch (error) { return { ok: false, error: error.message }; }
+        if (input.learning || input.pane || input.planView || input.databaseView || input.databaseTable ||
+            input.integrationId || input.integrationEnvironment || input.conversationId) {
+          return { ok: false, error: "A guide derives its own view. Supply only the guide, with projectSlug and sessionId when it opens a project place." };
+        }
+        if (!guided.navigate || guided.target === "learning") {
+          if (input.projectSlug || input.sessionId) {
+            return { ok: false, error: guided.navigate ? "The learning guide opens Learning, not a project; omit projectSlug and sessionId."
+              : "A point-only guide changes no view; omit projectSlug and sessionId." };
+          }
+        } else if (!input.projectSlug) {
+          return { ok: false, error: "Choose the exact project whose place this guide opens." };
+        } else if (trainingGuideCommand(guided, { id: "" }).pane !== "preview" && !input.sessionId) {
+          return { ok: false, error: "Choose the exact session before opening this guided session view." };
+        }
+      }
       if (learningFields && input.learningMode !== true) {
         return { ok: false, error: "Choose Learning mode before selecting its view or lesson content." };
       }
@@ -1708,6 +1746,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (result) return result;
       }
       if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
+      if (guided) {
+        return state.presentation.begin(connection, trainingGuideCommand(guided, { id: randomUUID(),
+          projectSlug: input.projectSlug || "", sessionId: input.sessionId || "" }), { get generation() { return state.generation; } });
+      }
       const command = { id: randomUUID(), projectSlug: input.projectSlug,
         ...(input.managementView ? { managementView: input.managementView } : {}),
         ...(input.pane ? { pane: input.pane } : {}),
@@ -1720,6 +1762,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.learningView ? { learningView: input.learningView } : {}),
         ...(input.learningContent ? { learningContent: input.learningContent } : {}),
         ...(input.learningTargetAttemptId ? { learningAttemptId: input.learningTargetAttemptId } : {}),
+        ...(input.learning ? { learning: { open: input.learning.open === true,
+          ...(input.learning.attemptId ? { attemptId: input.learning.attemptId } : {}),
+          ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
         ...(input.presentation ? { presentation: structuredClone(input.presentation) } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       if (input.presentation?.operation === "cue") {

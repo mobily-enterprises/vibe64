@@ -3,13 +3,14 @@ import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
 import { useTrainingPresentationCue } from "@local/vibe64-training/client/presentation-cue";
 import { createTrainingNavigation } from "@local/vibe64-training/client/navigation";
+import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, unref, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
@@ -42,6 +43,31 @@ const voiceTranscript = ref(null);
 const displayedPreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
 const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 const colleagueBody = inject(VIBE64_COLLEAGUE_BODY_KEY, null);
+const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+// The shared Learning environment (L) controller, when this host provides one.
+const learningOwner = inject(VIBE64_LEARNING_KEY, null);
+const learningController = computed(() => unref(learningOwner) || null);
+// The pinned current-step card reads only the L controller's client state.
+const learningStep = computed(() => {
+  const controller = learningController.value;
+  const attemptId = unref(controller?.attemptId);
+  const stepId = unref(controller?.stepId);
+  const lesson = unref(controller?.lesson);
+  const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
+  const index = steps.findIndex(step => step?.id === stepId);
+  if (!attemptId || !stepId || index < 0) return null;
+  const results = unref(controller.results);
+  const passed = (Array.isArray(results) ? results : Object.values(results || {}))
+    .some(result => result?.stepId === stepId && result.outcome === "passed");
+  return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
+    position: index + 1, total: steps.length, passed };
+});
+function openLearningStep() {
+  const step = learningStep.value;
+  const controller = learningController.value;
+  if (!step || typeof controller?.show !== "function") return;
+  Promise.resolve(controller.show({ attemptId: step.attemptId, stepId: step.stepId })).catch(reportFailure);
+}
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
   open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
@@ -189,11 +215,29 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   void handleNavigation(navigation);
   return true;
 }
+// Both hosts' navigators run through this wrapper: opening an app place shows
+// the app (Learning minimises with its state kept), and a guide rings the real
+// control after any "show me" navigation, reporting only what it drew.
+async function navigateBrowser(command) {
+  const controller = learningController.value;
+  const appPlace = command.projectSlug || command.managementView || (command.guide && command.guide.target !== "learning");
+  if (appPlace && !command.learning && unref(controller?.open) && typeof controller.minimise === "function") {
+    await controller.minimise();
+  }
+  if (!command.guide) return props.navigate(command);
+  return runTrainingGuideCommand(command, { navigateBrowser: props.navigate, view: { openFile(path) {
+    const view = companionView?.value;
+    return view?.projectSlug === command.projectSlug && view.sessionId === command.sessionId &&
+      typeof view.openFile === "function" && view.openFile(path) === true;
+  } } });
+}
 const trainingNavigation = createTrainingNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
-  navigate: () => props.navigate,
+  navigate: () => props.navigate ? navigateBrowser : null,
   beforeNavigate(command) {
-    if (xs.value && shown.value && ["open", "cue"].includes(command.presentation?.operation)) return toggleConversation();
+    // A phone shows one surface: reveal the app, Learning or the guide ring.
+    if (xs.value && shown.value && (["open", "cue"].includes(command.presentation?.operation) ||
+        command.guide || command.learning)) return toggleConversation();
   },
   acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
   error: productError
@@ -791,6 +835,14 @@ onBeforeUnmount(() => {
         <p>{{ pointerNotice }}</p>
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
+      <section v-if="learningStep" class="vibe64-colleague__step-card" aria-label="Current lesson step">
+        <p class="vibe64-colleague__step-meta">{{ learningStep.lessonTitle }} · Step {{ learningStep.position }} of {{ learningStep.total }}</p>
+        <p class="text-title-small">{{ learningStep.title }}</p>
+        <div class="vibe64-colleague__step-actions">
+          <span v-if="learningStep.passed" class="vibe64-colleague__watch-chip" data-status="active" role="status">Passed</span>
+          <v-btn variant="text" min-height="48" @click="openLearningStep">Open lesson</v-btn>
+        </div>
+      </section>
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
         <p>Colleague has no usable AI model. Your draft is kept and no request was sent. Connect an AI and configure an available Senior model, then return and press Send.</p>
         <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>
@@ -1109,4 +1161,8 @@ onBeforeUnmount(() => {
 .vibe64-colleague__history { display: flex; flex-direction: column; gap: 8px; padding: 16px; min-height: 0; overflow: auto; }
 .vibe64-colleague__history-annotation p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .vibe64-colleague__voice-feedback { flex: 1 1 100%; min-width: 0; }
+.vibe64-colleague__step-card { flex: 0 0 auto; margin: 12px 12px 0; padding: 12px 16px 4px; border: 1px solid color-mix(in srgb, var(--v64-learning, #f5c518) 45%, rgb(var(--v-theme-surface))); border-radius: var(--v64-shape-lg, 16px); background: var(--v64-learning-tint, rgb(var(--v-theme-surface))); overflow-wrap: anywhere; }
+.vibe64-colleague__step-card p { margin: 0 0 4px; }
+.vibe64-colleague__step-meta { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md, inherit); }
+.vibe64-colleague__step-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 </style>

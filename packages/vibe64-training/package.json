@@ -51,7 +51,8 @@
     "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
     "./shared/learning-guidance": "./src/shared/learningGuidance.js",
     "./shared/guide-targets": "./src/shared/guideTargets.js",
-    "./client/guide-overlay": "./src/client/TrainingGuideOverlay.vue"
+    "./client/guide-overlay": "./src/client/TrainingGuideOverlay.vue",
+    "./client/guide": "./src/client/trainingGuide.js"
   },
   "jskit": {
     "kind": "runtime",

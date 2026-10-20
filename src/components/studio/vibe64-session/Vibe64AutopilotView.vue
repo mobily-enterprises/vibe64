@@ -649,6 +649,7 @@
         :update-disabled-reason="saveWorkTitle"
         :can-review-update="Boolean(updateConflictRecovery)"
         :workspace-setup-status="workspaceSetupStatus"
+        :open-file="openGuideFile"
         @check-update="checkTemporaryAiUpdate"
         @review-update="reviewResolvedUpdate"
         @select-main-chat="showMainChat"
@@ -1848,6 +1849,13 @@ const learningGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 // Dashboard → Files editor (the attempt-scoped source editor).
 function openLearningFile(path) {
   if (!practiceLesson.value || typeof path !== "string" || !path) return false;
+  openSourceEditorFile({ path, presentation: "code" });
+  return sourceEditorOpenRequest.value?.path === path;
+}
+// A Colleague "show me" guide opens one project file in this session's own
+// Dashboard → Files editor, the same opener the lesson view uses.
+function openGuideFile(path) {
+  if (typeof path !== "string" || !path) return false;
   openSourceEditorFile({ path, presentation: "code" });
   return sourceEditorOpenRequest.value?.path === path;
 }
