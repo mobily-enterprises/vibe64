@@ -689,6 +689,15 @@ function createStudioProjectContext({
   // Inside the managed source root, the space inherits the managed-source
   // permission contract that agents, Preview and Files need.
   const learningSpaceRoot = normalizeRoot(learningSpace?.root, path.join(managedSourceRoot, LEARNING_SPACE_DIR));
+  // The default managed source root is the real workspace (/var/lib/vibe64),
+  // whatever `home` says, so a test process must name its space explicitly.
+  const learningSpaceRootNamed = Boolean(String(learningSpace?.root || explicitManagedSourceRoot || "").trim());
+  function learningSpaceStorageRoot() {
+    if (!learningSpaceRootNamed && process.env.NODE_TEST_CONTEXT) {
+      throw new Error("A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is the real workspace.");
+    }
+    return learningSpaceRoot;
+  }
   let selectedTargetRoot = resolveExplicitStudioTargetRoot({
     cwd,
     env,
@@ -755,7 +764,7 @@ function createStudioProjectContext({
       return skipLearningSpaceEntry(slug, "training marker names another practice project");
     }
     try {
-      if (!await practiceDirectoryExists(practiceNamespace(learningSpaceRoot, training).projectContextRoot)) return null;
+      if (!await practiceDirectoryExists(practiceNamespace(learningSpaceStorageRoot(), training).projectContextRoot)) return null;
     } catch (error) {
       if (error.code === "vibe64_practice_path_unsafe") return skipLearningSpaceEntry(slug, error.message);
       throw error;
@@ -777,14 +786,14 @@ function createStudioProjectContext({
   // skipped with a warning and never change the listing for the others.
   async function listLearningSpaceProjects({ learnerKey } = {}) {
     const learners = [];
-    for (const entry of await readDirectoryEntries(learningSpaceRoot)) {
+    for (const entry of await readDirectoryEntries(learningSpaceStorageRoot())) {
       if (learnerKey !== undefined && entry.name !== learnerKey) continue;
       if (entry.isDirectory()) learners.push(entry.name);
       else skipLearningSpaceEntry(entry.name, "not a real directory");
     }
     const projects = [];
     for (const learner of learners) {
-      for (const practice of await readDirectoryEntries(path.join(learningSpaceRoot, learner))) {
+      for (const practice of await readDirectoryEntries(path.join(learningSpaceStorageRoot(), learner))) {
         const entry = path.join(learner, practice.name);
         const slug = practiceSlug(practice.name);
         if (!practice.isDirectory() || practiceIdFromSlug(slug) !== practice.name) {
@@ -834,7 +843,7 @@ function createStudioProjectContext({
     if (practiceLearnerKey(actor) !== training.learnerKey) {
       throw Object.assign(new Error("Practice access belongs to the admitted learner."), { code: "vibe64_practice_scope_mismatch" });
     }
-    const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceNamespace(learningSpaceRoot, training);
+    const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceNamespace(learningSpaceStorageRoot(), training);
     // Preserve original runtime inventory, upgrade and canonical Git ownership.
     const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
     for (const directory of [projectContextRoot, projectRuntimeRoot]) await practiceDirectoryExists(directory);

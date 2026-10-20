@@ -260,7 +260,11 @@ accepted), the layout and `PRACTICE_PROJECT_DELETED_CODE`.
 The space sits inside the managed source tree, so agents, Preview and Files
 reach it through the managed-source permission contract (group, default ACL and
 umask); practice directories get no explicit mode, except the runtime root
-under the daemon-private system root. `.learning` is not a valid slug, so the
+under the daemon-private system root. The default managed source root is the
+real workspace under `/var/lib/vibe64` whatever `home` says, so in a Node test
+process (`NODE_TEST_CONTEXT`) a context with neither `explicitManagedSourceRoot`
+nor `learningSpace.root` refuses to read or create practice storage instead of
+reaching the real space. `.learning` is not a valid slug, so the
 catalogue never lists it. `listWorkspaceProjects` never shows a practice
 project, and its orphan-runtime sweep leaves every `training-<hex>` runtime
 whose record has a training marker (a warning when its learning-space project

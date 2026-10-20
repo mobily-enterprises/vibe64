@@ -2076,3 +2076,16 @@ test("a deleted practice project is not found to its open page on both hosts, no
     });
   }
 });
+
+test("a test process must name its learning space; the default is the real workspace", async (t) => {
+  const previous = process.env.NODE_TEST_CONTEXT;
+  process.env.NODE_TEST_CONTEXT = previous || "child";
+  t.after(() => { if (previous === undefined) delete process.env.NODE_TEST_CONTEXT; else process.env.NODE_TEST_CONTEXT = previous; });
+  await withTemporaryRoot(async root => {
+    const unnamed = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"),
+      explicitSystemRoot: path.join(root, "system"), env: {}, home: root });
+    await assert.rejects(() => unnamed.listLearningSpaceProjects(), /must pass explicitManagedSourceRoot or learningSpace\.root/u);
+    await assert.rejects(() => createPracticeProject(unnamed), /must pass explicitManagedSourceRoot or learningSpace\.root/u);
+    assert.deepEqual(await hostedPracticeContext(root).listLearningSpaceProjects(), []);
+  });
+});

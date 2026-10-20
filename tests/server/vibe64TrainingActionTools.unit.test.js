@@ -525,7 +525,8 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
     import("@local/vibe64-core/server/studioProjectContext"), import("@local/vibe64-core/server/osUserIdentity"),
     import("@local/vibe64-core/server/actionContext"), import("@jskit-ai/kernel/shared/validators"), import("fastify")
   ]);
-  configureStudioProjectContext({ explicitSystemRoot: f.systemRoot, explicitTargetRoot: f.root });
+  configureStudioProjectContext({ explicitSystemRoot: f.systemRoot, explicitTargetRoot: f.root,
+    explicitManagedSourceRoot: path.join(f.systemRoot, "managed-source") });
   t.after(() => configureStudioProjectContext());
   const actions = createActionCatalogue();
   const server = Fastify();
