@@ -106,7 +106,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
   }
 
   async function openCodeStep(attempt, stepId) {
-    if (!attempt || attempt.preparation.phase !== "ready") return null;
+    if (attempt?.preparation?.phase !== "ready") return null;
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const code = codeStepOf(lesson, stepId);
     return code ? { attempt, lesson, ...code } : null;

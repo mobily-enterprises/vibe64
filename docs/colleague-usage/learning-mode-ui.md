@@ -52,10 +52,10 @@ official catalogue's topics and courses with **Install**; an installed course
 with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
-A lesson without a practice project, such as local Vibe64's Lesson 0 **Set
-yourself up**, opens only the lesson, on the Learning page (`/app/learning`),
-with no project or conversation; that lesson uses
-[Dashboard → Health](health-checks.md).
+A lesson without a practice project, such as a course's first setup lesson
+(Lesson 0), opens only the lesson, on the Learning page (`/app/learning`), with
+no project or conversation. Its steps say which real screens it uses, for
+example **Account settings → AI Accounts** to connect an AI.
 
 ## Starting, continuing, leaving and finishing
 

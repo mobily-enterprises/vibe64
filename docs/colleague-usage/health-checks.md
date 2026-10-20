@@ -28,5 +28,5 @@ provider, and entering keys are things you do yourself; never paste a key or
 password into chat. Long command output stays on the Health page; Colleague sees a
 short summary of each check.
 
-Local Vibe64's Lesson 0, **Set yourself up**, walks through these checks one step
-at a time.
+A setup lesson in Learning may walk through some of these checks one step at a
+time; the installed lesson's steps say which.

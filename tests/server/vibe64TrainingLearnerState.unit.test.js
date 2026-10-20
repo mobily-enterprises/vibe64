@@ -130,6 +130,42 @@ test("reservation stores exact course/topic/lesson identity and server slug befo
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
 
+test("a lesson without an exercise reserves no practice project, and only that lesson may omit one", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  assert.deepEqual(Object.keys(reserved.attempt).sort(), ["attemptId", "createdAt", "pin", "requestIds"]);
+  assert.deepEqual(Object.keys(reserved.active).sort(), ["attemptId", "learnerId", "pin", "progressRevision", "schemaVersion"]);
+  const { attemptId } = reserved.attempt;
+  assert.deepEqual((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts, [reserved.attempt]);
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: true, attemptId, lessonCode: "INTRO-01", practiceSlug: "", projectSlugs: [] });
+  await assert.rejects(() => f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: 1 }), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
+  await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "end-1", expectedRevision: 1, reason: "left" });
+  await assert.rejects(() => f.reserve({ requestId: "continue-1", expectedRevision: 2, practiceId: attemptId }), /invalid attempt identity/u);
+
+  // vibe64 0.1.35 reserved a slug for every lesson; published upgrades still read that progress.
+  const progress = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
+  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  progress.attempts[0] = { ...progress.attempts[0], projectSlug, preparation: { phase: "reserved" } };
+  await f.write("progress.json", progress, f.paths.root);
+  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts[0].projectSlug, projectSlug);
+  progress.attempts[0].preparation = { phase: "preparing", initialSessionId: `training-${attemptId}` };
+  await f.write("progress.json", progress, f.paths.root);
+  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exactly when its lesson declares an exercise/u);
+  delete progress.attempts[0].preparation;
+  await f.write("progress.json", progress, f.paths.root);
+  await assert.rejects(() => f.state.readState({ actor: f.actor }), { code: "VIBE64_TRAINING_STATE_INVALID" });
+
+  const withExercise = await fixture(t);
+  const exercise = await withExercise.reserve();
+  const saved = JSON.parse(await fs.readFile(withExercise.paths.progress, "utf8"));
+  delete saved.attempts[0].projectSlug;
+  delete saved.attempts[0].preparation;
+  await withExercise.write("progress.json", saved, withExercise.paths.root);
+  await withExercise.write("active-lesson.json", { schemaVersion: 1, learnerId: "42", progressRevision: 1,
+    attemptId: exercise.attempt.attemptId, pin: withExercise.pin }, withExercise.paths.root);
+  await assert.rejects(() => withExercise.state.readState({ actor: withExercise.actor, includeCompletion: true }), /exactly when its lesson declares an exercise/u);
+});
+
 test("request replay precedes revision checks, distinct admitted requests share one active attempt, and conflicts do not rewrite it", async t => {
   const f = await fixture(t);
   const first = await f.reserve();

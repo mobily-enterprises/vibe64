@@ -271,10 +271,10 @@ it does not push Git, create a remote release, install content or enable a cours
 
 ### Lesson 0 is supplied by each installation
 
-Local and hosted Vibe64 are set up very differently, so "Set yourself up"
-(Lesson 0) is not part of the shared topic. Each installation supplies its own
-Lesson 0 topic and lists it first in the same course, followed by the shared,
-installation-agnostic topic:
+Local and hosted Vibe64 are set up very differently, so an installation-specific
+setup lesson (Lesson 0) need not be part of the shared topic. An installation can
+supply its own Lesson 0 topic and list it first in the same course, followed by
+the shared, installation-agnostic topic. For example:
 
 ```json
 { "schemaVersion": 1, "courseId": "vibe64-getting-started-local", "title": "Getting started with local Vibe64",
@@ -283,11 +283,12 @@ installation-agnostic topic:
              { "topicId": "vibe64-getting-started", "release": "0.1.12" }] }
 ```
 
-Local Vibe64 uses `learn-vibe64-local-setup` (V64-SETUP-00). It checks the
-machine through the real **Dashboard → Health** checks and **Account settings**,
-which Colleague can also read for the person. A hosted service keeps its own
-Lesson 0 topic in its own repository. Every later lesson stays in the shared
-topic and must work the same way on both.
+Such a lesson might check the machine through the real **Dashboard → Health**
+checks and **Account settings**, which Colleague can also read for the person.
+The getting-started course currently starts with V64-START-00 **Connect your
+AI** (AI Accounts), which works on both hosts; Lesson 0 content will change. A
+hosted service keeps any Lesson 0 topic of its own in its own repository. Every
+later lesson stays in the shared topic and must work the same way on both.
 
 ## Server reads of installed snapshots
 

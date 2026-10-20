@@ -109,7 +109,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   }
 
   function practiceTarget(attempt) {
-    if (attempt.preparation.phase !== "ready") {
+    if (attempt.preparation?.phase !== "ready") {
       throw stepFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
     }
     return { projectSlug: attempt.projectSlug, sessionId: attempt.preparation.initialSessionId };

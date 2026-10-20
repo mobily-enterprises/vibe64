@@ -73,7 +73,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
   async function readAttempt(actor, input) {
     const state = await learners.readState({ actor, includeCompletion: true });
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    if (!attempt || attempt.attemptId !== input.attemptId || attempt.preparation.phase !== "ready" ||
+    if (!attempt || attempt.attemptId !== input.attemptId || attempt.preparation?.phase !== "ready" ||
         attempt.preparation.initialSessionId !== input.sessionId) {
       throw failure("VIBE64_TRAINING_CHECK_ATTEMPT_STALE", "Use this learner's exact active prepared lesson attempt.");
     }

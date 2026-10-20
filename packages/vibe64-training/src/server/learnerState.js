@@ -95,13 +95,14 @@ const endedSchema = createSchema({
 });
 // practiceId names the practice project when the attempt continues one that an
 // earlier attempt created; it is stored only when it differs from attemptId.
+// projectSlug and preparation exist only for a lesson with an exercise.
 const attemptSchema = createSchema({
   attemptId: { ...text, maxLength: 36 }, practiceId: { ...text, required: false, maxLength: 36 },
   requestIds: { ...list({ ...text, maxLength: 64 }, MAX_REQUEST_IDS), minLength: 1 },
   createdAt: { ...text, maxLength: 24 },
   pin: { type: "object", required: true, schema: pinSchema },
-  projectSlug: { ...text, maxLength: 48 },
-  preparation: { type: "object", required: true, schema: preparationSchema },
+  projectSlug: { ...text, required: false, maxLength: 48 },
+  preparation: { type: "object", required: false, schema: preparationSchema },
   learning: { type: "object", required: false, schema: learningSchema },
   ended: { type: "object", required: false, schema: endedSchema }
 });
@@ -114,7 +115,7 @@ const progressSchema = createSchema({
 const activeSchema = createSchema({
   schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
   attemptId: { ...text, maxLength: 36 }, practiceId: { ...text, required: false, maxLength: 36 }, pin: { type: "object", required: true, schema: pinSchema },
-  projectSlug: { ...text, maxLength: 48 }, preparation: { type: "object", required: true, schema: preparationSchema },
+  projectSlug: { ...text, required: false, maxLength: 48 }, preparation: { type: "object", required: false, schema: preparationSchema },
   learning: { type: "object", required: false, schema: learningSchema }
 });
 
@@ -381,8 +382,10 @@ function validateAttempt(attempt) {
       (!uuidPattern.test(attempt.practiceId) || attempt.practiceId === attempt.attemptId)) {
     throw new Error("Learning state has an invalid attempt or practice project identity.");
   }
-  validatePreparation(attempt.preparation, attempt);
-  if (attempt.projectSlug !== practiceSlugFor(attemptPracticeId(attempt)) ||
+  if (attempt.preparation) validatePreparation(attempt.preparation, attempt);
+  // An attempt without preparation (its lesson has no exercise) names no practice project.
+  const projectSlug = attempt.preparation ? practiceSlugFor(attemptPracticeId(attempt)) : undefined;
+  if (attempt.projectSlug !== projectSlug || !attempt.preparation && attempt.practiceId !== undefined ||
       !Number.isFinite(Date.parse(attempt.createdAt)) || new Date(attempt.createdAt).toISOString() !== attempt.createdAt ||
       !attempt.requestIds.length || attempt.requestIds.some(id => !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
     throw new Error("Learning state has an invalid attempt identity, reservation time or retry inventory.");
@@ -497,8 +500,7 @@ function deriveActive(progress) {
     attemptId: attempt.attemptId,
     ...(attempt.practiceId ? { practiceId: attempt.practiceId } : {}),
     pin: attempt.pin,
-    projectSlug: attempt.projectSlug,
-    preparation: attempt.preparation,
+    ...(attempt.preparation ? { projectSlug: attempt.projectSlug, preparation: attempt.preparation } : {}),
     ...(attempt.learning ? { learning: attempt.learning } : {})
   };
 }
@@ -619,7 +621,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           }
         } else {
           validatePin(active.pin);
-          validatePreparation(active.preparation, active);
+          if (active.preparation) validatePreparation(active.preparation, active);
           validateLearning(active.learning, active, active.learnerId, active.progressRevision);
           const attemptIndex = progress.attempts.findIndex(attempt => attempt.attemptId === active.attemptId);
           const retained = progress.attempts[attemptIndex];
@@ -628,7 +630,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           const expected = retained && deriveActive({ ...progress, activeAttemptId: retained.attemptId, revision: expectedRevision });
           if (previousEndRevision && active.progressRevision <= previousEndRevision) throw new Error("Active summary predates this attempt's reservation.");
           let preparation = active.preparation;
-          if (expected && active.progressRevision < expectedRevision) {
+          if (preparation && expected?.preparation && active.progressRevision < expectedRevision) {
             const previous = active.preparation;
             const current = expected.preparation;
             const revisionDistance = expectedRevision - active.progressRevision;
@@ -656,7 +658,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
               preparation = current;
             }
           }
-          let projected = { ...active, progressRevision: expectedRevision, preparation };
+          let projected = { ...active, progressRevision: expectedRevision, ...(preparation ? { preparation } : {}) };
           if (expected && active.progressRevision < expectedRevision && expected.learning) {
             const previous = active.learning;
             const current = expected.learning;
@@ -731,6 +733,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const lessons = new Map();
     for (const attempt of progress.attempts) {
       const lesson = await verifyInstalled(attempt.pin);
+      validateLessonPractice(attempt, lesson);
       validateLessonLearning(attempt, lesson);
       lessons.set(attempt.attemptId, lesson);
     }
@@ -897,7 +900,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const pin = validatePin(inputPin);
     const samePractice = attempt => practiceId === undefined ? !attempt.practiceId : attemptPracticeId(attempt) === practiceId;
     await loadState(paths);
-    await verifyInstalled(pin);
+    const exercise = Boolean((await verifyInstalled(pin)).lesson.exercise);
     const release = await acquire(paths);
     try {
       const state = await loadState(paths);
@@ -944,8 +947,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           requestIds: [requestId],
           createdAt: new Date().toISOString(),
           pin,
-          projectSlug: practiceSlugFor(practiceId ?? attemptId),
-          preparation: { phase: "reserved" }
+          ...(exercise ? { projectSlug: practiceSlugFor(practiceId ?? attemptId), preparation: { phase: "reserved" } } : {})
         };
       }
       await verifyInstalled(pin);
@@ -1145,6 +1147,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       await verifyProgressLessons(state.progress);
+      if (!attempt.preparation) {
+        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This lesson has no practice project to prepare.", 409);
+      }
       if (initialSessionId !== undefined && !preparationSessionIds(attempt).has(initialSessionId)) {
         throw new Error("Observe preparation for the exact server-reserved initial session.");
       }
@@ -1237,6 +1242,16 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       if (!visual || !visual.states.includes(snapshot.state)) {
         throw new Error("The semantic state must belong to a visual declared in this pinned lesson.");
       }
+    }
+  }
+
+  // An exercise lesson's attempt names its practice project and preparation;
+  // any other attempt names none. Read only: vibe64 0.1.35 reserved a project
+  // for every lesson, and the published 20261008-learning-practice-history
+  // upgrade still reads that progress.
+  function validateLessonPractice(attempt, lesson) {
+    if (lesson.lesson.exercise ? !attempt.preparation : attempt.preparation && attempt.preparation.phase !== "reserved") {
+      throw new Error("An attempt names a practice project exactly when its lesson declares an exercise.");
     }
   }
 
@@ -1558,7 +1573,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const { progress } = await loadState(userPaths(actor));
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
     if (!attempt) return Object.freeze({ on: false });
-    const practiceSlug = attempt.preparation.phase !== "reserved" ? attempt.projectSlug : "";
+    const practiceSlug = attempt.preparation && attempt.preparation.phase !== "reserved" ? attempt.projectSlug : "";
     const mode = { on: true, attemptId: attempt.attemptId, lessonCode: attempt.pin.lesson.code, practiceSlug,
       projectSlugs: Object.freeze(practiceSlug ? [practiceSlug] : []) };
     if (!includeTitle) return Object.freeze(mode);

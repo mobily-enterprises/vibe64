@@ -71,8 +71,9 @@ function learning(value = {}) {
 function active(value) {
   if (!value) return null;
   return {
-    attemptId: value.attemptId, pin: pin(value.pin), projectSlug: value.projectSlug,
-    preparation: preparation(value.preparation), learning: learning(value.learning),
+    attemptId: value.attemptId, pin: pin(value.pin),
+    ...(value.preparation ? { projectSlug: value.projectSlug, preparation: preparation(value.preparation) } : {}),
+    learning: learning(value.learning),
     ...(value.ended ? { ended: pick(value.ended, ["requestId", "revision", "reason"]) } : {})
   };
 }
@@ -126,7 +127,7 @@ function installError(cause) {
 // bad record must not hide the learner's progress.
 async function practiceSlug({ attempt, actor, learningSpace }) {
   const slug = attempt.projectSlug;
-  if (!slug || !attempt.preparation || attempt.preparation.phase === "reserved") return "";
+  if (!attempt.preparation || attempt.preparation.phase === "reserved") return "";
   if (typeof learningSpace?.exists !== "function") return slug;
   try {
     return await learningSpace.exists({ actor, practiceId: attemptPracticeId(attempt) }) ? slug : "";
@@ -139,7 +140,7 @@ function attemptSummary(attempt, slug = "") {
   return {
     attemptId: attempt.attemptId,
     pin: pin(attempt.pin),
-    preparation: pick(attempt.preparation || {}, ["phase", "observedAt"]),
+    ...(attempt.preparation ? { preparation: pick(attempt.preparation, ["phase", "observedAt"]) } : {}),
     ...(slug ? { practiceSlug: slug } : {}),
     ...(attempt.ended ? { ended: pick(attempt.ended, ["revision", "reason"]) } : {})
   };
@@ -308,7 +309,7 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
       if (typeof exercises?.startLesson !== "function") return unavailable();
       return announced(prepared(await exercises.startLesson({ actor, ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision"]) })), actor);
     }),
-    definition("lesson.resume", { attemptId }, "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise keeps its reserved attempt and needs no project/session or ready phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass.", async (input, actor) => {
+    definition("lesson.resume", { attemptId }, "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise has no practice project, session or preparation phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass.", async (input, actor) => {
       if (typeof exercises?.prepareLesson !== "function") return unavailable();
       return announced(prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), actor);
     }),

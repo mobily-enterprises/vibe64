@@ -1863,7 +1863,7 @@ shared services. Failed cleanup is reported before a project can be considered
 closed. Idle services continue to consume and be charged for their resources.
 
 A pinned lesson without a declared practice exercise is taught without creating
-a project or session. It keeps the original reserved attempt and durable
+a project or session. Its attempt names no practice project and keeps durable
 progress; exercise tasks retain their preparation requirements.
 
 

@@ -162,7 +162,8 @@ test("host start and resume receive exact admitted IDs and same actor while proj
   assert.equal(viaTool.ok, true, JSON.stringify(viaTool));
   assert.deepEqual(viaTool.result, api);
   assert.equal(api.previewReady, false);
-  assert.equal(api.active.preparation.phase, "reserved");
+  // The fixture lesson declares no exercise, so its attempt names no practice project.
+  assert.equal(Object.hasOwn(api.active, "preparation") || Object.hasOwn(api.active, "projectSlug"), false);
   assert.equal(api.active.learning.submissions.length, 0);
   assert.deepEqual(f.calls[0].value, { actor: f.auth.user, ...f.input });
   assert.equal(f.calls[0].value.actor, f.auth.user);
@@ -577,7 +578,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const state = await training.learners.readState({ actor: osActor });
   assert.equal(state.progress.learnerId, String(osActor.uid));
   assert.equal(state.active.attemptId, id);
-  assert.equal(state.active.preparation.phase, "reserved");
+  assert.equal(Object.hasOwn(state.active, "preparation") || Object.hasOwn(state.active, "projectSlug"), false);
   assert.equal((await training.learners.readState({ actor: { uid: 999, username: "forged" } })).progress.attempts.length, 0);
   const resumed = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/resume`, payload: {
     attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"

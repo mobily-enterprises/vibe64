@@ -265,9 +265,15 @@ The internal learner-state API receives actor and course provenance from the
 admitted composing caller; it does not authenticate objects or expose browser
 paths. It verifies the exact installed published topic/lesson pin and uses the
 existing identity key convention without a local fallback. Private state outside
-projects owns one active attempt, revision, stable request receipts, server UUID
-and project slug, initially `reserved`. Project/session effects and assessment
-evidence remain separate future operation responsibilities.
+projects owns one active attempt, revision, stable request receipts and server
+UUID. An attempt for a lesson that declares an exercise also owns its practice
+project slug and preparation, initially `reserved`; any other attempt names no
+practice project, and continuing a practice project or beginning preparation for
+it refuses (`VIBE64_TRAINING_EXERCISE_MISSING`). Validation against the installed
+lesson enforces both ways; the reserved slug that vibe64 0.1.35 saved for every
+lesson stays readable for the published practice-history upgrade.
+Project/session effects and assessment evidence remain separate future operation
+responsibilities.
 
 `progress.json` is authoritative and is saved before its derived
 `active-lesson.json`. Duplicate request IDs are resolved before stale revision
@@ -377,8 +383,8 @@ session runtime, Git writer, execution gateway or state journal.
 A new start checks the current enabled exact course and published lesson and
 reserves its immutable pin before effects. Preparation takes the original
 learner preparation lock and reads the installed descriptor. A no-exercise
-lesson remains reserved without project/session/setup effects; an incompatible
-exercise checkpoint refuses without repair. For an exercise, the original
+lesson keeps its attempt without project/session/setup effects. For an
+exercise, the original
 managed initializer copies only verified ordinary bundled files and retains its
 commit/rollback behavior. Existing project provenance, repository mode and exact
 reserved session identity must agree. Unmarked directories and missing prepared

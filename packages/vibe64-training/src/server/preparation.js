@@ -183,12 +183,7 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
       let saved = await learners.resumeAttempt({ actor, attemptId });
       const lesson = await content.readLesson({ ...saved.attempt.pin.topic,
         lessonCode: saved.attempt.pin.lesson.code, lessonHash: saved.attempt.pin.lesson.hash });
-      if (!lesson.lesson.exercise) {
-        if (saved.attempt.preparation.phase !== "reserved") {
-          throw trainingError("VIBE64_TRAINING_PREPARATION_CONFLICT", "This lesson has no exercise but retains an exercise preparation checkpoint. Keep its progress and explicitly restart the lesson; no checkpoint was changed.");
-        }
-        return { ...saved, previewReady: false };
-      }
+      if (!lesson.lesson.exercise) return { ...saved, previewReady: false };
       if (typeof projectRepositoryService?.createManagedGitProject !== "function" ||
           typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
         throw trainingError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation.");

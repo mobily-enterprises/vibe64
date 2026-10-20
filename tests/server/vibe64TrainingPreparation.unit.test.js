@@ -100,6 +100,8 @@ test("enabled course reserves exact approved pin before effects and pending setu
 
 test("no-exercise start and resume retain their exact reservation without project, session or setup effects", async t => {
   const f = await fixture(t);
+  delete f.attempt.projectSlug;
+  delete f.attempt.preparation;
   f.owners.content.readLesson = async input => {
     assert.deepEqual(input, { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
     f.calls.push(["lesson", input]);
@@ -108,23 +110,19 @@ test("no-exercise start and resume retain their exact reservation without projec
   const started = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-one" });
   const resumed = await f.service.prepareLesson({ actor, attemptId });
   assert.deepEqual(resumed, started);
-  assert.deepEqual(resumed.attempt.preparation, { phase: "reserved" });
+  assert.equal(Object.hasOwn(resumed.attempt, "preparation") || Object.hasOwn(resumed.attempt, "projectSlug"), false);
   assert.equal(resumed.revision, 1);
   assert.equal(resumed.previewReady, false);
   assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson", "lock", "lesson"]);
   await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
 });
 
-test("no-exercise pins cannot relabel old preparation and failed content cannot begin effects", async t => {
+test("failed content cannot begin effects", async t => {
   const f = await fixture(t, { phase: "preparing" });
-  f.owners.content.readLesson = async () => ({ lesson: {} });
-  await assert.rejects(f.service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PREPARATION_CONFLICT" });
-  assert.equal(f.attempt.preparation.phase, "preparing");
-  assert.deepEqual(f.calls.map(([name]) => name), ["lock"]);
   const original = new Error("Installed pin changed");
   f.owners.content.readLesson = async () => { throw original; };
   await assert.rejects(f.service.prepareLesson({ actor, attemptId }), error => error === original);
-  assert.deepEqual(f.calls.map(([name]) => name), ["lock", "lock"]);
+  assert.deepEqual(f.calls.map(([name]) => name), ["lock"]);
 });
 
 test("disabled course rejects new reservations without project or session effects", async t => {
