@@ -4,9 +4,10 @@ import { spawn } from "node:child_process";
 import { chmod } from "node:fs/promises";
 import net from "node:net";
 
-const [socketPath, command, ...args] = process.argv.slice(2);
+// An empty umask argument keeps the one this process inherited.
+const [socketPath, umask, command, ...args] = process.argv.slice(2);
 if (!socketPath || !command) throw new Error("The stdio bridge requires a socket and command.");
-process.umask(0o007);
+if (umask) process.umask(Number.parseInt(umask, 8));
 let child;
 let connected = false;
 const server = net.createServer({ allowHalfOpen: true }, (socket) => {

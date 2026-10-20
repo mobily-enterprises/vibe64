@@ -11,6 +11,7 @@ import {
   resolveProjectCanonicalRepositoryPath,
   resolveProjectGithubMirrorPath
 } from "./projectState.js";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const PROJECT_REPOSITORY_MODE_GITHUB = "github";
 const PROJECT_REPOSITORY_MODE_MANAGED_GIT = "managed_git";
@@ -45,7 +46,7 @@ async function saveProjectRepositoryWorkflow(projectRuntimeRoot, requirePullRequ
   await mkdir(directory, { recursive: true });
   const temporary = path.join(directory, `.repository-workflow.${randomUUID()}.tmp`);
   try {
-    await writeFile(temporary, JSON.stringify({ requirePullRequest }) + "\n", { flag: "wx", mode: 0o660 });
+    await writeFile(temporary, JSON.stringify({ requirePullRequest }) + "\n", { flag: "wx", mode: vibe64SharedModes().file });
     await rename(temporary, path.join(directory, "repository-workflow.json"));
   } finally {
     await rm(temporary, { force: true });

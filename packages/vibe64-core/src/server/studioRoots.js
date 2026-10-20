@@ -11,7 +11,7 @@ const VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV = "VIBE64_SELF_TARGET_SYSTEM_ROOT";
 const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
 const VIBE64_SYSTEM_DIR = ".vibe64-demon";
 const VIBE64_RUNTIME_PROJECTS_DIR = "projects";
-const VIBE64_MANAGED_SOURCE_BASE_ROOT = "/var/lib/vibe64";
+const VIBE64_MANAGED_SOURCE_DIR = "Vibe64";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -40,53 +40,30 @@ function projectRuntimeKeyFromTargetRoot(targetRoot = "") {
   return `${projectSlugFromTargetRoot(normalizedTargetRoot)}-${hash}`;
 }
 
-function resolveDefaultLocalEditorSystemRoot(home = os.homedir()) {
+// The person's own state folder: XDG on Linux, Application Support on macOS.
+function resolveDefaultLocalEditorSystemRoot(home = os.homedir(), platform = process.platform) {
+  const homeRoot = home || process.cwd();
+  if (platform === "darwin") {
+    return normalizeRoot(path.join(homeRoot, "Library", "Application Support", "Vibe64"));
+  }
   const stateHome = String(process.env.XDG_STATE_HOME || "").trim();
-  return normalizeRoot(path.join(stateHome || path.join(home || process.cwd(), ".local", "state"), "vibe64"));
+  return normalizeRoot(path.join(stateHome || path.join(homeRoot, ".local", "state"), "vibe64"));
 }
 
 function resolveDefaultLocalEditorProjectsRoot() {
   return "";
 }
 
-function managedSourceOwnerName({
-  home = os.homedir(),
-  username = ""
-} = {}) {
-  const explicitUsername = String(username || "").trim();
-  if (explicitUsername) {
-    return path.basename(explicitUsername);
-  }
-  try {
-    const osUsername = String(os.userInfo().username || "").trim();
-    if (osUsername) {
-      return path.basename(osUsername);
-    }
-  } catch {
-    // Fall through to the home-directory basename.
-  }
-  return path.basename(normalizeRoot(home || process.cwd())) || "vibe64";
-}
-
-function resolveDefaultManagedSourceRoot({
-  home = os.homedir(),
-  username = ""
-} = {}) {
-  return path.join(VIBE64_MANAGED_SOURCE_BASE_ROOT, managedSourceOwnerName({
-    home,
-    username
-  }), VIBE64_RUNTIME_PROJECTS_DIR);
+// Project sources Vibe64 creates live in a visible folder in the person's home.
+function resolveDefaultManagedSourceRoot({ home = os.homedir() } = {}) {
+  return normalizeRoot(path.join(home || process.cwd(), VIBE64_MANAGED_SOURCE_DIR));
 }
 
 function resolveVibe64ManagedSourceRoot({
   explicitRoot = "",
-  home = os.homedir(),
-  username = ""
+  home = os.homedir()
 } = {}) {
-  return normalizeRoot(explicitRoot, resolveDefaultManagedSourceRoot({
-    home,
-    username
-  }));
+  return normalizeRoot(explicitRoot, resolveDefaultManagedSourceRoot({ home }));
 }
 
 function resolveStudioAppRoot({
@@ -200,8 +177,7 @@ function resolveVibe64Roots({
   home = os.homedir(),
   projectsRoot = "",
   runtimeProfile = null,
-  targetRoot = "",
-  username = ""
+  targetRoot = ""
 } = {}) {
   const resolvedTargetRoot = String(targetRoot || "").trim()
     ? normalizeRoot(targetRoot)
@@ -227,8 +203,7 @@ function resolveVibe64Roots({
   });
   const managedSourceRoot = resolveVibe64ManagedSourceRoot({
     explicitRoot: explicitManagedSourceRoot,
-    home,
-    username
+    home
   });
   return Object.freeze({
     managedSourceRoot,
@@ -249,7 +224,6 @@ function resolveVibe64Roots({
 export {
   VIBE64_APP_ROOT_ENV,
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_MANAGED_SOURCE_BASE_ROOT,
   VIBE64_SERVICE_DATA_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_DIR,

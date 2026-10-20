@@ -4,9 +4,7 @@ import {
   normalizeAbsolutePath,
   normalizeText
 } from "../normalize.js";
-
-const VIBE64_RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
-const DEFAULT_RUNTIME_PACK_ROOT = "/opt/vibe64/runtime-packs";
+import { vibe64Host } from "../hostProfile.js";
 
 const RUNTIME_PACKS = Object.freeze({
   "awsebcli": {
@@ -189,26 +187,25 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "playwright"
 ]);
 
-function runtimePackRoot({
-  env = process.env,
-  root = ""
-} = {}) {
-  return normalizeAbsolutePath(root || env?.[VIBE64_RUNTIME_PACK_ROOT_ENV] || DEFAULT_RUNTIME_PACK_ROOT);
+// "" when the host has no packs: commands then come from the person's PATH.
+function runtimePackRoot({ root = "" } = {}) {
+  return normalizeAbsolutePath(root || vibe64Host().runtimePackRoot);
 }
 
 function runtimePackBinPaths(runtime = "", options = {}) {
-  const packName = normalizeText(runtime);
-  const entries = RUNTIME_PACKS[packName]?.binDirs || [];
   const root = runtimePackRoot(options);
+  const entries = root ? RUNTIME_PACKS[normalizeText(runtime)]?.binDirs || [] : [];
   return entries.map((entry) => path.join(root, entry));
 }
 
-function runtimePackGuardBinPath(options = {}) {
-  return path.join(runtimePackRoot(options), "guard-bin");
+function runtimePackGuardBinPaths(options = {}) {
+  const root = runtimePackRoot(options);
+  return root ? [path.join(root, "guard-bin")] : [];
 }
 
-function runtimePackPolicyBinPath(options = {}) {
-  return path.join(runtimePackRoot(options), "policy-bin");
+function runtimePackPolicyBinPaths(options = {}) {
+  const root = runtimePackRoot(options);
+  return root ? [path.join(root, "policy-bin")] : [];
 }
 
 function runtimePackManagedCommands(runtime = "") {
@@ -236,15 +233,13 @@ function managedCommandsForRuntimePacks() {
 }
 
 export {
-  DEFAULT_RUNTIME_PACK_ROOT,
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
-  VIBE64_RUNTIME_PACK_ROOT_ENV,
   managedCommandRuntimeEntries,
   managedCommandsForRuntimePacks,
   runtimePackBinPaths,
-  runtimePackGuardBinPath,
-  runtimePackPolicyBinPath,
+  runtimePackGuardBinPaths,
+  runtimePackPolicyBinPaths,
   runtimePackManagedCommands,
   runtimePackRoot
 };

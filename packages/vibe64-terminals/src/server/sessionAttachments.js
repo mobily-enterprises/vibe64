@@ -17,6 +17,7 @@ import {
   storeCodexAttachment as storeUpload,
   withUploadedAgentAttachment
 } from "./codexAttachments.js";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 function attachmentDirectory(paths, id) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) {
@@ -66,11 +67,11 @@ function createSessionAttachments({ projectService, env = process.env }) {
       return withUploadedAgentAttachment(executionRoot, sessionId, id, async (upload) => {
         const directory = attachmentDirectory(paths, id);
         const staging = `${directory}.preparing-${randomUUID()}`;
-        await mkdir(staging, { recursive: true, mode: 0o770 });
+        await mkdir(staging, { recursive: true, mode: vibe64SharedModes().directory });
         try {
           await copyFile(upload.path, path.join(staging, "file"));
           const [record] = normalizeVibe64ConversationAttachments([upload]);
-          await writeFile(path.join(staging, "attachment.json"), JSON.stringify({ ...record, conversationId }), { mode: 0o660 });
+          await writeFile(path.join(staging, "attachment.json"), JSON.stringify({ ...record, conversationId }), { mode: vibe64SharedModes().file });
           await rename(staging, directory);
         } finally {
           await rm(staging, { force: true, recursive: true });

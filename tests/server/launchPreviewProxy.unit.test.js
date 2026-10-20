@@ -526,16 +526,23 @@ test("launch preview public socket path isolates localhost HTTP origins by port"
 test("launch preview public socket path defaults under XDG runtime dir", () => {
   assert.equal(
     previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
-      XDG_RUNTIME_DIR: "/run/vibe64-workspace"
+      XDG_RUNTIME_DIR: "/run/user/1000"
     }),
-    "/run/vibe64-workspace/vibe64/apps/v64preview-abcd1234--workspace.sock"
+    "/run/user/1000/vibe64/apps/v64preview-abcd1234--workspace.sock"
   );
   assert.equal(
     previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/run/vibe64/apps",
-      XDG_RUNTIME_DIR: "/run/vibe64-workspace"
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/srv/preview-sockets",
+      XDG_RUNTIME_DIR: "/run/user/1000"
     }),
-    "/run/vibe64/apps/v64preview-abcd1234--workspace.sock"
+    "/srv/preview-sockets/v64preview-abcd1234--workspace.sock"
+  );
+});
+
+test("launch preview public socket path falls back to a per-user temporary dir", () => {
+  assert.equal(
+    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {}),
+    path.join(os.tmpdir(), `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234--workspace.sock")
   );
 });
 

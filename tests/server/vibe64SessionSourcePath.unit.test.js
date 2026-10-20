@@ -59,7 +59,7 @@ test("session source path rejects a standalone authority folder presented as ses
 });
 
 test("session source path rejects a hosted namespace presented as direct source", () => {
-  const hostedNamespace = "/var/lib/vibe64/merc/projects/app";
+  const hostedNamespace = "/srv/vibe64/merc/projects/app";
   const session = {
     metadata: {
       repository_mode: "github",
@@ -67,14 +67,14 @@ test("session source path rejects a hosted namespace presented as direct source"
     },
     projectContextRoot: hostedNamespace,
     sessionId: "session-1",
-    sessionRoot: "/home/v64d_merc/.local/state/vibe64/projects/app/sessions/active/session-1"
+    sessionRoot: "/home/merc/.local/state/vibe64/projects/app/sessions/active/session-1"
   };
 
   assert.equal(explicitSessionSourcePath(session), "");
 });
 
 test("session source path rejects a standalone root when the session state is inside it", () => {
-  const projectContextRoot = "/var/lib/vibe64/merc/projects/app";
+  const projectContextRoot = "/srv/vibe64/merc/projects/app";
   const session = {
     completedSteps: ["session_created", "source_created"],
     metadata: {
@@ -108,7 +108,7 @@ test("session source path rejects a standalone root inside private session state
 
 test("session source path accepts marked managed session source metadata outside private state", () => {
   const sessionRoot = "/home/user/.local/state/vibe64/projects/app-test/sessions/active/session-1";
-  const sourcePath = "/var/lib/vibe64/user/projects/app-test/sessions/active/session-1/source";
+  const sourcePath = "/srv/vibe64/user/projects/app-test/sessions/active/session-1/source";
   const session = {
     completedSteps: ["session_created", "source_created"],
     id: "session-1",
@@ -129,7 +129,7 @@ test("session source path accepts marked managed session source metadata outside
 
 test("session source path rejects unmarked managed-looking source metadata outside private state", () => {
   const sessionRoot = "/home/user/.local/state/vibe64/projects/app-test/sessions/active/session-1";
-  const sourcePath = "/var/lib/vibe64/user/projects/app-test/sessions/active/session-1/source";
+  const sourcePath = "/srv/vibe64/user/projects/app-test/sessions/active/session-1/source";
   const session = {
     completedSteps: ["session_created", "source_created"],
     id: "session-1",

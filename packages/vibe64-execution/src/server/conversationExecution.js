@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { runVibe64Command } from "./runVibe64Command.js";
 import { inspectVibe64Service, stopVibe64Execution } from "./managedExecution.js";
+import { vibe64ProcessUmask } from "./hostProfile.js";
 
 const bridgePath = fileURLToPath(new URL("./engines/stdioBridge.js", import.meta.url));
 // Each inspection starts a privileged host helper. While the observed process
@@ -106,7 +107,7 @@ export function createVibe64ConversationExecution({
       try {
         const result = await commandRunner({
           actor: "app", command: stream ? process.execPath : command,
-          args: stream ? [bridgePath, socketPath, command, ...args] : args,
+          args: stream ? [bridgePath, socketPath, vibe64ProcessUmask(), command, ...args] : args,
           baseEnv: env, inheritProcessEnv: false, credentialHome: processHome, cwd,
           allowedRoots: [cwd], envPolicy: "auth", purpose, mode: "detached",
           shimDirs, runtimes: ["node26", "operator-clis"], logPath: outputPath,

@@ -11,6 +11,7 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 import { connectedPackageTypeUsesScript, isConnectedPackageType } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { readConnectedProjects } from "./connectedProjects.js";
 import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v1";
 
@@ -178,7 +179,7 @@ async function materializeConnectedDevelopmentInputs(input = {}) {
   const { sourceRoot, relativePath, filePath, existing, value, result } = await readConnectedDevelopmentInputs(input);
   await writeManagedGitExcludes(sourceRoot, [relativePath], { section: "connected source", atomicJson: true });
   if (!isDeepStrictEqual(existing, value)) {
-    await writeJsonFileAtomic(filePath, value, { directoryMode: 0o2770, fileMode: 0o660 });
+    await writeJsonFileAtomic(filePath, value, { directoryMode: vibe64SharedModes().inheritingDirectory, fileMode: vibe64SharedModes().file });
   }
   return result;
 }

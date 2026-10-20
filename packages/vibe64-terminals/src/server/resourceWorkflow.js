@@ -76,9 +76,34 @@ async function runtimePathIdentity(file, optional = false) {
     if (!info.isFile() && !info.isDirectory()) throw new Error("runtime_identity_unavailable");
     return [actual, info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String);
   } catch (error) {
-    if (optional && error.code === "ENOENT") return null;
+    if (optional && ["ENOENT", "ENOTDIR"].includes(error.code)) return null;
     throw error;
   }
+}
+
+// Fingerprint the pack as well as its tools: an aggregate pack can change
+// while its first command still points at an unchanged shared binary.
+async function packRuntimeIdentity(name, pack) {
+  const bins = runtimePackBinPaths(name);
+  const directories = await Promise.all(bins.map((bin) => runtimePathIdentity(bin)));
+  const commands = await Promise.all(bins.flatMap((bin) => pack.managedCommands
+    .map((command) => runtimePathIdentity(path.join(bin, command), true))));
+  const installed = await Promise.all((pack.identityPaths || [])
+    .map((file) => runtimePathIdentity(path.join(runtimePackRoot(), file))));
+  return { directories, commands, installed };
+}
+
+// Without packs, each command is whichever one the person's PATH finds first.
+async function installedRuntimeIdentity(pack, env) {
+  const directories = String(env.PATH || "").split(":").filter((directory) => path.isAbsolute(directory));
+  const commands = await Promise.all(pack.managedCommands.map(async (command) => {
+    for (const directory of directories) {
+      const identity = await runtimePathIdentity(path.join(directory, command), true);
+      if (identity) return identity;
+    }
+    return null;
+  }));
+  return { commands };
 }
 
 async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], steps = [], configuration = {}, env = process.env }) {
@@ -103,16 +128,10 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
     description.runtimeIdentities = await Promise.all(runtimeNames.map(async (name) => {
       const pack = RUNTIME_PACKS[name];
       if (!pack) throw new Error("runtime_identity_unavailable");
-      const bins = runtimePackBinPaths(name, { env });
-      // Fingerprint the pack as well as its tools: an aggregate pack can change
-      // while its first command still points at an unchanged shared binary.
-      const directories = await Promise.all(bins.map((bin) => runtimePathIdentity(bin)));
-      const commands = await Promise.all(bins.flatMap((bin) => pack.managedCommands
-        .map((command) => runtimePathIdentity(path.join(bin, command), true))));
-      if (pack.managedCommands.length && !commands.some(Boolean)) throw new Error("runtime_identity_unavailable");
-      const installed = await Promise.all((pack.identityPaths || [])
-        .map((file) => runtimePathIdentity(path.join(runtimePackRoot({ env }), file))));
-      const identity = { directories, commands, installed };
+      const identity = runtimePackRoot()
+        ? await packRuntimeIdentity(name, pack)
+        : await installedRuntimeIdentity(pack, env);
+      if (pack.managedCommands.length && !identity.commands.some(Boolean)) throw new Error("runtime_identity_unavailable");
       return { name, fingerprint: digest(JSON.stringify(identity)) };
     }));
     const files = new Set();

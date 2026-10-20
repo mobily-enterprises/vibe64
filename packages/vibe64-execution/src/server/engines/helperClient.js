@@ -1,11 +1,20 @@
 import {
   runCaptureCommand
 } from "./capture.js";
+import { vibe64Host } from "../hostProfile.js";
 
-const DEFAULT_EXEC_HELPER_PATH = "/usr/lib/vibe64/vibe64-exec-helper";
 const EXEC_HELPER_PAYLOAD_SCHEMA = "vibe64.exec-helper.payload";
 const EXEC_HELPER_PAYLOAD_SCHEMA_VERSION = 1;
-const VIBE64_EXEC_HELPER_PATH_ENV = "VIBE64_EXEC_HELPER_PATH";
+
+function execHelperPath(explicitPath = "") {
+  const resolved = String(explicitPath || "").trim() || vibe64Host().execHelperPath;
+  if (!resolved) {
+    const error = new Error("This computer has no helper for running commands as another user.");
+    error.code = "vibe64_exec_helper_unavailable";
+    throw error;
+  }
+  return resolved;
+}
 
 function normalizedHelperPayload(fields = {}) {
   return {
@@ -119,16 +128,15 @@ async function runHelperCommand(payload = {}, {
   }
   return runCapture("sudo", [
     "-n",
-    helperPath || env[VIBE64_EXEC_HELPER_PATH_ENV] || DEFAULT_EXEC_HELPER_PATH,
+    execHelperPath(helperPath),
     "execute"
   ], options);
 }
 
 export {
-  DEFAULT_EXEC_HELPER_PATH,
   EXEC_HELPER_PAYLOAD_SCHEMA,
   EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
-  VIBE64_EXEC_HELPER_PATH_ENV,
+  execHelperPath,
   helperOperationForRequest,
   helperPayload,
   normalizedHelperPayload,

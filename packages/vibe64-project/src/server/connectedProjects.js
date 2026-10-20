@@ -9,6 +9,7 @@ import {
   connectedPackageTypeUsesScript,
   isConnectedPackageType
 } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const CONNECTED_PROJECTS_FILE = "vibe64.connections.json";
 const CONNECTED_PROJECTS_LIMIT = 64;
@@ -101,7 +102,7 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   if (Buffer.byteLength(`${JSON.stringify(normalized, null, 2)}\n`, "utf8") > CONNECTED_PROJECTS_MAX_BYTES) {
     invalid("The connection list exceeds 64 KiB. Shorten its entries before saving.");
   }
-  await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, { directoryMode: 0o2770, fileMode: 0o660 });
+  await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, { directoryMode: vibe64SharedModes().inheritingDirectory, fileMode: vibe64SharedModes().file });
   return readConnectedProjects(sourceRoot);
 }
 

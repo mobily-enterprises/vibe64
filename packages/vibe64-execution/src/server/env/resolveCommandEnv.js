@@ -123,7 +123,7 @@ function resolveCommandEnv({
   const declaredRuntimes = Array.isArray(request.runtimes)
     ? request.runtimes.join(":")
     : "";
-  const sharedEnv = sharedToolEnv({ env: baseEnv });
+  const sharedEnv = sharedToolEnv();
   const callerEnv = commandCallerEnv(request.env, request);
   const runtimeDir = String(baseEnv.XDG_RUNTIME_DIR || "").trim();
   const env = {

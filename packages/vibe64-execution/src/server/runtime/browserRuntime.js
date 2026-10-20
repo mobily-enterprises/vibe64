@@ -1,22 +1,52 @@
 import {
-  PLAYWRIGHT_BROWSERS_PATH_ENV,
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
-  resolvePlaywrightBrowsersPath
+  PLAYWRIGHT_BROWSERS_PATH_ENV
 } from "../env/sharedToolEnv.js";
+import {
+  runtimePackRoot
+} from "./runtimePacks.js";
 
 const PLAYWRIGHT_BROWSER_LAUNCH_OK_PATTERN =
   /^Playwright browser launched:[ \t]+\/[^\r\n]*\/(?:chrome|chrome-headless-shell|headless_shell)[ \t]*\r?$/mu;
 const PLAYWRIGHT_RUNTIME_OK_PATTERN =
-  /Playwright runtime ready:\s+Version \d+\.\d+\.\d+;\s+manifest \/[^\r\n]+\/runtime\.env\b/u;
+  /Playwright runtime ready:\s+Version \d+\.\d+\.\d+;\s+(?:manifest \/[^\r\n]+\/runtime\.env|command \/[^\r\n]+)\b/u;
 
-function playwrightRuntimeEnv(options = {}) {
-  return {
-    [PLAYWRIGHT_BROWSERS_PATH_ENV]: resolvePlaywrightBrowsersPath(options),
-    [PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV]: "1"
-  };
+// Without packs, check the Playwright the person installed and the Chromium
+// headless shell in its own browser cache.
+function installedPlaywrightCheckLines() {
+  return [
+    "set -euo pipefail",
+    "playwright_command=\"$(command -v playwright || true)\"",
+    "if [ -z \"$playwright_command\" ]; then",
+    "  echo 'Playwright is not installed on this computer. See https://playwright.dev/docs/intro to install it.'",
+    "  exit 1",
+    "fi",
+    "playwright_output=\"$(\"$playwright_command\" --version 2>&1 || true)\"",
+    "expected_playwright_version=\"$(printf '%s\\n' \"$playwright_output\" | sed -n 's/^Version[[:space:]]*//p' | sed 's/[[:space:]]*$//' | head -n 1)\"",
+    "if ! [[ \"$expected_playwright_version\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then",
+    "  printf 'Playwright did not report its version: %s\\n' \"$playwright_command\"",
+    "  exit 1",
+    "fi"
+  ];
+}
+
+function installedBrowserLines() {
+  return [
+    `browsers_root="\${${PLAYWRIGHT_BROWSERS_PATH_ENV}:-}"`,
+    "if [ -z \"$browsers_root\" ]; then",
+    "  if [ \"$(uname -s)\" = Darwin ]; then browsers_root=\"$HOME/Library/Caches/ms-playwright\"; else browsers_root=\"${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright\"; fi",
+    "fi",
+    "browser=\"$(find -H \"$browsers_root\" -maxdepth 4 -type f \\( -name headless_shell -o -name chrome-headless-shell \\) -print 2>/dev/null | sort | tail -n 1 || true)\"",
+    "if [ -z \"$browser\" ] || [ ! -x \"$browser\" ]; then",
+    "  echo 'Playwright Chromium is not installed. Install it with: playwright install chromium'",
+    "  exit 1",
+    "fi"
+  ];
 }
 
 function playwrightRuntimeContractCheckLines() {
+  if (!runtimePackRoot()) {
+    return installedPlaywrightCheckLines();
+  }
   return [
     "set -euo pipefail",
     `: "\${${PLAYWRIGHT_BROWSERS_PATH_ENV}:?${PLAYWRIGHT_BROWSERS_PATH_ENV} is required}"`,
@@ -104,7 +134,9 @@ function playwrightRuntimeContractCheckLines() {
 function playwrightRuntimeVersionCheckScript() {
   return [
     ...playwrightRuntimeContractCheckLines(),
-    "printf 'Playwright runtime ready: Version %s; manifest %s\\n' \"$expected_playwright_version\" \"$runtime_manifest\""
+    runtimePackRoot()
+      ? "printf 'Playwright runtime ready: Version %s; manifest %s\\n' \"$expected_playwright_version\" \"$runtime_manifest\""
+      : "printf 'Playwright runtime ready: Version %s; command %s\\n' \"$expected_playwright_version\" \"$playwright_command\""
   ].join("\n");
 }
 
@@ -116,9 +148,8 @@ function playwrightRuntimeVersionCommandArgs() {
   ];
 }
 
-function playwrightBrowserLaunchCheckScript() {
+function pinnedBrowserLines() {
   return [
-    ...playwrightRuntimeContractCheckLines(),
     `expected_chromium="$${PLAYWRIGHT_BROWSERS_PATH_ENV}/chromium-$expected_chromium_revision"`,
     "browser=\"$(find -H \"$expected_chromium\" -maxdepth 4 -type f -name chrome -print 2>/dev/null | sort | head -n 1 || true)\"",
     "if [ -z \"$browser\" ] || [ ! -x \"$browser\" ]; then",
@@ -153,13 +184,22 @@ function playwrightBrowserLaunchCheckScript() {
     "fi",
     // Match Playwright's headless runtime. Full desktop Chromium starts extra
     // services that exhaust a bounded health job's process/thread allowance.
-    "browser=\"$headless_shell\"",
+    "browser=\"$headless_shell\""
+  ];
+}
+
+function playwrightBrowserLaunchCheckScript() {
+  return [
+    ...playwrightRuntimeContractCheckLines(),
+    ...(runtimePackRoot() ? pinnedBrowserLines() : installedBrowserLines()),
     // Launch through the executable's own loader; host ldd can report false
     // missing symbols when the managed browser uses a pinned Nix glibc.
     "browser_log=\"$(mktemp \"${TMPDIR:-/tmp}/vibe64-playwright-launch.XXXXXX\")\"",
     "cleanup_browser_log() { rm -f \"$browser_log\"; }",
     "trap cleanup_browser_log EXIT",
-    "if browser_output=\"$(timeout 15s \"$browser\" --headless --disable-gpu --no-sandbox --dump-dom 'data:text/html,<title>vibe64-playwright</title><h1>vibe64-playwright-ok</h1>' 2> \"$browser_log\")\"; then",
+    // macOS has no timeout(1) unless coreutils is installed.
+    "if command -v timeout >/dev/null 2>&1; then bounded() { timeout 15s \"$@\"; }; else bounded() { \"$@\"; }; fi",
+    "if browser_output=\"$(bounded \"$browser\" --headless --disable-gpu --no-sandbox --dump-dom 'data:text/html,<title>vibe64-playwright</title><h1>vibe64-playwright-ok</h1>' 2> \"$browser_log\")\"; then",
     "  :",
     "else",
     "  browser_status=$?",
@@ -211,6 +251,5 @@ export {
   playwrightRuntimeVersionCheckScript,
   playwrightRuntimeVersionCommandArgs,
   summarizePlaywrightBrowserLaunchOutput,
-  summarizePlaywrightRuntimeOutput,
-  playwrightRuntimeEnv
+  summarizePlaywrightRuntimeOutput
 };

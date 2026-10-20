@@ -689,12 +689,12 @@ function createStudioProjectContext({
   // Inside the managed source root, the space inherits the managed-source
   // permission contract that agents, Preview and Files need.
   const learningSpaceRoot = normalizeRoot(learningSpace?.root, path.join(managedSourceRoot, LEARNING_SPACE_DIR));
-  // The default managed source root is the real workspace (/var/lib/vibe64),
-  // whatever `home` says, so a test process must name its space explicitly.
+  // The default managed source root is a real folder in the person's home,
+  // so a test process must name its space explicitly.
   const learningSpaceRootNamed = Boolean(String(learningSpace?.root || explicitManagedSourceRoot || "").trim());
   function learningSpaceStorageRoot() {
     if (!learningSpaceRootNamed && process.env.NODE_TEST_CONTEXT) {
-      throw new Error("A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is the real workspace.");
+      throw new Error("A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is in the real home folder.");
     }
     return learningSpaceRoot;
   }

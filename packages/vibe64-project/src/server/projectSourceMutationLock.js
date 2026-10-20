@@ -8,6 +8,7 @@ import {
   rm,
   stat
 } from "node:fs/promises";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
 const SESSION_POLICY_LOCK_TIMEOUT_MS = 300_000;
@@ -83,13 +84,13 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, {
   }
   const lockRoot = path.join(root, "locks");
   const lockPath = path.join(lockRoot, lockName);
-  await mkdir(lockRoot, { recursive: true, mode: 0o2770 });
+  await mkdir(lockRoot, { recursive: true, mode: vibe64SharedModes().inheritingDirectory });
   const token = crypto.randomUUID();
   const deadline = Date.now() + Math.max(1, Number(timeoutMs) || DEFAULT_LOCK_TIMEOUT_MS);
   while (Date.now() <= deadline) {
     let handle;
     try {
-      handle = await open(lockPath, "wx", 0o660);
+      handle = await open(lockPath, "wx", vibe64SharedModes().file);
       await handle.writeFile(`${JSON.stringify({
         operation: text(operation),
         pid: process.pid,

@@ -14,7 +14,6 @@ import { surfaceRuntime } from "./surfaceRuntime.js";
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const APP_ENV_FILE = path.join(APP_ROOT, ".env");
-const HOST_ENV_FILE = "/etc/vibe64/vibe64.env";
 
 function toPort(value, fallback = 3000) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -38,11 +37,9 @@ function loadEnvFileIfPresent(filePath, loadEnvFile = process.loadEnvFile) {
 
 function loadRuntimeEnvFiles({
   appEnvFile = APP_ENV_FILE,
-  hostEnvFile = HOST_ENV_FILE,
   loadEnvFile = process.loadEnvFile
 } = {}) {
   loadEnvFileIfPresent(appEnvFile, loadEnvFile);
-  loadEnvFileIfPresent(hostEnvFile, loadEnvFile);
 }
 
 function ensureRuntimeEnvLoaded() {
@@ -84,7 +81,6 @@ function resolveRuntimeEnv() {
 
 export {
   APP_ENV_FILE,
-  HOST_ENV_FILE,
   loadRuntimeEnvFiles,
   resolveRuntimeEnv
 };

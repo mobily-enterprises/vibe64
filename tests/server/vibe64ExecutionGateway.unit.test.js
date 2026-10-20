@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { promisify } from "node:util";
 
 import {
@@ -40,6 +40,27 @@ import {
 
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+
+// These tests describe a host with pinned tool packs, a shared cache and a
+// privileged helper; every one of those lives in a temporary directory.
+const HOST_ROOT = await mkdtemp(path.join(os.tmpdir(), "v64-gateway-host-"));
+const RUNTIME_PACKS = path.join(HOST_ROOT, "runtime-packs");
+const PACK_HOST = Object.freeze({
+  runtimePackRoot: RUNTIME_PACKS,
+  sharedCacheRoot: path.join(HOST_ROOT, "cache"),
+  execHelperPath: path.join(HOST_ROOT, "exec-helper")
+});
+configureVibe64Host(PACK_HOST);
+after(async () => {
+  configureVibe64Host(null);
+  await rm(HOST_ROOT, { recursive: true, force: true });
+});
+
+function usePackRoot(t, runtimePackRoot) {
+  configureVibe64Host({ ...PACK_HOST, runtimePackRoot });
+  t.after(() => configureVibe64Host(PACK_HOST));
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -183,12 +204,12 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
 
   assert.equal(result.ok, true, result.output);
   const env = JSON.parse(result.stdout);
-  assert.equal(env.shared, "/var/cache/vibe64");
-  assert.equal(env.browsers, "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.equal(env.shared, PACK_HOST.sharedCacheRoot);
+  assert.equal(env.browsers, `${RUNTIME_PACKS}/playwright/browsers`);
   assert.equal(env.npmPrefix, path.join(currentUser.homedir, ".local"));
   const pathParts = env.path.split(":");
-  assert.equal(pathParts[0], "/opt/vibe64/runtime-packs/policy-bin");
-  assert.equal(pathParts[1], "/opt/vibe64/runtime-packs/managed-bin");
+  assert.equal(pathParts[0], `${RUNTIME_PACKS}/policy-bin`);
+  assert.equal(pathParts[1], `${RUNTIME_PACKS}/managed-bin`);
   assert.ok(pathParts.includes(path.join(currentUser.homedir, ".local", "bin")));
   assert.equal(env.author, "merc via Vibe64");
   assert.equal(env.email, "merc@sas.users.vibe64.invalid");
@@ -239,7 +260,7 @@ test("execution gateway gives Codex commands only their declared database env, f
   assert.deepEqual(JSON.parse(result.stdout), {
     author: "merc via Vibe64",
     authorEmail: "merc@sas.users.vibe64.invalid",
-    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+    browsers: `${RUNTIME_PACKS}/playwright/browsers`,
     committer: "Vibe64",
     committerEmail: "vibe64@sas.users.vibe64.invalid",
     dbHost: "127.0.0.1",
@@ -294,7 +315,7 @@ test("execution gateway gives Codex PTY terminals the same declared DB, Git iden
     assert.deepEqual(JSON.parse(match[1]), {
       author: "merc via Vibe64",
       authorEmail: "merc@sas.users.vibe64.invalid",
-      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+      browsers: `${RUNTIME_PACKS}/playwright/browsers`,
       dbHost: "127.0.0.1",
       dbName: "sas_compas_next",
       home: currentUser.homedir,
@@ -350,7 +371,7 @@ test("execution gateway gives detached Codex app-server commands the shared brow
     assert.deepEqual(JSON.parse(await waitForFile(outputPath)), {
       author: "merc via Vibe64",
       authorEmail: "merc@sas.users.vibe64.invalid",
-      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+      browsers: `${RUNTIME_PACKS}/playwright/browsers`,
       committer: "Vibe64",
       committerEmail: "vibe64@sas.users.vibe64.invalid"
     });
@@ -378,8 +399,8 @@ test("execution gateway does not let request env override shared tool cache poli
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
-    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
-    shared: "/var/cache/vibe64",
+    browsers: `${RUNTIME_PACKS}/playwright/browsers`,
+    shared: PACK_HOST.sharedCacheRoot,
     skipDownload: "1"
   });
 });
@@ -532,7 +553,7 @@ test("execution gateway gives terminal and Codex the same shared Playwright runt
 
   assert.equal(terminal.ok, true, terminal.output);
   assert.equal(codex.ok, true, codex.output);
-  assert.equal(terminal.stdout.trim(), "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.equal(terminal.stdout.trim(), `${RUNTIME_PACKS}/playwright/browsers`);
   assert.equal(codex.stdout.trim(), terminal.stdout.trim());
 });
 
@@ -830,7 +851,7 @@ test("execution gateway gives deployment commands production DB env, Git identit
   const env = JSON.parse(result.stdout);
   assert.equal(env.author, `${currentUser.username} via Vibe64`);
   assert.equal(env.authorEmail, `${currentUser.username}@sas.users.vibe64.invalid`);
-  assert.equal(env.browsers, "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.equal(env.browsers, `${RUNTIME_PACKS}/playwright/browsers`);
   assert.equal(env.db, "prod_sas_app");
   assert.equal(env.gitPrompt, "0");
   assert.equal(env.home, currentUser.homedir);
@@ -855,10 +876,10 @@ test("execution gateway gives deployment commands shared runtimes by default", a
 
   assert.equal(result.ok, true, result.output);
   const pathParts = result.stdout.split(":");
-  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/node26/bin"));
-  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/git/bin"));
-  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/bun/bin"));
-  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/playwright/bin"));
+  assert.ok(pathParts.includes(`${RUNTIME_PACKS}/node26/bin`));
+  assert.ok(pathParts.includes(`${RUNTIME_PACKS}/git/bin`));
+  assert.ok(pathParts.includes(`${RUNTIME_PACKS}/bun/bin`));
+  assert.ok(pathParts.includes(`${RUNTIME_PACKS}/playwright/bin`));
 });
 
 test("execution gateway streams capture output through onOutput", async () => {
@@ -993,7 +1014,7 @@ test("execution gateway resolves project Env records without inventing database 
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
-    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+    browsers: `${RUNTIME_PACKS}/playwright/browsers`,
     db: "sas_compas_next",
     publicUrl: "http://localhost:3000"
   });
@@ -1195,16 +1216,14 @@ test("execution gateway lets GitHub projects make local commits with fallback id
   );
 });
 
-test("execution gateway applies shim and runtime pack PATH in gateway order", async () => {
+test("execution gateway applies shim and runtime pack PATH in gateway order", async (t) => {
+  usePackRoot(t, "/runtime-packs");
   const result = await runVibe64Command({
     command: process.execPath,
     args: [
       "-e",
       "console.log(process.env.PATH)"
     ],
-    env: {
-      VIBE64_RUNTIME_PACK_ROOT: "/runtime-packs"
-    },
     runtimes: [
       "node26",
       "git",
@@ -1238,16 +1257,14 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
   ]);
 });
 
-test("execution gateway gives interactive command purposes the shared runtime pack PATH by default", async () => {
+test("execution gateway gives interactive command purposes the shared runtime pack PATH by default", async (t) => {
+  usePackRoot(t, "/runtime-packs");
   const result = await runVibe64Command({
     command: process.execPath,
     args: [
       "-e",
       "console.log(process.env.PATH)"
     ],
-    env: {
-      VIBE64_RUNTIME_PACK_ROOT: "/runtime-packs"
-    },
     purpose: "terminal"
   });
 
@@ -1285,6 +1302,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 test("execution gateway selects declared language tools and blocks undeclared host tools", async (t) => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-language-runtime-"));
   t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  usePackRoot(t, runtimeRoot);
   for (const [runtime, command] of Object.entries({
     python: "python3", ruby: "ruby", go: "go", java: "javac",
     kotlin: "kotlinc", csharp: "dotnet", rust: "cargo"
@@ -1295,7 +1313,7 @@ test("execution gateway selects declared language tools and blocks undeclared ho
       `#!/bin/sh\necho 'Missing declared ${runtime} runtime' >&2\nexit 127\n`);
     const request = {
       command, args: ["--version"], purpose: "source",
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, runtimes: [runtime]
+      runtimes: [runtime]
     };
     const selected = await runVibe64Command(request);
     assert.equal(selected.ok, true, selected.output);
@@ -1309,13 +1327,13 @@ test("execution gateway selects declared language tools and blocks undeclared ho
 test("execution gateway exposes EB and project credentials to coding and terminal commands", async (t) => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-eb-"));
   t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  usePackRoot(t, runtimeRoot);
   await writeExecutable(path.join(runtimeRoot, "awsebcli/bin/eb"), `#!${process.execPath}
 console.log(JSON.stringify({ key: process.env.EB_AWS_ACCESS_KEY_ID, region: process.env.EB_AWS_REGION }));
 `);
   for (const purpose of ["assistant", "terminal"]) {
     const result = await runVibe64Command({
       command: "eb", args: ["--version"], purpose,
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
       envPolicy: "project",
       project: { runtimeConfigEnv: { EB_AWS_ACCESS_KEY_ID: "test-key", EB_AWS_REGION: "ap-southeast-2" } }
     });
@@ -1324,8 +1342,10 @@ console.log(JSON.stringify({ key: process.env.EB_AWS_ACCESS_KEY_ID, region: proc
   }
 });
 
-test("execution gateway lets declared runtime tools win before guard-bin", async () => {
+test("execution gateway lets declared runtime tools win before guard-bin", async (t) => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-guard-"));
+  t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  usePackRoot(t, runtimeRoot);
   await writeExecutable(
     path.join(runtimeRoot, "node26", "bin", "npm"),
     "#!/usr/bin/env bash\nprintf '%s\\n' vibe64-node26-npm\n"
@@ -1341,9 +1361,6 @@ test("execution gateway lets declared runtime tools win before guard-bin", async
       "-lc",
       "command -v npm && npm --version"
     ],
-    env: {
-      VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-    },
     purpose: "terminal",
     runtimes: ["node26"]
   });
@@ -1355,8 +1372,10 @@ test("execution gateway lets declared runtime tools win before guard-bin", async
   ]);
 });
 
-test("execution gateway blocks managed host tools when runtimes are explicitly empty", async () => {
+test("execution gateway blocks managed host tools when runtimes are explicitly empty", async (t) => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-guard-empty-"));
+  t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
+  usePackRoot(t, runtimeRoot);
   await writeExecutable(
     path.join(runtimeRoot, "guard-bin", "npm"),
     [
@@ -1373,9 +1392,6 @@ test("execution gateway blocks managed host tools when runtimes are explicitly e
       "-lc",
       "npm --version"
     ],
-    env: {
-      VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-    },
     purpose: "terminal",
     runtimes: []
   });
@@ -1975,8 +1991,8 @@ test("execution gateway pty mode starts a terminal session with gateway env", as
 
   assert.equal(result.ok, true, result.error);
   assert.match(result.id, /./u);
-  const snapshot = await waitForTerminalOutput(result.id, namespace, "/opt/vibe64/runtime-packs/playwright/browsers");
-  assert.match(snapshot.output, /\/opt\/vibe64\/runtime-packs\/playwright\/browsers/u);
+  const snapshot = await waitForTerminalOutput(result.id, namespace, `${RUNTIME_PACKS}/playwright/browsers`);
+  assert.ok(snapshot.output.includes(`${RUNTIME_PACKS}/playwright/browsers`), snapshot.output);
   await closeTerminalSession(result.id, {
     namespace
   });
@@ -2001,7 +2017,7 @@ test("execution gateway pty mode preserves terminal argument factories", async (
     assert.equal(result.ok, true, result.output);
     const snapshot = await waitForTerminalOutput(result.id, namespace, `terminal:${result.id}`);
     assert.match(snapshot.output, new RegExp(`terminal:${result.id}`, "u"));
-    assert.match(snapshot.output, /playwright:\/opt\/vibe64\/runtime-packs\/playwright\/browsers/u);
+    assert.ok(snapshot.output.includes(`playwright:${RUNTIME_PACKS}/playwright/browsers`), snapshot.output);
   } finally {
     if (result.id) {
       await closeTerminalSession(result.id, {
@@ -2044,7 +2060,7 @@ test("execution gateway pty mode preserves terminal env factories under gateway 
       .split(/\r?\n/u)
       .find((candidate) => candidate.includes("DYNAMIC_TERMINAL_ID") || candidate.includes("dynamic")) || "{}";
     assert.deepEqual(JSON.parse(line), {
-      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
+      browsers: `${RUNTIME_PACKS}/playwright/browsers`,
       dynamic: result.id
     });
     assert.deepEqual(envInputs, [

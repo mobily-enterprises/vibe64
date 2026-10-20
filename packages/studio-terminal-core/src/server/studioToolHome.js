@@ -5,7 +5,8 @@ import {
 import {
   NPM_CONFIG_PREFIX_ENV,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
-  VIBE64_SHARED_CACHE_ROOT_ENV
+  VIBE64_SHARED_CACHE_ROOT_ENV,
+  runtimePackRoot
 } from "@local/vibe64-execution/server";
 import {
   shellQuote
@@ -14,12 +15,22 @@ import {
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV = "VIBE64_MYSQL_CLIENT_CONFIG_DIR";
 
+function requiredLine(name) {
+  return `[ -n "\${${name}:-}" ] || { printf '%s\\n' 'Vibe64 command ${name} is required.' >&2; exit 1; }`;
+}
+
+// Pinned tool packs come with their own npm prefix, cache and browsers; the
+// person's own tools need none of them.
 function studioToolHomeSetupLines() {
+  const home = "[ -n \"$HOME\" ] || { printf '%s\\n' 'Vibe64 command HOME is required.' >&2; exit 1; }";
+  if (!runtimePackRoot()) {
+    return [home];
+  }
   return [
-    "[ -n \"$HOME\" ] || { printf '%s\\n' 'Vibe64 command HOME is required.' >&2; exit 1; }",
-    `[ -n "\${${NPM_CONFIG_PREFIX_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${NPM_CONFIG_PREFIX_ENV} is required.' >&2; exit 1; }`,
-    `[ -n "\${${VIBE64_SHARED_CACHE_ROOT_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${VIBE64_SHARED_CACHE_ROOT_ENV} is required.' >&2; exit 1; }`,
-    `[ -n "\${${PLAYWRIGHT_BROWSERS_PATH_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${PLAYWRIGHT_BROWSERS_PATH_ENV} is required.' >&2; exit 1; }`,
+    home,
+    requiredLine(NPM_CONFIG_PREFIX_ENV),
+    requiredLine(VIBE64_SHARED_CACHE_ROOT_ENV),
+    requiredLine(PLAYWRIGHT_BROWSERS_PATH_ENV),
     "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
   ];
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import {
   GITHUB_ACCOUNT_MODE_USER,
@@ -20,6 +20,15 @@ import {
 import {
   codexRuntimeContext
 } from "../../packages/studio-terminal-core/src/server/codexRuntimeContext.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+
+after(() => configureVibe64Host(null));
+
+function usePackHost(t, runtimePackRoot, sharedCacheRoot = path.join(runtimePackRoot, "cache")) {
+  configureVibe64Host({ runtimePackRoot, sharedCacheRoot });
+  t.after(() => configureVibe64Host(null));
+  return { runtimePackRoot, sharedCacheRoot };
+}
 
 test("Codex credential context uses the daemon runner real home", () => {
   assert.deepEqual(codexCredentialContext({
@@ -39,17 +48,19 @@ test("Codex credential context uses the daemon runner real home", () => {
   });
 });
 
-test("Codex runtime context keeps home, provider env, tool home, and system root together", () => {
+test("Codex runtime context keeps home, provider env, tool home, and system root together", (t) => {
+  const host = usePackHost(t, "/srv/runtime-packs");
+  const browsers = "/srv/runtime-packs/playwright/browsers";
   const context = codexRuntimeContext({
     env: {
       PATH: "/usr/bin",
-      VIBE64_SYSTEM_ROOT: "/var/lib/vibe64/tenant/system"
+      VIBE64_SYSTEM_ROOT: "/srv/state/system"
     },
-    home: "/home/v64d_tenant",
+    home: "/home/owner",
     gid: 1000,
     providerOptions: {
       env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: "/run/vibe64/codex"
+        VIBE64_CODEX_ATTACHMENTS_ROOT: "/srv/run/codex"
       }
     },
     terminalEnv: {
@@ -61,18 +72,18 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
       DB_USER: "vibe64_dev_app"
     },
     uid: 1000,
-    username: "v64d_tenant"
+    username: "owner"
   });
 
   assert.equal(context.ok, true);
-  assert.equal(context.home, "/home/v64d_tenant");
-  assert.equal(context.toolHomeSource, "/home/v64d_tenant");
-  assert.equal(context.systemRoot, "/var/lib/vibe64/tenant/system");
-  assert.equal(context.env.HOME, "/home/v64d_tenant");
-  assert.equal(context.env.XDG_CONFIG_HOME, "/home/v64d_tenant/.config");
-  assert.equal(context.env.VIBE64_CODEX_ATTACHMENTS_ROOT, "/run/vibe64/codex");
-  assert.equal(context.env[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.equal(context.home, "/home/owner");
+  assert.equal(context.toolHomeSource, "/home/owner");
+  assert.equal(context.systemRoot, "/srv/state/system");
+  assert.equal(context.env.HOME, "/home/owner");
+  assert.equal(context.env.XDG_CONFIG_HOME, "/home/owner/.config");
+  assert.equal(context.env.VIBE64_CODEX_ATTACHMENTS_ROOT, "/srv/run/codex");
+  assert.equal(context.env[VIBE64_SHARED_CACHE_ROOT_ENV], host.sharedCacheRoot);
+  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], browsers);
   assert.equal(context.terminalEnv.DB_HOST, "127.0.0.1");
   assert.equal(context.terminalProcessEnv.DB_NAME, "tenant_app");
   assert.equal(context.terminalProcessEnv.DB_PASSWORD, "tenant-password");
@@ -83,31 +94,30 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.terminalEnv.MYSQL_PWD, undefined);
   assert.equal(context.terminalProcessEnv.MYSQL_TCP_PORT, undefined);
   assert.equal(context.terminalProcessEnv.VIBE64_MYSQL_USER, undefined);
-  assert.equal(context.terminalProcessEnv.HOME, "/home/v64d_tenant");
-  assert.equal(context.terminalProcessEnv[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.equal(context.terminalProcessEnv.HOME, "/home/owner");
+  assert.equal(context.terminalProcessEnv[VIBE64_SHARED_CACHE_ROOT_ENV], host.sharedCacheRoot);
+  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], browsers);
   assert.ok(context.runtimes.includes("mariadb"));
   assert.ok(context.providerOptions.runtimes.includes("mariadb"));
   assert.ok(context.terminalProcessEnv.PATH.split(":").includes(runtimePackBinPaths("mariadb")[0]));
-  assert.equal(context.providerOptions.env.HOME, "/home/v64d_tenant");
-  assert.equal(context.providerOptions.env[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.providerOptions.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
-  assert.equal(context.providerOptions.systemRoot, "/var/lib/vibe64/tenant/system");
-  assert.equal(context.providerOptions.toolHomeSource, "/home/v64d_tenant");
+  assert.equal(context.providerOptions.env.HOME, "/home/owner");
+  assert.equal(context.providerOptions.env[VIBE64_SHARED_CACHE_ROOT_ENV], host.sharedCacheRoot);
+  assert.equal(context.providerOptions.env[PLAYWRIGHT_BROWSERS_PATH_ENV], browsers);
+  assert.equal(context.providerOptions.systemRoot, "/srv/state/system");
+  assert.equal(context.providerOptions.toolHomeSource, "/home/owner");
 });
 
-test("Codex runtime context derives Playwright browsers path from the runtime-pack root", () => {
+test("Codex runtime context derives Playwright browsers path from the runtime-pack root", (t) => {
+  usePackHost(t, "/srv/vibe64-runtimes", "/srv/vibe64-cache");
   const context = codexRuntimeContext({
     env: {
-      PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong",
-      VIBE64_RUNTIME_PACK_ROOT: "/srv/vibe64-runtimes",
-      VIBE64_SHARED_CACHE_ROOT: "/srv/vibe64-cache"
+      PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong"
     },
-    home: "/home/v64d_tenant",
+    home: "/home/owner",
     terminalEnv: {
       PLAYWRIGHT_BROWSERS_PATH: "/tmp/also-wrong"
     },
-    username: "v64d_tenant"
+    username: "owner"
   });
 
   assert.equal(context.ok, true);
@@ -115,8 +125,9 @@ test("Codex runtime context derives Playwright browsers path from the runtime-pa
   assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-runtimes/playwright/browsers");
 });
 
-test("Codex runtime context exposes the active managed Playwright version and rejects project overrides", async () => {
+test("Codex runtime context exposes the active managed Playwright version and rejects project overrides", async (t) => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-managed-playwright-"));
+  usePackHost(t, runtimeRoot);
   try {
     await mkdir(path.join(runtimeRoot, "playwright"), {
       recursive: true
@@ -127,14 +138,12 @@ test("Codex runtime context exposes the active managed Playwright version and re
       "utf8"
     );
     const context = codexRuntimeContext({
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
-      home: "/home/v64d_tenant",
+      env: {},
+      home: "/home/owner",
       terminalEnv: {
         VIBE64_PLAYWRIGHT_VERSION: "9.9.9"
       },
-      username: "v64d_tenant"
+      username: "owner"
     });
 
     assert.equal(context.ok, true);
@@ -153,7 +162,7 @@ test("Codex runtime context exposes the active managed Playwright version and re
 test("Codex runtime context rejects missing required system root", () => {
   const context = codexRuntimeContext({
     env: {},
-    home: "/home/v64d_tenant",
+    home: "/home/owner",
     requireSystemRoot: true
   });
 

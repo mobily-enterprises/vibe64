@@ -17,6 +17,7 @@ import {
 import {
   resolveProjectRuntimeRoot
 } from "./projectState.js";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const PROJECT_PROMPT_HINTS_FILE = "prompt-hints.json";
 
@@ -79,10 +80,10 @@ async function saveProjectPromptHints({
     await writeFile(temporaryPath, `${JSON.stringify(normalized, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
-      mode: 0o660
+      mode: vibe64SharedModes().file
     });
     await rename(temporaryPath, filePath);
-    await chmod(filePath, 0o660);
+    await chmod(filePath, vibe64SharedModes().file);
   } finally {
     await rm(temporaryPath, { force: true });
   }

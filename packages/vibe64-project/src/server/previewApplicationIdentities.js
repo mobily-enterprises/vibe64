@@ -11,6 +11,7 @@ import {
 import {
   normalizePreviewApplicationIdentities
 } from "@local/vibe64-core/server/previewAuth";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const PREVIEW_APPLICATION_IDENTITIES_DIR = ".vibe64";
 const PREVIEW_APPLICATION_IDENTITIES_FILE = "preview-identities.json";
@@ -93,15 +94,15 @@ async function savePreviewApplicationIdentities({
   });
   const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   await mkdir(path.dirname(filePath), {
-    mode: 0o2770,
+    mode: vibe64SharedModes().inheritingDirectory,
     recursive: true
   });
   try {
     await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, {
-      mode: 0o660
+      mode: vibe64SharedModes().file
     });
     await rename(temporaryPath, filePath);
-    await chmod(filePath, 0o660);
+    await chmod(filePath, vibe64SharedModes().file);
   } finally {
     await rm(temporaryPath, {
       force: true

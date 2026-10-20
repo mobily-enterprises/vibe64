@@ -32,10 +32,8 @@ export {
   resolvedActorUser
 } from "./actor/userIdentity.js";
 export {
-  DEFAULT_EXEC_HELPER_PATH,
   EXEC_HELPER_PAYLOAD_SCHEMA,
   EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
-  VIBE64_EXEC_HELPER_PATH_ENV,
   helperOperationForRequest,
   helperPayload,
   normalizedHelperPayload,
@@ -154,28 +152,27 @@ export {
   uniqueStrings
 } from "./normalize.js";
 export {
-  DEFAULT_VIBE64_SHARED_CACHE_ROOT,
-  PLAYWRIGHT_BROWSERS_DIR_NAME,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
-  PLAYWRIGHT_RUNTIME_PACK_NAME,
   VIBE64_PLAYWRIGHT_VERSION_ENV,
   VIBE64_SHARED_CACHE_ROOT_ENV,
   resolveManagedPlaywrightVersion,
-  resolvePlaywrightBrowsersPath,
-  resolveVibe64SharedCacheRoot,
-  sharedToolEnv,
-  sharedToolEnvShellExportLines
+  sharedToolEnv
 } from "./env/sharedToolEnv.js";
+export {
+  configureVibe64Host,
+  vibe64Host,
+  vibe64ProcessUmask,
+  vibe64SharedModes
+} from "./hostProfile.js";
 export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
-  VIBE64_RUNTIME_PACK_ROOT_ENV,
   managedCommandRuntimeEntries,
   managedCommandsForRuntimePacks,
   runtimePackBinPaths,
-  runtimePackGuardBinPath,
-  runtimePackPolicyBinPath,
+  runtimePackGuardBinPaths,
+  runtimePackPolicyBinPaths,
   runtimePackManagedCommands,
   runtimePackRoot
 } from "./runtime/runtimePacks.js";
@@ -187,8 +184,7 @@ export {
   playwrightRuntimeVersionCheckScript,
   playwrightRuntimeVersionCommandArgs,
   summarizePlaywrightBrowserLaunchOutput,
-  summarizePlaywrightRuntimeOutput,
-  playwrightRuntimeEnv
+  summarizePlaywrightRuntimeOutput
 } from "./runtime/browserRuntime.js";
 export {
   agentPlaywrightCommandSource

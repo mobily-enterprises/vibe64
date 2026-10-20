@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
+    "./server/hostProfile": "./src/server/hostProfile.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js"
   },
   "jskit": {
@@ -29,6 +30,10 @@
           {
             "subpath": "./server",
             "summary": "Runs Vibe64 commands through one actor, environment, runtime path, policy, and execution gateway."
+          },
+          {
+            "subpath": "./server/hostProfile",
+            "summary": "What the machine running Vibe64 provides: tool packs, shared caches, a privileged helper and shared group access."
           },
           {
             "subpath": "./server/terminalSessions",

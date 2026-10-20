@@ -19,6 +19,7 @@ import {
   readdir,
   unlink
 } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 
@@ -63,7 +64,6 @@ const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
-const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
@@ -2050,7 +2050,7 @@ function previewProxySocketDir(env = process.env) {
   if (runtimeDir) {
     return path.join(runtimeDir, "vibe64", "apps");
   }
-  return PREVIEW_PROXY_SOCKET_DIR;
+  return path.join(os.tmpdir(), `vibe64-${process.getuid?.() ?? "user"}`, "apps");
 }
 
 function tryListen(server, port, host) {

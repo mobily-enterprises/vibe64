@@ -33,6 +33,8 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+
 const CODEX_ATTACHMENT_MAX_BYTES = VIBE64_UPLOAD_MAX_BYTES;
 const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = VIBE64_UPLOAD_BODY_LIMIT_BYTES;
 const ATTACHMENT_TTL_MS = 30 * 60 * 1000;
@@ -491,7 +493,7 @@ async function acquireAttachmentSessionKeyLock(
 ) {
   const lockPath = path.join(attachmentLocksRoot(options), projectKey, `${sessionKey}.lock`);
   const lockDirectory = path.dirname(lockPath);
-  await mkdir(lockDirectory, { mode: 0o770, recursive: true });
+  await mkdir(lockDirectory, { mode: vibe64SharedModes().directory, recursive: true });
   const deadline = Date.now() + Math.max(0, waitMs);
   while (true) {
     const release = await tryAcquireExclusiveFileLock(lockPath, {
@@ -853,7 +855,7 @@ async function prepareCodexAttachmentStorage({
 } = {}) {
   await prepareCodexAttachmentRoot({ env });
   const filesRoot = attachmentFilesRoot({ env });
-  await mkdir(filesRoot, { mode: 0o770, recursive: true });
+  await mkdir(filesRoot, { mode: vibe64SharedModes().directory, recursive: true });
   const projectEntries = await readDirectoryEntries(filesRoot);
   for (const projectEntry of projectEntries) {
     if (!projectEntry.isDirectory() || !ATTACHMENT_HASH_PATTERN.test(projectEntry.name)) {
@@ -1007,9 +1009,9 @@ async function storeCodexAttachment({
       await beforeCreate();
     }
     clearAttachmentSessionCleanupTimer(executionRoot, sessionId, { env });
-    await mkdir(sessionDirectory, { mode: 0o770, recursive: true });
+    await mkdir(sessionDirectory, { mode: vibe64SharedModes().directory, recursive: true });
     await mkdir(hostDirectory, {
-      mode: 0o770,
+      mode: vibe64SharedModes().directory,
       recursive: false
     });
     attachmentLock = await acquireAttachmentDirectoryLock(hostDirectory, {
@@ -1035,7 +1037,7 @@ async function storeCodexAttachment({
       counter,
       createWriteStream(partialPath, {
         flags: "wx",
-        mode: 0o660
+        mode: vibe64SharedModes().file
       })
     );
     if (input.stream.truncated === true) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import open, { apps } from "open";
 import process from "node:process";
@@ -7,6 +8,11 @@ import { fileURLToPath } from "node:url";
 import {
   projectSlugFromName
 } from "@local/vibe64-core/server/studioProjectContext";
+import {
+  VIBE64_SYSTEM_ROOT_ENV,
+  resolveDefaultLocalEditorSystemRoot
+} from "@local/vibe64-core/server/studioRoots";
+import { shellQuote } from "@local/vibe64-execution/server";
 import { startServer } from "../server.js";
 import {
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
@@ -203,7 +209,36 @@ function applyLocalCliRuntimeNamespace({
   return VIBE64_LOCAL_RUNTIME_NAMESPACE;
 }
 
+// Earlier macOS versions kept data in the Linux state folder. Moving it is the
+// person's decision, so startup only says how and changes nothing.
+function macosDataMoveMessage({
+  env = process.env,
+  exists = existsSync,
+  home = os.homedir(),
+  platform = process.platform
+} = {}) {
+  if (platform !== "darwin" || String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
+    return "";
+  }
+  const current = resolveDefaultLocalEditorSystemRoot(home, "darwin");
+  const previous = resolveDefaultLocalEditorSystemRoot(home, "linux");
+  if (exists(current) || !exists(previous)) {
+    return "";
+  }
+  return [
+    `Vibe64 now keeps its data in ${current}.`,
+    "Move your existing data there, then start Vibe64 again:",
+    `  mv ${shellQuote(previous)} ${shellQuote(current)}`
+  ].join("\n");
+}
+
 async function main() {
+  const dataMoveMessage = macosDataMoveMessage();
+  if (dataMoveMessage) {
+    console.error(dataMoveMessage);
+    process.exitCode = 1;
+    return;
+  }
   const {
     openOnStart,
     runtimeMode,
@@ -245,6 +280,7 @@ if (isDirectServerExecution()) {
 export {
   applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
+  macosDataMoveMessage,
   parseStartupArgs,
   serverStartOptions,
   shouldOpenBrowser

@@ -73,6 +73,7 @@ import { readStarredFiles, setStarredFile, starredFilesPath } from "./starredFil
 import { createSourceEditorFileIndex } from "./fileIndex.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "./searchIndex.js";
 import { readSourceInterpretation, readSourceInterpretations, writeSourceInterpretation } from "./sourceInterpretations.js";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
 const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
@@ -1789,7 +1790,7 @@ async function uploadDropZoneFile(context, input, readUpload) {
       if (part.file.destroyed) {
         throw sourceEditorError("Upload was interrupted or exceeded the allowed limits.", "vibe64_files_invalid_upload");
       }
-      await pipeline(part.file, createWriteStream(staged, { flags: "wx", mode: 0o660 }));
+      await pipeline(part.file, createWriteStream(staged, { flags: "wx", mode: vibe64SharedModes().file }));
       if (part.file.truncated) throw sourceEditorError(`Upload exceeds the ${VIBE64_UPLOAD_MAX_LABEL} limit.`, "vibe64_files_upload_too_large", {}, 413);
     }
     if (count !== 1) throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");

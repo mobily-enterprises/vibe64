@@ -55,10 +55,10 @@ test("Vibe64 terminal roots prefer the selected session source path", () => {
       source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
     },
     sessionId: "session-1",
-    targetRoot: "/var/lib/vibe64/merc/projects/demo"
+    targetRoot: "/srv/vibe64/merc/projects/demo"
   };
   const projectService = {
-    targetRoot: "/var/lib/vibe64/merc/projects/demo"
+    targetRoot: "/srv/vibe64/merc/projects/demo"
   };
 
   assert.equal(
@@ -72,7 +72,7 @@ test("Vibe64 terminal roots prefer the selected session source path", () => {
 });
 
 test("Vibe64 terminal roots never fall back to the hosted namespace", () => {
-  const hostedNamespace = "/var/lib/vibe64/merc/projects/demo";
+  const hostedNamespace = "/srv/vibe64/merc/projects/demo";
   const session = {
     sessionId: "session-without-source",
     targetRoot: hostedNamespace
