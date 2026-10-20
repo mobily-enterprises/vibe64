@@ -30,6 +30,7 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
         v-show="!learningMode"
         force-picker
         navigate-on-select
+        show-practice
       />
       <Vibe64SessionPanel
         v-show="learningMode"

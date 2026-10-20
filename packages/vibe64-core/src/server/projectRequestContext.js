@@ -42,7 +42,8 @@ async function resolveProjectRequestContext({
     if (slug !== practice.slug) {
       throw Object.assign(new Error("Practice access belongs to the exact saved project."), { code: "vibe64_practice_scope_mismatch" });
     }
-    const { project } = await resolvedProjectContext.readWorkspaceProject({ slug });
+    const { project } = await resolvedProjectContext.readWorkspaceProject({
+      ...(request.allowDeleting === true ? { allowDeleting: true } : {}), slug });
     return Object.freeze({
       projectRecordPath: project.projectRecordPath,
       projectRuntimeRoot: project.projectRuntimeRoot,

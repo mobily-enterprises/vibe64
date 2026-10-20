@@ -19,6 +19,7 @@ import { createTrainingTeachingBrief } from "./teachingBrief.js";
 import { createTrainingService } from "./preparation.js";
 import { createManagedProjectRepositoryService } from "@local/vibe64-project/server/managedRepository";
 import { admitLocalPracticeProject, createTrainingLearningSessions } from "./learningSessions.js";
+import { createLocalPracticeProjects } from "./practiceProjects.js";
 import { createTrainingTeachingOwner } from "./teaching.js";
 import { createTrainingAnswerAssessment } from "./answerAssessment.js";
 import { createTrainingPresentationActions } from "./presentationActions.js";
@@ -82,10 +83,12 @@ const Vibe64TrainingProvider = defineFeature({
       resolveLearningContext: learningSessions.resolveContext
     });
     registerLocalPracticeAdmission(({ slug }) => admitLocalPracticeProject({ learners, actor: currentOsUser(), slug }));
+    // Host facility practiceProjects.remove; Online supplies its own through trainingHost.
+    const practiceProjects = createLocalPracticeProjects({ learners, projectContext, project, terminals });
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     if (sourceEditor) registerTrainingCodeEditorRoutes(http);
     return { training: Object.freeze({ catalogue, courseInstaller, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
-      codeAuthorship }) };
+      codeAuthorship, practiceProjects }) };
   },
   actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
     if (trainingHost) return [];

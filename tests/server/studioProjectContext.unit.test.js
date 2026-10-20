@@ -2005,3 +2005,114 @@ test("local mode opens only the admitted learner practice Project through a cont
     registerLocalPracticeAdmission(async () => null);
   }
 });
+
+test("workspace records derive the practice field from the immutable training marker only", async () => {
+  await withTemporaryRoot(async root => {
+    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "catalogue"),
+      explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root });
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const created = await context.createWorkspaceProjectRecord({ slug, training });
+    assert.deepEqual(created.project.practice, { learnerKey: training.learnerKey, attemptId: training.attemptId });
+    await context.createWorkspaceProjectRecord({ slug: "ordinary" });
+    const listed = await context.listWorkspaceProjects();
+    assert.deepEqual(listed.projects.map(project => [project.slug, project.practice || null]), [
+      ["ordinary", null], [slug, { learnerKey: training.learnerKey, attemptId: training.attemptId }]
+    ], "the workspace listing stays unfiltered; presentation splits Practice");
+    assert.deepEqual((await context.readWorkspaceProject({ slug })).project.practice, created.project.practice);
+    const { projectPracticeForActor, practiceProjectAccessBlock } = await import("../../packages/vibe64-core/src/server/practiceProjects.js");
+    assert.equal(projectPracticeForActor(created.project, { uid: 42 }).practice.mine, true);
+    assert.equal(projectPracticeForActor(created.project, { uid: 43 }).practice.mine, false);
+    assert.equal(projectPracticeForActor(listed.projects[0], { uid: 42 }), listed.projects[0]);
+    assert.equal(practiceProjectAccessBlock(created.project, { uid: 42, role: "member" }), null);
+    assert.equal(practiceProjectAccessBlock(created.project, { uid: 43, role: "owner" }), null);
+    assert.equal(practiceProjectAccessBlock(created.project, { uid: 43, role: "member" }).code, "vibe64_practice_project_private");
+    assert.equal(practiceProjectAccessBlock(listed.projects[0], { uid: 43, role: "member" }), null);
+  });
+});
+
+async function withLocalPracticeProject(callback) {
+  await withTemporaryRoot(async root => {
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
+    const project = createProjectService({ projectContext: context });
+    const training = trainingProvenance();
+    const actor = { uid: 42, username: "learner" };
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    let paths;
+    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      const created = await context.createWorkspaceProjectRecord({ slug, training });
+      paths = { projectContextRoot: created.project.projectRoot, projectRuntimeRoot: created.project.projectRuntimeRoot,
+        projectSessionSourceRoot: created.project.projectSessionSourceRoot };
+    });
+    await writeTestFile(path.join(paths.projectContextRoot, "sessions", "active", "s1", "notes.txt"), "practice\n");
+    await writeTestFile(path.join(paths.projectSessionSourceRoot, "sessions", "active", "s1", "source", "app.js"), "practice\n");
+    const learners = { async readExerciseProjectScope(input) {
+      if (input.actor.uid !== 42 || input.attemptId !== training.attemptId) {
+        throw Object.assign(new Error("missing"), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+      }
+      assert.equal(input.access, "observe", "removal needs no active attempt");
+      return { training, projectSlug: slug };
+    } };
+    const closed = [];
+    const terminals = { async closeProjectRuntime(input) {
+      const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+      closed.push({ ...input, slug: currentProjectRequestContext().slug });
+      return { ok: true };
+    } };
+    await callback({ root, context, project, training, actor, slug, paths, learners, terminals, closed, working });
+  });
+}
+
+test("standalone light practice deletion removes the learner's private namespace through the archive lifecycle steps", async () => {
+  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
+  await withLocalPracticeProject(async ({ root, context, project, actor, slug, paths, learners, terminals, closed, working }) => {
+    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
+    await assert.rejects(practiceProjects.remove({ slug: "working", actor }), { code: "vibe64_project_not_practice" });
+    await assert.rejects(practiceProjects.remove({ slug, actor: { uid: 43, username: "other" } }), { code: "vibe64_project_not_practice" });
+    await assert.rejects(practiceProjects.remove({ slug }), { code: "vibe64_auth_required" });
+    assert.equal(closed.length, 0);
+    assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: true });
+    assert.deepEqual(closed, [{ reason: "project-delete", slug }], "the runtime closes inside the practice project context");
+    for (const directory of Object.values(paths)) await assert.rejects(() => access(directory), { code: "ENOENT" });
+    await assert.rejects(() => access(path.dirname(paths.projectContextRoot)), { code: "ENOENT" }, "the empty attempt namespace goes");
+    await access(working);
+    await access(path.join(root, "system"));
+    assert.deepEqual(await practiceProjects.remove({ slug, actor }), { ok: true, slug, removed: false });
+    assert.equal(closed.length, 1);
+  });
+});
+
+test("standalone light practice deletion resumes its persisted steps and refuses a pinned session", async () => {
+  const { createLocalPracticeProjects } = await import("../../packages/vibe64-training/src/server/practiceProjects.js");
+  await withLocalPracticeProject(async ({ context, project, training, actor, slug, paths, learners, terminals, closed }) => {
+    const pinned = path.join(paths.projectSessionSourceRoot, "sessions", "pinned");
+    await fs.promises.symlink("active/main-session", pinned);
+    const unpinned = createLocalPracticeProjects({ learners, projectContext: context, project, terminals });
+    await assert.rejects(unpinned.remove({ slug, actor }), { code: "vibe64_project_pinned", statusCode: 409 });
+    const readMetadata = () => context.runWithPracticeProjectScope({ actor, training, access: "observe" },
+      async () => (await context.readWorkspaceProjectState({ slug })).metadata);
+    assert.equal((await readMetadata()).deletion, undefined, "a pinned refusal writes no deletion marker");
+    await rm(pinned);
+    let failures = 1;
+    const practiceProjects = createLocalPracticeProjects({ learners, projectContext: context, project, terminals,
+      async removePath(target, options) {
+        if (target === paths.projectSessionSourceRoot && failures-- > 0) throw Object.assign(new Error("busy"), { code: "source_busy" });
+        return rm(target, options);
+      } });
+    await assert.rejects(practiceProjects.remove({ slug, actor }), { code: "source_busy" });
+    await assert.rejects(readMetadata(), { code: "vibe64_practice_scope_mismatch" },
+      "ordinary practice scopes still refuse a project being deleted");
+    const steps = await context.runWithPracticeProjectScope({ actor, training, access: "write", allowDeleting: true },
+      async () => (await context.readWorkspaceProjectState({ slug })).metadata.deletion.steps);
+    assert.ok(steps["runtime-closed"]);
+    assert.equal(steps["source-removed"], undefined);
+    await assert.rejects(context.runWithPracticeProjectScope({ actor, training, access: "observe", allowDeleting: true }, () => assert.fail()),
+      /explicit write access/u);
+    assert.equal((await practiceProjects.remove({ slug, actor })).removed, true);
+    assert.equal(closed.length, 1, "the completed runtime close is not repeated");
+    for (const directory of Object.values(paths)) await assert.rejects(() => access(directory), { code: "ENOENT" });
+  });
+});

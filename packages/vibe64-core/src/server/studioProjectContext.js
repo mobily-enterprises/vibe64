@@ -45,6 +45,7 @@ import {
 import {
   normalizeProjectDeletion
 } from "./projectDeletion.js";
+import { projectPracticeFromTraining } from "./practiceProjects.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -269,6 +270,7 @@ async function selectedProjectRecord({
     ...selectionRecord,
     ...repositoryFields,
     ...(githubRepository ? { githubRepository } : {}),
+    ...(metadata?.training ? { practice: projectPracticeFromTraining(metadata.training) } : {}),
     projectRecordPath,
     projectRuntimeRoot,
     projectSessionSourceRoot,
@@ -348,6 +350,7 @@ function workspaceProjectRecord({
       : "",
     runtime: publicProjectRuntimeOpenState(runtime),
     ...(deletion ? { deletion } : {}),
+    ...(metadata.training ? { practice: projectPracticeFromTraining(metadata.training) } : {}),
     sessionsRoot: projectRuntimeRoot
       ? resolveProjectSessionsRoot({
           projectRuntimeRoot
@@ -776,11 +779,18 @@ function createStudioProjectContext({
     return namespace.slug === slug && practiceDirectoryExists(namespace.projectContextRoot);
   }
 
-  async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe" } = {}, operation) {
+  // allowDeleting admits only the learner's own light practice deletion: it
+  // requires write access and lets that owner see and resume its deletion marker.
+  async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
+    allowDeleting = false } = {}, operation) {
     if (projectCatalogEnabled || typeof operation !== "function") {
       throw new TypeError("Local practice access requires the original local Project context and an owning callback.");
     }
-    return runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess }, operation, false);
+    if (allowDeleting === true && practiceAccess !== "write") {
+      throw new TypeError("Practice deletion requires explicit write access.");
+    }
+    return runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess,
+      allowDeleting: allowDeleting === true }, operation, false);
   }
 
   async function runWithHostedTrainingProjectScope(input = {}, operation) {
@@ -790,7 +800,8 @@ function createStudioProjectContext({
     return runTrainingProjectScope(input, operation, true);
   }
 
-  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe" }, operation, hosted) {
+  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe", allowDeleting = false },
+    operation, hosted) {
     if (!["observe", "control", "write", "create"].includes(practiceAccess)) {
       throw new TypeError("Practice access requires an explicit supported operation scope.");
     }
@@ -830,14 +841,14 @@ function createStudioProjectContext({
       throw Object.assign(new Error("Hosted practice requires its existing owned Project record."), { code: "vibe64_practice_scope_mismatch" });
     }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
-      if (!isDeepStrictEqual(metadata.training, training) || metadata.deletion ||
+      if (!isDeepStrictEqual(metadata.training, training) || (metadata.deletion && !allowDeleting) ||
           projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
         throw Object.assign(new Error("Practice project has missing or different ownership. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
       }
     }
     const scope = Object.freeze({ training, access: practiceAccess, slug, projectsRoot: practiceProjectsRoot, systemRoot,
       targetRoot: projectContextRoot, projectRecordPath, projectRuntimeRoot, projectSessionSourceRoot,
-      sourceRoot: "", sourceConfigRoot: "", vibe64User: actor });
+      sourceRoot: "", sourceConfigRoot: "", vibe64User: actor, ...(allowDeleting ? { allowDeleting: true } : {}) });
     return runWithPracticeProjectContext(practiceOwner, scope, operation);
   }
 
@@ -1316,7 +1327,7 @@ function createStudioProjectContext({
       projectRecordPath: projectRecordPathForSlug(slug)
     }));
     if (scope && (Object.keys(metadata).length || await pathExists(scope.targetRoot) || await pathExists(scope.projectRuntimeRoot)) &&
-        (!isDeepStrictEqual(metadata.training, scope.training) || metadata.deletion ||
+        (!isDeepStrictEqual(metadata.training, scope.training) || (metadata.deletion && scope.allowDeleting !== true) ||
         projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT)) {
       throw Object.assign(new Error("Practice project ownership changed. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
     }
@@ -1332,7 +1343,9 @@ function createStudioProjectContext({
   async function updateWorkspaceProjectState(input = {}, update, {
     allowDeleting = false
   } = {}) {
-    if (!projectCatalogEnabled) {
+    // Local practice records change only inside the learner's own deletion scope.
+    const deletionScope = !projectCatalogEnabled && practiceScope()?.allowDeleting === true;
+    if (!projectCatalogEnabled && !deletionScope) {
       throw projectCatalogUnavailableError();
     }
     assertProjectEffectAdmission();
@@ -1340,6 +1353,7 @@ function createStudioProjectContext({
       throw new TypeError("updateWorkspaceProjectState requires an update function.");
     }
     const slug = projectSlugFromInput(input);
+    if (deletionScope) practiceScope(slug);
     const state = {
       projectContextRoot: projectContextRootForSlug(slug),
       projectRecordPath: projectRecordPathForSlug(slug),

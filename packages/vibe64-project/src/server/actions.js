@@ -271,6 +271,8 @@ function createProjectActions({ project } = {}) {
     action({
       id: ACTION_CREATE_PROJECT,
       kind: "command",
+      // Hosted members create practice projects only through lessons.
+      ownerRequired: true,
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
       execute: (input) => project.createProject(input)
