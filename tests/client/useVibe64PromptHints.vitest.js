@@ -263,6 +263,21 @@ describe("useVibe64PromptHints", () => {
     scope.stop();
   });
 
+  it("scopes a cancel to the project the generation started in, even after leaving it", async () => {
+    const location = { origin: "http://vibe64.local", pathname: "/app/project/training-0123" };
+    vi.stubGlobal("window", { location });
+    const generation = deferredResult();
+    const request = vi.fn(path => path.endsWith("/cancel") ? Promise.resolve({ ok: true }) : generation.promise);
+    const { scope } = createHints({}, { request });
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request).toHaveBeenCalledTimes(1);
+
+    location.pathname = "/app";
+    scope.stop();
+    expect(request.mock.calls[1][0]).toBe("/api/app/training-0123/vibe64/sessions/session-1/prompt-hints/cancel");
+    vi.unstubAllGlobals();
+  });
+
   it("previews only an empty composer and inserts editable text on selection", async () => {
     const draft = ref("");
     const onSelect = vi.fn((text) => {

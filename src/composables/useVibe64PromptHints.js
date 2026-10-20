@@ -10,6 +10,7 @@ import {
   vibe64SessionPromptHintsCancelPath,
   vibe64SessionPromptHintsPath
 } from "@/lib/vibe64SessionRequestConfig.js";
+import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import {
   vibe64BrowserTabOriginId
 } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -81,8 +82,11 @@ function useVibe64PromptHints({
       const targetSession = currentSessionId.value;
       const targetPath = currentSessionsApiPath.value;
       const operationId = promptHintOperationId();
+      // Scoped now: the abort can come after the page left the project, and a
+      // cancel resolved from the next location would miss the session.
+      const cancelPath = scopedDevelopmentApiUrl(vibe64SessionPromptHintsCancelPath(targetPath, targetSession));
       const cancel = () => {
-        void request(vibe64SessionPromptHintsCancelPath(targetPath, targetSession), {
+        void request(cancelPath, {
           method: "POST", body: { operationId, originId }
         }).catch(() => null);
       };
