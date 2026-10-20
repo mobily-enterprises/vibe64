@@ -17,7 +17,8 @@ import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vi
 import Vibe64LearningStepDialog from "/src/components/learning/Vibe64LearningStepDialog.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
-import { registerVibe64ColleagueModel, selectionLabels } from "./colleagueModelBridge.js";
+import { registerVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
+import { selectionLabels } from "./colleagueSelectionLabels.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";

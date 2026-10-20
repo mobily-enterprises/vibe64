@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX
 } from "./support/base-shell-data";
+import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 const targetRoot = "/workspace/example-target-app";
 
@@ -22,20 +23,42 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
-  await page.getByRole("button", { name: "Account settings" }).click();
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  const accountMenu = page.locator(".vibe64-auth-settings__menu");
+  await expect(accountMenu.getByText("Redo onboarding", { exact: true })).toBeVisible();
+  await accountMenu.getByText("Account settings", { exact: true }).click();
   const accountConnectionsDialog = page.getByRole("dialog");
   await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeVisible();
   const refreshAccountsButton = accountConnectionsDialog.getByRole("button", { name: "Refresh AI accounts" });
   await expect(refreshAccountsButton).toBeEnabled();
   await refreshAccountsButton.click();
   await expect(refreshAccountsButton).toBeEnabled();
-  await expect(accountConnectionsDialog.getByRole("button", { name: "Add AI", exact: true })).toBeEnabled();
+  await expect(accountConnectionsDialog.getByRole("button", { name: "Add connection", exact: true })).toBeEnabled();
+  await expect(accountConnectionsDialog.getByRole("button", { name: "Set up your AI", exact: true })).toBeVisible();
   await accountConnectionsDialog.getByRole("tab", { name: "GitHub" }).click();
   await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "GitHub Connection" })).toBeVisible();
   await accountConnectionsDialog.getByRole("button", { name: "Close account settings" }).click();
   await expect(accountConnectionsDialog).toBeHidden();
   await expect(page.getByText("Session type", { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(developmentUrlPattern());
+
+  // Onboarding replaces the settings dialog, and focus comes back to the menu.
+  const accountMenuButton = page.getByRole("button", { name: "Account menu", exact: true });
+  const onboarding = page.locator('[aria-labelledby="ai-onboarding-title"]');
+  await accountMenuButton.click();
+  await accountMenu.getByText("Account settings", { exact: true }).click();
+  await accountConnectionsDialog.getByRole("button", { name: "Set up your AI", exact: true }).click();
+  await expect(onboarding).toBeVisible();
+  await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(onboarding).toBeHidden();
+  await expect(accountMenuButton).toBeFocused();
+  await page.keyboard.press("Enter");
+  await accountMenu.getByText("Redo onboarding", { exact: true }).click();
+  await expect(onboarding).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(onboarding).toBeHidden();
+  await expect(accountMenuButton).toBeFocused();
 });
 
 test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
@@ -83,10 +106,16 @@ type MockReadyStudioShellOptions = {
 };
 
 async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOptions = {}) {
+  await suppressAiOnboarding(page);
   const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   const apiPayloads = new Map<string, unknown>([
     ["/api/vibe64/accounts/codex-providers", { ok: true, providers: [] }],
     ["/api/vibe64/accounts/ai-connections", { ok: true, connections: [] }],
+    ["/api/vibe64/accounts/model-routing/workflows", { ok: true, workflows: [] }],
+    ["/api/vibe64/training/learning-mode", { ok: true, available: true, learningMode: null }],
+    ["/api/vibe64/training/courses", { ok: true, courses: [] }],
+    ["/api/vibe64/training/learning", { ok: true, available: false }],
+    ["/api/vibe64/colleague", { ok: false, error: "Colleague is not part of this smoke." }],
     [
       "/api/vibe64/assistants/capabilities",
       {

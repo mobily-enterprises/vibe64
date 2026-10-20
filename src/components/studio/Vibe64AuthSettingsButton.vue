@@ -1,19 +1,37 @@
 <template>
-  <div class="vibe64-auth-settings">
-    <v-btn
-      :class="[
-        'vibe64-auth-settings__button',
-        credentialsNeedAttention ? 'vibe64-auth-settings__button--needs-attention' : ''
-      ]"
-      density="comfortable"
-      :icon="mdiAccountCogOutline"
-      size="large"
-      title="Account settings"
-      type="button"
-      variant="tonal"
-      aria-label="Account settings"
-      @click="openDialog"
-    />
+  <div ref="root" class="vibe64-auth-settings">
+    <v-menu location="bottom end">
+      <template #activator="{ props: menuProps }">
+        <v-btn
+          v-bind="menuProps"
+          :class="[
+            'vibe64-auth-settings__button',
+            credentialsNeedAttention ? 'vibe64-auth-settings__button--needs-attention' : ''
+          ]"
+          density="comfortable"
+          :icon="mdiAccountCogOutline"
+          size="large"
+          title="Account"
+          type="button"
+          variant="tonal"
+          aria-label="Account menu"
+        />
+      </template>
+      <v-list class="vibe64-auth-settings__menu" density="comfortable">
+        <v-list-item
+          :prepend-icon="mdiAccountCogOutline"
+          title="Account settings"
+          @click="openDialog()"
+        />
+        <v-list-item
+          v-if="aiOnboardingAvailable"
+          :prepend-icon="mdiAutoFix"
+          subtitle="Choose or switch your AI"
+          title="Redo onboarding"
+          @click="redoOnboarding"
+        />
+      </v-list>
+    </v-menu>
 
     <v-dialog
       v-model="dialogOpen"
@@ -158,6 +176,7 @@ import { readAppearance, writeAppearance } from "@/lib/appearance.js";
 import {
   mdiAccountOutline,
   mdiAccountCogOutline,
+  mdiAutoFix,
   mdiClose,
   mdiMonitor,
   mdiWeatherNight,
@@ -169,6 +188,10 @@ import {
   accountRowsForStatus,
   ProviderAccountsSetup,
   AiConnectionsSettings,
+  aiOnboardingAvailable,
+  aiOnboardingBlocked,
+  onVibe64AiOnboardingRequested,
+  requestVibe64AiOnboarding,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
@@ -199,6 +222,7 @@ const providerOptions = computed(() => [
   ...accountProviderOptions
 ]);
 const dialogOpen = ref(false);
+const root = ref(null);
 const theme = useTheme();
 const appearance = ref(readAppearance());
 const appearanceChoices = Object.freeze([
@@ -318,14 +342,38 @@ function handleAccountConnectionsDialogRequest(event) {
   void openDialog(event?.detail || {});
 }
 
+function activatorElement() {
+  return root.value?.querySelector(".vibe64-auth-settings__button") || null;
+}
+
+function redoOnboarding() {
+  requestVibe64AiOnboarding({ start: "choose", redo: true, returnFocus: activatorElement() });
+}
+
+// The flow replaces this dialog; focus returns to the menu, not a closed tab.
+// While AI Accounts is busy, aiOnboardingBlocked stops requests reaching here.
+function handleAiOnboardingRequest(event) {
+  if (!dialogOpen.value) return;
+  dialogOpen.value = false;
+  if (event?.detail && !event.detail.returnFocus) event.detail.returnFocus = activatorElement();
+}
+
 let disposeAccountConnectionsDialogRequest = () => null;
+let disposeAiOnboardingRequest = () => null;
 
 onMounted(() => {
   disposeAccountConnectionsDialogRequest = onVibe64AccountConnectionsDialogRequested(handleAccountConnectionsDialogRequest);
+  disposeAiOnboardingRequest = onVibe64AiOnboardingRequested(handleAiOnboardingRequest);
 });
 
 onBeforeUnmount(() => {
   disposeAccountConnectionsDialogRequest();
+  disposeAiOnboardingRequest();
+  aiOnboardingBlocked.value = false;
+});
+
+watch(() => dialogOpen.value && aiConnectionsBusy.value, (blocked) => {
+  aiOnboardingBlocked.value = blocked;
 });
 
 watch(

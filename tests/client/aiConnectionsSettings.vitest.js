@@ -1,7 +1,7 @@
 import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null }));
+const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null, requestOnboarding: null }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({
   useModelRouting: () => ({ connectedWorkflows: ref([{ engineId: "codex", connected: true }, { engineId: "opencode", connected: true }]) })
 }));
@@ -19,7 +19,10 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useAiConnections.
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue", () => ({ default: {} }));
-vi.mock("../../packages/vibe64-accounts/src/client/studio/FreeAiSelector.vue", () => ({ default: {} }));
+vi.mock("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js", () => ({
+  aiOnboardingAvailable: ref(true),
+  requestVibe64AiOnboarding: (...args) => mocks.requestOnboarding(...args)
+}));
 import AiConnectionsSettings from "../../packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue";
 
 let app;
@@ -32,6 +35,7 @@ function mount() {
 }
 beforeEach(() => {
   vi.stubGlobal("document", { activeElement: {} });
+  mocks.requestOnboarding = vi.fn();
   mocks.accounts = {
     status: ref({ accounts: [{ id: "codex", connected: true, ownerOnly: true }, { id: "claude", connected: true }] }),
     isLoading: ref(false), loadError: ref("")
@@ -189,4 +193,51 @@ it("removes only the selected orchestrator key through its existing owner", asyn
   await state.confirmRemove();
   expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "deepseek", remove: true });
   expect(state.removeOpen).toBe(false);
+});
+
+it("offers onboarding instead of a free starter until an AI of the person's own is connected", () => {
+  mocks.accounts.status.value.accounts = [];
+  mocks.providers.connections.value = [];
+  const state = mount();
+  expect(state.configuredAiGroups.map(group => group.id)).toEqual(["opencode"]);
+  expect(state.hasOwnAi).toBe(false);
+  state.openOnboarding();
+  expect(mocks.requestOnboarding).toHaveBeenCalledExactlyOnceWith({ start: "choose" });
+  mocks.providers.connections.value = [{ id: "deepseek", connected: true, configuredEngines: ["codex"] }];
+  expect(state.hasOwnAi).toBe(true);
+  expect(mocks.providers.change).not.toHaveBeenCalled();
+});
+
+it("keeps offering onboarding while the person's only AI needs reconnecting, like the onboarding host", () => {
+  mocks.accounts.status.value.accounts = [{ id: "claude", connected: false, status: "reconnect_required" }];
+  mocks.providers.connections.value = [{ id: "deepseek", connected: false, claudeReady: false, configuredEngines: ["codex", "claude"] }];
+  const state = mount();
+  expect(state.configuredAiRows.filter(account => !account.builtIn).map(account => [account.id, account.keyHint])).toEqual([
+    ["claude", "Reconnect required"], ["deepseek", "Reconnect required"], ["deepseek", "Reconnect required"]
+  ]);
+  expect(state.hasOwnAi).toBe(false);
+  mocks.providers.connections.value[0].claudeReady = true;
+  expect(state.hasOwnAi).toBe(true);
+  mocks.providers.connections.value = [];
+  mocks.connections.connections.value.push({ id: "openrouter", builtIn: false });
+  expect(state.hasOwnAi).toBe(true);
+});
+
+it("is idle with no provider id saving, removing or changing model access", () => {
+  Object.assign(mocks.connections, {
+    removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("")
+  });
+  const state = mount();
+  expect([state.removeTarget, state.modelAccessTarget].map(Boolean)).toEqual([false, false]);
+  expect([state.removeRunning, state.modelAccessRunning, state.editorSaving, state.busy]).toEqual([false, false, false, false]);
+  mocks.connections.removingProviderId.value = "zai";
+  state.requestRemove({ id: "zai", kind: "opencode", engineId: "opencode" });
+  expect(state.busy).toBe(true);
+});
+
+it("reports busy while a removal runs so Redo onboarding cannot interrupt it", () => {
+  const state = mount();
+  expect(state.busy).toBe(false);
+  mocks.providers.busy.value = true;
+  expect(state.busy).toBe(true);
 });

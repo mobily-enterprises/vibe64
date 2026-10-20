@@ -21,7 +21,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnecti
 
 import { registerVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
-import { aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
+import { aiOnboardingAvailable, aiOnboardingBlocked, aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
 import { aiIsSetUp, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js";
@@ -210,6 +210,33 @@ describe("host auto-open", () => {
     await state.close("later");
     expect(aiOnboardingSnoozed("owner-1")).toBe(true);
     expect(aiOnboardingSnoozed("local")).toBe(false);
+  });
+
+  it("returns focus to the stand-in a listener names when the opener has gone", async () => {
+    mocks.accounts.status.value.accounts[2].connected = true;
+    const state = mount(AiOnboardingHost, { canConfigure: true });
+    expect(aiOnboardingAvailable.value).toBe(true);
+    const opener = { isConnected: false, focus: vi.fn() };
+    const activator = { isConnected: true, focus: vi.fn() };
+    document.activeElement = opener;
+    const stop = onVibe64AiOnboardingRequested((event) => { event.detail.returnFocus = activator; });
+    requestVibe64AiOnboarding();
+    stop();
+    await state.close("dismiss");
+    expect(activator.focus).toHaveBeenCalledOnce();
+    expect(opener.focus).not.toHaveBeenCalled();
+    app.unmount();
+    app = null;
+    expect(aiOnboardingAvailable.value).toBe(false);
+  });
+
+  it("does not open while a busy dialog blocks it", () => {
+    mocks.accounts.status.value.accounts[2].connected = true;
+    const state = mount(AiOnboardingHost, { canConfigure: true });
+    aiOnboardingBlocked.value = true;
+    expect(requestVibe64AiOnboarding()).toBe(false);
+    expect(state.open).toBe(false);
+    aiOnboardingBlocked.value = false;
   });
 });
 

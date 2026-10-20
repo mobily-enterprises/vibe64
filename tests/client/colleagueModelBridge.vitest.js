@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerVibe64ColleagueModel, selectionLabels, useVibe64ColleagueModel } from "../../packages/vibe64-colleague/src/client/colleagueModelBridge.js";
+import { registerVibe64ColleagueModel, useVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
+import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueSelectionLabels.js";
 
 describe("Colleague model bridge", () => {
   it("reaches the newest mounted Colleague and removes only the unmounted one", async () => {

@@ -14,7 +14,7 @@ import { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConv
 import * as realtimeComposables from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
-import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueModelBridge.js";
+import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueSelectionLabels.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 
@@ -969,7 +969,8 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const imports = {
     "./colleagueFocusBinding.js": { createColleagueFocusBinding },
     "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
-    "./colleagueModelBridge.js": { registerVibe64ColleagueModel: () => () => {}, selectionLabels },
+    "/src/lib/vibe64ColleagueModelBridge.js": { registerVibe64ColleagueModel: () => () => {} },
+    "./colleagueSelectionLabels.js": { selectionLabels },
     "@local/vibe64-accounts/client": { AiOnboardingNudge: {}, requestVibe64AiOnboarding: () => events.push(["ai-onboarding"]) },
     vue,
     vuetify: { useDisplay: () => display },

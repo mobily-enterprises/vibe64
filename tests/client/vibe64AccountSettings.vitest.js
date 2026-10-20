@@ -1,5 +1,22 @@
 import { readFile } from "node:fs/promises";
+import { createRenderer, ref, ssrContextKey } from "vue";
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("vuetify", () => ({ useTheme: () => ({ change: vi.fn() }) }));
+vi.mock("@local/vibe64-accounts/client", async () => ({
+  ...(await import("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js")),
+  AiConnectionsSettings: {},
+  ProviderAccountsSetup: {},
+  accountRowsForStatus: () => [],
+  useVibe64Accounts: () => ({ status: ref(null), savePersonalAiProfileCommand: {}, refresh: vi.fn(), reloadLocalStatus: vi.fn() })
+}));
+
+import Vibe64AuthSettingsButton from "../../src/components/studio/Vibe64AuthSettingsButton.vue";
+import {
+  aiOnboardingBlocked,
+  onVibe64AiOnboardingRequested,
+  requestVibe64AiOnboarding
+} from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
 
 import {
   onVibe64AccountConnectionsDialogRequested,
@@ -101,5 +118,56 @@ describe("standalone personal AI profile settings", () => {
     expect(component).toContain("theme.change(value);");
     expect(component).toContain("writeAppearance(value);");
     expect(main).toContain("defaultTheme: readAppearance(),");
+  });
+
+  it("gives way to the AI onboarding flow, returning focus to the menu, unless AI Accounts is busy", async () => {
+    vi.stubGlobal("window", new EventTarget());
+    vi.stubGlobal("CustomEvent", class extends Event {
+      constructor(type, options = {}) {
+        super(type);
+        this.detail = options.detail;
+      }
+    });
+    const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const app = renderer.createApp({ ...Vibe64AuthSettingsButton, render: () => null });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    const state = app._instance.setupState;
+    const activator = { focus: vi.fn() };
+    state.root = { querySelector: () => activator };
+    const requests = [];
+    const stop = onVibe64AiOnboardingRequested((event) => requests.push(event.detail));
+
+    await state.openDialog({ refresh: false });
+    expect(requestVibe64AiOnboarding({ start: "choose" })).toBe(true);
+    expect(state.dialogOpen).toBe(false);
+    expect(requests.at(-1)).toEqual({ start: "choose", returnFocus: activator });
+
+    state.redoOnboarding();
+    expect(requests.at(-1)).toEqual({ start: "choose", returnFocus: activator });
+
+    await state.openDialog({ refresh: false });
+    state.aiConnectionsBusy = true;
+    await Promise.resolve();
+    expect(aiOnboardingBlocked.value).toBe(true);
+    expect(requestVibe64AiOnboarding({ start: "choose" })).toBe(false);
+    expect(state.dialogOpen).toBe(true);
+    expect(requests).toHaveLength(2);
+
+    state.aiConnectionsBusy = false;
+    await Promise.resolve();
+    expect(aiOnboardingBlocked.value).toBe(false);
+    stop();
+    app.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("puts Account settings and Redo onboarding in one account menu", async () => {
+    const component = await readFile(
+      new URL("../../src/components/studio/Vibe64AuthSettingsButton.vue", import.meta.url),
+      "utf8"
+    );
+    expect(component).toContain('aria-label="Account menu"');
+    expect(component).toMatch(/title="Account settings"[\s\S]*v-if="aiOnboardingAvailable"[\s\S]*title="Redo onboarding"/u);
   });
 });
