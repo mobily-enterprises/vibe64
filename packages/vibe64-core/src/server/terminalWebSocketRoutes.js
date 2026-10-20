@@ -99,7 +99,6 @@ function registerTerminalWebSocketRoute(
 
         const routeParams = request.params || {};
         const sessionId = String(routeParams.sessionId || "");
-        const learningAttemptId = String(routeParams.learningAttemptId || "");
         const terminalSessionId = String(routeParams.terminalSessionId || "");
         const toolId = String(routeParams.toolId || "");
         const jobId = String(routeParams.jobId || "");
@@ -136,7 +135,6 @@ function registerTerminalWebSocketRoute(
                     request,
                     rows: message.rows,
                     sessionId,
-                    learningAttemptId,
                     isClosed: () => closed,
                     terminalSessionId,
                     toolId
@@ -162,7 +160,6 @@ function registerTerminalWebSocketRoute(
         if (closed) return;
         void withProjectContext(() => Promise.resolve(subscribe(service, {
           jobId,
-          learningAttemptId,
           request,
           sessionId,
           isClosed: () => closed,
